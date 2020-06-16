@@ -17,15 +17,96 @@ from pandas.api.types import (
     CategoricalDtype,
 )
 
+from ...base import tokenize
+
 # this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_file, open_files
+from ..core import new_dd_object
+from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from .io import from_delayed
 
 import fsspec.implementations.local
 from fsspec.compression import compr
+
+
+class CSVSubgraph(Mapping):
+    """
+    Subgraph for reading CSV files.
+    """
+
+    def __init__(
+        self,
+        name,
+        reader,
+        blocks,
+        is_first,
+        head,
+        header,
+        kwargs,
+        dtypes,
+        columns,
+        enforce,
+        path,
+    ):
+        self.name = name
+        self.reader = reader
+        self.blocks = blocks
+        self.is_first = is_first
+        self.head = head  # example pandas DF for metadata
+        self.header = header  # prepend to all blocks
+        self.kwargs = kwargs
+        self.dtypes = dtypes
+        self.columns = columns
+        self.enforce = enforce
+        self.colname, self.paths = path or (None, None)
+
+    def __getitem__(self, key):
+        try:
+            name, i = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
+
+        if name != self.name:
+            raise KeyError(key)
+
+        if i < 0 or i >= len(self.blocks):
+            raise KeyError(key)
+
+        block = self.blocks[i]
+
+        if self.paths is not None:
+            path_info = (self.colname, self.paths[i], self.paths)
+        else:
+            path_info = None
+
+        write_header = False
+        rest_kwargs = self.kwargs.copy()
+        if not self.is_first[i]:
+            write_header = True
+            rest_kwargs.pop("skiprows", None)
+
+        return (
+            pandas_read_text,
+            self.reader,
+            block,
+            self.header,
+            rest_kwargs,
+            self.dtypes,
+            self.columns,
+            write_header,
+            self.enforce,
+            path_info,
+        )
+
+    def __len__(self):
+        return len(self.blocks)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield (self.name, i)
 
 
 def pandas_read_text(
@@ -180,12 +261,11 @@ def text_blocks_to_pandas(
     header,
     head,
     kwargs,
-    collection=True,
     enforce=False,
     specified_dtypes=None,
     path=None,
 ):
-    """ Convert blocks of bytes to a dask.dataframe or other high-level object
+    """ Convert blocks of bytes to a dask.dataframe
 
     This accepts a list of lists of values of bytes where each list corresponds
     to one file, and the value of bytes concatenate to comprise the entire
@@ -202,16 +282,14 @@ def text_blocks_to_pandas(
         all blocks
     head : pd.DataFrame
         An example Pandas DataFrame to be used for metadata.
-        Can be ``None`` if ``collection==False``
     kwargs : dict
         Keyword arguments to pass down to ``reader``
-    collection: boolean, optional (defaults to True)
     path : tuple, optional
         A tuple containing column name for path and list of all paths
 
     Returns
     -------
-    A dask.dataframe or list of delayed values
+    A dask.dataframe
     """
     dtypes = head.dtypes.to_dict()
     # dtypes contains only instances of CategoricalDtype, which causes issues
@@ -243,60 +321,55 @@ def text_blocks_to_pandas(
         dtypes[k] = "category"
 
     columns = list(head.columns)
-    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
-    dfs = []
-    colname, paths = path or (None, None)
 
-    for i, blocks in enumerate(block_lists):
-        if not blocks:
-            continue
-        if path:
-            path_info = (colname, paths[i], paths)
-        else:
-            path_info = None
-        df = delayed_pandas_read_text(
-            reader,
-            blocks[0],
-            header,
-            kwargs,
-            dtypes,
-            columns,
-            write_header=False,
-            enforce=enforce,
-            path=path_info,
-        )
+    blocks = tuple(flatten(block_lists))
+    # Create mask of first blocks from nested block_lists
+    is_first = tuple(block_mask(block_lists))
 
-        dfs.append(df)
-        rest_kwargs = kwargs.copy()
-        rest_kwargs.pop("skiprows", None)
-        for b in blocks[1:]:
-            dfs.append(
-                delayed_pandas_read_text(
-                    reader,
-                    b,
-                    header,
-                    rest_kwargs,
-                    dtypes,
-                    columns,
-                    enforce=enforce,
-                    path=path_info,
+    name = "read-csv-" + tokenize(reader, columns, enforce, head)
+
+    if path:
+        colname, paths = path
+        head = head.assign(
+            **{
+                colname: pd.Categorical.from_codes(
+                    np.zeros(len(head), dtype=int), paths
                 )
-            )
+            }
+        )
+    if len(unknown_categoricals):
+        head = clear_known_categories(head, cols=unknown_categoricals)
 
-    if collection:
-        if path:
-            head = head.assign(
-                **{
-                    colname: pd.Categorical.from_codes(
-                        np.zeros(len(head), dtype=int), paths
-                    )
-                }
-            )
-        if len(unknown_categoricals):
-            head = clear_known_categories(head, cols=unknown_categoricals)
-        return from_delayed(dfs, head)
-    else:
-        return dfs
+    subgraph = CSVSubgraph(
+        name,
+        reader,
+        blocks,
+        is_first,
+        head,
+        header,
+        kwargs,
+        dtypes,
+        columns,
+        enforce,
+        path,
+    )
+
+    return new_dd_object(subgraph, name, head, (None,) * (len(blocks) + 1))
+
+
+def block_mask(block_lists):
+    """
+    Yields a flat iterable of booleans to mark the zeroth elements of the
+    nested input ``block_lists`` in a flattened output.
+
+    >>> list(block_mask([[1, 2], [3, 4], [5]]))
+    [True, False, True, False, True]
+    """
+    for block in block_lists:
+        if not block:
+            continue
+        yield True
+        yield from (False for _ in block[1:])
 
 
 def auto_blocksize(total_memory, cpu_count):
@@ -320,7 +393,6 @@ def read_pandas(
     reader,
     urlpath,
     blocksize="default",
-    collection=True,
     lineterminator=None,
     compression=None,
     sample=256000,
@@ -461,13 +533,14 @@ def read_pandas(
             if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
                 head[c] = head[c].astype(float)
 
+    values = [[dsk.dask.values() for dsk in block] for block in values]
+
     return text_blocks_to_pandas(
         reader,
         values,
         header,
         head,
         kwargs,
-        collection=collection,
         enforce=enforce,
         specified_dtypes=specified_dtypes,
         path=path,
@@ -510,8 +583,6 @@ blocksize : str, int or None, optional
     based on available physical memory and the number of cores, up to a maximum
     of 64MB. Can be a number like ``64000000` or a string like ``"64MB"``. If
     ``None``, a single block is used for each file.
-collection : boolean, optional
-    Return a dask.dataframe if True or list of dask.delayed objects if False
 sample : int, optional
     Number of bytes to use when determining dtypes
 assume_missing : bool, optional
@@ -555,7 +626,6 @@ def make_reader(reader, reader_name, file_type):
     def read(
         urlpath,
         blocksize="default",
-        collection=True,
         lineterminator=None,
         compression=None,
         sample=256000,
@@ -569,7 +639,6 @@ def make_reader(reader, reader_name, file_type):
             reader,
             urlpath,
             blocksize=blocksize,
-            collection=collection,
             lineterminator=lineterminator,
             compression=compression,
             sample=sample,

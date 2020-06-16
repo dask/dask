@@ -1751,7 +1751,7 @@ class DataFrameGroupBy(_GroupBy):
         try:
             return self[key]
         except KeyError as e:
-            raise AttributeError(e)
+            raise AttributeError(e) from e
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
@@ -1790,6 +1790,7 @@ class SeriesGroupBy(_GroupBy):
 
         super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
         name = self._meta.obj.name
         levels = _determine_levels(self.index)

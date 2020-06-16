@@ -238,7 +238,7 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = [v for v in divisions]
+    df4.divisions = divisions.tolist()
 
     return df4.map_partitions(M.sort_index)
 
@@ -382,13 +382,13 @@ class maybe_buffered_partd(object):
                 if self.compression
                 else None
             )
-        except AttributeError:
+        except AttributeError as e:
             raise ImportError(
                 "Not able to import and load {0} as compression algorithm."
                 "Please check if the library is installed and supported by Partd.".format(
                     self.compression
                 )
-            )
+            ) from e
         file = partd.File(path)
         partd.file.cleanup_files.append(path)
         # Envelope partd file with compression, if set and available

@@ -44,6 +44,14 @@ def _resample_series(
         new_index = pd.date_range(
             start, end, freq=rule, closed=reindex_closed, name=out.index.name
         )
+
+    if not out.index.isin(new_index).all():
+        raise ValueError(
+            "Index is not contained within new index. This can often be "
+            "resolved by using larger partitions, or unambiguous "
+            "frequencies: 'Q', 'A'..."
+        )
+
     return out.reindex(new_index, fill_value=fill_value)
 
 
@@ -78,7 +86,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
             setter = lambda a, val: a.append(val)
         else:
             setter = lambda a, val: a.__setitem__(-1, val)
-        setter(newdivs, divisions[-1])
+        setter(newdivs, divisions[-1] + res)
         if outdivs[-1] > divisions[-1]:
             setter(outdivs, outdivs[-1])
         elif outdivs[-1] < divisions[-1]:
@@ -116,16 +124,7 @@ class Resampler(object):
             )
             raise ValueError(msg)
         self.obj = obj
-        rule = pd.tseries.frequencies.to_offset(rule)
-        day_nanos = pd.tseries.frequencies.Day().nanos
-
-        if getnanos(rule) and day_nanos % rule.nanos:
-            raise NotImplementedError(
-                "Resampling frequency %s that does"
-                " not evenly divide a day is not "
-                "implemented" % rule
-            )
-        self._rule = rule
+        self._rule = pd.tseries.frequencies.to_offset(rule)
         self._kwargs = kwargs
 
     def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
