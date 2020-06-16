@@ -632,7 +632,8 @@ def test_append_with_partition(tmpdir, engine):
     df1.index.name = "index"
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
-    dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine)
+    fut = dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine, compute=False)
+    fut.compute(scheduler="single-threaded")
     dd.to_parquet(
         dd_df1,
         tmp,
@@ -2522,6 +2523,10 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
 @write_read_engines_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
+
+    if write_engine == "pyarrow" and pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
+
     tmp = str(tmpdir)
     size = 1_000
     npartitions = 4

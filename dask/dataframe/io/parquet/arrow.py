@@ -2,6 +2,7 @@ from functools import partial
 from collections import OrderedDict
 import json
 import warnings
+from distutils.version import LooseVersion
 
 import pandas as pd
 import pyarrow as pa
@@ -17,6 +18,8 @@ from .utils import (
     Engine,
     _analyze_paths,
 )
+
+preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
 
 
 def _get_md_row_groups(pieces):
@@ -212,8 +215,10 @@ def _write_partitioned(table, root_path, partition_cols, fs, index_cols=(), **kw
 
     df = table.to_pandas(ignore_metadata=True)
     index_cols = list(index_cols)
-    if index_cols:
+    preserve_index = False
+    if index_cols and preserve_ind_supported:
         df.set_index(index_cols, inplace=True)
+        preserve_index = True
 
     partition_keys = [df[col] for col in partition_cols]
     data_df = df.drop(partition_cols, axis="columns")
@@ -236,7 +241,9 @@ def _write_partitioned(table, root_path, partition_cols, fs, index_cols=(), **kw
                 for name, val in zip(partition_cols, keys)
             ]
         )
-        subtable = pa.Table.from_pandas(subgroup, schema=subschema, safe=False)
+        subtable = pa.Table.from_pandas(
+            subgroup, preserve_index=preserve_index, schema=subschema, safe=False
+        )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdir(prefix, exists_ok=True)
         outfile = guid() + ".parquet"
