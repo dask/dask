@@ -4,7 +4,7 @@ import pandas as pd
 import pytest
 
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
-from dask.dataframe._compat import PANDAS_GT_0240
+from dask.dataframe._compat import PANDAS_GT_0240, PANDAS_GT_110
 import dask.dataframe as dd
 
 
@@ -195,7 +195,11 @@ def test_series_resample_non_existent_datetime():
     result = ddf.resample("1D").mean()
     expected = df.resample("1D").mean()
 
-    assert_eq(result, expected)
+    check_kwargs = {}
+    if PANDAS_GT_110:
+        check_kwargs["check_freq"] = False
+
+    assert_eq(result, expected, **check_kwargs)
 
 
 @pytest.mark.skipif(PANDAS_VERSION <= "0.23.4", reason="quantile not in 0.23")

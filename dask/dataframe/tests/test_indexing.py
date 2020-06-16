@@ -5,7 +5,7 @@ import pytest
 
 import dask.dataframe as dd
 
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
 
@@ -368,24 +368,39 @@ def test_loc_timestamp_str():
     assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
     assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
-    assert_eq(df.loc["2011-01-02 10:00"].to_frame().T, ddf.loc["2011-01-02 10:00"])
+    check_freq = {}
+    if PANDAS_GT_110:
+        check_freq["check_freq"] = False
+
+    assert_eq(
+        df.loc["2011-01-02 10:00"].to_frame().T,
+        ddf.loc["2011-01-02 10:00"],
+        **check_freq,
+    )
 
     # series
-    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"])
-    assert_eq(df.A.loc["2011-01-02":"2011-01-10"], ddf.A.loc["2011-01-02":"2011-01-10"])
+    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], **check_freq)
+    assert_eq(
+        df.A.loc["2011-01-02":"2011-01-10"],
+        ddf.A.loc["2011-01-02":"2011-01-10"],
+        **check_freq,
+    )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
+        **check_freq,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
+        **check_freq,
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
+        **check_freq,
     )
 
     df = pd.DataFrame(

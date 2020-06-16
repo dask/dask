@@ -222,7 +222,15 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
-@pytest.mark.parametrize("npartitions", [1, pytest.param(2, marks=pytest.mark.xfail)])
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        1,
+        pytest.param(
+            2, marks=pytest.mark.xfail(not PANDAS_GT_110, reason="Fixed upstream")
+        ),
+    ],
+)
 def test_timezone_freq(npartitions):
     s_naive = pd.Series(pd.date_range("20130101", periods=10))
     s_aware = pd.Series(pd.date_range("20130101", periods=10, tz="US/Eastern"))
@@ -1083,7 +1091,7 @@ def test_value_counts_with_dropna():
     result = ddf.x.value_counts(dropna=False)
     expected = df.x.value_counts(dropna=False)
     assert_eq(result, expected)
-    result2 = ddf.x.value_counts(split_every=2)
+    result2 = ddf.x.value_counts(dropna=False, split_every=2)
     assert_eq(result2, expected)
     assert result._name != result2._name
 
@@ -2557,19 +2565,23 @@ def test_to_timestamp():
     index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
-    # Pandas >= 1.1.0 checks index.freq for DatetimeIndex.
-    # We don't compute that.
-    result = df.to_timestamp()
-    result.index.freq = None
 
-    assert_eq(ddf.to_timestamp(), result)
-    result = df.to_timestamp(freq="M", how="s")
-    result.index.freq = None
-    assert_eq(ddf.to_timestamp(freq="M", how="s").compute(), result)
+    check_kwargs = {}
+    if PANDAS_GT_110:
+        check_kwargs["check_freq"] = False
+
+    assert_eq(ddf.to_timestamp(), df.to_timestamp(), **check_kwargs)
+    assert_eq(
+        ddf.to_timestamp(freq="M", how="s").compute(),
+        df.to_timestamp(freq="M", how="s"),
+        **check_kwargs
+    )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
-    result = df.x.to_timestamp(freq="M", how="s")
-    result.index.freq = None
-    assert_eq(ddf.x.to_timestamp(freq="M", how="s").compute(), result)
+    assert_eq(
+        ddf.x.to_timestamp(freq="M", how="s").compute(),
+        df.x.to_timestamp(freq="M", how="s"),
+        **check_kwargs
+    )
 
 
 def test_to_frame():
