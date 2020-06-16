@@ -2541,6 +2541,6 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     df1 = dd.from_pandas(data, npartitions=npartitions)
     df1.to_parquet(tmp, partition_on="B", engine=write_engine)
 
-    expect = df1[df1["B"] == 1]
+    expect = data[data["B"] == 1]
     got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
-    assert_eq(expect, got, check_divisions=False)
+    assert_eq(expect, got)
