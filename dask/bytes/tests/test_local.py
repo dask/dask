@@ -70,7 +70,7 @@ def test_urlpath_inference_errors():
         get_fs_token_paths([])
 
     # Protocols differ
-    with pytest.raises(ValueError, match="the same protocol"):
+    with pytest.raises(ValueError, match="Protocol mismatch"):
         get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
 
     # Options differ
@@ -80,17 +80,6 @@ def test_urlpath_inference_errors():
                 "ftp://myuser@node.com/test/path.csv",
                 "ftp://otheruser@node.com/other/path.csv",
             ]
-        )
-
-    # Unknown type
-    with pytest.raises(TypeError):
-        get_fs_token_paths(
-            {
-                "sets/are.csv",
-                "unordered/so/they.csv",
-                "should/not/be.csv",
-                "allowed.csv",
-            }
         )
 
 
