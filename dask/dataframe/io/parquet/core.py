@@ -225,7 +225,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts = engine.read_metadata(
+    meta, statistics, parts, index = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -235,8 +235,6 @@ def read_parquet(
         split_row_groups=split_row_groups,
         **kwargs
     )
-    if meta.index.name is not None:
-        index = meta.index.name
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(

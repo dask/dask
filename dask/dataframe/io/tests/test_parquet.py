@@ -2542,3 +2542,17 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     expect = data[data["B"] == 1]
     got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
     assert_eq(expect, got)
+
+
+def test_from_pandas_preserve_none_index(tmpdir, engine):
+
+    check_pyarrow()
+    fn = str(tmpdir.join("test.parquet"))
+
+    df = pd.DataFrame({"a": [1, 2], "b": [4, 5], "c": [6, 7]}).set_index("c")
+    df.index.name = None
+    df.to_parquet(fn, engine="pyarrow", index=True)
+
+    expect = pd.read_parquet(fn)
+    got = dd.read_parquet(fn, engine=engine)
+    assert_eq(expect, got)

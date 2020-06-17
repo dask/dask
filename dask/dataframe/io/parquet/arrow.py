@@ -539,7 +539,7 @@ class ArrowEngine(Engine):
             for piece in parts
         ]
 
-        return (meta, stats, parts)
+        return (meta, stats, parts, index)
 
     @classmethod
     def read_partition(
