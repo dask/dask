@@ -597,7 +597,9 @@ properties:
                 type: string
 
           require-encryption:
-            type: boolean
+            type:
+            - boolean
+            - "null"
             description: |
               Whether to require encryption on non-local comms
 

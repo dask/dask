@@ -130,7 +130,7 @@ distributed:
       connect: 10s          # time before connecting fails
       tcp: 30s              # time before calling an unresponsive connection dead
 
-    require-encryption: False   # Whether to require encryption on non-local comms
+    require-encryption: null # Whether to require encryption on non-local comms
 
     tls:
       ciphers: null   # Allowed ciphers, specified as an OpenSSL cipher string.
