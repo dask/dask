@@ -261,6 +261,27 @@ class Task:
             else [self.kwargs]
         )
 
+
+    def is_complex(self):
+        """ Does this task contain nested tasks? """
+        if type(self.args) is Task:
+            return True
+
+        if (isinstance(self.args, list) and
+                any(type(a) is Task for a in self.args)):
+            return True
+
+        if type(self.kwargs) is Task:
+            return True
+
+        if (isinstance(self.kwargs, dict) and
+                any(type(v) is Task for v in self.kwargs.items())):
+
+            return True
+
+        return False
+
+
     def can_fuse(self, other):
         """
         Returns
