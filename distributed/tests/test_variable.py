@@ -263,3 +263,22 @@ def test_future_erred_sync(client):
 
     with pytest.raises(ZeroDivisionError):
         future2.result()
+
+
+@gen_cluster(client=True)
+async def test_variables_do_not_leak_client(c, s, a, b):
+    # https://github.com/dask/distributed/issues/3899
+    clients_pre = set(s.clients)
+
+    # setup variable with future
+    x = Variable("x")
+    future = c.submit(inc, 1)
+    await x.set(future)
+
+    # complete teardown
+    x.delete()
+
+    start = time()
+    while set(s.clients) != clients_pre:
+        await asyncio.sleep(0.01)
+        assert time() < start + 5

@@ -119,6 +119,8 @@ class VariableExtension:
             with suppress(KeyError):
                 del self.variables[name]
 
+            self.scheduler.remove_client("variable-%s" % name)
+
 
 class Variable:
     """ Distributed Global Variable
