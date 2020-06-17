@@ -550,7 +550,8 @@ def test_categorical(tmpdir, write_engine, read_engine):
         assert ddf2.compute().x.cat.categories.tolist() == ["a", "b", "c"]
 
         ddf2.loc[:1000].compute()
-        df.index.name = "index"  # defaults to 'index' in this case
+        # None will be changed to '__null_dask_index__'
+        df.index.name = "__null_dask_index__"
         assert assert_eq(df, ddf2)
 
     # dereference cats
@@ -1237,9 +1238,7 @@ def test_divisions_read_with_filters(tmpdir):
     # save it
     d.to_parquet(tmpdir, write_index=True, partition_on=["a"], engine="fastparquet")
     # read it
-    out = dd.read_parquet(
-        tmpdir, index="index", engine="fastparquet", filters=[("a", "==", "b")]
-    )
+    out = dd.read_parquet(tmpdir, engine="fastparquet", filters=[("a", "==", "b")])
     # test it
     expected_divisions = (25, 49)
     assert out.divisions == expected_divisions

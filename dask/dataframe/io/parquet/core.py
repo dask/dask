@@ -382,7 +382,13 @@ def to_parquet(
         # As of 0.24.2, pandas will rename an index with name=None
         # when df.reset_index() is called.  The default name is "index",
         # (or "level_0" if "index" is already a column name)
-        division_info["name"] = "index" if "index" not in df.columns else "level_0"
+        # division_info["name"] = "index" if "index" not in df.columns else "level_0"
+        if "__null_dask_index__" not in df.columns:
+            division_info["name"] = "__null_dask_index__"
+        else:
+            raise ValueError(
+                "Must specify an index if __null_dask_index__ is a column name"
+            )
 
     # If write_index==True (default), reset the index and record the
     # name of the original index in `index_cols` (will be `index` if None,
@@ -395,7 +401,12 @@ def to_parquet(
     index_cols = []
     if write_index:
         real_cols = set(df.columns)
+        none_index = list(df._meta.index.names) == [None]
         df = df.reset_index()
+        if none_index:
+            df.columns = [
+                c if c != "index" else "__null_dask_index__" for c in df.columns
+            ]
         index_cols = [c for c in set(df.columns).difference(real_cols)]
     else:
         # Not writing index - might as well drop it
@@ -678,9 +689,9 @@ def process_statistics(parts, statistics, filters, index, chunksize):
             elif index != [out[0]["name"]]:
                 raise ValueError("Specified index is invalid.\nindex: {}".format(index))
         elif index is not False and len(out) > 1:
-            if any(o["name"] == "index" for o in out):
-                # Use sorted column named "index" as the index
-                [o] = [o for o in out if o["name"] == "index"]
+            if any(o["name"] == "__null_dask_index__" for o in out):
+                # Use sorted column named "__null_dask_index__" as the index
+                [o] = [o for o in out if o["name"] == "__null_dask_index__"]
                 divisions = o["divisions"]
                 if index is None:
                     index = [o["name"]]
