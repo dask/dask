@@ -305,7 +305,7 @@ class Task:
         else:
             kwargs_str = "**%s" % fn(self.kwargs)
 
-        annot_str = "annotions=%s" % fn(self.annotations) if self.annotations else ""
+        annot_str = "annotations=%s" % fn(self.annotations) if self.annotations else ""
 
         bits = (bit for bit in (arg_str, kwargs_str, annot_str) if bit)
         return ", ".join(bits)
