@@ -64,25 +64,6 @@ def test_urlpath_inference_strips_protocol(tmpdir):
     assert paths2 == paths3
 
 
-def test_urlpath_inference_errors():
-    # Empty list
-    with pytest.raises(ValueError, match="empty"):
-        get_fs_token_paths([])
-
-    # Protocols differ
-    with pytest.raises(ValueError, match="Protocol mismatch"):
-        get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
-
-    # Options differ
-    with pytest.raises(ValueError, match="the same file-system options"):
-        get_fs_token_paths(
-            [
-                "ftp://myuser@node.com/test/path.csv",
-                "ftp://otheruser@node.com/other/path.csv",
-            ]
-        )
-
-
 def test_unordered_urlpath_errors():
 
     # Unordered urlpath argument
