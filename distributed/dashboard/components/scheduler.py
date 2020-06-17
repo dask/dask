@@ -1794,7 +1794,7 @@ class WorkerTable(DashboardComponent):
             tooltips="""
                 <div>
                   <span style="font-size: 10px; font-family: Monaco, monospace;">Worker (@name): </span>
-                  <span style="font-size: 10px; font-family: Monaco, monospace;">@cpu</span>
+                  <span style="font-size: 10px; font-family: Monaco, monospace;">@cpu_fraction</span>
                 </div>
                 """,
         )
