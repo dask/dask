@@ -83,6 +83,20 @@ def test_urlpath_inference_errors():
         )
 
 
+def test_unordered_urlpath_errors():
+
+    # Unordered urlpath argument
+    with pytest.raises(TypeError):
+        read_bytes(
+            {
+                "sets/are.csv",
+                "unordered/so/they.csv",
+                "should/not/be.csv",
+                "allowed.csv",
+            }
+        )
+
+
 def test_urlpath_expand_read():
     """Make sure * is expanded in file paths when reading."""
     # when reading, globs should be expanded to read files by mask
