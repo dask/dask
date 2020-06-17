@@ -550,8 +550,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
         assert ddf2.compute().x.cat.categories.tolist() == ["a", "b", "c"]
 
         ddf2.loc[:1000].compute()
-        # None will be changed to '__null_dask_index__'
-        df.index.name = "__null_dask_index__"
         assert assert_eq(df, ddf2)
 
     # dereference cats
@@ -2537,6 +2535,7 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
             "B": pd.Categorical(b),
         }
     ).set_index("myindex")
+    data.index.name = None
     df1 = dd.from_pandas(data, npartitions=npartitions)
     df1.to_parquet(tmp, partition_on="B", engine=write_engine)
 

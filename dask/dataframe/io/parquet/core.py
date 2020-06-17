@@ -246,12 +246,16 @@ def read_parquet(
     meta, index, columns = set_index_columns(
         meta, index, columns, index_in_columns, auto_index_allowed
     )
+    if meta.index.name == "__null_dask_index__":
+        meta.index.name = None
 
     subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
         meta = meta.set_index(index)
+        if meta.index.name == "__null_dask_index__":
+            meta.index.name = None
 
     if len(divisions) < 2:
         # empty dataframe - just use meta
@@ -275,7 +279,10 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
         df.columns.name = meta.columns.name
     columns = columns or []
     index = index or []
-    return df[[c for c in columns if c not in index]]
+    df = df[[c for c in columns if c not in index]]
+    if index == ["__null_dask_index__"]:
+        df.index.name = None
+    return df
 
 
 def to_parquet(
