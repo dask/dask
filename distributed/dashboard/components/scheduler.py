@@ -535,7 +535,7 @@ class ComputerPerKey(DashboardComponent):
             self.fig.title.text = "Compute Time Per Task"
 
             compute_result = dict(
-                times=compute_time, color=compute_colors, names=compute_names,
+                times=compute_time, color=compute_colors, names=compute_names
             )
 
             update(self.compute_source, compute_result)
@@ -635,7 +635,7 @@ class AggregateAction(DashboardComponent):
             self.fig.x_range.factors = agg_names
             self.fig.title.text = "Aggregate Time Per Action"
 
-            action_result = dict(times=agg_time, color=agg_colors, names=agg_names,)
+            action_result = dict(times=agg_time, color=agg_colors, names=agg_names)
 
             update(self.action_source, action_result)
 
@@ -1856,7 +1856,28 @@ class WorkerTable(DashboardComponent):
                 )
                 continue
             try:
-                data[name].insert(0, sum(data[name]))
+                if len(self.scheduler.workers) == 0:
+                    total_data = None
+                elif name == "memory_percent":
+                    total_data = sum(
+                        ws.metrics["memory"] for ws in self.scheduler.workers.values()
+                    ) / sum(ws.memory_limit for ws in self.scheduler.workers.values())
+                elif name == "cpu":
+                    total_data = (
+                        sum(ws.metrics["cpu"] for ws in self.scheduler.workers.values())
+                        / 100
+                        / len(self.scheduler.workers.values())
+                    )
+                elif name == "cpu_fraction":
+                    total_data = (
+                        sum(ws.metrics["cpu"] for ws in self.scheduler.workers.values())
+                        / 100
+                        / sum(ws.nthreads for ws in self.scheduler.workers.values())
+                    )
+                else:
+                    total_data = sum(data[name])
+
+                data[name].insert(0, total_data)
             except TypeError:
                 data[name].insert(0, None)
 
