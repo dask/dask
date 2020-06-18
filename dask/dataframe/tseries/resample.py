@@ -28,7 +28,13 @@ def _resample_series(
     how_args,
     how_kwargs,
 ):
+    base_date = start - pd.tseries.frequencies.to_offset(rule)
+    series.loc[base_date, :] = None
 
+    # group the series by the binned index and aggregate
+    out = getattr(series.resample(rule, **resample_kwargs), how)(
+        *how_args, **how_kwargs
+    )
     if PANDAS_GT_0240:
         new_index = pd.date_range(
             start.tz_localize(None),
@@ -43,21 +49,7 @@ def _resample_series(
             start, end, freq=rule, closed=reindex_closed, name=series.index.name
         )
 
-    label = resample_kwargs.get("label") or "right"
-
-    # add bin to left of start
-    bins = new_index.insert(0, new_index[0] - pd.tseries.frequencies.to_offset(rule))
-
-    # divide index into the bins
-    intervals = pd.cut(series.index, bins)
-
-    # group the series by the binned index and aggregate
-    out = getattr(series.groupby(intervals), how)(*how_args, **how_kwargs)
-
-    # use edge of interval index as index value
-    out.index = getattr(out.index.categories, label)
-
-    return out
+    return out.reindex(new_index, fill_value=fill_value)
 
 
 def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
