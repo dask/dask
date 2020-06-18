@@ -4093,10 +4093,11 @@ class Client:
         on all currently connected workers. It will also be run on any worker
         that connects in the future.
 
-        The plugin may include methods ``setup``, ``teardown``, and
-        ``transition``.  See the ``dask.distributed.WorkerPlugin`` class or the
-        examples below for the interface and docstrings.  It must be
-        serializable with the pickle or cloudpickle modules.
+        The plugin may include methods ``setup``, ``teardown``, ``transition``,
+        ``release_key``, and ``release_dep``.  See the
+        ``dask.distributed.WorkerPlugin`` class or the examples below for the
+        interface and docstrings.  It must be serializable with the pickle or
+        cloudpickle modules.
 
         If the plugin has a ``name`` attribute, or if the ``name=`` keyword is
         used then that will control idempotency.  A a plugin with that name has
@@ -4123,6 +4124,10 @@ class Client:
         ...     def teardown(self, worker: dask.distributed.Worker):
         ...         pass
         ...     def transition(self, key: str, start: str, finish: str, **kwargs):
+        ...         pass
+        ...     def release_key(self, key: str, state: str, cause: Optional[str], reason: None, report: bool):
+        ...         pass
+        ...     def release_dep(self, dep: str, state: str, report: bool):
         ...         pass
 
         >>> plugin = MyPlugin(1, 2, 3)

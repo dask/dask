@@ -90,7 +90,8 @@ class WorkerPlugin:
     """ Interface to extend the Worker
 
     A worker plugin enables custom code to run at different stages of the Workers'
-    lifecycle: at setup, during task state transitions and at teardown.
+    lifecycle: at setup, during task state transitions, when a task or dependency
+    is released, and at teardown.
 
     A plugin enables custom code to run at each of step of a Workers's life. Whenever such
     an event happens, the corresponding method on this class will be called. Note that the
@@ -146,4 +147,36 @@ class WorkerPlugin:
         finish: string
             Final state of the transition.
         kwargs: More options passed when transitioning
+        """
+
+    def release_key(self, key, state, cause, reason, report):
+        """
+        Called when the worker releases a task.
+
+        Parameters
+        ----------
+        key: string
+        state: string
+            State of the released task.
+            One of waiting, ready, executing, long-running, memory, error.
+        cause: string or None
+            Additional information on what triggered the release of the task.
+        reason: None
+            Not used.
+        report: bool
+            Whether the worker should report the released task to the scheduler.
+        """
+
+    def release_dep(self, dep, state, report):
+        """
+        Called when the worker releases a dependency.
+
+        Parameters
+        ----------
+        dep: string
+        state: string
+            State of the released dependency.
+            One of waiting, flight, memory.
+        report: bool
+            Whether the worker should report the released dependency to the scheduler.
         """

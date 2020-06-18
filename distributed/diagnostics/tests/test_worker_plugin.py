@@ -1,15 +1,15 @@
 import pytest
 
 from distributed import Worker, WorkerPlugin
-from distributed.utils_test import gen_cluster
+from distributed.utils_test import async_wait_for, gen_cluster, inc
 
 
 class MyPlugin(WorkerPlugin):
     name = "MyPlugin"
 
-    def __init__(self, data, expected_transitions=None):
+    def __init__(self, data, expected_notifications=None):
         self.data = data
-        self.expected_transitions = expected_transitions
+        self.expected_notifications = expected_notifications
 
     def setup(self, worker):
         assert isinstance(worker, Worker)
@@ -17,20 +17,32 @@ class MyPlugin(WorkerPlugin):
         self.worker._my_plugin_status = "setup"
         self.worker._my_plugin_data = self.data
 
-        self.observed_transitions = []
+        self.observed_notifications = []
 
     def teardown(self, worker):
         self.worker._my_plugin_status = "teardown"
 
-        if self.expected_transitions is not None:
-            assert len(self.observed_transitions) == len(self.expected_transitions)
+        if self.expected_notifications is not None:
+            assert len(self.observed_notifications) == len(self.expected_notifications)
             for expected, real in zip(
-                self.expected_transitions, self.observed_transitions
+                self.expected_notifications, self.observed_notifications
             ):
                 assert expected == real
 
     def transition(self, key, start, finish, **kwargs):
-        self.observed_transitions.append((key, start, finish))
+        self.observed_notifications.append(
+            {"key": key, "start": start, "finish": finish,}
+        )
+
+    def release_key(self, key, state, cause, reason, report):
+        self.observed_notifications.append(
+            {"key": key, "state": state,}
+        )
+
+    def release_dep(self, dep, state, report):
+        self.observed_notifications.append(
+            {"dep": dep, "state": state,}
+        )
 
 
 @gen_cluster(client=True, nthreads=[])
@@ -54,16 +66,18 @@ async def test_create_on_construction(c, s, a, b):
 
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
 async def test_normal_task_transitions_called(c, s, w):
-    expected_transitions = [
-        ("task", "waiting", "ready"),
-        ("task", "ready", "executing"),
-        ("task", "executing", "memory"),
+    expected_notifications = [
+        {"key": "task", "start": "waiting", "finish": "ready"},
+        {"key": "task", "start": "ready", "finish": "executing"},
+        {"key": "task", "start": "executing", "finish": "memory"},
+        {"key": "task", "state": "memory"},
     ]
 
-    plugin = MyPlugin(1, expected_transitions=expected_transitions)
+    plugin = MyPlugin(1, expected_notifications=expected_notifications)
 
     await c.register_worker_plugin(plugin)
     await c.submit(lambda x: x, 1, key="task")
+    await async_wait_for(lambda: not w.task_state, timeout=10)
 
 
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
@@ -71,13 +85,13 @@ async def test_failing_task_transitions_called(c, s, w):
     def failing(x):
         raise Exception()
 
-    expected_transitions = [
-        ("task", "waiting", "ready"),
-        ("task", "ready", "executing"),
-        ("task", "executing", "error"),
+    expected_notifications = [
+        {"key": "task", "start": "waiting", "finish": "ready"},
+        {"key": "task", "start": "ready", "finish": "executing"},
+        {"key": "task", "start": "executing", "finish": "error"},
     ]
 
-    plugin = MyPlugin(1, expected_transitions=expected_transitions)
+    plugin = MyPlugin(1, expected_notifications=expected_notifications)
 
     await c.register_worker_plugin(plugin)
 
@@ -89,16 +103,44 @@ async def test_failing_task_transitions_called(c, s, w):
     nthreads=[("127.0.0.1", 1)], client=True, worker_kwargs={"resources": {"X": 1}},
 )
 async def test_superseding_task_transitions_called(c, s, w):
-    expected_transitions = [
-        ("task", "waiting", "constrained"),
-        ("task", "constrained", "executing"),
-        ("task", "executing", "memory"),
+    expected_notifications = [
+        {"key": "task", "start": "waiting", "finish": "constrained"},
+        {"key": "task", "start": "constrained", "finish": "executing"},
+        {"key": "task", "start": "executing", "finish": "memory"},
+        {"key": "task", "state": "memory"},
     ]
 
-    plugin = MyPlugin(1, expected_transitions=expected_transitions)
+    plugin = MyPlugin(1, expected_notifications=expected_notifications)
 
     await c.register_worker_plugin(plugin)
     await c.submit(lambda x: x, 1, key="task", resources={"X": 1})
+    await async_wait_for(lambda: not w.task_state, timeout=10)
+
+
+@gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
+async def test_release_dep_called(c, s, w):
+    dsk = {
+        "dep": 1,
+        "task": (inc, "dep"),
+    }
+
+    expected_notifications = [
+        {"key": "dep", "start": "waiting", "finish": "ready"},
+        {"key": "dep", "start": "ready", "finish": "executing"},
+        {"key": "dep", "start": "executing", "finish": "memory"},
+        {"key": "task", "start": "waiting", "finish": "ready"},
+        {"key": "task", "start": "ready", "finish": "executing"},
+        {"key": "task", "start": "executing", "finish": "memory"},
+        {"key": "dep", "state": "memory"},
+        {"dep": "dep", "state": "memory"},
+        {"key": "task", "state": "memory"},
+    ]
+
+    plugin = MyPlugin(1, expected_notifications=expected_notifications)
+
+    await c.register_worker_plugin(plugin)
+    await c.get(dsk, "task", sync=False)
+    await async_wait_for(lambda: not (w.task_state or w.dep_state), timeout=10)
 
 
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)

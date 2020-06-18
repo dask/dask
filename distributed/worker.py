@@ -1601,7 +1601,7 @@ class Worker(ServerNode):
         self.task_state[key] = state or finish
         if self.validate:
             self.validate_key(key)
-        self._notify_transition(key, start, state or finish, **kwargs)
+        self._notify_plugins("transition", key, start, state or finish, **kwargs)
 
     def transition_waiting_ready(self, key):
         try:
@@ -2249,6 +2249,8 @@ class Worker(ServerNode):
 
             if report and state in PROCESSING:  # not finished
                 self.batched_stream.send({"op": "release", "key": key, "cause": cause})
+
+            self._notify_plugins("release_key", key, state, cause, reason, report)
         except CommClosedError:
             pass
         except Exception as e:
@@ -2292,6 +2294,8 @@ class Worker(ServerNode):
 
             if report and state == "memory":
                 self.batched_stream.send({"op": "release-worker-data", "keys": [dep]})
+
+            self._notify_plugins("release_dep", dep, state, report)
         except Exception as e:
             logger.exception(e)
             if LOG_PDB:
@@ -2833,11 +2837,11 @@ class Worker(ServerNode):
         result = {k: profile.call_stack(frame) for k, frame in frames.items()}
         return result
 
-    def _notify_transition(self, key, start, finish, **kwargs):
+    def _notify_plugins(self, method_name, *args, **kwargs):
         for name, plugin in self.plugins.items():
-            if hasattr(plugin, "transition"):
+            if hasattr(plugin, method_name):
                 try:
-                    plugin.transition(key, start, finish, **kwargs)
+                    getattr(plugin, method_name)(*args, **kwargs)
                 except Exception:
                     logger.info(
                         "Plugin '%s' failed with exception" % name, exc_info=True
