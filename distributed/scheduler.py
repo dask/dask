@@ -5303,7 +5303,9 @@ class Scheduler(ServerNode):
     async def check_worker_ttl(self):
         now = time()
         for ws in self.workers.values():
-            if ws.last_seen < now - self.worker_ttl:
+            if (ws.last_seen < now - self.worker_ttl) and (
+                10 * heartbeat_interval(len(self.workers))
+            ):
                 logger.warning(
                     "Worker failed to heartbeat within %s seconds. Closing: %s",
                     self.worker_ttl,
@@ -5571,7 +5573,8 @@ def heartbeat_interval(n):
     elif n < 200:
         return 2
     else:
-        return 5
+        # no more than 200 hearbeats a second scaled by workers
+        return n / 200 + 1
 
 
 class KilledWorker(Exception):
