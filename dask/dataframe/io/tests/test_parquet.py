@@ -2547,8 +2547,10 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
 def test_from_pandas_preserve_none_index(tmpdir, engine):
 
     check_pyarrow()
-    fn = str(tmpdir.join("test.parquet"))
+    if pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
 
+    fn = str(tmpdir.join("test.parquet"))
     df = pd.DataFrame({"a": [1, 2], "b": [4, 5], "c": [6, 7]}).set_index("c")
     df.index.name = None
     df.to_parquet(fn, engine="pyarrow", index=True)
