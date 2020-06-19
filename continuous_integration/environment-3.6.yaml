@@ -56,4 +56,4 @@ dependencies:
   - mmh3
   - pip
   - pip:
-    - git+https://github.com/distributed/distributed@task-annotations#egg=distributed
+    - git+https://github.com/sjperkins/distributed@task-annotations#egg=distributed
