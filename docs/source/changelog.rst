@@ -1,6 +1,38 @@
 Changelog
 =========
 
+2.19.0 / 2020-06-19
+-------------------
+
+Array
++++++
+
+- Cast chunk sizes to python int ``dtype`` (:pr:`6326`) `Gil Forsyth`_
+- Add ``shape=None`` to ``*_like()`` array creation functions (:pr:`6064`) `Anderson Banihirwe`_
+
+Core
+++++
+
+- Update expected error msg for protocol difference in fsspec (:pr:`6331`) `Gil Forsyth`_
+- Fix for floats < 1 in ``parse_bytes`` (:pr:`6311`) `Gil Forsyth`_
+- Fix exception causes all over the codebase (:pr:`6308`) `Ram Rachum`_
+- Fix duplicated tests (:pr:`6303`) `James Lamb`_
+- Remove unused testing function (:pr:`6304`) `James Lamb`_
+
+DataFrame
++++++++++
+
+- Add high-level CSV Subgraph (:pr:`6262`) `Gil Forsyth`_
+- Fix ``ValueError`` when merging an index-only 1-partition dataframe (:pr:`6309`) `Krishan Bhasin`_
+- Make ``index.map`` clear divisions. (:pr:`6285`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Add link to 2020 survey (:pr:`6328`) `Tom Augspurger`_
+- Update ``bag.rst`` (:pr:`6317`) `Ben Shaver`_
+
+
 2.18.1 / 2020-06-09
 -------------------
 
@@ -3318,3 +3350,4 @@ Other
 .. _`Ryan Williams`: https://github.com/ryan-williams
 .. _`Eric Czech`: https://github.com/eric-czech
 .. _`Abdulelah Bin Mahfoodh`: https://github.com/abduhbm
+.. _`Ben Shaver`: https://github.com/bpshaver
