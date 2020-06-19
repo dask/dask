@@ -512,16 +512,11 @@ def get_async(
     return nested_get(result, state["cache"])
 
 
-def callback_wrapper(callback, fut):
-    """ Wrapper for getting future and calling the callback with it """
-    callback(fut)
-
-
 def executor_apply_async(executor, func, args=(), kwds={}, callback=None):
     """ A apply_async implementation for `concurrent.futures.Executor`s """
     fut = executor.submit(func, *args, **kwds)
     if callback is not None:
-        fut.add_done_callback(partial(callback_wrapper, callback))
+        fut.add_done_callback(callback)
 
 
 """ Synchronous concrete version of get_async
