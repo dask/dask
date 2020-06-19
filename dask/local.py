@@ -514,8 +514,7 @@ def get_async(
 
 def callback_wrapper(callback, fut):
     """ Wrapper for getting future and calling the callback with it """
-    r = fut.result()
-    callback(r)
+    callback(fut)
 
 
 def executor_apply_async(executor, func, args=(), kwds={}, callback=None):
