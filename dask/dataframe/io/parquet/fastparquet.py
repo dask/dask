@@ -230,7 +230,6 @@ class FastParquetEngine(Engine):
                 column_index_names,
             ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
             #  auto-ranges should not be created by fastparquet
-            # index_names = [n for n in index_names if n is not None]
             column_names.extend(pf.cats)
 
         else:
