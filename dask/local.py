@@ -124,7 +124,10 @@ if os.name == "nt":
     def queue_get(q):
         while True:
             try:
-                return q.get(block=True, timeout=0.1)
+                r = q.get(block=True, timeout=0.1)
+                if isinstance(r, Future):
+                    r = r.result()
+                return r
             except Empty:
                 pass
 
@@ -132,7 +135,10 @@ if os.name == "nt":
 else:
 
     def queue_get(q):
-        return q.get()
+        r = q.get()
+        if isinstance(r, Future):
+            r = r.result()
+        return r
 
 
 DEBUG = False
