@@ -1,6 +1,37 @@
 Changelog
 =========
 
+2.19.0 - 2020-06-19
+-------------------
+
+- Notify worker plugins when a task is released (:pr:`3817`) `Nick Evans`_
+- Update heartbeat checks in scheduler (:pr:`3896`) `Benjamin Zaitlen`_
+- Make encryption default if ``Security`` is given arguments (:pr:`3887`) `Matthew Rocklin`_
+- Show ``cpu_fraction`` on hover for dashboard workers circle plot. (:pr:`3906`) `Loïc Estève`_
+- Prune virtual client on variable deletion (:pr:`3910`) `Marco Neumann`_
+- Fix total aggregated metrics in dashboard (:pr:`3897`) `Loïc Estève`_
+- Support Bokeh 2.1 (:pr:`3904`) `Matthew Rocklin`_
+- Update ``related-work.rst`` (:pr:`3889`) `DomHudson`_
+- Skip ``test_pid_file`` in older versions of Python (:pr:`3888`) `Matthew Rocklin`_
+- Replace ``stream=`` with ``comm=`` in handlers (:pr:`3860`) `Julien Jerphanion`_
+- Check hosts for ``None`` value in SSH cluster. (:pr:`3883`) `Matthias Bussonnier`_
+- Allow dictionaries in ``security=`` keywords (:pr:`3874`) `Matthew Rocklin`_
+- Use pickle protocol 5 with NumPy object arrays (:pr:`3871`) `jakirkham`_
+- Cast any ``frame`` to ``uint8`` (same type as ``bytes``) (:pr:`3870`) `jakirkham`_
+- Use ``Enum`` for worker, scheduler and nanny status. (:pr:`3853`) `Matthias Bussonnier`_
+- Drop legacy ``buffer_interface`` assignment (:pr:`3869`) `jakirkham`_
+- Drop old frame splitting in NumPy serialization (:pr:`3868`) `jakirkham`_
+- Drop no longer needed local ``import pickle`` (:pr:`3865`) `jakirkham`_
+- Fix typo in ``feed``'s log message (:pr:`3867`) `jakirkham`_
+- Tidy pickle (:pr:`3866`) `jakirkham`_
+- Handle empty times in task stream (:pr:`3862`) `Benjamin Zaitlen`_
+- Change ``asyncssh`` objects to sphinx references (:pr:`3861`) `Jacob Tomlinson`_
+- Improve ``SSHCluster`` docstring for ``connect_options`` (:pr:`3859`) `Jacob Tomlinson`_
+- Validate address parameter in client constructor (:pr:`3842`) `joshreback`_
+- Use ``SpecCluster`` name in worker names (:pr:`3855`) `Loïc Estève`_
+- Allow async ``add_worker`` and ``remove_worker`` plugin methods (:pr:`3847`) `James Bourbeau`_
+
+
 2.18.0 - 2020-06-05
 -------------------
 
@@ -1792,3 +1823,6 @@ significantly without many new features.
 .. _`Nick Evans`: https://github.com/nre
 .. _`Scott Sanderson`: https://github.com/ssanderson
 .. _`Matthias Bussonnier`: https://github.com/Carreau
+.. _`DomHudson`: https://github.com/DomHudson
+.. _`Julien Jerphanion`: https://github.com/jjerphan
+.. _`joshreback`: https://github.com/joshreback
