@@ -1,7 +1,7 @@
+from concurrent.futures import ThreadPoolExecutor
 import os
 import signal
 import threading
-from multiprocessing.pool import ThreadPool
 from time import time, sleep
 
 import pytest
@@ -55,7 +55,7 @@ def test_exceptions_rise_to_top():
 
 
 def test_reuse_pool():
-    with ThreadPool() as pool:
+    with ThreadPoolExecutor() as pool:
         with dask.config.set(pool=pool):
             assert get({"x": (inc, 1)}, "x") == 2
             assert get({"x": (inc, 1)}, "x") == 2
@@ -69,7 +69,7 @@ def test_pool_kwarg():
     dsk = {("x", i): (f,) for i in range(30)}
     dsk["x"] = (len, (set, [("x", i) for i in range(len(dsk))]))
 
-    with ThreadPool(3) as pool:
+    with ThreadPoolExecutor(3) as pool:
         assert get(dsk, "x", pool=pool) == 3
 
 

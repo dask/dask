@@ -1,3 +1,4 @@
+from concurrent.futures import ProcessPoolExecutor
 from distutils.version import LooseVersion
 import sys
 import multiprocessing
@@ -174,7 +175,7 @@ def test_unpicklable_args_generate_errors():
 
 
 def test_reuse_pool():
-    with multiprocessing.Pool() as pool:
+    with ProcessPoolExecutor() as pool:
         with dask.config.set(pool=pool):
             assert get({"x": (inc, 1)}, "x") == 2
             assert get({"x": (inc, 1)}, "x") == 2
