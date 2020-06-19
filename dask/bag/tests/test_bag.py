@@ -1,6 +1,6 @@
+from concurrent.futures import ProcessPoolExecutor
 import gc
 import math
-import multiprocessing
 import os
 import random
 import weakref
@@ -1456,7 +1456,7 @@ def test_temporary_directory(tmpdir):
 
     # We use a pool to avoid a race condition between the pool close
     # cleaning up files, and the assert below.
-    pool = multiprocessing.Pool(4)
+    pool = ProcessPoolExecutor(4)
 
     with pool:
         with dask.config.set(temporary_directory=str(tmpdir), pool=pool):
