@@ -31,10 +31,10 @@ def test_task_pickle():
 def test_task_repr_and_str():
     task_1 = Task.from_call(inc, 1, extra=0.1, annotations={"resource": "GPU"})
     task_2 = Task.from_call(inc, task_1)
-    assert str(task_2) == "inc(inc(1, extra=0.1, annotions={'resource': 'GPU'}))"
+    assert str(task_2) == "inc(inc(1, extra=0.1, annotations={'resource': 'GPU'}))"
     assert (
         repr(task_2)
-        == "Task(inc, Task(inc, 1, extra=0.1, annotions={'resource': 'GPU'}))"
+        == "Task(inc, Task(inc, 1, extra=0.1, annotations={'resource': 'GPU'}))"
     )
 
 
