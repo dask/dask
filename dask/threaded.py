@@ -76,7 +76,6 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
 
     results = get_async(
         partial(executor_apply_async, pool),
-        pool._max_workers,
         dsk,
         result,
         cache=cache,

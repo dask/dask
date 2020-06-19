@@ -245,7 +245,6 @@ def get(
         # Run
         result = get_async(
             partial(multiprocessing_apply_async, pool),
-            pool._max_workers,
             dsk3,
             keys,
             get_id=_process_get_id,

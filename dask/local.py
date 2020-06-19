@@ -355,7 +355,6 @@ The main function of the scheduler.  Get is the main entry point.
 
 def get_async(
     apply_async,
-    num_workers,
     dsk,
     result,
     cache=None,
@@ -379,8 +378,6 @@ def get_async(
     ----------
     apply_async : function
         Asynchronous apply function as found on Pool or ThreadPool
-    num_workers : int
-        The number of active tasks we should have at any one time
     dsk : dict
         A dask dictionary specifying a workflow
     result : key or list of keys
@@ -475,8 +472,8 @@ def get_async(
                     callback=queue.put,
                 )
 
-            # Seed initial tasks into the thread pool
-            while state["ready"] and len(state["running"]) < num_workers:
+            # Seed initial tasks into the pool
+            while state["ready"]:
                 fire_task()
 
             # Main loop, wait on tasks to finish, insert new ones
@@ -499,7 +496,7 @@ def get_async(
                 for f in posttask_cbs:
                     f(key, res, dsk, state, worker_id)
 
-                while state["ready"] and len(state["running"]) < num_workers:
+                while state["ready"]:
                     fire_task()
 
             succeeded = True
@@ -543,8 +540,7 @@ def get_sync(dsk, keys, **kwargs):
 
     Can be useful for debugging.
     """
-    kwargs.pop("num_workers", None)  # if num_workers present, remove it
-    return get_async(apply_sync, 1, dsk, keys, **kwargs)
+    return get_async(apply_sync, dsk, keys, **kwargs)
 
 
 def sortkey(item):
