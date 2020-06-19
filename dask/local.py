@@ -125,10 +125,10 @@ if os.name == "nt":
         while True:
             try:
                 f = q.get(block=True, timeout=0.1)
-                r = f.result()
-                return r
             except Empty:
                 pass
+            r = f.result()
+            return r
 
 
 else:
