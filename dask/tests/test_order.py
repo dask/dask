@@ -374,7 +374,7 @@ def test_local_parents_of_reduction(abcde):
     }
 
     order(dsk)
-    dask.get(dsk, [a1, b1, c1])  # trigger computation
+    dask.local.get_sync(dsk, [a1, b1, c1])  # trigger computation
 
     assert log == expected
 
