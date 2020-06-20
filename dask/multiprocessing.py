@@ -1,4 +1,4 @@
-from concurrent.futures import ProcessPoolExecutor
+from concurrent.futures import ProcessPoolExecutor as _ProcessPoolExecutor
 from contextlib import suppress
 import copyreg
 from functools import partial
@@ -169,10 +169,15 @@ def wrap_func(func, *args, **kwds):
     return func(*args, **kwds)
 
 
+class ProcessPoolExecutor(_ProcessPoolExecutor):
+    def submit(self, fn, *args, **kwargs):
+        if sys.version_info[:2] < (3, 7):
+            fn = partial(wrap_func, fn)
+        return super(ProcessPoolExecutor, self).submit(fn, *args, **kwargs)
+
+
 def multiprocessing_apply_async(executor, func, args=(), kwds={}, callback=None):
     """ A apply_async implementation for `concurrent.futures.Executor`s """
-    if sys.version_info[:2] < (3, 7):
-        func = partial(wrap_func, func)
     executor_apply_async(executor, func=func, args=args, kwds=kwds, callback=callback)
 
 
