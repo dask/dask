@@ -364,7 +364,7 @@ def get_async(
     """Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
-    takes a an apply_async function as found on Pool objects to form a more
+    takes an apply_async function as found on Pool objects to form a more
     specific ``get`` method that walks through the dask array with parallel
     workers, avoiding repeat computation and minimizing memory use.
 
