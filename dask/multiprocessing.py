@@ -169,6 +169,7 @@ def wrap_func(func, *args, **kwds):
 
 
 class ProcessPoolExecutor(_ProcessPoolExecutor):
+    """ Wrap `submit` calls to handle worker initialization on Python 3.6 """
     def submit(self, fn, *args, **kwargs):
         if sys.version_info[:2] < (3, 7):
             fn = partial(wrap_func, fn)
