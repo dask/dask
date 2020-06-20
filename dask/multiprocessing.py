@@ -7,7 +7,7 @@ import os
 import pickle
 import sys
 import traceback
-from functools import lru_cache, partial
+from functools import partial
 from warnings import warn
 
 from . import config
@@ -165,7 +165,8 @@ def get_context():
 
 def wrap_func(func, *args, **kwds):
     """ Ensure worker is initialized (workaround for Python 3.6) """
-    initialize_worker_process()
+    if sys.version_info[:2] < (3, 7):
+        initialize_worker_process()
     return func(*args, **kwds)
 
 
@@ -220,7 +221,9 @@ def get(
         if sys.version_info[:2] < (3, 7):
             pool = ProcessPoolExecutor(num_workers)
         else:
-            pool = ProcessPoolExecutor(num_workers, mp_context=context)
+            pool = ProcessPoolExecutor(
+                num_workers, mp_context=context, initializer=initialize_worker_process
+            )
         cleanup = True
     else:
         cleanup = False
@@ -260,7 +263,6 @@ def get(
     return result
 
 
-@lru_cache(maxsize=1)
 def initialize_worker_process():
     """
     Initialize a worker process before running any tasks in it.
