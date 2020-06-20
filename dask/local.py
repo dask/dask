@@ -348,7 +348,7 @@ The main function of the scheduler.  Get is the main entry point.
 
 
 def get_async(
-    apply_async,
+    executor,
     dsk,
     result,
     cache=None,
@@ -453,18 +453,16 @@ def get_async(
                     (dep, state["cache"][dep]) for dep in get_dependencies(dsk, key)
                 )
                 # Submit
-                apply_async(
+                fut = executor.submit(
                     execute_task,
-                    args=(
-                        key,
-                        dumps((dsk[key], data)),
-                        dumps,
-                        loads,
-                        get_id,
-                        pack_exception,
-                    ),
-                    callback=queue.put,
+                    key,
+                    dumps((dsk[key], data)),
+                    dumps,
+                    loads,
+                    get_id,
+                    pack_exception,
                 )
+                fut.add_done_callback(queue.put)
 
             # Seed initial tasks into the pool
             while state["ready"]:
@@ -504,13 +502,6 @@ def get_async(
     return nested_get(result, state["cache"])
 
 
-def executor_apply_async(executor, func, args=(), kwds={}, callback=None):
-    """ A apply_async implementation for `concurrent.futures.Executor`s """
-    fut = executor.submit(func, *args, **kwds)
-    if callback is not None:
-        fut.add_done_callback(callback)
-
-
 """ Synchronous concrete version of get_async
 
 Usually we supply a multi-core apply_async function.  Here we provide a
@@ -527,7 +518,6 @@ class SynchronousExecutor(Executor):
 
 
 synchronous_executor = SynchronousExecutor()
-apply_sync = partial(executor_apply_async, synchronous_executor)
 
 
 def get_sync(dsk, keys, **kwargs):
@@ -535,7 +525,7 @@ def get_sync(dsk, keys, **kwargs):
 
     Can be useful for debugging.
     """
-    return get_async(apply_sync, dsk, keys, **kwargs)
+    return get_async(synchronous_executor, dsk, keys, **kwargs)
 
 
 def sortkey(item):

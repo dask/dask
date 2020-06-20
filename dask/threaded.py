@@ -4,7 +4,6 @@ A threaded shared-memory scheduler
 See local.py
 """
 import atexit
-from functools import partial
 import sys
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
@@ -13,7 +12,7 @@ from threading import current_thread, Lock
 
 from . import config
 from .system import CPU_COUNT
-from .local import executor_apply_async, get_async
+from .local import get_async
 from .utils_test import inc, add  # noqa: F401
 
 
@@ -75,7 +74,7 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
                 pools[thread][num_workers] = pool
 
     results = get_async(
-        partial(executor_apply_async, pool),
+        pool,
         dsk,
         result,
         cache=cache,
