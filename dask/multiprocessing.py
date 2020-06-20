@@ -165,14 +165,14 @@ def get_context():
 
 def wrap_func(func, *args, **kwds):
     """ Ensure worker is initialized (workaround for Python 3.6) """
-    if sys.version_info[:2] < (3, 7):
-        initialize_worker_process()
+    initialize_worker_process()
     return func(*args, **kwds)
 
 
 def multiprocessing_apply_async(executor, func, args=(), kwds={}, callback=None):
     """ A apply_async implementation for `concurrent.futures.Executor`s """
-    func = partial(wrap_func, func)
+    if sys.version_info[:2] < (3, 7):
+        func = partial(wrap_func, func)
     executor_apply_async(executor, func=func, args=args, kwds=kwds, callback=callback)
 
 
