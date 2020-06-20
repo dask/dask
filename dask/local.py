@@ -104,9 +104,9 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+from concurrent.futures import Executor, Future
 from functools import partial
 import os
-from concurrent.futures import Executor, Future
 from queue import Queue, Empty
 
 from . import config
