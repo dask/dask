@@ -176,11 +176,6 @@ class ProcessPoolExecutor(_ProcessPoolExecutor):
         return super(ProcessPoolExecutor, self).submit(fn, *args, **kwargs)
 
 
-def multiprocessing_apply_async(executor, func, args=(), kwds={}, callback=None):
-    """ A apply_async implementation for `concurrent.futures.Executor`s """
-    executor_apply_async(executor, func=func, args=args, kwds=kwds, callback=callback)
-
-
 def get(
     dsk,
     keys,
@@ -252,7 +247,7 @@ def get(
     try:
         # Run
         result = get_async(
-            partial(multiprocessing_apply_async, pool),
+            partial(executor_apply_async, pool),
             dsk3,
             keys,
             get_id=_process_get_id,
