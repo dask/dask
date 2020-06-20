@@ -162,7 +162,7 @@ def get_context():
         return multiprocessing.get_context(context_name)
 
 
-def wrap_func(func, *args, **kwds):
+def worker_init_exec_func(func, *args, **kwds):
     """ Ensure worker is initialized (workaround for Python 3.6) """
     initialize_worker_process()
     return func(*args, **kwds)
@@ -172,7 +172,7 @@ class ProcessPoolExecutor(_ProcessPoolExecutor):
     """ Wrap `submit` calls to handle worker initialization on Python 3.6 """
     def submit(self, fn, *args, **kwargs):
         if sys.version_info[:2] < (3, 7):
-            fn = partial(wrap_func, fn)
+            fn = partial(worker_init_exec_func, fn)
         return super(ProcessPoolExecutor, self).submit(fn, *args, **kwargs)
 
 
