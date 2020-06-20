@@ -2,8 +2,8 @@
 Asynchronous Shared-Memory Scheduler for Dask Graphs.
 
 This scheduler coordinates several workers to execute tasks in a dask graph in
-parallel.  It depends on an apply_async function as would be found in thread or
-process Pools and a corresponding Queue for worker-to-scheduler communication.
+parallel.  It depends on a ``concurrent.futures.Executor``
+and a corresponding Queue for worker-to-scheduler communication.
 
 It tries to execute tasks in an order which maintains a small memory footprint
 throughout execution.  It does this by running tasks that allow us to release
@@ -364,14 +364,14 @@ def get_async(
     """Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
-    takes an apply_async function as found on Pool objects to form a more
+    takes a ``concurrent.futures.Executor`` to form a more
     specific ``get`` method that walks through the dask array with parallel
     workers, avoiding repeat computation and minimizing memory use.
 
     Parameters
     ----------
-    apply_async : function
-        Asynchronous apply function as found on Pool or ThreadPool
+    executor : Executor
+        A ``concurrent.futures.Executor`` instance
     dsk : dict
         A dask dictionary specifying a workflow
     result : key or list of keys
@@ -499,7 +499,7 @@ def get_async(
 
 """ Synchronous concrete version of get_async
 
-Usually we supply a multi-core apply_async function.  Here we provide a
+Usually we supply a ``concurrent.futures.Executor``.  Here we provide a
 sequential one.  This is useful for debugging and for code dominated by the
 GIL
 """
