@@ -1,7 +1,6 @@
 from concurrent.futures import ProcessPoolExecutor as _ProcessPoolExecutor
 from contextlib import suppress
 import copyreg
-from functools import partial
 import multiprocessing
 import os
 import pickle
