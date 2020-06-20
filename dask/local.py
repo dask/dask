@@ -124,19 +124,15 @@ if os.name == "nt":
     def queue_get(q):
         while True:
             try:
-                f = q.get(block=True, timeout=0.1)
+                return q.get(block=True, timeout=0.1)
             except Empty:
                 pass
-            r = f.result()
-            return r
 
 
 else:
 
     def queue_get(q):
-        f = q.get()
-        r = f.result()
-        return r
+        return q.get()
 
 
 DEBUG = False
@@ -476,7 +472,8 @@ def get_async(
 
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
-                key, res_info, failed = queue_get(queue)
+                future = queue_get(queue)
+                key, res_info, failed = future.result()
                 if failed:
                     exc, tb = loads(res_info)
                     if rerun_exceptions_locally:
