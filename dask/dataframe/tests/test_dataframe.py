@@ -814,7 +814,6 @@ def test_map_partitions_magic():
 
     def f(df, partition_info=None):
         print(partition_info)
-        print("I'm in teh fn")
         if partition_info:
             df["a"] = partition_info["npartitions"]
         return df
