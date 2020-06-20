@@ -464,12 +464,10 @@ def get_async(
                 )
                 fut.add_done_callback(queue.put)
 
-            # Seed initial tasks into the pool
-            while state["ready"]:
-                fire_task()
-
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
+                while state["ready"]:
+                    fire_task()
                 future = queue_get(queue)
                 key, res_info, failed = future.result()
                 if failed:
@@ -488,9 +486,6 @@ def get_async(
                 finish_task(dsk, key, state, results, keyorder.get)
                 for f in posttask_cbs:
                     f(key, res, dsk, state, worker_id)
-
-                while state["ready"]:
-                    fire_task()
 
             succeeded = True
 
