@@ -9,14 +9,13 @@ from tlz import valmap, get_in
 import msgpack
 
 from . import pickle
-from ..utils import has_keyword, nbytes, typename
+from ..utils import has_keyword, nbytes, typename, ensure_bytes
 from .compression import maybe_compress, decompress
 from .utils import (
     unpack_frames,
     pack_frames_prelude,
     frame_split_size,
     merge_frames,
-    ensure_bytes,
     msgpack_opts,
 )
 
