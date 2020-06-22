@@ -78,10 +78,13 @@ class AdaptiveCore:
         self.periodic_callback = None
 
         def f():
-            self.periodic_callback = PeriodicCallback(self.adapt, self.interval * 1000)
-            self.periodic_callback.start()
+            try:
+                self.periodic_callback.start()
+            except AttributeError:
+                pass
 
         if self.interval:
+            self.periodic_callback = PeriodicCallback(self.adapt, self.interval * 1000)
             try:
                 self.loop.add_callback(f)
             except AttributeError:
