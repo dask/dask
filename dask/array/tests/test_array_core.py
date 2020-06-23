@@ -4214,6 +4214,9 @@ def test_compute_chunk_sizes():
     assert z.chunks == ((10, 10, 5, 0, 0),)
     assert len(z) == 25
 
+    # check that dtype of chunk dimensions is `int`
+    assert isinstance(z.chunks[0][0], int)
+
 
 def test_compute_chunk_sizes_2d_array():
     X = np.linspace(-1, 1, num=9 * 4).reshape(9, 4)

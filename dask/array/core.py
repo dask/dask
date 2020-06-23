@@ -1152,7 +1152,11 @@ class Array(DaskMethodsMixin):
 
             c.append(tuple(chunk_shapes[s]))
 
-        x._chunks = compute(tuple(c))[0]
+        # `map_blocks` assigns numpy dtypes
+        # cast chunk dimensions back to python int before returning
+        x._chunks = tuple(
+            [tuple([int(chunk) for chunk in chunks]) for chunks in compute(tuple(c))[0]]
+        )
         return x
 
     @property
@@ -2511,6 +2515,19 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
 
+def _compute_multiplier(limit: int, dtype, largest_block: int, result):
+    """
+    Utility function for auto_chunk, to fin how much larger or smaller the ideal
+    chunk size is relative to what we have now.
+    """
+    return (
+        limit
+        / dtype.itemsize
+        / largest_block
+        / np.prod(list(r if r != 0 else 1 for r in result.values()))
+    )
+
+
 def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     """ Determine automatic chunks
 
@@ -2591,9 +2608,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = (
-            limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
-        )
+        multiplier = _compute_multiplier(limit, dtype, largest_block, result)
+
         last_multiplier = 0
         last_autos = set()
         while (
@@ -2604,6 +2620,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
             # Expand or contract each of the dimensions appropriately
             for a in sorted(autos):
+                if ideal_shape[a] == 0:
+                    result[a] = 0
+                    continue
                 proposed = result[a] * multiplier ** (1 / len(autos))
                 if proposed > shape[a]:  # we've hit the shape boundary
                     autos.remove(a)
@@ -2614,9 +2633,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
-            multiplier = (
-                limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
-            )
+            multiplier = _compute_multiplier(limit, dtype, largest_block, result)
 
         for k, v in result.items():
             chunks[k] = v
