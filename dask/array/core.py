@@ -3492,7 +3492,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if not seq:
         raise ValueError("Need array(s) to concatenate")
 
-    meta = np.concatenate([meta_from_array(s) for s in seq], axis=axis)
+    seq_metas = [meta_from_array(s) for s in seq]
+    _concatenate = concatenate_lookup.dispatch(
+        type(max(seq_metas, key=lambda x: getattr(x, "__array_priority__", 0)))
+    )
+    meta = _concatenate(seq_metas, axis=axis)
 
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]
