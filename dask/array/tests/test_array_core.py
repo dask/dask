@@ -4078,6 +4078,33 @@ def test_dask_array_holds_scipy_sparse_containers():
     assert (zz == xx.T).all()
 
 
+@pytest.mark.parametrize("axis", [0, 1])
+def test_scipy_sparse_concatenate(axis):
+    pytest.importorskip("scipy.sparse")
+    import scipy.sparse
+
+    rs = da.random.RandomState(RandomState=np.random.RandomState)
+
+    xs = []
+    ys = []
+    for i in range(2):
+        x = rs.random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        xs.append(x)
+        ys.append(x.map_blocks(scipy.sparse.csr_matrix))
+
+    z = da.concatenate(ys, axis=axis)
+    z = z.compute()
+
+    if axis == 0:
+        sp_concatenate = scipy.sparse.vstack
+    elif axis == 1:
+        sp_concatenate = scipy.sparse.hstack
+    z_expected = sp_concatenate([scipy.sparse.csr_matrix(e.compute()) for e in xs])
+
+    assert (z != z_expected).nnz == 0
+
+
 def test_3851():
     with warnings.catch_warnings() as record:
         Y = da.random.random((10, 10), chunks="auto")

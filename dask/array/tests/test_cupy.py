@@ -828,6 +828,33 @@ def test_sparse_hstack_vstack_csr():
     assert_eq(x, y.todense())
 
 
+@pytest.mark.parametrize("axis", [0, 1])
+def test_cupy_sparse_concatenate(axis):
+    pytest.importorskip("cupyx")
+
+    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    meta = cupy.sparse.csr_matrix((0, 0))
+
+    xs = []
+    ys = []
+    for i in range(2):
+        x = rs.random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        xs.append(x)
+        ys.append(x.map_blocks(cupy.sparse.csr_matrix, meta=meta))
+
+    z = da.concatenate(ys, axis=axis)
+    z = z.compute()
+
+    if axis == 0:
+        sp_concatenate = cupy.sparse.vstack
+    elif axis == 1:
+        sp_concatenate = cupy.sparse.hstack
+    z_expected = sp_concatenate([cupy.sparse.csr_matrix(e.compute()) for e in xs])
+
+    assert (z.toarray() == z_expected.toarray()).all()
+
+
 @pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(
     np.__version__ < "1.17", reason="no shape argument for *_like functions"
