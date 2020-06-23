@@ -348,9 +348,12 @@ def rearrange_by_column(
     if shuffle == "disk":
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == "tasks":
-        return rearrange_by_column_tasks(
+        df2 = rearrange_by_column_tasks(
             df, col, max_branch, npartitions, ignore_index=ignore_index
         )
+        if ignore_index:
+            df2._meta = df2._meta.reset_index(drop=True)
+        return df2
     else:
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 

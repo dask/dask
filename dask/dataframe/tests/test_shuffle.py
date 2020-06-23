@@ -991,7 +991,12 @@ def test_dataframe_shuffle_on_tasks_api(on, ignore_index, max_branch):
     )
     df_out_2 = df_in.shuffle(ext_on, shuffle="tasks", ignore_index=ignore_index)
 
-    assert_eq(df_out_1, df_out_2)
+    assert_eq(df_out_1, df_out_2, check_index=(not ignore_index))
+
+    if ignore_index:
+        assert df_out_1.index.dtype != df_in.index.dtype
+    else:
+        assert df_out_1.index.dtype == df_in.index.dtype
 
 
 def test_set_index_overlap():
