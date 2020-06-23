@@ -391,9 +391,14 @@ def to_parquet(
         # but dask will always change the name to the NONE_LABEL constant
         if NONE_LABEL not in df.columns:
             division_info["name"] = NONE_LABEL
-        else:
+        elif write_index:
             raise ValueError(
-                "Must specify an index if __null_dask_index__ is a column name"
+                "Index must have a name if __null_dask_index__ is a column."
+            )
+        else:
+            warnings.warn(
+                "If read back by Dask, column named __null_dask_index__ "
+                "will be set to the index (and renamed to None)."
             )
 
     # If write_index==True (default), reset the index and record the

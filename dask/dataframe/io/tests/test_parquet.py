@@ -631,8 +631,7 @@ def test_append_with_partition(tmpdir, engine):
     df1.index.name = "index"
     dd_df0 = dd.from_pandas(df0, npartitions=1)
     dd_df1 = dd.from_pandas(df1, npartitions=1)
-    fut = dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine, compute=False)
-    fut.compute(scheduler="single-threaded")
+    dd.to_parquet(dd_df0, tmp, partition_on=["lon"], engine=engine)
     dd.to_parquet(
         dd_df1,
         tmp,
@@ -1024,14 +1023,9 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
             ("partition_column", pa.int64()),
         ]
     )
-    fut = ddf.to_parquet(
-        str(tmpdir),
-        compute=False,
-        engine="pyarrow",
-        partition_on="partition_column",
-        schema=schema,
+    ddf.to_parquet(
+        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
     )
-    fut.compute(scheduler="single-threaded")
     ddf_after_write = (
         dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
         .compute()
@@ -2558,3 +2552,25 @@ def test_from_pandas_preserve_none_index(tmpdir, engine):
     expect = pd.read_parquet(fn)
     got = dd.read_parquet(fn, engine=engine)
     assert_eq(expect, got)
+
+
+def test_illegal_column_name(tmpdir, engine):
+    # Make sure user is prevented from preserving a "None" index
+    # name if there is already a column using the special `null_name`
+    null_name = "__null_dask_index__"
+    fn = str(tmpdir.join("test.parquet"))
+    df = pd.DataFrame({"x": [1, 2], null_name: [4, 5]}).set_index("x")
+    df.index.name = None
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # If we don't want to preserve the None index name, the
+    # write should work, but a UserWarning should be raised
+    with pytest.raises(UserWarning) as w:
+        ddf.to_parquet(fn, engine=engine, write_index=False)
+    assert null_name in str(w.value)
+
+    # If we do want to preserve the None index name, should
+    # get a ValueError for having an illegal column name
+    with pytest.raises(ValueError) as e:
+        ddf.to_parquet(fn, engine=engine)
+    assert null_name in str(e.value)
