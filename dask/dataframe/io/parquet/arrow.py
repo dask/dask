@@ -1,5 +1,5 @@
 from functools import partial
-from collections import OrderedDict
+from collections import defaultdict, OrderedDict
 import json
 import warnings
 from distutils.version import LooseVersion
@@ -265,6 +265,86 @@ def _index_in_schema(index, schema):
         return False  # No index to check
 
 
+def _gather_metadata(paths, fs):
+    if len(paths) > 1:
+        # This is a list of files
+        dataset = pq.ParquetDataset(paths, filesystem=fs, validate_schema=False)
+        base, fns = _analyze_paths(paths, fs)
+    elif fs.isdir(paths[0]):
+        # This is a directory
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs, validate_schema=False)
+        allpaths = fs.glob(paths[0] + fs.sep + "*")
+        base, fns = _analyze_paths(allpaths, fs)
+    else:
+        # This is a single file
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs)
+        base = paths[0]
+        fns = [None]
+
+    partition_info = {"partition_keys": {}, "partition_names": []}
+    if dataset.partitions is not None:
+        partition_info["partition_names"] = [
+            n for n in dataset.partitions.partition_names if n is not None
+        ]
+        for piece in dataset.pieces:
+            partition_info["partition_keys"][piece.path] = piece.partition_keys
+
+    metadata = None
+    if dataset.metadata:
+        # We have a metadata file
+        schema = dataset.metadata.schema.to_arrow_schema()
+        return schema, dataset.metadata, base, partition_info
+    else:
+        # Collect proper metadata manually
+        if dataset.schema is not None:
+            schema = dataset.schema.to_arrow_schema()
+        else:
+            schema = None
+        metadata = None
+        for piece, fn in zip(dataset.pieces, fns):
+            md = piece.get_metadata()
+            if schema is None:
+                schema = md.schema.to_arrow_schema()
+            if fn:
+                md.set_file_path(fn)
+            if metadata:
+                metadata.append_row_groups(md)
+            else:
+                metadata = md
+        return schema, metadata, base, partition_info
+
+
+def _construct_parts(fs, metadata, data_path, partition_keys, categories):
+    # get the number of row groups per file
+    row_groups_per_part = 1  # Can use `chunksize` to calculate this
+    file_row_groups = defaultdict(int)
+    for rg in range(metadata.num_row_groups):
+        fpath = metadata.row_group(rg).column(0).file_path
+        if fpath is None:
+            raise ValueError("metadata is missing file_path string.")
+        file_row_groups[fpath] += 1
+    # create parts from each file, limiting the number of row_groups in each piece
+    parts = []
+    for filename, row_group_count in file_row_groups.items():
+        row_groups = range(row_group_count)
+        for i in range(0, row_group_count, row_groups_per_part):
+            rg_list = list(row_groups[i : i + row_groups_per_part])
+            full_path = (
+                fs.sep.join([data_path, filename])
+                if filename != ""
+                else data_path  # This is a single file
+            )
+            part = {
+                "piece": (full_path, rg_list),
+                "kwargs": {
+                    "partitions": partition_keys.get(full_path, None),
+                    "categories": categories,
+                },
+            }
+            parts.append(part)
+    return parts
+
+
 class ArrowEngine(Engine):
     @classmethod
     def read_metadata(
@@ -278,6 +358,74 @@ class ArrowEngine(Engine):
         split_row_groups=True,
         **kwargs,
     ):
+
+        schema, metadata, base_path, partition_info = _gather_metadata(paths, fs)
+        partition_keys = partition_info["partition_keys"]
+        partitions = partition_info["partition_names"]
+        columns = None
+
+        has_pandas_metadata = (
+            schema.metadata is not None and b"pandas" in schema.metadata
+        )
+
+        if has_pandas_metadata:
+            pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
+            (
+                index_names,
+                column_names,
+                storage_name_mapping,
+                column_index_names,
+            ) = _parse_pandas_metadata(pandas_metadata)
+            if categories is None:
+                categories = []
+                for col in pandas_metadata["columns"]:
+                    if (col["pandas_type"] == "categorical") and (
+                        col["name"] not in categories
+                    ):
+                        categories.append(col["name"])
+        else:
+            index_names = []
+            column_names = schema.names
+            storage_name_mapping = {k: k for k in column_names}
+            column_index_names = [None]
+
+        if index is None and index_names:
+            index = index_names
+
+        if set(column_names).intersection(partitions):
+            raise ValueError(
+                "partition(s) should not exist in columns.\n"
+                "categories: {} | partitions: {}".format(column_names, partitions)
+            )
+
+        column_names, index_names = _normalize_index_columns(
+            columns, column_names + partitions, index, index_names
+        )
+
+        all_columns = index_names + column_names
+
+        # Check that categories are included in columns
+        if categories and not set(categories).intersection(all_columns):
+            raise ValueError(
+                "categories not in available columns.\n"
+                "categories: {} | columns: {}".format(categories, list(all_columns))
+            )
+
+        dtypes = _get_pyarrow_dtypes(schema, categories)
+        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
+
+        index_cols = index or ()
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
+        meta = clear_known_categories(meta, cols=categories)
+
+        parts = _construct_parts(fs, metadata, base_path, partition_keys, categories)
+        stats = None
+
+        import pdb
+
+        pdb.set_trace()
+        return (meta, stats, parts, index)
+
         # Define the dataset object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will

@@ -236,6 +236,8 @@ def read_parquet(
         **kwargs
     )
 
+    return
+
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
         parts, statistics, filters, index, chunksize
