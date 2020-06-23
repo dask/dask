@@ -130,6 +130,57 @@ def test_blockwise_literals():
     assert_eq(z, x)
 
 
+def test_blockwise_1_in_shape_I():
+    def test_f(a, b):
+        assert 1 in b.shape
+
+    p, k, N = 7, 2, 5
+    da.blockwise(
+        test_f,
+        "x",
+        da.zeros((2 * p, 9, k * N), chunks=(p, 3, k)),
+        "xzt",
+        da.zeros((2 * p, 9, 1), chunks=(p, 3, -1)),
+        "xzt",
+        concatenate=True,
+        dtype=float,
+    ).compute()
+
+
+def test_blockwise_1_in_shape_II():
+    def test_f(a, b):
+        assert 1 in b.shape
+
+    p, k, N = 7, 2, 5
+    da.blockwise(
+        test_f,
+        "x",
+        da.zeros((2 * p, 9, k * N, 8), chunks=(p, 9, k, 4)),
+        "xztu",
+        da.zeros((2 * p, 9, 1, 8), chunks=(p, 9, -1, 4)),
+        "xztu",
+        concatenate=True,
+        dtype=float,
+    ).compute()
+
+
+def test_blockwise_1_in_shape_III():
+    def test_f(a, b):
+        assert 1 in b.shape
+
+    k, N = 2, 5
+    da.blockwise(
+        test_f,
+        "x",
+        da.zeros((k * N, 9, 8), chunks=(k, 3, 4)),
+        "xtu",
+        da.zeros((1, 9, 8), chunks=(-1, 3, 4)),
+        "xtu",
+        concatenate=True,
+        dtype=float,
+    ).compute()
+
+
 def test_concatenate3_on_scalars():
     assert_eq(concatenate3([1, 2]), np.array([1, 2]))
 
