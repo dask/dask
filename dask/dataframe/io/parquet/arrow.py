@@ -268,7 +268,7 @@ def _index_in_schema(index, schema):
         return False  # No index to check
 
 
-def _gather_metadata(paths, fs):
+def _gather_metadata(paths, fs, split_row_groups, gather_statistics):
     if len(paths) > 1:
         # This is a list of files
         dataset = pq.ParquetDataset(paths, filesystem=fs, validate_schema=False)
@@ -307,6 +307,11 @@ def _gather_metadata(paths, fs):
         else:
             schema = None
         metadata = None
+        if split_row_groups is False and gather_statistics is not True:
+            # Don't need to construct real metadata if splitting by file
+            # and we don't need column statistics
+            metadata = [p.path for p in dataset.pieces]
+            return schema, metadata, base, partition_info
         for piece, fn in zip(dataset.pieces, fns):
             md = piece.get_metadata()
             if schema is None:
@@ -323,33 +328,101 @@ def _gather_metadata(paths, fs):
 
 
 def _construct_parts(
-    fs, metadata, data_path, partition_keys, partition_obj, categories
+    fs,
+    metadata,
+    filters,
+    index_cols,
+    data_path,
+    partition_keys,
+    partition_obj,
+    categories,
+    split_row_groups,
+    gather_statistics,
 ):
+
+    parts = []
+    # Check if `metadata` is just a list of paths
+    # (not splitting by row-group or collecting statistics)
+    if isinstance(metadata, list):
+        for full_path in metadata:
+            part = {
+                "piece": (full_path, None, partition_keys.get(full_path, None)),
+                "kwargs": {"partitions": partition_obj, "categories": categories},
+            }
+            parts.append(part)
+        return parts
+
+    stat_cols = index_cols  # TODO: Also consider filtered columns
+    gather_statistics = gather_statistics and stat_cols
+
     # get the number of row groups per file
-    row_groups_per_part = 1  # Can use `chunksize` to calculate this
     file_row_groups = defaultdict(int)
+    file_row_group_stats = defaultdict(list)
     for rg in range(metadata.num_row_groups):
-        fpath = metadata.row_group(rg).column(0).file_path
+        row_group = metadata.row_group(rg)
+        fpath = row_group.column(0).file_path
         if fpath is None:
             raise ValueError("metadata is missing file_path string.")
         file_row_groups[fpath] += 1
-    # create parts from each file, limiting the number of row_groups in each piece
-    parts = []
-    for filename, row_group_count in file_row_groups.items():
-        row_groups = range(row_group_count)
-        for i in range(0, row_group_count, row_groups_per_part):
-            rg_list = list(row_groups[i : i + row_groups_per_part])
+        if gather_statistics:
+            s = {"num-rows": row_group.num_rows, "columns": []}
+            for i, name in enumerate(stat_cols):
+                column = row_group.column(i)
+                d = {"name": name}
+                if column.statistics:
+                    cs_min = column.statistics.min
+                    cs_max = column.statistics.max
+                    d.update(
+                        {
+                            "min": cs_min,
+                            "max": cs_max,
+                            "null_count": column.statistics.null_count,
+                        }
+                    )
+                s["columns"].append(d)
+            s["total_byte_size"] = row_group.total_byte_size
+            file_row_group_stats[fpath].append(s)
+
+    stats = []
+    if split_row_groups:
+        # create parts from each file, limiting the number of row_groups in each piece
+        split_row_groups = int(split_row_groups)
+        for filename, row_group_count in file_row_groups.items():
+            row_groups = range(row_group_count)
+            for i in range(0, row_group_count, split_row_groups):
+                rg_list = list(row_groups[i : i + split_row_groups])
+                full_path = (
+                    fs.sep.join([data_path, filename])
+                    if filename != ""
+                    else data_path  # This is a single file
+                )
+                part = {
+                    "piece": (full_path, rg_list, partition_keys.get(full_path, None)),
+                    "kwargs": {"partitions": partition_obj, "categories": categories},
+                }
+                parts.append(part)
+                # TODO: Implement `_aggregate_stats` and uncomment...
+                # stat = _aggregate_stats(
+                #     file_row_group_stats[filename][rg_list[0]:rg_list[-1]+1]
+                # )
+                # stats.append(stat)
+    else:
+        for filename in file_row_groups:
             full_path = (
                 fs.sep.join([data_path, filename])
                 if filename != ""
                 else data_path  # This is a single file
             )
             part = {
-                "piece": (full_path, rg_list, partition_keys.get(full_path, None)),
+                "piece": (full_path, None, partition_keys.get(full_path, None)),
                 "kwargs": {"partitions": partition_obj, "categories": categories},
             }
             parts.append(part)
-    return parts
+            # TODO: Implement `_aggregate_stats` and uncomment...
+            # stat = _aggregate_stats(file_row_group_stats[filename])
+            # stats.append(stat)
+
+    return parts, stats
 
 
 class ArrowEngine(Engine):
@@ -362,11 +435,13 @@ class ArrowEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=True,
+        split_row_groups=1,
         **kwargs,
     ):
 
-        schema, metadata, base_path, partition_info = _gather_metadata(paths, fs)
+        (schema, metadata, base_path, partition_info) = _gather_metadata(
+            paths, fs, split_row_groups, gather_statistics
+        )
         partition_obj = partition_info["partitions"]
         partition_keys = partition_info["partition_keys"]
         partitions = partition_info["partition_names"]
@@ -426,10 +501,38 @@ class ArrowEngine(Engine):
         meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
         meta = clear_known_categories(meta, cols=categories)
 
-        parts = _construct_parts(
-            fs, metadata, base_path, partition_keys, partition_obj, categories
+        if isinstance(metadata, list):
+            gather_statistics = False
+
+        parts, stats = _construct_parts(
+            fs,
+            metadata,
+            filters,
+            index_cols,
+            base_path,
+            partition_keys,
+            partition_obj,
+            categories,
+            split_row_groups,
+            gather_statistics,
         )
-        stats = None  # Not returning statistics for now...
+
+        if partition_obj:
+            for partition in partition_obj:
+                if isinstance(index, list) and partition.name == index[0]:
+                    meta.index = pd.CategoricalIndex(
+                        categories=partition.keys, name=index[0]
+                    )
+                elif partition.name == meta.index.name:
+                    meta.index = pd.CategoricalIndex(
+                        categories=partition.keys, name=meta.index.name
+                    )
+                elif partition.name in meta.columns:
+                    meta[partition.name] = pd.Series(
+                        pd.Categorical(categories=partition.keys, values=[]),
+                        index=meta.index,
+                    )
+
         return (meta, stats, parts, index)
 
         # # Define the dataset object to use for metadata,
@@ -706,26 +809,6 @@ class ArrowEngine(Engine):
                 # we slice with `columns` later on.
                 if level not in columns:
                     columns.append(level)
-        if isinstance(piece, str):
-            # `piece` is a file-path string
-            piece = pq.ParquetDatasetPiece(
-                piece, open_file_func=partial(fs.open, mode="rb")
-            )
-        else:
-            # `piece` contains (path, row_group, partition_keys)
-            (path, row_group, partition_keys) = piece
-            if isinstance(row_group, list):
-                if len(row_group) > 1:
-                    raise ValueError(
-                        "Multiple row-group per piece is not yet supported."
-                    )
-                row_group = row_group[0]
-            piece = pq.ParquetDatasetPiece(
-                path,
-                row_group=row_group,
-                partition_keys=partition_keys,
-                open_file_func=partial(fs.open, mode="rb"),
-            )
 
         # Ensure `columns` and `partitions` do not overlap
         columns_and_parts = columns.copy()
@@ -736,9 +819,38 @@ class ArrowEngine(Engine):
                 else:
                     columns_and_parts.append(part_name)
             columns = columns or None
-        # import pdb; pdb.set_trace()
-        arrow_table = cls._parquet_piece_as_arrow(piece, columns, partitions, **kwargs)
-        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+
+        if isinstance(piece, str):
+            # `piece` is a file-path string
+            path = piece
+            row_group = None
+            partition_keys = None
+        else:
+            # `piece` contains (path, row_group, partition_keys)
+            (path, row_group, partition_keys) = piece
+
+        if not isinstance(row_group, list):
+            row_group = [row_group]
+
+        dfs = []
+        for rg in row_group:
+            piece = pq.ParquetDatasetPiece(
+                path,
+                row_group=rg,
+                partition_keys=partition_keys,
+                open_file_func=partial(fs.open, mode="rb"),
+            )
+
+            arrow_table = cls._parquet_piece_as_arrow(
+                piece, columns, partitions, **kwargs
+            )
+            df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+
+            if len(row_group) > 1:
+                dfs.append(df)
+
+        if len(row_group) > 1:
+            df = pd.concat(dfs)
 
         # Note that `to_pandas(ignore_metadata=False)` means
         # pyarrow will use the pandas metadata to set the index.
