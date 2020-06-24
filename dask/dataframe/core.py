@@ -3420,6 +3420,19 @@ class Index(Series):
             applied = applied.clear_divisions()
         return applied
 
+    def _get_names(self):
+        return self._meta.names
+
+    @derived_from(pd.Index)
+    def set_names(self, names, level=None, inplace=False):
+        if inplace:
+            raise NotImplementedError("The inplace= keyword is not supported")
+        meta = self._meta_nonempty.set_names(names, level)
+        result = self.map_partitions(M.set_names, names, level, inplace, meta=meta)
+        return result
+
+    names = property(fset=set_names, fget=_get_names)
+
 
 class DataFrame(_Frame):
     """
