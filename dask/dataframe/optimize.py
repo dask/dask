@@ -48,10 +48,16 @@ def optimize_read_parquet_getitem(dsk, keys):
         columns = set()
         update_blocks = {}
 
+        old = layers[k]
+
+        # Bail out if there are any duplicate column names
+        if len(set(old.meta.columns)) < len(old.meta.columns):
+            return dsk
+
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
 
-            # Check if we're a read_parquet followed by a getitem
+            # Check if we're a read_parquet followed by a getitem or iloc
             if not isinstance(block, Blockwise):
                 # getitem are Blockwise...
                 return dsk
@@ -60,7 +66,9 @@ def optimize_read_parquet_getitem(dsk, keys):
                 # ... with a single item...
                 return dsk
 
-            if list(block.dsk.values())[0][0] != operator.getitem:
+            if list(block.dsk.values())[0][
+                0
+            ] != operator.getitem and not block.output.startswith("iloc"):
                 # ... where this value is __getitem__...
                 return dsk
 
@@ -73,13 +81,20 @@ def optimize_read_parquet_getitem(dsk, keys):
                 return dsk
 
             block_columns = block.indices[1][0]
+            if isinstance(block_columns, slice):
+                # only single-column iloc is currently optimized
+                return dsk
+
+            if isinstance(block_columns, int):
+                # iloc will give a column index, not a name
+                block_columns = old.meta.columns[block_columns]
+
             if isinstance(block_columns, str):
+                # __getitem__ will give a column name or list of column names
                 block_columns = [block_columns]
 
             columns |= set(block_columns)
             update_blocks[dep] = block
-
-        old = layers[k]
 
         if columns and columns < set(old.meta.columns):
             columns = list(columns)
@@ -90,7 +105,13 @@ def optimize_read_parquet_getitem(dsk, keys):
             for block_key, block in update_blocks.items():
                 # (('read-parquet-old', (.,)), ( ... )) ->
                 # (('read-parquet-new', (.,)), ( ... ))
-                new_indices = ((name, block.indices[0][1]), block.indices[1])
+
+                # After iloc selecting a column, the column index is always 0
+                block_col_indices = block.indices[1]
+                if block_key.startswith("iloc"):
+                    block_col_indices = (0, None)
+
+                new_indices = ((name, block.indices[0][1]), block_col_indices)
                 numblocks = {name: block.numblocks[old.name]}
                 new_block = Blockwise(
                     block.output,
@@ -113,7 +134,7 @@ def optimize_read_parquet_getitem(dsk, keys):
             columns = list(meta.columns)
 
         new = ParquetSubgraph(
-            name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
+            name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs,
         )
         layers[name] = new
         if name != old.name:

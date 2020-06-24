@@ -2574,3 +2574,57 @@ def test_illegal_column_name(tmpdir, engine):
     with pytest.raises(ValueError) as e:
         ddf.to_parquet(fn, engine=engine)
     assert null_name in str(e.value)
+
+
+@pytest.mark.parametrize("preserve_index", [True, False])
+@pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
+def test_iloc_optimization(tmpdir, engine, preserve_index, index):
+    df = pd.DataFrame(
+        {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
+    )
+    df.index.name = "my_index"
+    ddf = dd.from_pandas(df, 2, sort=False)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine, write_index=preserve_index)
+
+    ddf = dd.read_parquet(fn, engine=engine).iloc[:, 1]
+
+    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[ddf._name])
+    get, read = sorted(dsk.layers)  # keys are iloc-, read-parquet-
+    subgraph = dsk.layers[read]
+    assert isinstance(subgraph, ParquetSubgraph)
+    assert subgraph.columns == ["B"]
+
+    assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
+
+
+def test_iloc_optimization_empty(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    df2 = dd.read_parquet(fn, columns=[], engine=engine)
+    dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
+
+    subgraph = list(dsk.layers.values())[0]
+    assert isinstance(subgraph, ParquetSubgraph)
+    assert subgraph.columns == []
+
+
+def test_iloc_optimization_multi(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    a = dd.read_parquet(fn, engine=engine).iloc[:, 1]
+    b = dd.read_parquet(fn, engine=engine).iloc[:, 2]
+    c = dd.read_parquet(fn, engine=engine).iloc[:, 1:3]
+
+    a1, a2, a3 = dask.compute(a, b, c)
+    b1, b2, b3 = dask.compute(a, b, c, optimize_graph=False)
+
+    assert_eq(a1, b1)
+    assert_eq(a2, b2)
+    assert_eq(a3, b3)
