@@ -550,7 +550,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
         assert ddf2.compute().x.cat.categories.tolist() == ["a", "b", "c"]
 
         ddf2.loc[:1000].compute()
-        df.index.name = "index"  # defaults to 'index' in this case
         assert assert_eq(df, ddf2)
 
     # dereference cats
@@ -1024,14 +1023,9 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
             ("partition_column", pa.int64()),
         ]
     )
-    fut = ddf.to_parquet(
-        str(tmpdir),
-        compute=False,
-        engine="pyarrow",
-        partition_on="partition_column",
-        schema=schema,
+    ddf.to_parquet(
+        str(tmpdir), engine="pyarrow", partition_on="partition_column", schema=schema
     )
-    fut.compute(scheduler="single-threaded")
     ddf_after_write = (
         dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False)
         .compute()
@@ -1236,9 +1230,7 @@ def test_divisions_read_with_filters(tmpdir):
     # save it
     d.to_parquet(tmpdir, write_index=True, partition_on=["a"], engine="fastparquet")
     # read it
-    out = dd.read_parquet(
-        tmpdir, index="index", engine="fastparquet", filters=[("a", "==", "b")]
-    )
+    out = dd.read_parquet(tmpdir, engine="fastparquet", filters=[("a", "==", "b")])
     # test it
     expected_divisions = (25, 49)
     assert out.divisions == expected_divisions
@@ -2483,7 +2475,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
                 if pa.types.is_timestamp(col.type) and (
                     col.type.unit in ("s", "ms", "us")
                 ):
-                    multiplier = {"s": 1_0000_000_000, "ms": 1_000_000, "us": 1_000,}[
+                    multiplier = {"s": 1_0000_000_000, "ms": 1_000_000, "us": 1_000}[
                         col.type.unit
                     ]
 
@@ -2518,3 +2510,67 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
     # this should not fail, but instead produce timestamps that are in the valid range
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
+
+
+@write_read_engines_xfail
+def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
+
+    if write_engine == "pyarrow" and pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
+
+    tmp = str(tmpdir)
+    size = 1_000
+    npartitions = 4
+    b = np.arange(npartitions).repeat(size // npartitions)
+    data = pd.DataFrame(
+        {
+            "myindex": np.arange(size),
+            "A": np.random.random(size=size),
+            "B": pd.Categorical(b),
+        }
+    ).set_index("myindex")
+    data.index.name = None
+    df1 = dd.from_pandas(data, npartitions=npartitions)
+    df1.to_parquet(tmp, partition_on="B", engine=write_engine)
+
+    expect = data[data["B"] == 1]
+    got = dd.read_parquet(tmp, engine=read_engine, filters=[("B", "==", 1)])
+    assert_eq(expect, got)
+
+
+def test_from_pandas_preserve_none_index(tmpdir, engine):
+
+    check_pyarrow()
+    if pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
+
+    fn = str(tmpdir.join("test.parquet"))
+    df = pd.DataFrame({"a": [1, 2], "b": [4, 5], "c": [6, 7]}).set_index("c")
+    df.index.name = None
+    df.to_parquet(fn, engine="pyarrow", index=True)
+
+    expect = pd.read_parquet(fn)
+    got = dd.read_parquet(fn, engine=engine)
+    assert_eq(expect, got)
+
+
+def test_illegal_column_name(tmpdir, engine):
+    # Make sure user is prevented from preserving a "None" index
+    # name if there is already a column using the special `null_name`
+    null_name = "__null_dask_index__"
+    fn = str(tmpdir.join("test.parquet"))
+    df = pd.DataFrame({"x": [1, 2], null_name: [4, 5]}).set_index("x")
+    df.index.name = None
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    # If we don't want to preserve the None index name, the
+    # write should work, but a UserWarning should be raised
+    with pytest.raises(UserWarning) as w:
+        ddf.to_parquet(fn, engine=engine, write_index=False)
+    assert null_name in str(w.value)
+
+    # If we do want to preserve the None index name, should
+    # get a ValueError for having an illegal column name
+    with pytest.raises(ValueError) as e:
+        ddf.to_parquet(fn, engine=engine)
+    assert null_name in str(e.value)
