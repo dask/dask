@@ -230,14 +230,13 @@ class FastParquetEngine(Engine):
                 column_index_names,
             ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
             #  auto-ranges should not be created by fastparquet
-            index_names = [n for n in index_names if n is not None]
             column_names.extend(pf.cats)
 
         else:
             raise ValueError("File has multiple entries for 'pandas' metadata")
 
         if index is None and len(index_names) > 0:
-            if len(index_names) == 1:
+            if len(index_names) == 1 and index_names[0] is not None:
                 index = index_names[0]
             else:
                 index = index_names
@@ -437,13 +436,18 @@ class FastParquetEngine(Engine):
             }
             parts.append(part_item)
 
-        return (meta, stats, parts)
+        # Cannot allow `None` in columns if the user has specified index=False
+        if index is False and None in meta.columns:
+            meta.drop(columns=[None], inplace=True)
+
+        return (meta, stats, parts, index)
 
     @classmethod
     def read_partition(
         cls, fs, piece, columns, index, categories=(), pf=None, **kwargs
     ):
         if isinstance(index, list):
+            index = ["__index_level_0__" if i is None else i for i in index]
             columns += index
 
         if pf is None:
