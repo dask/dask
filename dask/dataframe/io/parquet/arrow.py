@@ -1,14 +1,17 @@
 from functools import partial
 from collections import defaultdict, OrderedDict
 import json
-import warnings
+
+# import warnings
 from distutils.version import LooseVersion
 
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow.compat import guid
-from ....utils import natural_sort_key, getargspec
+from ....utils import getargspec
+
+# from ....utils import natural_sort_key
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
 
@@ -281,11 +284,14 @@ def _gather_metadata(paths, fs):
         base = paths[0]
         fns = [None]
 
-    partition_info = {"partition_keys": {}, "partition_names": []}
+    partition_info = {"partitions": None, "partition_keys": {}, "partition_names": []}
+    fn_partitioned = False
     if dataset.partitions is not None:
+        fn_partitioned = True
         partition_info["partition_names"] = [
             n for n in dataset.partitions.partition_names if n is not None
         ]
+        partition_info["partitions"] = dataset.partitions
         for piece in dataset.pieces:
             partition_info["partition_keys"][piece.path] = piece.partition_keys
 
@@ -305,7 +311,9 @@ def _gather_metadata(paths, fs):
             md = piece.get_metadata()
             if schema is None:
                 schema = md.schema.to_arrow_schema()
-            if fn:
+            if fn_partitioned:
+                md.set_file_path(piece.path.replace(base + fs.sep, ""))
+            elif fn:
                 md.set_file_path(fn)
             if metadata:
                 metadata.append_row_groups(md)
@@ -314,7 +322,9 @@ def _gather_metadata(paths, fs):
         return schema, metadata, base, partition_info
 
 
-def _construct_parts(fs, metadata, data_path, partition_keys, categories):
+def _construct_parts(
+    fs, metadata, data_path, partition_keys, partition_obj, categories
+):
     # get the number of row groups per file
     row_groups_per_part = 1  # Can use `chunksize` to calculate this
     file_row_groups = defaultdict(int)
@@ -335,11 +345,8 @@ def _construct_parts(fs, metadata, data_path, partition_keys, categories):
                 else data_path  # This is a single file
             )
             part = {
-                "piece": (full_path, rg_list),
-                "kwargs": {
-                    "partitions": partition_keys.get(full_path, None),
-                    "categories": categories,
-                },
+                "piece": (full_path, rg_list, partition_keys.get(full_path, None)),
+                "kwargs": {"partitions": partition_obj, "categories": categories},
             }
             parts.append(part)
     return parts
@@ -360,6 +367,7 @@ class ArrowEngine(Engine):
     ):
 
         schema, metadata, base_path, partition_info = _gather_metadata(paths, fs)
+        partition_obj = partition_info["partitions"]
         partition_keys = partition_info["partition_keys"]
         partitions = partition_info["partition_names"]
         columns = None
@@ -418,276 +426,274 @@ class ArrowEngine(Engine):
         meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
         meta = clear_known_categories(meta, cols=categories)
 
-        parts = _construct_parts(fs, metadata, base_path, partition_keys, categories)
-        stats = None
-
-        import pdb
-
-        pdb.set_trace()
+        parts = _construct_parts(
+            fs, metadata, base_path, partition_keys, partition_obj, categories
+        )
+        stats = None  # Not returning statistics for now...
         return (meta, stats, parts, index)
 
-        # Define the dataset object to use for metadata,
-        # Also, initialize `parts`.  If `parts` is populated here,
-        # then each part will correspond to a file.  Otherwise, each part will
-        # correspond to a row group (populated below)
-        parts, dataset = _determine_dataset_parts(
-            fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
-        )
-        # Check if the column-chunk file_path's are set in "_metadata".
-        # If available, we can use the path to sort the row-groups
-        col_chunk_paths = False
-        if dataset.metadata:
-            col_chunk_paths = all(
-                dataset.metadata.row_group(i).column(0).file_path is not None
-                for i in range(dataset.metadata.num_row_groups)
-            )
+        # # Define the dataset object to use for metadata,
+        # # Also, initialize `parts`.  If `parts` is populated here,
+        # # then each part will correspond to a file.  Otherwise, each part will
+        # # correspond to a row group (populated below)
+        # parts, dataset = _determine_dataset_parts(
+        #     fs, paths, gather_statistics, filters, kwargs.get("dataset", {})
+        # )
+        # # Check if the column-chunk file_path's are set in "_metadata".
+        # # If available, we can use the path to sort the row-groups
+        # col_chunk_paths = False
+        # if dataset.metadata:
+        #     col_chunk_paths = all(
+        #         dataset.metadata.row_group(i).column(0).file_path is not None
+        #         for i in range(dataset.metadata.num_row_groups)
+        #     )
 
-        # TODO: Call to `_determine_dataset_parts` uses `pq.ParquetDataset`
-        # to define the `dataset` object. `split_row_groups` should be passed
-        # to that constructor once it is supported (see ARROW-2801).
-        if dataset.partitions is not None:
-            partitions = [
-                n for n in dataset.partitions.partition_names if n is not None
-            ]
-            if partitions and dataset.metadata:
-                # Dont use dataset.metadata for partitioned datasets, unless
-                # the column-chunk metadata includes the `"file_path"`.
-                # The order of dataset.metadata.row_group items is often
-                # different than the order of `dataset.pieces`.
-                if not col_chunk_paths or (
-                    len(dataset.pieces) != dataset.metadata.num_row_groups
-                ):
-                    dataset.schema = dataset.metadata.schema
-                    dataset.metadata = None
-        else:
-            partitions = []
+        # # TODO: Call to `_determine_dataset_parts` uses `pq.ParquetDataset`
+        # # to define the `dataset` object. `split_row_groups` should be passed
+        # # to that constructor once it is supported (see ARROW-2801).
+        # if dataset.partitions is not None:
+        #     partitions = [
+        #         n for n in dataset.partitions.partition_names if n is not None
+        #     ]
+        #     if partitions and dataset.metadata:
+        #         # Dont use dataset.metadata for partitioned datasets, unless
+        #         # the column-chunk metadata includes the `"file_path"`.
+        #         # The order of dataset.metadata.row_group items is often
+        #         # different than the order of `dataset.pieces`.
+        #         if not col_chunk_paths or (
+        #             len(dataset.pieces) != dataset.metadata.num_row_groups
+        #         ):
+        #             dataset.schema = dataset.metadata.schema
+        #             dataset.metadata = None
+        # else:
+        #     partitions = []
 
-        # Statistics are currently collected at the row-group level only.
-        # Therefore, we cannot perform filtering with split_row_groups=False.
-        # For "partitioned" datasets, each file (usually) corresponds to a
-        # row-group anyway.
-        # TODO: Map row-group statistics onto file pieces for filtering.
-        #       This shouldn't be difficult if `col_chunk_paths==True`
-        if not split_row_groups and not col_chunk_paths:
-            if gather_statistics is None and not partitions:
-                gather_statistics = False
-                if filters:
-                    raise ValueError(
-                        "Filters not supported with split_row_groups=False "
-                        "(unless proper _metadata is available)."
-                    )
-            if gather_statistics and not partitions:
-                raise ValueError(
-                    "Statistics not supported with split_row_groups=False."
-                    "(unless proper _metadata is available)."
-                )
+        # # Statistics are currently collected at the row-group level only.
+        # # Therefore, we cannot perform filtering with split_row_groups=False.
+        # # For "partitioned" datasets, each file (usually) corresponds to a
+        # # row-group anyway.
+        # # TODO: Map row-group statistics onto file pieces for filtering.
+        # #       This shouldn't be difficult if `col_chunk_paths==True`
+        # if not split_row_groups and not col_chunk_paths:
+        #     if gather_statistics is None and not partitions:
+        #         gather_statistics = False
+        #         if filters:
+        #             raise ValueError(
+        #                 "Filters not supported with split_row_groups=False "
+        #                 "(unless proper _metadata is available)."
+        #             )
+        #     if gather_statistics and not partitions:
+        #         raise ValueError(
+        #             "Statistics not supported with split_row_groups=False."
+        #             "(unless proper _metadata is available)."
+        #         )
 
-        if dataset.metadata:
-            schema = dataset.metadata.schema.to_arrow_schema()
-        else:
-            schema = dataset.schema.to_arrow_schema()
-        columns = None
+        # if dataset.metadata:
+        #     schema = dataset.metadata.schema.to_arrow_schema()
+        # else:
+        #     schema = dataset.schema.to_arrow_schema()
+        # columns = None
 
-        has_pandas_metadata = (
-            schema.metadata is not None and b"pandas" in schema.metadata
-        )
+        # has_pandas_metadata = (
+        #     schema.metadata is not None and b"pandas" in schema.metadata
+        # )
 
-        if has_pandas_metadata:
-            pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
-            (
-                index_names,
-                column_names,
-                storage_name_mapping,
-                column_index_names,
-            ) = _parse_pandas_metadata(pandas_metadata)
-            if categories is None:
-                categories = []
-                for col in pandas_metadata["columns"]:
-                    if (col["pandas_type"] == "categorical") and (
-                        col["name"] not in categories
-                    ):
-                        categories.append(col["name"])
-        else:
-            index_names = []
-            column_names = schema.names
-            storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
+        # if has_pandas_metadata:
+        #     pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
+        #     (
+        #         index_names,
+        #         column_names,
+        #         storage_name_mapping,
+        #         column_index_names,
+        #     ) = _parse_pandas_metadata(pandas_metadata)
+        #     if categories is None:
+        #         categories = []
+        #         for col in pandas_metadata["columns"]:
+        #             if (col["pandas_type"] == "categorical") and (
+        #                 col["name"] not in categories
+        #             ):
+        #                 categories.append(col["name"])
+        # else:
+        #     index_names = []
+        #     column_names = schema.names
+        #     storage_name_mapping = {k: k for k in column_names}
+        #     column_index_names = [None]
 
-        if index is None and index_names:
-            index = index_names
+        # if index is None and index_names:
+        #     index = index_names
 
-        if set(column_names).intersection(partitions):
-            raise ValueError(
-                "partition(s) should not exist in columns.\n"
-                "categories: {} | partitions: {}".format(column_names, partitions)
-            )
+        # if set(column_names).intersection(partitions):
+        #     raise ValueError(
+        #         "partition(s) should not exist in columns.\n"
+        #         "categories: {} | partitions: {}".format(column_names, partitions)
+        #     )
 
-        column_names, index_names = _normalize_index_columns(
-            columns, column_names + partitions, index, index_names
-        )
+        # column_names, index_names = _normalize_index_columns(
+        #     columns, column_names + partitions, index, index_names
+        # )
 
-        all_columns = index_names + column_names
+        # all_columns = index_names + column_names
 
-        pieces = sorted(dataset.pieces, key=lambda piece: natural_sort_key(piece.path))
+        # pieces = sorted(dataset.pieces, key=lambda piece: natural_sort_key(piece.path))
 
-        # Check that categories are included in columns
-        if categories and not set(categories).intersection(all_columns):
-            raise ValueError(
-                "categories not in available columns.\n"
-                "categories: {} | columns: {}".format(categories, list(all_columns))
-            )
+        # # Check that categories are included in columns
+        # if categories and not set(categories).intersection(all_columns):
+        #     raise ValueError(
+        #         "categories not in available columns.\n"
+        #         "categories: {} | columns: {}".format(categories, list(all_columns))
+        #     )
 
-        dtypes = _get_pyarrow_dtypes(schema, categories)
-        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
+        # dtypes = _get_pyarrow_dtypes(schema, categories)
+        # dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-        index_cols = index or ()
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
+        # index_cols = index or ()
+        # meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
 
-        meta = clear_known_categories(meta, cols=categories)
-        if (
-            gather_statistics is None
-            and dataset.metadata
-            and dataset.metadata.num_row_groups >= len(pieces)
-        ):
-            gather_statistics = True
-        if not pieces:
-            gather_statistics = False
+        # meta = clear_known_categories(meta, cols=categories)
+        # if (
+        #     gather_statistics is None
+        #     and dataset.metadata
+        #     and dataset.metadata.num_row_groups >= len(pieces)
+        # ):
+        #     gather_statistics = True
+        # if not pieces:
+        #     gather_statistics = False
 
-        if filters:
-            # Filters may require us to gather statistics
-            if gather_statistics is False and partitions:
-                warnings.warn(
-                    "Filtering with gather_statistics=False. "
-                    "Only partition columns will be filtered correctly."
-                )
-            elif gather_statistics is False:
-                raise ValueError("Cannot apply filters with gather_statistics=False")
-            elif not gather_statistics:
-                gather_statistics = True
+        # if filters:
+        #     # Filters may require us to gather statistics
+        #     if gather_statistics is False and partitions:
+        #         warnings.warn(
+        #             "Filtering with gather_statistics=False. "
+        #             "Only partition columns will be filtered correctly."
+        #         )
+        #     elif gather_statistics is False:
+        #         raise ValueError("Cannot apply filters with gather_statistics=False")
+        #     elif not gather_statistics:
+        #         gather_statistics = True
 
-        row_groups_per_piece = None
-        if gather_statistics:
-            # Read from _metadata file
-            if dataset.metadata and dataset.metadata.num_row_groups >= len(pieces):
-                row_groups = [
-                    dataset.metadata.row_group(i)
-                    for i in range(dataset.metadata.num_row_groups)
-                ]
+        # row_groups_per_piece = None
+        # if gather_statistics:
+        #     # Read from _metadata file
+        #     if dataset.metadata and dataset.metadata.num_row_groups >= len(pieces):
+        #         row_groups = [
+        #             dataset.metadata.row_group(i)
+        #             for i in range(dataset.metadata.num_row_groups)
+        #         ]
 
-                # Re-order row-groups by path name if known
-                if col_chunk_paths:
-                    row_groups = sorted(
-                        row_groups,
-                        key=lambda row_group: natural_sort_key(
-                            row_group.column(0).file_path
-                        ),
-                    )
+        #         # Re-order row-groups by path name if known
+        #         if col_chunk_paths:
+        #             row_groups = sorted(
+        #                 row_groups,
+        #                 key=lambda row_group: natural_sort_key(
+        #                     row_group.column(0).file_path
+        #                 ),
+        #             )
 
-                if split_row_groups and len(dataset.paths) == 1:
-                    row_groups_per_piece = _get_row_groups_per_piece(
-                        pieces, dataset.metadata, dataset.paths[0], fs
-                    )
-                names = dataset.metadata.schema.names
-            else:
-                # Read from each individual piece (quite possibly slow).
-                row_groups, row_groups_per_piece = _get_md_row_groups(pieces)
-                if row_groups:
-                    piece = pieces[0]
-                    md = piece.get_metadata()
-                    names = md.schema.names
-                else:
-                    gather_statistics = False
+        #         if split_row_groups and len(dataset.paths) == 1:
+        #             row_groups_per_piece = _get_row_groups_per_piece(
+        #                 pieces, dataset.metadata, dataset.paths[0], fs
+        #             )
+        #         names = dataset.metadata.schema.names
+        #     else:
+        #         # Read from each individual piece (quite possibly slow).
+        #         row_groups, row_groups_per_piece = _get_md_row_groups(pieces)
+        #         if row_groups:
+        #             piece = pieces[0]
+        #             md = piece.get_metadata()
+        #             names = md.schema.names
+        #         else:
+        #             gather_statistics = False
 
-        if gather_statistics:
-            stats = []
-            skip_cols = set()  # Columns with min/max = None detected
-            path_last = None
-            for ri, row_group in enumerate(row_groups):
-                s = {"num-rows": row_group.num_rows, "columns": []}
-                for i, name in enumerate(names):
-                    if name not in skip_cols:
-                        column = row_group.column(i)
-                        d = {"name": name}
-                        if column.statistics:
-                            cs_min = column.statistics.min
-                            cs_max = column.statistics.max
-                            if not column.statistics.has_min_max:
-                                cs_min, cs_max = None, None
-                            if None in [cs_min, cs_max] and ri == 0:
-                                skip_cols.add(name)
-                                continue
-                            cs_vals = pd.Series([cs_min, cs_max])
-                            d.update(
-                                {
-                                    "min": cs_vals[0],
-                                    "max": cs_vals[1],
-                                    "null_count": column.statistics.null_count,
-                                }
-                            )
-                        s["columns"].append(d)
-                s["total_byte_size"] = row_group.total_byte_size
-                if col_chunk_paths:
-                    s["file_path_0"] = row_group.column(0).file_path
-                    if not split_row_groups and (s["file_path_0"] == path_last):
-                        # Rather than appending a new "row-group", just merge
-                        # new `s` statistics into last element of `stats`.
-                        # Note that each stats element will now correspond to an
-                        # entire file (rather than actual "row-groups")
-                        _merge_statistics(stats, s)
-                        continue
-                    else:
-                        path_last = s["file_path_0"]
-                stats.append(s)
-        else:
-            stats = None
+        # if gather_statistics:
+        #     stats = []
+        #     skip_cols = set()  # Columns with min/max = None detected
+        #     path_last = None
+        #     for ri, row_group in enumerate(row_groups):
+        #         s = {"num-rows": row_group.num_rows, "columns": []}
+        #         for i, name in enumerate(names):
+        #             if name not in skip_cols:
+        #                 column = row_group.column(i)
+        #                 d = {"name": name}
+        #                 if column.statistics:
+        #                     cs_min = column.statistics.min
+        #                     cs_max = column.statistics.max
+        #                     if not column.statistics.has_min_max:
+        #                         cs_min, cs_max = None, None
+        #                     if None in [cs_min, cs_max] and ri == 0:
+        #                         skip_cols.add(name)
+        #                         continue
+        #                     cs_vals = pd.Series([cs_min, cs_max])
+        #                     d.update(
+        #                         {
+        #                             "min": cs_vals[0],
+        #                             "max": cs_vals[1],
+        #                             "null_count": column.statistics.null_count,
+        #                         }
+        #                     )
+        #                 s["columns"].append(d)
+        #         s["total_byte_size"] = row_group.total_byte_size
+        #         if col_chunk_paths:
+        #             s["file_path_0"] = row_group.column(0).file_path
+        #             if not split_row_groups and (s["file_path_0"] == path_last):
+        #                 # Rather than appending a new "row-group", just merge
+        #                 # new `s` statistics into last element of `stats`.
+        #                 # Note that each stats element will now correspond to an
+        #                 # entire file (rather than actual "row-groups")
+        #                 _merge_statistics(stats, s)
+        #                 continue
+        #             else:
+        #                 path_last = s["file_path_0"]
+        #         stats.append(s)
+        # else:
+        #     stats = None
 
-        if dataset.partitions:
-            for partition in dataset.partitions:
-                if isinstance(index, list) and partition.name == index[0]:
-                    meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=index[0]
-                    )
-                elif partition.name == meta.index.name:
-                    meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=meta.index.name
-                    )
-                elif partition.name in meta.columns:
-                    meta[partition.name] = pd.Series(
-                        pd.Categorical(categories=partition.keys, values=[]),
-                        index=meta.index,
-                    )
+        # if dataset.partitions:
+        #     for partition in dataset.partitions:
+        #         if isinstance(index, list) and partition.name == index[0]:
+        #             meta.index = pd.CategoricalIndex(
+        #                 categories=partition.keys, name=index[0]
+        #             )
+        #         elif partition.name == meta.index.name:
+        #             meta.index = pd.CategoricalIndex(
+        #                 categories=partition.keys, name=meta.index.name
+        #             )
+        #         elif partition.name in meta.columns:
+        #             meta[partition.name] = pd.Series(
+        #                 pd.Categorical(categories=partition.keys, values=[]),
+        #                 index=meta.index,
+        #             )
 
-        # Create `parts`
-        # This is a list of row-group-descriptor dicts, or file-paths
-        # if we have a list of files and gather_statistics=False
-        if not parts:
-            if split_row_groups and row_groups_per_piece:
-                # TODO: This block can be removed after ARROW-2801
-                parts = []
-                rg_tot = 0
-                for i, piece in enumerate(pieces):
-                    num_row_groups = row_groups_per_piece[i]
-                    for rg in range(num_row_groups):
-                        parts.append((piece.path, rg, piece.partition_keys))
-                        # Setting file_path here, because it may be
-                        # missing from the row-group/column-chunk stats
-                        if "file_path_0" not in stats[rg_tot]:
-                            stats[rg_tot]["file_path_0"] = piece.path
-                        rg_tot += 1
-            else:
-                parts = [
-                    (piece.path, piece.row_group, piece.partition_keys)
-                    for piece in pieces
-                ]
-        parts = [
-            {
-                "piece": piece,
-                "kwargs": {"partitions": dataset.partitions, "categories": categories},
-            }
-            for piece in parts
-        ]
+        # # Create `parts`
+        # # This is a list of row-group-descriptor dicts, or file-paths
+        # # if we have a list of files and gather_statistics=False
+        # if not parts:
+        #     if split_row_groups and row_groups_per_piece:
+        #         # TODO: This block can be removed after ARROW-2801
+        #         parts = []
+        #         rg_tot = 0
+        #         for i, piece in enumerate(pieces):
+        #             num_row_groups = row_groups_per_piece[i]
+        #             for rg in range(num_row_groups):
+        #                 parts.append((piece.path, rg, piece.partition_keys))
+        #                 # Setting file_path here, because it may be
+        #                 # missing from the row-group/column-chunk stats
+        #                 if "file_path_0" not in stats[rg_tot]:
+        #                     stats[rg_tot]["file_path_0"] = piece.path
+        #                 rg_tot += 1
+        #     else:
+        #         parts = [
+        #             (piece.path, piece.row_group, piece.partition_keys)
+        #             for piece in pieces
+        #         ]
+        # parts = [
+        #     {
+        #         "piece": piece,
+        #         "kwargs": {"partitions": dataset.partitions, "categories": categories},
+        #     }
+        #     for piece in parts
+        # ]
 
-        return (meta, stats, parts, index)
+        # return (meta, stats, parts, index)
 
     @classmethod
     def read_partition(
@@ -708,6 +714,12 @@ class ArrowEngine(Engine):
         else:
             # `piece` contains (path, row_group, partition_keys)
             (path, row_group, partition_keys) = piece
+            if isinstance(row_group, list):
+                if len(row_group) > 1:
+                    raise ValueError(
+                        "Multiple row-group per piece is not yet supported."
+                    )
+                row_group = row_group[0]
             piece = pq.ParquetDatasetPiece(
                 path,
                 row_group=row_group,
@@ -724,7 +736,7 @@ class ArrowEngine(Engine):
                 else:
                     columns_and_parts.append(part_name)
             columns = columns or None
-
+        # import pdb; pdb.set_trace()
         arrow_table = cls._parquet_piece_as_arrow(piece, columns, partitions, **kwargs)
         df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
 
