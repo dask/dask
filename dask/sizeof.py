@@ -83,6 +83,9 @@ def register_numpy():
 
     @sizeof.register(np.ndarray)
     def sizeof_numpy_ndarray(x):
+        if 0 in x.strides:
+            xs = x[tuple(slice(None) if s != 0 else slice(1) for s in x.strides)]
+            return xs.nbytes
         return int(x.nbytes)
 
 

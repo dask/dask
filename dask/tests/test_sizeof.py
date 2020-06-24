@@ -25,6 +25,12 @@ def test_numpy():
     assert sizeof(dt) == sys.getsizeof(dt)
 
 
+def test_numpy_0_strided():
+    np = pytest.importorskip("numpy")
+    x = np.broadcast_to(1, (100, 100, 100))
+    assert sizeof(x) <= 8
+
+
 def test_pandas():
     pd = pytest.importorskip("pandas")
     df = pd.DataFrame(
