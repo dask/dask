@@ -1,5 +1,6 @@
 from functools import partial
 from collections import defaultdict, OrderedDict
+from itertools import chain
 import json
 
 # import warnings
@@ -268,19 +269,27 @@ def _index_in_schema(index, schema):
         return False  # No index to check
 
 
-def _gather_metadata(paths, fs, split_row_groups, gather_statistics):
+def _gather_metadata(
+    paths, fs, split_row_groups, filters, gather_statistics, dataset_kwargs
+):
     if len(paths) > 1:
         # This is a list of files
-        dataset = pq.ParquetDataset(paths, filesystem=fs, validate_schema=False)
+        dataset = pq.ParquetDataset(
+            paths, filesystem=fs, filters=filters, **dataset_kwargs
+        )
         base, fns = _analyze_paths(paths, fs)
     elif fs.isdir(paths[0]):
         # This is a directory
-        dataset = pq.ParquetDataset(paths[0], filesystem=fs, validate_schema=False)
+        dataset = pq.ParquetDataset(
+            paths[0], filesystem=fs, filters=filters, **dataset_kwargs
+        )
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         base, fns = _analyze_paths(allpaths, fs)
     else:
         # This is a single file
-        dataset = pq.ParquetDataset(paths[0], filesystem=fs)
+        dataset = pq.ParquetDataset(
+            paths[0], filesystem=fs, filters=filters, **dataset_kwargs
+        )
         base = paths[0]
         fns = [None]
 
@@ -299,7 +308,9 @@ def _gather_metadata(paths, fs, split_row_groups, gather_statistics):
     if dataset.metadata:
         # We have a metadata file
         schema = dataset.metadata.schema.to_arrow_schema()
-        return schema, dataset.metadata, base, partition_info
+        if gather_statistics is None:
+            gather_statistics = True
+        return schema, dataset.metadata, base, partition_info, gather_statistics
     else:
         # Collect proper metadata manually
         if dataset.schema is not None:
@@ -324,12 +335,40 @@ def _gather_metadata(paths, fs, split_row_groups, gather_statistics):
                 metadata.append_row_groups(md)
             else:
                 metadata = md
-        return schema, metadata, base, partition_info
+        return schema, metadata, base, partition_info, gather_statistics
+
+
+def _aggregate_stats(
+    file_path, file_row_group_stats, file_row_group_column_stats, stat_col_indices
+):
+    if len(file_row_group_stats) < 1:
+        raise ValueError("Empty statistics.")
+    else:
+        df_rgs = pd.DataFrame(file_row_group_stats)
+        s = {
+            "file_path_0": file_path,
+            "num-rows": df_rgs["num-rows"].sum(),
+            "total_byte_size": df_rgs["total_byte_size"].sum(),
+            "columns": [],
+        }
+        df_cols = pd.DataFrame(file_row_group_column_stats)
+        for ind, name in enumerate(stat_col_indices):
+            i = ind * 3
+            s["columns"].append(
+                {
+                    "name": name,
+                    "min": df_cols.iloc[:, i].min(),
+                    "max": df_cols.iloc[:, i + 1].max(),
+                    "null_count": df_cols.iloc[:, i + 2].sum(),
+                }
+            )
+        return s
 
 
 def _construct_parts(
     fs,
     metadata,
+    schema,
     filters,
     index_cols,
     data_path,
@@ -341,6 +380,8 @@ def _construct_parts(
 ):
 
     parts = []
+    stats = []
+
     # Check if `metadata` is just a list of paths
     # (not splitting by row-group or collecting statistics)
     if isinstance(metadata, list):
@@ -350,14 +391,20 @@ def _construct_parts(
                 "kwargs": {"partitions": partition_obj, "categories": categories},
             }
             parts.append(part)
-        return parts
+        return parts, stats
 
-    stat_cols = index_cols  # TODO: Also consider filtered columns
-    gather_statistics = gather_statistics and stat_cols
+    stat_col_indices = {}
+    flat_filters = list(chain(*filters)) if filters else []
+    for i, name in enumerate(schema.names):
+        if name in index_cols or name in flat_filters:
+            stat_col_indices[name] = i
+    stat_cols = list(stat_col_indices.keys())
+    gather_statistics = gather_statistics and len(stat_cols) > 0
 
     # get the number of row groups per file
     file_row_groups = defaultdict(int)
     file_row_group_stats = defaultdict(list)
+    file_row_group_column_stats = defaultdict(list)
     for rg in range(metadata.num_row_groups):
         row_group = metadata.row_group(rg)
         fpath = row_group.column(0).file_path
@@ -365,25 +412,24 @@ def _construct_parts(
             raise ValueError("metadata is missing file_path string.")
         file_row_groups[fpath] += 1
         if gather_statistics:
-            s = {"num-rows": row_group.num_rows, "columns": []}
-            for i, name in enumerate(stat_cols):
+            s = {
+                "num-rows": row_group.num_rows,
+                "total_byte_size": row_group.total_byte_size,
+            }
+            cstats = []
+            for name, i in stat_col_indices.items():
                 column = row_group.column(i)
-                d = {"name": name}
                 if column.statistics:
-                    cs_min = column.statistics.min
-                    cs_max = column.statistics.max
-                    d.update(
-                        {
-                            "min": cs_min,
-                            "max": cs_max,
-                            "null_count": column.statistics.null_count,
-                        }
-                    )
-                s["columns"].append(d)
-            s["total_byte_size"] = row_group.total_byte_size
+                    cstats += [
+                        column.statistics.min,
+                        column.statistics.max,
+                        column.statistics.null_count,
+                    ]
+                else:
+                    cstats += [None, None, None]
             file_row_group_stats[fpath].append(s)
+            file_row_group_column_stats[fpath].append(tuple(cstats))
 
-    stats = []
     if split_row_groups:
         # create parts from each file, limiting the number of row_groups in each piece
         split_row_groups = int(split_row_groups)
@@ -401,11 +447,16 @@ def _construct_parts(
                     "kwargs": {"partitions": partition_obj, "categories": categories},
                 }
                 parts.append(part)
-                # TODO: Implement `_aggregate_stats` and uncomment...
-                # stat = _aggregate_stats(
-                #     file_row_group_stats[filename][rg_list[0]:rg_list[-1]+1]
-                # )
-                # stats.append(stat)
+                if gather_statistics:
+                    stat = _aggregate_stats(
+                        filename,
+                        file_row_group_stats[filename][rg_list[0] : rg_list[-1] + 1],
+                        file_row_group_column_stats[filename][
+                            rg_list[0] : rg_list[-1] + 1
+                        ],
+                        stat_col_indices,
+                    )
+                    stats.append(stat)
     else:
         for filename in file_row_groups:
             full_path = (
@@ -418,9 +469,14 @@ def _construct_parts(
                 "kwargs": {"partitions": partition_obj, "categories": categories},
             }
             parts.append(part)
-            # TODO: Implement `_aggregate_stats` and uncomment...
-            # stat = _aggregate_stats(file_row_group_stats[filename])
-            # stats.append(stat)
+            if gather_statistics:
+                stat = _aggregate_stats(
+                    filename,
+                    file_row_group_stats[filename],
+                    file_row_group_column_stats[filename],
+                    stat_col_indices,
+                )
+                stats.append(stat)
 
     return parts, stats
 
@@ -439,8 +495,19 @@ class ArrowEngine(Engine):
         **kwargs,
     ):
 
-        (schema, metadata, base_path, partition_info) = _gather_metadata(
-            paths, fs, split_row_groups, gather_statistics
+        (
+            schema,
+            metadata,
+            base_path,
+            partition_info,
+            gather_statistics,
+        ) = _gather_metadata(
+            paths,
+            fs,
+            split_row_groups,
+            filters,
+            gather_statistics,
+            kwargs.get("dataset", {}),
         )
         partition_obj = partition_info["partitions"]
         partition_keys = partition_info["partition_keys"]
@@ -507,6 +574,7 @@ class ArrowEngine(Engine):
         parts, stats = _construct_parts(
             fs,
             metadata,
+            schema,
             filters,
             index_cols,
             base_path,
