@@ -434,13 +434,15 @@ Dask Name: {name}, {task} tasks"""
     @property
     def index(self):
         """Return dask Index instance"""
-        return self.map_partitions(
-            getattr,
-            "index",
-            token=self._name + "-index",
-            meta=self._meta.index,
-            enforce_metadata=False,
-        )
+        if not hasattr(self, "_index"):
+            self._index = self.map_partitions(
+                getattr,
+                "index",
+                token=self._name + "-index",
+                meta=self._meta.index,
+                enforce_metadata=False,
+            )
+        return self._index
 
     @index.setter
     def index(self, value):
@@ -451,6 +453,7 @@ Dask Name: {name}, {task} tasks"""
         self.dask = result.dask
         self._name = result._name
         self._meta = result._meta
+        self._index = result.index
 
     def reset_index(self, drop=False):
         """Reset the index to the default index.
@@ -3423,15 +3426,18 @@ class Index(Series):
     def _get_names(self):
         return self._meta.names
 
-    @derived_from(pd.Index)
-    def set_names(self, names, level=None, inplace=False):
-        if inplace:
-            raise NotImplementedError("The inplace= keyword is not supported")
+    def _set_names(self, names, level=None, inplace=True):
         meta = self._meta_nonempty.set_names(names, level)
         result = self.map_partitions(M.set_names, names, level, inplace, meta=meta)
+        if inplace:
+            self._meta.names = meta.names
         return result
 
-    names = property(fset=set_names, fget=_get_names)
+    @derived_from(pd.Index)
+    def set_names(self, names, level=None, inplace=False):
+        return self._set_names(names, level, inplace)
+
+    names = property(fset=_set_names, fget=_get_names)
 
 
 class DataFrame(_Frame):
