@@ -493,8 +493,12 @@ class ArrowEngine(Engine):
         meta = clear_known_categories(meta, cols=categories)
 
         # Cannot gather_statistics if our `metadata` is a list
-        # of paths, or if we are building a multiindex (for now)
+        # of paths, or if we are building a multiindex (for now).
+        # We also don't "need" to gather statistics if we don't
+        # want to apply any filters or calculate divisions
         if isinstance(metadata, list) or len(index_cols) > 1:
+            gather_statistics = False
+        elif filters is None and len(index_cols) == 0:
             gather_statistics = False
 
         if filters:
