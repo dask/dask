@@ -101,14 +101,27 @@ def _gather_metadata(
     if len(paths) > 1:
         # This is a list of files
         base, fns = _analyze_paths(paths, fs)
+        proxy_metadata = None
         if "_metadata" in fns:
             # We have a _metadata file. PyArrow cannot handle
             #  "_metadata" when `paths` is a list.
-            paths.remove(base + fs.sep + "_metadata")
+            paths.remove(fs.sep.join([base, "_metadata"]))
             fns.remove("_metadata")
+            proxy_metadata = (
+                pq.ParquetDataset(
+                    fs.sep.join([base, "_metadata"]),
+                    filesystem=fs,
+                    filters=filters,
+                    **dataset_kwargs,
+                )
+                .pieces[0]
+                .get_metadata()
+            )
         dataset = pq.ParquetDataset(
             paths, filesystem=fs, filters=filters, **dataset_kwargs
         )
+        if proxy_metadata:
+            dataset.metadata = proxy_metadata
     elif fs.isdir(paths[0]):
         # This is a directory
         allpaths = fs.glob(paths[0] + fs.sep + "*")
