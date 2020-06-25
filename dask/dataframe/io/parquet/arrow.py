@@ -25,7 +25,6 @@ from .utils import (
 )
 
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
-check_datetime = pd.__version__ < LooseVersion("1.0")
 
 
 def _write_partitioned(table, root_path, partition_cols, fs, index_cols=(), **kwargs):
@@ -338,7 +337,7 @@ def _construct_parts(
                     if single_rg_parts:
                         cmin = column.statistics.min
                         cmax = column.statistics.max
-                        to_ts = check_datetime and isinstance(cmin, pd.datetime)
+                        to_ts = column.statistics.logical_type.type == "TIMESTAMP"
                         s["columns"].append(
                             {
                                 "name": name,
