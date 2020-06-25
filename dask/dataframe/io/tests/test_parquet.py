@@ -1817,6 +1817,13 @@ def test_arrow_partitioning(tmpdir):
 
 
 def test_sorted_warnings(tmpdir, engine):
+
+    if engine == "pyarrow":
+        pytest.skip(
+            "ArrowEngine will only collect statistics for "
+            "known index columns and/or filtered columns."
+        )
+
     tmpdir = str(tmpdir)
     df = dd.from_pandas(
         pd.DataFrame({"cola": range(10), "colb": range(10)}), npartitions=2
