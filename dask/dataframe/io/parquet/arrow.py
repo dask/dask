@@ -179,6 +179,9 @@ def _aggregate_stats(
     """
     if len(file_row_group_stats) < 1:
         raise ValueError("Empty statistics.")
+    elif len(file_row_group_column_stats) == 0:
+        assert len(file_row_group_stats) == 1
+        return file_row_group_stats[0]
     else:
         df_rgs = pd.DataFrame(file_row_group_stats)
         s = {
@@ -262,6 +265,7 @@ def _construct_parts(
     file_row_groups = defaultdict(int)
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
+    single_rg_parts = int(split_row_groups) == 1
     for rg in range(metadata.num_row_groups):
         row_group = metadata.row_group(rg)
         fpath = row_group.column(0).file_path
@@ -269,23 +273,48 @@ def _construct_parts(
             raise ValueError("metadata is missing file_path string.")
         file_row_groups[fpath] += 1
         if gather_statistics:
-            s = {
-                "num-rows": row_group.num_rows,
-                "total_byte_size": row_group.total_byte_size,
-            }
+            if single_rg_parts:
+                s = {
+                    "file_path_0": fpath,
+                    "num-rows": row_group.num_rows,
+                    "total_byte_size": row_group.total_byte_size,
+                    "columns": [],
+                }
+            else:
+                s = {
+                    "num-rows": row_group.num_rows,
+                    "total_byte_size": row_group.total_byte_size,
+                }
             cstats = []
             for name, i in stat_col_indices.items():
                 column = row_group.column(i)
                 if column.statistics:
-                    cstats += [
-                        column.statistics.min,
-                        column.statistics.max,
-                        column.statistics.null_count,
-                    ]
+                    if single_rg_parts:
+                        cmin = column.statistics.min
+                        cmax = column.statistics.max
+                        to_ts = isinstance(cmin, pd.datetime)
+                        s["columns"].append(
+                            {
+                                "name": name,
+                                "min": cmin if not to_ts else pd.Timestamp(cmin),
+                                "max": cmax if not to_ts else pd.Timestamp(cmax),
+                                "null_count": column.statistics.null_count,
+                            }
+                        )
+                    else:
+                        cstats += [
+                            column.statistics.min,
+                            column.statistics.max,
+                            column.statistics.null_count,
+                        ]
                 else:
-                    cstats += [None, None, None]
+                    if single_rg_parts:
+                        s["columns"].append({"name": name})
+                    else:
+                        cstats += [None, None, None]
             file_row_group_stats[fpath].append(s)
-            file_row_group_column_stats[fpath].append(tuple(cstats))
+            if not single_rg_parts:
+                file_row_group_column_stats[fpath].append(tuple(cstats))
 
     if split_row_groups:
         # create parts from each file, limiting the number of row_groups in each piece
