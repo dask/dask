@@ -437,6 +437,7 @@ def test_columns_index_with_multi_index(tmpdir, engine):
 
         # Pyarrow supports multi-index reads
         ddf = dd.read_parquet(fn, engine=engine, index=index.names)
+
         assert_eq(ddf, df)
 
         d = dd.read_parquet(fn, columns="a", engine=engine, index=index.names)

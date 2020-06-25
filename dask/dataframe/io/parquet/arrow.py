@@ -90,7 +90,7 @@ def _index_in_schema(index, schema):
 
 
 def _gather_metadata(
-    paths, fs, split_row_groups, filters, gather_statistics, dataset_kwargs
+    paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
 ):
     """ Gather parquet metadata
 
@@ -125,6 +125,10 @@ def _gather_metadata(
         dataset = pq.ParquetDataset(
             paths[0], filesystem=fs, filters=filters, **dataset_kwargs
         )
+        if gather_statistics is None:
+            gather_statistics = True
+        if split_row_groups is None:
+            split_row_groups = True
 
     partition_info = {"partitions": None, "partition_keys": {}, "partition_names": []}
     fn_partitioned = False
@@ -143,19 +147,39 @@ def _gather_metadata(
         schema = dataset.metadata.schema.to_arrow_schema()
         if gather_statistics is None:
             gather_statistics = True
-        return schema, dataset.metadata, base, partition_info, gather_statistics
+        if split_row_groups is None:
+            split_row_groups = True
+        return (
+            schema,
+            dataset.metadata,
+            base,
+            partition_info,
+            split_row_groups,
+            gather_statistics,
+        )
     else:
         # Collect proper metadata manually
         if dataset.schema is not None:
             schema = dataset.schema.to_arrow_schema()
         else:
             schema = None
+        if gather_statistics is None:
+            gather_statistics = False
+        if split_row_groups is None:
+            split_row_groups = False
         metadata = None
         if split_row_groups is False and gather_statistics is not True:
             # Don't need to construct real metadata if splitting by file
             # and we don't need column statistics
             metadata = [p.path for p in dataset.pieces]
-            return schema, metadata, base, partition_info
+            return (
+                schema,
+                metadata,
+                base,
+                partition_info,
+                split_row_groups,
+                gather_statistics,
+            )
         for piece, fn in zip(dataset.pieces, fns):
             md = piece.get_metadata()
             if schema is None:
@@ -168,7 +192,14 @@ def _gather_metadata(
                 metadata.append_row_groups(md)
             else:
                 metadata = md
-        return schema, metadata, base, partition_info, gather_statistics
+        return (
+            schema,
+            metadata,
+            base,
+            partition_info,
+            split_row_groups,
+            gather_statistics,
+        )
 
 
 def _aggregate_stats(
@@ -383,7 +414,7 @@ class ArrowEngine(Engine):
         index=None,
         gather_statistics=None,
         filters=None,
-        split_row_groups=1,
+        split_row_groups=None,
         **kwargs,
     ):
 
@@ -392,13 +423,14 @@ class ArrowEngine(Engine):
             metadata,
             base_path,
             partition_info,
+            split_row_groups,
             gather_statistics,
         ) = _gather_metadata(
             paths,
             fs,
             split_row_groups,
-            filters,
             gather_statistics,
+            filters,
             kwargs.get("dataset", {}),
         )
         partition_obj = partition_info["partitions"]
@@ -460,7 +492,9 @@ class ArrowEngine(Engine):
         meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
         meta = clear_known_categories(meta, cols=categories)
 
-        if isinstance(metadata, list):
+        # Cannot gather_statistics if our `metadata` is a list
+        # of paths, or if we are building a multiindex (for now)
+        if isinstance(metadata, list) or len(index_cols) > 1:
             gather_statistics = False
 
         if filters:
@@ -475,6 +509,8 @@ class ArrowEngine(Engine):
             elif not gather_statistics:
                 gather_statistics = True
 
+        # Finally, construct our list of `parts`
+        # (and a corresponing list of statistics)
         parts, stats = _construct_parts(
             fs,
             metadata,
