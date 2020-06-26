@@ -467,7 +467,7 @@ class FastParquetEngine(Engine):
             pf.fn = base
             if null_index_name and "__index_level_0__" in pf.columns:
                 index = ["__index_level_0__"]
-                columns.append("__index_level_0__")
+                columns += index
             return pf.to_pandas(columns, categories, index=index)
         else:
             if isinstance(pf, tuple):
@@ -483,7 +483,7 @@ class FastParquetEngine(Engine):
             if null_index_name:
                 if "__index_level_0__" in pf.columns:
                     index = ["__index_level_0__"]
-                    columns.append("__index_level_0__")
+                    columns += index
                     pf.fmd.key_value_metadata = None
             else:
                 pf.fmd.key_value_metadata = None
