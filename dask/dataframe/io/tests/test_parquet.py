@@ -2628,3 +2628,22 @@ def test_iloc_optimization_multi(tmpdir, engine):
     assert_eq(a1, b1)
     assert_eq(a2, b2)
     assert_eq(a3, b3)
+
+
+def test_iloc_optimization_duplicate_column(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    ddf = dd.read_parquet(fn, engine=engine)
+    ddf.columns = ["A", "A", "A"]
+    a = ddf.iloc[:, 0]
+    b = ddf.iloc[:, 1]
+    c = ddf.iloc[:, 2]
+
+    a1, a2, a3 = dask.compute(a, b, c)
+
+    np.testing.assert_array_equal(a1.values, df["A"].values)
+    np.testing.assert_array_equal(a2.values, df["B"].values)
+    np.testing.assert_array_equal(a3.values, df["C"].values)

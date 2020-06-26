@@ -50,10 +50,6 @@ def optimize_read_parquet_getitem(dsk, keys):
 
         old = layers[k]
 
-        # Bail out if there are any duplicate column names
-        if len(set(old.meta.columns)) < len(old.meta.columns):
-            return dsk
-
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
 
