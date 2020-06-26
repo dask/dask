@@ -162,9 +162,31 @@ def reduction(
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
+
+    # To support np.matrix and scipy.sparse.spmatrix blocks, we do some munging of the `axis` and `keepdims` params that
+    # are passed to a callsites below
+    keepdims_kwargs = dict(keepdims=True, axis=axis)
+    tree_reduce_kwargs = dict()
+    if hasattr(x, "_meta"):
+        if isinstance(x._meta, np.matrix):
+            keepdims_kwargs = dict(axis=axis)
+            tree_reduce_kwargs = keepdims_kwargs
+            if axis == (0, 1):
+                chunk = compose(np.matrix, chunk)
+        else:
+            try:
+                from scipy.sparse import spmatrix
+
+                if isinstance(x._meta, spmatrix):
+                    keepdims_kwargs = dict(axis=axis[0])
+                    tree_reduce_kwargs = keepdims_kwargs
+                    if axis == (0, 1):
+                        chunk = compose(lambda n: np.array([[n]]), chunk)
+            except ImportError:
+                pass
     # The dtype of `tmp` doesn't actually matter, and may be incorrect.
     tmp = blockwise(
-        chunk, inds, x, inds, axis=axis, keepdims=True, token=name, dtype=dtype or float
+        chunk, inds, x, inds, **keepdims_kwargs, token=name, dtype=dtype or float
     )
     tmp._chunks = tuple(
         (output_size,) * len(c) if i in axis else c for i, c in enumerate(tmp.chunks)
@@ -173,12 +195,10 @@ def reduction(
     if meta is None and hasattr(x, "_meta"):
         try:
             reduced_meta = compute_meta(
-                chunk, x.dtype, x._meta, axis=axis, keepdims=True, computing_meta=True
+                chunk, x.dtype, x._meta, **keepdims_kwargs, computing_meta=True
             )
         except TypeError:
-            reduced_meta = compute_meta(
-                chunk, x.dtype, x._meta, axis=axis, keepdims=True
-            )
+            reduced_meta = compute_meta(chunk, x.dtype, x._meta, **keepdims_kwargs)
         except ValueError:
             pass
     else:
@@ -195,6 +215,7 @@ def reduction(
         name=name,
         concatenate=concatenate,
         reduced_meta=reduced_meta,
+        keepdims_kwargs=tree_reduce_kwargs,
     )
     if keepdims and output_size != 1:
         result._chunks = tuple(
@@ -216,6 +237,7 @@ def _tree_reduce(
     name=None,
     concatenate=True,
     reduced_meta=None,
+    keepdims_kwargs=None,
 ):
     """Perform the tree reduction step of a reduction.
 
@@ -236,7 +258,9 @@ def _tree_reduce(
     for i, n in enumerate(x.numblocks):
         if i in split_every and split_every[i] != 1:
             depth = int(builtins.max(depth, ceil(log(n, split_every[i]))))
-    func = partial(combine or aggregate, axis=axis, keepdims=True)
+    func = partial(
+        combine or aggregate, **(keepdims_kwargs or dict(axis=axis, keepdims=True))
+    )
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=axis))
     for i in range(depth - 1):
@@ -249,7 +273,7 @@ def _tree_reduce(
             name=(name or funcname(combine or aggregate)) + "-partial",
             reduced_meta=reduced_meta,
         )
-    func = partial(aggregate, axis=axis, keepdims=keepdims)
+    func = partial(aggregate, **(keepdims_kwargs or dict(axis=axis, keepdims=keepdims)))
     if concatenate:
         func = compose(func, partial(_concatenate2, axes=axis))
     return partial_reduce(
@@ -294,6 +318,23 @@ def partial_reduce(
         tuple(1 for p in partition_all(split_every[i], c)) if i in split_every else c
         for (i, c) in enumerate(x.chunks)
     ]
+
+    try:
+        import numpy as np
+
+        if isinstance(reduced_meta, np.matrix) and len(split_every) == 1:
+            keepdims = True
+    except ImportError:
+        pass
+
+    try:
+        from scipy.sparse import spmatrix
+
+        if isinstance(reduced_meta, spmatrix) and len(split_every) == 1:
+            keepdims = True
+    except ImportError:
+        pass
+
     if not keepdims:
         out_axis = [i for i in range(x.ndim) if i not in split_every]
         getter = lambda k: get(out_axis, k)
