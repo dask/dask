@@ -2647,3 +2647,26 @@ def test_iloc_optimization_duplicate_column(tmpdir, engine):
     np.testing.assert_array_equal(a1.values, df["A"].values)
     np.testing.assert_array_equal(a2.values, df["B"].values)
     np.testing.assert_array_equal(a3.values, df["C"].values)
+
+
+def test_iloc_out_of_order_selection(tmpdir, engine):
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    fn = os.path.join(str(tmpdir))
+    ddf.to_parquet(fn, engine=engine)
+
+    ddf = dd.read_parquet(fn, engine=engine)
+    ddf = ddf[["C", "A", "B"]]
+    a = ddf.iloc[:, 0]
+    b = ddf.iloc[:, 1]
+    c = ddf.iloc[:, 2]
+
+    assert a.name == "C"
+    assert b.name == "A"
+    assert c.name == "B"
+
+    a1, b1, c1 = dask.compute(a, b, c)
+
+    assert a1.name == "C"
+    assert b1.name == "A"
+    assert c1.name == "B"
