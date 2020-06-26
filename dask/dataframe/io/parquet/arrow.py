@@ -18,6 +18,7 @@ from .utils import (
     _normalize_index_columns,
     Engine,
     _analyze_paths,
+    _flatten_seq,
 )
 
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
@@ -237,7 +238,7 @@ def _gather_metadata(
         )
 
 
-def _process_metadata(schema, index, categories, partition_info):
+def _generate_dd_meta(schema, index, categories, partition_info):
     partition_obj = partition_info["partitions"]
     partitions = partition_info["partition_names"]
     columns = None
@@ -344,20 +345,6 @@ def _aggregate_stats(
                 }
             )
         return s
-
-
-def _flatten_seq(seq):
-    """ Simple utility to flatten nested list/tuple
-    """
-    t = []
-    if seq is None:
-        return t
-    for i in seq:
-        if not isinstance(i, (list, tuple)):
-            t.append(i)
-        else:
-            t.extend(_flatten_seq(i))
-    return t
 
 
 def _construct_parts(
@@ -551,7 +538,7 @@ class ArrowEngine(Engine):
         )
 
         # Process metadata to define `meta` and `index_cols`
-        meta, index_cols, categories, index = _process_metadata(
+        meta, index_cols, categories, index = _generate_dd_meta(
             schema, index, categories, partition_info
         )
 
