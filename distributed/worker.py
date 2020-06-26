@@ -1341,7 +1341,7 @@ class Worker(ServerNode):
         info = {"nbytes": {k: sizeof(v) for k, v in data.items()}, "status": "OK"}
         return info
 
-    async def delete_data(self, comm=None, keys=None, report=True):
+    def delete_data(self, comm=None, keys=None, report=True):
         if keys:
             for key in list(keys):
                 self.log.append((key, "delete"))
@@ -1352,12 +1352,6 @@ class Worker(ServerNode):
                     self.release_dep(key)
 
             logger.debug("Deleted %d keys", len(keys))
-            if report:
-                logger.debug("Reporting loss of keys to scheduler")
-                # TODO: this route seems to not exist?
-                await self.scheduler.remove_keys(
-                    address=self.contact_address, keys=list(keys)
-                )
         return "OK"
 
     async def set_resources(self, **resources):
