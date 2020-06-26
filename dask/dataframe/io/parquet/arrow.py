@@ -12,13 +12,13 @@ from ....utils import getargspec
 
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
+from ....core import flatten
 
 from .utils import (
     _parse_pandas_metadata,
     _normalize_index_columns,
     Engine,
     _analyze_paths,
-    _flatten_seq,
 )
 
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
@@ -382,7 +382,11 @@ def _construct_parts(
         return parts, stats
 
     # Determine which columns need statistics
-    flat_filters = set(_flatten_seq(filters))
+    flat_filters = (
+        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
+        if filters
+        else []
+    )
     stat_col_indices = {}
     for i, name in enumerate(schema.names):
         if name in index_cols or name in flat_filters:

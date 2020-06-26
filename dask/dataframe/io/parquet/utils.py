@@ -431,17 +431,3 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
-
-
-def _flatten_seq(seq):
-    """ Simple utility to flatten nested list/tuple
-    """
-    t = []
-    if seq is None:
-        return t
-    for i in seq:
-        if not isinstance(i, (list, tuple)):
-            t.append(i)
-        else:
-            t.extend(_flatten_seq(i))
-    return t
