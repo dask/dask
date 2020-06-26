@@ -4,16 +4,12 @@ import json
 import warnings
 from distutils.version import LooseVersion
 
-# import warnings
-from distutils.version import LooseVersion
-
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 from pyarrow.compat import guid
 from ....utils import getargspec
 
-# from ....utils import natural_sort_key
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
 
@@ -90,14 +86,8 @@ def _index_in_schema(index, schema):
         return False  # No index to check
 
 
-def _gather_metadata(
-    paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
-):
-    """ Gather parquet metadata
-
-        Use _metadata or aggregate footer metadata into a single
-        object.  Also, collect other information necessary for
-        parquet-to-ddf mapping (e.g. schema, partition_info).
+def _get_dataset_object(paths, fs, filters, dataset_kwargs):
+    """ Generate a ParquetDataset object
     """
     if len(paths) > 1:
         # This is a list of files
@@ -105,7 +95,8 @@ def _gather_metadata(
         proxy_metadata = None
         if "_metadata" in fns:
             # We have a _metadata file. PyArrow cannot handle
-            #  "_metadata" when `paths` is a list.
+            #  "_metadata" when `paths` is a list. So, we shuld
+            # open "_metadata" separately.
             paths.remove(fs.sep.join([base, "_metadata"]))
             fns.remove("_metadata")
             proxy_metadata = (
@@ -124,7 +115,7 @@ def _gather_metadata(
         if proxy_metadata:
             dataset.metadata = proxy_metadata
     elif fs.isdir(paths[0]):
-        # This is a directory
+        # This is a directory.  We can let pyarrow do its thing.
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         base, fns = _analyze_paths(allpaths, fs)
         if "_metadata" in fns and "validate_schema" not in dataset_kwargs:
@@ -133,17 +124,38 @@ def _gather_metadata(
             paths[0], filesystem=fs, filters=filters, **dataset_kwargs
         )
     else:
-        # This is a single file
+        # This is a single file.  No danger in gathering statistics
+        # and/or splitting row-groups without a "_metadata" file
         base = paths[0]
         fns = [None]
         dataset = pq.ParquetDataset(
             paths[0], filesystem=fs, filters=filters, **dataset_kwargs
         )
+
+    return dataset, base, fns
+
+
+def _gather_metadata(
+    paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
+):
+    """ Gather parquet metadata into a single data structure.
+
+        Use _metadata or aggregate footer metadata into a single
+        object.  Also, collect other information necessary for
+        parquet-to-ddf mapping (e.g. schema, partition_info).
+    """
+
+    # Step 1: Create a ParquetDataset object
+    dataset, base, fns = _get_dataset_object(paths, fs, filters, dataset_kwargs)
+    if fns == [None]:
+        # This is a single file. No danger in gathering statistics
+        # and/or splitting row-groups without a "_metadata" file
         if gather_statistics is None:
             gather_statistics = True
         if split_row_groups is None:
             split_row_groups = True
 
+    # Step 2: Construct necessary (parquet) partitioning information
     partition_info = {"partitions": None, "partition_keys": {}, "partition_names": []}
     fn_partitioned = False
     if dataset.partitions is not None:
@@ -155,9 +167,14 @@ def _gather_metadata(
         for piece in dataset.pieces:
             partition_info["partition_keys"][piece.path] = piece.partition_keys
 
+    # Step 3: Construct a single `metadata` object. We can
+    #         directly use dataset.metadata if it is available.
+    #         Otherwise, if `gather_statistics` or `split_row_groups`,
+    #         we need to gether the footer metadata manually
     metadata = None
     if dataset.metadata:
-        # We have a metadata file
+        # We have a _metadata file.
+        # PyArrow already did the work for us
         schema = dataset.metadata.schema.to_arrow_schema()
         if gather_statistics is None:
             gather_statistics = True
@@ -172,7 +189,8 @@ def _gather_metadata(
             gather_statistics,
         )
     else:
-        # Collect proper metadata manually
+        # No _metadata file.
+        # May need to collect footer metadata manually
         if dataset.schema is not None:
             schema = dataset.schema.to_arrow_schema()
         else:
@@ -182,9 +200,10 @@ def _gather_metadata(
         if split_row_groups is None:
             split_row_groups = False
         metadata = None
-        if split_row_groups is False and gather_statistics is not True:
-            # Don't need to construct real metadata if splitting by file
-            # and we don't need column statistics
+        if not (split_row_groups or gather_statistics):
+            # Don't need to construct real metadata if
+            # we are not gathering statistics or splitting
+            # by row-group
             metadata = [p.path for p in dataset.pieces]
             if schema is None:
                 schema = dataset.pieces[0].get_metadata().schema.to_arrow_schema()
@@ -308,7 +327,7 @@ def _construct_parts(
     stat_cols = list(stat_col_indices.keys())
     gather_statistics = gather_statistics and len(stat_cols) > 0
 
-    # get the number of row groups per file
+    # Get the number of row groups per file
     file_row_groups = defaultdict(int)
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
@@ -364,7 +383,8 @@ def _construct_parts(
                 file_row_group_column_stats[fpath].append(tuple(cstats))
 
     if split_row_groups:
-        # create parts from each file, limiting the number of row_groups in each piece
+        # Create parts from each file,
+        # limiting the number of row_groups in each piece
         split_row_groups = int(split_row_groups)
         for filename, row_group_count in file_row_groups.items():
             row_groups = range(row_group_count)
@@ -434,6 +454,9 @@ class ArrowEngine(Engine):
         **kwargs,
     ):
 
+        # Step 1: Gather necessary metadata information.
+        #         This includes the schema and (parquet)
+        #         partitioning information.
         (
             schema,
             metadata,
