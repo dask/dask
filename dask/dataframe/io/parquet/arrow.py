@@ -186,6 +186,8 @@ def _gather_metadata(
             # Don't need to construct real metadata if splitting by file
             # and we don't need column statistics
             metadata = [p.path for p in dataset.pieces]
+            if schema is None:
+                schema = dataset.pieces[0].get_metadata().schema.to_arrow_schema()
             return (
                 schema,
                 metadata,
