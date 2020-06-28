@@ -57,7 +57,8 @@ from ..utils import (
     ensure_bytes,
     ensure_unicode,
     key_split,
-    parse_bytes
+    parse_bytes,
+    iter_chunks
 )
 from . import chunk
 
@@ -2481,6 +2482,34 @@ def to_dataframe(seq, columns, dtypes):
     return res.astype(dtypes, copy=False)
 
 
+def _repartition_from_boundaries(bag, new_partitions_boundaries, new_name):
+    if not isinstance(new_partitions_boundaries, list):
+        new_partitions_boundaries = list(new_partitions_boundaries)
+    if new_partitions_boundaries[0] > 0:
+        new_partitions_boundaries.insert(0, 0)
+    if new_partitions_boundaries[-1] < bag.npartitions:
+        new_partitions_boundaries.append(bag.npartitions)
+    num_new_partitions = len(new_partitions_boundaries)
+    dsk = {}
+    for new_partition_index in range(len(new_partitions_boundaries)):
+        value = (
+            list,
+            (
+                toolz.concat,
+                [
+                    (bag.name, old_partition_index)
+                    for old_partition_index in range(
+                    new_partitions_boundaries[new_partition_index],
+                    new_partitions_boundaries[new_partition_index + 1],
+                )
+                ],
+            ),
+        )
+        dsk[new_name, new_partition_index] = value
+    graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[bag])
+    return Bag(graph, name=new_name, npartitions=num_new_partitions)
+
+
 def repartition_npartitions(bag, npartitions):
     """ Changes the number of partitions of the bag.
 
@@ -2490,29 +2519,13 @@ def repartition_npartitions(bag, npartitions):
     new_name = "repartition-%d-%s" % (npartitions, tokenize(bag, npartitions))
     if npartitions == bag.npartitions:
         return bag
-    elif npartitions < bag.npartitions:
+    elif bag.npartitions > npartitions:
         ratio = bag.npartitions / npartitions
         new_partitions_boundaries = [
             int(old_partition_index * ratio)
             for old_partition_index in range(npartitions + 1)
         ]
-
-        dsk = {}
-        for new_partition_index in range(npartitions):
-            value = (
-                list,
-                (
-                    toolz.concat,
-                    [
-                        (bag.name, old_partition_index)
-                        for old_partition_index in range(
-                        new_partitions_boundaries[new_partition_index],
-                        new_partitions_boundaries[new_partition_index + 1],
-                    )
-                    ],
-                ),
-            )
-            dsk[new_name, new_partition_index] = value
+        return _repartition_from_boundaries(bag, new_partitions_boundaries, new_name)
     else:  # npartitions > bag.npartitions
         ratio = npartitions / bag.npartitions
         split_name = "split-%s" % tokenize(bag, npartitions)
@@ -2535,6 +2548,41 @@ def repartition_npartitions(bag, npartitions):
     return Bag(graph, name=new_name, npartitions=npartitions)
 
 
+def _split_partitions(bag, nsplits, new_name):
+    """Split a Dask bag into new partitions
+
+    Parameters
+    ----------
+    bag: Dask bag
+    nsplits: List[int]
+        Number of target bags for each partition
+        The length of nsplits should be the same as bag.npartitions
+    new_name: str
+
+    See Also
+    --------
+    repartition_size
+    """
+    if len(nsplits) != bag.npartitions:
+        raise ValueError("nsplits should have len={}".format(bag.npartitions))
+    dsk = {}
+    split_name = "split-{}".format(tokenize(bag, nsplits))
+    j = 0
+    for i, k in enumerate(nsplits):
+        if k == 1:
+            dsk[new_name, j] = (bag.name, i)
+            j += 1
+        else:
+            dsk[split_name, i] = (split, (bag.name, i), k)
+            for jj in range(k):
+                dsk[new_name, j] = (operator.getitem, (split_name, i), jj)
+                j += 1
+
+        graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[bag])
+        num_new_partitions = 1 + sum(nsplits)
+        return Bag(graph, name=new_name, npartitions=num_new_partitions)
+
+
 def repartition_size(bag, size):
     """
     Repartition bag so that new partitions have approximately `size` memory usage each
@@ -2548,16 +2596,15 @@ def repartition_size(bag, size):
     nsplits = (1 + mem_usages) // size
     if any(nsplits > 1):
         split_name = "repartition-split-{}-{}".format(size, tokenize(bag))
-        bag = _split_partitions(df, nsplits, split_name)
-    #     # update mem_usages to account for the split partitions
-    #     split_mem_usages = []
-    #     for n, usage in zip(nsplits, mem_usages):
-    #         split_mem_usages.extend([usage / n] * n)
-    #     # turn them into a series?
-    #
-    # # 2. now that all partitions are less than size, concat them up to size
-    # assert np.all(split_mem_usages <= size)
-    # new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
-    # new_partitions_boundaries = np.cumsum(new_partitions)
-    # new_name = "repartition-{}-{}".format(size, tokenize(bag))
-    # return _repartition_from_boundaries(bag, new_partitions_boundaries, new_name)
+        bag = _split_partitions(bag, nsplits, split_name)
+        # update mem_usages to account for the split partitions
+        split_mem_usages = []
+        for n, usage in zip(nsplits, mem_usages):
+            split_mem_usages.extend([usage / n] * n)
+
+    # 2. now that all partitions are less than size, concat them up to size
+    assert all(split_mem_usages <= size)
+    new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
+    new_partitions_boundaries = accumulate(operator.add, new_npartitions)
+    new_name = "repartition-{}-{}".format(size, tokenize(bag))
+    return _repartition_from_boundaries(bag, new_partitions_boundaries, new_name)

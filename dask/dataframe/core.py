@@ -40,6 +40,7 @@ from ..utils import (
     OperatorMethodMixin,
     is_arraylike,
     typename,
+    iter_chunks
 )
 from ..array.core import Array, normalize_arg
 from ..array.utils import zeros_like_safe
@@ -5883,6 +5884,7 @@ def repartition_size(df, size):
     """
     Repartition dataframe so that new partitions have approximately `size` memory usage each
     """
+    import pdb; pdb.set_trace()
     if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
@@ -5902,6 +5904,7 @@ def repartition_size(df, size):
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
+    import pdb; pdb.set_trace()
     new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
     new_partitions_boundaries = np.cumsum(new_npartitions)
     new_name = "repartition-{}-{}".format(size, tokenize(df))
@@ -5913,34 +5916,6 @@ def total_mem_usage(df, index=True, deep=False):
     if is_series_like(mem_usage):
         mem_usage = mem_usage.sum()
     return mem_usage
-
-
-def iter_chunks(sizes, max_size):
-    """Split sizes into chunks of total max_size each
-
-    Parameters
-    ----------
-    sizes : iterable of numbers
-        The sizes to be chunked
-    max_size : number
-        Maximum total size per chunk.
-        It must be greater or equal than each size in sizes
-    """
-    chunk, chunk_sum = [], 0
-    iter_sizes = iter(sizes)
-    size = next(iter_sizes, None)
-    while size is not None:
-        assert size <= max_size
-        if chunk_sum + size <= max_size:
-            chunk.append(size)
-            chunk_sum += size
-            size = next(iter_sizes, None)
-        else:
-            assert chunk
-            yield chunk
-            chunk, chunk_sum = [], 0
-    if chunk:
-        yield chunk
 
 
 def repartition_npartitions(df, npartitions):
