@@ -4578,8 +4578,10 @@ def test_dask_array_holds_scipy_sparse_containers():
     assert (zz == xx.T).all()
 
 
-@pytest.mark.parametrize("axis", [0, 1])
-def test_scipy_sparse_concatenate(axis):
+@pytest.mark.parametrize(
+    "axis,stack,spmatrix", [(0, "vstack", "csr"), (1, "hstack", "coo")]
+)
+def test_scipy_sparse_concatenate(axis, stack, spmatrix):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
 
@@ -4594,15 +4596,23 @@ def test_scipy_sparse_concatenate(axis):
         ys.append(x.map_blocks(scipy.sparse.csr_matrix))
 
     z = da.concatenate(ys, axis=axis)
-    z = z.compute()
+    zz = z.compute()
 
-    if axis == 0:
+    if spmatrix == "coo":
+        spmatrix = scipy.sparse.coo_matrix
+    else:
+        spmatrix = scipy.sparse.csr_matrix
+
+    assert isinstance(zz, spmatrix)
+
+    if stack == "vstack":
         sp_concatenate = scipy.sparse.vstack
-    elif axis == 1:
+    else:
         sp_concatenate = scipy.sparse.hstack
+
     z_expected = sp_concatenate([scipy.sparse.csr_matrix(e.compute()) for e in xs])
 
-    assert (z != z_expected).nnz == 0
+    assert (zz != z_expected).nnz == 0
 
 
 def test_3851():
