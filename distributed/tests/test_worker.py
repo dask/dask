@@ -1460,6 +1460,15 @@ async def test_local_directory(s):
             assert "dask-worker-space" in w.local_directory
 
 
+@gen_cluster(nthreads=[])
+async def test_local_directory_make_new_directory(s):
+    with tmpfile() as fn:
+        w = await Worker(s.address, local_directory=os.path.join(fn, "foo", "bar"))
+        assert w.local_directory.startswith(fn)
+        assert "foo" in w.local_directory
+        assert "dask-worker-space" in w.local_directory
+
+
 @pytest.mark.skipif(
     not sys.platform.startswith("linux"), reason="Need 127.0.0.2 to mean localhost"
 )
