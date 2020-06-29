@@ -58,7 +58,7 @@ class _iLocIndexer(_IndexerBase):
         if iindexer != slice(None):
             raise NotImplementedError(msg)
 
-        if len(set(self.obj.columns)) < len(self.obj.columns):
+        if not self.obj.columns.is_unique:
             # if there are any duplicate column names, do an iloc
             return self._iloc(iindexer, cindexer)
         else:
