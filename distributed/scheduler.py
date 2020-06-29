@@ -1143,22 +1143,24 @@ class Scheduler(ServerNode):
             default_port=self.default_port,
         )
 
-        routes = get_handlers(
-            server=self,
-            modules=dask.config.get("distributed.scheduler.http.routes"),
-            prefix=http_prefix,
-        )
-        self.start_http_server(routes, dashboard_address, default_port=8787)
-
-        if dashboard or (dashboard is None and dashboard_address):
+        http_server_modules = dask.config.get("distributed.scheduler.http.routes")
+        show_dashboard = dashboard or (dashboard is None and dashboard_address)
+        missing_bokeh = False
+        # install vanilla route if show_dashboard but bokeh is not installed
+        if show_dashboard:
             try:
                 import distributed.dashboard.scheduler
             except ImportError:
-                logger.debug("To start diagnostics web server please install Bokeh")
-            else:
-                distributed.dashboard.scheduler.connect(
-                    self.http_application, self.http_server, self, prefix=http_prefix
-                )
+                missing_bokeh = True
+                http_server_modules.append("distributed.http.scheduler.missing_bokeh")
+        routes = get_handlers(
+            server=self, modules=http_server_modules, prefix=http_prefix,
+        )
+        self.start_http_server(routes, dashboard_address, default_port=8787)
+        if show_dashboard and not missing_bokeh:
+            distributed.dashboard.scheduler.connect(
+                self.http_application, self.http_server, self, prefix=http_prefix
+            )
 
         # Communication state
         self.loop = loop or IOLoop.current()
