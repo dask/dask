@@ -450,6 +450,13 @@ class FastParquetEngine(Engine):
         null_index_name = False
         if isinstance(index, list):
             if index == [None]:
+                # Handling a None-labeled index...
+                # The pandas metadata told us to read in an index
+                # labeled `None`. If this corresponds to a `RangeIndex`,
+                # fastparquet will need use the pandas metadata to
+                # construct the index. Otherwise, the index will correspond
+                # to a column named "__index_level_0__".  We will need to
+                # check the `ParquetFile` object for this column below.
                 index = []
                 null_index_name = True
             columns += index
@@ -466,6 +473,7 @@ class FastParquetEngine(Engine):
             pf.cats = paths_to_cats(fns, scheme)
             pf.fn = base
             if null_index_name and "__index_level_0__" in pf.columns:
+                # See "Handling a None-labeled index" comment above
                 index = ["__index_level_0__"]
                 columns += index
             return pf.to_pandas(columns, categories, index=index)
@@ -482,6 +490,7 @@ class FastParquetEngine(Engine):
             rg_piece = pf.row_groups[piece]
             if null_index_name:
                 if "__index_level_0__" in pf.columns:
+                    # See "Handling a None-labeled index" comment above
                     index = ["__index_level_0__"]
                     columns += index
                     pf.fmd.key_value_metadata = None
