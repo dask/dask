@@ -549,3 +549,34 @@ def test_iloc_raises():
 
     with pytest.raises(IndexError):
         ddf.iloc[:, [5, 6]]
+
+
+def test_set_names():
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": [1, 1, 2, 2], "b": [3, 4, 3, 4]}), npartitions=2,
+    )
+    index_names = ["c"]
+    ddf.index = ddf.index.set_names(index_names)
+    assert ddf.index.names == index_names
+    index_names = ["d"]
+    ddf.index.set_names(index_names, inplace=True)
+    assert ddf.index.names == index_names
+    index_names = ["c"]
+    ddf.index.names = index_names
+    assert ddf.index.names == index_names
+
+
+def test_set_names_multi_index():
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": [1, 1, 2, 2], "b": [3, 4, 3, 4]}), npartitions=2,
+    )
+    ddf = ddf.groupby(["a", "b"]).sum()
+    index_names = ["c", "d"]
+    ddf.index = ddf.index.set_names(index_names)
+    assert ddf.index.names == index_names
+    index_names = ["e", "f"]
+    ddf.index.set_names(index_names, inplace=True)
+    assert ddf.index.names == index_names
+    index_names = ["c", "d"]
+    ddf.index.names = index_names
+    assert ddf.index.names == index_names
