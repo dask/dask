@@ -446,8 +446,19 @@ class FastParquetEngine(Engine):
     def read_partition(
         cls, fs, piece, columns, index, categories=(), pf=None, **kwargs
     ):
+
+        null_index_name = False
         if isinstance(index, list):
-            index = ["__index_level_0__" if i is None else i for i in index]
+            if index == [None]:
+                # Handling a None-labeled index...
+                # The pandas metadata told us to read in an index
+                # labeled `None`. If this corresponds to a `RangeIndex`,
+                # fastparquet will need use the pandas metadata to
+                # construct the index. Otherwise, the index will correspond
+                # to a column named "__index_level_0__".  We will need to
+                # check the `ParquetFile` object for this column below.
+                index = []
+                null_index_name = True
             columns += index
 
         if pf is None:
@@ -461,6 +472,10 @@ class FastParquetEngine(Engine):
             pf.file_scheme = scheme
             pf.cats = paths_to_cats(fns, scheme)
             pf.fn = base
+            if null_index_name and "__index_level_0__" in pf.columns:
+                # See "Handling a None-labeled index" comment above
+                index = ["__index_level_0__"]
+                columns += index
             return pf.to_pandas(columns, categories, index=index)
         else:
             if isinstance(pf, tuple):
@@ -473,7 +488,14 @@ class FastParquetEngine(Engine):
                 pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
                 pf.fmd.row_groups = None
             rg_piece = pf.row_groups[piece]
-            pf.fmd.key_value_metadata = None
+            if null_index_name:
+                if "__index_level_0__" in pf.columns:
+                    # See "Handling a None-labeled index" comment above
+                    index = ["__index_level_0__"]
+                    columns += index
+                    pf.fmd.key_value_metadata = None
+            else:
+                pf.fmd.key_value_metadata = None
             return pf.read_row_group_file(
                 rg_piece, columns, categories, index=index, **kwargs.get("read", {})
             )
