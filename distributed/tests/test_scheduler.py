@@ -2147,3 +2147,8 @@ async def test_unknown_task_duration_config(client, s, a, b):
     assert len(s.unknown_durations) == 1
     await wait(future)
     assert len(s.unknown_durations) == 0
+
+
+@gen_cluster()
+async def test_unknown_task_duration_config(s, a, b):
+    assert s.idle_since == s.time_started

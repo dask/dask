@@ -1117,6 +1117,7 @@ class Scheduler(ServerNode):
         else:
             self.idle_timeout = None
         self.idle_since = time()
+        self.time_started = self.idle_since  # compatibility for dask-gateway
         self._lock = asyncio.Lock()
         self.bandwidth = parse_bytes(dask.config.get("distributed.scheduler.bandwidth"))
         self.bandwidth_workers = defaultdict(float)
