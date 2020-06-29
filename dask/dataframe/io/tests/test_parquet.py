@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 import warnings
@@ -2222,6 +2223,41 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
 
+@pytest.mark.parametrize("split_row_groups", [1, 12])
+@pytest.mark.parametrize("gather_statistics", [True, False])
+def test_split_row_groups_int_pyarrow(tmpdir, split_row_groups, gather_statistics):
+
+    check_pyarrow()
+    tmp = str(tmpdir)
+    engine = "pyarrow"
+    row_group_size = 10
+    npartitions = 4
+    half_size = 400
+    df = pd.DataFrame(
+        {
+            "i32": np.arange(2 * half_size, dtype=np.int32),
+            "f": np.arange(2 * half_size, dtype=np.float64),
+        }
+    )
+    half = len(df) // 2
+
+    dd.from_pandas(df.iloc[:half], npartitions=npartitions).to_parquet(
+        tmp, engine=engine, row_group_size=row_group_size
+    )
+    dd.from_pandas(df.iloc[half:], npartitions=npartitions).to_parquet(
+        tmp, append=True, engine=engine, row_group_size=row_group_size
+    )
+
+    ddf2 = dd.read_parquet(
+        tmp,
+        engine=engine,
+        split_row_groups=split_row_groups,
+        gather_statistics=gather_statistics,
+    )
+    expected_rg_cout = int(half_size / row_group_size)
+    assert ddf2.npartitions == 2 * math.ceil(expected_rg_cout / split_row_groups)
+
+
 def test_split_row_groups_filter_pyarrow(tmpdir):
     check_pyarrow()
     tmp = str(tmpdir)
@@ -2241,7 +2277,7 @@ def test_split_row_groups_filter_pyarrow(tmpdir):
         tmp,
         engine="pyarrow",
         gather_statistics=True,
-        split_row_groups=False,
+        split_row_groups=True,
         filters=filters,
     )
 
