@@ -557,3 +557,20 @@ async def test_nanny_closed_by_keyboard_interrupt(cleanup, protocol):
             await n.process.stopped.wait()
             # Check that the scheduler has been notified about the closed worker
             assert len(s.workers) == 0
+
+
+class StartException(Exception):
+    pass
+
+
+class BrokenWorker(worker.Worker):
+    async def start(self):
+        raise StartException("broken")
+
+
+@pytest.mark.asyncio
+async def test_worker_start_exception(cleanup):
+    # make sure this raises the right Exception:
+    with pytest.raises(StartException):
+        async with Nanny("tcp://localhost:1", worker_class=BrokenWorker) as n:
+            await n.start()

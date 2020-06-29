@@ -693,7 +693,7 @@ class WorkerProcess:
                     "Failed while trying to start worker process: %s", msg["exception"]
                 )
                 await self.process.join()
-                raise msg
+                raise msg["exception"]
             else:
                 return msg
 
