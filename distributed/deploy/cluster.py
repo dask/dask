@@ -53,6 +53,8 @@ class Cluster:
         self.scheduler_info = {"workers": {}}
         self.periodic_callbacks = {}
         self._asynchronous = asynchronous
+        self._watch_worker_status_comm = None
+        self._watch_worker_status_task = None
 
         self.status = "created"
 
@@ -70,12 +72,16 @@ class Cluster:
         if self.status == "closed":
             return
 
-        await self._watch_worker_status_comm.close()
-        await self._watch_worker_status_task
+        if self._watch_worker_status_comm:
+            await self._watch_worker_status_comm.close()
+        if self._watch_worker_status_task:
+            await self._watch_worker_status_task
 
         for pc in self.periodic_callbacks.values():
             pc.stop()
-        await self.scheduler_comm.close_rpc()
+
+        if self.scheduler_comm:
+            await self.scheduler_comm.close_rpc()
 
         self.status = "closed"
 

@@ -375,22 +375,23 @@ class SpecCluster(Cluster):
             await asyncio.sleep(0.1)
         if self.status == "closed":
             return
-        self.status = "closing"
+        if self.status == "running":
+            self.status = "closing"
 
-        self.scale(0)
-        await self._correct_state()
-        for future in self._futures:
-            await future
-        async with self._lock:
-            with suppress(CommClosedError):
-                if self.scheduler_comm:
-                    await self.scheduler_comm.close(close_workers=True)
-                else:
-                    logger.warning("Cluster closed without starting up")
+            self.scale(0)
+            await self._correct_state()
+            for future in self._futures:
+                await future
+            async with self._lock:
+                with suppress(CommClosedError):
+                    if self.scheduler_comm:
+                        await self.scheduler_comm.close(close_workers=True)
+                    else:
+                        logger.warning("Cluster closed without starting up")
 
-        await self.scheduler.close()
-        for w in self._created:
-            assert w.status == Status.closed, w.status
+            await self.scheduler.close()
+            for w in self._created:
+                assert w.status == Status.closed, w.status
 
         if hasattr(self, "_old_logging_level"):
             silence_logging(self._old_logging_level)

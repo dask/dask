@@ -1,6 +1,7 @@
 import asyncio
 import re
 from time import sleep
+import warnings
 
 import dask
 from dask.distributed import SpecCluster, Worker, Client, Scheduler, Nanny
@@ -508,3 +509,14 @@ async def test_run_spec_cluster_worker_names(cleanup):
         await cluster
         assert list(cluster.worker_spec) == worker_names
         assert sorted(list(cluster.workers)) == worker_names
+
+
+@pytest.mark.asyncio
+async def test_bad_close(cleanup):
+    with warnings.catch_warnings(record=True) as record:
+        cluster = SpecCluster(
+            workers=worker_spec, scheduler=scheduler, asynchronous=True
+        )
+        await cluster.close()
+
+    assert not record
