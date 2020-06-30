@@ -2362,7 +2362,6 @@ class Worker(ServerNode):
         raise gen.Return(result)
 
     def run(self, comm, function, args=(), wait=True, kwargs=None):
-        kwargs = kwargs or {}
         return run(self, comm, function=function, args=args, kwargs=kwargs, wait=wait)
 
     def run_coroutine(self, comm, function, args=(), kwargs=None, wait=True):
@@ -3524,7 +3523,8 @@ def weight(k, v):
     return sizeof(v)
 
 
-async def run(server, comm, function, args=(), kwargs={}, is_coro=None, wait=True):
+async def run(server, comm, function, args=(), kwargs=None, is_coro=None, wait=True):
+    kwargs = kwargs or {}
     function = pickle.loads(function)
     if is_coro is None:
         is_coro = iscoroutinefunction(function)
