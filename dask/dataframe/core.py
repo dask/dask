@@ -3483,6 +3483,7 @@ class DataFrame(_Frame):
         """
         from .indexing import _iLocIndexer
 
+        # For dataframes with unique column names, this will be transformed into a __getitem__ call
         return _iLocIndexer(self)
 
     def __len__(self):
