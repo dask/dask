@@ -5307,7 +5307,7 @@ class Scheduler(ServerNode):
         now = time()
         for ws in self.workers.values():
             if (ws.last_seen < now - self.worker_ttl) and (
-                10 * heartbeat_interval(len(self.workers))
+                ws.last_seen < now - 10 * heartbeat_interval(len(self.workers))
             ):
                 logger.warning(
                     "Worker failed to heartbeat within %s seconds. Closing: %s",

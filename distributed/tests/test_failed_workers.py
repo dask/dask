@@ -415,16 +415,22 @@ async def test_restart_timeout_on_long_running_task(c, s, a):
     assert "timeout" not in text.lower()
 
 
+@pytest.mark.slow
 @gen_cluster(client=True, scheduler_kwargs={"worker_ttl": "500ms"})
 async def test_worker_time_to_live(c, s, a, b):
+    from distributed.scheduler import heartbeat_interval
+
+    # worker removal is also controlled by 10 * heartbeat
     assert set(s.workers) == {a.address, b.address}
+    interval = 10 * heartbeat_interval(len(s.workers)) + 0.5
+
     a.periodic_callbacks["heartbeat"].stop()
     await asyncio.sleep(0.010)
     assert set(s.workers) == {a.address, b.address}
 
     start = time()
     while set(s.workers) == {a.address, b.address}:
-        await asyncio.sleep(0.050)
-        assert time() < start + 2
+        await asyncio.sleep(interval)
+        assert time() < start + interval + 0.1
 
     set(s.workers) == {b.address}
