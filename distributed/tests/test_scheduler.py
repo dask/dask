@@ -1205,8 +1205,8 @@ async def test_service_hosts():
     port = 0
     for url, expected in [
         ("tcp://0.0.0.0", ("::", "0.0.0.0")),
-        ("tcp://127.0.0.1", "127.0.0.1"),
-        ("tcp://127.0.0.1:38275", "127.0.0.1"),
+        ("tcp://127.0.0.1", ("::", "0.0.0.0")),
+        ("tcp://127.0.0.1:38275", ("::", "0.0.0.0")),
     ]:
         async with Scheduler(host=url) as s:
             sock = first(s.http_server._sockets.values())

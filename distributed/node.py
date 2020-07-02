@@ -121,7 +121,7 @@ class ServerNode(Server):
         self.http_server = HTTPServer(self.http_application, ssl_options=ssl_options)
         http_address = clean_dashboard_address(dashboard_address or default_port)
 
-        if not http_address["address"]:
+        if http_address["address"] is None:
             address = self._start_address
             if isinstance(address, (list, tuple)):
                 address = address[0]

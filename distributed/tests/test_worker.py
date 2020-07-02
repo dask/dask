@@ -1042,7 +1042,7 @@ async def test_service_hosts_match_worker(s):
 
     async with Worker(s.address, host="tcp://127.0.0.1") as w:
         sock = first(w.http_server._sockets.values())
-        assert sock.getsockname()[0] == "127.0.0.1"
+        assert sock.getsockname()[0] in ("::", "0.0.0.0")
 
 
 @gen_cluster(nthreads=[])
