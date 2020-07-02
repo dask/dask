@@ -2617,3 +2617,16 @@ def test_illegal_column_name(tmpdir, engine):
     with pytest.raises(ValueError) as e:
         ddf.to_parquet(fn, engine=engine)
     assert null_name in str(e.value)
+
+
+def test_pa_dataset_simple(tmpdir, engine):
+    check_pyarrow()
+    fn = str(tmpdir)
+    df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
+    df.set_index("a", inplace=True, drop=True)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine=engine)
+    read_df = dd.read_parquet(fn, engine="pyarrow", dataset={"pa_dataset": True})
+    read_df.compute(scheduler="synchronous")
+
+    assert_eq(ddf, read_df)
