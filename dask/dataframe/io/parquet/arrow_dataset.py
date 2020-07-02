@@ -6,7 +6,7 @@ from ...methods import concat
 from ...utils import clear_known_categories
 from ....utils import natural_sort_key
 
-from .arrow import ArrowEngine, _get_meta_from_schema
+from .arrow import ArrowEngine, _get_meta_from_schema, _merge_statistics
 
 
 class ArrowDatasetSubgraph(Mapping):
@@ -112,7 +112,7 @@ class ArrowDatasetEngine(ArrowEngine):
 
         if split_row_groups:
             fragments = [
-                f_rg for f in fragments for f_rg in f.get_row_group_fragments(filter)
+                f_rg for f in fragments for f_rg in f.split_by_row_group(filter)
             ]
 
         # create dask object
@@ -122,9 +122,51 @@ class ArrowDatasetEngine(ArrowEngine):
         meta, categories = _get_meta_from_schema(
             schema, index, categories, [], check_partitions=False
         )
-
         kwargs = {"categories": categories}
-        return meta, fragments, schema, filter, kwargs
+
+        # TODO update gather_statistics based on other keywords
+        if gather_statistics is None:
+            # check first fragment to see if it has statistics
+            if fragments:
+                fragment = fragments[0]
+                if fragment.row_groups:
+                    if fragment.row_groups[0].statistics:
+                        gather_statistics = True
+
+        if gather_statistics:
+            stats = []
+            # TODO is tracking skip_cols needed?
+            skip_cols = set()  # Columns with min/max = None detected
+            for fragment in fragments:
+
+                for ri, row_group in enumerate(fragment.row_groups):
+                    s =  {"num-rows": row_group.num_rows, "columns": []}
+                    for name, col_stats in row_group.statistics.items():
+                        if name not in skip_cols:
+                            d = {"name": name}
+                            if col_stats["max"] is None or col_stats["min"] is None:
+                                skip_cols.add(name)
+                                continue
+                            d.update(
+                                {
+                                    "min": col_stats["min"],
+                                    "max": col_stats["max"],
+                                    # TODO (but need to set something to reuse _merge_statistics
+                                    "null_count": 0,
+                                }
+                            )
+                            s["columns"].append(d)
+                    # TODO
+                    s["total_byte_size"] = 0
+                    if ri == 0:
+                        stats.append(s)
+                    else:
+                        _merge_statistics(stats, s)
+        else:
+            stats = None
+
+
+        return meta, stats, fragments, schema, filter, kwargs
 
     @staticmethod
     def read_partition(
@@ -139,6 +181,7 @@ class ArrowDatasetEngine(ArrowEngine):
                     columns.append(level)
 
         # works with pyarrow master, not with released pyarrow 0.17
+        # breakpoint()
         df = fragment.to_table(
             use_threads=False, schema=schema, columns=columns, filter=filter
         ).to_pandas(categories=categories)

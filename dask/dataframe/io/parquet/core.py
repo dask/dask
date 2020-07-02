@@ -223,16 +223,16 @@ def read_parquet(
         index = [index]
 
     if engine.__name__ == "ArrowDatasetEngine":
-        meta, fragments, schema, filter, kwargs = engine.read_metadata(
-        fs,
-        paths,
-        categories=categories,
-        index=index,
-        gather_statistics=gather_statistics,
-        filters=filters,
-        split_row_groups=split_row_groups,
-        **kwargs
-    )
+        meta, statistics, fragments, schema, filter, kwargs = engine.read_metadata(
+            fs,
+            paths,
+            categories=categories,
+            index=index,
+            gather_statistics=gather_statistics,
+            filters=filters,
+            split_row_groups=split_row_groups,
+            **kwargs
+        )
     else:
         meta, statistics, parts = engine.read_metadata(
             fs,
@@ -247,15 +247,22 @@ def read_parquet(
     if meta.index.name is not None:
         index = meta.index.name
 
+    # breakpoint()
+
     # Parse dataset statistics from metadata (if available)
     if engine.__name__ == "ArrowDatasetEngine":
-        index_in_columns = False
-        divisions = [None] * (len(fragments) + 1)
+        # index_in_columns = False
+        # divisions = [None] * (len(fragments) + 1)
+        # don't pass filter (parts already have been filtered by pyarrow)
+        parts, divisions, index, index_in_columns = process_statistics(
+            fragments, statistics, None, index, chunksize
+        )
     else:
         parts, divisions, index, index_in_columns = process_statistics(
             parts, statistics, filters, index, chunksize
         )
-
+    
+    # breakpoint()
     # Account for index and columns arguments.
     # Modify `meta` dataframe accordingly
     meta, index, columns = set_index_columns(
@@ -279,6 +286,7 @@ def read_parquet(
         subgraph = {(name, 0): meta}
         divisions = (None, None)
 
+    # breakpoint()
     return new_dd_object(subgraph, name, meta, divisions)
 
 

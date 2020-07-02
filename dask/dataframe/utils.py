@@ -662,6 +662,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             asciitable(["", "dtype"], [("Found", x.dtype), ("Expected", meta.dtype)]),
         )
 
+    breakpoint()
     raise ValueError(
         "Metadata mismatch found%s.\n\n"
         "%s" % ((" in `%s`" % funcname if funcname else ""), errmsg)
