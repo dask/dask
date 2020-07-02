@@ -2597,6 +2597,17 @@ def test_from_pandas_preserve_none_index(tmpdir, engine):
     assert_eq(expect, got)
 
 
+@write_read_engines()
+def test_from_pandas_preserve_none_rangeindex(tmpdir, write_engine, read_engine):
+    # See GitHub Issue#6348
+    fn = str(tmpdir.join("test.parquet"))
+    df0 = pd.DataFrame({"t": [1, 2, 3]}, index=pd.RangeIndex(start=1, stop=4))
+    df0.to_parquet(fn, engine=write_engine)
+
+    df1 = dd.read_parquet(fn, engine=read_engine)
+    assert_eq(df0, df1.compute())
+
+
 def test_illegal_column_name(tmpdir, engine):
     # Make sure user is prevented from preserving a "None" index
     # name if there is already a column using the special `null_name`
