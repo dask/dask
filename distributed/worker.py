@@ -2333,6 +2333,7 @@ class Worker(ServerNode):
     ################
 
     # FIXME: this breaks if changed to async def...
+    # xref: https://github.com/dask/distributed/issues/3938
     @gen.coroutine
     def executor_submit(self, key, function, args=(), kwargs=None, executor=None):
         """ Safely run function in thread pool executor
