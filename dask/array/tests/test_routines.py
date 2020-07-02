@@ -336,6 +336,13 @@ def test_tensordot_more_than_26_dims():
     assert_eq(da.tensordot(dx, dx, ndim), np.array(2 ** ndim))
 
 
+def test_tensordot_more_than_32_involved_dims():
+    shape = (1,) * 22
+    x = da.ones(shape=shape)
+    xx = da.tensordot(x, x, 11)
+    assert assert_eq(xx, np.ones(shape=shape))
+
+
 def test_dot_method():
     x = np.arange(400).reshape((20, 20))
     a = da.from_array(x, chunks=(5, 5))

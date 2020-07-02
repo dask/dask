@@ -227,10 +227,6 @@ def _tensordot(a, b, axes):
     else:
         x = tensordot(a, b, axes=axes)
 
-    ind = [slice(None, None)] * x.ndim
-    for a in sorted(axes[0]):
-        ind.insert(a, None)
-    x = x[tuple(ind)]
     return x
 
 
@@ -259,9 +255,10 @@ def tensordot(lhs, rhs, axes=2):
 
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
+        out_index.remove(left_index[l])
         right_index[r] = left_index[l]
 
-    intermediate = blockwise(
+    return blockwise(
         _tensordot,
         out_index,
         lhs,
@@ -270,10 +267,8 @@ def tensordot(lhs, rhs, axes=2):
         right_index,
         dtype=dt,
         axes=(left_axes, right_axes),
+        concatenate=True,
     )
-
-    result = intermediate.sum(axis=left_axes)
-    return result
 
 
 @derived_from(np)
