@@ -14,7 +14,7 @@ import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
-from dask.utils import put_lines, M
+from dask.utils import put_lines, M, iter_chunks
 
 from dask.dataframe.core import (
     repartition_divisions,
@@ -22,7 +22,6 @@ from dask.dataframe.core import (
     _concat,
     Scalar,
     has_parallel_type,
-    iter_chunks,
     total_mem_usage,
     is_broadcastable,
 )

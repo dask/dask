@@ -28,6 +28,7 @@ from dask.utils import (
     parse_timedelta,
     parse_bytes,
     is_arraylike,
+    iter_chunks
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
@@ -566,3 +567,18 @@ def test_is_arraylike():
     assert is_arraylike(np.empty(())) is True
     assert is_arraylike(np.empty((0,))) is True
     assert is_arraylike(np.empty((0, 0))) is True
+
+
+def test_iter_chunks():
+    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
+    assert list(iter_chunks(sizes, 19)) == [
+        [14],
+        [8, 5],
+        [9, 7],
+        [9, 1],
+        [19],
+        [8],
+        [19],
+    ]
+    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
+    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]

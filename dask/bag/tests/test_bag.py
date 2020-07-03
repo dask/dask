@@ -26,6 +26,7 @@ from dask.bag.core import (
     inline_singleton_lists,
     optimize,
     from_delayed,
+    total_mem_usage
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
@@ -1164,10 +1165,24 @@ def test_zip(npartitions, hi=1000):
 
 @pytest.mark.parametrize("nin", [1, 2, 7, 11, 23])
 @pytest.mark.parametrize("nout", [1, 2, 5, 12, 23])
-def test_repartition(nin, nout):
+def test_repartition_npartitions(nin, nout):
     b = db.from_sequence(range(100), npartitions=nin)
     c = b.repartition(npartitions=nout)
     assert c.npartitions == nout
+    assert_eq(b, c)
+    results = dask.get(c.dask, c.__dask_keys__())
+    assert all(results)
+
+
+# @pytest.mark.parametrize("nin", [1, 2, 4, 8])
+# @pytest.mark.parametrize("partition_size", [1024, 2048, 4096])
+@pytest.mark.parametrize("nin", [1])
+@pytest.mark.parametrize("partition_size", [1024])
+def test_repartition_partition_size(nin, partition_size):
+    b = db.from_sequence(range(1000), npartitions=nin)  # 9112 bytes
+    c = b.repartition(partition_size=partition_size)
+    mem_usages = c.map_partitions(total_mem_usage).compute()
+    assert all(mem_usage <= partition_size for mem_usage in mem_usages)
     assert_eq(b, c)
     results = dask.get(c.dask, c.__dask_keys__())
     assert all(results)
@@ -1185,6 +1200,11 @@ def test_repartition_names():
     c = b.repartition(5)
     assert b is c
 
+
+def test_repartition_input_errors():
+    with pytest.raises(ValueError):
+        bag = db.from_sequence(range(10))
+        bag.repartition(npartitions=5, partition_size="5MiB")
 
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]

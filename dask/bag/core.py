@@ -2543,9 +2543,8 @@ def repartition_npartitions(bag, npartitions):
                 dsk[(new_name, j)] = (operator.getitem, (split_name, i), jj)
                 j += 1
             last = new
-
-    graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[bag])
-    return Bag(graph, name=new_name, npartitions=npartitions)
+        graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[bag])
+        return Bag(graph, name=new_name, npartitions=npartitions)
 
 
 def _split_partitions(bag, nsplits, new_name):
@@ -2583,6 +2582,10 @@ def _split_partitions(bag, nsplits, new_name):
         return Bag(graph, name=new_name, npartitions=num_new_partitions)
 
 
+def total_mem_usage(bag):
+    return sys.getsizeof(bag)
+
+
 def repartition_size(bag, size):
     """
     Repartition bag so that new partitions have approximately `size` memory usage each
@@ -2590,11 +2593,11 @@ def repartition_size(bag, size):
     if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
-    mem_usages = bag.map_partitions(sys.getsizeof).compute()
+    mem_usages = bag.map_partitions(total_mem_usage).compute()
 
     # 1. split each partition that is larger than partition size
-    nsplits = (1 + mem_usages) // size
-    if any(nsplits > 1):
+    nsplits = [1 + mem_usage // size for mem_usage in mem_usages]
+    if any((nsplit > 1 for nsplit in nsplits)):
         split_name = "repartition-split-{}-{}".format(size, tokenize(bag))
         bag = _split_partitions(bag, nsplits, split_name)
         # update mem_usages to account for the split partitions
@@ -2603,8 +2606,9 @@ def repartition_size(bag, size):
             split_mem_usages.extend([usage / n] * n)
 
     # 2. now that all partitions are less than size, concat them up to size
-    assert all(split_mem_usages <= size)
-    new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
+    assert all((mem_usage <= size for mem_usage in split_mem_usages))
+    new_npartitions = list(map(len, iter_chunks(split_mem_usages, size)))
     new_partitions_boundaries = accumulate(operator.add, new_npartitions)
     new_name = "repartition-{}-{}".format(size, tokenize(bag))
+    import pdb; pdb.set_trace()
     return _repartition_from_boundaries(bag, new_partitions_boundaries, new_name)

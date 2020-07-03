@@ -5884,7 +5884,6 @@ def repartition_size(df, size):
     """
     Repartition dataframe so that new partitions have approximately `size` memory usage each
     """
-    import pdb; pdb.set_trace()
     if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
