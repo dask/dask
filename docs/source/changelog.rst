@@ -1,6 +1,23 @@
 Changelog
 =========
 
+2.20.0 - 2020-07-02
+-------------------
+
+- Link issue on using ``async`` with ``executor_submit`` (:pr:`3939`) `jakirkham`_
+- Make dashboard server listens on all IPs by default even when interface is set explicitly (:pr:`3941`) `Loïc Estève`_
+- Update logic for worker removal in check ttl (:pr:`3927`) `Benjamin Zaitlen`_
+- Close a created cluster quietly (:pr:`3935`) `Matthew Rocklin`_
+- Ensure ``Worker.run*`` handles ``kwargs`` correctly (:pr:`3937`) `jakirkham`_
+- Restore ``Scheduler.time_started`` for Dask Gateway (:pr:`3934`) `Tom Augspurger`_
+- Fix exception handling in ``_wait_until_connected`` (:pr:`3912`) `Alexander Clausen`_
+- Make local directory if it does not exist (:pr:`3928`) `Matthew Rocklin`_
+- Install vanilla status route if bokeh dependency is not satisfied (:pr:`3844`) `joshreback`_
+- Make ``Worker.delete_data`` sync (:pr:`3922`) `Peter Andreas Entschev`_
+- Fix ``ensure_bytes`` import location (:pr:`3919`) `jakirkham`_
+- Fix race condition in repeated calls to ``cluster.adapt()`` (:pr:`3915`) `Jacob Tomlinson`_
+
+
 2.19.0 - 2020-06-19
 -------------------
 
@@ -1826,3 +1843,4 @@ significantly without many new features.
 .. _`DomHudson`: https://github.com/DomHudson
 .. _`Julien Jerphanion`: https://github.com/jjerphan
 .. _`joshreback`: https://github.com/joshreback
+.. _`Alexander Clausen`: https://github.com/sk1p
