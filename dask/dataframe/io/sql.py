@@ -16,7 +16,7 @@ def read_sql_table(
     npartitions=None,
     limits=None,
     columns=None,
-    bytes_per_chunk=256 * 2 ** 20,
+    bytes_per_chunk="256 MiB",
     head_rows=5,
     schema=None,
     meta=None,
@@ -73,7 +73,7 @@ def read_sql_table(
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
         Labeling columns created by functions or arithmetic operations is
         recommended.
-    bytes_per_chunk : int
+    bytes_per_chunk : str, int
         If both divisions and npartitions is None, this is the target size of
         each partition, in bytes
     head_rows : int
@@ -170,7 +170,14 @@ def read_sql_table(
         if npartitions is None:
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)["count_1"][0]
-            npartitions = int(round(count * bytes_per_row / bytes_per_chunk)) or 1
+            npartitions = (
+                int(
+                    round(
+                        count * bytes_per_row / dask.utils.parse_bytes(bytes_per_chunk)
+                    )
+                )
+                or 1
+            )
         if dtype.kind == "M":
             divisions = pd.date_range(
                 start=mini,
