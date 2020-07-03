@@ -1167,7 +1167,6 @@ def test_zip(npartitions, hi=1000):
 def test_repartition(nin, nout):
     b = db.from_sequence(range(100), npartitions=nin)
     c = b.repartition(npartitions=nout)
-
     assert c.npartitions == nout
     assert_eq(b, c)
     results = dask.get(c.dask, c.__dask_keys__())

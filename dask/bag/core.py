@@ -2489,9 +2489,9 @@ def _repartition_from_boundaries(bag, new_partitions_boundaries, new_name):
         new_partitions_boundaries.insert(0, 0)
     if new_partitions_boundaries[-1] < bag.npartitions:
         new_partitions_boundaries.append(bag.npartitions)
-    num_new_partitions = len(new_partitions_boundaries)
+    num_new_partitions = len(new_partitions_boundaries) - 1
     dsk = {}
-    for new_partition_index in range(len(new_partitions_boundaries)):
+    for new_partition_index in range(num_new_partitions):
         value = (
             list,
             (
