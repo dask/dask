@@ -1,6 +1,30 @@
 Changelog
 =========
 
+2.20.0 / 2020-07-02
+-------------------
+
+Array
++++++
+
+- Register ``sizeof`` for numpy zero-strided arrays (:pr:`6343`) `Matthias Bussonnier`_
+- Use ``concatenate_lookup`` in ``concatenate`` (:pr:`6339`) `John A Kirkham`_
+- Fix rechunking of arrays with some zero-length dimensions (:pr:`6335`) `Matthias Bussonnier`_
+
+DataFrame
++++++++++
+
+- Dispatch ``iloc``` calls to ``getitem`` (:pr:`6355`) `Gil Forsyth`_
+- Handle unnamed pandas ``RangeIndex`` in fastparquet engine (:pr:`6350`) `Richard (Rick) Zamora`_
+- Preserve index when writing partitioned parquet datasets with pyarrow (:pr:`6282`) `Richard (Rick) Zamora`_
+- Use ``ignore_index`` for pandas' ``group_split_dispatch`` (:pr:`6251`) `Richard (Rick) Zamora`_
+
+Documentation
++++++++++++++
+
+- Add doc describing argument (:pr:`6318`) `asmith26`_
+
+
 2.19.0 / 2020-06-19
 -------------------
 
@@ -3351,3 +3375,4 @@ Other
 .. _`Eric Czech`: https://github.com/eric-czech
 .. _`Abdulelah Bin Mahfoodh`: https://github.com/abduhbm
 .. _`Ben Shaver`: https://github.com/bpshaver
+.. _`Matthias Bussonnier`: https://github.com/Carreau
