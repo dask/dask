@@ -58,7 +58,7 @@ from ..utils import (
     ensure_unicode,
     key_split,
     parse_bytes,
-    iter_chunks
+    iter_chunks,
 )
 from . import chunk
 
@@ -1569,7 +1569,6 @@ class Bag(DaskMethodsMixin):
             dsk = self.__dask_optimize__(dsk, keys)
         return [Delayed(k, dsk) for k in keys]
 
-
     def repartition(self, npartitions=None, partition_size=None):
         """ Repartition Bag across new divisions.
 
@@ -1595,7 +1594,7 @@ class Bag(DaskMethodsMixin):
         --------
         >>> b.repartition(5)  # set to have 5 partitions  # doctest: +SKIP
         """
-        if (sum([npartitions is not None, partition_size is not None]) != 1):
+        if sum([npartitions is not None, partition_size is not None]) != 1:
             raise ValueError(
                 "Please provide exactly one ``npartitions`` or ``partition_size`` keyword arguments"
             )
@@ -1603,7 +1602,6 @@ class Bag(DaskMethodsMixin):
             return repartition_npartitions(self, npartitions)
         elif partition_size is not None:
             return repartition_size(self, partition_size)
-
 
     def accumulate(self, binop, initial=no_default):
         """ Repeatedly apply binary function to a sequence, accumulating results.
@@ -2589,9 +2587,9 @@ def _repartition_from_boundaries(bag, new_partitions_boundaries, new_name):
                 [
                     (bag.name, old_partition_index)
                     for old_partition_index in range(
-                    new_partitions_boundaries[new_partition_index],
-                    new_partitions_boundaries[new_partition_index + 1],
-                )
+                        new_partitions_boundaries[new_partition_index],
+                        new_partitions_boundaries[new_partition_index + 1],
+                    )
                 ],
             ),
         )

@@ -26,7 +26,7 @@ from dask.bag.core import (
     inline_singleton_lists,
     optimize,
     from_delayed,
-    total_mem_usage
+    total_mem_usage,
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
@@ -1203,6 +1203,7 @@ def test_repartition_input_errors():
     with pytest.raises(ValueError):
         bag = db.from_sequence(range(10))
         bag.repartition(npartitions=5, partition_size="5MiB")
+
 
 def test_accumulate():
     parts = [[1, 2, 3], [4, 5], [], [6, 7]]

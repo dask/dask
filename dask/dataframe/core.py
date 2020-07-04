@@ -40,7 +40,7 @@ from ..utils import (
     OperatorMethodMixin,
     is_arraylike,
     typename,
-    iter_chunks
+    iter_chunks,
 )
 from ..array.core import Array, normalize_arg
 from ..array.utils import zeros_like_safe

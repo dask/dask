@@ -28,7 +28,7 @@ from dask.utils import (
     parse_timedelta,
     parse_bytes,
     is_arraylike,
-    iter_chunks
+    iter_chunks,
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
