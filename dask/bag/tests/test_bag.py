@@ -1174,12 +1174,10 @@ def test_repartition_npartitions(nin, nout):
     assert all(results)
 
 
-# @pytest.mark.parametrize("nin", [1, 2, 4, 8])
-# @pytest.mark.parametrize("partition_size", [1024, 2048, 4096])
-@pytest.mark.parametrize("nin", [1])
-@pytest.mark.parametrize("partition_size", [1024])
+@pytest.mark.parametrize("nin", [1, 2, 4, 8])
+@pytest.mark.parametrize("partition_size", [128, 256, 512])
 def test_repartition_partition_size(nin, partition_size):
-    b = db.from_sequence(range(1000), npartitions=nin)  # 9112 bytes
+    b = db.from_sequence(range(100), npartitions=nin)  # 1008 bytes
     c = b.repartition(partition_size=partition_size)
     mem_usages = c.map_partitions(total_mem_usage).compute()
     assert all(mem_usage <= partition_size for mem_usage in mem_usages)

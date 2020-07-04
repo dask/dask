@@ -5903,7 +5903,6 @@ def repartition_size(df, size):
 
     # 2. now that all partitions are less than size, concat them up to size
     assert np.all(mem_usages <= size)
-    import pdb; pdb.set_trace()
     new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
     new_partitions_boundaries = np.cumsum(new_npartitions)
     new_name = "repartition-{}-{}".format(size, tokenize(df))

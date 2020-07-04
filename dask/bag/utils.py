@@ -3,5 +3,4 @@ def assert_eq(a, b):
         a = a.compute(scheduler="sync")
     if hasattr(b, "compute"):
         b = b.compute(scheduler="sync")
-
     assert a == b
