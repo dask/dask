@@ -176,7 +176,7 @@ def test_npartitions(db):
         "test",
         db,
         columns=list(df.columns),
-        bytes_per_chunk=2 ** 30,
+        bytes_per_chunk="2 GiB",
         index_col="number",
     )
     assert data.npartitions == 1
