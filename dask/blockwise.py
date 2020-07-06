@@ -378,7 +378,9 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     # "coordinate set" that consists of
     # - the output indices
     # - the dummy indices
-    # - the dummy indices, with indices replaced by zeros (for broadcasting)
+    # - the dummy indices, with indices replaced by zeros (for broadcasting), we
+    #   are careful to only emit a single dummy zero when concatenate=True to not
+    #   concatenate the same array with itself several times.
     # - a 0 to assist with broadcasting.
 
     index_pos, zero_pos = {}, {}
@@ -390,7 +392,8 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     for i, ind in enumerate(dummy_indices):
         index_pos[ind] = 2 * i + len(out_indices)
         zero_pos[ind] = 2 * i + 1 + len(out_indices)
-        _dummies_list.append([list(range(dims[ind])), [0] * dims[ind]])
+        reps = 1 if concatenate else dims[ind]
+        _dummies_list.append([list(range(dims[ind])), [0] * reps])
 
     # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
     dummies = tuple(itertools.chain.from_iterable(_dummies_list))
@@ -402,7 +405,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Axes along which to concatenate, for each input
     concat_axes = []
-
     for arg, ind in argpairs:
         if ind is not None:
             coord_maps.append(
@@ -415,7 +417,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
         else:
             coord_maps.append(None)
             concat_axes.append(None)
-
     # Unpack delayed objects in kwargs
     dsk2 = {}
     if kwargs:
@@ -438,6 +439,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
                     tups = lol_product((arg,), arg_coords)
+
                     if concatenate:
                         tups = (concatenate, tups, axes)
                 else:
@@ -467,7 +469,6 @@ def lol_product(head, values):
     values : sequence
         Mix of singletons and lists. Each list is substituted with every
         possible value and introduces another level of list in the output.
-
     Examples
     --------
 
