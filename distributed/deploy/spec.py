@@ -233,7 +233,6 @@ class SpecCluster(Cluster):
         self.workers = {}
         self._i = 0
         self.security = security or Security()
-        self.scheduler_comm = None
         self._futures = set()
 
         if silence_logs:

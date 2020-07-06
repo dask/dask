@@ -55,6 +55,7 @@ class Cluster:
         self._asynchronous = asynchronous
         self._watch_worker_status_comm = None
         self._watch_worker_status_task = None
+        self.scheduler_comm = None
 
         self.status = "created"
 
