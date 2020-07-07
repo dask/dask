@@ -2647,7 +2647,6 @@ def test_pa_dataset_simple(tmpdir, engine):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine)
     read_df = dd.read_parquet(fn, engine="pyarrow", dataset={"pa_dataset": True})
-    read_df.compute(scheduler="synchronous")
 
     assert_eq(ddf, read_df)
 
@@ -2671,7 +2670,6 @@ def test_pa_dataset_partitioned(tmpdir, engine, test_filter):
         dataset={"pa_dataset": True},
         filters=[("b", "==", "a")] if test_filter else None,
     )
-    read_df.compute(scheduler="synchronous")
 
     if test_filter:
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())

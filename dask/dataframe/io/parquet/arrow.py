@@ -8,10 +8,9 @@ from distutils.version import LooseVersion
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pyarrow.compat import guid
 from ....utils import getargspec
 
-from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
+from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes, _guid
 from ...utils import clear_known_categories
 from ....core import flatten
 
@@ -73,7 +72,7 @@ def _write_partitioned(table, root_path, partition_cols, fs, index_cols=(), **kw
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdir(prefix, exists_ok=True)
-        outfile = guid() + ".parquet"
+        outfile = _guid() + ".parquet"
         full_path = fs.sep.join([prefix, outfile])
         with fs.open(full_path, "wb") as f:
             pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
