@@ -960,7 +960,13 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     )
 
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on=["partition_column"])
+    # Note: `append_row_groups` will fail with pyarrow>17.1 for _metadata write
+    ddf.to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        partition_on=["partition_column"],
+        write_metadata_file=False,
+    )
 
     # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
@@ -2008,8 +2014,9 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
     ddf2 = ddf2.set_index("x").reset_index().persist()
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
-    ddf2.to_parquet(tmp_path, engine=engine)
-    ddf_read = dd.read_parquet(tmp_path, engine=engine)
+    # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
+    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False)
+    ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset={"validate_schema": False})
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
@@ -2641,3 +2648,26 @@ def test_pa_dataset_simple(tmpdir, engine):
     read_df.compute(scheduler="synchronous")
 
     assert_eq(ddf, read_df)
+
+
+@pytest.mark.parametrize("test_filter", [True, False])
+def test_pa_dataset_partitioned(tmpdir, engine, test_filter):
+    check_pyarrow()
+    fn = str(tmpdir)
+    df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine=engine, partition_on="b")
+    read_df = dd.read_parquet(
+        fn, engine="pyarrow",
+        dataset={"pa_dataset": True},
+        filters=[("b", "==", "a")] if test_filter else None,
+    )
+    read_df.compute(scheduler="synchronous")
+    
+    if test_filter:
+        assert_eq(
+            ddf[ddf["b"] == "a"].compute(),
+            read_df.compute(),
+        )
+    else:
+        assert_eq(ddf, read_df)

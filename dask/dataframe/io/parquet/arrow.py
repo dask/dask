@@ -1,6 +1,7 @@
 from functools import partial
 from collections import defaultdict
 import json
+import operator
 import warnings
 from distutils.version import LooseVersion
 
@@ -156,21 +157,49 @@ def _gather_metadata(
         if len(paths) == 1 and fs.isdir(paths[0]):
             paths = paths[0]
 
-        ds = pa_ds.dataset(paths, format="parquet")
+        ds = pa_ds.dataset(
+            paths,
+            format="parquet",
+            partitioning=dataset_kwargs.get("partitioning", "hive"),  # Assume "hive" by default
+        )
         schema = ds.schema
         metadata = []
         base = ""
-        # TODO: Support partitioned datasets
+        # Dataset API doesn't use partition_info
         partition_info = {"partitions": None, "partition_keys": {}, "partition_names": []}
         if gather_statistics is None:
             gather_statistics = True
         if split_row_groups is None and gather_statistics:
             split_row_groups = True
 
-        # TODO: Translate filters
-        filters = None
+        # TODO: Translate multiple/nested filters from `filters`.
+        #       For now, user must include the filters in `dataset_kwargs`
+        #       for "full" filtering support.
+        ds_filters = dataset_kwargs.get("filters", None)
+        if filters and ds_filters is None:
+            if not isinstance(filters, list):
+                raise ValueError("Outer-most type of filters must be a list.")
+            if len(filters) > 1 or not isinstance(filters[0], tuple):
+                warnings.warn(
+                    "Failed to translate filter for dataset API. "
+                    "Include filters based on pyarrow.dataset.Expression "
+                    "in dataset kwargs for full support."
+                )
+            else:
+                filter_col = filters[0][0]
+                filter_op = filters[0][1]
+                filter_op = {
+                    "==": operator.eq,
+                    "!=": operator.ne,
+                    "<=": operator.ge,
+                    "<=": operator.le,
+                    ">": operator.gt,
+                    "<": operator.lt,
+                }[filter_op]
+                filter_comp = filters[0][2]
+                ds_filters = filter_op(pa_ds.field(filter_col), filter_comp)
 
-        for file_frag in ds.get_fragments(filter=filters):
+        for file_frag in ds.get_fragments(filter=ds_filters):
             for rg_frag in file_frag.split_by_row_group():
                 metadata.append(rg_frag)
 
@@ -276,7 +305,7 @@ def _gather_metadata(
         )
 
 
-def _generate_dd_meta(schema, index, categories, partition_info):
+def _generate_dd_meta(schema, index, categories, partition_info, using_fragments=False):
     partition_obj = partition_info["partitions"]
     partitions = partition_info["partition_names"]
     columns = None
@@ -304,14 +333,19 @@ def _generate_dd_meta(schema, index, categories, partition_info):
         storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
 
+    if using_fragments:
+        # TODO hack to include partition names in column names
+        column_names = schema.names
+
     if index is None and index_names:
         index = index_names
 
-    if set(column_names).intersection(partitions):
-        raise ValueError(
-            "partition(s) should not exist in columns.\n"
-            "categories: {} | partitions: {}".format(column_names, partitions)
-        )
+    if not using_fragments:
+        if set(column_names).intersection(partitions):
+            raise ValueError(
+                "partition(s) should not exist in columns.\n"
+                "categories: {} | partitions: {}".format(column_names, partitions)
+            )
 
     column_names, index_names = _normalize_index_columns(
         columns, column_names + partitions, index, index_names
@@ -388,7 +422,7 @@ def _aggregate_stats(
 def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_indices, use_pa_ds):
 
     # Get the number of row groups per file
-    file_row_groups = defaultdict(int)
+    file_row_groups = defaultdict(list)
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
 
@@ -396,7 +430,7 @@ def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_ind
         for rg_frag in metadata:
             row_group = rg_frag.row_groups[0]
             fpath = rg_frag.path
-            file_row_groups[fpath] += 1
+            file_row_groups[fpath].append(rg_frag)
             statistics = row_group.statistics
             # TODO: PyArrow does not currently include statistics
             #       for string columns - Need this addressed.
@@ -440,7 +474,10 @@ def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_ind
             fpath = row_group.column(0).file_path
             if fpath is None:
                 raise ValueError("metadata is missing file_path string.")
-            file_row_groups[fpath] += 1
+            if file_row_groups[fpath]:
+                file_row_groups[fpath].append(file_row_groups[fpath][-1] + 1)
+            else:
+                file_row_groups[fpath].append(0)
             if gather_statistics:
                 if single_rg_parts:
                     s = {
@@ -519,7 +556,7 @@ def _construct_parts(
     if isinstance(metadata, list) and isinstance(metadata[0], str):
         for full_path in metadata:
             part = {
-                "piece": (full_path, None, partition_keys.get(full_path, None)),
+                "piece": (full_path, None, partition_keys.get(full_path, None), None),
                 "kwargs": {"partitions": partition_obj, "categories": categories},
             }
             parts.append(part)
@@ -562,10 +599,11 @@ def _construct_parts(
         # Create parts from each file,
         # limiting the number of row_groups in each piece
         split_row_groups = int(split_row_groups)
-        for filename, row_group_count in file_row_groups.items():
-            row_groups = range(row_group_count)
+        for filename, row_groups in file_row_groups.items():
+            row_group_count = len(row_groups)
             for i in range(0, row_group_count, split_row_groups):
-                rg_list = list(row_groups[i : i + split_row_groups])
+                i_end = i + split_row_groups
+                rg_list = row_groups[i : i_end]
                 full_path = (
                     fs.sep.join([data_path, filename])
                     if filename != ""
@@ -575,22 +613,20 @@ def _construct_parts(
                 if partition_obj and pkeys is None:
                     continue  # This partition was filtered
                 part = {
-                    "piece": (full_path, rg_list, pkeys),
+                    "piece": (full_path, rg_list, pkeys, schema),
                     "kwargs": {"partitions": partition_obj, "categories": categories},
                 }
                 parts.append(part)
                 if gather_statistics:
                     stat = _aggregate_stats(
                         filename,
-                        file_row_group_stats[filename][rg_list[0] : rg_list[-1] + 1],
-                        file_row_group_column_stats[filename][
-                            rg_list[0] : rg_list[-1] + 1
-                        ],
+                        file_row_group_stats[filename][i:i_end],
+                        file_row_group_column_stats[filename][i:i_end],
                         stat_col_indices,
                     )
                     stats.append(stat)
     else:
-        for filename in file_row_groups:
+        for filename, row_groups in file_row_groups.items():
             full_path = (
                 fs.sep.join([data_path, filename])
                 if filename != ""
@@ -599,8 +635,11 @@ def _construct_parts(
             pkeys = partition_keys.get(full_path, None)
             if partition_obj and pkeys is None:
                 continue  # This partition was filtered
+            rgs = None
+            if use_pa_ds:
+                rgs = row_groups
             part = {
-                "piece": (full_path, None, pkeys),
+                "piece": (full_path, rgs, pkeys, schema),
                 "kwargs": {"partitions": partition_obj, "categories": categories},
             }
             parts.append(part)
@@ -657,7 +696,7 @@ class ArrowEngine(Engine):
 
         # Process metadata to define `meta` and `index_cols`
         meta, index_cols, categories, index = _generate_dd_meta(
-            schema, index, categories, partition_info
+            schema, index, categories, partition_info, use_pa_ds
         )
 
         # Cannot gather_statistics if our `metadata` is a list
@@ -728,25 +767,30 @@ class ArrowEngine(Engine):
             path = piece
             row_group = None
             partition_keys = None
+            schema = None
         else:
-            # `piece` contains (path, row_group, partition_keys)
-            (path, row_group, partition_keys) = piece
+            # `piece` contains (path, row_group, partition_keys, schema)
+            (path, row_group, partition_keys, schema) = piece
 
         if not isinstance(row_group, list):
             row_group = [row_group]
 
         dfs = []
         for rg in row_group:
-            piece = pq.ParquetDatasetPiece(
-                path,
-                row_group=rg,
-                partition_keys=partition_keys,
-                open_file_func=partial(fs.open, mode="rb"),
-            )
-
-            arrow_table = cls._parquet_piece_as_arrow(
-                piece, columns, partitions, **kwargs
-            )
+            if isinstance(rg, pa_ds.ParquetFileFragment):
+                # `rg` is already a `ParquetFileFragment`, pyarrow
+                # knows how to convert this to a `table`
+                arrow_table = rg.to_table(use_threads=False, schema=schema)
+            else:
+                piece = pq.ParquetDatasetPiece(
+                    path,
+                    row_group=rg,
+                    partition_keys=partition_keys,
+                    open_file_func=partial(fs.open, mode="rb"),
+                )
+                arrow_table = cls._parquet_piece_as_arrow(
+                    piece, columns, partitions, **kwargs
+                )
             df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
 
             if len(row_group) > 1:
