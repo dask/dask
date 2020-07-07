@@ -13,6 +13,7 @@ from ....utils import getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes, _guid
 from ...utils import clear_known_categories
 from ....core import flatten
+from ....utils import natural_sort_key
 
 from .utils import (
     _parse_pandas_metadata,
@@ -140,6 +141,14 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     return dataset, base, fns
 
 
+def _get_ds_metadata(ds, ds_filters):
+    metadata = []
+    for file_frag in ds.get_fragments(filter=ds_filters):
+        for rg_frag in file_frag.split_by_row_group():
+            metadata.append(rg_frag)
+    return sorted(metadata, key=lambda x: natural_sort_key(x.path))
+
+
 def _gather_metadata(
     paths, fs, split_row_groups, gather_statistics, filters, use_pa_ds, dataset_kwargs
 ):
@@ -152,19 +161,38 @@ def _gather_metadata(
 
     if use_pa_ds:
         # Use pyarrow.dataset API
-
+        ds = None
         if len(paths) == 1 and fs.isdir(paths[0]):
             paths = paths[0]
 
-        ds = pa_ds.dataset(
-            paths,
-            format="parquet",
-            partitioning=dataset_kwargs.get(
-                "partitioning", "hive"
-            ),  # Assume "hive" by default
-        )
+            # Use _metadata file if available
+            # TODO: Handle _metadata within a list of files
+            meta_path = fs.sep.join([paths, "_metadata"])
+            if fs.exists(meta_path):
+                schema = pa_ds.dataset(
+                    paths,
+                    format="parquet",
+                    partitioning=dataset_kwargs.get(
+                        "partitioning", "hive"
+                    ),  # Assume "hive" by default
+                ).schema
+                ds = pa_ds.parquet_dataset(
+                    meta_path,
+                    schema=schema,
+                    partitioning=dataset_kwargs.get("partitioning", "hive"),
+                )
+                if gather_statistics is None:
+                    gather_statistics = True
+
+        if ds is None:
+            ds = pa_ds.dataset(
+                paths,
+                format="parquet",
+                partitioning=dataset_kwargs.get(
+                    "partitioning", "hive"
+                ),  # Assume "hive" by default
+            )
         schema = ds.schema
-        metadata = []
         base = ""
         # Dataset API doesn't use partition_info
         partition_info = {
@@ -172,9 +200,7 @@ def _gather_metadata(
             "partition_keys": {},
             "partition_names": [],
         }
-        if gather_statistics is None:
-            gather_statistics = True
-        if split_row_groups is None and gather_statistics:
+        if split_row_groups is None and gather_statistics is not False:
             split_row_groups = True
 
         # TODO: Translate multiple/nested filters from `filters`.
@@ -204,9 +230,7 @@ def _gather_metadata(
                 filter_comp = filters[0][2]
                 ds_filters = filter_op(pa_ds.field(filter_col), filter_comp)
 
-        for file_frag in ds.get_fragments(filter=ds_filters):
-            for rg_frag in file_frag.split_by_row_group():
-                metadata.append(rg_frag)
+        metadata = _get_ds_metadata(ds, ds_filters)
 
         return (
             schema,
@@ -779,7 +803,9 @@ class ArrowEngine(Engine):
             if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
                 # `rg` is already a `ParquetFileFragment`, pyarrow
                 # knows how to convert this to a `table`
-                arrow_table = rg.to_table(use_threads=False, schema=schema)
+                arrow_table = rg.to_table(
+                    use_threads=False, schema=schema, columns=columns
+                )
             else:
                 piece = pq.ParquetDatasetPiece(
                     path,
