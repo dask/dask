@@ -2014,6 +2014,7 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
     ddf2 = ddf2.set_index("x").reset_index().persist()
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
+
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
     ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False)
     ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset={"validate_schema": False})

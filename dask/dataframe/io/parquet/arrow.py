@@ -545,6 +545,7 @@ def _construct_parts(
         ``gather_statistics=True``, and other criteria is met.
     """
 
+
     parts = []
     stats = []
 
