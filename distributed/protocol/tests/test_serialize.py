@@ -420,6 +420,7 @@ def test_compression_numpy_list():
         (tuple([MyObj(None)]), True),
         ({("x", i): MyObj(5) for i in range(100)}, True),
         (memoryview(b"hello"), True),
+        (memoryview(np.random.random((3, 4))), True),
     ],
 )
 def test_check_dask_serializable(data, is_serializable):
@@ -441,10 +442,18 @@ def test_serialize_lists(serializers):
     assert data_in == data_out
 
 
-def test_deser_memoryview():
-    data_in = memoryview(b"hello")
+@pytest.mark.parametrize(
+    "data_in", [memoryview(b"hello"), memoryview(np.random.random((3, 4)))],
+)
+def test_deser_memoryview(data_in):
     header, frames = serialize(data_in)
     assert header["type"] == "builtins.memoryview"
     assert frames[0] is data_in
     data_out = deserialize(header, frames)
     assert data_in == data_out
+
+
+def test_ser_memoryview_object():
+    data_in = memoryview(np.array(["hello"], dtype=object))
+    with pytest.raises(TypeError):
+        serialize(data_in, on_error="raise")
