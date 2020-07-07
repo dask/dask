@@ -160,13 +160,19 @@ def _gather_metadata(
         ds = pa_ds.dataset(
             paths,
             format="parquet",
-            partitioning=dataset_kwargs.get("partitioning", "hive"),  # Assume "hive" by default
+            partitioning=dataset_kwargs.get(
+                "partitioning", "hive"
+            ),  # Assume "hive" by default
         )
         schema = ds.schema
         metadata = []
         base = ""
         # Dataset API doesn't use partition_info
-        partition_info = {"partitions": None, "partition_keys": {}, "partition_names": []}
+        partition_info = {
+            "partitions": None,
+            "partition_keys": {},
+            "partition_names": [],
+        }
         if gather_statistics is None:
             gather_statistics = True
         if split_row_groups is None and gather_statistics:
@@ -191,7 +197,7 @@ def _gather_metadata(
                 filter_op = {
                     "==": operator.eq,
                     "!=": operator.ne,
-                    "<=": operator.ge,
+                    ">=": operator.ge,
                     "<=": operator.le,
                     ">": operator.gt,
                     "<": operator.lt,
@@ -211,7 +217,6 @@ def _gather_metadata(
             split_row_groups,
             gather_statistics,
         )
-
 
     # Step 1: Create a ParquetDataset object
     dataset, base, fns = _get_dataset_object(paths, fs, filters, dataset_kwargs)
@@ -419,7 +424,9 @@ def _aggregate_stats(
         return s
 
 
-def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_indices, use_pa_ds):
+def _process_metadata(
+    metadata, single_rg_parts, gather_statistics, stat_col_indices, use_pa_ds
+):
 
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
@@ -436,14 +443,9 @@ def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_ind
             #       for string columns - Need this addressed.
             if gather_statistics:
                 if single_rg_parts:
-                    s = {
-                        "num-rows": row_group.num_rows,
-                        "columns": [],
-                    }
+                    s = {"num-rows": row_group.num_rows, "columns": []}
                 else:
-                    s = {
-                        "num-rows": row_group.num_rows,
-                    }
+                    s = {"num-rows": row_group.num_rows}
                 cstats = []
                 for name, i in stat_col_indices.items():
                     if name in statistics:
@@ -456,10 +458,7 @@ def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_ind
                                 }
                             )
                         else:
-                            cstats += [
-                                statistics[name]["min"],
-                                statistics[name]["max"],
-                            ]
+                            cstats += [statistics[name]["min"], statistics[name]["max"]]
                     else:
                         if single_rg_parts:
                             s["columns"].append({"name": name})
@@ -545,7 +544,6 @@ def _construct_parts(
         ``gather_statistics=True``, and other criteria is met.
     """
 
-
     parts = []
     stats = []
 
@@ -588,12 +586,12 @@ def _construct_parts(
         file_row_groups,
         file_row_group_stats,
         file_row_group_column_stats,
-     ) = _process_metadata(
-         metadata,
-         int(split_row_groups) == 1,
-         gather_statistics,
-         stat_col_indices,
-         use_pa_ds,
+    ) = _process_metadata(
+        metadata,
+        int(split_row_groups) == 1,
+        gather_statistics,
+        stat_col_indices,
+        use_pa_ds,
     )
 
     if split_row_groups:
@@ -604,7 +602,7 @@ def _construct_parts(
             row_group_count = len(row_groups)
             for i in range(0, row_group_count, split_row_groups):
                 i_end = i + split_row_groups
-                rg_list = row_groups[i : i_end]
+                rg_list = row_groups[i:i_end]
                 full_path = (
                     fs.sep.join([data_path, filename])
                     if filename != ""
@@ -704,7 +702,9 @@ class ArrowEngine(Engine):
         # of paths, or if we are building a multiindex (for now).
         # We also don't "need" to gather statistics if we don't
         # want to apply any filters or calculate divisions
-        if (isinstance(metadata, list) and isinstance(metadata[0], str)) or len(index_cols) > 1:
+        if (isinstance(metadata, list) and isinstance(metadata[0], str)) or len(
+            index_cols
+        ) > 1:
             gather_statistics = False
         elif filters is None and len(index_cols) == 0:
             gather_statistics = False
