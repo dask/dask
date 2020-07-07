@@ -2655,6 +2655,12 @@ def test_pa_dataset_simple(tmpdir, engine):
 @pytest.mark.parametrize("test_filter", [True, False])
 def test_pa_dataset_partitioned(tmpdir, engine, test_filter):
     check_pyarrow()
+
+    if pa.__version__ <= LooseVersion("0.17.1"):
+        # Using pyarrow.dataset API does not currently produce
+        # Categorical type for partitioned columns.
+        pytest.skip("PyArrow>0.17.1 Required.")
+
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
     ddf = dd.from_pandas(df, npartitions=2)

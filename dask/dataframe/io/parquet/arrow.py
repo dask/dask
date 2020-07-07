@@ -338,19 +338,18 @@ def _generate_dd_meta(schema, index, categories, partition_info, using_fragments
         storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
 
-    if using_fragments:
-        # TODO hack to include partition names in column names
-        column_names = schema.names
+    if using_fragments and not partitions:
+        # TODO: Explore other ways to specify partitions
+        partitions = [p for p in schema.names if p not in (column_names + index_names)]
 
     if index is None and index_names:
         index = index_names
 
-    if not using_fragments:
-        if set(column_names).intersection(partitions):
-            raise ValueError(
-                "partition(s) should not exist in columns.\n"
-                "categories: {} | partitions: {}".format(column_names, partitions)
-            )
+    if set(column_names).intersection(partitions):
+        raise ValueError(
+            "partition(s) should not exist in columns.\n"
+            "categories: {} | partitions: {}".format(column_names, partitions)
+        )
 
     column_names, index_names = _normalize_index_columns(
         columns, column_names + partitions, index, index_names
@@ -778,7 +777,7 @@ class ArrowEngine(Engine):
 
         dfs = []
         for rg in row_group:
-            if isinstance(rg, pa_ds.ParquetFileFragment):
+            if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
                 # `rg` is already a `ParquetFileFragment`, pyarrow
                 # knows how to convert this to a `table`
                 arrow_table = rg.to_table(use_threads=False, schema=schema)
