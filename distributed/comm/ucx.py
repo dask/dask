@@ -186,11 +186,13 @@ class UCX(Comm):
                     hasattr(f, "__cuda_array_interface__") for f in frames
                 )
                 sizes = tuple(nbytes(f) for f in frames)
-                send_frames = [
-                    each_frame
-                    for each_frame, each_size in zip(frames, sizes)
-                    if each_size
-                ]
+                cuda_send_frames, send_frames = zip(
+                    *(
+                        (is_cuda, each_frame)
+                        for is_cuda, each_frame in zip(cuda_frames, frames)
+                        if len(each_frame) > 0
+                    )
+                )
 
                 # Send meta data
 
@@ -209,7 +211,7 @@ class UCX(Comm):
                 #  syncing the default stream will wait for other non-blocking CUDA streams.
                 # Note this is only sufficient if the memory being sent is not currently in use on
                 # non-blocking CUDA streams.
-                if any(cuda_frames):
+                if any(cuda_send_frames):
                     synchronize_stream(0)
 
                 for each_frame in send_frames:
@@ -252,13 +254,17 @@ class UCX(Comm):
                     device_array(each_size) if is_cuda else host_array(each_size)
                     for is_cuda, each_size in zip(cuda_frames, sizes)
                 ]
-                recv_frames = [
-                    each_frame for each_frame in frames if len(each_frame) > 0
-                ]
+                cuda_recv_frames, recv_frames = zip(
+                    *(
+                        (is_cuda, each_frame)
+                        for is_cuda, each_frame in zip(cuda_frames, frames)
+                        if len(each_frame) > 0
+                    )
+                )
 
                 # It is necessary to first populate `frames` with CUDA arrays and synchronize
                 # the default stream before starting receiving to ensure buffers have been allocated
-                if any(cuda_frames):
+                if any(cuda_recv_frames):
                     synchronize_stream(0)
 
                 for each_frame in recv_frames:
