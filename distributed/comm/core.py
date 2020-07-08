@@ -3,6 +3,7 @@ import asyncio
 from contextlib import suppress
 import inspect
 import logging
+import random
 import weakref
 
 import dask
@@ -218,6 +219,8 @@ async def connect(addr, timeout=None, deserialize=True, **connection_args):
     if timeout and timeout / 20 < backoff:
         backoff = timeout / 20
 
+    retry_timeout_backoff = random.randrange(140, 160) / 100
+
     # This starts a thread
     while True:
         try:
@@ -227,7 +230,7 @@ async def connect(addr, timeout=None, deserialize=True, **connection_args):
                 )
                 with suppress(TimeoutError):
                     comm = await asyncio.wait_for(
-                        future, timeout=min(deadline - time(), 1)
+                        future, timeout=min(deadline - time(), retry_timeout_backoff)
                     )
                     break
             if not comm:
@@ -239,7 +242,8 @@ async def connect(addr, timeout=None, deserialize=True, **connection_args):
             if time() < deadline:
                 logger.debug("Could not connect, waiting before retrying")
                 await asyncio.sleep(backoff)
-                backoff *= 1.5
+                backoff *= random.randrange(140, 160) / 100
+                retry_timeout_backoff *= random.randrange(140, 160) / 100
                 backoff = min(backoff, 1)  # wait at most one second
             else:
                 _raise(error)
