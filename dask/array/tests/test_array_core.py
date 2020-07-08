@@ -130,6 +130,57 @@ def test_blockwise_literals():
     assert_eq(z, x)
 
 
+def test_blockwise_1_in_shape_I():
+    def test_f(a, b):
+        assert 1 in b.shape
+
+    p, k, N = 7, 2, 5
+    da.blockwise(
+        test_f,
+        "x",
+        da.zeros((2 * p, 9, k * N), chunks=(p, 3, k)),
+        "xzt",
+        da.zeros((2 * p, 9, 1), chunks=(p, 3, -1)),
+        "xzt",
+        concatenate=True,
+        dtype=float,
+    ).compute()
+
+
+def test_blockwise_1_in_shape_II():
+    def test_f(a, b):
+        assert 1 in b.shape
+
+    p, k, N = 7, 2, 5
+    da.blockwise(
+        test_f,
+        "x",
+        da.zeros((2 * p, 9, k * N, 8), chunks=(p, 9, k, 4)),
+        "xztu",
+        da.zeros((2 * p, 9, 1, 8), chunks=(p, 9, -1, 4)),
+        "xztu",
+        concatenate=True,
+        dtype=float,
+    ).compute()
+
+
+def test_blockwise_1_in_shape_III():
+    def test_f(a, b):
+        assert 1 in b.shape
+
+    k, N = 2, 5
+    da.blockwise(
+        test_f,
+        "x",
+        da.zeros((k * N, 9, 8), chunks=(k, 3, 4)),
+        "xtu",
+        da.zeros((1, 9, 8), chunks=(-1, 3, 4)),
+        "xtu",
+        concatenate=True,
+        dtype=float,
+    ).compute()
+
+
 def test_concatenate3_on_scalars():
     assert_eq(concatenate3([1, 2]), np.array([1, 2]))
 
@@ -4076,6 +4127,33 @@ def test_dask_array_holds_scipy_sparse_containers():
     zz = z.compute(scheduler="single-threaded")
     assert isinstance(yy, scipy.sparse.spmatrix)
     assert (zz == xx.T).all()
+
+
+@pytest.mark.parametrize("axis", [0, 1])
+def test_scipy_sparse_concatenate(axis):
+    pytest.importorskip("scipy.sparse")
+    import scipy.sparse
+
+    rs = da.random.RandomState(RandomState=np.random.RandomState)
+
+    xs = []
+    ys = []
+    for i in range(2):
+        x = rs.random((1000, 10), chunks=(100, 10))
+        x[x < 0.9] = 0
+        xs.append(x)
+        ys.append(x.map_blocks(scipy.sparse.csr_matrix))
+
+    z = da.concatenate(ys, axis=axis)
+    z = z.compute()
+
+    if axis == 0:
+        sp_concatenate = scipy.sparse.vstack
+    elif axis == 1:
+        sp_concatenate = scipy.sparse.hstack
+    z_expected = sp_concatenate([scipy.sparse.csr_matrix(e.compute()) for e in xs])
+
+    assert (z != z_expected).nnz == 0
 
 
 def test_3851():

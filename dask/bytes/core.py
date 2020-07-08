@@ -1,3 +1,4 @@
+import os
 import copy
 
 from fsspec.core import (  # noqa: F401
@@ -90,6 +91,9 @@ def read_bytes(
         represented in the corresponding block.
 
     """
+    if not isinstance(urlpath, (str, list, tuple, os.PathLike)):
+        raise TypeError("Path should be a string, os.PathLike, list or tuple")
+
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)
 
     if len(paths) == 0:

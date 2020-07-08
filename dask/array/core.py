@@ -2515,6 +2515,19 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     return tuple(tuple(int(x) if not math.isnan(x) else x for x in c) for c in chunks)
 
 
+def _compute_multiplier(limit: int, dtype, largest_block: int, result):
+    """
+    Utility function for auto_chunk, to fin how much larger or smaller the ideal
+    chunk size is relative to what we have now.
+    """
+    return (
+        limit
+        / dtype.itemsize
+        / largest_block
+        / np.prod(list(r if r != 0 else 1 for r in result.values()))
+    )
+
+
 def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     """ Determine automatic chunks
 
@@ -2595,9 +2608,8 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                 ideal_shape.append(s)
 
         # How much larger or smaller the ideal chunk size is relative to what we have now
-        multiplier = (
-            limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
-        )
+        multiplier = _compute_multiplier(limit, dtype, largest_block, result)
+
         last_multiplier = 0
         last_autos = set()
         while (
@@ -2608,6 +2620,9 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
             # Expand or contract each of the dimensions appropriately
             for a in sorted(autos):
+                if ideal_shape[a] == 0:
+                    result[a] = 0
+                    continue
                 proposed = result[a] * multiplier ** (1 / len(autos))
                 if proposed > shape[a]:  # we've hit the shape boundary
                     autos.remove(a)
@@ -2618,9 +2633,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
                     result[a] = round_to(proposed, ideal_shape[a])
 
             # recompute how much multiplier we have left, repeat
-            multiplier = (
-                limit / dtype.itemsize / largest_block / np.prod(list(result.values()))
-            )
+            multiplier = _compute_multiplier(limit, dtype, largest_block, result)
 
         for k, v in result.items():
             chunks[k] = v
@@ -3479,7 +3492,11 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     if not seq:
         raise ValueError("Need array(s) to concatenate")
 
-    meta = np.concatenate([meta_from_array(s) for s in seq], axis=axis)
+    seq_metas = [meta_from_array(s) for s in seq]
+    _concatenate = concatenate_lookup.dispatch(
+        type(max(seq_metas, key=lambda x: getattr(x, "__array_priority__", 0)))
+    )
+    meta = _concatenate(seq_metas, axis=axis)
 
     # Promote types to match meta
     seq = [a.astype(meta.dtype) for a in seq]

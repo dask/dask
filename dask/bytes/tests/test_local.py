@@ -12,7 +12,7 @@ from dask import compute
 from dask.utils import filetexts
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.compression import compr
-from dask.bytes.core import read_bytes, open_files, get_fs_token_paths
+from dask.bytes.core import read_bytes, open_files
 from dask.bytes.utils import compress
 
 compute = partial(compute, scheduler="sync")
@@ -44,86 +44,17 @@ def to_uri(path):
     return pathlib.Path(os.path.abspath(path)).as_uri()
 
 
-def test_urlpath_inference_strips_protocol(tmpdir):
-    tmpdir = str(tmpdir)
-    paths = [os.path.join(tmpdir, "test.%02d.csv" % i) for i in range(20)]
+def test_unordered_urlpath_errors():
 
-    for path in paths:
-        with open(path, "wb") as f:
-            f.write(b"1,2,3\n" * 10)
-
-    # globstring
-    protocol = "file:///" if sys.platform == "win32" else "file://"
-    urlpath = protocol + os.path.join(tmpdir, "test.*.csv")
-    _, _, paths2 = get_fs_token_paths(urlpath)
-    assert "file:" not in paths2[0]
-    assert paths2[0].endswith("/test.00.csv")
-
-    # list of paths
-    _, _, paths3 = get_fs_token_paths([protocol + p for p in paths])
-    assert paths2 == paths3
-
-
-def test_urlpath_inference_errors():
-    # Empty list
-    with pytest.raises(ValueError, match="empty"):
-        get_fs_token_paths([])
-
-    # Protocols differ
-    with pytest.raises(ValueError, match="the same protocol"):
-        get_fs_token_paths(["s3://test/path.csv", "/other/path.csv"])
-
-    # Options differ
-    with pytest.raises(ValueError, match="the same file-system options"):
-        get_fs_token_paths(
-            [
-                "ftp://myuser@node.com/test/path.csv",
-                "ftp://otheruser@node.com/other/path.csv",
-            ]
-        )
-
-    # Unknown type
+    # Unordered urlpath argument
     with pytest.raises(TypeError):
-        get_fs_token_paths(
+        read_bytes(
             {
                 "sets/are.csv",
                 "unordered/so/they.csv",
                 "should/not/be.csv",
                 "allowed.csv",
             }
-        )
-
-
-def test_urlpath_expand_read():
-    """Make sure * is expanded in file paths when reading."""
-    # when reading, globs should be expanded to read files by mask
-    with filetexts(csv_files, mode="b"):
-        _, _, paths = get_fs_token_paths(".*.csv")
-        assert len(paths) == 2
-        _, _, paths = get_fs_token_paths([".*.csv"])
-        assert len(paths) == 2
-
-
-def test_recursive_glob_expand():
-    """Make sure * is expanded in file paths when reading."""
-    with filetexts(
-        {"sub1/afile.csv": b"", "sub1/sub2/another.csv": b"", "sub1/twofile.csv": b""},
-        mode="b",
-    ):
-        _, _, paths = get_fs_token_paths(os.path.abspath("**/*.csv"))
-        assert len(paths) == 3
-
-
-def test_urlpath_expand_write():
-    """Make sure * is expanded in file paths when writing."""
-    _, _, paths = get_fs_token_paths("prefix-*.csv", mode="wb", num=2)
-    assert [p.endswith(pa) for p, pa in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
-    _, _, paths = get_fs_token_paths(["prefix-*.csv"], mode="wb", num=2)
-    assert [p.endswith(pa) for p, pa in zip(paths, ["prefix-0.csv", "prefix-1.csv"])]
-    # we can read with multiple masks, but not write
-    with pytest.raises(ValueError):
-        _, _, paths = get_fs_token_paths(
-            ["prefix1-*.csv", "prefix2-*.csv"], mode="wb", num=2
         )
 
 
