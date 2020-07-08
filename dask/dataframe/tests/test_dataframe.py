@@ -1612,6 +1612,7 @@ def test_dataframe_picklable():
 
     cloudpickle = pytest.importorskip("cloudpickle")
     cp_dumps = cloudpickle.dumps
+    cp_loads = cloudpickle.loads
 
     d = _compat.makeTimeDataFrame()
     df = dd.from_pandas(d, npartitions=3)
@@ -1620,25 +1621,25 @@ def test_dataframe_picklable():
     # dataframe
     df2 = loads(dumps(df))
     assert_eq(df, df2)
-    df2 = loads(cp_dumps(df))
+    df2 = cp_loads(cp_dumps(df))
     assert_eq(df, df2)
 
     # series
     a2 = loads(dumps(df.A))
     assert_eq(df.A, a2)
-    a2 = loads(cp_dumps(df.A))
+    a2 = cp_loads(cp_dumps(df.A))
     assert_eq(df.A, a2)
 
     # index
     i2 = loads(dumps(df.index))
     assert_eq(df.index, i2)
-    i2 = loads(cp_dumps(df.index))
+    i2 = cp_loads(cp_dumps(df.index))
     assert_eq(df.index, i2)
 
     # scalar
     # lambdas are present, so only test cloudpickle
     s = df.A.sum()
-    s2 = loads(cp_dumps(s))
+    s2 = cp_loads(cp_dumps(s))
     assert_eq(s, s2)
 
 
