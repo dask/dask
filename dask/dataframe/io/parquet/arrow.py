@@ -1,7 +1,6 @@
 from functools import partial
 from collections import defaultdict
 import json
-import operator
 import warnings
 from distutils.version import LooseVersion
 
@@ -141,8 +140,11 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     return dataset, base, fns
 
 
-def _get_ds_metadata(ds, ds_filters):
+def _get_ds_metadata(ds, filters):
     metadata = []
+    ds_filters = None
+    if filters is not None:
+        ds_filters = pq._filters_to_expression(filters)
     for file_frag in ds.get_fragments(filter=ds_filters):
         for rg_frag in file_frag.split_by_row_group():
             metadata.append(rg_frag)
@@ -164,26 +166,15 @@ def _gather_metadata(
         ds = None
         if len(paths) == 1 and fs.isdir(paths[0]):
             paths = paths[0]
-
             # Use _metadata file if available
             # TODO: Handle _metadata within a list of files
             meta_path = fs.sep.join([paths, "_metadata"])
             if fs.exists(meta_path):
-                schema = pa_ds.dataset(
-                    paths,
-                    format="parquet",
-                    partitioning=dataset_kwargs.get(
-                        "partitioning", "hive"
-                    ),  # Assume "hive" by default
-                ).schema
                 ds = pa_ds.parquet_dataset(
-                    meta_path,
-                    schema=schema,
-                    partitioning=dataset_kwargs.get("partitioning", "hive"),
+                    meta_path, partitioning=dataset_kwargs.get("partitioning", "hive")
                 )
                 if gather_statistics is None:
                     gather_statistics = True
-
         if ds is None:
             ds = pa_ds.dataset(
                 paths,
@@ -203,34 +194,8 @@ def _gather_metadata(
         if split_row_groups is None and gather_statistics is not False:
             split_row_groups = True
 
-        # TODO: Translate multiple/nested filters from `filters`.
-        #       For now, user must include the filters in `dataset_kwargs`
-        #       for "full" filtering support.
-        ds_filters = dataset_kwargs.get("filters", None)
-        if filters and ds_filters is None:
-            if not isinstance(filters, list):
-                raise ValueError("Outer-most type of filters must be a list.")
-            if len(filters) > 1 or not isinstance(filters[0], tuple):
-                warnings.warn(
-                    "Failed to translate filter for dataset API. "
-                    "Include filters based on pyarrow.dataset.Expression "
-                    "in dataset kwargs for full support."
-                )
-            else:
-                filter_col = filters[0][0]
-                filter_op = filters[0][1]
-                filter_op = {
-                    "==": operator.eq,
-                    "!=": operator.ne,
-                    ">=": operator.ge,
-                    "<=": operator.le,
-                    ">": operator.gt,
-                    "<": operator.lt,
-                }[filter_op]
-                filter_comp = filters[0][2]
-                ds_filters = filter_op(pa_ds.field(filter_col), filter_comp)
-
-        metadata = _get_ds_metadata(ds, ds_filters)
+        # Generate list of row-group fragments and call it `metadata`
+        metadata = _get_ds_metadata(ds, filters)
 
         return (
             schema,
