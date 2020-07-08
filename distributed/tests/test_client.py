@@ -512,7 +512,7 @@ def test_thread(c):
 
     x = c.submit(slowinc, 1, delay=0.3)
     with pytest.raises(TimeoutError):
-        x.result(timeout=0.01)
+        x.result(timeout="10 ms")
     assert x.result() == 2
 
 

@@ -818,6 +818,7 @@ class Client:
             return format_dashboard_link(host, port)
 
     def sync(self, func, *args, asynchronous=None, callback_timeout=None, **kwargs):
+        callback_timeout = parse_timedelta(callback_timeout)
         if (
             asynchronous
             or self.asynchronous
