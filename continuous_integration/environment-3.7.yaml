@@ -39,6 +39,7 @@ dependencies:
   - lz4
   - numba
   - partd
+  - pickle5
   - psutil
   - requests
   - scikit-image
