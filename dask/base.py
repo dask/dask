@@ -220,8 +220,9 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
             _opt_list = []
             group = {}
             for k, (dsk, keys) in groups.items():
-                group[k] = (opt(dsk, keys), keys)
-                _opt_list.append(opt(dsk, keys, **kwargs))
+                _opt = opt(dsk, keys, **kwargs)
+                group[k] = (_opt, keys)
+                _opt_list.append(_opt)
             groups = group
 
         dsk = merge(*map(ensure_dict, _opt_list,))
