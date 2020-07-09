@@ -329,11 +329,11 @@ def subs(task, key, val, convert=False):
         return Task(
             task.function,
             subs(task.args, key, val, convert),
-            (None if not task.kwargs
-             else {k: subs(v, key, val, convert)
-                   for k, v in task.kwargs.items()} if isinstance(task, dict)
-             else task.kwargs),
-            task.annotations,
+            ({k: subs(v, key, val, convert)
+              for k, v in task.kwargs.items()}
+             if type(task.kwargs) is dict
+             else subs(task.kwargs, key, val, convert)),
+            task.annotations
         )
     elif type_task is TupleTask:
         newargs = []
