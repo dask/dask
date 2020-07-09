@@ -212,16 +212,18 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
         _opt_list = []
         for opt, val in groups.items():
-            _graph_and_keys = _extract_graph_and_keys(val)
-            groups[opt] = _graph_and_keys
-            _opt_list.append(opt(_graph_and_keys[0], _graph_and_keys[1], **kwargs))
+            dsk, keys = _extract_graph_and_keys(val)
+            _opt = opt(dsk, keys, **kwargs)
+            groups[opt] = (_opt, keys)
+            _opt_list.append(_opt)
 
         for opt in optimizations:
             _opt_list = []
             group = {}
             for k, (dsk, keys) in groups.items():
-                group[k] = (opt(dsk, keys), keys)
-                _opt_list.append(opt(dsk, keys, **kwargs))
+                _opt = opt(dsk, keys, **kwargs)
+                group[k] = (_opt, keys)
+                _opt_list.append(_opt)
             groups = group
 
         dsk = merge(*map(ensure_dict, _opt_list,))
