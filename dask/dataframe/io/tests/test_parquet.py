@@ -2575,10 +2575,9 @@ def test_illegal_column_name(tmpdir, engine):
     ddf = dd.from_pandas(df, npartitions=2)
 
     # If we don't want to preserve the None index name, the
-    # write should work, but a UserWarning should be raised
-    with pytest.raises(UserWarning) as w:
+    # write should work, but the user should be warned
+    with pytest.warns(UserWarning, match=null_name):
         ddf.to_parquet(fn, engine=engine, write_index=False)
-    assert null_name in str(w.value)
 
     # If we do want to preserve the None index name, should
     # get a ValueError for having an illegal column name
