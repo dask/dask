@@ -167,7 +167,8 @@ def test_unregistered_func(func):
         A class that "mocks" ndarray by encapsulating an ndarray and using
         protocols to "look like" an ndarray. Basically tests whether Dask
         works fine with something that is essentially an array but uses
-        protocols instead of being an actual array.
+        protocols instead of being an actual array. Must be manually
+        registered as a valid chunk type.
         """
 
         __array_priority__ = 20
@@ -205,6 +206,8 @@ def test_unregistered_func(func):
         astype = wrap("astype")
         sum = wrap("sum")
         prod = wrap("prod")
+
+    da.register_chunk_type(EncapsulateNDArray)
 
     # Wrap a procol-based encapsulated ndarray
     x = EncapsulateNDArray(np.random.random((100, 100)))
