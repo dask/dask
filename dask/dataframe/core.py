@@ -5140,10 +5140,9 @@ def map_partitions(
         meta = make_meta(meta, index=meta_index)
 
     partition_info = {
-        "npartitions" : 0,
+        "npartitions" : df[0].npartitions,
         "partition_number" : 0,
-        "divisions" : tuple(),
-        "curr_partition_divisions":tuple()
+        "divisions" : df[0].divisions,
     }
 
     if all(isinstance(arg, Scalar) for arg in args):
@@ -5166,8 +5165,6 @@ def map_partitions(
         if isinstance(arg, _Frame):
             args2.append(arg)
             dependencies.append(arg)
-            partition_info["npartitions"] = arg.npartitions
-            partition_info["divisions"] = arg.divisions
             continue
         arg = normalize_arg(arg)
         arg2, collections = unpack_collections(arg)
