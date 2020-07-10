@@ -71,7 +71,7 @@ class DaskMethodsMixin(object):
 
         Examples
         --------
-        >>> x.visualize(filename='dask')  # doctest: +SKIP
+        >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
         >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
 
         Returns
@@ -144,8 +144,8 @@ class DaskMethodsMixin(object):
         """Compute this dask collection
 
         This turns a lazy Dask collection into its in-memory equivalent.
-        For example a Dask.array turns into a :func:`numpy.array` and a Dask.dataframe
-        turns into a :func:`pandas.dataframe`.  The entire dataset must fit into memory
+        For example a Dask array turns into a NumPy array and a Dask dataframe
+        turns into a Pandas dataframe.  The entire dataset must fit into memory
         before calling this operation.
 
         Parameters
@@ -481,7 +481,7 @@ def visualize(*args, **kwargs):
 
     Examples
     --------
-    >>> x.visualize(filename='dask')  # doctest: +SKIP
+    >>> x.visualize(filename='dask.pdf')  # doctest: +SKIP
     >>> x.visualize(filename='dask.pdf', color='order')  # doctest: +SKIP
 
     Returns
