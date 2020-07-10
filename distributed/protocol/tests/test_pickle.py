@@ -1,7 +1,6 @@
 from functools import partial
 import gc
 from operator import add
-import pickle
 import weakref
 import sys
 
@@ -9,6 +8,14 @@ import pytest
 
 from distributed.protocol import deserialize, serialize
 from distributed.protocol.pickle import HIGHEST_PROTOCOL, dumps, loads
+
+if sys.version_info < (3, 8):
+    try:
+        import pickle5 as pickle
+    except ImportError:
+        import pickle
+else:
+    import pickle
 
 
 def test_pickle_data():

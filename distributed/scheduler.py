@@ -12,7 +12,7 @@ import math
 from numbers import Number
 import operator
 import os
-import pickle
+import sys
 import random
 import warnings
 import weakref
@@ -85,6 +85,14 @@ from .event import EventExtension
 from .pubsub import PubSubSchedulerExtension
 from .stealing import WorkStealing
 from .variable import VariableExtension
+
+if sys.version_info < (3, 8):
+    try:
+        import pickle5 as pickle
+    except ImportError:
+        import pickle
+else:
+    import pickle
 
 
 logger = logging.getLogger(__name__)

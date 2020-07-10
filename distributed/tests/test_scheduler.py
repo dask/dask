@@ -1,7 +1,6 @@
 import asyncio
 import json
 import logging
-import pickle
 import operator
 import re
 import sys
@@ -41,6 +40,14 @@ from distributed.utils_test import (  # noqa: F401
 )
 from distributed.utils_test import loop, nodebug  # noqa: F401
 from dask.compatibility import apply
+
+if sys.version_info < (3, 8):
+    try:
+        import pickle5 as pickle
+    except ImportError:
+        import pickle
+else:
+    import pickle
 
 
 alice = "alice:1234"
