@@ -1,11 +1,9 @@
 from collections import namedtuple
 import pickle
 
-import pytest
-
 from dask.core import get
 
-from dask.task import EmptyDict, Task, annotate
+from dask.task import Task, annotate
 from dask.utils import apply
 
 
@@ -14,13 +12,6 @@ def inc(x, extra=None):
         return x + 1 + extra
 
     return x + 1
-
-
-def test_empty_dict():
-    d = EmptyDict()
-
-    with pytest.raises(NotImplementedError):
-        d["a"] = 5
 
 
 def test_task_pickle():

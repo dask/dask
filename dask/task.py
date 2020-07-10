@@ -1,19 +1,7 @@
 import functools
 import types
 
-
-class EmptyDict(dict):
-    def __init__(self):
-        pass
-
-    def __setitem__(self, key, value):
-        raise NotImplementedError("Modifying an EmptyDict")
-
-    def __reduce__(self):
-        return (EmptyDict, ())
-
-
-EMPTY_DICT = EmptyDict()
+EMPTY_DICT = dict()
 
 
 def annotate(fn, annotation=None):
@@ -261,7 +249,6 @@ class Task:
             else [self.kwargs]
         )
 
-
     @classmethod
     def _is_complex(cls, task):
         task_type = type(task)
@@ -275,11 +262,9 @@ class Task:
         else:
             return False
 
-
     def is_complex(self):
         """ Does this task contain nested tasks? """
         return self._is_complex(self.args) or self._is_complex(self.kwargs)
-
 
     def can_fuse(self, other):
         """
