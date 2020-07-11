@@ -221,7 +221,7 @@ Pandas' ``groupby('g').agg(list)``:
    ... )
    >>> df.groupby('g').agg(collect_list)
 
-To apply :py:class:`dask.dataframe.SeriesGroupBy.nunique` to more than one
+To apply :py:class:`dask.dataframe.groupby.SeriesGroupBy.nunique` to more than one
 column you can use:
 
 .. code-block:: python
