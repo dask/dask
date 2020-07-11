@@ -211,8 +211,8 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     See Also
     --------
 
-    take - handle slicing with lists ("fancy" indexing)
-    slice_slices_and_integers - handle slicing with slices and integers
+    take : handle slicing with lists ("fancy" indexing)
+    slice_slices_and_integers : handle slicing with slices and integers
     """
     assert all(isinstance(i, (slice, list, Integral, np.ndarray)) for i in index)
     if not len(blockdims) == len(index):
