@@ -220,3 +220,18 @@ Pandas' ``groupby('g').agg(list)``:
    ...     agg=lambda s0: s0.apply(lambda chunks: list(it.chain.from_iterable(chunks))),
    ... )
    >>> df.groupby('g').agg(collect_list)
+
+To apply :py:class:`dask.dataframe.SeriesGroupBy.nunique` to more than one
+column you can use:
+
+.. code-block:: python
+
+    >>> nunique = dd.Aggregation(
+    ...     name="nunique",
+    ...     chunk=lambda s : s.apply(lambda x: list(set(x))),
+    ...     agg=lambda s0 : s0._selected_obj.groupby(
+    ...         level=list(range(s0._selected_obj.index.nlevels))
+    ...     ).sum(),
+    ...     finalize=lambda s1 : s1.apply(lambda final: len(set(final))),
+    )
+    >>> df.groupby('g').agg({'a':nunique, 'b':nunique})
