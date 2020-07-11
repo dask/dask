@@ -87,9 +87,11 @@ Install
 ~~~~~~~
 
 To build the library you can install the necessary requirements using
-``pip`` or ``conda<https://conda.io>``_::
+pip or conda_::
 
   cd dask
+
+.. _conda: https://conda.io/
 
 ``pip``::
 
@@ -97,8 +99,8 @@ To build the library you can install the necessary requirements using
 
 ``conda``::
 
-  conda env create -f continuous_integration/environment-3.8-dev.yaml
-  conda activate test-environment
+  conda env create -n dask-dev -f continuous_integration/environment-latest.yaml
+  conda activate dask-dev
   python -m pip install --no-deps -e .
 
 
