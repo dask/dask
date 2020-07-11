@@ -2007,6 +2007,16 @@ def test_to_hdf5():
             assert_eq(f["/y"][:], y)
             assert f["/y"].chunks == (2,)
 
+    # Tests a defered save
+    with tmpfile(".hdf5") as fn:
+        delayed = x.to_hdf5(fn, "/x", compute=False)
+        delayed.compute()
+
+        with h5py.File(fn, mode="r+") as f:
+            d = f["/x"]
+            assert_eq(d[:], x)
+            assert d.chunks == (2, 2)
+
 
 def test_to_dask_dataframe():
     dd = pytest.importorskip("dask.dataframe")

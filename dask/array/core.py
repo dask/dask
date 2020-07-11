@@ -4435,6 +4435,21 @@ def concatenate_axes(arrays, axes):
     return concatenate3(transposelist(arrays, axes, extradims=extradims))
 
 
+class HDF5DatasetProxy:
+    """ Proxy Object to manage openning when `store` comes to write the data """
+
+    def __init__(self, filename, **kwargs):
+        self.filename = filename
+        self.kwargs = kwargs
+
+    def __setitem__(self, key, val):
+        import h5py
+
+        with h5py.File(self.filename, mode="a") as f:
+            ds = f.require_dataset(**self.kwargs)
+            ds[key] = val
+
+
 def to_hdf5(filename, *args, **kwargs):
     """ Store arrays in HDF5 file
 
@@ -4468,21 +4483,21 @@ def to_hdf5(filename, *args, **kwargs):
         raise ValueError("Please provide {'/data/path': array} dictionary")
 
     chunks = kwargs.pop("chunks", True)
+    compute = kwargs.pop("compute", True)
 
-    import h5py
+    dsets = [
+        HDF5DatasetProxy(
+            filename,
+            name=dp,
+            shape=x.shape,
+            dtype=x.dtype,
+            chunks=tuple([c[0] for c in x.chunks]) if chunks is True else chunks,
+            **kwargs,
+        )
+        for dp, x in data.items()
+    ]
 
-    with h5py.File(filename, mode="a") as f:
-        dsets = [
-            f.require_dataset(
-                dp,
-                shape=x.shape,
-                dtype=x.dtype,
-                chunks=tuple([c[0] for c in x.chunks]) if chunks is True else chunks,
-                **kwargs,
-            )
-            for dp, x in data.items()
-        ]
-        store(list(data.values()), dsets)
+    return store(list(data.values()), dsets, compute=compute)
 
 
 def interleave_none(a, b):
