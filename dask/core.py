@@ -372,7 +372,10 @@ def subs(task, key, val, convert=False):
         )
     else:
         try:
-            if type_task is type(key) and task == key:
+            if type_task is type(key) and all(
+                type(aa) == type(bb) and
+                aa == bb for aa, bb in zip(task, key)):
+
                 return val
         except Exception:
             pass
