@@ -1028,9 +1028,9 @@ class SubgraphCallable(object):
     def __eq__(self, other):
         return (
             type(self) is type(other)
-            and self.dsk == other.dsk
             and self.outkey == other.outkey
             and set(self.inkeys) == set(other.inkeys)
+            and self.dsk == other.dsk
             and self.name == other.name
         )
 
