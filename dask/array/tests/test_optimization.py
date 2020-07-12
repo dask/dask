@@ -6,6 +6,7 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.optimization import fuse
+from dask.task import Task
 from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
 from dask.array.optimization import getitem, optimize, optimize_slices, fuse_slice
@@ -96,8 +97,8 @@ def test_fuse_getitem():
     ]
 
     for inp, expected in pairs:
-        result = optimize_slices({"y": inp})
-        assert result == {"y": expected}
+        result = Task.from_spec(optimize_slices({"y": inp}))
+        assert result == Task.from_spec({"y": expected})
 
 
 def test_fuse_getitem_lock():
@@ -150,8 +151,8 @@ def test_fuse_getitem_lock():
     ]
 
     for inp, expected in pairs:
-        result = optimize_slices({"y": inp})
-        assert result == {"y": expected}
+        result = Task.from_spec(optimize_slices({"y": inp}))
+        assert result == Task.from_spec({"y": expected})
 
 
 def test_optimize_with_getitem_fusion():
@@ -160,9 +161,10 @@ def test_optimize_with_getitem_fusion():
         "b": (getter, "a", (slice(10, 20), slice(100, 200))),
         "c": (getter, "b", (5, slice(50, 60))),
     }
+    from dask.task import Task
 
     result = optimize(dsk, ["c"])
-    expected_task = (getter, "some-array", (15, slice(150, 160)))
+    expected_task = Task(getter, ["some-array", (15, slice(150, 160))])
     assert any(v == expected_task for v in result.values())
     assert len(result) < len(dsk)
 
@@ -178,7 +180,7 @@ def test_optimize_slicing():
 
     expected = {"e": (getter, (range, 10), (slice(0, 5, None),))}
     result = optimize_slices(fuse(dsk, [], rename_keys=False)[0])
-    assert result == expected
+    assert Task.from_spec(result) == Task.from_spec(expected)
 
     # protect output keys
     expected = {
@@ -188,7 +190,7 @@ def test_optimize_slicing():
     }
     result = optimize_slices(fuse(dsk, ["c", "d", "e"], rename_keys=False)[0])
 
-    assert result == expected
+    assert Task.from_spec(result) == Task.from_spec(expected)
 
 
 def test_fuse_slice():
@@ -251,7 +253,7 @@ def test_hard_fuse_slice_cases():
     dsk = {
         "x": (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5))
     }
-    assert optimize_slices(dsk) == {"x": (getter, "x", (None, 5))}
+    assert Task.from_spec(optimize_slices(dsk)) == Task.from_spec({"x": (getter, "x", (None, 5))})
 
 
 def test_dont_fuse_numpy_arrays():
@@ -277,8 +279,8 @@ def test_minimize_data_transfer():
 
     assert len(deps) == 4
     for dep in deps:
-        assert dsk[dep][0] in (getitem, getter)
-        assert dsk[dep][1] == big_key
+        assert dsk[dep].function in (getitem, getter)
+        assert dsk[dep].args[0] == big_key
 
 
 def test_fuse_slices_with_alias():
@@ -303,10 +305,10 @@ def test_dont_fuse_fancy_indexing_in_getter_nofancy():
             ([1, 3], slice(50, 60, None)),
         )
     }
-    assert optimize_slices(dsk) == dsk
+    assert Task.from_spec(optimize_slices(dsk)) == Task.from_spec(dsk)
 
     dsk = {"a": (getitem, (getter_nofancy, "x", [1, 2, 3]), 0)}
-    assert optimize_slices(dsk) == dsk
+    assert Task.from_spec(optimize_slices(dsk)) == Task.from_spec(dsk)
 
 
 @pytest.mark.parametrize("chunks", [10, 5, 3])
@@ -321,7 +323,8 @@ def test_fuse_getter_with_asarray(chunks):
         assert s.count("getitem") + s.count("getter") <= 1
         if v is not x:
             assert "1234567890" not in s
-    n_getters = len([v for v in dsk.values() if v[0] in (getitem, getter)])
+    n_getters = len([v for v in dsk.values() if type(v) is Task
+                    and v.function in (getitem, getter)])
     if y.npartitions > 1:
         assert n_getters == y.npartitions
     else:
@@ -353,7 +356,7 @@ def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove)
         ),
     ]
     for orig, final in opts:
-        assert optimize_slices({"a": orig}) == {"a": final}
+        assert Task.from_spec(optimize_slices({"a": orig})) == Task.from_spec({"a": final})
 
 
 @pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")

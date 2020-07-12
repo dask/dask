@@ -7,6 +7,7 @@ from .core import getter, getter_nofancy, getter_inline
 from ..blockwise import optimize_blockwise, fuse_roots
 from ..core import flatten, reverse_dict
 from ..optimization import cull, fuse, inline_functions
+from ..task import Task, TupleTask, spec_type
 from ..utils import ensure_dict
 from ..highlevelgraph import HighLevelGraph
 
@@ -80,7 +81,9 @@ def hold_keys(dsk, dependencies):
     move around only small pieces of data, rather than the underlying arrays.
     """
     dependents = reverse_dict(dependencies)
-    data = {k for k, v in dsk.items() if type(v) not in (tuple, str)}
+    data = {k for k, v in dsk.items()
+            if spec_type(v)
+            not in (Task, TupleTask, tuple, str)}
 
     hold_keys = list(data)
     for dat in data:
@@ -91,22 +94,69 @@ def hold_keys(dsk, dependencies):
             # when there's either more than one dependent, or the dependent is
             # no longer a get* function or an alias. We then add the final
             # key to the list of keys not to fuse.
-            if type(task) is tuple and task and task[0] in GETTERS:
+            typ = spec_type(task)
+
+            if typ is Task and task.function in GETTERS:
                 try:
                     while len(dependents[dep]) == 1:
                         new_dep = next(iter(dependents[dep]))
                         new_task = dsk[new_dep]
                         # If the task is a get* or an alias, continue up the
                         # linear chain
-                        if new_task[0] in GETTERS or new_task in dsk:
+                        typ = spec_type(new_task)
+                        if ((typ is Task and new_task.function in GETTERS) or
+                            (typ is TupleTask and new_task[0] in GETTERS) or
+                            new_task in dsk):
+
                             dep = new_dep
                         else:
                             break
                 except (IndexError, TypeError):
                     pass
                 hold_keys.append(dep)
+            elif typ is TupleTask and task[0] in GETTERS:
+                try:
+                    while len(dependents[dep]) == 1:
+                        new_dep = next(iter(dependents[dep]))
+                        new_task = dsk[new_dep]
+                        # If the task is a get* or an alias, continue up the
+                        # linear chain
+                        typ = spec_type(new_task)
+                        if ((typ is Task and new_task.function in GETTERS) or
+                            (typ is TupleTask and new_task[0] in GETTERS) or
+                            new_task in dsk):
+
+                            dep = new_dep
+                        else:
+                            break
+                except (IndexError, TypeError):
+                    pass
+                hold_keys.append(dep)
+
     return hold_keys
 
+
+class NoGetterError(ValueError):
+    pass
+
+
+def _maybe_extract_getters(t):
+    typ = spec_type(t)
+
+    if typ is Task and t.function in GETTERS and len(t.args) in (2, 4):
+        if len(t.args) == 2:
+            get = t.function
+            return get, t.args[0], t.args[1], get is not getitem, None
+        elif len(t.args) == 4:
+            return t.function, t.args[0], t.args[1], t.args[2], t.args[3]
+
+    elif typ is TupleTask and t[0] in GETTERS and len(t) in (3, 5):
+        if len(t) == 3:
+            return t[0], t[1], t[2], t[0] is not getitem, None
+        elif len(t) == 5:
+            return t
+
+    raise NoGetterError
 
 def optimize_slices(dsk):
     """ Optimize slices
@@ -120,77 +170,72 @@ def optimize_slices(dsk):
     fancy_ind_types = (list, np.ndarray)
     dsk = dsk.copy()
     for k, v in dsk.items():
-        if type(v) is tuple and v[0] in GETTERS and len(v) in (3, 5):
-            if len(v) == 3:
-                get, a, a_index = v
-                # getter defaults to asarray=True, getitem is semantically False
-                a_asarray = get is not getitem
-                a_lock = None
-            else:
-                get, a, a_index, a_asarray, a_lock = v
-            while type(a) is tuple and a[0] in GETTERS and len(a) in (3, 5):
-                if len(a) == 3:
-                    f2, b, b_index = a
-                    b_asarray = f2 is not getitem
-                    b_lock = None
-                else:
-                    f2, b, b_index, b_asarray, b_lock = a
+        try:
+            get, a, a_index, a_asarray, a_lock = _maybe_extract_getters(v)
+        except NoGetterError:
+            continue
 
-                if a_lock and a_lock is not b_lock:
+        while True:
+            try:
+                f2, b, b_index, b_asarray, b_lock = _maybe_extract_getters(a)
+            except NoGetterError:
+                break
+
+            if a_lock and a_lock is not b_lock:
+                break
+            if (type(a_index) is tuple) != (type(b_index) is tuple):
+                break
+            if type(a_index) is tuple:
+                indices = b_index + a_index
+                if len(a_index) != len(b_index) and any(i is None for i in indices):
                     break
-                if (type(a_index) is tuple) != (type(b_index) is tuple):
-                    break
-                if type(a_index) is tuple:
-                    indices = b_index + a_index
-                    if len(a_index) != len(b_index) and any(i is None for i in indices):
-                        break
-                    if f2 is getter_nofancy and any(
-                        isinstance(i, fancy_ind_types) for i in indices
-                    ):
-                        break
-                elif f2 is getter_nofancy and (
-                    type(a_index) in fancy_ind_types or type(b_index) in fancy_ind_types
+                if f2 is getter_nofancy and any(
+                    isinstance(i, fancy_ind_types) for i in indices
                 ):
                     break
-                try:
-                    c_index = fuse_slice(b_index, a_index)
-                    # rely on fact that nested gets never decrease in
-                    # strictness e.g. `(getter_nofancy, (getter, ...))` never
-                    # happens
-                    get = getter if f2 is getter_inline else f2
-                except NotImplementedError:
-                    break
-                a, a_index, a_lock = b, c_index, b_lock
-                a_asarray |= b_asarray
-
-            # Skip the get call if not from from_array and nothing to do
-            if get not in GETNOREMOVE and (
-                (
-                    type(a_index) is slice
-                    and not a_index.start
-                    and a_index.stop is None
-                    and a_index.step is None
-                )
-                or (
-                    type(a_index) is tuple
-                    and all(
-                        type(s) is slice
-                        and not s.start
-                        and s.stop is None
-                        and s.step is None
-                        for s in a_index
-                    )
-                )
+            elif f2 is getter_nofancy and (
+                type(a_index) in fancy_ind_types or type(b_index) in fancy_ind_types
             ):
-                dsk[k] = a
-            elif get is getitem or (a_asarray and not a_lock):
-                # default settings are fine, drop the extra parameters Since we
-                # always fallback to inner `get` functions, `get is getitem`
-                # can only occur if all gets are getitem, meaning all
-                # parameters must be getitem defaults.
-                dsk[k] = (get, a, a_index)
-            else:
-                dsk[k] = (get, a, a_index, a_asarray, a_lock)
+                break
+            try:
+                c_index = fuse_slice(b_index, a_index)
+                # rely on fact that nested gets never decrease in
+                # strictness e.g. `(getter_nofancy, (getter, ...))` never
+                # happens
+                get = getter if f2 is getter_inline else f2
+            except NotImplementedError:
+                break
+            a, a_index, a_lock = b, c_index, b_lock
+            a_asarray |= b_asarray
+
+        # Skip the get call if not from from_array and nothing to do
+        if get not in GETNOREMOVE and (
+            (
+                type(a_index) is slice
+                and not a_index.start
+                and a_index.stop is None
+                and a_index.step is None
+            )
+            or (
+                type(a_index) is tuple
+                and all(
+                    type(s) is slice
+                    and not s.start
+                    and s.stop is None
+                    and s.step is None
+                    for s in a_index
+                )
+            )
+        ):
+            dsk[k] = a
+        elif get is getitem or (a_asarray and not a_lock):
+            # default settings are fine, drop the extra parameters Since we
+            # always fallback to inner `get` functions, `get is getitem`
+            # can only occur if all gets are getitem, meaning all
+            # parameters must be getitem defaults.
+            dsk[k] = Task.from_spec((get, a, a_index))
+        else:
+            dsk[k] = Task.from_spec((get, a, a_index, a_asarray, a_lock))
 
     return dsk
 
