@@ -209,7 +209,7 @@ Finally, we create and use the aggregation
    b  4
 
 Another example of a custom aggregation is the Dask DataFrame version of 
-Pandas' ``groupby('a').agg(list)``:
+Pandas' ``df.groupby('a').agg(list)``:
 
 .. code-block:: python
 
