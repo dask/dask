@@ -5,7 +5,7 @@ import dask.array as da
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 from dask.array.numpy_compat import _numpy_120
 
-from .test_dispatch import EncapsulateNDArray
+from .test_dispatch import EncapsulateNDArray, WrappedArray
 
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
@@ -175,3 +175,33 @@ def test_non_existent_func():
             assert list(np.sort(x)) == [1, 2, 3, 4]
     else:
         assert list(np.sort(x)) == [1, 2, 3, 4]
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.parametrize(
+    "func", [np.equal, np.matmul, np.dot, lambda x, y: np.stack([x, y]),],
+)
+@pytest.mark.parametrize(
+    "arr_upcast, arr_downcast",
+    [
+        (
+            WrappedArray(np.random.random((10, 10))),
+            da.random.random((10, 10), chunks=(5, 5)),
+        ),
+        (
+            da.random.random((10, 10), chunks=(5, 5)),
+            EncapsulateNDArray(np.random.random((10, 10))),
+        ),
+        (
+            WrappedArray(np.random.random((10, 10))),
+            EncapsulateNDArray(np.random.random((10, 10))),
+        ),
+    ],
+)
+def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
+    """ Test proper dispatch on binary NumPy functions"""
+    assert (
+        type(func(arr_upcast, arr_downcast))
+        == type(func(arr_downcast, arr_upcast))
+        == type(arr_upcast)
+    )

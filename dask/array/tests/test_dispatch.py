@@ -149,13 +149,8 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
         operator.sub,
         operator.truediv,
         operator.floordiv,
-        operator.matmul,
         np.add,
         np.subtract,
-        np.equal,
-        np.matmul,
-        np.dot,
-        lambda x, y: np.stack([x, y]),
     ],
 )
 @pytest.mark.parametrize(
@@ -176,7 +171,7 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
     ],
 )
 def test_binary_operation_type_precedence(op, arr_upcast, arr_downcast):
-    """ Test proper dispatch on binary operators, NumPy ufuncs, and NumPy functions"""
+    """ Test proper dispatch on binary operators and NumPy ufuncs"""
     assert (
         type(op(arr_upcast, arr_downcast))
         == type(op(arr_downcast, arr_upcast))
