@@ -209,7 +209,7 @@ Finally, we create and use the aggregation
    b  4
 
 Another example of a custom aggregation is the Dask DataFrame version of 
-Pandas' ``groupby('g').agg(list)``:
+Pandas' ``groupby('a').agg(list)``:
 
 .. code-block:: python
 
@@ -219,13 +219,15 @@ Pandas' ``groupby('g').agg(list)``:
    ...     chunk=lambda s: s.apply(list),
    ...     agg=lambda s0: s0.apply(lambda chunks: list(it.chain.from_iterable(chunks))),
    ... )
-   >>> df.groupby('g').agg(collect_list)
+   >>> ddf.groupby('a').agg(collect_list)
 
 To apply :py:class:`dask.dataframe.groupby.SeriesGroupBy.nunique` to more than one
 column you can use:
 
 .. code-block:: python
 
+    >>> df['c'] = [1, 2, 1, 1, 2]
+    >>> ddf = dd.from_pandas(df, 2)
     >>> nunique = dd.Aggregation(
     ...     name="nunique",
     ...     chunk=lambda s : s.apply(lambda x: list(set(x))),
@@ -234,4 +236,4 @@ column you can use:
     ...     ).sum(),
     ...     finalize=lambda s1 : s1.apply(lambda final: len(set(final))),
     )
-    >>> df.groupby('g').agg({'a':nunique, 'b':nunique})
+    >>> ddf.groupby('a').agg({'b':nunique, 'c':nunique})
