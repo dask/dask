@@ -1594,7 +1594,7 @@ class Bag(DaskMethodsMixin):
         --------
         >>> b.repartition(5)  # set to have 5 partitions  # doctest: +SKIP
         """
-        if sum([npartitions is not None, partition_size is not None]) != 1:
+        if not bool(npartitions) ^ bool(partition_size):
             raise ValueError(
                 "Please provide exactly one ``npartitions`` or ``partition_size`` keyword arguments"
             )
