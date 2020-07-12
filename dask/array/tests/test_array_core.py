@@ -4,6 +4,8 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
+from itertools import chain
+
 import os
 import time
 from io import StringIO
@@ -21,6 +23,7 @@ import dask.array as da
 import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
+from dask.task import Task
 from dask.utils import ignoring, tmpfile, tmpdir, key_split
 from dask.utils_test import inc, dec
 
@@ -1895,7 +1898,11 @@ def test_store_locks():
     v = store([a, b], [at, bt], compute=False, lock=lock)
     assert isinstance(v, Delayed)
     dsk = v.dask
-    locks = set(vv for v in dsk.values() for vv in v if isinstance(vv, _Lock))
+    locks = set(vv for v in dsk.values()
+                for vv in (chain(v.args, v.kwargs)
+                           if type(v) is Task
+                           else v)
+                if isinstance(vv, _Lock))
     assert locks == set([lock])
 
     # Ensure same lock applies over multiple stores
