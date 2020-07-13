@@ -81,9 +81,9 @@ def hold_keys(dsk, dependencies):
     move around only small pieces of data, rather than the underlying arrays.
     """
     dependents = reverse_dict(dependencies)
-    data = {k for k, v in dsk.items()
-            if spec_type(v)
-            not in (Task, TupleTask, tuple, str)}
+    data = {
+        k for k, v in dsk.items() if spec_type(v) not in (Task, TupleTask, tuple, str)
+    }
 
     hold_keys = list(data)
     for dat in data:
@@ -104,9 +104,11 @@ def hold_keys(dsk, dependencies):
                         # If the task is a get* or an alias, continue up the
                         # linear chain
                         typ = spec_type(new_task)
-                        if ((typ is Task and new_task.function in GETTERS) or
-                            (typ is TupleTask and new_task[0] in GETTERS) or
-                                new_task in dsk):
+                        if (
+                            (typ is Task and new_task.function in GETTERS)
+                            or (typ is TupleTask and new_task[0] in GETTERS)
+                            or new_task in dsk
+                        ):
 
                             dep = new_dep
                         else:
@@ -122,9 +124,11 @@ def hold_keys(dsk, dependencies):
                         # If the task is a get* or an alias, continue up the
                         # linear chain
                         typ = spec_type(new_task)
-                        if ((typ is Task and new_task.function in GETTERS) or
-                            (typ is TupleTask and new_task[0] in GETTERS) or
-                                new_task in dsk):
+                        if (
+                            (typ is Task and new_task.function in GETTERS)
+                            or (typ is TupleTask and new_task[0] in GETTERS)
+                            or new_task in dsk
+                        ):
 
                             dep = new_dep
                         else:

@@ -334,7 +334,7 @@ def subs(task, key, val, convert=False):
             {k: subs(v, key, val, convert) for k, v in task.kwargs.items()}
             if type(task.kwargs) is dict
             else subs(task.kwargs, key, val, convert),
-            task.annotations
+            task.annotations,
         )
     elif type_task is TupleTask:
         newargs = []
@@ -376,10 +376,11 @@ def subs(task, key, val, convert=False):
             # Can't do a simple equality check, since this may trigger
             # a FutureWarning from NumPy about array equality
             # https://github.com/dask/dask/pull/2457
-            if type_task is type(key) and len(key) == len(task) and all(
-                    type(aa) == type(bb) and
-                    aa == bb for
-                    aa, bb in zip(task, key)):
+            if (
+                type_task is type(key)
+                and len(key) == len(task)
+                and all(type(aa) == type(bb) and aa == bb for aa, bb in zip(task, key))
+            ):
 
                 return val
         except Exception:

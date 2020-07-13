@@ -583,7 +583,7 @@ def test_rename_fused_keys_bag():
 
     options = {
         "optimization.fuse.rename-keys": False,
-        "optimization.cull.convert_tasks": False
+        "optimization.cull.convert_tasks": False,
     }
 
     with dask.config.set(options):

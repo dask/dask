@@ -97,12 +97,13 @@ def lazify_task(task, start=True):
             assert len(task.args) == 1
             return lazify_task(task.args[0], start=False)
         else:
-            return Task(task.function,
-                        lazify_task(task.args, start=False),
-                        {k: lazify_task(v, start=False)
-                         for k, v in task.kwargs.items()}
-                        if type(task.kwargs) is dict
-                        else lazify_task(task.kwargs, start=False))
+            return Task(
+                task.function,
+                lazify_task(task.args, start=False),
+                {k: lazify_task(v, start=False) for k, v in task.kwargs.items()}
+                if type(task.kwargs) is dict
+                else lazify_task(task.kwargs, start=False),
+            )
     elif task_type is TupleTask:
         head, tail = task[0], task[1:]
 

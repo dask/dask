@@ -253,7 +253,9 @@ def test_hard_fuse_slice_cases():
     dsk = {
         "x": (getter, (getter, "x", (None, slice(None, None))), (slice(None, None), 5))
     }
-    assert Task.from_spec(optimize_slices(dsk)) == Task.from_spec({"x": (getter, "x", (None, 5))})
+    assert Task.from_spec(optimize_slices(dsk)) == Task.from_spec(
+        {"x": (getter, "x", (None, 5))}
+    )
 
 
 def test_dont_fuse_numpy_arrays():
@@ -323,8 +325,9 @@ def test_fuse_getter_with_asarray(chunks):
         assert s.count("getitem") + s.count("getter") <= 1
         if v is not x:
             assert "1234567890" not in s
-    n_getters = len([v for v in dsk.values() if type(v) is Task
-                    and v.function in (getitem, getter)])
+    n_getters = len(
+        [v for v in dsk.values() if type(v) is Task and v.function in (getitem, getter)]
+    )
     if y.npartitions > 1:
         assert n_getters == y.npartitions
     else:
@@ -356,7 +359,9 @@ def test_remove_no_op_slices_if_get_is_not_getter_or_getter_nofancy(get, remove)
         ),
     ]
     for orig, final in opts:
-        assert Task.from_spec(optimize_slices({"a": orig})) == Task.from_spec({"a": final})
+        assert Task.from_spec(optimize_slices({"a": orig})) == Task.from_spec(
+            {"a": final}
+        )
 
 
 @pytest.mark.xfail(reason="blockwise fusion does not respect this, which is ok")

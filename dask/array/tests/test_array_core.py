@@ -1898,11 +1898,12 @@ def test_store_locks():
     v = store([a, b], [at, bt], compute=False, lock=lock)
     assert isinstance(v, Delayed)
     dsk = v.dask
-    locks = set(vv for v in dsk.values()
-                for vv in (chain(v.args, v.kwargs)
-                           if type(v) is Task
-                           else v)
-                if isinstance(vv, _Lock))
+    locks = set(
+        vv
+        for v in dsk.values()
+        for vv in (chain(v.args, v.kwargs) if type(v) is Task else v)
+        if isinstance(vv, _Lock)
+    )
     assert locks == set([lock])
 
     # Ensure same lock applies over multiple stores
