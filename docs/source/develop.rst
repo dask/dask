@@ -86,23 +86,22 @@ Contributions to Dask can then be made by submitting pull requests on GitHub.
 Install
 ~~~~~~~
 
-You may want to install larger dependencies like NumPy and Pandas using a
-binary package manager like conda_.  You can skip this step if you already
-have these libraries, don't care to use them, or have sufficient build
-environment on your computer to compile them when installing with ``pip``::
+To build the library you can install the necessary requirements using
+pip or conda_::
 
-   conda install -y numpy pandas scipy bokeh psutil
+  cd dask
 
 .. _conda: https://conda.io/
 
-Install Dask and dependencies::
+``pip``::
 
-   cd dask
-   python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete]"
 
-For development, Dask uses the following additional dependencies::
+``conda``::
 
-   python -m pip install pytest moto
+  conda env create -n dask-dev -f continuous_integration/environment-latest.yaml
+  conda activate dask-dev
+  python -m pip install --no-deps -e .
 
 
 Run Tests
