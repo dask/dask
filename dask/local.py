@@ -215,7 +215,7 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
 
     See Also
     --------
-    _execute_task - actually execute task
+    _execute_task : actually execute task
     """
     try:
         task, data = loads(task_info)
