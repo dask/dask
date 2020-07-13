@@ -98,7 +98,7 @@ def lazify(dsk):
 
     See Also
     --------
-    ``dask.bag.core.lazify_task``
+    dask.bag.core.lazify_task
     """
     return valmap(lazify_task, dsk)
 
