@@ -294,7 +294,7 @@ def test_fuse_slices_with_alias():
     dsk2 = optimize(dsk, keys)
     assert len(dsk2) == 3
     fused_key = set(dsk2).difference(["x", ("dx2", 0)]).pop()
-    assert dsk2[fused_key] == (getter, "x", (slice(0, 4), 0))
+    assert dsk2[fused_key] == Task.from_spec((getter, "x", (slice(0, 4), 0)))
 
 
 def test_dont_fuse_fancy_indexing_in_getter_nofancy():

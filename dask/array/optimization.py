@@ -106,7 +106,7 @@ def hold_keys(dsk, dependencies):
                         typ = spec_type(new_task)
                         if ((typ is Task and new_task.function in GETTERS) or
                             (typ is TupleTask and new_task[0] in GETTERS) or
-                            new_task in dsk):
+                                new_task in dsk):
 
                             dep = new_dep
                         else:
@@ -124,7 +124,7 @@ def hold_keys(dsk, dependencies):
                         typ = spec_type(new_task)
                         if ((typ is Task and new_task.function in GETTERS) or
                             (typ is TupleTask and new_task[0] in GETTERS) or
-                            new_task in dsk):
+                                new_task in dsk):
 
                             dep = new_dep
                         else:
@@ -157,6 +157,7 @@ def _maybe_extract_getters(t):
             return t
 
     raise NoGetterError
+
 
 def optimize_slices(dsk):
     """ Optimize slices

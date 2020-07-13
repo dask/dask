@@ -13,7 +13,7 @@ from .core import (
     reverse_dict,
     ishashable,
 )
-from .task import Task, TupleTask
+from .task import Task, TupleTask, spec_type
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -379,12 +379,18 @@ def functions_of(task):
     while work:
         new_work = []
         for task in work:
-            if type(task) in sequence_types:
-                if istask(task):
-                    funcs.add(unwrap_partial(task[0]))
-                    new_work.extend(task[1:])
-                else:
-                    new_work.extend(task)
+            typ = spec_type(task)
+
+            if typ is Task:
+                funcs.add(unwrap_partial(task.function))
+                new_work.extend(task.args)
+                new_work.extend(task.kwargs.values())
+            elif typ is TupleTask:
+                funcs.add(unwrap_partial(task[0]))
+                new_work.extend(task[1:])
+            elif typ in sequence_types:
+                new_work.extend(task)
+
         work = new_work
 
     return funcs
