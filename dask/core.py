@@ -42,9 +42,9 @@ def istask(x):
 
     >>> inc = lambda x: x + 1
     >>> istask((inc, 1))
-    TupleTask
+    <class 'dask.task.TupleTask'>
     >>> istask(Task(inc, [1]))
-    Task
+    <class 'dask.task.Task'>
     >>> istask(1)
     False
     """
