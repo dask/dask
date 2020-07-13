@@ -383,8 +383,7 @@ def functions_of(task):
 
             if typ is Task:
                 funcs.add(unwrap_partial(task.function))
-                new_work.extend(task.args)
-                new_work.extend(task.kwargs.values())
+                new_work.extend(task.dependencies())
             elif typ is TupleTask:
                 funcs.add(unwrap_partial(task[0]))
                 new_work.extend(task[1:])

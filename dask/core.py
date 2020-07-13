@@ -232,10 +232,10 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     while work:
         new_work = []
         for w in work:
-            typ = type(w)
+            typ = spec_type(w)
             if typ is Task:
                 new_work.extend(w.dependencies())
-            elif typ is tuple and w and callable(w[0]):  # istask(w)
+            elif typ is TupleTask:
                 new_work.extend(w[1:])
             elif typ is list:
                 new_work.extend(w)
@@ -328,11 +328,12 @@ def subs(task, key, val, convert=False):
     if type_task is Task:
         return Task(
             task.function,
-            subs(task.args, key, val, convert),
-            ({k: subs(v, key, val, convert)
-              for k, v in task.kwargs.items()}
-             if type(task.kwargs) is dict
-             else subs(task.kwargs, key, val, convert)),
+            [subs(a, key, val, convert) for a in task.args]
+            if type(task.args) is list
+            else subs(task.args, key, val, convert),
+            {k: subs(v, key, val, convert) for k, v in task.kwargs.items()}
+            if type(task.kwargs) is dict
+            else subs(task.kwargs, key, val, convert),
             task.annotations
         )
     elif type_task is TupleTask:
@@ -372,9 +373,13 @@ def subs(task, key, val, convert=False):
         )
     else:
         try:
-            if type_task is type(key) and all(
+            # Can't do a simple equality check, since this may trigger
+            # a FutureWarning from NumPy about array equality
+            # https://github.com/dask/dask/pull/2457
+            if type_task is type(key) and len(key) == len(task) and all(
                     type(aa) == type(bb) and
-                    aa == bb for aa, bb in zip(task, key)):
+                    aa == bb for
+                    aa, bb in zip(task, key)):
 
                 return val
         except Exception:

@@ -243,7 +243,7 @@ class Task:
         return Task.to_spec(self)
 
     def dependencies(self):
-        return (self.args if isinstance(self.args, list) else [self.args]) + (
+        return (self.args if type(self.args) is list else [self.args]) + (
             list(self.kwargs.values())
             if isinstance(self.kwargs, dict)
             else [self.kwargs]
