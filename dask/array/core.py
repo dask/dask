@@ -4249,7 +4249,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     Given a sequence of dask arrays, form a new dask array by stacking them
     along a new dimension (axis=0 by default)
 
-     Parameters
+    Parameters
     ----------
     seq: list of dask.arrays
     axis: int
