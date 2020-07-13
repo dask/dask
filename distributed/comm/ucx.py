@@ -35,6 +35,8 @@ logger = logging.getLogger(__name__)
 ucp = None
 host_array = None
 device_array = None
+ucx_create_endpoint = None
+ucx_create_listener = None
 
 
 def synchronize_stream(stream=0):
@@ -47,7 +49,7 @@ def synchronize_stream(stream=0):
 
 
 def init_once():
-    global ucp, host_array, device_array
+    global ucp, host_array, device_array, ucx_create_endpoint, ucx_create_listener
     if ucp is not None:
         return
 
@@ -106,6 +108,19 @@ def init_once():
         rmm.reinitialize(
             pool_allocator=True, managed_memory=False, initial_pool_size=pool_size
         )
+
+    try:
+        from ucp.endpoint_reuse import EndpointReuse
+    except ImportError:
+        ucx_create_endpoint = ucp.create_endpoint
+        ucx_create_listener = ucp.create_listener
+    else:
+        if dask.config.get("ucx.reuse-endpoints"):
+            ucx_create_endpoint = EndpointReuse.create_endpoint
+            ucx_create_listener = EndpointReuse.create_listener
+        else:
+            ucx_create_endpoint = ucp.create_endpoint
+            ucx_create_listener = ucp.create_listener
 
 
 class UCX(Comm):
@@ -310,7 +325,7 @@ class UCXConnector(Connector):
         logger.debug("UCXConnector.connect: %s", address)
         ip, port = parse_host_port(address)
         init_once()
-        ep = await ucp.create_endpoint(ip, port)
+        ep = await ucx_create_endpoint(ip, port)
         return self.comm_class(
             ep,
             local_addr=None,
@@ -363,7 +378,7 @@ class UCXListener(Listener):
                 await self.comm_handler(ucx)
 
         init_once()
-        self.ucp_server = ucp.create_listener(serve_forever, port=self._input_port)
+        self.ucp_server = ucx_create_listener(serve_forever, port=self._input_port)
 
     def stop(self):
         self.ucp_server = None

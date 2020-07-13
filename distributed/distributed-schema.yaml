@@ -800,3 +800,6 @@ properties:
         - string
         - "null"
         description: Define which Infiniband device to use
+      reuse-endpoints:
+        type: boolean
+        description: Whether to reuse endpoints or not, default True
