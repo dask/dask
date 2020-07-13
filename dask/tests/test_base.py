@@ -27,6 +27,7 @@ from dask.base import (
 )
 from dask.core import literal
 from dask.delayed import Delayed
+from dask.task import Task, TupleTask, spec_type
 from dask.utils import tmpdir, tmpfile, ignoring
 from dask.utils_test import inc, dec
 from dask.diagnostics import Profiler
@@ -811,9 +812,18 @@ def test_use_cloudpickle_to_tokenize_functions_in__main__():
 
 def inc_to_dec(dsk, keys):
     dsk = dict(dsk)
-    for key in dsk:
-        if dsk[key][0] == inc:
-            dsk[key] = (dec,) + dsk[key][1:]
+    updates = {}
+
+    for k, v in dsk.items():
+        typ = spec_type(v)
+
+        if typ is Task and v.function is inc:
+            updates[k] = Task(dec, v.args, v.kwargs, v.annotations)
+        elif typ is TupleTask and v[0] is inc:
+            updates[k] = (dec,) + v[1:]
+
+    dsk.update(updates)
+
     return dsk
 
 
