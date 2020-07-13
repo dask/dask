@@ -54,8 +54,9 @@ class DaskMethodsMixin(object):
         Parameters
         ----------
         filename : str or None, optional
-            The name (without an extension) of the file to write to disk.  If
-            `filename` is None, no file will be written, and we communicate
+            The name of the file to write to disk. If the provided `filename`
+            doesn't include an extension, '.png' will be used by default.
+            If `filename` is None, no file will be written, and we communicate
             with dot using only pipes.
         format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
             Format in which to write output file.  Default is 'png'.
@@ -143,7 +144,7 @@ class DaskMethodsMixin(object):
         """Compute this dask collection
 
         This turns a lazy Dask collection into its in-memory equivalent.
-        For example a Dask.array turns into a  :func:`numpy.array` and a Dask.dataframe
+        For example a Dask array turns into a NumPy array and a Dask dataframe
         turns into a Pandas dataframe.  The entire dataset must fit into memory
         before calling this operation.
 
@@ -212,16 +213,18 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
         _opt_list = []
         for opt, val in groups.items():
-            _graph_and_keys = _extract_graph_and_keys(val)
-            groups[opt] = _graph_and_keys
-            _opt_list.append(opt(_graph_and_keys[0], _graph_and_keys[1], **kwargs))
+            dsk, keys = _extract_graph_and_keys(val)
+            _opt = opt(dsk, keys, **kwargs)
+            groups[opt] = (_opt, keys)
+            _opt_list.append(_opt)
 
         for opt in optimizations:
             _opt_list = []
             group = {}
             for k, (dsk, keys) in groups.items():
-                group[k] = (opt(dsk, keys), keys)
-                _opt_list.append(opt(dsk, keys, **kwargs))
+                _opt = opt(dsk, keys, **kwargs)
+                group[k] = (_opt, keys)
+                _opt_list.append(_opt)
             groups = group
 
         dsk = merge(*map(ensure_dict, _opt_list,))
@@ -457,8 +460,9 @@ def visualize(*args, **kwargs):
     dsk : dict(s) or collection(s)
         The dask graph(s) to visualize.
     filename : str or None, optional
-        The name (without an extension) of the file to write to disk.  If
-        `filename` is None, no file will be written, and we communicate
+        The name of the file to write to disk. If the provided `filename`
+        doesn't include an extension, '.png' will be used by default.
+        If `filename` is None, no file will be written, and we communicate
         with dot using only pipes.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
