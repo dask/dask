@@ -178,7 +178,7 @@ def check_if_handled_given_other(f):
     def wrapper(self, other):
         if (
             is_valid_array_chunk(other)
-            or isinstance(other, (self.__class__, list, tuple) + np.ScalarType)
+            or isinstance(other, (self.__class__, list, tuple, np.generic))
             or "dask.dataframe.core.Scalar" in str(other.__class__)
         ):
             return f(self, other)
