@@ -1,7 +1,7 @@
 import struct
 import msgpack
 
-from ..utils import ensure_bytes, nbytes
+from ..utils import nbytes
 
 BIG_BYTES_SHARD_SIZE = 2 ** 26
 
@@ -84,7 +84,7 @@ def merge_frames(header, frames):
         if len(L) == 1:  # no work necessary
             out.extend(L)
         else:
-            out.append(b"".join(map(ensure_bytes, L)))
+            out.append(b"".join(L))
     return out
 
 
