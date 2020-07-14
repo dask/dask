@@ -740,10 +740,10 @@ def to_csv(
         append mode and thus the single file mode, especially on cloud
         storage systems such as S3 or GCS. A warning will be issued when
         writing to a file that is not backed by a local filesystem.
-    compression : string or None
-        String like 'gzip' or 'xz'.  Must support efficient random access.
-        Filenames with extensions corresponding to known compression
-        algorithms (gz, bz2) will be compressed accordingly automatically
+    compression : string, optional
+        a string representing the compression to use in the output file,
+        allowed values are 'gzip', 'bz2', 'xz',
+        only used when the first argument is a filename
     compute: bool
         If true, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
@@ -779,10 +779,6 @@ def to_csv(
     encoding : string, optional
         A string representing the encoding to use in the output file,
         defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
-    compression : string, optional
-        a string representing the compression to use in the output file,
-        allowed values are 'gzip', 'bz2', 'xz',
-        only used when the first argument is a filename
     line_terminator : string, default '\\n'
         The newline character or character sequence to use in the output
         file
