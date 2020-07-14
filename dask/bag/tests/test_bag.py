@@ -1186,6 +1186,19 @@ def test_repartition_partition_size(nin, partition_size):
     assert all(results)
 
 
+def test_repartition_partition_size_complex_dtypes():
+    import numpy as np
+
+    b = db.from_sequence(
+        [np.array(range(100)), np.array(range(100))], npartitions=1
+    )  # 1680 bytes
+    c = b.repartition(partition_size=1000)
+    assert 2 == c.npartitions
+    assert_eq(b, c)
+    results = dask.get(c.dask, c.__dask_keys__())
+    assert all(results)
+
+
 def test_repartition_names():
     b = db.from_sequence(range(100), npartitions=5)
     c = b.repartition(2)

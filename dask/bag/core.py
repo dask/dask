@@ -4,7 +4,7 @@ import math
 import operator
 import uuid
 import warnings
-import sys
+from dask.sizeof import sizeof
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from functools import wraps, partial, reduce
@@ -2532,7 +2532,7 @@ def repartition_size(bag, size):
 
 
 def total_mem_usage(bag):
-    return sys.getsizeof(bag)
+    return sizeof(bag)
 
 
 def _split_partitions(bag, nsplits, new_name):
