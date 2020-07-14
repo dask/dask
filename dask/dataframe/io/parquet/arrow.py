@@ -141,14 +141,28 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
 
 
 def _get_ds_metadata(ds, filters):
+    partition_names = []
+    partition_keys = {}
     metadata = []
     ds_filters = None
     if filters is not None:
         ds_filters = pq._filters_to_expression(filters)
-    for file_frag in ds.get_fragments(filter=ds_filters):
-        for rg_frag in file_frag.split_by_row_group():
+    for file_frag in ds.get_fragments(ds_filters):
+        for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
             metadata.append(rg_frag)
-    return sorted(metadata, key=lambda x: natural_sort_key(x.path))
+            keys = pa_ds._get_partition_keys(rg_frag.partition_expression)
+            if keys:
+                partition_keys[rg_frag.path] = keys
+                if not partition_names:
+                    partition_names = list(keys)
+
+    metadata = sorted(metadata, key=lambda x: natural_sort_key(x.path))
+    partition_info = {
+        "partitions": None,  # Not used with dataset API
+        "partition_keys": partition_keys,
+        "partition_names": partition_names,
+    }
+    return metadata, partition_info
 
 
 def _gather_metadata(
@@ -183,19 +197,14 @@ def _gather_metadata(
                     "partitioning", "hive"
                 ),  # Assume "hive" by default
             )
-        schema = ds.schema
-        base = ""
-        # Dataset API doesn't use partition_info
-        partition_info = {
-            "partitions": None,
-            "partition_keys": {},
-            "partition_names": [],
-        }
+
         if split_row_groups is None and gather_statistics is not False:
             split_row_groups = True
 
         # Generate list of row-group fragments and call it `metadata`
-        metadata = _get_ds_metadata(ds, filters)
+        metadata, partition_info = _get_ds_metadata(ds, filters)
+        schema = ds.schema
+        base = ""
 
         return (
             schema,
@@ -542,7 +551,7 @@ def _construct_parts(
     if isinstance(metadata, list) and isinstance(metadata[0], str):
         for full_path in metadata:
             part = {
-                "piece": (full_path, None, partition_keys.get(full_path, None), None),
+                "piece": (full_path, None, partition_keys.get(full_path, None)),
                 "kwargs": {"partitions": partition_obj, "categories": categories},
             }
             parts.append(part)
@@ -599,8 +608,13 @@ def _construct_parts(
                 if partition_obj and pkeys is None:
                     continue  # This partition was filtered
                 part = {
-                    "piece": (full_path, rg_list, pkeys, schema),
-                    "kwargs": {"partitions": partition_obj, "categories": categories},
+                    "piece": (full_path, rg_list, pkeys),
+                    "kwargs": {
+                        "partitions": partition_obj,
+                        "categories": categories,
+                        "filters": filters,
+                        "schema": schema,
+                    },
                 }
                 parts.append(part)
                 if gather_statistics:
@@ -625,8 +639,13 @@ def _construct_parts(
             if use_pa_ds:
                 rgs = row_groups
             part = {
-                "piece": (full_path, rgs, pkeys, schema),
-                "kwargs": {"partitions": partition_obj, "categories": categories},
+                "piece": (full_path, rgs, pkeys),
+                "kwargs": {
+                    "partitions": partition_obj,
+                    "categories": categories,
+                    "filters": filters,
+                    "schema": schema,
+                },
             }
             parts.append(part)
             if gather_statistics:
@@ -730,7 +749,16 @@ class ArrowEngine(Engine):
 
     @classmethod
     def read_partition(
-        cls, fs, piece, columns, index, categories=(), partitions=(), **kwargs
+        cls,
+        fs,
+        piece,
+        columns,
+        index,
+        categories=(),
+        partitions=(),
+        filters=None,
+        schema=None,
+        **kwargs,
     ):
         if isinstance(index, list):
             for level in index:
@@ -755,10 +783,9 @@ class ArrowEngine(Engine):
             path = piece
             row_group = None
             partition_keys = None
-            schema = None
         else:
-            # `piece` contains (path, row_group, partition_keys, schema)
-            (path, row_group, partition_keys, schema) = piece
+            # `piece` contains (path, row_group, partition_keys)
+            (path, row_group, partition_keys) = piece
 
         if not isinstance(row_group, list):
             row_group = [row_group]
@@ -769,7 +796,10 @@ class ArrowEngine(Engine):
                 # `rg` is already a `ParquetFileFragment`, pyarrow
                 # knows how to convert this to a `table`
                 arrow_table = rg.to_table(
-                    use_threads=False, schema=schema, columns=columns
+                    use_threads=False,
+                    schema=schema,
+                    columns=columns,
+                    filter=pq._filters_to_expression(filters) if filters else None,
                 )
             else:
                 piece = pq.ParquetDatasetPiece(
