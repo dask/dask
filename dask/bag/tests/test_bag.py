@@ -1193,6 +1193,8 @@ def test_repartition_partition_size_complex_dtypes():
         [np.array(range(100)), np.array(range(100))], npartitions=1
     )  # 1680 bytes
     c = b.repartition(partition_size=1000)
+    mem_usages = c.map_partitions(total_mem_usage).compute()
+    print(mem_usages)
     assert 2 == c.npartitions
     assert_eq(b, c)
     results = dask.get(c.dask, c.__dask_keys__())
