@@ -5006,6 +5006,7 @@ def apply_concat_apply(
             (a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0].__dask_keys__())
         }
     else:
+        # should go here!
         dsk = {
             (a, 0, i, 0): (
                 apply,

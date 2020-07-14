@@ -3,7 +3,7 @@ import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
-from .utils import is_categorical_dtype, is_scalar, has_known_categories
+from .utils import is_categorical_dtype, is_scalar, is_list_like, has_known_categories
 from ..utils import M
 import sys
 
@@ -212,15 +212,15 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         raise ValueError("'index' must be the name of an existing column")
     if not is_scalar(columns) or columns is None:
         raise ValueError("'columns' must be the name of an existing column")
-    if not is_categorical_dtype(df[columns]):
-        raise ValueError("'columns' must be category dtype")
-    if not has_known_categories(df[columns]):
-        raise ValueError(
-            "'columns' must have known categories. Please use "
-            "`df[columns].cat.as_known()` beforehand to ensure "
-            "known categories"
-        )
-    if not is_scalar(values) or values is None:
+    # if not is_categorical_dtype(df[columns]):
+    #     raise ValueError("'columns' must be category dtype")
+    # if not has_known_categories(df[columns]):
+    #     raise ValueError(
+    #         "'columns' must have known categories. Please use "
+    #         "`df[columns].cat.as_known()` beforehand to ensure "
+    #         "known categories"
+    #     )
+    if not (is_list_like(values) and all([is_scalar(v) for v in values])) or not is_scalar(values) or values is None:
         raise ValueError("'values' must be the name of an existing column")
     if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
         raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
@@ -244,24 +244,24 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             chunk_kwargs=kwargs,
         )
 
-    if aggfunc in ["count", "mean"]:
-        pv_count = apply_concat_apply(
-            [df],
-            chunk=methods.pivot_count,
-            aggregate=methods.pivot_agg,
-            meta=meta,
-            token="pivot_table_count",
-            chunk_kwargs=kwargs,
-        )
+    # if aggfunc in ["count", "mean"]:
+    #     pv_count = apply_concat_apply(
+    #         [df],
+    #         chunk=methods.pivot_count,
+    #         aggregate=methods.pivot_agg,
+    #         meta=meta,
+    #         token="pivot_table_count",
+    #         chunk_kwargs=kwargs,
+    #     )
 
     if aggfunc == "sum":
         return pv_sum
-    elif aggfunc == "count":
-        return pv_count
-    elif aggfunc == "mean":
-        return pv_sum / pv_count
-    else:
-        raise ValueError
+    # elif aggfunc == "count":
+    #     return pv_count
+    # elif aggfunc == "mean":
+    #     return pv_sum / pv_count
+    # else:
+    #     raise ValueError
 
 
 ###############################################################

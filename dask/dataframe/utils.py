@@ -13,6 +13,7 @@ import pandas as pd
 from pandas.api.types import (
     is_categorical_dtype,
     is_scalar,
+    is_list_like,
     is_sparse,
     is_period_dtype,
     is_datetime64tz_dtype,
