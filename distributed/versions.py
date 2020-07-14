@@ -34,8 +34,6 @@ scheduler_relevant_packages = set(pkg for pkg, _ in required_packages) | set(
 # notes to be displayed for mismatch packages
 notes_mismatch_package = {
     "msgpack": "Variation is ok, as long as everything is above 0.6",
-    "lz4": "Variation is ok, but missing libraries are not",
-    "python": "Variation is sometimes ok, sometimes not. It depends on your workloads",
 }
 
 
@@ -157,14 +155,40 @@ def error_message(scheduler, workers, client, client_name="client"):
         if pkg in notes_mismatch_package.keys():
             notes.append(f"-  {pkg}: {notes_mismatch_package[pkg]}")
 
+    out = {"warning": "", "error": ""}
+
     if errs:
         err_table = asciitable(["Package", client_name, "scheduler", "workers"], errs)
         err_msg = f"Mismatched versions found\n\n{err_table}"
         if notes:
             err_msg += "\nNotes: \n{}".format("\n".join(notes))
-        return err_msg
-    else:
-        return ""
+        out["warning"] += err_msg
+
+        for name, c, s, ws in errs:
+            if not isinstance(ws, set):
+                ws = {ws}
+
+            if name == "python":
+                majors = [tuple(version.split(".")[:2]) for version in {c, s} | ws]
+                if len(set(majors)) != 1:
+                    err_table = asciitable(
+                        ["Package", client_name, "scheduler", "workers"],
+                        [t for t in errs if t[0] == "python"],
+                    )
+                    out["error"] += f"Python major versions must match\n\n{err_table}\n"
+
+            if name == "lz4":
+                versions = [version for version in {c, s} | ws]
+                if any(versions) and not all(versions):
+                    err_table = asciitable(
+                        ["Package", client_name, "scheduler", "workers"],
+                        [t for t in errs if t[0] == "lz4"],
+                    )
+                    out[
+                        "error"
+                    ] += f"\nLZ4 must be installed everywhere or nowhere\n\n{err_table}\n"
+
+    return out
 
 
 class VersionMismatchWarning(Warning):
