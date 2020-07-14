@@ -1792,6 +1792,17 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
+        """
+        Examples
+        --------
+        
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
+        >>> df = pd.DataFrame(data=d)
+        >>> ddf = dd.from_pandas(df, 2)
+        >>> ddf.groupby(['col1']).col2.nunique().compute()
+        """
         name = self._meta.obj.name
         levels = _determine_levels(self.index)
 

@@ -179,7 +179,7 @@ for a DataFrame.
    >>> df = pd.DataFrame({
    ...   'a': ['a', 'b', 'a', 'a', 'b'],
    ...   'b': [0, 1, 0, 2, 5],
-   >>> })
+   ... })
    >>> ddf = dd.from_pandas(df, 2)
 
 We define the building blocks to find the maximum and minimum of each chunk, and then
@@ -230,10 +230,8 @@ column you can use:
     >>> ddf = dd.from_pandas(df, 2)
     >>> nunique = dd.Aggregation(
     ...     name="nunique",
-    ...     chunk=lambda s : s.apply(lambda x: list(set(x))),
-    ...     agg=lambda s0 : s0._selected_obj.groupby(
-    ...         level=list(range(s0._selected_obj.index.nlevels))
-    ...     ).sum(),
-    ...     finalize=lambda s1 : s1.apply(lambda final: len(set(final))),
-    )
+    ...     chunk=lambda s: s.apply(lambda x: list(set(x))),
+    ...     agg=lambda s0: s0.obj.groupby(level=list(range(s0.obj.index.nlevels))).sum(),
+    ...     finalize=lambda s1: s1.apply(lambda final: len(set(final))),
+    ... )
     >>> ddf.groupby('a').agg({'b':nunique, 'c':nunique})
