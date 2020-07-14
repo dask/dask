@@ -28,6 +28,11 @@ else:
     pa_ds = None
 
 
+#
+#  Private Helper Functions
+#
+
+
 def _write_partitioned(table, root_path, partition_cols, fs, index_cols=(), **kwargs):
     """ Write table to a partitioned dataset with pyarrow.
 
@@ -140,33 +145,8 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     return dataset, base, fns
 
 
-def _get_ds_metadata(ds, filters):
-    partition_names = []
-    partition_keys = {}
-    metadata = []
-    ds_filters = None
-    if filters is not None:
-        ds_filters = pq._filters_to_expression(filters)
-    for file_frag in ds.get_fragments(ds_filters):
-        for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
-            metadata.append(rg_frag)
-            keys = pa_ds._get_partition_keys(rg_frag.partition_expression)
-            if keys:
-                partition_keys[rg_frag.path] = keys
-                if not partition_names:
-                    partition_names = list(keys)
-
-    metadata = sorted(metadata, key=lambda x: natural_sort_key(x.path))
-    partition_info = {
-        "partitions": None,  # Not used with dataset API
-        "partition_keys": partition_keys,
-        "partition_names": partition_names,
-    }
-    return metadata, partition_info
-
-
 def _gather_metadata(
-    paths, fs, split_row_groups, gather_statistics, filters, use_pa_ds, dataset_kwargs
+    paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
 ):
     """ Gather parquet metadata into a single data structure.
 
@@ -174,46 +154,6 @@ def _gather_metadata(
         object.  Also, collect other information necessary for
         parquet-to-ddf mapping (e.g. schema, partition_info).
     """
-
-    if use_pa_ds:
-        # Use pyarrow.dataset API
-        ds = None
-        if len(paths) == 1 and fs.isdir(paths[0]):
-            paths = paths[0]
-            # Use _metadata file if available
-            # TODO: Handle _metadata within a list of files
-            meta_path = fs.sep.join([paths, "_metadata"])
-            if fs.exists(meta_path):
-                ds = pa_ds.parquet_dataset(
-                    meta_path, partitioning=dataset_kwargs.get("partitioning", "hive")
-                )
-                if gather_statistics is None:
-                    gather_statistics = True
-        if ds is None:
-            ds = pa_ds.dataset(
-                paths,
-                format="parquet",
-                partitioning=dataset_kwargs.get(
-                    "partitioning", "hive"
-                ),  # Assume "hive" by default
-            )
-
-        if split_row_groups is None and gather_statistics is not False:
-            split_row_groups = True
-
-        # Generate list of row-group fragments and call it `metadata`
-        metadata, partition_info = _get_ds_metadata(ds, filters)
-        schema = ds.schema
-        base = ""
-
-        return (
-            schema,
-            metadata,
-            base,
-            partition_info,
-            split_row_groups,
-            gather_statistics,
-        )
 
     # Step 1: Create a ParquetDataset object
     dataset, base, fns = _get_dataset_object(paths, fs, filters, dataset_kwargs)
@@ -307,7 +247,7 @@ def _gather_metadata(
         )
 
 
-def _generate_dd_meta(schema, index, categories, partition_info, using_fragments=False):
+def _generate_dd_meta(schema, index, categories, partition_info):
     partition_obj = partition_info["partitions"]
     partitions = partition_info["partition_names"]
     columns = None
@@ -334,10 +274,6 @@ def _generate_dd_meta(schema, index, categories, partition_info, using_fragments
         column_names = schema.names
         storage_name_mapping = {k: k for k in column_names}
         column_index_names = [None]
-
-    if using_fragments and not partitions:
-        # TODO: Explore other ways to specify partitions
-        partitions = [p for p in schema.names if p not in (column_names + index_names)]
 
     if index is None and index_names:
         index = index_names
@@ -420,102 +356,63 @@ def _aggregate_stats(
         return s
 
 
-def _process_metadata(
-    metadata, single_rg_parts, gather_statistics, stat_col_indices, use_pa_ds
-):
-
+def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_indices):
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
-
-    if use_pa_ds:
-        for rg_frag in metadata:
-            row_group = rg_frag.row_groups[0]
-            fpath = rg_frag.path
-            file_row_groups[fpath].append(rg_frag)
-            statistics = row_group.statistics
-            # TODO: PyArrow does not currently include statistics
-            #       for string columns - Need this addressed.
-            if gather_statistics:
-                if single_rg_parts:
-                    s = {"num-rows": row_group.num_rows, "columns": []}
-                else:
-                    s = {"num-rows": row_group.num_rows}
-                cstats = []
-                for name, i in stat_col_indices.items():
-                    if name in statistics:
-                        if single_rg_parts:
-                            s["columns"].append(
-                                {
-                                    "name": name,
-                                    "min": statistics[name]["min"],
-                                    "max": statistics[name]["max"],
-                                }
-                            )
-                        else:
-                            cstats += [statistics[name]["min"], statistics[name]["max"]]
-                    else:
-                        if single_rg_parts:
-                            s["columns"].append({"name": name})
-                        else:
-                            cstats += [None, None, None]
-                file_row_group_stats[fpath].append(s)
-                if not single_rg_parts:
-                    file_row_group_column_stats[fpath].append(tuple(cstats))
-    else:
-        for rg in range(metadata.num_row_groups):
-            row_group = metadata.row_group(rg)
-            fpath = row_group.column(0).file_path
-            if fpath is None:
-                raise ValueError("metadata is missing file_path string.")
-            if file_row_groups[fpath]:
-                file_row_groups[fpath].append(file_row_groups[fpath][-1] + 1)
+    for rg in range(metadata.num_row_groups):
+        row_group = metadata.row_group(rg)
+        fpath = row_group.column(0).file_path
+        if fpath is None:
+            raise ValueError("metadata is missing file_path string.")
+        if file_row_groups[fpath]:
+            file_row_groups[fpath].append(file_row_groups[fpath][-1] + 1)
+        else:
+            file_row_groups[fpath].append(0)
+        if gather_statistics:
+            if single_rg_parts:
+                s = {
+                    "file_path_0": fpath,
+                    "num-rows": row_group.num_rows,
+                    "total_byte_size": row_group.total_byte_size,
+                    "columns": [],
+                }
             else:
-                file_row_groups[fpath].append(0)
-            if gather_statistics:
-                if single_rg_parts:
-                    s = {
-                        "file_path_0": fpath,
-                        "num-rows": row_group.num_rows,
-                        "total_byte_size": row_group.total_byte_size,
-                        "columns": [],
-                    }
-                else:
-                    s = {
-                        "num-rows": row_group.num_rows,
-                        "total_byte_size": row_group.total_byte_size,
-                    }
-                cstats = []
-                for name, i in stat_col_indices.items():
-                    column = row_group.column(i)
-                    if column.statistics:
-                        if single_rg_parts:
-                            cmin = column.statistics.min
-                            cmax = column.statistics.max
-                            to_ts = column.statistics.logical_type.type == "TIMESTAMP"
-                            s["columns"].append(
-                                {
-                                    "name": name,
-                                    "min": cmin if not to_ts else pd.Timestamp(cmin),
-                                    "max": cmax if not to_ts else pd.Timestamp(cmax),
-                                    "null_count": column.statistics.null_count,
-                                }
-                            )
-                        else:
-                            cstats += [
-                                column.statistics.min,
-                                column.statistics.max,
-                                column.statistics.null_count,
-                            ]
+                s = {
+                    "num-rows": row_group.num_rows,
+                    "total_byte_size": row_group.total_byte_size,
+                }
+            cstats = []
+            for name, i in stat_col_indices.items():
+                column = row_group.column(i)
+                if column.statistics:
+                    if single_rg_parts:
+                        cmin = column.statistics.min
+                        cmax = column.statistics.max
+                        to_ts = column.statistics.logical_type.type == "TIMESTAMP"
+                        s["columns"].append(
+                            {
+                                "name": name,
+                                "min": cmin if not to_ts else pd.Timestamp(cmin),
+                                "max": cmax if not to_ts else pd.Timestamp(cmax),
+                                "null_count": column.statistics.null_count,
+                            }
+                        )
                     else:
-                        if single_rg_parts:
-                            s["columns"].append({"name": name})
-                        else:
-                            cstats += [None, None, None]
-                file_row_group_stats[fpath].append(s)
-                if not single_rg_parts:
-                    file_row_group_column_stats[fpath].append(tuple(cstats))
+                        cstats += [
+                            column.statistics.min,
+                            column.statistics.max,
+                            column.statistics.null_count,
+                        ]
+                else:
+                    if single_rg_parts:
+                        s["columns"].append({"name": name})
+                    else:
+                        cstats += [None, None, None]
+            file_row_group_stats[fpath].append(s)
+            if not single_rg_parts:
+                file_row_group_column_stats[fpath].append(tuple(cstats))
 
     return file_row_groups, file_row_group_stats, file_row_group_column_stats
 
@@ -531,7 +428,6 @@ def _construct_parts(
     categories,
     split_row_groups,
     gather_statistics,
-    use_pa_ds,
 ):
     """ Construct ``parts`` for ddf construction
 
@@ -557,12 +453,16 @@ def _construct_parts(
             parts.append(part)
         return parts, stats
 
+    # Check if we are using pyarrow.datset API
     use_pa_ds = False
-    if isinstance(metadata, list):
+    if isinstance(metadata, list) and pa_ds:
         if isinstance(metadata[0], pa_ds.ParquetFileFragment):
             use_pa_ds = True
+            _process_func = _process_metadata_pyarrow_dataset
         else:
             raise TypeError("metadata type not recognized")
+    else:
+        _process_func = _process_metadata
 
     # Determine which columns need statistics
     flat_filters = (
@@ -582,12 +482,8 @@ def _construct_parts(
         file_row_groups,
         file_row_group_stats,
         file_row_group_column_stats,
-    ) = _process_metadata(
-        metadata,
-        int(split_row_groups) == 1,
-        gather_statistics,
-        stat_col_indices,
-        use_pa_ds,
+    ) = _process_func(
+        metadata, int(split_row_groups) == 1, gather_statistics, stat_col_indices
     )
 
     if split_row_groups:
@@ -635,9 +531,7 @@ def _construct_parts(
             pkeys = partition_keys.get(full_path, None)
             if partition_obj and pkeys is None:
                 continue  # This partition was filtered
-            rgs = None
-            if use_pa_ds:
-                rgs = row_groups
+            rgs = row_groups if use_pa_ds else None
             part = {
                 "piece": (full_path, rgs, pkeys),
                 "kwargs": {
@@ -660,6 +554,120 @@ def _construct_parts(
     return parts, stats
 
 
+#
+#  PyArrow Dataset API [PyArrow>0.17.1] - Private Helper Functions
+#
+
+
+def _collect_pyarrow_dataset_frags(ds, filters):
+    partition_names = []
+    partition_keys = {}
+    metadata = []
+    ds_filters = None
+    if filters is not None:
+        ds_filters = pq._filters_to_expression(filters)
+    for file_frag in ds.get_fragments(ds_filters):
+        for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
+            metadata.append(rg_frag)
+            keys = pa_ds._get_partition_keys(rg_frag.partition_expression)
+            if keys:
+                partition_keys[rg_frag.path] = keys
+                if not partition_names:
+                    partition_names = list(keys)
+
+    metadata = sorted(metadata, key=lambda x: natural_sort_key(x.path))
+    partition_info = {
+        "partitions": None,  # Not used with dataset API
+        "partition_keys": partition_keys,
+        "partition_names": partition_names,
+    }
+    return metadata, partition_info
+
+
+def _gather_metadata_pyarrow_dataset(
+    paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
+):
+    """ pyarrow.dataset version of _gather_metadata
+
+        Use pyarrow.dataset API to collect list of row-group fragments.
+        Also, collect other information necessary for parquet-to-ddf
+        mapping (e.g. schema, partition_info).
+    """
+    # Use pyarrow.dataset API
+    ds = None
+    if len(paths) == 1 and fs.isdir(paths[0]):
+        paths = paths[0]
+        # Use _metadata file if available
+        # TODO: Handle _metadata within a list of files
+        meta_path = fs.sep.join([paths, "_metadata"])
+        if fs.exists(meta_path):
+            ds = pa_ds.parquet_dataset(
+                meta_path, partitioning=dataset_kwargs.get("partitioning", "hive")
+            )
+            if gather_statistics is None:
+                gather_statistics = True
+    if ds is None:
+        ds = pa_ds.dataset(
+            paths,
+            format="parquet",
+            partitioning=dataset_kwargs.get(
+                "partitioning", "hive"
+            ),  # Assume "hive" by default
+        )
+
+    if split_row_groups is None and gather_statistics is not False:
+        split_row_groups = True
+
+    # Generate list of row-group fragments and call it `metadata`
+    metadata, partition_info = _collect_pyarrow_dataset_frags(ds, filters)
+    schema = ds.schema
+    base = ""
+
+    return (schema, metadata, base, partition_info, split_row_groups, gather_statistics)
+
+
+def _process_metadata_pyarrow_dataset(
+    metadata, single_rg_parts, gather_statistics, stat_col_indices
+):
+    # Get the number of row groups per file
+    file_row_groups = defaultdict(list)
+    file_row_group_stats = defaultdict(list)
+    file_row_group_column_stats = defaultdict(list)
+    for rg_frag in metadata:
+        row_group = rg_frag.row_groups[0]
+        fpath = rg_frag.path
+        file_row_groups[fpath].append(rg_frag)
+        statistics = row_group.statistics
+        if gather_statistics:
+            if single_rg_parts:
+                s = {"num-rows": row_group.num_rows, "columns": []}
+            else:
+                s = {"num-rows": row_group.num_rows}
+            cstats = []
+            for name, i in stat_col_indices.items():
+                if name in statistics:
+                    if single_rg_parts:
+                        s["columns"].append(
+                            {
+                                "name": name,
+                                "min": statistics[name]["min"],
+                                "max": statistics[name]["max"],
+                            }
+                        )
+                    else:
+                        cstats += [statistics[name]["min"], statistics[name]["max"]]
+                else:
+                    if single_rg_parts:
+                        s["columns"].append({"name": name})
+                    else:
+                        cstats += [None, None, None]
+            file_row_group_stats[fpath].append(s)
+            if not single_rg_parts:
+                file_row_group_column_stats[fpath].append(tuple(cstats))
+
+    return file_row_groups, file_row_group_stats, file_row_group_column_stats
+
+
 class ArrowEngine(Engine):
     @classmethod
     def read_metadata(
@@ -677,6 +685,9 @@ class ArrowEngine(Engine):
         # Check if we are using pyarrow.dataset API
         dataset_kwargs = kwargs.get("dataset", {})
         use_pa_ds = dataset_kwargs.pop("pa_dataset", False) and pa_ds is not None
+        _gather_func = (
+            _gather_metadata_pyarrow_dataset if use_pa_ds else _gather_metadata
+        )
 
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
@@ -689,19 +700,13 @@ class ArrowEngine(Engine):
             partition_info,
             split_row_groups,
             gather_statistics,
-        ) = _gather_metadata(
-            paths,
-            fs,
-            split_row_groups,
-            gather_statistics,
-            filters,
-            use_pa_ds,
-            dataset_kwargs,
+        ) = _gather_func(
+            paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
         )
 
         # Process metadata to define `meta` and `index_cols`
         meta, index_cols, categories, index = _generate_dd_meta(
-            schema, index, categories, partition_info, use_pa_ds
+            schema, index, categories, partition_info
         )
 
         # Cannot gather_statistics if our `metadata` is a list
@@ -742,7 +747,6 @@ class ArrowEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
-            use_pa_ds,
         )
 
         return (meta, stats, parts, index)
