@@ -482,7 +482,7 @@ class Worker(ServerNode):
             warnings.warn("The local_dir keyword has moved to local_directory")
             local_directory = local_dir
 
-        if local_directory is None:
+        if not local_directory:
             local_directory = dask.config.get("temporary-directory") or os.getcwd()
 
         if not os.path.exists(local_directory):
