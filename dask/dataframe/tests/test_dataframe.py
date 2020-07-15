@@ -4291,7 +4291,7 @@ def test_simple_map_partitions():
     ddf = dd.from_pandas(df, npartitions=2)
     ddf = ddf.clip(-4, 6)
     task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
-    [v] = task[0].dsk.values()
+    [v] = task.function.dsk.values()
     assert v[0] == M.clip or v[1] == M.clip
 
 

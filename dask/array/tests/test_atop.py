@@ -184,6 +184,29 @@ def test_rewrite(inputs, expected):
     assert result2 == expected
 
 
+def test_blockwise_annotations():
+    x = da.ones(100, dtype=np.int32, chunks=10)
+    y = da.ones(10, dtype=np.int32, chunks=5)
+
+    def fn(a, b):
+        return a[:, None] * b[None, :]
+
+    annotation = {"data": "x"}
+
+    r = da.blockwise(fn, "ij", x, "i", y, "j", annotations=annotation, dtype=np.int32)
+
+    for task in r.__dask_graph__().layers[r.name].values():
+        assert task.annotations == annotation
+
+    def annotations(coords):
+        return {"coordinate": coords}
+
+    r = da.blockwise(fn, "ij", x, "i", y, "j", annotations=annotations, dtype=np.int32)
+
+    for k, task in r.__dask_graph__().layers[r.name].items():
+        assert k[1:] == task.annotations["coordinate"]
+
+
 def test_index_subs():
     assert index_subs(tuple("ij"), {"i": "j", "j": "i"}) == tuple("ji")
 

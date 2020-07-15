@@ -20,6 +20,7 @@ def blockwise(
     new_axes=None,
     align_arrays=True,
     concatenate=None,
+    annotations=None,
     meta=None,
     **kwargs
 ):
@@ -214,6 +215,7 @@ def blockwise(
         dependencies=dependencies,
         new_axes=new_axes,
         concatenate=concatenate,
+        annotations=annotations,
         **kwargs2
     )
     graph = HighLevelGraph.from_collections(

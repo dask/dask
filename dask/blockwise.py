@@ -10,6 +10,7 @@ from .core import reverse_dict
 from .delayed import to_task_dask
 from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable, fuse
+from .task import Task
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
@@ -49,6 +50,7 @@ def blockwise(
     numblocks=None,
     concatenate=None,
     new_axes=None,
+    annotations=None,
     dependencies=(),
     **kwargs
 ):
@@ -128,6 +130,7 @@ def blockwise(
         numblocks=numblocks,
         concatenate=concatenate,
         new_axes=new_axes,
+        annotations=annotations,
     )
     return subgraph
 
@@ -180,6 +183,7 @@ class Blockwise(Mapping):
         numblocks,
         concatenate=None,
         new_axes=None,
+        annotations=None,
     ):
         self.output = output
         self.output_indices = tuple(output_indices)
@@ -199,6 +203,7 @@ class Blockwise(Mapping):
         else:
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
+        self.annotations = annotations
 
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
@@ -218,7 +223,8 @@ class Blockwise(Mapping):
                 *list(toolz.concat(self.indices)),
                 new_axes=self.new_axes,
                 numblocks=self.numblocks,
-                concatenate=self.concatenate
+                concatenate=self.concatenate,
+                annotations=self.annotations
             )
         return self._cached_dict
 
@@ -353,6 +359,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     numblocks = kwargs.pop("numblocks")
     concatenate = kwargs.pop("concatenate", None)
     new_axes = kwargs.pop("new_axes", {})
+    annotations = kwargs.pop("annotations", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
@@ -445,11 +452,18 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                 else:
                     tups = (arg,) + arg_coords
                 args.append(tups)
+
+        # NOTE(sjperkins)
+        # Callable annotations may have security
+        # implications when expanding Blockwise
+        # objects on distributed servers. Not
+        # currently the case but might be in future.
+        annot = annotations(out_coords) if callable(annotations) else annotations
+
         if kwargs:
-            val = (apply, func, args, kwargs2)
+            val = Task(func, args, kwargs2, annotations=annot)
         else:
-            args.insert(0, func)
-            val = tuple(args)
+            val = Task(func, args, annotations=annot)
         dsk[(output,) + out_coords] = val
 
     if dsk2:
