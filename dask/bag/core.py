@@ -8,6 +8,7 @@ from dask.sizeof import sizeof
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from functools import wraps, partial, reduce
+from itertools import chain
 from random import Random
 from urllib.request import urlopen
 
@@ -2532,6 +2533,8 @@ def repartition_size(bag, size):
 
 
 def total_mem_usage(bag):
+    if isinstance(bag, chain):
+        bag = list(bag)
     return sizeof(bag)
 
 

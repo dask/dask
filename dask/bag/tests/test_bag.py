@@ -1174,15 +1174,38 @@ def test_repartition_npartitions(nin, nout):
     assert all(results)
 
 
-@pytest.mark.parametrize("nin", [1, 2, 4, 8])
-@pytest.mark.parametrize("partition_size", [128, 256, 512])
-def test_repartition_partition_size(nin, partition_size):
+@pytest.mark.parametrize("nin, partition_size, nout", [
+    (1, 100, 10),
+    (2, 100, 10),
+    (5, 100, 10),
+    (1, 200, 5),
+    (2, 200, 5),
+    (5, 200, 5),
+    (1, 500, 5),
+    (2, 500, 2),
+    (5, 500, 2)
+])
+def test_repartition_partition_size(nin, partition_size, nout):
     b = db.from_sequence(range(100), npartitions=nin)  # 1008 bytes
     c = b.repartition(partition_size=partition_size)
-    mem_usages = c.map_partitions(total_mem_usage).compute()
-    assert all(mem_usage <= partition_size for mem_usage in mem_usages)
+    assert c.npartitions >= nout
     assert_eq(b, c)
     results = dask.get(c.dask, c.__dask_keys__())
+    assert all(results)
+
+
+def test_multiple_repartition_partition_size():
+    b = db.from_sequence(range(100), npartitions=1)  # 1008 bytes
+    c = b.repartition(partition_size=500)
+    assert c.npartitions >= 2
+    assert_eq(b, c)
+    results = dask.get(c.dask, c.__dask_keys__())
+    assert all(results)
+
+    d = c.repartition(partition_size=200)
+    assert d.npartitions >= 5
+    assert_eq(c, d)
+    results = dask.get(d.dask, d.__dask_keys__())
     assert all(results)
 
 
@@ -1193,9 +1216,7 @@ def test_repartition_partition_size_complex_dtypes():
         [np.array(range(100)), np.array(range(100))], npartitions=1
     )  # 1680 bytes
     c = b.repartition(partition_size=1000)
-    mem_usages = c.map_partitions(total_mem_usage).compute()
-    print(mem_usages)
-    assert 2 == c.npartitions
+    assert c.npartitions >= 2
     assert_eq(b, c)
     results = dask.get(c.dask, c.__dask_keys__())
     assert all(results)
