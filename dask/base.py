@@ -214,8 +214,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
         _opt_list = []
         for opt, val in groups.items():
             dsk, keys = _extract_graph_and_keys(val)
+            groups[opt] = (dsk, keys)
             _opt = opt(dsk, keys, **kwargs)
-            groups[opt] = (_opt, keys)
             _opt_list.append(_opt)
 
         for opt in optimizations:
