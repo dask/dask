@@ -412,12 +412,7 @@ def get_async(
         result_flat = set([result])
     results = set(result_flat)
 
-    # NOTE(sjperkins)
-    # This implies a dict copy and is a
-    # potential site for conversion to Task objects
-    # dsk = Task.from_spec(dsk)
     dsk = dict(dsk)
-
     with local_callbacks(callbacks) as callbacks:
         _, _, pretask_cbs, posttask_cbs, _ = unpack_callbacks(callbacks)
         started_cbs = []
