@@ -351,11 +351,14 @@ def _aggregate_stats(
         return s
 
 
-def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_indices):
+def _process_metadata(
+    metadata, single_rg_parts, gather_statistics, stat_col_indices, no_filters
+):
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
+    cmax_last = {}
     for rg in range(metadata.num_row_groups):
         row_group = metadata.row_group(rg)
         fpath = row_group.column(0).file_path
@@ -382,34 +385,60 @@ def _process_metadata(metadata, single_rg_parts, gather_statistics, stat_col_ind
             for name, i in stat_col_indices.items():
                 column = row_group.column(i)
                 if column.statistics:
+                    cmin = column.statistics.min
+                    cmax = column.statistics.max
+                    cnull = column.statistics.null_count
+                    last = cmax_last.get(name, None)
+                    if no_filters and last and cmin < last:
+                        # We are collecting statistics for divisions
+                        # only (no filters) - Column isn't sorted, so
+                        # lets bail.
+                        #
+                        # Note: This assumes ascending order.
+                        #
+                        gather_statistics = False
+                        file_row_group_stats = {}
+                        file_row_group_column_stats = {}
+                        break
+
                     if single_rg_parts:
-                        cmin = column.statistics.min
-                        cmax = column.statistics.max
                         to_ts = column.statistics.logical_type.type == "TIMESTAMP"
                         s["columns"].append(
                             {
                                 "name": name,
                                 "min": cmin if not to_ts else pd.Timestamp(cmin),
                                 "max": cmax if not to_ts else pd.Timestamp(cmax),
-                                "null_count": column.statistics.null_count,
+                                "null_count": cnull,
                             }
                         )
                     else:
-                        cstats += [
-                            column.statistics.min,
-                            column.statistics.max,
-                            column.statistics.null_count,
-                        ]
+                        cstats += [cmin, cmax, cnull]
+                    cmax_last[name] = cmax
                 else:
+
+                    if no_filters and column.num_values > 0:
+                        # We are collecting statistics for divisions
+                        # only (no filters) - Lets bail.
+                        gather_statistics = False
+                        file_row_group_stats = {}
+                        file_row_group_column_stats = {}
+                        break
+
                     if single_rg_parts:
                         s["columns"].append({"name": name})
                     else:
                         cstats += [None, None, None]
-            file_row_group_stats[fpath].append(s)
-            if not single_rg_parts:
-                file_row_group_column_stats[fpath].append(tuple(cstats))
+            if gather_statistics:
+                file_row_group_stats[fpath].append(s)
+                if not single_rg_parts:
+                    file_row_group_column_stats[fpath].append(tuple(cstats))
 
-    return file_row_groups, file_row_group_stats, file_row_group_column_stats
+    return (
+        file_row_groups,
+        file_row_group_stats,
+        file_row_group_column_stats,
+        gather_statistics,
+    )
 
 
 def _construct_parts(
@@ -466,8 +495,13 @@ def _construct_parts(
         file_row_groups,
         file_row_group_stats,
         file_row_group_column_stats,
+        gather_statistics,
     ) = _process_metadata(
-        metadata, int(split_row_groups) == 1, gather_statistics, stat_col_indices
+        metadata,
+        int(split_row_groups) == 1,
+        gather_statistics,
+        stat_col_indices,
+        flat_filters == [],
     )
 
     if split_row_groups:
