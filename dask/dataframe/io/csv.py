@@ -726,6 +726,8 @@ def to_csv(
 
     Parameters
     ----------
+    df : dask.DataFrame
+        Data to save
     filename : string
         Path glob indicating the naming scheme for the output files
     name_function : callable, default None
