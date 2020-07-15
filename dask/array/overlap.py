@@ -167,9 +167,7 @@ def overlap_internal(x, axes):
         else:
             left = [bds[0] + right_depth]
             right = [bds[-1] + left_depth]
-            mid = []
-            for bd in bds[1:-1]:
-                mid.append(bd + left_depth + right_depth)
+            mid = [bd + left_depth + right_depth for bd in bds[1:-1]]
             chunks.append(left + mid + right)
 
     dsk = merge(interior_slices, overlap_blocks)
