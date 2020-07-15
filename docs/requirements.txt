@@ -1,5 +1,4 @@
-# We pin numpydoc to avoid doubly-escaped *args and **kwargs in rendered docs
-numpydoc==0.8.0
+numpydoc
 tornado
 toolz
 cloudpickle
