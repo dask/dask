@@ -16,7 +16,6 @@ import sys
 import random
 import warnings
 import weakref
-
 import psutil
 import sortedcontainers
 
@@ -3266,6 +3265,10 @@ class Scheduler(ServerNode):
             while tasks:
                 gathers = defaultdict(dict)
                 for ts in list(tasks):
+                    if ts.state == "forgotten":
+                        # task is no longer needed by any client or dependant task
+                        tasks.remove(ts)
+                        continue
                     n_missing = n - len(ts.who_has & workers)
                     if n_missing <= 0:
                         # Already replicated enough

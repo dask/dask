@@ -2159,3 +2159,17 @@ async def test_unknown_task_duration_config(client, s, a, b):
 @gen_cluster()
 async def test_unknown_task_duration_config(s, a, b):
     assert s.idle_since == s.time_started
+
+
+@gen_cluster(client=True, timeout=1000)
+async def test_retire_state_change(c, s, a, b):
+    np = pytest.importorskip("numpy")
+    y = c.map(lambda x: x ** 2, range(10))
+    await c.scatter(y)
+    for x in range(2):
+        v = c.map(lambda i: i * np.random.randint(1000), y)
+        k = c.map(lambda i: i * np.random.randint(1000), v)
+        foo = c.map(lambda j: j * 6, k)
+        step = c.compute(foo)
+        c.gather(step)
+    await c.retire_workers(workers=[a.address])
