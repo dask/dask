@@ -2533,8 +2533,11 @@ def repartition_size(bag, size):
 
 
 def total_mem_usage(bag):
+    print("total_mem_usage")
     if isinstance(bag, chain):
         bag = list(bag)
+        print(bag)
+        print(sizeof(bag))
     return sizeof(bag)
 
 

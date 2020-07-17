@@ -26,7 +26,6 @@ from dask.bag.core import (
     inline_singleton_lists,
     optimize,
     from_delayed,
-    total_mem_usage,
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
@@ -648,7 +647,7 @@ def test_read_text_large():
 def test_read_text_encoding():
     with tmpfile() as fn:
         with open(fn, "wb") as f:
-            f.write((u"你好！" + os.linesep).encode("gb18030") * 100)
+            f.write(("你好！" + os.linesep).encode("gb18030") * 100)
         b = db.read_text(fn, blocksize=100, encoding="gb18030")
         c = db.read_text(fn, encoding="gb18030")
         assert len(b.dask) > 5
@@ -684,11 +683,11 @@ def test_from_s3():
     pytest.importorskip("s3fs")
 
     five_tips = (
-        u"total_bill,tip,sex,smoker,day,time,size\n",
-        u"16.99,1.01,Female,No,Sun,Dinner,2\n",
-        u"10.34,1.66,Male,No,Sun,Dinner,3\n",
-        u"21.01,3.5,Male,No,Sun,Dinner,3\n",
-        u"23.68,3.31,Male,No,Sun,Dinner,2\n",
+        "total_bill,tip,sex,smoker,day,time,size\n",
+        "16.99,1.01,Female,No,Sun,Dinner,2\n",
+        "10.34,1.66,Male,No,Sun,Dinner,3\n",
+        "21.01,3.5,Male,No,Sun,Dinner,3\n",
+        "23.68,3.31,Male,No,Sun,Dinner,2\n",
     )
 
     # test compressed data
@@ -948,7 +947,7 @@ def test_to_textfiles_name_function_warn():
 
 
 def test_to_textfiles_encoding():
-    b = db.from_sequence([u"汽车", u"苹果", u"天气"], npartitions=2)
+    b = db.from_sequence(["汽车", "苹果", "天气"], npartitions=2)
     for ext, myopen in ext_open:
         with tmpdir() as dir:
             c = b.to_textfiles(
@@ -961,7 +960,7 @@ def test_to_textfiles_encoding():
             text = f.read()
             if hasattr(text, "decode"):
                 text = text.decode("gb18030")
-            assert u"天气" in text
+            assert "天气" in text
             f.close()
 
 
@@ -1012,12 +1011,12 @@ def test_string_namespace():
 
 
 def test_string_namespace_with_unicode():
-    b = db.from_sequence([u"Alice Smith", u"Bob Jones", "Charlie Smith"], npartitions=2)
+    b = db.from_sequence(["Alice Smith", "Bob Jones", "Charlie Smith"], npartitions=2)
     assert list(b.str.lower()) == ["alice smith", "bob jones", "charlie smith"]
 
 
 def test_str_empty_split():
-    b = db.from_sequence([u"Alice Smith", u"Bob Jones", "Charlie Smith"], npartitions=2)
+    b = db.from_sequence(["Alice Smith", "Bob Jones", "Charlie Smith"], npartitions=2)
     assert list(b.str.split()) == [
         ["Alice", "Smith"],
         ["Bob", "Jones"],
@@ -1066,7 +1065,7 @@ def test_bag_class_extend():
 
 
 def test_gh715():
-    bin_data = u"\u20ac".encode("utf-8")
+    bin_data = "\u20ac".encode("utf-8")
     with tmpfile() as fn:
         with open(fn, "wb") as f:
             f.write(bin_data)
@@ -1174,17 +1173,20 @@ def test_repartition_npartitions(nin, nout):
     assert all(results)
 
 
-@pytest.mark.parametrize("nin, partition_size, nout", [
-    (1, 100, 10),
-    (2, 100, 10),
-    (5, 100, 10),
-    (1, 200, 5),
-    (2, 200, 5),
-    (5, 200, 5),
-    (1, 500, 5),
-    (2, 500, 2),
-    (5, 500, 2)
-])
+@pytest.mark.parametrize(
+    "nin, partition_size, nout",
+    [
+        (1, 100, 10),
+        (2, 100, 10),
+        (5, 100, 10),
+        (1, 200, 5),
+        (2, 200, 5),
+        (5, 200, 5),
+        (1, 500, 5),
+        (2, 500, 2),
+        (5, 500, 2),
+    ],
+)
 def test_repartition_partition_size(nin, partition_size, nout):
     b = db.from_sequence(range(100), npartitions=nin)  # 1008 bytes
     c = b.repartition(partition_size=partition_size)
@@ -1211,6 +1213,11 @@ def test_multiple_repartition_partition_size():
 
 def test_repartition_partition_size_complex_dtypes():
     import numpy as np
+    from dask.sizeof import sizeof
+
+    print(
+        f"size of list of numpy arrays: {sizeof([np.array(range(100)), np.array(range(100))])}"
+    )
 
     b = db.from_sequence(
         [np.array(range(100)), np.array(range(100))], npartitions=1
