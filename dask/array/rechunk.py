@@ -8,6 +8,7 @@ The rechunk module defines:
 import math
 import heapq
 from functools import reduce
+from typing import Union
 
 from itertools import product, chain, count
 from operator import getitem, add, mul, itemgetter
@@ -662,3 +663,71 @@ def format_plan(plan):
     [(3*[10], 2*[15]), ([30], 3*[10])]
     """
     return [format_chunks(c) for c in plan]
+
+
+def _get_chunks(n, chunksize):
+    leftover = n % chunksize
+    n_chunks = n // chunksize
+
+    chunks = [chunksize] * n_chunks
+    if leftover:
+        chunks.append(leftover)
+    return tuple(chunks)
+
+
+def even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
+    """
+    Find a chunk size that splits an array into even sized chunks.
+
+    Parameters
+    ----------
+    N : int
+        Length of the array
+    n_chunks : int, float.
+        Approximate number of chunks for the array
+
+    Returns
+    -------
+    chunksize : int
+        The chunksize for the array. When an array is chunked with this
+        chunksize,
+
+        * The length of every chunk will be approximately the same.
+        * The number of chunks will be approximately ``n_chunks`` (within one).
+
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import dask.array as da
+    >>> x = np.arange(5030)
+    >>> chunksize = da.even_chunksize(len(x), 16)
+    >>> y = da.from_array(x, chunks=chunksize)
+    >>> y.chunks
+    ((296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 294),)
+    >>> len(y.chunks[0])
+    17
+
+    """
+    min_chunks = int(n_chunks) - 1
+    max_chunks = int(n_chunks) + 1
+    _n_chunks = np.arange(min_chunks, max_chunks + 1)
+    chunk_sizes = N / _n_chunks
+
+    possible_chunks = {int(c): _get_chunks(N, int(c)) for c in chunk_sizes}
+    possible_chunks.update(
+        {int(c + 1): _get_chunks(N, int(c + 1)) for c in chunk_sizes}
+    )
+    valid_chunks = {
+        size: chunks
+        for size, chunks in possible_chunks.items()
+        if abs(n_chunks - len(chunks)) <= 1
+    }
+    if not len(valid_chunks):
+        return N // n_chunks
+
+    diffs = {
+        chunksize: max(chunks) - min(chunks)
+        for chunksize, chunks in valid_chunks.items()
+    }
+    best_chunksize = min(diffs, key=diffs.get)
+    return best_chunksize

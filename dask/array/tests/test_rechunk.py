@@ -777,3 +777,17 @@ def test_rechunk_bad_keys():
         x.rechunk({-100: 4})
 
     assert "-100" in str(info.value)
+
+
+@pytest.mark.parametrize("arr_len", [201, 104, 531, 5030, 2031])
+@pytest.mark.parametrize("n_chunks", [3, 9, 13, 19, 11])
+def test_even_chunksize(arr_len, n_chunks):
+    x = np.arange(arr_len)
+    chunksize = da.even_chunksize(len(x), n_chunks)
+    y = da.from_array(x, chunks=chunksize)
+    chunks = y.chunks[0]
+    assert sum(chunks) == arr_len
+    assert np.median(chunks) == chunksize
+    assert abs(n_chunks - len(chunks)) <= 1
+    assert max(chunks) <= 2 * min(chunks) + 6
+    # "+ 6" for the case when every chunk is small

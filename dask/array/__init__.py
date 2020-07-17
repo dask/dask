@@ -219,7 +219,7 @@ try:
     from .overlap import map_overlap
     from .wrap import ones, zeros, empty, full
     from .creation import ones_like, zeros_like, empty_like, full_like
-    from .rechunk import rechunk
+    from .rechunk import rechunk, even_chunksize
     from ..base import compute
     from .optimization import optimize
     from .creation import (
