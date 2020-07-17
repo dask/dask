@@ -545,7 +545,7 @@ def gradient(f, *varargs, **kwargs):
                 raise ValueError(
                     "Chunk size must be larger than edge_order + 1. "
                     "Minimum chunk for axis {} is {}. Rechunk to "
-                    "proceed.".format(np.min(c), ax)
+                    "proceed.".format(ax, np.min(c))
                 )
 
         if np.isscalar(varargs[i]):
