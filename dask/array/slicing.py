@@ -135,9 +135,9 @@ def slice_array(out_name, in_name, blockdims, index):
     This function works by successively unwrapping cases and passing down
     through a sequence of functions.
 
-    slice_with_newaxis - handle None/newaxis case
-    slice_wrap_lists - handle fancy indexing with lists
-    slice_slices_and_integers - handle everything else
+    slice_with_newaxis : handle None/newaxis case
+    slice_wrap_lists : handle fancy indexing with lists
+    slice_slices_and_integers : handle everything else
     """
     blockdims = tuple(map(tuple, blockdims))
 
