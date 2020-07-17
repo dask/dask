@@ -1,6 +1,25 @@
 Changelog
 =========
 
+2.21.0 - 2020-07-17
+-------------------
+
+- Fix data replication error (:pr:`3963`) `Andrew Fulton`_
+- Treat falsey local directory as ``None`` (:pr:`3964`) `Tom Augspurger`_
+- Unpin ``numpydoc`` now that 1.1 is released (:pr:`3957`) `Gil Forsyth`_
+- Error hard when Dask has mismatched versions or lz4 installed (:pr:`3936`) `Matthew Rocklin`_
+- Skip coercing to ``bytes`` in ``merge_frames`` (:pr:`3960`) `jakirkham`_
+- UCX: reuse endpoints in order to fix NVLINK issue (:pr:`3953`) `Mads R. B. Kristensen`_
+- Optionally use ``pickle5`` (:pr:`3849`) `jakirkham`_
+- Update time per task chart with filtering and pie (:pr:`3933`) `Benjamin Zaitlen`_
+- UCX: explicit shutdown message (:pr:`3950`) `Mads R. B. Kristensen`_
+- Avoid too aggressive retry of connections (:pr:`3944`) `Matthias Bussonnier`_
+- Parse timeouts in ``Client.sync`` (:pr:`3952`) `Matthew Rocklin`_
+- Synchronize on non-trivial CUDA frame transmission (:pr:`3949`) `jakirkham`_
+- Serialize ``memoryview`` with ``shape`` and ``format`` (:pr:`3947`) `jakirkham`_
+- Move ``scheduler_comm`` into ``Cluster.__init__`` (:pr:`3945`) `Matthew Rocklin`_
+
+
 2.20.0 - 2020-07-02
 -------------------
 
@@ -1844,3 +1863,4 @@ significantly without many new features.
 .. _`Julien Jerphanion`: https://github.com/jjerphan
 .. _`joshreback`: https://github.com/joshreback
 .. _`Alexander Clausen`: https://github.com/sk1p
+.. _`Andrew Fulton`: https://github.com/andrewfulton9
