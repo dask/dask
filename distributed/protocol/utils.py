@@ -58,34 +58,36 @@ def merge_frames(header, frames):
     [b'123456']
     """
     lengths = list(header["lengths"])
+    frames = list(map(memoryview, frames))
 
     assert sum(lengths) == sum(map(nbytes, frames))
 
-    if all(len(f) == l for f, l in zip(frames, lengths)):
-        return frames
+    if not all(len(f) == l for f, l in zip(frames, lengths)):
+        frames = frames[::-1]
+        lengths = lengths[::-1]
 
-    frames = frames[::-1]
-    lengths = lengths[::-1]
-
-    out = []
-    while lengths:
-        l = lengths.pop()
-        L = []
-        while l:
-            frame = frames.pop()
-            if nbytes(frame) <= l:
-                L.append(frame)
-                l -= nbytes(frame)
+        out = []
+        while lengths:
+            l = lengths.pop()
+            L = []
+            while l:
+                frame = frames.pop()
+                if nbytes(frame) <= l:
+                    L.append(frame)
+                    l -= nbytes(frame)
+                else:
+                    L.append(frame[:l])
+                    frames.append(frame[l:])
+                    l = 0
+            if len(L) == 1:  # no work necessary
+                out.append(L[0])
             else:
-                mv = memoryview(frame)
-                L.append(mv[:l])
-                frames.append(mv[l:])
-                l = 0
-        if len(L) == 1:  # no work necessary
-            out.extend(L)
-        else:
-            out.append(b"".join(L))
-    return out
+                out.append(memoryview(bytearray().join(L)))
+        frames = out
+
+    frames = [memoryview(bytearray(f)) if f.readonly else f for f in frames]
+
+    return frames
 
 
 def pack_frames_prelude(frames):

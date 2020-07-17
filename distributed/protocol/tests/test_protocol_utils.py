@@ -1,18 +1,32 @@
+import pytest
+
 from distributed.protocol.utils import merge_frames, pack_frames, unpack_frames
 from distributed.utils import ensure_bytes
 
 
-def test_merge_frames():
-    result = merge_frames({"lengths": [3, 4]}, [b"12", b"34", b"567"])
-    expected = [b"123", b"4567"]
+@pytest.mark.parametrize(
+    "lengths,frames",
+    [
+        ([3], [b"123"]),
+        ([3, 3], [b"123", b"456"]),
+        ([2, 3, 2], [b"12345", b"67"]),
+        ([5, 2], [b"123", b"45", b"67"]),
+        ([3, 4], [b"12", b"34", b"567"]),
+    ],
+)
+def test_merge_frames(lengths, frames):
+    header = {"lengths": lengths}
+    result = merge_frames(header, frames)
 
+    data = b"".join(frames)
+    expected = []
+    for i in lengths:
+        expected.append(data[:i])
+        data = data[i:]
+
+    assert all(isinstance(f, memoryview) for f in result)
+    assert all(not f.readonly for f in result)
     assert list(map(ensure_bytes, result)) == expected
-
-    b = b"123"
-    assert merge_frames({"lengths": [3]}, [b])[0] is b
-
-    L = [b"123", b"456"]
-    assert merge_frames({"lengths": [3, 3]}, L) is L
 
 
 def test_pack_frames():

@@ -100,6 +100,14 @@ def test_dumps_serialize_numpy(x):
         np.testing.assert_equal(x, y)
 
 
+def test_dumps_numpy_writable():
+    a1 = np.arange(1000)
+    a1.flags.writeable = False
+    (a2,) = loads(dumps([to_serialize(a1)]))
+    assert (a1 == a2).all()
+    assert a2.flags.writeable
+
+
 @pytest.mark.parametrize(
     "x",
     [
