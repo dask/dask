@@ -779,15 +779,63 @@ def test_rechunk_bad_keys():
     assert "-100" in str(info.value)
 
 
-@pytest.mark.parametrize("arr_len", [201, 104, 531, 5030, 2031])
-@pytest.mark.parametrize("n_chunks", [3, 9, 13, 19, 11])
-def test_even_chunksize(arr_len, n_chunks):
+@pytest.mark.parametrize("arr_len", [1004, 2001, 5301, 7030, 8031])
+@pytest.mark.parametrize("n_chunks", [3, 9, 13, 11, 18])
+@pytest.mark.parametrize("n_chunks_type", ["float", "int"])
+def test_nchunks_basics(arr_len, n_chunks, n_chunks_type):
     x = np.arange(arr_len)
-    chunksize = da.even_chunksize(len(x), n_chunks)
-    y = da.from_array(x, chunks=chunksize)
+    approx_chunksize = arr_len / n_chunks
+    n = n_chunks if n_chunks_type == "int" else n_chunks + 0.5
+    y1 = da.rechunk(da.from_array(x), n_chunks=n_chunks)
+    y2 = da.from_array(x).rechunk(n_chunks=n_chunks)
+    assert np.allclose(y1.compute(), y2.compute())
+    y = y1
     chunks = y.chunks[0]
     assert sum(chunks) == arr_len
-    assert np.median(chunks) == chunksize
-    assert abs(n_chunks - len(chunks)) <= 1
-    assert max(chunks) <= 2 * min(chunks) + 6
-    # "+ 6" for the case when every chunk is small
+    if n_chunks_type == "int":
+        assert n_chunks == len(chunks)
+    else:
+        assert abs(n_chunks - len(chunks)) <= 1
+    assert max(chunks) <= 1.15 * min(chunks) + 1
+
+
+@pytest.mark.parametrize("n_chunks", range(3, 104 + 1))
+def test_nchunks_too_large_nchunks(n_chunks):
+    arr_len = 104
+    approx_chunksize = arr_len / n_chunks
+
+    close_to_even_divisors = [15, 18, 21, 26, 35, 52, 104]
+    if n_chunks >= 14 and n_chunks not in close_to_even_divisors:
+        with pytest.raises(ValueError):
+            y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
+    else:
+        y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
+        assert True
+
+
+def test_nchunks_special_inputs():
+    arr_len = 256
+    x = np.arange(arr_len)
+    y = da.rechunk(da.from_array(x), n_chunks=-1)
+    assert y.chunks == ((256,),)
+
+    y = da.from_array(x).rechunk(n_chunks=-1)
+    assert y.chunks == ((256,),)
+
+
+def test_nchunks_2d():
+    arr_len = 256
+    x = np.arange(arr_len).reshape(64, 4)
+    y = da.from_array(x, chunks=-1).rechunk(n_chunks=(4, -1))
+    assert y.chunks == ((16, 16, 16, 16), (4,))
+
+    x = np.arange(arr_len).reshape(64, 4)
+    y = da.from_array(x, chunks=-1).rechunk(n_chunks=(4, "auto"))
+    assert y.chunks == ((16, 16, 16, 16), (4,))
+
+
+def test_nchunks_simple_input():
+    arr_len = 256
+    x = np.arange(arr_len)
+    y = da.rechunk(da.from_array(x), n_chunks=1)
+    assert y.chunks == ((256,),)

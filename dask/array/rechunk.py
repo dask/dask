@@ -183,7 +183,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
+def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=None):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -201,6 +201,11 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
+    n_chunks : int, float, tuple, optional
+        The number of chunks for each dimension. Integers indicate the exact
+        number of chunks; floats specify the number of chunks can be
+        ``floor(n_chunks)`` or ``ceil(n_chunks)``.  Specification of -1 or
+        "auto" if also valid as per the ``chunk`` documentation above.
 
     Examples
     --------
@@ -221,9 +226,20 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
+    if n_chunks:
+        if isinstance(n_chunks, (int, float)):
+            n_chunks = (n_chunks,) * x.ndim
+
+        chunksizes = [
+            _even_chunksize(s, n_chunk) if n_chunk not in ("auto", -1) else s
+            for s, n_chunk in zip(x.shape, n_chunks)
+        ]
+        return rechunk(x, chunks=chunksizes, threshold=None, block_size_limit=None)
+
     # don't rechunk if array is empty
     if x.ndim > 0 and all(s == 0 for s in x.shape):
         return x
+
     if isinstance(chunks, dict):
         chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
@@ -235,6 +251,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
         chunks, x.shape, limit=block_size_limit, dtype=x.dtype, previous_chunks=x.chunks
     )
 
+    # Now chunks are tuple of tuples
     if chunks == x.chunks:
         return x
     ndim = x.ndim
@@ -675,7 +692,7 @@ def _get_chunks(n, chunksize):
     return tuple(chunks)
 
 
-def even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
+def _even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
     """
     Find a chunk size that splits an array into even sized chunks.
 
@@ -708,22 +725,35 @@ def even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
     17
 
     """
-    min_chunks = int(n_chunks) - 1
-    max_chunks = int(n_chunks) + 1
-    _n_chunks = np.arange(min_chunks, max_chunks + 1)
+    if isinstance(n_chunks, int):
+        min_nchunks = max_nchunks = n_chunks
+        _n_chunks = np.array([n_chunks])
+    elif isinstance(n_chunks, float):
+        min_nchunks = math.floor(n_chunks)
+        max_nchunks = math.ceil(n_chunks)
+        _n_chunks = np.array([min_nchunks, max_nchunks])
+    else:
+        raise TypeError("n_chunks={} is not an int of a float")
     chunk_sizes = N / _n_chunks
+    eps = 0.1
+    min_chunkssize = int((1 - eps) * chunk_sizes.min())
+    max_chunkssize = int((1 + eps) * chunk_sizes.max())
+    chunk_sizes = [int(c) for c in range(min_chunkssize, max_chunkssize + 1) if c >= 1]
+    possible_chunks = {c: _get_chunks(N, c) for c in chunk_sizes}
 
-    possible_chunks = {int(c): _get_chunks(N, int(c)) for c in chunk_sizes}
-    possible_chunks.update(
-        {int(c + 1): _get_chunks(N, int(c + 1)) for c in chunk_sizes}
-    )
     valid_chunks = {
         size: chunks
         for size, chunks in possible_chunks.items()
-        if abs(n_chunks - len(chunks)) <= 1
+        if min_nchunks <= len(chunks) <= max_nchunks
     }
     if not len(valid_chunks):
-        return N // n_chunks
+        msg = (
+            "With n_chunks={nchunks} and dimension length={N}, the chunk size "
+            "is approximately {chunksize}. It's not possible to evenly divide "
+            "into n_chunks={nchunks} with the accepted tolerance.\n\nTo "
+            "resolve this error, try decreasing n_chunks for a larger chunksize"
+        )
+        raise ValueError(msg.format(nchunks=n_chunks, N=N, chunksize=_n_chunks.min()))
 
     diffs = {
         chunksize: max(chunks) - min(chunks)
