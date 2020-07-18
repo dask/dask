@@ -779,8 +779,8 @@ def test_rechunk_bad_keys():
     assert "-100" in str(info.value)
 
 
-@pytest.mark.parametrize("arr_len", [1004, 2001, 5301, 7030, 8031])
-@pytest.mark.parametrize("n_chunks", [3, 9, 13, 11, 18])
+@pytest.mark.parametrize("arr_len", [1014, 2503, 5321])
+@pytest.mark.parametrize("n_chunks", [3, 9, 13])
 @pytest.mark.parametrize("n_chunks_type", ["float", "int"])
 def test_nchunks_basics(arr_len, n_chunks, n_chunks_type):
     x = np.arange(arr_len)
@@ -799,18 +799,18 @@ def test_nchunks_basics(arr_len, n_chunks, n_chunks_type):
     assert max(chunks) <= 1.15 * min(chunks) + 1
 
 
-@pytest.mark.parametrize("n_chunks", range(3, 104 + 1))
-def test_nchunks_too_large_nchunks(n_chunks):
+def test_nchunks_too_large_nchunks():
     arr_len = 104
-    approx_chunksize = arr_len / n_chunks
-
     close_to_even_divisors = [15, 18, 21, 26, 35, 52, 104]
-    if n_chunks >= 14 and n_chunks not in close_to_even_divisors:
-        with pytest.raises(ValueError):
+
+    for n_chunks in range(1, arr_len + 1):
+        approx_chunksize = arr_len / n_chunks
+        if n_chunks <= 13 or n_chunks in close_to_even_divisors:
             y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
-    else:
-        y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
-        assert True
+            assert len(y.chunks[0]) == n_chunks
+        else:
+            with pytest.raises(ValueError):
+                y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
 
 
 def test_nchunks_special_inputs():
