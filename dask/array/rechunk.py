@@ -725,12 +725,14 @@ def _even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
     17
 
     """
+    if n_chunks <= 1:
+        return N
     if isinstance(n_chunks, int):
         min_nchunks = max_nchunks = n_chunks
         _n_chunks = np.array([n_chunks])
     elif isinstance(n_chunks, float):
-        min_nchunks = math.floor(n_chunks)
-        max_nchunks = math.ceil(n_chunks)
+        min_nchunks = max(1, math.floor(n_chunks))
+        max_nchunks = max(1, math.ceil(n_chunks))
         _n_chunks = np.array([min_nchunks, max_nchunks])
     else:
         raise TypeError("n_chunks={} is not an int of a float")
