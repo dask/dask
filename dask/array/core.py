@@ -2194,7 +2194,9 @@ class Array(DaskMethodsMixin):
 
         return squeeze(self, axis)
 
-    def rechunk(self, chunks="auto", threshold=None, block_size_limit=None, n_chunks=None):
+    def rechunk(
+        self, chunks="auto", threshold=None, block_size_limit=None, n_chunks=None
+    ):
         """ See da.rechunk for docstring """
         from . import rechunk  # avoid circular import
 

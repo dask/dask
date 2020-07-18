@@ -784,8 +784,6 @@ def test_rechunk_bad_keys():
 @pytest.mark.parametrize("n_chunks_type", ["float", "int"])
 def test_nchunks_basics(arr_len, n_chunks, n_chunks_type):
     x = np.arange(arr_len)
-    approx_chunksize = arr_len / n_chunks
-    n = n_chunks if n_chunks_type == "int" else n_chunks + 0.5
     y1 = da.rechunk(da.from_array(x), n_chunks=n_chunks)
     y2 = da.from_array(x).rechunk(n_chunks=n_chunks)
     assert np.allclose(y1.compute(), y2.compute())
@@ -804,7 +802,6 @@ def test_nchunks_too_large_nchunks():
     close_to_even_divisors = [15, 18, 21, 26, 35, 52, 104]
 
     for n_chunks in range(1, arr_len + 1):
-        approx_chunksize = arr_len / n_chunks
         if n_chunks <= 13 or n_chunks in close_to_even_divisors:
             y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
             assert len(y.chunks[0]) == n_chunks
