@@ -26,6 +26,7 @@ from dask.bag.core import (
     inline_singleton_lists,
     optimize,
     from_delayed,
+    total_mem_usage,
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
@@ -1174,59 +1175,42 @@ def test_repartition_npartitions(nin, nout):
 
 
 @pytest.mark.parametrize(
-    "nin, partition_size, nout",
-    [
-        (1, 100, 10),
-        (2, 100, 10),
-        (5, 100, 10),
-        (1, 200, 5),
-        (2, 200, 5),
-        (5, 200, 5),
-        (1, 500, 5),
-        (2, 500, 2),
-        (5, 500, 2),
-    ],
+    "nin, nout",
+    [(1, 1), (2, 1), (5, 1), (1, 2), (2, 2), (5, 2), (1, 5), (2, 5), (5, 5),],
 )
-def test_repartition_partition_size(nin, partition_size, nout):
-    b = db.from_sequence(range(100), npartitions=nin)  # 1008 bytes
-    c = b.repartition(partition_size=partition_size)
+def test_repartition_partition_size(nin, nout):
+    b = db.from_sequence(range(100), npartitions=nin)
+    total_mem = sum(b.map_partitions(total_mem_usage).compute())
+    c = b.repartition(partition_size=(total_mem // nout))
     assert c.npartitions >= nout
     assert_eq(b, c)
-    results = dask.get(c.dask, c.__dask_keys__())
-    assert all(results)
 
 
 def test_multiple_repartition_partition_size():
-    b = db.from_sequence(range(100), npartitions=1)  # 1008 bytes
-    c = b.repartition(partition_size=500)
+    b = db.from_sequence(range(100), npartitions=1)
+    total_mem = sum(b.map_partitions(total_mem_usage).compute())
+    c = b.repartition(partition_size=(total_mem // 2))
     assert c.npartitions >= 2
     assert_eq(b, c)
-    results = dask.get(c.dask, c.__dask_keys__())
-    assert all(results)
 
-    d = c.repartition(partition_size=200)
+    d = c.repartition(partition_size=(total_mem // 5))
     assert d.npartitions >= 5
     assert_eq(c, d)
-    results = dask.get(d.dask, d.__dask_keys__())
-    assert all(results)
 
 
 def test_repartition_partition_size_complex_dtypes():
     import numpy as np
-    from dask.sizeof import sizeof
 
-    print(
-        f"size of list of numpy arrays: {sizeof([np.array(range(100)), np.array(range(100))])}"
-    )
+    b = db.from_sequence([np.array(range(100)) for _ in range(4)], npartitions=1)
+    total_mem = sum(b.map_partitions(total_mem_usage).compute())
+    print(total_mem)
 
-    b = db.from_sequence(
-        [np.array(range(100)), np.array(range(100))], npartitions=1
-    )  # 1680 bytes
-    c = b.repartition(partition_size=1000)
-    assert c.npartitions >= 2
+    new_partition_size = total_mem // 4
+    c = b.repartition(partition_size=new_partition_size)
+    assert c.npartitions >= 4
+    mem_usages = c.map_partitions(total_mem_usage).compute()
+    assert max(mem_usages) < new_partition_size
     assert_eq(b, c)
-    results = dask.get(c.dask, c.__dask_keys__())
-    assert all(results)
 
 
 def test_repartition_names():
