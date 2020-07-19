@@ -178,7 +178,7 @@ def test_pivot_table(values, aggfunc):
             "A": np.random.choice(list("XYZ"), size=100),
             "B": np.random.randn(100),
             "C": pd.Categorical(np.random.choice(list("abc"), size=100)),
-            "D": np.random.randn(100)
+            "D": np.random.randn(100),
         }
     )
     ddf = dd.from_pandas(df, 5)

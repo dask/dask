@@ -3,9 +3,10 @@ import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
-from .utils import is_categorical_dtype, is_scalar, is_list_like, has_known_categories
+from .utils import is_categorical_dtype, is_scalar, has_known_categories
 from ..utils import M
 import sys
+from pandas.api.types import is_list_like
 
 ###############################################################
 # Dummies
@@ -221,7 +222,11 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             "`df[columns].cat.as_known()` beforehand to ensure "
             "known categories"
         )
-    if not (is_list_like(values) and all([is_scalar(v) for v in values]) or is_scalar(values)):
+    if not (
+        is_list_like(values)
+        and all([is_scalar(v) for v in values])
+        or is_scalar(values)
+    ):
         raise ValueError("'values' must be refer to existing an column or columns")
     if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
         raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
@@ -230,7 +235,9 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
     if is_scalar(values):
         new_columns = columns_contents
     else:
-        new_columns = pd.MultiIndex.from_product((values, columns_contents), names=[None, columns])
+        new_columns = pd.MultiIndex.from_product(
+            (values, columns_contents), names=[None, columns]
+        )
 
     meta = pd.DataFrame(
         columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
