@@ -226,9 +226,9 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
     if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
         raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
 
-    columns_contents = df[columns].cat.categories
+    columns_contents = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
     if is_scalar(values):
-        new_columns = pd.CategoricalIndex(columns_contents, name=columns)
+        new_columns = columns_contents
     else:
         new_columns = pd.MultiIndex.from_product((values, columns_contents), names=[None, columns])
 
