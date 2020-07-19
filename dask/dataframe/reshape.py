@@ -248,24 +248,24 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             chunk_kwargs=kwargs,
         )
 
-    # if aggfunc in ["count", "mean"]:
-    #     pv_count = apply_concat_apply(
-    #         [df],
-    #         chunk=methods.pivot_count,
-    #         aggregate=methods.pivot_agg,
-    #         meta=meta,
-    #         token="pivot_table_count",
-    #         chunk_kwargs=kwargs,
-    #     )
+    if aggfunc in ["count", "mean"]:
+        pv_count = apply_concat_apply(
+            [df],
+            chunk=methods.pivot_count,
+            aggregate=methods.pivot_agg,
+            meta=meta,
+            token="pivot_table_count",
+            chunk_kwargs=kwargs,
+        )
 
     if aggfunc == "sum":
         return pv_sum
-    # elif aggfunc == "count":
-    #     return pv_count
-    # elif aggfunc == "mean":
-    #     return pv_sum / pv_count
-    # else:
-    #     raise ValueError
+    elif aggfunc == "count":
+        return pv_count
+    elif aggfunc == "mean":
+        return pv_sum / pv_count
+    else:
+        raise ValueError
 
 
 ###############################################################
