@@ -201,11 +201,13 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=No
     block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
-    n_chunks : int, float, tuple, optional
-        The number of chunks for each dimension. Integers indicate the exact
-        number of chunks; floats specify the number of chunks can be
-        ``floor(n_chunks)`` or ``ceil(n_chunks)``.  Specification of -1 or
-        "auto" if also valid as per the ``chunk`` documentation above.
+    n_chunks : tuple of int/float/str, optional
+        The number of chunks for each dimension. Valid tuple elements are
+        integers, floats and strings. Strings must be valid arguments for
+        ``chunks``; examples "auto" and "100MB".
+
+        If ``x`` has a single dimension and a int/float/string is passed, it's
+        case to a tuple.
 
     Examples
     --------
@@ -225,13 +227,22 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=No
     dimension to attain blocks of a uniform block size
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
-    """
-    if n_chunks:
-        if isinstance(n_chunks, (int, float)):
-            n_chunks = (n_chunks,) * x.ndim
 
+    Splitting evenly into 6 chunks is possible with the following:
+
+    >>> y = x.rechunk(n_chunks=(6, -1))
+    >>> y.chunks
+    ((167, 167, 167, 167, 167, 165), (1000,))
+
+    This is different from the naive solution of using a chunk size of
+    ``1000 // 6``, which has 7 chunks with the last chunk being of length 4.
+
+    """
+    if isinstance(n_chunks, (int, float, str)) and x.ndim == 1:
+        n_chunks = (n_chunks, )
+    if isinstance(n_chunks, tuple):
         chunksizes = [
-            _even_chunksize(s, n_chunk) if n_chunk not in ("auto", -1) else s
+            s if isinstance(n_chunk, str) or s == -1 else _even_chunksize(s, n_chunk)
             for s, n_chunk in zip(x.shape, n_chunks)
         ]
         return rechunk(x, chunks=chunksizes, threshold=None, block_size_limit=None)
