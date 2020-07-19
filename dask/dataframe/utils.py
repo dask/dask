@@ -742,7 +742,7 @@ def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
             )
         elif isinstance(dsk, dd.DataFrame):
             assert "DataFrame" in type(result).__name__, type(result)
-            assert isinstance(dsk.columns, pd.Index), type(dsk.columns)
+            assert isinstance(dsk.columns, (pd.Index, pd.MultiIndex)), type(dsk.columns)
             assert type(dsk._meta) == type(result), type(dsk._meta)
             if check_names:
                 tm.assert_index_equal(dsk.columns, result.columns)
