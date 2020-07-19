@@ -837,6 +837,7 @@ def test_nchunks_simple_input():
     y = da.rechunk(da.from_array(x), n_chunks=1)
     assert y.chunks == ((256,),)
 
+
 def test_nchunks_small_positive():
     arr_len = 256
     x = np.arange(arr_len)

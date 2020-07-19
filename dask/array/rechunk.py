@@ -239,7 +239,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=No
 
     """
     if isinstance(n_chunks, (int, float, str)) and x.ndim == 1:
-        n_chunks = (n_chunks, )
+        n_chunks = (n_chunks,)
     if isinstance(n_chunks, tuple):
         chunksizes = [
             s if isinstance(n_chunk, str) or s == -1 else _even_chunksize(s, n_chunk)
