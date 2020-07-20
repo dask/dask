@@ -34,7 +34,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy
-    python -m ip install --pre pandas==1.1.0rc0
+    python -m pip install --pre pandas==1.1.0rc0
     python -m pip install \
         --no-deps \
         --upgrade \
