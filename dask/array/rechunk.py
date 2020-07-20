@@ -207,7 +207,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=No
         ``chunks``; examples "auto" and "100MB".
 
         If ``x`` has a single dimension and a int/float/string is passed, it's
-        case to a tuple.
+        cast to a tuple.
 
     Examples
     --------
