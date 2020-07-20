@@ -727,13 +727,14 @@ def _even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
     --------
     >>> import numpy as np
     >>> import dask.array as da
+    >>> from dask.array.rechunk import _even_chunksize
     >>> x = np.arange(5030)
-    >>> chunksize = da.even_chunksize(len(x), 16)
+    >>> chunksize = _even_chunksize(len(x), 16)
     >>> y = da.from_array(x, chunks=chunksize)
     >>> y.chunks
-    ((296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 296, 294),)
+    ((315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 305),)
     >>> len(y.chunks[0])
-    17
+    16
 
     """
     if n_chunks <= 1:
