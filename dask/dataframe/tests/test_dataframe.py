@@ -37,6 +37,9 @@ dsk = {
 meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
 
 
 def test_dataframe_doc():
@@ -222,7 +225,18 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
-@pytest.mark.parametrize("npartitions", [1, pytest.param(2, marks=pytest.mark.xfail)])
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        1,
+        pytest.param(
+            2,
+            marks=pytest.mark.xfail(
+                not dd._compat.PANDAS_GT_110, reason="Fixed upstream."
+            ),
+        ),
+    ],
+)
 def test_timezone_freq(npartitions):
     s_naive = pd.Series(pd.date_range("20130101", periods=10))
     s_aware = pd.Series(pd.date_range("20130101", periods=10, tz="US/Eastern"))
@@ -1047,7 +1061,7 @@ def test_value_counts_with_dropna():
     result = ddf.x.value_counts(dropna=False)
     expected = df.x.value_counts(dropna=False)
     assert_eq(result, expected)
-    result2 = ddf.x.value_counts(split_every=2)
+    result2 = ddf.x.value_counts(split_every=2, dropna=False)
     assert_eq(result2, expected)
     assert result._name != result2._name
 
@@ -2522,15 +2536,17 @@ def test_to_timestamp():
     index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
-    assert_eq(ddf.to_timestamp(), df.to_timestamp())
+    assert_eq(ddf.to_timestamp(), df.to_timestamp(), **CHECK_FREQ)
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
+        **CHECK_FREQ
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
+        **CHECK_FREQ
     )
 
 
