@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import meta_from_array, assert_eq
 
 asarrays = [np.asarray]
@@ -23,6 +24,9 @@ except ImportError:
 
 @pytest.mark.parametrize("asarray", asarrays)
 def test_meta_from_array(asarray):
+    if "COO.from_numpy" in str(asarray) and _numpy_120:
+        raise pytest.xfail(reason="sparse-383")
+
     x = np.array(1)
     assert meta_from_array(x, ndim=1).shape == (0,)
 
