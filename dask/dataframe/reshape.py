@@ -227,9 +227,12 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         and all([is_scalar(v) for v in values])
         or is_scalar(values)
     ):
-        raise ValueError("'values' must be refer to existing an column or columns")
+        raise ValueError("'values' must refer to existing column or columns")
     if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
         raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
+
+    # _emulate can't work for empty data
+    # the result must have CategoricalIndex columns
 
     columns_contents = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
     if is_scalar(values):
