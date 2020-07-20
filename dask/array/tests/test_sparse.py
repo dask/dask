@@ -5,7 +5,7 @@ import pytest
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_117
+from dask.array.numpy_compat import _numpy_117, _numpy_120
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
 sparse = pytest.importorskip("sparse")
@@ -22,15 +22,33 @@ functions = [
     lambda x: 2 * x,
     lambda x: x / 2,
     lambda x: x ** 2,
-    lambda x: x + x,
-    lambda x: x * x,
-    lambda x: x[0],
-    lambda x: x[:, 1],
-    lambda x: x[:1, None, 1:3],
+    pytest.param(
+        lambda x: x + x,
+        marks=pytest.mark.xfail(
+            _numpy_120, reason="https://github.com/pydata/sparse/issues/383"
+        ),
+    ),
+    pytest.param(
+        lambda x: x * x, marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838")
+    ),
+    pytest.param(
+        lambda x: x[0], marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838")
+    ),
+    pytest.param(
+        lambda x: x[:, 1], marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838")
+    ),
+    pytest.param(
+        lambda x: x[:1, None, 1:3],
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
-    lambda x: x.sum(),
-    lambda x: x.mean(),
+    pytest.param(
+        lambda x: x.sum(), marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838")
+    ),
+    pytest.param(
+        lambda x: x.mean(), marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838")
+    ),
     lambda x: x.moment(order=0),
     pytest.param(
         lambda x: x.std(),
@@ -44,12 +62,30 @@ functions = [
             reason="fixed in https://github.com/pydata/sparse/pull/243"
         ),
     ),
-    lambda x: x.dot(np.arange(x.shape[-1])),
-    lambda x: x.dot(np.eye(x.shape[-1])),
-    lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
-    lambda x: x.sum(axis=0),
-    lambda x: x.max(axis=0),
-    lambda x: x.sum(axis=(1, 2)),
+    pytest.param(
+        lambda x: x.dot(np.arange(x.shape[-1])),
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
+    pytest.param(
+        lambda x: x.dot(np.eye(x.shape[-1])),
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
+    pytest.param(
+        lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
+    pytest.param(
+        lambda x: x.sum(axis=0),
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
+    pytest.param(
+        lambda x: x.max(axis=0),
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
+    pytest.param(
+        lambda x: x.sum(axis=(1, 2)),
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
     lambda x: x.round(1),
@@ -57,7 +93,10 @@ functions = [
     lambda x: abs(x),
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
-    lambda x: x.rechunk((2, 2, 1)),
+    pytest.param(
+        lambda x: x.rechunk((2, 2, 1)),
+        marks=pytest.mark.xfail(_numpy_120, reason="sparse-3838"),
+    ),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
 ]
