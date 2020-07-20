@@ -726,13 +726,10 @@ def to_csv(
 
     Parameters
     ----------
+    df : dask.DataFrame
+        Data to save
     filename : string
         Path glob indicating the naming scheme for the output files
-    name_function : callable, default None
-        Function accepting an integer (partition index) and producing a
-        string to replace the asterisk in the given filename globstring.
-        Should preserve the lexicographic order of partitions. Not
-        supported when `single_file` is `True`.
     single_file : bool, default False
         Whether to save everything into a single CSV file. Under the
         single file mode, each partition is appended at the end of the
@@ -740,74 +737,35 @@ def to_csv(
         append mode and thus the single file mode, especially on cloud
         storage systems such as S3 or GCS. A warning will be issued when
         writing to a file that is not backed by a local filesystem.
-    compression : string or None
-        String like 'gzip' or 'xz'.  Must support efficient random access.
-        Filenames with extensions corresponding to known compression
-        algorithms (gz, bz2) will be compressed accordingly automatically
-    compute: bool
+    encoding : string, optional
+        A string representing the encoding to use in the output file,
+        defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
+    mode : str
+        Python write mode, default 'w'
+    name_function : callable, default None
+        Function accepting an integer (partition index) and producing a
+        string to replace the asterisk in the given filename globstring.
+        Should preserve the lexicographic order of partitions. Not
+        supported when `single_file` is `True`.
+    compression : string, optional
+        a string representing the compression to use in the output file,
+        allowed values are 'gzip', 'bz2', 'xz',
+        only used when the first argument is a filename
+    compute : bool
         If true, immediately executes. If False, returns a set of delayed
         objects, which can be computed at a later time.
-    sep : character, default ','
-        Field delimiter for the output file
-    na_rep : string, default ''
-        Missing data representation
-    float_format : string, default None
-        Format string for floating point numbers
-    columns : sequence, optional
-        Columns to write
-    header : boolean or list of string, default True
-        Write out column names. If a list of string is given it is assumed
-        to be aliases for the column names
+    storage_options : dict
+        Parameters passed on to the backend filesystem class.
     header_first_partition_only : boolean, default None
         If set to `True`, only write the header row in the first output
         file. By default, headers are written to all partitions under
         the multiple file mode (`single_file` is `False`) and written
         only once under the single file mode (`single_file` is `True`).
         It must not be `False` under the single file mode.
-    index : boolean, default True
-        Write row names (index)
-    index_label : string or sequence, or False, default None
-        Column label for index column(s) if desired. If None is given, and
-        `header` and `index` are True, then the index names are used. A
-        sequence should be given if the DataFrame uses MultiIndex.  If
-        False do not print fields for index names. Use index_label=False
-        for easier importing in R
-    nanRep : None
-        deprecated, use na_rep
-    mode : str
-        Python write mode, default 'w'
-    encoding : string, optional
-        A string representing the encoding to use in the output file,
-        defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
-    compression : string, optional
-        a string representing the compression to use in the output file,
-        allowed values are 'gzip', 'bz2', 'xz',
-        only used when the first argument is a filename
-    line_terminator : string, default '\\n'
-        The newline character or character sequence to use in the output
-        file
-    quoting : optional constant from csv module
-        defaults to csv.QUOTE_MINIMAL
-    quotechar : string (length 1), default '\"'
-        character used to quote fields
-    doublequote : boolean, default True
-        Control quoting of `quotechar` inside a field
-    escapechar : string (length 1), default None
-        character used to escape `sep` and `quotechar` when appropriate
-    chunksize : int or None
-        rows to write at a time
-    tupleize_cols : boolean, default False
-        write multi_index columns as a list of tuples (if True)
-        or new (expanded format) if False)
-    date_format : string, default None
-        Format string for datetime objects
-    decimal: string, default '.'
-        Character recognized as decimal separator. E.g. use ',' for
-        European data
-    storage_options: dict
-        Parameters passed on to the backend filesystem class.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
+    kwargs : dict, optional
+        Additional parameters to pass to `pd.DataFrame.to_csv()`
 
     Returns
     -------
