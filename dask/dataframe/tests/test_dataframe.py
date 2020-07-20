@@ -399,12 +399,48 @@ def test_describe_numeric(method, test_values):
         (None, None, None, ["c", "d", "g"]),  # numeric + bool
         (None, None, None, ["c", "d", "f", "g"]),  # numeric + bool + timedelta
         (None, None, None, ["f", "g"]),  # bool + timedelta
-        ("all", None, None, None),
-        (["number"], None, [0.25, 0.5], None),
-        ([np.timedelta64], None, None, None),
-        (["number", "object"], None, [0.25, 0.75], None),
-        (None, ["number", "object"], None, None),
-        (["object", "datetime", "bool"], None, None, None),
+        pytest.param(
+            "all",
+            None,
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            ["number"],
+            None,
+            [0.25, 0.5],
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            [np.timedelta64],
+            None,
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            ["number", "object"],
+            None,
+            [0.25, 0.75],
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            None,
+            ["number", "object"],
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            ["object", "datetime", "bool"],
+            None,
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
     ],
 )
 def test_describe(include, exclude, percentiles, subset):
