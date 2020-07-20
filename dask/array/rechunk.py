@@ -749,7 +749,7 @@ def _even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
     else:
         raise TypeError("n_chunks={} is not an int of a float")
     chunk_sizes = N / _n_chunks
-    eps = 0.1
+    eps = 0.2
     min_chunkssize = int((1 - eps) * chunk_sizes.min())
     max_chunkssize = int((1 + eps) * chunk_sizes.max())
     chunk_sizes = [int(c) for c in range(min_chunkssize, max_chunkssize + 1) if c >= 1]

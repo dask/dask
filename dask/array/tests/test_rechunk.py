@@ -843,3 +843,8 @@ def test_nchunks_small_positive():
     x = np.arange(arr_len)
     y = da.rechunk(da.from_array(x), n_chunks=0.5)
     assert y.chunks == ((256,),)
+
+def test_nchunks_small_array():
+    x = np.arange(7)
+    y = da.rechunk(da.from_array(x), n_chunks=2)
+    assert y.chunks == ((4, 3,),)
