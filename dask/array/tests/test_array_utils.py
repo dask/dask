@@ -57,7 +57,7 @@ def test_meta_from_array_type_inputs():
         chunks=(5, 5),
         shape=(5, 5),
         meta=np.ndarray,
-        dtype=np.float,
+        dtype=float,
     )
     assert_eq(x, x)
 

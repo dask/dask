@@ -18,7 +18,7 @@ try:
         if (
             not np.allclose(
                 np.divide(0.4, 1, casting="unsafe"),
-                np.divide(0.4, 1, casting="unsafe", dtype=np.float),
+                np.divide(0.4, 1, casting="unsafe", dtype=float),
             )
             or not np.allclose(np.divide(1, 0.5, dtype="i8"), 2)
             or not np.allclose(np.divide(0.4, 1), 0.4)
