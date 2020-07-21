@@ -606,7 +606,7 @@ class Server:
                 break
             else:
                 yield asyncio.sleep(0.05)
-        yield [comm.close() for comm in self._comms]  # then forcefully close
+        yield [comm.close() for comm in list(self._comms)]  # then forcefully close
         for cb in self._ongoing_coroutines:
             cb.cancel()
         for i in range(10):
