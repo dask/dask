@@ -183,7 +183,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=None):
+def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=False):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -201,13 +201,8 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=No
     block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
-    n_chunks : tuple of int/float/str, optional
-        The number of chunks for each dimension. Valid tuple elements are
-        integers, floats and strings. Strings must be valid arguments for
-        ``chunks``; examples "auto" and "100MB".
-
-        If ``x`` has a single dimension and a int/float/string is passed, it's
-        cast to a tuple.
+    balance : bool, default False
+        If True, try to make each chunk to be the same size.
 
     Examples
     --------
@@ -230,23 +225,14 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=No
 
     Splitting evenly into 6 chunks is possible with the following:
 
-    >>> y = x.rechunk(n_chunks=(6, -1))
-    >>> y.chunks
+    >>> z = x.rechunk(chunks=(100//6, -1), balance=True)
+    >>> z.chunks
     ((167, 167, 167, 167, 167, 165), (1000,))
 
-    This is different from the naive solution of using a chunk size of
-    ``1000 // 6``, which has 7 chunks with the last chunk being of length 4.
+    If ``x`` is rechunked with a chunk size of ``100//6``, there will be one
+    chunk that's of size 4.
 
     """
-    if isinstance(n_chunks, (int, float, str)) and x.ndim == 1:
-        n_chunks = (n_chunks,)
-    if isinstance(n_chunks, tuple):
-        chunksizes = [
-            s if isinstance(n_chunk, str) or s == -1 else _even_chunksize(s, n_chunk)
-            for s, n_chunk in zip(x.shape, n_chunks)
-        ]
-        return rechunk(x, chunks=chunksizes, threshold=None, block_size_limit=None)
-
     # don't rechunk if array is empty
     if x.ndim > 0 and all(s == 0 for s in x.shape):
         return x
@@ -268,6 +254,12 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, n_chunks=No
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+
+    if balance:
+        ideal_chunks = tuple(int(np.median(chunk)) for chunk in chunks)
+        even_chunks = tuple(_even_chunksize(N, N // c) for N, c in zip(x.shape, ideal_chunks))
+        chunks = even_chunks
+
     new_shapes = tuple(map(sum, chunks))
 
     for new, old in zip(new_shapes, x.shape):
@@ -774,4 +766,4 @@ def _even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
         for chunksize, chunks in valid_chunks.items()
     }
     best_chunksize = min(diffs, key=diffs.get)
-    return best_chunksize
+    return valid_chunks[best_chunksize]

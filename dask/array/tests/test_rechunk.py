@@ -779,72 +779,10 @@ def test_rechunk_bad_keys():
     assert "-100" in str(info.value)
 
 
-@pytest.mark.parametrize("arr_len", [1014, 2503, 5321])
-@pytest.mark.parametrize("n_chunks", [3, 9, 13])
-@pytest.mark.parametrize("n_chunks_type", ["float", "int"])
-def test_nchunks_basics(arr_len, n_chunks, n_chunks_type):
-    x = np.arange(arr_len)
-    y1 = da.rechunk(da.from_array(x), n_chunks=n_chunks)
-    y2 = da.from_array(x).rechunk(n_chunks=n_chunks)
-    assert np.allclose(y1.compute(), y2.compute())
-    y = y1
-    chunks = y.chunks[0]
-    assert sum(chunks) == arr_len
-    if n_chunks_type == "int":
-        assert n_chunks == len(chunks)
-    else:
-        assert abs(n_chunks - len(chunks)) <= 1
-    assert max(chunks) <= 1.15 * min(chunks) + 1
-
-
-def test_nchunks_too_large_nchunks():
-    arr_len = 104
-    close_to_even_divisors = [15, 18, 21, 26, 35, 52, 104]
-
-    for n_chunks in range(1, arr_len + 1):
-        if n_chunks <= 13 or n_chunks in close_to_even_divisors:
-            y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
-            assert len(y.chunks[0]) == n_chunks
-        else:
-            with pytest.raises(ValueError):
-                y = da.from_array(np.arange(arr_len)).rechunk(n_chunks=n_chunks)
-
-
-def test_nchunks_special_inputs():
-    arr_len = 256
-    x = np.arange(arr_len)
-    y = da.rechunk(da.from_array(x), n_chunks=-1)
-    assert y.chunks == ((256,),)
-
-    y = da.from_array(x).rechunk(n_chunks=-1)
-    assert y.chunks == ((256,),)
-
-
-def test_nchunks_2d():
-    arr_len = 256
-    x = np.arange(arr_len).reshape(64, 4)
-    y = da.from_array(x, chunks=-1).rechunk(n_chunks=(4, -1))
-    assert y.chunks == ((16, 16, 16, 16), (4,))
-
-    x = np.arange(arr_len).reshape(64, 4)
-    y = da.from_array(x, chunks=-1).rechunk(n_chunks=(4, "auto"))
-    assert y.chunks == ((16, 16, 16, 16), (4,))
-
-
-def test_nchunks_simple_input():
-    arr_len = 256
-    x = np.arange(arr_len)
-    y = da.rechunk(da.from_array(x), n_chunks=1)
-    assert y.chunks == ((256,),)
-
-
-def test_nchunks_small_positive():
-    arr_len = 256
-    x = np.arange(arr_len)
-    y = da.rechunk(da.from_array(x), n_chunks=0.5)
-    assert y.chunks == ((256,),)
-
-def test_nchunks_small_array():
-    x = np.arange(7)
-    y = da.rechunk(da.from_array(x), n_chunks=2)
-    assert y.chunks == ((4, 3,),)
+@pytest.mark.parametrize("arr_len", [220])
+def test_balance_basics(arr_len, n_chunks):
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=100, balance=True)
+    unbalanced = x.rechunk(chunks=100, balance=False)
+    assert unbalanced.chunks[0] == (100, 100, 20)
+    assert balanced.chunks[0] == (110, 110)
