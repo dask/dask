@@ -780,7 +780,7 @@ def test_rechunk_bad_keys():
 
 
 @pytest.mark.parametrize("arr_len", [220])
-def test_balance_basics(arr_len, n_chunks):
+def test_balance_basics(arr_len):
     x = da.from_array(np.arange(arr_len))
     balanced = x.rechunk(chunks=100, balance=True)
     unbalanced = x.rechunk(chunks=100, balance=False)
