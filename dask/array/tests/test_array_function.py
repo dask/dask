@@ -3,6 +3,7 @@ import numpy as np
 
 import dask.array as da
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+from dask.array.numpy_compat import _numpy_120
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
@@ -88,6 +89,7 @@ def test_array_function_sparse(func):
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_array_function_sparse_tensordot():
     sparse = pytest.importorskip("sparse")
     x = np.random.random((2, 3, 4))
