@@ -36,7 +36,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
         numpy
     python -m pip install --pre pandas==1.1.0rc0
     python -m pip install \
-        --no-deps \
         --upgrade \
         locket \
         git+https://github.com/pydata/sparse \
