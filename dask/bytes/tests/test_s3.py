@@ -24,7 +24,7 @@ from fsspec.compression import compr
 
 compute = partial(compute, scheduler="sync")
 numpy_120_mark = pytest.mark.xfail(
-    LooseVersion(np.__version__) >= "1.2.0", reason="Upstream incompatibility"
+    LooseVersion(np.__version__) >= "1.20.0", reason="Upstream incompatibility"
 )
 
 
