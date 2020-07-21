@@ -9,7 +9,7 @@ from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_118
+from dask.array.numpy_compat import _numpy_118, _numpy_120
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
@@ -4020,6 +4020,7 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
+@pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Aviod searchsorted failure.
