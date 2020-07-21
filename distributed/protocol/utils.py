@@ -105,12 +105,9 @@ def pack_frames(frames):
     --------
     unpack_frames
     """
-    prelude = [pack_frames_prelude(frames)]
-
-    if not isinstance(frames, list):
-        frames = list(frames)
-
-    return b"".join(prelude + frames)
+    data = [pack_frames_prelude(frames)]
+    data.extend(frames)
+    return b"".join(data)
 
 
 def unpack_frames(b):
@@ -123,14 +120,17 @@ def unpack_frames(b):
     --------
     pack_frames
     """
-    (n_frames,) = struct.unpack("Q", b[:8])
+    fmt = "Q"
+    fmt_size = struct.calcsize(fmt)
+    (n_frames,) = struct.unpack_from(fmt, b)
+    lengths = struct.unpack_from(f"{n_frames}{fmt}", b, fmt_size)
 
     frames = []
-    start = 8 + n_frames * 8
-    for i in range(n_frames):
-        (length,) = struct.unpack("Q", b[(i + 1) * 8 : (i + 2) * 8])
-        frame = b[start : start + length]
+    start = fmt_size * (1 + n_frames)
+    for length in lengths:
+        end = start + length
+        frame = b[start:end]
         frames.append(frame)
-        start += length
+        start = end
 
     return frames
