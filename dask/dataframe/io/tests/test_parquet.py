@@ -8,6 +8,7 @@ import pandas as pd
 import pytest
 
 import dask
+import dask.array as da
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
@@ -15,6 +16,9 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.utils import natural_sort_key, parse_bytes
+
+
+pytestmark = pytest.mark.skipif(da.numpy_compat._numpy_120, reason="Unsupported")
 
 try:
     import fastparquet
@@ -26,7 +30,6 @@ try:
     import pyarrow as pa
 except ImportError:
     check_pa_divs = pa = False
-
 
 try:
     import pyarrow.parquet as pq
