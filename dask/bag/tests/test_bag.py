@@ -1179,7 +1179,7 @@ def test_repartition_npartitions(nin, nout):
     [(1, 1), (2, 1), (5, 1), (1, 2), (2, 2), (5, 2), (1, 5), (2, 5), (5, 5),],
 )
 def test_repartition_partition_size(nin, nout):
-    b = db.from_sequence(range(100), npartitions=nin)
+    b = db.from_sequence(range(1, 100), npartitions=nin)
     total_mem = sum(b.map_partitions(total_mem_usage).compute())
     c = b.repartition(partition_size=(total_mem // nout))
     assert c.npartitions >= nout
@@ -1187,7 +1187,7 @@ def test_repartition_partition_size(nin, nout):
 
 
 def test_multiple_repartition_partition_size():
-    b = db.from_sequence(range(100), npartitions=1)
+    b = db.from_sequence(range(1, 100), npartitions=1)
     total_mem = sum(b.map_partitions(total_mem_usage).compute())
 
     c = b.repartition(partition_size=(total_mem // 2))
