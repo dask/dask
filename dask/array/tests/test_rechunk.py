@@ -779,10 +779,59 @@ def test_rechunk_bad_keys():
     assert "-100" in str(info.value)
 
 
-@pytest.mark.parametrize("arr_len", [220])
-def test_balance_basics(arr_len):
+def test_balance_basics():
+    arr_len = 220
+
     x = da.from_array(np.arange(arr_len))
     balanced = x.rechunk(chunks=100, balance=True)
     unbalanced = x.rechunk(chunks=100, balance=False)
     assert unbalanced.chunks[0] == (100, 100, 20)
     assert balanced.chunks[0] == (110, 110)
+
+
+def test_balance_small():
+    arr_len = 13
+
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=4, balance=True)
+    unbalanced = x.rechunk(chunks=4, balance=False)
+    assert balanced.chunks[0] == (5, 5, 3)
+    assert unbalanced.chunks[0] == (4, 4, 4, 1)
+
+    arr_len = 7
+
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=3, balance=True)
+    unbalanced = x.rechunk(chunks=3, balance=False)
+    assert balanced.chunks[0] == (4, 3)
+    assert unbalanced.chunks[0] == (3, 3, 1)
+
+
+def test_balance_basics_2d():
+    N = 210
+
+    x = da.from_array(np.random.uniform(size=(N, N)))
+    balanced = x.rechunk(chunks=(100, 100), balance=True)
+    unbalanced = x.rechunk(chunks=(100, 100), balance=False)
+    assert unbalanced.chunks == ((100, 100, 10), (100, 100, 10))
+    assert balanced.chunks == ((105, 105), (105, 105))
+
+
+def test_balance_2d_negative_dimension():
+    N = 210
+
+    x = da.from_array(np.random.uniform(size=(N, N)))
+    balanced = x.rechunk(chunks=(100, -1), balance=True)
+    unbalanced = x.rechunk(chunks=(100, -1), balance=False)
+    assert unbalanced.chunks == ((100, 100, 10), (N,))
+    assert balanced.chunks == ((105, 105), (N,))
+
+
+def test_balance_different_inputs():
+    N = 210
+
+    x = da.from_array(np.random.uniform(size=(N, N)))
+    balanced = x.rechunk(chunks=("10MB", -1), balance=True)
+    unbalanced = x.rechunk(chunks=("10MB", -1), balance=False)
+    assert balanced.chunks == unbalanced.chunks
+    assert balanced.chunks[1] == (N,)
