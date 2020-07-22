@@ -227,7 +227,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         and all([is_scalar(v) for v in values])
         or is_scalar(values)
     ):
-        raise ValueError("'values' must refer to existing column or columns")
+        raise ValueError("'values' must refer to an existing column or columns")
     if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
         raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
 
@@ -239,7 +239,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         new_columns = columns_contents
     else:
         new_columns = pd.MultiIndex.from_product(
-            (values, columns_contents), names=[None, columns]
+            (sorted(values), columns_contents), names=[None, columns]
         )
 
     meta = pd.DataFrame(

@@ -251,6 +251,10 @@ def test_pivot_table_errors():
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns=["C"], values="B")
     assert msg in str(err.value)
+    msg = "'values' must refer to an existing column or columns"
+    with pytest.raises(ValueError) as err:
+        dd.pivot_table(ddf, index="A", columns="C", values=[["B"]])
+    assert msg in str(err.value)
 
     msg = "aggfunc must be either 'mean', 'sum' or 'count'"
     with pytest.raises(ValueError) as err:
