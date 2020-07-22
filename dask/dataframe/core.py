@@ -2827,7 +2827,7 @@ Dask Name: {name}, {task} tasks""".format(
                             "isn't monotonic_increasing"
                         )
                         raise ValueError(msg)
-                    res.divisions = tuple(new.tolist())
+                    res.divisions = tuple(methods.to_list(new))
                 else:
                     res = res.clear_divisions()
             if inplace:
@@ -3597,7 +3597,7 @@ class DataFrame(_Frame):
         return iter(self._meta)
 
     def _ipython_key_completions_(self):
-        return self.columns.tolist()
+        return methods.to_list(self.columns)
 
     @property
     def ndim(self):
@@ -4747,7 +4747,7 @@ def elemwise(op, *args, **kwargs):
                 **kwargs,
             )
             if isinstance(divisions, pd.Index):
-                divisions = divisions.tolist()
+                divisions = methods.to_list(divisions)
         except Exception:
             pass
         else:
@@ -5238,7 +5238,7 @@ def map_partitions(
                 *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
             )
             if isinstance(divisions, pd.Index):
-                divisions = divisions.tolist()
+                divisions = methods.to_list(divisions)
         except Exception:
             pass
         else:
@@ -5857,7 +5857,7 @@ def repartition_freq(df, freq=None):
         start = df.divisions[0].ceil(freq)
     except ValueError:
         start = df.divisions[0]
-    divisions = pd.date_range(start=start, end=df.divisions[-1], freq=freq).tolist()
+    divisions = methods.to_list(pd.date_range(start=start, end=df.divisions[-1], freq=freq))
     if not len(divisions):
         divisions = [df.divisions[0], df.divisions[-1]]
     else:
@@ -5965,7 +5965,7 @@ def repartition_npartitions(df, npartitions):
             )
             if np.issubdtype(original_divisions.dtype, np.datetime64):
                 divisions = (
-                    pd.Series(divisions).astype(original_divisions.dtype).tolist()
+                    methods.to_list(pd.Series(divisions).astype(original_divisions.dtype))
                 )
             elif np.issubdtype(original_divisions.dtype, np.integer):
                 divisions = divisions.astype(original_divisions.dtype)
