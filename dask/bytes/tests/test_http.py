@@ -12,10 +12,10 @@ from dask.utils import tmpdir
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
-errs = (requests.exceptions.RequestException, )
+errs = (requests.exceptions.RequestException,)
 if LooseVersion(fsspec.__version__) > "0.7.4":
     aiohttp = pytest.importorskip("aiohttp")
-    errs = errs + (aiohttp.client_exceptions.ClientResponseError, )
+    errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
 
 
 @pytest.fixture(scope="module")
