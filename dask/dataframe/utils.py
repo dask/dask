@@ -295,6 +295,16 @@ def make_meta_index(x, index=None):
     return x[0:0]
 
 
+@make_meta.register(set)
+def make_meta_set(s, index=None):
+    return set()
+
+
+@make_meta.register(list)
+def make_meta_list(s, index=None):
+    return []
+
+
 @make_meta.register(object)
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
