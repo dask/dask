@@ -9,6 +9,7 @@ from ...highlevelgraph import HighLevelGraph
 from .._compat import PANDAS_GT_0240
 from .. import methods
 
+
 def getnanos(rule):
     try:
         return getattr(rule, "nanos", None)

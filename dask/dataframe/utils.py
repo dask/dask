@@ -43,6 +43,7 @@ from ..utils import is_index_like as dask_is_index_like
 from . import _dtypes  # noqa: F401
 from . import methods
 
+
 def is_integer_na_dtype(t):
     dtype = getattr(t, "dtype", t)
     if HAS_INT_NA:

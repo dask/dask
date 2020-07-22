@@ -5857,7 +5857,9 @@ def repartition_freq(df, freq=None):
         start = df.divisions[0].ceil(freq)
     except ValueError:
         start = df.divisions[0]
-    divisions = methods.to_list(pd.date_range(start=start, end=df.divisions[-1], freq=freq))
+    divisions = methods.to_list(
+        pd.date_range(start=start, end=df.divisions[-1], freq=freq)
+    )
     if not len(divisions):
         divisions = [df.divisions[0], df.divisions[-1]]
     else:
@@ -5964,8 +5966,8 @@ def repartition_npartitions(df, npartitions):
                 fp=divisions,
             )
             if np.issubdtype(original_divisions.dtype, np.datetime64):
-                divisions = (
-                    methods.to_list(pd.Series(divisions).astype(original_divisions.dtype))
+                divisions = methods.to_list(
+                    pd.Series(divisions).astype(original_divisions.dtype)
                 )
             elif np.issubdtype(original_divisions.dtype, np.integer):
                 divisions = divisions.astype(original_divisions.dtype)
