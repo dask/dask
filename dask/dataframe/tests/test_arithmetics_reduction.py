@@ -1367,3 +1367,12 @@ def test_empty_df_reductions(func):
     ddf = dd.from_pandas(pdf, npartitions=1)
 
     assert_eq(dsk_func(ddf), pd_func(pdf))
+
+
+def test_dunder_method_mul():
+    df = pd.DataFrame(np.ones((10, 3)), columns=list("BCA"))
+    factors = pd.Series([1, 2, 3], index=list("ABC"))
+
+    ddf = dd.from_pandas(df, 1)
+    ddf_mul = ddf * factors
+    assert list(ddf_mul._meta.columns) == ["A", "B", "C"]
