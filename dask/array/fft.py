@@ -5,6 +5,7 @@ import numpy as np
 
 try:
     import scipy
+    import scipy.fft
     import scipy.fftpack
 except ImportError:
     scipy = None
@@ -214,20 +215,36 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     return func
 
 
-fft = fft_wrap(np.fft.fft)
-fft2 = fft_wrap(np.fft.fft2)
-fftn = fft_wrap(np.fft.fftn)
-ifft = fft_wrap(np.fft.ifft)
-ifft2 = fft_wrap(np.fft.ifft2)
-ifftn = fft_wrap(np.fft.ifftn)
-rfft = fft_wrap(np.fft.rfft)
-rfft2 = fft_wrap(np.fft.rfft2)
-rfftn = fft_wrap(np.fft.rfftn)
-irfft = fft_wrap(np.fft.irfft)
-irfft2 = fft_wrap(np.fft.irfft2)
-irfftn = fft_wrap(np.fft.irfftn)
-hfft = fft_wrap(np.fft.hfft)
-ihfft = fft_wrap(np.fft.ihfft)
+if scipy is None:
+    fft = fft_wrap(np.fft.fft)
+    fft2 = fft_wrap(np.fft.fft2)
+    fftn = fft_wrap(np.fft.fftn)
+    ifft = fft_wrap(np.fft.ifft)
+    ifft2 = fft_wrap(np.fft.ifft2)
+    ifftn = fft_wrap(np.fft.ifftn)
+    rfft = fft_wrap(np.fft.rfft)
+    rfft2 = fft_wrap(np.fft.rfft2)
+    rfftn = fft_wrap(np.fft.rfftn)
+    irfft = fft_wrap(np.fft.irfft)
+    irfft2 = fft_wrap(np.fft.irfft2)
+    irfftn = fft_wrap(np.fft.irfftn)
+    hfft = fft_wrap(np.fft.hfft)
+    ihfft = fft_wrap(np.fft.ihfft)
+else:
+    fft = fft_wrap(scipy.fft.fft)
+    fft2 = fft_wrap(scipy.fft.fft2)
+    fftn = fft_wrap(scipy.fft.fftn)
+    ifft = fft_wrap(scipy.fft.ifft)
+    ifft2 = fft_wrap(scipy.fft.ifft2)
+    ifftn = fft_wrap(scipy.fft.ifftn)
+    rfft = fft_wrap(scipy.fft.rfft)
+    rfft2 = fft_wrap(scipy.fft.rfft2)
+    rfftn = fft_wrap(scipy.fft.rfftn)
+    irfft = fft_wrap(scipy.fft.irfft)
+    irfft2 = fft_wrap(scipy.fft.irfft2)
+    irfftn = fft_wrap(scipy.fft.irfftn)
+    hfft = fft_wrap(scipy.fft.hfft)
+    ihfft = fft_wrap(scipy.fft.ihfft)
 
 
 def _fftfreq_block(i, n, d):
