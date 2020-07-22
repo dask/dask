@@ -676,8 +676,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
 def check_matching_columns(meta, actual):
     # Need nan_to_num otherwise nan comparison gives False
     if not np.array_equal(np.nan_to_num(meta.columns), np.nan_to_num(actual.columns)):
-        extra = methods.to_list(actual.columns.difference(meta.columns))
-        missing = methods.to_list(meta.columns.difference(actual.columns))
+        extra = methods.tolist(actual.columns.difference(meta.columns))
+        missing = methods.tolist(meta.columns.difference(actual.columns))
         if extra or missing:
             extra_info = f"  Extra:   {extra}\n  Missing: {missing}"
         else:
@@ -776,7 +776,7 @@ def _maybe_sort(a):
                 a.index.names = [
                     "-overlapped-index-name-%d" % i for i in range(len(a.index.names))
                 ]
-            a = a.sort_values(by=methods.to_list(a.columns))
+            a = a.sort_values(by=methods.tolist(a.columns))
         else:
             a = a.sort_values()
     except (TypeError, IndexError, ValueError):

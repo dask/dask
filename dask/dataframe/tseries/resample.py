@@ -76,8 +76,8 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     else:
         outdivs = tempdivs
 
-    newdivs = methods.to_list(newdivs)
-    outdivs = methods.to_list(outdivs)
+    newdivs = methods.tolist(newdivs)
+    outdivs = methods.tolist(outdivs)
 
     # Adjust ends
     if newdivs[0] < divisions[0]:

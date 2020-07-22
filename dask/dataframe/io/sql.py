@@ -180,7 +180,7 @@ def read_sql_table(
                 or 1
             )
         if dtype.kind == "M":
-            divisions = methods.to_list(
+            divisions = methods.tolist(
                 pd.date_range(
                     start=mini,
                     end=maxi,

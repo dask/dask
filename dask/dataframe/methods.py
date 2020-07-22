@@ -167,7 +167,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
 
     part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
-    q.index = ["{0:g}%".format(l * 100) for l in to_list(q.index)]
+    q.index = ["{0:g}%".format(l * 100) for l in tolist(q.index)]
     if is_series_like(q) and typ != type(q):
         q = q.to_frame()
     part3 = typ([max], index=["max"])
@@ -540,16 +540,16 @@ def concat_pandas(
     return out
 
 
-to_list_dispatch = Dispatch("to_list")
+tolist_dispatch = Dispatch("tolist")
 
 
-def to_list(obj):
-    func = to_list_dispatch.dispatch(type(obj))
+def tolist(obj):
+    func = tolist_dispatch.dispatch(type(obj))
     return func(obj)
 
 
-@to_list_dispatch.register((pd.Series, pd.Index, pd.Categorical))
-def to_list_pandas(obj):
+@tolist_dispatch.register((pd.Series, pd.Index, pd.Categorical))
+def tolist_pandas(obj):
     return obj.tolist()
 
 

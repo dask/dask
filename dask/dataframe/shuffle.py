@@ -84,7 +84,7 @@ def set_index(
         divisions, sizes, mins, maxes = base.compute(
             divisions, sizes, mins, maxes, optimize_graph=False
         )
-        divisions = methods.to_list(divisions)
+        divisions = methods.tolist(divisions)
 
         empty_dataframe_detected = pd.isnull(divisions).all()
         if repartition or empty_dataframe_detected:
@@ -238,7 +238,7 @@ def set_partition(
             column_dtype=df.columns.dtype,
         )
 
-    df4.divisions = methods.to_list(divisions)
+    df4.divisions = methods.tolist(divisions)
 
     return df4.map_partitions(M.sort_index)
 
