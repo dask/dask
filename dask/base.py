@@ -1004,7 +1004,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     There are various ways to specify the scheduler to use:
 
     1.  Passing in scheduler= parameters
-    2.  Passing these into global confiuration
+    2.  Passing these into global configuration
     3.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use
