@@ -8,7 +8,7 @@ The rechunk module defines:
 import math
 import heapq
 from functools import reduce
-from typing import Union
+from typing import Union, Tuple
 
 from itertools import product, chain, count
 from operator import getitem, add, mul, itemgetter
@@ -257,7 +257,9 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
 
     if balance:
         ideal_chunks = tuple(int(np.median(chunk)) for chunk in chunks)
-        even_chunks = tuple(_even_chunksize(N, N // c) for N, c in zip(x.shape, ideal_chunks))
+        even_chunks = tuple(
+            _even_chunksize(N, N // c) for N, c in zip(x.shape, ideal_chunks)
+        )
         chunks = even_chunks
 
     new_shapes = tuple(map(sum, chunks))
@@ -695,7 +697,7 @@ def _get_chunks(n, chunksize):
     return tuple(chunks)
 
 
-def _even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
+def _even_chunksize(N: int, n_chunks: Union[int, float]) -> Tuple[int, ...]:
     """
     Find a chunk size that splits an array into even sized chunks.
 
@@ -708,29 +710,16 @@ def _even_chunksize(N: int, n_chunks: Union[int, float]) -> int:
 
     Returns
     -------
-    chunksize : int
+    chunksize : Tuple[int, ...]
         The chunksize for the array. When an array is chunked with this
         chunksize,
 
         * The length of every chunk will be approximately the same.
         * The number of chunks will be approximately ``n_chunks`` (within one).
 
-    Examples
-    --------
-    >>> import numpy as np
-    >>> import dask.array as da
-    >>> from dask.array.rechunk import _even_chunksize
-    >>> x = np.arange(5030)
-    >>> chunksize = _even_chunksize(len(x), 16)
-    >>> y = da.from_array(x, chunks=chunksize)
-    >>> y.chunks
-    ((315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 315, 305),)
-    >>> len(y.chunks[0])
-    16
-
     """
     if n_chunks <= 1:
-        return N
+        return (N,)
     if isinstance(n_chunks, int):
         min_nchunks = max_nchunks = n_chunks
         _n_chunks = np.array([n_chunks])
