@@ -67,8 +67,11 @@ def sizeof_python_dict(d):
 
 @sizeof.register(chain)
 def sizeof_itertools_chain(c):
+    from copy import deepcopy
+
+    c2 = deepcopy(c)
     mem = 0
-    for e in c:
+    for e in c2:
         mem += sizeof(e)
     return mem
 

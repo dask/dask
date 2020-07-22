@@ -33,6 +33,9 @@ def test_itertools_chain():
     iterator2 = chain.from_iterable([list(range(20))])
     assert sizeof(iterator2) > sizeof(iterator1)
 
+    iterator1 = chain.from_iterable([list(range(10))])
+    assert sizeof(iterator1) == sizeof(iterator1)
+
 
 def test_numpy():
     np = pytest.importorskip("numpy")

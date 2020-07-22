@@ -1189,6 +1189,7 @@ def test_repartition_partition_size(nin, nout):
 def test_multiple_repartition_partition_size():
     b = db.from_sequence(range(100), npartitions=1)
     total_mem = sum(b.map_partitions(total_mem_usage).compute())
+
     c = b.repartition(partition_size=(total_mem // 2))
     assert c.npartitions >= 2
     assert_eq(b, c)
@@ -1203,7 +1204,6 @@ def test_repartition_partition_size_complex_dtypes():
 
     b = db.from_sequence([np.array(range(100)) for _ in range(4)], npartitions=1)
     total_mem = sum(b.map_partitions(total_mem_usage).compute())
-    print(total_mem)
 
     new_partition_size = total_mem // 4
     c = b.repartition(partition_size=new_partition_size)
