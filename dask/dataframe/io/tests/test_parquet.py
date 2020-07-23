@@ -16,6 +16,7 @@ from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.utils import natural_sort_key, parse_bytes
 
+
 try:
     import fastparquet
 except ImportError:
@@ -26,7 +27,6 @@ try:
     import pyarrow as pa
 except ImportError:
     check_pa_divs = pa = False
-
 
 try:
     import pyarrow.parquet as pq

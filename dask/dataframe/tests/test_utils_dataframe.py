@@ -129,7 +129,7 @@ def test_meta_nonempty():
             "E": np.int32(1),
             "F": pd.Timestamp("2016-01-01"),
             "G": pd.date_range("2016-01-01", periods=3, tz="America/New_York"),
-            "H": pd.Timedelta("1 hours", "ms"),
+            "H": pd.Timedelta("1 hours"),
             "I": np.void(b" "),
             "J": pd.Categorical([UNKNOWN_CATEGORIES] * 3),
         },
@@ -147,7 +147,7 @@ def test_meta_nonempty():
     assert df3["E"][0].dtype == "i4"
     assert df3["F"][0] == pd.Timestamp("1970-01-01 00:00:00")
     assert df3["G"][0] == pd.Timestamp("1970-01-01 00:00:00", tz="America/New_York")
-    assert df3["H"][0] == pd.Timedelta("1", "ms")
+    assert df3["H"][0] == pd.Timedelta("1")
     assert df3["I"][0] == "foo"
     assert df3["J"][0] == UNKNOWN_CATEGORIES
 

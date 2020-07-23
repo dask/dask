@@ -2487,7 +2487,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             is_anchored = offset.isAnchored()
 
-        include_right = is_anchored or not hasattr(offset, "_inc")
+        include_right = is_anchored or not hasattr(offset, "delta")
 
         if end == self.npartitions - 1:
             divs = self.divisions
@@ -4106,7 +4106,7 @@ class DataFrame(_Frame):
             left_index=on is None,
             right_index=True,
             left_on=on,
-            suffixes=[lsuffix, rsuffix],
+            suffixes=(lsuffix, rsuffix),
             npartitions=npartitions,
             shuffle=shuffle,
         )

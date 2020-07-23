@@ -23,6 +23,9 @@ from fsspec.compression import compr
 
 
 compute = partial(compute, scheduler="sync")
+numpy_120_mark = pytest.mark.xfail(
+    LooseVersion(np.__version__) >= "1.20.0", reason="Upstream incompatibility"
+)
 
 
 test_bucket_name = "test"
@@ -385,6 +388,7 @@ def test_modification_time_read_bytes():
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
+@numpy_120_mark
 def test_parquet(s3, engine):
     dd = pytest.importorskip("dask.dataframe")
     from dask.dataframe._compat import tm
@@ -421,6 +425,7 @@ def test_parquet(s3, engine):
     tm.assert_frame_equal(data, df2.compute())
 
 
+@numpy_120_mark
 def test_parquet_wstoragepars(s3):
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip("fastparquet")
