@@ -28,6 +28,7 @@ dependencies:
   - botocore
   - bokeh
   - httpretty
+  - aiohttp
   - chest
   - s3fs
   - cloudpickle
