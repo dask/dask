@@ -26,6 +26,7 @@ dependencies:
   - blosc
   - boto3
   - botocore
+  - aiohttp
   - bokeh
   - httpretty
   - chest
