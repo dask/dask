@@ -9,6 +9,7 @@ from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
+import dask.bag as db
 from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.dataframe import _compat
@@ -4308,3 +4309,21 @@ def test_dataframe_groupby_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum())
+
+
+def test_create_bag_set():
+    s = pd.Series(range(10))
+    ds = dd.from_pandas(s, npartitions=3)
+    b = (ds % 3).map_partitions(set)
+    assert isinstance(b, db.Bag)
+    L = b.distinct().compute(scheduler="sync")
+    assert len(L) == 3
+    assert set(L) == {0, 1, 2}
+
+
+def test_create_bag_list():
+    s = pd.Series(range(10))
+    ds = dd.from_pandas(s, npartitions=3)
+    b = ds.map_partitions(list)
+    assert isinstance(b, db.Bag)
+    assert b.compute(scheduler="sync") == list(range(10))
