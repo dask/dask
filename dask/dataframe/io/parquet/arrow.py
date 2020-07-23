@@ -7,7 +7,6 @@ from distutils.version import LooseVersion
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from pyarrow.compat import guid
 from ....utils import natural_sort_key, getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
@@ -202,7 +201,9 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
     return parts, dataset
 
 
-def _write_partitioned(table, root_path, filename, partition_cols, fs, index_cols=(), **kwargs):
+def _write_partitioned(
+    table, root_path, filename, partition_cols, fs, index_cols=(), **kwargs
+):
     """ Write table to a partitioned dataset with pyarrow.
 
         Logic copied from pyarrow.parquet.

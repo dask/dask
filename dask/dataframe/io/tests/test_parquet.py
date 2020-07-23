@@ -1088,6 +1088,7 @@ def test_partition_on(tmpdir, engine):
     for val in df.a2.unique():
         assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
 
+
 def test_partition_on_duplicates(tmpdir, engine):
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
@@ -1102,11 +1103,10 @@ def test_partition_on_duplicates(tmpdir, engine):
     for _ in range(2):
         d.to_parquet(tmpdir, partition_on=["a1", "a2"], engine=engine)
 
-    out = dd.read_parquet(
-        tmpdir, engine=engine
-    ).compute()
+    out = dd.read_parquet(tmpdir, engine=engine).compute()
 
     assert len(df) == len(out)
+
 
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
 def test_partition_on_string(tmpdir, partition_on):
