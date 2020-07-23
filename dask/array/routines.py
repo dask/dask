@@ -663,7 +663,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     ----------
     a : array_like
         Input data. The histogram is computed over the flattened array.
-    bins : int or sequence of scalars or str, optional
+    bins : int or sequence of scalars, optional
         Either an iterable specifying the ``bins`` or the number of ``bins``
         and a ``range`` argument is required as computing ``min`` and ``max``
         over blocked arrays is an expensive operation that must be performed
