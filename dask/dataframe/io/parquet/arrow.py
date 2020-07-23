@@ -202,7 +202,7 @@ def _determine_dataset_parts(fs, paths, gather_statistics, filters, dataset_kwar
     return parts, dataset
 
 
-def _write_partitioned(table, root_path, partition_cols, fs, index_cols=(), **kwargs):
+def _write_partitioned(table, root_path, filename, partition_cols, fs, index_cols=(), **kwargs):
     """ Write table to a partitioned dataset with pyarrow.
 
         Logic copied from pyarrow.parquet.
@@ -246,11 +246,10 @@ def _write_partitioned(table, root_path, partition_cols, fs, index_cols=(), **kw
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdir(prefix, exists_ok=True)
-        outfile = guid() + ".parquet"
-        full_path = fs.sep.join([prefix, outfile])
+        full_path = fs.sep.join([prefix, filename])
         with fs.open(full_path, "wb") as f:
             pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
-        md_list[-1].set_file_path(fs.sep.join([subdir, outfile]))
+        md_list[-1].set_file_path(fs.sep.join([subdir, filename]))
 
     return md_list
 
@@ -753,7 +752,7 @@ class ArrowEngine(Engine):
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
             md_list = _write_partitioned(
-                t, path, partition_on, fs, index_cols=index_cols, **kwargs
+                t, path, filename, partition_on, fs, index_cols=index_cols, **kwargs
             )
             if md_list:
                 _meta = md_list[0]
