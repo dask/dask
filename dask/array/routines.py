@@ -672,9 +672,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         bins in the given range (10, by default). If `bins` is a
         sequence, it defines a monotonically increasing array of bin edges,
         including the rightmost edge, allowing for non-uniform bin widths.
-        .. versionadded:: 1.11.0
-        If `bins` is a string, it defines the method used to calculate the
-        optimal bin width, as defined by `histogram_bin_edges`.
     range : (float, float), optional
         The lower and upper range of the bins.  If not provided, range
         is simply ``(a.min(), a.max())``.  Values outside the range are
