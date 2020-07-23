@@ -19,6 +19,9 @@ dsk = {
 meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
 
 
 def test_loc():
@@ -369,24 +372,35 @@ def test_loc_timestamp_str():
     assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
     assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
-    assert_eq(df.loc["2011-01-02 10:00"].to_frame().T, ddf.loc["2011-01-02 10:00"])
+    assert_eq(
+        df.loc["2011-01-02 10:00"].to_frame().T,
+        ddf.loc["2011-01-02 10:00"],
+        **CHECK_FREQ
+    )
 
     # series
-    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"])
-    assert_eq(df.A.loc["2011-01-02":"2011-01-10"], ddf.A.loc["2011-01-02":"2011-01-10"])
+    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], **CHECK_FREQ)
+    assert_eq(
+        df.A.loc["2011-01-02":"2011-01-10"],
+        ddf.A.loc["2011-01-02":"2011-01-10"],
+        **CHECK_FREQ
+    )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
+        **CHECK_FREQ
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
+        **CHECK_FREQ
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
+        **CHECK_FREQ
     )
 
     df = pd.DataFrame(
