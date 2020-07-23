@@ -690,9 +690,9 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         .. versionchanged:: 1.15.0
             DeprecationWarnings are actually emitted.
     weights : array_like, optional
-        A dask.array.Array of weights, of the same block structure as `a`.  Each value in
-        `a` only contributes its associated weight towards the bin count
-        (instead of 1). If `density` is True, the weights are
+        A dask.array.Array of weights, of the same block structure as ``a``.  Each value in
+        ``a`` only contributes its associated weight towards the bin count
+        (instead of 1). If ``density`` is True, the weights are
         normalized, so that the integral of the density over the range
         remains 1.
     density : bool, optional
