@@ -702,7 +702,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         array/sequence of the bin edges.
     Returns
     -------
-    hist : array
+    hist : dask Array
         The values of the histogram. See `density` and `weights` for a
         description of the possible semantics.
     bin_edges : dask Array of dtype float
