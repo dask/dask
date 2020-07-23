@@ -791,6 +791,16 @@ Attribute access is synchronous and blocking:
 Example: Parameter Server
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+Here's an example of a parameter server, one method to perform distributed
+machine learning. This parameter server perform this minimization:
+
+.. math::
+
+   \min_{p\in\R^{1000}} \sum_{i=1}^1000 (p_i - 2)^2
+
+Of course, this minimization is trivial and :math:`p_i = 2` for all :math:`i`.
+However, it suffices for illustration:
+
 .. code-block:: python
 
    import numpy as np
@@ -799,24 +809,28 @@ Example: Parameter Server
    client = Client(processes=False)
 
    class ParameterServer:
-       def __init__(self):
-           self.data = dict()
+      def __init__(self):
+          self.data = dict()
 
-       def put(self, key, value):
-           self.data[key] = value
+      def put(self, key, value):
+          self.data[key] = value
 
-       def get(self, key):
-           return self.data[key]
+      def get(self, key):
+          return self.data[key]
 
-   ps_future = client.submit(ParameterServer, actor=True)
-   ps = ps_future.result()
+   def train(params, lr=0.1):
+      grad = 2 * (params - 2)  # gradient of (params - 2)**2
+      new_params = params - lr * grad
+      return new_params
 
-   ps.put('parameters', np.random.random(1000))
+    ps_future = client.submit(ParameterServer, actor=True)
+    ps = ps_future.result()
 
-   def train(batch, ps):
-       params = ps.get('parameters')
-
-   for batch in batches:
+    ps.put('parameters', np.random.random(1000))
+    for k in range(20):
+       params = ps.get('parameters').result()
+       new_params = train(params)
+       ps.put('parameters', new_params)
 
 
 Asynchronous Operation
