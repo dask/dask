@@ -681,11 +681,8 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         based on the actual data within `range`, the bin count will fill
         the entire range including portions containing no data.
     normed : bool, optional
-        .. deprecated:: 1.6.0
-        This is equivalent to the `density` argument, but produces incorrect
+        This is equivalent to the ``density`` argument, but produces incorrect
         results for unequal bin widths. It should not be used.
-        .. versionchanged:: 1.15.0
-            DeprecationWarnings are actually emitted.
     weights : array_like, optional
         A dask.array.Array of weights, of the same block structure as ``a``.  Each value in
         ``a`` only contributes its associated weight towards the bin count
