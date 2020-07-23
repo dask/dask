@@ -791,15 +791,15 @@ Attribute access is synchronous and blocking:
 Example: Parameter Server
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Here's an example of a parameter server, one method to perform distributed
-machine learning. This parameter server perform this minimization:
+This example will perform the following minimization with a parameter server:
 
 .. math::
 
    \min_{p\in\R^{1000}} \sum_{i=1}^1000 (p_i - 2)^2
 
-Of course, this minimization is trivial and :math:`p_i = 2` for all :math:`i`.
-However, it suffices for illustration:
+The parameter server will hold the model, and the client will calculate the
+gradient. Of course, this minimization is trivial and :math:`p_i = 2` for all
+:math:`i`.  However, it suffices for illustration.
 
 .. code-block:: python
 
@@ -832,6 +832,7 @@ However, it suffices for illustration:
        new_params = train(params)
        ps.put('parameters', new_params)
 
+This example could be adapted to machine learning if desired.
 
 Asynchronous Operation
 ~~~~~~~~~~~~~~~~~~~~~~
