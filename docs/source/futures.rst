@@ -791,6 +791,16 @@ Attribute access is synchronous and blocking:
 Example: Parameter Server
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+This example will perform the following minimization with a parameter server:
+
+.. math::
+
+   \min_{p\in\R^{1000}} \sum_{i=1}^1000 (p_i - 2)^2
+
+The parameter server will hold the model, and the client will calculate the
+gradient. Of course, this minimization is trivial and :math:`p_i = 2` for all
+:math:`i`.  However, it suffices for illustration.
+
 .. code-block:: python
 
    import numpy as np
@@ -808,16 +818,21 @@ Example: Parameter Server
        def get(self, key):
            return self.data[key]
 
+   def train(params, lr=0.1):
+       grad = 2 * (params - 2)  # gradient of (params - 2)**2
+       new_params = params - lr * grad
+       return new_params
+
    ps_future = client.submit(ParameterServer, actor=True)
    ps = ps_future.result()
 
    ps.put('parameters', np.random.random(1000))
+   for k in range(20):
+       params = ps.get('parameters').result()
+       new_params = train(params)
+       ps.put('parameters', new_params)
 
-   def train(batch, ps):
-       params = ps.get('parameters')
-
-   for batch in batches:
-
+This example could be adapted to machine learning if desired.
 
 Asynchronous Operation
 ~~~~~~~~~~~~~~~~~~~~~~
