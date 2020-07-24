@@ -9,6 +9,7 @@ _numpy_115 = LooseVersion(np.__version__) >= "1.15.0"
 _numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
 _numpy_117 = LooseVersion(np.__version__) >= "1.17.0"
 _numpy_118 = LooseVersion(np.__version__) >= "1.18.0"
+_numpy_120 = LooseVersion(np.__version__) >= "1.20.0"
 
 
 # Taken from scikit-learn:
@@ -18,7 +19,7 @@ try:
         if (
             not np.allclose(
                 np.divide(0.4, 1, casting="unsafe"),
-                np.divide(0.4, 1, casting="unsafe", dtype=np.float),
+                np.divide(0.4, 1, casting="unsafe", dtype=float),
             )
             or not np.allclose(np.divide(1, 0.5, dtype="i8"), 2)
             or not np.allclose(np.divide(0.4, 1), 0.4)

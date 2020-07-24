@@ -27,6 +27,7 @@ dependencies:
   - fsspec>=0.6.0
   - boto3
   - botocore
+  - aiohttp
   - bokeh
   - httpretty
   - chest

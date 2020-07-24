@@ -33,10 +33,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
     conda uninstall --force numpy pandas
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
-        numpy \
-        pandas
+        numpy
+    python -m pip install --pre pandas==1.1.0rc0
     python -m pip install \
-        --no-deps \
         --upgrade \
         locket \
         git+https://github.com/pydata/sparse \
