@@ -6,10 +6,14 @@ Simlar operations can be done on Dask Dataframes. Users commonly wish
 to link the two:
 
 - perform SQL-like operations on Dask Dataframes
+
 - load data from databases using SQL, and process the results in Dask
+
 - save the output of Dask commputations in a database
+
 - use the Dask API to specify queries, but execute some or part of the
   query on the database
+
 - which is the best tool for my workload, SQL or dask?
 
 This document describes the connection between Dask and SQL-databases
@@ -32,6 +36,7 @@ The following packages may be of interest
 - `blazingSQL`_, part of the Rapids project, implements SQL queries using ``cuDF``
   and Dask, for execution on CUDA/GPU-enabled hardware, including referencing
   externally-stored data
+
 - `pandasql`_ allows executing SQL queries on a pandas table by writing the data to
   ``SQLite``, which may be useful for small toy examples (this package has not been
   maintained for some time)
@@ -54,9 +59,12 @@ on a cluster, the following are the main differences to watch out for
 
 - Dask does not support arbitray text queries, only whole tables and SQLAlchemy
   `sql expressions`_
+
 - the engine argument must be a `URI string`_, not an SQLAlchemy engine/connection
+
 - partitioning information is *required*, which can be as simple as providing
   an index column argument, or can be more explicit (see below)
+
 - the chunksize argument is not used, since the partitioning must be via an
   index column
 
@@ -84,9 +92,9 @@ SQLAlchemy, or provide an alternate API which is better optimised.
 
 If you already have a way to fetch data from the database in partitions,
 then you can wrap this function in :func:`dask.delayed` and construct a
-dataframe this way. It might look something like this.
+dataframe this way. It might look something like
 
-.. code-block::python
+.. code-block:: python
 
    from dask import delayed
    import dask.dataframe as dd
