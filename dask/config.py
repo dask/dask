@@ -10,6 +10,14 @@ from collections.abc import Mapping
 
 import yaml
 
+try:
+    from jsonschema import validate
+
+    VALIDATE_CONFIG = True
+except ImportError:
+    VALIDATE_CONFIG = False
+    pass
+
 no_default = "__no_default__"
 
 
@@ -36,6 +44,17 @@ config_lock = threading.Lock()
 defaults = []
 
 
+def schema_validate(new):
+    if not VALIDATE_CONFIG:
+        pass
+
+    root = os.path.dirname(__file__)
+    with open(os.path.join(root, "dask-schema.yaml")) as f:
+        schema = yaml.safe_load(f)
+
+    validate(instance=new, schema=schema)
+
+
 def canonical_name(k, config):
     """Return the canonical name for a key.
 
@@ -59,7 +78,7 @@ def canonical_name(k, config):
     return k
 
 
-def update(old, new, priority="new"):
+def update(old, new, priority="new", validate=VALIDATE_CONFIG):
     """Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
@@ -98,11 +117,13 @@ def update(old, new, priority="new"):
         else:
             if priority == "new" or k not in old:
                 old[k] = v
+    if validate:
+        schema_validate(old)
 
     return old
 
 
-def merge(*dicts):
+def merge(*dicts, validate=VALIDATE_CONFIG):
     """Update a sequence of nested dictionaries
 
     This prefers the values in the latter dictionaries to those in the former
@@ -121,6 +142,8 @@ def merge(*dicts):
     result = {}
     for d in dicts:
         update(result, d)
+    if validate:
+        schema_validate(result)
     return result
 
 
@@ -333,7 +356,7 @@ class set:
                 else:
                     d.pop(path[-1], None)
 
-    def _assign(self, keys, value, d, path=(), record=True):
+    def _assign(self, keys, value, d, path=(), record=True, validate=VALIDATE_CONFIG):
         """Assign value into a nested configuration dictionary
 
         Parameters
@@ -368,6 +391,9 @@ class set:
                 # No need to record subsequent operations after an insert
                 record = False
             self._assign(keys[1:], value, d[key], path, record=record)
+
+        if validate:
+            schema_validate(self.config)
 
 
 def collect(paths=paths, env=None):
