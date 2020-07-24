@@ -809,25 +809,25 @@ gradient. Of course, this minimization is trivial and :math:`p_i = 2` for all
    client = Client(processes=False)
 
    class ParameterServer:
-      def __init__(self):
-          self.data = dict()
+       def __init__(self):
+           self.data = dict()
 
-      def put(self, key, value):
-          self.data[key] = value
+       def put(self, key, value):
+           self.data[key] = value
 
-      def get(self, key):
-          return self.data[key]
+       def get(self, key):
+           return self.data[key]
 
    def train(params, lr=0.1):
-      grad = 2 * (params - 2)  # gradient of (params - 2)**2
-      new_params = params - lr * grad
-      return new_params
+       grad = 2 * (params - 2)  # gradient of (params - 2)**2
+       new_params = params - lr * grad
+       return new_params
 
-    ps_future = client.submit(ParameterServer, actor=True)
-    ps = ps_future.result()
+   ps_future = client.submit(ParameterServer, actor=True)
+   ps = ps_future.result()
 
-    ps.put('parameters', np.random.random(1000))
-    for k in range(20):
+   ps.put('parameters', np.random.random(1000))
+   for k in range(20):
        params = ps.get('parameters').result()
        new_params = train(params)
        ps.put('parameters', new_params)
