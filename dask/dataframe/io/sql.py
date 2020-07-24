@@ -6,6 +6,7 @@ from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
+from .. import methods
 
 
 def read_sql_table(
@@ -179,11 +180,13 @@ def read_sql_table(
                 or 1
             )
         if dtype.kind == "M":
-            divisions = pd.date_range(
-                start=mini,
-                end=maxi,
-                freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
-            ).tolist()
+            divisions = methods.tolist(
+                pd.date_range(
+                    start=mini,
+                    end=maxi,
+                    freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
+                )
+            )
             divisions[0] = mini
             divisions[-1] = maxi
         elif dtype.kind in ["i", "u", "f"]:
