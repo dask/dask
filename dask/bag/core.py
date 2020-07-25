@@ -2510,12 +2510,12 @@ def repartition_size(bag, size):
     if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
-    mem_usages = bag.map_partitions(total_mem_usage).compute()
+    mem_usages = bag.map_partitions(sizeof).compute()
 
     # 1. split each partition that is larger than partition size
     nsplits = [1 + mem_usage // size for mem_usage in mem_usages]
     if any((nsplit > 1 for nsplit in nsplits)):
-        split_name = "repartition-split-{}-{}".format(size, tokenize(bag))
+        split_name = "repartition-split-{}".format(tokenize(bag, size))
         bag = _split_partitions(bag, nsplits, split_name)
         # update mem_usages to account for the split partitions
         split_mem_usages = []
@@ -2527,12 +2527,8 @@ def repartition_size(bag, size):
     assert all((mem_usage <= size for mem_usage in mem_usages))
     new_npartitions = list(map(len, iter_chunks(mem_usages, size)))
     new_partitions_boundaries = accumulate(operator.add, new_npartitions)
-    new_name = "repartition-{}-{}".format(size, tokenize(bag))
+    new_name = "repartition-{}".format(tokenize(bag, size))
     return _repartition_from_boundaries(bag, new_partitions_boundaries, new_name)
-
-
-def total_mem_usage(bag):
-    return sizeof(bag)
 
 
 def _split_partitions(bag, nsplits, new_name):
