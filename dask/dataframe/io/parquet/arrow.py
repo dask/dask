@@ -115,6 +115,8 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
                 .pieces[0]
                 .get_metadata()
             )
+        # Create our dataset from the list of data files.
+        # Note that this will not parse all the files (yet)
         dataset = pq.ParquetDataset(
             paths, filesystem=fs, filters=filters, **dataset_kwargs
         )
@@ -221,6 +223,10 @@ def _gather_metadata(
                 split_row_groups,
                 gather_statistics,
             )
+        # We have not detected a _metadata file, and the user has specified
+        # that they want to split by row-group and/or gather statistics.
+        # This is the only case where we MUST scan all files to collect
+        # metadata.
         for piece, fn in zip(dataset.pieces, fns):
             md = piece.get_metadata()
             if schema is None:
@@ -266,6 +272,7 @@ def _generate_dd_meta(schema, index, categories, partition_info):
                 ):
                     categories.append(col["name"])
     else:
+        # No pandas metadata implies no index, unless selected by the user
         index_names = []
         column_names = schema.names
         storage_name_mapping = {k: k for k in column_names}
@@ -303,10 +310,12 @@ def _generate_dd_meta(schema, index, categories, partition_info):
     if partition_obj:
         for partition in partition_obj:
             if isinstance(index, list) and partition.name == index[0]:
+                # Index from directory structure
                 meta.index = pd.CategoricalIndex(
                     categories=partition.keys, name=index[0]
                 )
             elif partition.name == meta.index.name:
+                # Index created from a categorical column
                 meta.index = pd.CategoricalIndex(
                     categories=partition.keys, name=meta.index.name
                 )
@@ -326,7 +335,8 @@ def _aggregate_stats(
         into a single dictionary.
     """
     if len(file_row_group_stats) < 1:
-        raise ValueError("Empty statistics.")
+        # Empty statistics
+        return {}
     elif len(file_row_group_column_stats) == 0:
         assert len(file_row_group_stats) == 1
         return file_row_group_stats[0]
