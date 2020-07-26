@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.join(source_dir, "ext"))
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
