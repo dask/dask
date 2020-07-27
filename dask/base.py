@@ -214,8 +214,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
         _opt_list = []
         for opt, val in groups.items():
             dsk, keys = _extract_graph_and_keys(val)
+            groups[opt] = (dsk, keys)
             _opt = opt(dsk, keys, **kwargs)
-            groups[opt] = (_opt, keys)
             _opt_list.append(_opt)
 
         for opt in optimizations:
@@ -697,7 +697,13 @@ def normalize_set(s):
 
 @normalize_token.register((tuple, list))
 def normalize_seq(seq):
-    return type(seq).__name__, list(map(normalize_token, seq))
+    def func(seq):
+        try:
+            return list(map(normalize_token, seq))
+        except RecursionError:
+            return str(uuid.uuid4())
+
+    return type(seq).__name__, func(seq)
 
 
 @normalize_token.register(literal)
@@ -1004,7 +1010,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
     There are various ways to specify the scheduler to use:
 
     1.  Passing in scheduler= parameters
-    2.  Passing these into global confiuration
+    2.  Passing these into global configuration
     3.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use

@@ -98,7 +98,7 @@ def lazify(dsk):
 
     See Also
     --------
-    ``dask.bag.core.lazify_task``
+    dask.bag.core.lazify_task
     """
     return valmap(lazify_task, dsk)
 
@@ -1354,7 +1354,7 @@ class Bag(DaskMethodsMixin):
             Whether to warn if the number of elements returned is less than
             requested, default is True.
 
-        >>> b = from_sequence(range(10))
+        >>> b = from_sequence(range(1_000))
         >>> b.take(3)  # doctest: +SKIP
         (0, 1, 2)
         """

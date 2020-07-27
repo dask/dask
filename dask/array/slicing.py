@@ -135,9 +135,9 @@ def slice_array(out_name, in_name, blockdims, index):
     This function works by successively unwrapping cases and passing down
     through a sequence of functions.
 
-    slice_with_newaxis - handle None/newaxis case
-    slice_wrap_lists - handle fancy indexing with lists
-    slice_slices_and_integers - handle everything else
+    slice_with_newaxis : handle None/newaxis case
+    slice_wrap_lists : handle fancy indexing with lists
+    slice_slices_and_integers : handle everything else
     """
     blockdims = tuple(map(tuple, blockdims))
 
@@ -211,8 +211,8 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     See Also
     --------
 
-    take - handle slicing with lists ("fancy" indexing)
-    slice_slices_and_integers - handle slicing with slices and integers
+    take : handle slicing with lists ("fancy" indexing)
+    slice_slices_and_integers : handle slicing with slices and integers
     """
     assert all(isinstance(i, (slice, list, Integral, np.ndarray)) for i in index)
     if not len(blockdims) == len(index):
