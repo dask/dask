@@ -96,7 +96,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
-    split_row_groups=True,
+    split_row_groups=None,
     chunksize=None,
     **kwargs
 ):
@@ -154,11 +154,14 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
-    split_row_groups : bool
-        If True (default) then output dataframe partitions will correspond
-        to parquet-file row-groups (when enough row-group metadata is
-        available). Otherwise, partitions correspond to distinct files.
-        Only the "pyarrow" engine currently supports this argument.
+    split_row_groups : bool or int
+        Default is True if a _metadata file is available or if
+        the dataset is composed of a single file (otherwise defult is False).
+        If True, then each output dataframe partition will correspond to a single
+        parquet-file row-group. If False, each partition will correspond to a
+        complete file.  If a positive integer value is given, each dataframe
+        partition will correspond to that number of parquet row-groups (or fewer).
+        Only the "pyarrow" engine supports this argument.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
