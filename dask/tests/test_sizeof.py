@@ -1,4 +1,5 @@
 import sys
+from array import array
 
 import pytest
 
@@ -16,6 +17,13 @@ def test_name():
 
 def test_containers():
     assert sizeof([1, 2, [3]]) > (getsizeof(3) * 3 + getsizeof([]))
+
+
+def test_bytes_like():
+    assert 1000 <= sizeof(bytes(1000)) <= 2000
+    assert 1000 <= sizeof(bytearray(1000)) <= 2000
+    assert 1000 <= sizeof(memoryview(bytes(1000))) <= 2000
+    assert 8000 <= sizeof(array("d", range(1000))) <= 9000
 
 
 def test_numpy():
