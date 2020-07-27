@@ -1,5 +1,4 @@
 import struct
-import msgpack
 
 from ..utils import nbytes
 
@@ -10,13 +9,7 @@ msgpack_opts = {
     ("max_%s_len" % x): 2 ** 31 - 1 for x in ["str", "bin", "array", "map", "ext"]
 }
 msgpack_opts["strict_map_key"] = False
-
-try:
-    msgpack.loads(msgpack.dumps(""), raw=False, **msgpack_opts)
-    msgpack_opts["raw"] = False
-except TypeError:
-    # Backward compat with old msgpack (prior to 0.5.2)
-    msgpack_opts["encoding"] = "utf-8"
+msgpack_opts["raw"] = False
 
 
 def frame_split_size(frame, n=BIG_BYTES_SHARD_SIZE) -> list:
