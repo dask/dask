@@ -374,7 +374,11 @@ def _process_metadata(
         row_group = metadata.row_group(rg)
         fpath = row_group.column(0).file_path
         if fpath is None:
-            raise ValueError("metadata is missing file_path string.")
+            raise ValueError(
+                "Global metadata structure is missing a file_path string. "
+                "If the dataset includes a _metadata file, that file may "
+                "have one or more missing file_path fields."
+            )
         if file_row_groups[fpath]:
             file_row_groups[fpath].append(file_row_groups[fpath][-1] + 1)
         else:
