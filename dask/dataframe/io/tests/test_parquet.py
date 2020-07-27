@@ -2637,3 +2637,12 @@ def test_illegal_column_name(tmpdir, engine):
     with pytest.raises(ValueError) as e:
         ddf.to_parquet(fn, engine=engine)
     assert null_name in str(e.value)
+
+
+def test_divisions_with_null_partition(tmpdir, engine):
+    df = pd.DataFrame({"a": [1, 2, None, None], "b": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(str(tmpdir), engine=engine, write_index=False)
+
+    ddf_read = dd.read_parquet(str(tmpdir), engine=engine, index="a")
+    assert ddf_read.divisions == (None, None, None)

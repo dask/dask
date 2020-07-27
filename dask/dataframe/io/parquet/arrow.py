@@ -433,17 +433,20 @@ def _process_metadata(
                     cmax = column.statistics.max
                     cnull = column.statistics.null_count
                     last = cmax_last.get(name, None)
-                    if no_filters and last and cmin < last:
-                        # We are collecting statistics for divisions
-                        # only (no filters) - Column isn't sorted, so
-                        # lets bail.
-                        #
-                        # Note: This assumes ascending order.
-                        #
-                        gather_statistics = False
-                        file_row_group_stats = {}
-                        file_row_group_column_stats = {}
-                        break
+                    if no_filters:
+                        # Only think about bailing if we don't need
+                        # stats for filtering
+                        if cmin is None or (last and cmin < last):
+                            # We are collecting statistics for divisions
+                            # only (no filters) - Column isn't sorted, or
+                            # we have an all-null partition, so lets bail.
+                            #
+                            # Note: This assumes ascending order.
+                            #
+                            gather_statistics = False
+                            file_row_group_stats = {}
+                            file_row_group_column_stats = {}
+                            break
 
                     if single_rg_parts:
                         to_ts = column.statistics.logical_type.type == "TIMESTAMP"
