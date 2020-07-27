@@ -124,6 +124,10 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
             dataset.metadata = proxy_metadata
     elif fs.isdir(paths[0]):
         # This is a directory.  We can let pyarrow do its thing.
+        # Note: In the future, it may be best to avoid listing the
+        #       directory if we can get away with checking for the
+        #       existence of _metadata.  Listing may be much more
+        #       expensive in storage systems like S3.
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         base, fns = _analyze_paths(allpaths, fs)
         if "_metadata" in fns and "validate_schema" not in dataset_kwargs:
@@ -341,24 +345,49 @@ def _aggregate_stats(
         assert len(file_row_group_stats) == 1
         return file_row_group_stats[0]
     else:
-        df_rgs = pd.DataFrame(file_row_group_stats)
-        s = {
-            "file_path_0": file_path,
-            "num-rows": df_rgs["num-rows"].sum(),
-            "total_byte_size": df_rgs["total_byte_size"].sum(),
-            "columns": [],
-        }
-        df_cols = pd.DataFrame(file_row_group_column_stats)
+        # Note: It would be better to avoid df_rgs and df_cols
+        #       construction altogether. It makes it fast to aggregate
+        #       the statistics for many row groups, but isn't
+        #       worthwhile for a small number of row groups.
+        if len(file_row_group_stats) > 1:
+            df_rgs = pd.DataFrame(file_row_group_stats)
+            s = {
+                "file_path_0": file_path,
+                "num-rows": df_rgs["num-rows"].sum(),
+                "total_byte_size": df_rgs["total_byte_size"].sum(),
+                "columns": [],
+            }
+        else:
+            s = {
+                "file_path_0": file_path,
+                "num-rows": file_row_group_stats[0]["num-rows"],
+                "total_byte_size": file_row_group_stats[0]["total_byte_size"],
+                "columns": [],
+            }
+
+        df_cols = None
+        if len(file_row_group_column_stats) > 1:
+            df_cols = pd.DataFrame(file_row_group_column_stats)
         for ind, name in enumerate(stat_col_indices):
             i = ind * 3
-            s["columns"].append(
-                {
-                    "name": name,
-                    "min": df_cols.iloc[:, i].min(),
-                    "max": df_cols.iloc[:, i + 1].max(),
-                    "null_count": df_cols.iloc[:, i + 2].sum(),
-                }
-            )
+            if df_cols is None:
+                s["columns"].append(
+                    {
+                        "name": name,
+                        "min": file_row_group_column_stats[0][i],
+                        "max": file_row_group_column_stats[0][i + 1],
+                        "null_count": file_row_group_column_stats[0][i + 2],
+                    }
+                )
+            else:
+                s["columns"].append(
+                    {
+                        "name": name,
+                        "min": df_cols.iloc[:, i].min(),
+                        "max": df_cols.iloc[:, i + 1].max(),
+                        "null_count": df_cols.iloc[:, i + 2].sum(),
+                    }
+                )
         return s
 
 
