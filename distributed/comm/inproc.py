@@ -36,7 +36,10 @@ class Manager:
             # Avoid immediate warning for unreachable network
             # (will still warn for other get_ip() calls when actually used)
             warnings.simplefilter("ignore")
-            self.ip = get_ip()
+            try:
+                self.ip = get_ip()
+            except OSError:
+                self.ip = "127.0.0.1"
         self.lock = threading.Lock()
 
     def add_listener(self, addr, listener):
