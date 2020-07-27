@@ -951,6 +951,10 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
+@pytest.mark.xfail(
+    pa.__version__ >= LooseVersion("1.0.0"),
+    reason="incompatible changes in pyarrow upstream",
+)
 def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(tmpdir):
     check_pyarrow()
 
@@ -1987,6 +1991,22 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
     assert_eq(ddf, ddf2, check_divisions=False)
 
 
+@pytest.mark.parametrize(
+    "engine",
+    [
+        pytest.param("fastparquet", marks=FASTPARQUET_MARK),
+        pytest.param(
+            "pyarrow",
+            marks=[
+                PYARROW_MARK,
+                pytest.mark.xfail(
+                    pa.__version__ >= LooseVersion("1.0.0"),
+                    reason="incompatible change upstream",
+                ),
+            ],
+        ),
+    ],
+)
 def test_timeseries_nulls_in_schema(tmpdir, engine):
     # GH#5608: relative path failing _metadata/_common_metadata detection.
     tmp_path = str(tmpdir.mkdir("files"))
