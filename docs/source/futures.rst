@@ -795,11 +795,12 @@ This example will perform the following minimization with a parameter server:
 
 .. math::
 
-   \min_{p\in\R^{1000}} \sum_{i=1}^1000 (p_i - 2)^2
+   \min_{p\in\mathbb{R}^{1000}} \sum_{i=1}^{1000} (p_i - 1)^2
 
-The parameter server will hold the model, and the client will calculate the
-gradient. Of course, this minimization is trivial and :math:`p_i = 2` for all
-:math:`i`.  However, it suffices for illustration.
+This is a simple minimization that will serve as an illustrative example.
+
+The Dask Actor will serve as the parameter server that will hold the model.
+The client will calculate the gradient of the loss function above.
 
 .. code-block:: python
 
@@ -819,7 +820,7 @@ gradient. Of course, this minimization is trivial and :math:`p_i = 2` for all
            return self.data[key]
 
    def train(params, lr=0.1):
-       grad = 2 * (params - 2)  # gradient of (params - 2)**2
+       grad = 2 * (params - 1)  # gradient of (params - 1)**2
        new_params = params - lr * grad
        return new_params
 
@@ -831,8 +832,13 @@ gradient. Of course, this minimization is trivial and :math:`p_i = 2` for all
        params = ps.get('parameters').result()
        new_params = train(params)
        ps.put('parameters', new_params)
+       print(new_params.mean())
+       # k=0: "0.5988202981316124"
+       # k=10: "0.9569236575164062"
 
-This example could be adapted to machine learning if desired.
+This example works, and the loss function is minimized. The (simple) equation
+above is minimize, so each :math:`p_i` converges to 1. If desired, this example
+could be adapted to machine learning with a more complex function to minimize.
 
 Asynchronous Operation
 ~~~~~~~~~~~~~~~~~~~~~~
