@@ -75,5 +75,5 @@ Paid support
 ------------
 In addition to the previous options, paid support is available from
 
--   Anaconda: `<https://www.anaconda.com/support>`_
+-   Anaconda: `<https://www.anaconda.com/help>`_
 -   Quansight: `<https://www.quansight.com/open-source-support>`_

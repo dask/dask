@@ -30,7 +30,7 @@ For local use this happens when you create a client with no arguments:
    from dask.distributed import Client
    client = Client()  # start distributed scheduler locally.  Launch dashboard
 
-It is typically served at http://localhost:8787/status ,
+It is typically served at ``http://localhost:8787/status`` ,
 but may be served elsewhere if this port is taken.
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
 or can be queried from ``client.scheduler_info()['services']``.
