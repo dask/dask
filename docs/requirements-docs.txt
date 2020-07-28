@@ -8,3 +8,6 @@ pandas>=0.23.0
 distributed>=2.14.0
 fsspec
 scipy
+pytest
+pytest-check-links
+requests-cache
