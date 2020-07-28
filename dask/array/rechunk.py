@@ -225,12 +225,12 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
 
     Splitting evenly into 6 chunks is possible with the following:
 
-    >>> z = x.rechunk(chunks=(100//6, -1), balance=True)
+    >>> z = x.rechunk(chunks=(1000 // 6, -1), balance=True)
     >>> z.chunks
     ((167, 167, 167, 167, 167, 165), (1000,))
 
-    If ``x`` is rechunked with a chunk size of ``100//6``, there will be one
-    chunk that's of size 4.
+    This means there isn't a chunk of size 4, which is what would happen
+    with ``x.rechunk(chunks=(1000 // 6, -1))``.
 
     """
     # don't rechunk if array is empty
