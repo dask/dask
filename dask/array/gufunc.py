@@ -12,7 +12,7 @@ from ..core import flatten
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
 #   - Allow for zero input arguments
-# See https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+# See https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
 _DIMENSION_NAME = r"\w+"
 _CORE_DIMENSION_LIST = "(?:{0:}(?:,{0:})*,?)?".format(_DIMENSION_NAME)
 _ARGUMENT = r"\({}\)".format(_CORE_DIMENSION_LIST)
@@ -270,7 +270,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     References
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
     axes = kwargs.pop("axes", None)
     axis = kwargs.pop("axis", None)
@@ -580,7 +580,7 @@ class gufunc(object):
     References
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
 
     def __init__(self, pyfunc, **kwargs):
@@ -710,7 +710,7 @@ def as_gufunc(signature=None, **kwargs):
     References
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
     _allowedkeys = {
         "vectorize",

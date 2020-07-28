@@ -92,7 +92,7 @@ Slicing rows and (optionally) columns with ``.loc``:
    c                ...
    Dask Name: try_loc, 2 tasks
 
-Dask DataFrame supports Pandas' `partial-string indexing <https://pandas.pydata.org/pandas-docs/stable/timeseries.html#partial-string-indexing>`_:
+Dask DataFrame supports Pandas' `partial-string indexing <https://pandas.pydata.org/pandas-docs/stable/user_guide/timeseries.html#partial-string-indexing>`_:
 
 .. code-block:: python
 

@@ -372,6 +372,11 @@ html_context = {
     "css_files": ["_static/theme_overrides.css"]  # override wide tables in RTD theme
 }
 
+# Rate limiting issue for github: https://github.com/sphinx-doc/sphinx/issues/7388
+linkcheck_ignore = [
+    r"^https?:\/\/(?:www\.)?github.com\/",
+    r"^https?:\/\/localhost(?:[:\/].+)?$",
+]
 
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":

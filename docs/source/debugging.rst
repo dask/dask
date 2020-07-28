@@ -155,16 +155,16 @@ commonly.
 Web Diagnostics
 ~~~~~~~~~~~~~~~
 
-First, the distributed scheduler has a number of `diagnostic web pages
-<https://distributed.dask.org/en/latest/web.html>`_ showing dozens of
+First, the distributed scheduler has a number of `diagnostic tools
+<https://distributed.dask.org/en/latest/diagnosing-performance.html>`_ showing dozens of
 recorded metrics like CPU, memory, network, and disk use, a history of previous
 tasks, allocation of tasks to workers, worker memory pressure, work stealing,
 open file handle limits, etc.  *Many* problems can be correctly diagnosed by
 inspecting these pages.  By default, these are available at
 ``http://scheduler:8787/``, ``http://scheduler:8788/``, and ``http://worker:8789/``,
 where ``scheduler`` and ``worker`` should be replaced by the addresses of the
-scheduler and each of the workers. See `web diagnostic docs
-<https://distributed.dask.org/en/latest/web.html>`_ for more information.
+scheduler and each of the workers. See `diagnosing performance docs
+<https://distributed.dask.org/en/latest/diagnosing-performance.html>`_ for more information.
 
 Logs
 ~~~~
@@ -232,7 +232,7 @@ LocalCluster
 
 If you are using the distributed scheduler from a single machine, you may be
 setting up workers manually using the command line interface or you may be
-using `LocalCluster <https://distributed.dask.org/en/latest/local-cluster.html>`_
+using `LocalCluster <https://distributed.dask.org/en/latest/api.html#cluster>`_
 which is what runs when you just call ``Client()``:
 
 .. code-block:: python
