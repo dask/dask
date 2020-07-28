@@ -1,3 +1,4 @@
+import math
 import os
 import sys
 import warnings
@@ -16,6 +17,7 @@ from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.utils import natural_sort_key, parse_bytes
 
+
 try:
     import fastparquet
 except ImportError:
@@ -26,7 +28,6 @@ try:
     import pyarrow as pa
 except ImportError:
     check_pa_divs = pa = False
-
 
 try:
     import pyarrow.parquet as pq
@@ -959,7 +960,13 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     )
 
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf.to_parquet(str(tmpdir), engine="pyarrow", partition_on=["partition_column"])
+    # Note: `append_row_groups` will fail with pyarrow>17.1 for _metadata write
+    ddf.to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        partition_on=["partition_column"],
+        write_metadata_file=False,
+    )
 
     # Test that read fails because of default behavior when schema not provided
     with pytest.raises(ValueError) as e_info:
@@ -1817,6 +1824,13 @@ def test_arrow_partitioning(tmpdir):
 
 
 def test_sorted_warnings(tmpdir, engine):
+
+    if engine == "pyarrow":
+        pytest.skip(
+            "ArrowEngine will only collect statistics for "
+            "known index columns and/or filtered columns."
+        )
+
     tmpdir = str(tmpdir)
     df = dd.from_pandas(
         pd.DataFrame({"cola": range(10), "colb": range(10)}), npartitions=2
@@ -2000,8 +2014,11 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
     ddf2 = ddf2.set_index("x").reset_index().persist()
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
-    ddf2.to_parquet(tmp_path, engine=engine)
-    ddf_read = dd.read_parquet(tmp_path, engine=engine)
+    # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
+    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False)
+    ddf_read = dd.read_parquet(
+        tmp_path, engine=engine, dataset={"validate_schema": False}
+    )
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
@@ -2215,6 +2232,41 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 4
 
 
+@pytest.mark.parametrize("split_row_groups", [1, 12])
+@pytest.mark.parametrize("gather_statistics", [True, False])
+def test_split_row_groups_int_pyarrow(tmpdir, split_row_groups, gather_statistics):
+
+    check_pyarrow()
+    tmp = str(tmpdir)
+    engine = "pyarrow"
+    row_group_size = 10
+    npartitions = 4
+    half_size = 400
+    df = pd.DataFrame(
+        {
+            "i32": np.arange(2 * half_size, dtype=np.int32),
+            "f": np.arange(2 * half_size, dtype=np.float64),
+        }
+    )
+    half = len(df) // 2
+
+    dd.from_pandas(df.iloc[:half], npartitions=npartitions).to_parquet(
+        tmp, engine=engine, row_group_size=row_group_size
+    )
+    dd.from_pandas(df.iloc[half:], npartitions=npartitions).to_parquet(
+        tmp, append=True, engine=engine, row_group_size=row_group_size
+    )
+
+    ddf2 = dd.read_parquet(
+        tmp,
+        engine=engine,
+        split_row_groups=split_row_groups,
+        gather_statistics=gather_statistics,
+    )
+    expected_rg_cout = int(half_size / row_group_size)
+    assert ddf2.npartitions == 2 * math.ceil(expected_rg_cout / split_row_groups)
+
+
 def test_split_row_groups_filter_pyarrow(tmpdir):
     check_pyarrow()
     tmp = str(tmpdir)
@@ -2234,7 +2286,7 @@ def test_split_row_groups_filter_pyarrow(tmpdir):
         tmp,
         engine="pyarrow",
         gather_statistics=True,
-        split_row_groups=False,
+        split_row_groups=True,
         filters=filters,
     )
 
@@ -2584,3 +2636,12 @@ def test_illegal_column_name(tmpdir, engine):
     with pytest.raises(ValueError) as e:
         ddf.to_parquet(fn, engine=engine)
     assert null_name in str(e.value)
+
+
+def test_divisions_with_null_partition(tmpdir, engine):
+    df = pd.DataFrame({"a": [1, 2, None, None], "b": [1, 2, 3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(str(tmpdir), engine=engine, write_index=False)
+
+    ddf_read = dd.read_parquet(str(tmpdir), engine=engine, index="a")
+    assert ddf_read.divisions == (None, None, None)
