@@ -1942,9 +1942,20 @@ class WorkerTable(DashboardComponent):
                 if len(self.scheduler.workers) == 0:
                     total_data = None
                 elif name == "memory_percent":
-                    total_data = sum(
-                        ws.metrics["memory"] for ws in self.scheduler.workers.values()
-                    ) / sum(ws.memory_limit for ws in self.scheduler.workers.values())
+                    total_mem = sum(
+                        ws.memory_limit for ws in self.scheduler.workers.values()
+                    )
+                    total_data = (
+                        (
+                            sum(
+                                ws.metrics["memory"]
+                                for ws in self.scheduler.workers.values()
+                            )
+                            / total_mem
+                        )
+                        if total_mem
+                        else ""
+                    )
                 elif name == "cpu":
                     total_data = (
                         sum(ws.metrics["cpu"] for ws in self.scheduler.workers.values())
