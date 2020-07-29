@@ -1,9 +1,9 @@
 Generalized Ufuncs
 ==================
 
-`NumPy <https://www.numpy.org>`_ provides the concept of `generalized ufuncs <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html>`_. Generalized ufuncs are functions
+`NumPy <https://www.numpy.org>`_ provides the concept of `generalized ufuncs <https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html>`_. Generalized ufuncs are functions
 that distinguish the various dimensions of passed arrays in the two classes loop dimensions
-and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_ is specified for NumPy generalized ufuncs.
+and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html#details-of-signature>`_ is specified for NumPy generalized ufuncs.
 
 `Dask <https://dask.org/>`_ integrates interoperability with NumPy's generalized ufuncs
 by adhering to respective `ufunc protocol <https://docs.scipy.org/doc/numpy/reference/arrays.classes.html#numpy.class.__array_ufunc__>`_, and provides a wrapper to make a Python function a generalized ufunc.

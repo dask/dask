@@ -3163,7 +3163,7 @@ Other
 .. _`Albert DeFusco`: https://github.com/AlbertDeFusco
 .. _`Markus Gonser`: https://github.com/magonser
 .. _`Martijn Arts`: https://github.com/mfaafm
-.. _`Jon Mease`: https://github.com/jmmease
+.. _`Jon Mease`: https://github.com/jonmmease
 .. _`Xander Johnson`: https://github.com/metasyn
 .. _`Nir`: https://github.com/nirizr
 .. _`Keisuke Fujii`: https://github.com/fujiisoup
@@ -3252,7 +3252,7 @@ Other
 .. _`Adam Beberg`: https://github.com/beberg
 .. _`Johnnie Gray`: https://github.com/jcmgray
 .. _`Roma Sokolov`: https://github.com/little-arhat
-.. _`Daniel Severo`: https://github.com/daniel-severo
+.. _`Daniel Severo`: https://github.com/dsevero
 .. _`Michał Jastrzębski`: https://github.com/inc0
 .. _`Janne Vuorela`: https://github.com/Dimplexion
 .. _`Ross Petchler`: https://github.com/rpetchler
@@ -3264,7 +3264,7 @@ Other
 .. _`@HSR05`: https://github.com/HSR05
 .. _`Ben Zaitlen`: https://github.com/quasiben
 .. _`Brett Naul`: https://github.com/bnaul
-.. _`Justin Poehnelt`: https://github.com/justinwp
+.. _`Justin Poehnelt`: https://github.com/jpoehnelt
 .. _`Dan O'Donovan`: https://github.com/danodonovan
 .. _`amerkel2`: https://github.com/amerkel2
 .. _`Justin Waugh`: https://github.com/bluecoconut
