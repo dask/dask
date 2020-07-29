@@ -223,15 +223,17 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
 
-    Splitting evenly into 6 chunks is possible with the following:
+    If a chunk size does not divide the dimension then rechunk will leave any
+    unevenness to the last chunk.
 
-    >>> z = x.rechunk(chunks=(1000 // 6, -1), balance=True)
-    >>> z.chunks
-    ((167, 167, 167, 167, 167, 165), (1000,))
+    >>> x.rechunk(chunks=(400, -1)).chunks
+    ((400, 400, 200), (1000,))
 
-    This means there isn't a chunk of size 4, which is what would happen
-    with ``x.rechunk(chunks=(1000 // 6, -1))``.
+    However if you want more balanced chunks, and don't mind Dask choosing a
+    different chunksize for you then you can use the ``balance=True`` option.
 
+    >>> x.rechunk(chunks=(400, -1), balance=True).chunks
+    ((500, 500), (1000,))
     """
     # don't rechunk if array is empty
     if x.ndim > 0 and all(s == 0 for s in x.shape):
