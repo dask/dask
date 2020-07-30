@@ -9,6 +9,7 @@ import math
 import heapq
 from functools import reduce
 from typing import Union, Tuple
+from warnings import warn
 
 from itertools import product, chain, count
 from operator import getitem, add, mul, itemgetter
@@ -726,11 +727,11 @@ def _balance_chunksizes(chunks: Tuple[int, ...]) -> Tuple[int, ...]:
     ]
     possible_chunks = [c for c in new_chunks if len(c) == n_chunks]
     if not len(possible_chunks):
-        msg = (
-            "chunk size balancing not possible with given chunk size. "
+        warn(
+            "chunk size balancing not possible with given chunks. "
             "Try increasing the chunk size."
         )
-        raise ValueError(msg)
+        return chunks
 
     diffs = [max(c) - min(c) for c in possible_chunks]
     best_chunk_size = np.argmin(diffs)
