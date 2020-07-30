@@ -180,6 +180,16 @@ your own configuration items below to convert back and forth.
    export DASK_DISTRIBUTED__LOGGING__TORNADO="critical"
    </textarea>
 
+**Inline with dot notation**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilCode" name="configConvertUtilCode" rows="10" cols="50" class="configTextArea" wrap="off">
+   >>> dask.config.set({"distributed.logging.distributed": "info"})
+   >>> dask.config.set({"distributed.logging.bokeh": "critical"})
+   >>> dask.config.set({"distributed.logging.tornado": "critical"})
+   </textarea>
+
 
 Defaults
 ~~~~~~~~

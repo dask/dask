@@ -3,6 +3,10 @@ Configuration Reference
 
 .. contents:: :local:
 
+.. note::
+   It is possible to configure Dask inline with dot notation, with YAML or via environment variables.
+   See the `conversion utility <configuration.html#conversion-utility>`_ for converting the following dot notation to other forms.
+
 Dask
 ----
 
