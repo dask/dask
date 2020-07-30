@@ -92,8 +92,8 @@ You can specify configuration values in YAML files like the following:
        work-stealing: True
        allowed-failures: 5
 
-      admin:
-        log-format: '%(name)s - %(levelname)s - %(message)s'
+       admin:
+         log-format: '%(name)s - %(levelname)s - %(message)s'
 
 These files can live in any of the following locations:
 
@@ -151,6 +151,34 @@ as lists, dictionaries, and so on with normal Python syntax.
 
 Environment variables take precedence over configuration values found in YAML
 files.
+
+Conversion Utility
+^^^^^^^^^^^^^^^^^^
+
+Many examples in the documentation use YAML config in their examples. You can enter
+your own configuration items below to convert back and forth.
+
+**YAML**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilYAML" name="configConvertUtilYAML" rows="10" cols="50" class="configTextArea" wrap="off">
+   distributed:
+     logging:
+       distributed: info
+       bokeh: critical
+       tornado: critical
+   </textarea>
+
+**Environment variable**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilEnv" name="configConvertUtilEnv" rows="10" cols="50" class="configTextArea" wrap="off">
+   export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"
+   export DASK_DISTRIBUTED__LOGGING__BOKEH="critical"
+   export DASK_DISTRIBUTED__LOGGING__TORNADO="critical"
+   </textarea>
 
 
 Defaults
