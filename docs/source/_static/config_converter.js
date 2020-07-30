@@ -3,6 +3,8 @@
  * If they exist add event handlers to convert YAML to environment variables and vice-versa
  * when the user types in either field.
  *
+ * This script includes unit tests which can be run manually in the developer console with `runTests()`.
+ *
  */
 window.addEventListener('load', (event) => {
     var configConvertUtilYAML = document.getElementById("configConvertUtilYAML")
@@ -294,4 +296,20 @@ function mergeDeep(...objects) {
 
         return prev;
     }, {});
+}
+
+/** Tests
+ *
+ * To run these tests build the documentation and open the configuration.html page in your browser.
+ * Then open developer tools and run `runTests()` in the console.
+ *
+ */
+function runTests() {
+    console.assert(dumpEnv(parseYAML("distributed:\n  logging:\n    distributed: info\n")) == 'export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"')
+    console.assert(dumpCode(parseYAML("distributed:\n  logging:\n    distributed: info\n")) == '>>> dask.config.set({"distributed.logging.distributed": "info"})')
+    console.assert(dumpYAML(parseEnv('export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"')) == "distributed:\n  logging:\n    distributed: info\n")
+    console.assert(dumpCode(parseEnv('export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"')) == '>>> dask.config.set({"distributed.logging.distributed": "info"})')
+    console.assert(dumpEnv(parseCode('>>> dask.config.set({"distributed.logging.distributed": "info"})')) == 'export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"')
+    console.assert(dumpYAML(parseCode('>>> dask.config.set({"distributed.logging.distributed": "info"})')) == "distributed:\n  logging:\n    distributed: info\n")
+    console.log("Tests complete")
 }
