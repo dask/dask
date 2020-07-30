@@ -189,7 +189,7 @@ In particular, for users coming from traditional Hadoop/Spark clusters (such as
 those sold by Cloudera/Hortonworks) you are using the Yarn resource
 manager.  You can deploy Dask on these systems using the `Dask Yarn
 <https://yarn.dask.org>`_ project, as well as other projects, like `JupyterHub
-on Hadoop <https://jcrist.github.io/jupyterhub-on-hadoop/>`_.
+on Hadoop <https://jupyterhub-on-hadoop.readthedocs.io/en/latest/>`_.
 
 
 Developer-Facing Differences
