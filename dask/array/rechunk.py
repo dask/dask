@@ -8,7 +8,7 @@ The rechunk module defines:
 import math
 import heapq
 from functools import reduce
-from typing import Union, Tuple
+from typing import Tuple
 from warnings import warn
 
 from itertools import product, chain, count
