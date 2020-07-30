@@ -647,7 +647,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
     elif is_dataframe_like(meta):
         dtypes = pd.concat([x.dtypes, meta.dtypes], axis=1, sort=True)
         bad_dtypes = [
-            (col, a, b)
+            (repr(col), a, b)
             for col, a, b in dtypes.fillna("-").itertuples()
             if not equal_dtypes(a, b)
         ]

@@ -361,9 +361,9 @@ def test_check_meta():
         "+--------+----------+----------+\n"
         "| Column | Found    | Expected |\n"
         "+--------+----------+----------+\n"
-        "| a      | object   | category |\n"
-        "| c      | -        | float64  |\n"
-        "| e      | category | -        |\n"
+        "| 'a'    | object   | category |\n"
+        "| 'c'    | -        | float64  |\n"
+        "| 'e'    | category | -        |\n"
         "+--------+----------+----------+"
     )
     assert str(err.value) == exp
