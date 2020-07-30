@@ -207,7 +207,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
         ``balance=True`` will also reduce the number of chunks by
         one if there will be any small leftover chunks.
         This means using ``x.rechunk(chunks=len(x) // N, balance=True)``
-        will result ``N`` chunks for reasonably sized chunks.
+        will almost certainly result in ``N`` chunks.
 
     Examples
     --------

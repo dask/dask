@@ -861,4 +861,3 @@ def test_balance_split_into_n_chunks():
             x = da.from_array(np.random.uniform(size=N))
             y = x.rechunk(chunks=len(x) // nchunks, balance=True)
             assert len(y.chunks[0]) == nchunks
-
