@@ -155,7 +155,7 @@ files.
 Conversion Utility
 ^^^^^^^^^^^^^^^^^^
 
-Many examples in the documentation use YAML config in their examples. You can enter
+It is possible to configure Dask inline with dot notation, with YAML or via environment variables. You can enter
 your own configuration items below to convert back and forth.
 
 .. warning::
