@@ -806,6 +806,26 @@ def test_balance_small():
     assert balanced.chunks[0] == (4, 3)
     assert unbalanced.chunks[0] == (3, 3, 1)
 
+def test_balance_n_chunks_size():
+    arr_len = 100
+    n_chunks = 8
+
+    x = da.from_array(np.arange(arr_len))
+    balanced = x.rechunk(chunks=arr_len // n_chunks, balance=True)
+    unbalanced = x.rechunk(chunks=arr_len // n_chunks, balance=False)
+    assert balanced.chunks[0] == (13, ) * 7 + (9, )
+    assert unbalanced.chunks[0] == (12, ) * 8 + (4, )
+
+def test_balance_raises():
+    arr_len = 100
+    n_chunks = 11
+
+    x = da.from_array(np.arange(arr_len))
+    with pytest.raises(ValueError, match="Try increasing the chunk size"):
+        balanced = x.rechunk(chunks=arr_len // n_chunks, balance=True)
+
+    n_chunks = 10
+    balanced = x.rechunk(chunks=arr_len // n_chunks, balance=True)
 
 def test_balance_basics_2d():
     N = 210

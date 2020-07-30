@@ -715,15 +715,22 @@ def _balance_chunksizes(chunks: Tuple[int, ...]) -> Tuple[int, ...]:
         New chunks for Dask array with balanced sizes.
     """
     median_len = np.median(chunks).astype(int)
+    n_chunks = len(chunks)
     eps = median_len // 2
     if min(chunks) <= 0.5 * max(chunks):
-        chunks = (chunks[0] + chunks[-1], *chunks[1:-1])
+        n_chunks -= 1
 
     new_chunks = [
         _get_chunks(sum(chunks), chunk_len)
         for chunk_len in range(median_len - eps, median_len + eps + 1)
     ]
-    possible_chunks = [c for c in new_chunks if len(c) == len(chunks)]
+    possible_chunks = [c for c in new_chunks if len(c) == n_chunks]
+    if not len(possible_chunks):
+        msg = (
+            "chunk size balancing not possible with given chunk size. "
+            "Try increasing the chunk size."
+        )
+        raise ValueError(msg)
 
     diffs = [max(c) - min(c) for c in possible_chunks]
     best_chunk_size = np.argmin(diffs)
