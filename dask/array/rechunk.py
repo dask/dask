@@ -204,11 +204,10 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
     balance : bool, default False
         If True, try to make each chunk to be the same size.
 
-        Reduce the number of chunks by one if there will be any small
-        leftover chunks.  This allows using
-        ``x.rechunk(chunks=len(x) // N, balance=True)``
-        to split into ``N`` chunks even if there are leftover small
-        chunks.
+        ``balance=True`` will also reduce the number of chunks by
+        one if there will be any small leftover chunks.
+        This means using ``x.rechunk(chunks=len(x) // N, balance=True)``
+        will result ``N`` chunks for reasonably sized chunks.
 
     Examples
     --------

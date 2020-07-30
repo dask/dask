@@ -835,3 +835,30 @@ def test_balance_different_inputs():
     unbalanced = x.rechunk(chunks=("10MB", -1), balance=False)
     assert balanced.chunks == unbalanced.chunks
     assert balanced.chunks[1] == (N,)
+
+
+def test_balance_split_into_n_chunks():
+    # Some prime numbers around 1000
+    array_lens = [
+        991,
+        997,
+        1009,
+        1013,
+        1019,
+        1021,
+        1031,
+        1033,
+        1039,
+        1049,
+        1051,
+        1061,
+        1063,
+        1069,
+    ]
+
+    for N in array_lens:
+        for nchunks in range(1, 20):
+            x = da.from_array(np.random.uniform(size=N))
+            y = x.rechunk(chunks=len(x) // nchunks, balance=True)
+            assert len(y.chunks[0]) == nchunks
+
