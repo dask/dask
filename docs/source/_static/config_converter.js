@@ -92,6 +92,12 @@ function parseEnv(raw) {
     return mergeDeep(...objects)
 }
 
+/**
+ * Parse Python dot notation code examples into a JS object.
+ *
+ * @param {string} raw - Raw Python dot notation code examples
+ * @return {object} The parsed data
+ */
 function parseCode(raw) {
     objects = []
     raw = raw.trim()
@@ -182,20 +188,30 @@ function walkEnv(config, prefix = "DASK_") {
     return vars
 }
 
+/**
+ * Dump a JS config object to a set of dot notation Python examples.
+ *
+ * @param {string} config - Config object
+ * @return {string} Python dot notation examples
+ *
+ * @example
+ * dumpEnv({"array": {"chunk-size": "128 MB"}})
+ * // returns '>>> dask.config.set({"array.chunk-size": "128 MB"})'
+ */
 function dumpCode(config) {
     return walkCode(config).join("\n")
 }
 
 /**
- * Walk through config object and construct env var namespace. Recursive method.
+ * Walk through config object and construct dot notation namespace. Recursive method.
  *
  * @param {string} config - Config object
- * @param {string} prefix - The prefix for the current level of nesting. Always starts with "DASK_"
+ * @param {string} prefix - The prefix for the current level of nesting.
  * @return {list} list of environment variable declarations
  *
  * @example
- * walkEnv({"array": {"chunk-size": "128 MB"}})
- * // returns ['export DASK_ARRAY__CHUNK_SIZE="128 MB"']
+ * walkCode({"array": {"chunk-size": "128 MB"}})
+ * // returns ['>>> dask.config.set({"array.chunk-size": "128 MB"})']
  */
 function walkCode(config, prefix = "") {
     let vars = []

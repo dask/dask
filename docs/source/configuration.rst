@@ -158,6 +158,10 @@ Conversion Utility
 Many examples in the documentation use YAML config in their examples. You can enter
 your own configuration items below to convert back and forth.
 
+.. warning::
+   This utility is designed to improve understanding of converting between different notations
+   and does not claim to be a perfect implementation. Please use for reference only.
+
 **YAML**
 
 .. raw:: html
