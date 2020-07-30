@@ -204,6 +204,12 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
     balance : bool, default False
         If True, try to make each chunk to be the same size.
 
+        Reduce the number of chunks by one if there will be any small
+        leftover chunks.  This allows using
+        ``x.rechunk(chunks=len(x) // N, balance=True)``
+        to split into ``N`` chunks even if there are leftover small
+        chunks.
+
     Examples
     --------
     >>> import dask.array as da
@@ -256,11 +262,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
         raise ValueError("Provided chunks are not consistent with shape")
 
     if balance:
-        ideal_chunks = tuple(int(np.median(chunk)) for chunk in chunks)
-        even_chunks = tuple(
-            _even_chunksize(N, N // c) for N, c in zip(x.shape, ideal_chunks)
-        )
-        chunks = even_chunks
+        chunks = tuple([_balance_chunksizes(chunk) for chunk in chunks])
 
     new_shapes = tuple(map(sum, chunks))
 
@@ -697,62 +699,31 @@ def _get_chunks(n, chunksize):
     return tuple(chunks)
 
 
-def _even_chunksize(N: int, n_chunks: Union[int, float]) -> Tuple[int, ...]:
+def _balance_chunksizes(chunks: Tuple[int, ...]) -> Tuple[int, ...]:
     """
-    Find a chunk size that splits an array into even sized chunks.
+    Balance the chunk sizes
 
     Parameters
     ----------
-    N : int
-        Length of the array
-    n_chunks : int, float.
-        Approximate number of chunks for the array
+    chunks : Tuple[int, ...]
+        Chunk sizes for Dask array.
 
     Returns
     -------
-    chunksize : Tuple[int, ...]
-        The chunksize for the array. When an array is chunked with this
-        chunksize,
-
-        * The length of every chunk will be approximately the same.
-        * The number of chunks will be approximately ``n_chunks`` (within one).
-
+    new_chunks : Tuple[int, ...]
+        New chunks for Dask array with balanced sizes.
     """
-    if n_chunks <= 1:
-        return (N,)
-    if isinstance(n_chunks, int):
-        min_nchunks = max_nchunks = n_chunks
-        _n_chunks = np.array([n_chunks])
-    elif isinstance(n_chunks, float):
-        min_nchunks = max(1, math.floor(n_chunks))
-        max_nchunks = max(1, math.ceil(n_chunks))
-        _n_chunks = np.array([min_nchunks, max_nchunks])
-    else:
-        raise TypeError("n_chunks={} is not an int of a float")
-    chunk_sizes = N / _n_chunks
-    eps = 0.2
-    min_chunkssize = int((1 - eps) * chunk_sizes.min())
-    max_chunkssize = int((1 + eps) * chunk_sizes.max())
-    chunk_sizes = [int(c) for c in range(min_chunkssize, max_chunkssize + 1) if c >= 1]
-    possible_chunks = {c: _get_chunks(N, c) for c in chunk_sizes}
+    median_len = np.median(chunks).astype(int)
+    eps = median_len // 2
+    if min(chunks) <= 0.5 * max(chunks):
+        chunks = (chunks[0] + chunks[-1], *chunks[1:-1])
 
-    valid_chunks = {
-        size: chunks
-        for size, chunks in possible_chunks.items()
-        if min_nchunks <= len(chunks) <= max_nchunks
-    }
-    if not len(valid_chunks):
-        msg = (
-            "With n_chunks={nchunks} and dimension length={N}, the chunk size "
-            "is approximately {chunksize}. It's not possible to evenly divide "
-            "into n_chunks={nchunks} with the accepted tolerance.\n\nTo "
-            "resolve this error, try decreasing n_chunks for a larger chunksize"
-        )
-        raise ValueError(msg.format(nchunks=n_chunks, N=N, chunksize=_n_chunks.min()))
+    new_chunks = [
+        _get_chunks(sum(chunks), chunk_len)
+        for chunk_len in range(median_len - eps, median_len + eps + 1)
+    ]
+    possible_chunks = [c for c in new_chunks if len(c) == len(chunks)]
 
-    diffs = {
-        chunksize: max(chunks) - min(chunks)
-        for chunksize, chunks in valid_chunks.items()
-    }
-    best_chunksize = min(diffs, key=diffs.get)
-    return valid_chunks[best_chunksize]
+    diffs = [max(c) - min(c) for c in possible_chunks]
+    best_chunk_size = np.argmin(diffs)
+    return possible_chunks[best_chunk_size]
