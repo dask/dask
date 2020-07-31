@@ -3,13 +3,13 @@ Dask Dataframe and SQL
 
 SQL is a method for executing tabular computation on database servers.
 Simlar operations can be done on Dask Dataframes. Users commonly wish
-to link the two to:
-
-.. contents:: :local:
+to link the two together.
 
 This document describes the connection between Dask and SQL-databases
 and serves to clarify several of the questions that we commonly
 receive from users.
+
+.. contents:: :local:
 
 Does Dask implement SQL?
 ------------------------
@@ -60,7 +60,7 @@ would be best to profile your queries
 to combine data from different sources, dask may be your best option.
 
 You may find the dask API easier to use than writing SQL (if you
-are already used to Pandas), and the diagnostic feedback more unseful.
+are already used to Pandas), and the diagnostic feedback more useful.
 These points can debatably be in Dask's favour.
 
 Loading from SQL with read_sql_table
@@ -186,7 +186,7 @@ output data type or conversion in the database, if pandas is having
 trouble inferring the data type.
 
 You should be warned, that SQLAlchemy expressions take some time to get
-used to, and you can practive with Pandas first, reading only the first small
+used to, and you can practice with Pandas first, reading only the first small
 chunk of a query, until things look right. You can find a more complete
 object-oriented example in `this gist`_
 
