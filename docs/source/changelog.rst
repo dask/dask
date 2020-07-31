@@ -1,6 +1,26 @@
 Changelog
 =========
 
+2.22.0 - 2020-07-31
+-------------------
+
+- Only call ``frame_split_size`` when there are frames (:pr:`3996`) `jakirkham`_
+- Fix failing ``test_bandwidth`` (:pr:`3999`) `jakirkham`_
+- Handle sum of memory percentage when ``memory_limit`` is 0 (:pr:`3984`) `Julia Signell`_
+- Drop msgpack pre-0.5.2 compat code (:pr:`3977`) `jakirkham`_
+- Revert to localhost for local IP if no network available (:pr:`3991`) `Matthew Rocklin`_
+- Add missing backtick in inline directive. (:pr:`3988`) `Matthias Bussonnier`_
+- Warn when ``threads_per_worker`` is set to zero (:pr:`3986`) `Julia Signell`_
+- Use ``memoryview`` in ``unpack_frames`` (:pr:`3980`) `jakirkham`_
+- Iterate over list of comms (:pr:`3959`) `Matthew Rocklin`_
+- Streamline ``pack_frames``/``unpack_frames`` frames (:pr:`3973`) `jakirkham`_
+- Always attempt to create ``dask-worker-space`` folder and continue if it exists (:pr:`3972`) `Jendrik Jördening`_
+- Use ``merge_frames`` with host memory only (:pr:`3971`) `jakirkham`_
+- Simplify ``pack_frames_prelude`` (:pr:`3961`) `jakirkham`_
+- Use continuation prompt for proper example parsing (:pr:`3966`) `Matthias Bussonnier`_
+- Ensure writable frames (:pr:`3967`) `jakirkham`_
+
+
 2.21.0 - 2020-07-17
 -------------------
 
@@ -1864,3 +1884,4 @@ significantly without many new features.
 .. _`joshreback`: https://github.com/joshreback
 .. _`Alexander Clausen`: https://github.com/sk1p
 .. _`Andrew Fulton`: https://github.com/andrewfulton9
+.. _`Jendrik Jördening`: https://github.com/jendrikjoe
