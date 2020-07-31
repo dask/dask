@@ -1,6 +1,43 @@
 Changelog
 =========
 
+2.22.0 / 2020-07-31
+-------------------
+
+Array
++++++
+
+- Compatibility for NumPy dtype deprecation (:pr:`6430`) `Tom Augspurger`_
+
+Core
+++++
+
+- Implement ``sizeof`` for some ``bytes``-like objects (:pr:`6457`) `John A Kirkham`_
+- HTTP error for new ``fsspec`` (:pr:`6446`) `Martin Durant`_
+- When ``RecursionError`` is raised, return uuid from ``tokenize`` function (:pr:`6437`) `Julia Signell`_
+- Install deps of upstream-dev packages (:pr:`6431`) `Tom Augspurger`_
+- Use updated link in ``setup.cfg`` (:pr:`6426`) `Zhengnan`_
+
+DataFrame
++++++++++
+
+- Add single quotes around column names if strings (:pr:`6471`) `Gil Forsyth`_
+- Refactor ``ArrowEngine`` for better ``read_parquet`` performance (:pr:`6346`) `Richard (Rick) Zamora`_
+- Add ``tolist`` dispatch (:pr:`6444`) `GALI PREM SAGAR`_
+- Compatibility with pandas 1.1.0rc0 (:pr:`6429`) `Tom Augspurger`_
+- Multi value pivot table (:pr:`6428`) `joshreback`_
+- Duplicate argument definitions in ``to_csv`` docstring (:pr:`6411`) `Jun Han (Johnson) Ooi`_
+
+Documentation
++++++++++++++
+
+- Add utility to docs to convert YAML config to env vars and back (:pr:`6472`) `Jacob Tomlinson`_
+- Fix parameter server rendering (:pr:`6466`) `Scott Sievert`_
+- Fixes broken links (:pr:`6403`) `Jim Circadian`_
+- Complete parameter server implementation in docs (:pr:`6449`) `Scott Sievert`_
+- Fix typo (:pr:`6436`) `Jack Xiaosong Xu`_
+
+
 2.21.0 / 2020-07-17
 -------------------
 
@@ -3419,3 +3456,7 @@ Other
 .. _`Clark Zinzow`: https://github.com/clarkzinzow
 .. _`Tom McTiernan`: https://github.com/tmct
 .. _`Zhengnan`: https://github.com/ZhengnanZhao
+.. _`joshreback`: https://github.com/joshreback
+.. _`Jun Han (Johnson) Ooi`: https://github.com/tebesfinwo
+.. _`Jim Circadian`: https://github.com/JimCircadian
+.. _`Jack Xiaosong Xu`: https://github.com/jackxxu
