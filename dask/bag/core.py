@@ -2503,6 +2503,15 @@ def repartition_npartitions(bag, npartitions):
         return _split_partitions(bag, nsplits, new_name)
 
 
+def total_mem_usage(bag):
+    from copy import deepcopy
+    from itertools import chain
+
+    if isinstance(bag, chain):
+        bag = reify(deepcopy(bag))
+    return sizeof(bag)
+
+
 def repartition_size(bag, size):
     """
     Repartition bag so that new partitions have approximately `size` memory usage each
@@ -2510,7 +2519,7 @@ def repartition_size(bag, size):
     if isinstance(size, str):
         size = parse_bytes(size)
     size = int(size)
-    mem_usages = bag.map_partitions(sizeof).compute()
+    mem_usages = bag.map_partitions(total_mem_usage).compute()
 
     # 1. split each partition that is larger than partition size
     nsplits = [1 + mem_usage // size for mem_usage in mem_usages]

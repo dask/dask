@@ -26,12 +26,12 @@ from dask.bag.core import (
     inline_singleton_lists,
     optimize,
     from_delayed,
+    total_mem_usage
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
 from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
-from dask.sizeof import sizeof
 
 
 # Needed to pickle the lambda functions used in this test suite
@@ -1180,7 +1180,7 @@ def test_repartition_npartitions(nin, nout):
 )
 def test_repartition_partition_size(nin, nout):
     b = db.from_sequence(range(1, 100), npartitions=nin)
-    total_mem = sum(b.map_partitions(sizeof).compute())
+    total_mem = sum(b.map_partitions(total_mem_usage).compute())
     c = b.repartition(partition_size=(total_mem // nout))
     assert c.npartitions >= nout
     assert_eq(b, c)
@@ -1188,7 +1188,7 @@ def test_repartition_partition_size(nin, nout):
 
 def test_multiple_repartition_partition_size():
     b = db.from_sequence(range(1, 100), npartitions=1)
-    total_mem = sum(b.map_partitions(sizeof).compute())
+    total_mem = sum(b.map_partitions(total_mem_usage).compute())
 
     c = b.repartition(partition_size=(total_mem // 2))
     assert c.npartitions >= 2
@@ -1203,12 +1203,12 @@ def test_repartition_partition_size_complex_dtypes():
     import numpy as np
 
     b = db.from_sequence([np.array(range(100)) for _ in range(4)], npartitions=1)
-    total_mem = sum(b.map_partitions(sizeof).compute())
+    total_mem = sum(b.map_partitions(total_mem_usage).compute())
 
     new_partition_size = total_mem // 4
     c = b.repartition(partition_size=new_partition_size)
     assert c.npartitions >= 4
-    mem_usages = c.map_partitions(sizeof).compute()
+    mem_usages = c.map_partitions(total_mem_usage).compute()
     assert max(mem_usages) < new_partition_size
     assert_eq(b, c)
 

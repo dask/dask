@@ -4,7 +4,6 @@ from array import array
 from distutils.version import LooseVersion
 
 from .utils import Dispatch
-from itertools import chain
 
 try:  # PyPy does not support sys.getsizeof
     sys.getsizeof(1)
@@ -63,17 +62,6 @@ def sizeof_python_dict(d):
         + sizeof(list(d.values()))
         - 2 * sizeof(list())
     )
-
-
-@sizeof.register(chain)
-def sizeof_itertools_chain(c):
-    from copy import deepcopy
-
-    c2 = deepcopy(c)
-    mem = 0
-    for e in c2:
-        mem += sizeof(e)
-    return mem
 
 
 @sizeof.register_lazy("cupy")

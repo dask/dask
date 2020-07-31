@@ -26,17 +26,6 @@ def test_bytes_like():
     assert 8000 <= sizeof(array("d", range(1000))) <= 9000
 
 
-def test_itertools_chain():
-    from itertools import chain
-
-    iterator1 = chain.from_iterable([list(range(10))])
-    iterator2 = chain.from_iterable([list(range(20))])
-    assert sizeof(iterator2) > sizeof(iterator1)
-
-    iterator1 = chain.from_iterable([list(range(10))])
-    assert sizeof(iterator1) == sizeof(iterator1)
-
-
 def test_numpy():
     np = pytest.importorskip("numpy")
     assert 8000 <= sizeof(np.empty(1000, dtype="f8")) <= 9000
