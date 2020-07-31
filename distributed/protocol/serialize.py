@@ -475,8 +475,8 @@ def serialize_bytelist(x, **kwargs):
     header, frames = serialize(x, **kwargs)
     if "lengths" not in header:
         header["lengths"] = tuple(map(nbytes, frames))
-    frames = sum(map(frame_split_size, frames), [])
     if frames:
+        frames = sum(map(frame_split_size, frames), [])
         compression, frames = zip(*map(maybe_compress, frames))
     else:
         compression = []
