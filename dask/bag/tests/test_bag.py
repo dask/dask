@@ -26,7 +26,7 @@ from dask.bag.core import (
     inline_singleton_lists,
     optimize,
     from_delayed,
-    total_mem_usage
+    total_mem_usage,
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
