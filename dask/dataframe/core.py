@@ -1153,6 +1153,12 @@ Dask Name: {name}, {task} tasks"""
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
         """
+        if isinstance(divisions, int):
+            npartitions = divisions
+            divisions = None
+        if isinstance(divisions, str):
+            partition_size = divisions
+            divisions = None
         if (
             sum(
                 [
