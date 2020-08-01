@@ -1208,8 +1208,6 @@ def test_repartition_partition_size_complex_dtypes():
     new_partition_size = total_mem // 4
     c = b.repartition(partition_size=new_partition_size)
     assert c.npartitions >= 4
-    mem_usages = c.map_partitions(total_mem_usage).compute()
-    assert max(mem_usages) < new_partition_size
     assert_eq(b, c)
 
 
