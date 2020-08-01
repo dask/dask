@@ -362,6 +362,13 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     annotations = kwargs.pop("annotations", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
+    if annotations is None:
+        annotate_with_block_id = False
+    elif isinstance(annotations, dict):
+        annotate_with_block_id = annotations.get("block_id", False)
+    else:
+        raise TypeError("annotations must be a dictionary")
+
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
@@ -453,12 +460,11 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                     tups = (arg,) + arg_coords
                 args.append(tups)
 
-        # NOTE(sjperkins)
-        # Callable annotations may have security
-        # implications when expanding Blockwise
-        # objects on distributed servers. Not
-        # currently the case but might be in future.
-        annot = annotations(out_coords) if callable(annotations) else annotations
+        if annotate_with_block_id:
+            annot = annotations.copy()
+            annot["block_id"] = out_coords
+        else:
+            annot = annotations
 
         if kwargs:
             val = Task(func, args, kwargs2, annotations=annot)

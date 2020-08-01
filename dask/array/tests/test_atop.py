@@ -198,13 +198,13 @@ def test_blockwise_annotations():
     for task in r.__dask_graph__().layers[r.name].values():
         assert task.annotations == annotation
 
-    def annotations(coords):
-        return {"coordinate": coords}
+    annotations = {"block_id": True, "data": "x"}
 
     r = da.blockwise(fn, "ij", x, "i", y, "j", annotations=annotations, dtype=np.int32)
 
     for k, task in r.__dask_graph__().layers[r.name].items():
-        assert k[1:] == task.annotations["coordinate"]
+        assert k[1:] == task.annotations["block_id"]
+        assert task.annotations["data"] == "x"
 
 
 def test_index_subs():
