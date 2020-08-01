@@ -20,7 +20,7 @@ set.
    from dask.distributed import Client
    client = Client()
 
-You can navigate to http://localhost:8787/status to see the diagnostic
+You can navigate to ``http://localhost:8787/status`` to see the diagnostic
 dashboard if you have Bokeh installed.
 
 Client
