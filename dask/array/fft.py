@@ -137,8 +137,9 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
     Examples
     --------
-    >>> parallel_fft = fft_wrap(np.fft.fft)
-    >>> parallel_ifft = fft_wrap(np.fft.ifft)
+    >>> import dask.array.fft as dff
+    >>> parallel_fft = dff.fft_wrap(np.fft.fft)
+    >>> parallel_ifft = dff.fft_wrap(np.fft.ifft)
     """
     if scipy is not None:
         if fft_func is scipy.fftpack.rfft:
