@@ -1090,6 +1090,7 @@ def test_partition_on(tmpdir, engine):
 
 
 def test_partition_on_duplicates(tmpdir, engine):
+    # https://github.com/dask/dask/issues/6445
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
         {
