@@ -276,7 +276,7 @@ async def test_ProcessingHistogram(c, s, a, b):
 async def test_NBytesHistogram(c, s, a, b):
     nh = NBytesHistogram(s)
     nh.update()
-    assert (nh.source.data["top"] != 0).sum() == 1
+    assert any(nh.source.data["top"] != 0)
 
     futures = c.map(inc, range(10))
     await wait(futures)
