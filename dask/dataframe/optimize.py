@@ -60,7 +60,7 @@ def optimize_read_parquet_getitem(dsk, keys):
                 # ... with a single item...
                 return dsk
 
-            if list(block.dsk.values())[0][0] != operator.getitem:
+            if list(block.dsk.values())[0].function != operator.getitem:
                 # ... where this value is __getitem__...
                 return dsk
 

@@ -10,8 +10,8 @@ from .core import reverse_dict
 from .delayed import to_task_dask
 from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable, fuse
-from .task import Task
-from .utils import ensure_dict, homogeneous_deepmap, apply
+from .task import Task, TupleTask, spec_type
+from .utils import ensure_dict, homogeneous_deepmap
 
 
 def subs(task, substitution):
@@ -20,14 +20,22 @@ def subs(task, substitution):
     This is like dask.core.subs, but takes a dict of many substitutions to
     perform simultaneously.  It is not as concerned with micro performance.
     """
-    if isinstance(task, dict):
+    typ = spec_type(task)
+
+    if typ is dict:
         return {k: subs(v, substitution) for k, v in task.items()}
-    if type(task) in (tuple, list, set):
+    elif typ is Task:
+        return Task(task.function,
+                    subs(task.args, substitution),
+                    subs(task.kwargs, substitution),
+                    task.annotations)
+    elif typ in (TupleTask, tuple, list, set):
         return type(task)([subs(x, substitution) for x in task])
-    try:
-        return substitution[task]
-    except (KeyError, TypeError):
-        return task
+    else:
+        try:
+            return substitution[task]
+        except (KeyError, TypeError):
+            return task
 
 
 def index_subs(ind, substitution):
@@ -113,13 +121,12 @@ def blockwise(
 
     # Construct local graph
     if not kwargs:
-        subgraph = {output: (func,) + tuple(keys)}
+        subgraph = {output: Task(func, list(keys))}
     else:
         _keys = list(keys)
         if new_keys:
             _keys = _keys[: -len(new_keys)]
-        kwargs2 = (dict, list(map(list, kwargs.items())))
-        subgraph = {output: (apply, func, _keys, kwargs2)}
+        subgraph = {output: Task(func, _keys, kwargs)}
 
     # Construct final output
     subgraph = Blockwise(

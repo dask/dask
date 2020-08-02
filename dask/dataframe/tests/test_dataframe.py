@@ -14,6 +14,7 @@ import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
+from dask.task import Task
 from dask.utils import put_lines, M
 
 from dask.dataframe.core import (
@@ -4345,7 +4346,7 @@ def test_simple_map_partitions():
     ddf = ddf.clip(-4, 6)
     task = ddf.__dask_graph__()[ddf.__dask_keys__()[0]]
     [v] = task.function.dsk.values()
-    assert v[0] == M.clip or v[1] == M.clip
+    assert type(v) is Task and v.function == M.clip
 
 
 def test_iter():
