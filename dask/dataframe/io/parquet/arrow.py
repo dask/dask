@@ -72,7 +72,7 @@ def _write_partitioned(
             subgroup, preserve_index=preserve_index, schema=subschema, safe=False
         )
         prefix = fs.sep.join([root_path, subdir])
-        fs.mkdirs(prefix, exists_ok=True)
+        fs.mkdirs(prefix, exist_ok=True)
         full_path = fs.sep.join([prefix, filename])
         with fs.open(full_path, "wb") as f:
             pq.write_table(subtable, f, metadata_collector=md_list, **kwargs)
