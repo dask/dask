@@ -29,7 +29,7 @@ except ImportError:
 try:
     import sparse
 
-    register_chunk_type(sparse.COO)
+    register_chunk_type(sparse.SparseArray)
 except ImportError:
     pass
 
