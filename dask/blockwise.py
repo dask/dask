@@ -25,10 +25,12 @@ def subs(task, substitution):
     if typ is dict:
         return {k: subs(v, substitution) for k, v in task.items()}
     elif typ is Task:
-        return Task(task.function,
-                    subs(task.args, substitution),
-                    subs(task.kwargs, substitution),
-                    task.annotations)
+        return Task(
+            task.function,
+            subs(task.args, substitution),
+            subs(task.kwargs, substitution),
+            task.annotations,
+        )
     elif typ in (TupleTask, tuple, list, set):
         return type(task)([subs(x, substitution) for x in task])
     else:
