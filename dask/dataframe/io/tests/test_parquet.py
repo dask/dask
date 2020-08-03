@@ -1115,22 +1115,6 @@ def test_partition_on_duplicates(tmpdir, engine):
     out = dd.read_parquet(tmpdir, engine=engine).compute()
 
     assert len(df) == len(out)
-
-
-def test_partition_on_output_files(tmpdir, engine):
-    # https://github.com/dask/dask/issues/6445
-    tmpdir = str(tmpdir)
-    df = pd.DataFrame(
-        {
-            "a1": np.random.choice(["A", "B", "C"], size=100),
-            "a2": np.random.choice(["X", "Y", "Z"], size=100),
-            "data": np.random.random(size=100),
-        }
-    )
-    d = dd.from_pandas(df, npartitions=2)
-
-    d.to_parquet(tmpdir, partition_on=["a1", "a2"], engine=engine)
-
     for root, dirs, files in os.walk(tmpdir):
         if root == tmpdir:
             for file in files:
