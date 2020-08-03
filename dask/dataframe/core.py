@@ -1120,6 +1120,8 @@ Dask Name: {name}, {task} tasks"""
         divisions : list, optional
             List of partitions to be used. Only used if npartitions and
             partition_size isn't specified.
+            For convenience if given an integer this will defer to npartitions
+            and if given a string it will defer to partition_size (see below)
         npartitions : int, optional
             Number of partitions of output. Only used if partition_size
             isn't specified.
