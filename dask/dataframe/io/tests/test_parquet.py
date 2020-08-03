@@ -1096,6 +1096,34 @@ def test_partition_on(tmpdir, engine):
         assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
 
 
+def test_partition_on_duplicates(tmpdir, engine):
+    # https://github.com/dask/dask/issues/6445
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "a1": np.random.choice(["A", "B", "C"], size=100),
+            "a2": np.random.choice(["X", "Y", "Z"], size=100),
+            "data": np.random.random(size=100),
+        }
+    )
+    d = dd.from_pandas(df, npartitions=2)
+
+    for _ in range(2):
+        d.to_parquet(tmpdir, partition_on=["a1", "a2"], engine=engine)
+
+    out = dd.read_parquet(tmpdir, engine=engine).compute()
+
+    assert len(df) == len(out)
+    for root, dirs, files in os.walk(tmpdir):
+        for file in files:
+            assert file in (
+                "part.0.parquet",
+                "part.1.parquet",
+                "_common_metadata",
+                "_metadata",
+            )
+
+
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
 def test_partition_on_string(tmpdir, partition_on):
     tmpdir = str(tmpdir)
