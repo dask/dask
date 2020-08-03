@@ -45,7 +45,7 @@ among the various worker processes or threads:
    client = Client(processes=False)  # start local workers as threads
 
 If you have `Bokeh <https://bokeh.pydata.org>`_ installed, then this starts up a
-diagnostic dashboard at http://localhost:8787 .
+diagnostic dashboard at ``http://localhost:8787`` .
 
 Submit Tasks
 ------------
@@ -791,6 +791,17 @@ Attribute access is synchronous and blocking:
 Example: Parameter Server
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+This example will perform the following minimization with a parameter server:
+
+.. math::
+
+   \min_{p\in\mathbb{R}^{1000}} \sum_{i=1}^{1000} (p_i - 1)^2
+
+This is a simple minimization that will serve as an illustrative example.
+
+The Dask Actor will serve as the parameter server that will hold the model.
+The client will calculate the gradient of the loss function above.
+
 .. code-block:: python
 
    import numpy as np
@@ -808,16 +819,26 @@ Example: Parameter Server
        def get(self, key):
            return self.data[key]
 
+   def train(params, lr=0.1):
+       grad = 2 * (params - 1)  # gradient of (params - 1)**2
+       new_params = params - lr * grad
+       return new_params
+
    ps_future = client.submit(ParameterServer, actor=True)
    ps = ps_future.result()
 
    ps.put('parameters', np.random.random(1000))
+   for k in range(20):
+       params = ps.get('parameters').result()
+       new_params = train(params)
+       ps.put('parameters', new_params)
+       print(new_params.mean())
+       # k=0: "0.5988202981316124"
+       # k=10: "0.9569236575164062"
 
-   def train(batch, ps):
-       params = ps.get('parameters')
-
-   for batch in batches:
-
+This example works, and the loss function is minimized. The (simple) equation
+above is minimize, so each :math:`p_i` converges to 1. If desired, this example
+could be adapted to machine learning with a more complex function to minimize.
 
 Asynchronous Operation
 ~~~~~~~~~~~~~~~~~~~~~~
