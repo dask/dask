@@ -1116,13 +1116,13 @@ def test_partition_on_duplicates(tmpdir, engine):
 
     assert len(df) == len(out)
     for root, dirs, files in os.walk(tmpdir):
-        if root == tmpdir:
-            for file in files:
-                assert file in ("_common_metadata", "_metadata")
-        else:
-            for file in files:
-                assert re.match(f"{tmpdir}/a1=[ABC]/a2=[XYZ]", root)
-                assert file in ("part.0.parquet", "part.1.parquet")
+        for file in files:
+            assert file in (
+                "part.0.parquet",
+                "part.1.parquet",
+                "_common_metadata",
+                "_metadata",
+            )
 
 
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
