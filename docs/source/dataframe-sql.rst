@@ -2,14 +2,17 @@ Dask Dataframe and SQL
 ======================
 
 SQL is a method for executing tabular computation on database servers.
-Simlar operations can be done on Dask Dataframes. Users commonly wish
+Similar operations can be done on Dask Dataframes. Users commonly wish
 to link the two together.
 
 This document describes the connection between Dask and SQL-databases
 and serves to clarify several of the questions that we commonly
 receive from users.
 
-.. contents:: :local:
+.. contents::
+    :local:
+    :depth: 1
+    :backlinks: top
 
 Does Dask implement SQL?
 ------------------------
@@ -77,7 +80,7 @@ database server.
 Since Dask is designed to work with larger-than-memory datasets, or be distributed
 on a cluster, the following are the main differences versus Pandas to watch out for
 
-- Dask does not support arbitray text queries, only whole tables and SQLAlchemy
+- Dask does not support arbitrary text queries, only whole tables and SQLAlchemy
   `sql expressions`_
 
 - the engine argument must be a `URI string`_, not an SQLAlchemy engine/connection
@@ -94,7 +97,8 @@ on a cluster, the following are the main differences versus Pandas to watch out 
 If you need something more flexible than this, or the
 method fails for you (e.g., on type inference), then skip to the next section.
 
-**Why the differences**
+Why the differences
+^^^^^^^^^^^^^^^^^^^
 
 Dask is intended to make processing large volumes of data possible, including
 potentially distributing that processing across a cluster. For the retreival of
@@ -107,7 +111,7 @@ The constraints mean that we cannot directly accept SQLAlchemy engines
 or connection objects, since they have internal state (buffers, etc.)
 that cannot be serialised. A `URI string`_  must be used, which can be
 recreated into a fresh engine on the workers.
-Similarly, we cannot accomodate chunked queries
+Similarly, we cannot accommodate chunked queries
 which rely on the internal state of a database cursor; nor LIMIT/OFFSET
 queries, which are not guaranteed to be repeatable, and involve scanning
 the whole query on th server (which is very inefficient).
@@ -116,7 +120,8 @@ the whole query on th server (which is very inefficient).
 distributed capabilities, then you are probably better to use Pandas or SQLAlchemy
 directly.
 
-**Index Column**
+Index Column
+^^^^^^^^^^^^
 
 We need a way to turn a single main query into sub-queries for each
 partition. For most reasonable database tables, there should be an obvious
@@ -126,7 +131,7 @@ is important, since many simultaneous queries will hit your server once
 Dask starts to compute.
 
 By providing just a column name for the index argument, you imply that the
-column is numeric, and Dask guesses a reasonable partitiong by evenly
+column is numeric, and Dask guesses a reasonable partitioning by evenly
 splitting the space between minimum and maximum values into ``npartitions``
 intervals. You can also provide the max/min that you would like to
 consider so that Dask doesn't need to query for these. Alternatively,
@@ -135,7 +140,8 @@ them to guess the typical bytes/row, and base the partitioning size on
 this. Needless to say, the results will vary a lot for tables that are
 not uncommonly homogenous.
 
-**Specific partitioning**
+Specific partitioning
+^^^^^^^^^^^^^^^^^^^^^
 
 In some cases, you may have a very good idea of how to partition the data,
 for example based on a column that has a finite number of unique values
@@ -145,7 +151,7 @@ natural ordering, for the index column, not only numerical types.
 In this case, you would provide a specific set of ``divisions``,
 the start/end values of the index column for each partition. For example,
 if a column happened to contain a random ID in hex string format, then you
-could precify 16 partitions with
+could specify 16 partitions with
 
 .. code-block:: python
 
@@ -153,9 +159,10 @@ could precify 16 partitions with
                         index_col="hexID")
 
 so the first partition would have IDs with values ``"0" <= hexID < "1"``, i.e.,
-leading characted "0".
+leading character "0".
 
-**SQLAlchemy expressions**
+SQLAlchemy expressions
+^^^^^^^^^^^^^^^^^^^^^^
 
 Since we only send the database connection URI and not the engine object,
 we cannot rely on SQLAlchemy's table class inference and ORM to conduct queries. However, we can
@@ -195,7 +202,11 @@ object-oriented example in `this gist`_
 Load from SQL, manual approaches
 --------------------------------
 
-**Delayed functions**
+If ``read_sql_table`` is not sufficient for your needs, you can try one of
+the following methods.
+
+Delayed functions
+^^^^^^^^^^^^^^^^^
 
 Often you know more about your data and server than the generic approach above
 allows. Indeed, some database-like servers may simply not be supported by
@@ -228,12 +239,13 @@ your own query, and a way to format that query to be specific to each partition.
 For example, you might have ranges or specific unique values with a WHERE
 clause. The ``known_types`` here is used to transform the dataframe partition and provide
 a ``meta``, to help for consistency and avoid Dask having to analyse one partition
-up front the guess the columns/types; you may also want to explicitly set the index.
+up front to guess the columns/types; you may also want to explicitly set the index.
 Furthermore, it is a good idea to provide
 ``divisions`` (the start/end of each partition in the index column), if possible,
 since you likely know these from the subqueries you are constructing.
 
-**Stream via client**
+Stream via client
+^^^^^^^^^^^^^^^^^
 
 In some cases, the workers may not have access to data, but the client does;
 or the initial loading time of the data is not important, so long as the
@@ -246,7 +258,8 @@ See a complete example of how to do this `here`_
 .. _here: https://stackoverflow.com/questions/62818473/why-dasks-read-sql-table-requires-a-index-col-parameter/62821858#62821858
 
 
-**Access data files directly**
+Access data files directly
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Some database systems such as Apache Hive store their data in a location
 and format that may be directly accessible to Dask, such as parquet files
