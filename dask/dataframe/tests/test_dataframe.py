@@ -1886,7 +1886,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
-    b = a.repartition(npartitions=k)
+    b = a.repartition(k)
     assert_eq(a, b)
     assert b.npartitions == k
     parts = dask.get(b.dask, b.__dask_keys__())
@@ -1909,6 +1909,13 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     assert np.alltrue(b.map_partitions(total_mem_usage, deep=True).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
+
+
+def test_repartition_partition_size_arg():
+    df = pd.DataFrame({"x": range(10)},)
+    a = dd.from_pandas(df, npartitions=2)
+    b = a.repartition("1 MiB")
+    assert b.npartitions == 1
 
 
 def test_iter_chunks():
