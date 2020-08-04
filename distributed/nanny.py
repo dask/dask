@@ -293,7 +293,7 @@ class Nanny(ServerNode):
 
         logger.info("        Start Nanny at: %r", self.address)
         response = await self.instantiate()
-        if response == "running":
+        if response == Status.running:
             assert self.worker_address
             self.status = Status.running
         else:
@@ -316,7 +316,7 @@ class Nanny(ServerNode):
         deadline = self.loop.time() + timeout
         await self.process.kill(timeout=0.8 * (deadline - self.loop.time()))
 
-    async def instantiate(self, comm=None):
+    async def instantiate(self, comm=None) -> Status:
         """ Start a local worker process
 
         Blocks until the process is up and the scheduler is properly informed
@@ -535,7 +535,7 @@ class WorkerProcess:
         self.worker_dir = None
         self.worker_address = None
 
-    async def start(self):
+    async def start(self) -> Status:
         """
         Ensure the worker process is started.
         """
@@ -584,7 +584,7 @@ class WorkerProcess:
         self.worker_address = msg["address"]
         self.worker_dir = msg["dir"]
         assert self.worker_address
-        self.status = "running"
+        self.status = Status.running
         self.running.set()
 
         init_q.close()

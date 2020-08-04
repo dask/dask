@@ -4,6 +4,7 @@ import socket
 import sys
 import threading
 import weakref
+import warnings
 
 import pytest
 
@@ -11,6 +12,7 @@ import dask
 from distributed.core import (
     pingpong,
     Server,
+    Status,
     rpc,
     connect,
     send_recv,
@@ -74,6 +76,79 @@ def echo_serialize(comm, x):
 
 def echo_no_serialize(comm, x):
     return {"result": x}
+
+
+def test_server_status_is_always_enum():
+    """
+    Assignments with strings get converted to corresponding Enum variant
+    """
+    server = Server({})
+    assert isinstance(server.status, Status)
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("ignore")
+        assert server.status != Status.stopped
+        server.status = "stopped"
+    assert isinstance(server.status, Status)
+    assert server.status == Status.stopped
+
+
+def test_server_status_assign_non_variant_raises():
+    server = Server({})
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("ignore")
+        with pytest.raises(AssertionError):
+            server.status = "I do not exists"
+
+
+def test_server_status_compare_non_variant_raises():
+    server = Server({})
+    # turn off warnings into error for assertion checking.
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("default")
+        with pytest.raises(AssertionError):
+            server.status == "You can't compare with me"
+
+
+def test_server_status_assign_with_variant_warns():
+    server = Server({})
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("default")
+        with pytest.warns(PendingDeprecationWarning):
+            server.status = "running"
+
+
+def test_server_status_compare_with_variant_warns():
+    server = Server({})
+    with warnings.catch_warnings(record=True) as w:
+        warnings.simplefilter("default")
+        with pytest.warns(PendingDeprecationWarning):
+            server.status == "running"
+
+
+def test_server_status_assign_with_variant_raises_in_tests():
+    """That would be the default in user code"""
+    server = Server({})
+    with pytest.raises(PendingDeprecationWarning):
+        server.status = "running"
+
+
+def test_server_status_compare_with_variant_raises_in_tests():
+    """That would be the default in user code"""
+    server = Server({})
+    with pytest.raises(PendingDeprecationWarning):
+        server.status == "running"
+
+
+def test_server_assign_assign_enum_is_quiet():
+    """That would be the default in user code"""
+    server = Server({})
+    server.status = Status.running
+
+
+def test_server_status_compare_enum_is_quiet():
+    """That would be the default in user code"""
+    server = Server({})
+    server.status == Status.running
 
 
 def test_server(loop):
@@ -269,7 +344,7 @@ async def check_rpc(listen_addr, rpc_addr=None, listen_args={}, connection_args=
         assert response == b"pong"
 
     assert not remote.comms
-    assert remote.status == "closed"
+    assert remote.status == Status.closed
 
     server.stop()
     await asyncio.sleep(0)

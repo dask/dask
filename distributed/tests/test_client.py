@@ -40,6 +40,7 @@ from distributed import (
     TimeoutError,
     CancelledError,
 )
+from distributed.core import Status
 from distributed.comm import CommClosedError
 from distributed.client import (
     Client,
@@ -3690,7 +3691,7 @@ def test_open_close_many_workers(loop, worker, count, repeat):
 
             [c.sync(w.close) for w in list(workers)]
             for w in workers:
-                assert w.status == "closed"
+                assert w.status == Status.closed
 
     start = time()
     while proc.num_fds() > before:
@@ -4625,7 +4626,7 @@ async def test_retire_workers(c, s, a, b):
     assert set(s.workers) == {b.address}
 
     start = time()
-    while a.status != "closed":
+    while a.status != Status.closed:
         await asyncio.sleep(0.01)
         assert time() < start + 5
 
@@ -5829,8 +5830,8 @@ async def test_shutdown(cleanup):
             async with Client(s.address, asynchronous=True) as c:
                 await c.shutdown()
 
-            assert s.status == "closed"
-            assert w.status == "closed"
+            assert s.status == Status.closed
+            assert w.status == Status.closed
 
 
 @pytest.mark.asyncio
@@ -5839,7 +5840,7 @@ async def test_shutdown_localcluster(cleanup):
         async with Client(lc, asynchronous=True) as c:
             await c.shutdown()
 
-        assert lc.scheduler.status == "closed"
+        assert lc.scheduler.status == Status.closed
 
 
 @pytest.mark.asyncio
@@ -5978,7 +5979,7 @@ def test_async_with(loop):
 
     assert result == 11
     assert client.status == "closed"
-    assert cluster.status == "closed"
+    assert cluster.status == Status.closed
 
 
 def test_client_sync_with_async_def(loop):

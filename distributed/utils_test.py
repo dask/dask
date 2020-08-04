@@ -914,7 +914,7 @@ def gen_cluster(
                                 s.validate_state()
                         finally:
                             if client and c.status not in ("closing", "closed"):
-                                await c._close(fast=s.status == "closed")
+                                await c._close(fast=s.status == Status.closed)
                             await end_cluster(s, workers)
                             await asyncio.wait_for(cleanup_global_workers(), 1)
 
@@ -1505,7 +1505,7 @@ def check_instances():
     ), {n: n.status for n in Nanny._instances}
 
     # assert not list(SpecCluster._instances)  # TODO
-    assert all(c.status == "closed" for c in SpecCluster._instances), list(
+    assert all(c.status == Status.closed for c in SpecCluster._instances), list(
         SpecCluster._instances
     )
     SpecCluster._instances.clear()

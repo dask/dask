@@ -5,6 +5,7 @@ import copy
 import logging
 import math
 import weakref
+import warnings
 
 import dask
 from tornado import gen
@@ -36,19 +37,39 @@ class ProcessInterface:
     It should implement the methods below, like ``start`` and ``close``
     """
 
+    @property
+    def status(self):
+        return self._status
+
+    @status.setter
+    def status(self, new_status):
+        if isinstance(new_status, Status):
+            self._status = new_status
+        elif isinstance(new_status, str) or new_status is None:
+            warnings.warn(
+                f"Since distributed 2.19 `.status` is now an Enum, please assign `Status.{new_status}`",
+                PendingDeprecationWarning,
+                stacklevel=1,
+            )
+            corresponding_enum_variants = [s for s in Status if s.value == new_status]
+            assert len(corresponding_enum_variants) == 1
+            self._status = corresponding_enum_variants[0]
+        else:
+            raise TypeError(f"expected Status or str, got {new_status}")
+
     def __init__(self, scheduler=None, name=None):
         self.address = getattr(self, "address", None)
         self.external_address = None
         self.lock = asyncio.Lock()
-        self.status = "created"
+        self.status = Status.created
         self._event_finished = asyncio.Event()
 
     def __await__(self):
         async def _():
             async with self.lock:
-                if self.status == "created":
+                if self.status == Status.created:
                     await self.start()
-                    assert self.status == "running"
+                    assert self.status == Status.running
             return self
 
         return _().__await__()
@@ -63,7 +84,7 @@ class ProcessInterface:
         For the scheduler we will expect the scheduler's ``.address`` attribute
         to be avaialble after this completes.
         """
-        self.status = "running"
+        self.status = Status.running
 
     async def close(self):
         """ Close the process
@@ -73,7 +94,7 @@ class ProcessInterface:
         This method should kill the process a bit more forcefully and does not
         need to worry about shutting down gracefully
         """
-        self.status = "closed"
+        self.status = Status.closed
         self._event_finished.set()
 
     async def finished(self):
@@ -256,11 +277,11 @@ class SpecCluster(Cluster):
             self.sync(self._correct_state)
 
     async def _start(self):
-        while self.status == "starting":
+        while self.status == Status.starting:
             await asyncio.sleep(0.01)
-        if self.status == "running":
+        if self.status == Status.running:
             return
-        if self.status == "closed":
+        if self.status == Status.closed:
             raise ValueError("Cluster is closed")
 
         self._lock = asyncio.Lock()
@@ -279,7 +300,7 @@ class SpecCluster(Cluster):
             cls = import_term(cls)
         self.scheduler = cls(**self.scheduler_spec.get("options", {}))
 
-        self.status = "starting"
+        self.status = Status.starting
         self.scheduler = await self.scheduler
         self.scheduler_comm = rpc(
             getattr(self.scheduler, "external_address", None) or self.scheduler.address,
@@ -359,7 +380,7 @@ class SpecCluster(Cluster):
 
     def __await__(self):
         async def _():
-            if self.status == "created":
+            if self.status == Status.created:
                 await self._start()
             await self.scheduler
             await self._correct_state()
@@ -370,13 +391,12 @@ class SpecCluster(Cluster):
         return _().__await__()
 
     async def _close(self):
-        while self.status == "closing":
+        while self.status == Status.closing:
             await asyncio.sleep(0.1)
-        if self.status == "closed":
+        if self.status == Status.closed:
             return
-        if self.status == "running":
-            self.status = "closing"
-
+        if self.status == Status.running:
+            self.status = Status.closing
             self.scale(0)
             await self._correct_state()
             for future in self._futures:
@@ -402,7 +422,7 @@ class SpecCluster(Cluster):
     async def __aenter__(self):
         await self
         await self._correct_state()
-        assert self.status == "running"
+        assert self.status == Status.running
         return self
 
     def __exit__(self, typ, value, traceback):
@@ -453,7 +473,7 @@ class SpecCluster(Cluster):
         while len(self.worker_spec) > n:
             self.worker_spec.popitem()
 
-        if self.status not in ("closing", "closed"):
+        if self.status not in (Status.closing, Status.closed):
             while len(self.worker_spec) < n:
                 self.worker_spec.update(self.new_worker_spec())
 
@@ -617,5 +637,5 @@ async def run_spec(spec: dict, *args):
 def close_clusters():
     for cluster in list(SpecCluster._instances):
         with suppress(gen.TimeoutError, TimeoutError):
-            if cluster.status != "closed":
+            if cluster.status != Status.closed:
                 cluster.close(timeout=10)

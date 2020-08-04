@@ -16,6 +16,7 @@ import pytest
 
 from dask.system import CPU_COUNT
 from distributed import Client, Worker, Nanny, get_client
+from distributed.core import Status
 from distributed.deploy.local import LocalCluster, nprocesses_nthreads
 from distributed.metrics import time
 from distributed.system import MEMORY_LIMIT
@@ -188,7 +189,7 @@ def test_Client_with_local(loop):
 def test_Client_solo(loop):
     with Client(loop=loop, silence_logs=False) as c:
         pass
-    assert c.cluster.status == "closed"
+    assert c.cluster.status == Status.closed
 
 
 @gen_test()
@@ -223,7 +224,7 @@ def test_Client_kwargs(loop):
     with Client(loop=loop, processes=False, n_workers=2, silence_logs=False) as c:
         assert len(c.cluster.workers) == 2
         assert all(isinstance(w, Worker) for w in c.cluster.workers.values())
-    assert c.cluster.status == "closed"
+    assert c.cluster.status == Status.closed
 
 
 def test_Client_unused_kwargs_with_cluster(loop):

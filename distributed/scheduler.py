@@ -315,6 +315,8 @@ class WorkerState:
             corresponding_enum_variants = [s for s in Status if s.value == new_status]
             assert len(corresponding_enum_variants) == 1
             self._status = corresponding_enum_variants[0]
+        else:
+            raise TypeError(f"expected Status or str, got {new_status}")
 
     @property
     def host(self):
@@ -1403,19 +1405,6 @@ class Scheduler(ServerNode):
         Scheduler._instances.add(self)
         self.rpc.allow_offload = False
         self.status = Status.undefined
-
-    @property
-    def status(self):
-        return self._status
-
-    @status.setter
-    def status(self, new_status):
-        if isinstance(new_status, Status):
-            self._status = new_status
-        elif isinstance(new_status, str) or new_status is None:
-            corresponding_enum_variants = [s for s in Status if s.value == new_status]
-            assert len(corresponding_enum_variants) == 1
-            self._status = corresponding_enum_variants[0]
 
     ##################
     # Administration #

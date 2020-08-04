@@ -1127,7 +1127,7 @@ async def test_close_nanny(c, s, a, b):
         assert not a.is_alive()
         assert a.pid is None
 
-    while a.status != "closed":
+    while a.status != Status.closed:
         await asyncio.sleep(0.05)
         assert time() < start + 10
 
@@ -1136,7 +1136,7 @@ async def test_close_nanny(c, s, a, b):
 async def test_retire_workers_close(c, s, a, b):
     await s.retire_workers(close_workers=True)
     assert not s.workers
-    while a.status != "closed" and b.status != "closed":
+    while a.status != Status.closed and b.status != Status.closed:
         await asyncio.sleep(0.01)
 
 
@@ -1148,7 +1148,7 @@ async def test_retire_nannies_close(c, s, a, b):
 
     start = time()
 
-    while any(n.status != "closed" for n in nannies):
+    while any(n.status != Status.closed for n in nannies):
         await asyncio.sleep(0.05)
         assert time() < start + 10
 
@@ -1543,7 +1543,7 @@ async def test_closing_scheduler_closes_workers(s, a, b):
     await s.close()
 
     start = time()
-    while a.status != "closed" or b.status != "closed":
+    while a.status != Status.closed or b.status != Status.closed:
         await asyncio.sleep(0.01)
         assert time() < start + 2
 
@@ -1613,16 +1613,16 @@ async def test_idle_timeout(c, s, a, b):
     await future
     assert s.idle_since is None or s.idle_since > beginning
 
-    assert s.status != "closed"
+    assert s.status != Status.closed
 
     with captured_logger("distributed.scheduler") as logs:
         start = time()
-        while s.status != "closed":
+        while s.status != Status.closed:
             await asyncio.sleep(0.01)
             assert time() < start + 3
 
         start = time()
-        while not (a.status == "closed" and b.status == "closed"):
+        while not (a.status == Status.closed and b.status == Status.closed):
             await asyncio.sleep(0.01)
             assert time() < start + 1
 
@@ -1686,8 +1686,8 @@ async def test_result_type(c, s, a, b):
 @gen_cluster()
 async def test_close_workers(s, a, b):
     await s.close(close_workers=True)
-    assert a.status == "closed"
-    assert b.status == "closed"
+    assert a.status == Status.closed
+    assert b.status == Status.closed
 
 
 @pytest.mark.skipif(
@@ -1741,9 +1741,9 @@ async def test_adaptive_target(c, s, a, b):
 @pytest.mark.asyncio
 async def test_async_context_manager(cleanup):
     async with Scheduler(port=0) as s:
-        assert s.status == "running"
+        assert s.status == Status.running
         async with Worker(s.address) as w:
-            assert w.status == "running"
+            assert w.status == Status.running
             assert s.workers
         assert not s.workers
 

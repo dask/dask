@@ -1313,7 +1313,7 @@ class Worker(ServerNode):
             }
         )
 
-        return "dont-reply"
+        return Status.dont_reply
 
     ###################
     # Local Execution #
@@ -3071,7 +3071,7 @@ def get_worker():
         return thread_state.execution_state["worker"]
     except AttributeError:
         try:
-            return first(w for w in Worker._instances if w.status == "running")
+            return first(w for w in Worker._instances if w.status == Status.running)
         except StopIteration:
             raise ValueError("No workers found")
 

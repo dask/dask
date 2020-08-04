@@ -7,6 +7,7 @@ import weakref
 import dask
 
 from .spec import SpecCluster, ProcessInterface
+from ..core import Status
 from ..utils import cli_keywords
 from ..scheduler import Scheduler as _Scheduler
 from ..worker import Worker as _Worker
@@ -130,7 +131,7 @@ class Worker(Process):
             logger.info(line.strip())
             if "worker at" in line:
                 self.address = line.split("worker at:")[1].strip()
-                self.status = "running"
+                self.status = Status.running
                 break
         logger.debug("%s", line)
         await super().start()
