@@ -1,3 +1,4 @@
+from array import array
 from functools import partial
 import traceback
 import importlib
@@ -623,6 +624,25 @@ def _deserialize_bytearray(header, frames):
         return frames[0]
     else:
         return bytearray().join(frames)
+
+
+@dask_serialize.register(array)
+def _serialize_array(obj):
+    header = {"typecode": obj.typecode}
+    frames = [memoryview(obj)]
+    return header, frames
+
+
+@dask_deserialize.register(array)
+def _deserialize_array(header, frames):
+    a = array(header["typecode"])
+    for f in map(memoryview, frames):
+        try:
+            f = f.cast("B")
+        except TypeError:
+            f = f.tobytes()
+        a.frombytes(f)
+    return a
 
 
 @dask_serialize.register(memoryview)

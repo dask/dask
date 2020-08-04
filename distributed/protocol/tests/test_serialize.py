@@ -1,3 +1,4 @@
+from array import array
 import copy
 import pickle
 
@@ -77,6 +78,20 @@ def test_serialize_bytestrings():
         bb = deserialize(header, [b"", *frames])
         assert type(bb) == type(b)
         assert bb == b
+
+
+@pytest.mark.parametrize(
+    "typecode", ["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q", "f", "d"],
+)
+def test_serialize_arrays(typecode):
+    a = array(typecode)
+    a.extend(range(5))
+    header, frames = serialize(a)
+    assert frames[0] == memoryview(a)
+    a2 = deserialize(header, frames)
+    assert type(a2) == type(a)
+    assert a2.typecode == a.typecode
+    assert a2 == a
 
 
 def test_Serialize():
