@@ -1122,6 +1122,8 @@ Dask Name: {name}, {task} tasks"""
         divisions : list, optional
             List of partitions to be used. Only used if npartitions and
             partition_size isn't specified.
+            For convenience if given an integer this will defer to npartitions
+            and if given a string it will defer to partition_size (see below)
         npartitions : int, optional
             Number of partitions of output. Only used if partition_size
             isn't specified.
@@ -1155,6 +1157,12 @@ Dask Name: {name}, {task} tasks"""
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
         """
+        if isinstance(divisions, int):
+            npartitions = divisions
+            divisions = None
+        if isinstance(divisions, str):
+            partition_size = divisions
+            divisions = None
         if (
             sum(
                 [
