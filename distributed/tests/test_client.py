@@ -1542,6 +1542,22 @@ async def test_upload_file(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_upload_file_refresh_delayed(c, s, a, b):
+    with save_sys_modules():
+        for value in [123, 456]:
+            with tmp_text("myfile.py", "def f():\n    return {}".format(value)) as fn:
+                await c.upload_file(fn)
+
+            sys.path.append(os.path.dirname(fn))
+            from myfile import f
+
+            b = delayed(f)()
+            bb = c.compute(b, sync=False)
+            result = await c.gather(bb)
+            assert result == value
+
+
+@gen_cluster(client=True)
 async def test_upload_file_no_extension(c, s, a, b):
     with tmp_text("myfile", "") as fn:
         await c.upload_file(fn)
