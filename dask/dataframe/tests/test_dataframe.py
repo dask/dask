@@ -1917,21 +1917,6 @@ def test_repartition_partition_size_arg():
     assert b.npartitions == 1
 
 
-def test_iter_chunks():
-    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
-    assert list(iter_chunks(sizes, 19)) == [
-        [14],
-        [8, 5],
-        [9, 7],
-        [9, 1],
-        [19],
-        [8],
-        [19],
-    ]
-    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
-    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
-
-
 def test_repartition_npartitions_same_limits():
     df = pd.DataFrame(
         {"x": [1, 2, 3]},
