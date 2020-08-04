@@ -441,3 +441,11 @@ def test_apply_and_enforce_message():
 
     with pytest.raises(ValueError, match=re.escape("Missing: ['D']")):
         apply_and_enforce(_func=func, _meta=meta)
+
+
+def test_nonempty_series_sparse():
+    ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
+    with pytest.warns(None) as w:
+        dd.utils._nonempty_series(ser)
+
+    assert len(w) == 0
