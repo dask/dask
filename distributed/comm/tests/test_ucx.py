@@ -9,7 +9,6 @@ from distributed.comm.registry import backends, get_backend
 from distributed.comm import ucx, parse_address
 from distributed.protocol import to_serialize
 from distributed.deploy.local import LocalCluster
-from dask.dataframe.utils import assert_eq
 from distributed.utils_test import gen_test, loop, inc, cleanup, popen  # noqa: 401
 
 
@@ -187,6 +186,7 @@ async def test_ping_pong_cudf(g):
     # *** ImportError: /usr/lib/x86_64-linux-gnu/libstdc++.so.6: version `CXXABI_1.3.11'
     # not found (required by python3.7/site-packages/pyarrow/../../../libarrow.so.12)
     cudf = pytest.importorskip("cudf")
+    from cudf.tests.utils import assert_eq
 
     cudf_obj = g(cudf)
 
