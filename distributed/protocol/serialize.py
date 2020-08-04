@@ -515,7 +515,7 @@ def serialize_bytelist(x, **kwargs):
     header["count"] = len(frames)
 
     header = msgpack.dumps(header, use_bin_type=True)
-    frames2 = [header] + list(frames)
+    frames2 = [header, *frames]
     return [pack_frames_prelude(frames2)] + frames2
 
 
