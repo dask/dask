@@ -628,7 +628,7 @@ def _deserialize_bytearray(header, frames):
 
 @dask_serialize.register(array)
 def _serialize_array(obj):
-    header = {"typecode": obj.typecode}
+    header = {"typecode": obj.typecode, "writeable": (None,)}
     frames = [memoryview(obj)]
     return header, frames
 
