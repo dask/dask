@@ -7,7 +7,7 @@ import msgpack
 from .compression import compressions, maybe_compress, decompress
 from .serialize import serialize, deserialize, Serialize, Serialized, extract_serialize
 from .utils import frame_split_size, merge_frames, msgpack_opts
-from ..utils import nbytes
+from ..utils import is_writeable, nbytes
 
 _deserialize = deserialize
 
@@ -46,6 +46,8 @@ def dumps(msg, serializers=None, on_error="message", context=None):
         out_frames = []
 
         for key, (head, frames) in data.items():
+            if "writeable" not in head:
+                head["writeable"] = tuple(map(is_writeable, frames))
             if "lengths" not in head:
                 head["lengths"] = tuple(map(nbytes, frames))
 
@@ -71,6 +73,8 @@ def dumps(msg, serializers=None, on_error="message", context=None):
             out_frames.extend(_out_frames)
 
         for key, (head, frames) in pre.items():
+            if "writeable" not in head:
+                head["writeable"] = tuple(map(is_writeable, frames))
             if "lengths" not in head:
                 head["lengths"] = tuple(map(nbytes, frames))
             head["count"] = len(frames)

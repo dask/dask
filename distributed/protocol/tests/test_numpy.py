@@ -17,7 +17,7 @@ from distributed.protocol.numpy import itemsize
 from distributed.protocol.pickle import HIGHEST_PROTOCOL
 from distributed.protocol.compression import maybe_compress
 from distributed.system import MEMORY_LIMIT
-from distributed.utils import tmpfile, nbytes
+from distributed.utils import ensure_bytes, tmpfile, nbytes
 from distributed.utils_test import gen_cluster
 
 
@@ -100,12 +100,16 @@ def test_dumps_serialize_numpy(x):
         np.testing.assert_equal(x, y)
 
 
-def test_dumps_numpy_writable():
+@pytest.mark.parametrize("writeable", [True, False])
+def test_dumps_numpy_writable(writeable):
     a1 = np.arange(1000)
-    a1.flags.writeable = False
-    (a2,) = loads(dumps([to_serialize(a1)]))
+    a1.flags.writeable = writeable
+    fs = dumps([to_serialize(a1)])
+    # Make all frames read-only
+    fs = list(map(ensure_bytes, fs))
+    (a2,) = loads(fs)
     assert (a1 == a2).all()
-    assert a2.flags.writeable
+    assert a2.flags.writeable == a1.flags.writeable
 
 
 @pytest.mark.parametrize(

@@ -51,36 +51,44 @@ def merge_frames(header, frames):
     [b'123456']
     """
     lengths = list(header["lengths"])
-    frames = list(map(memoryview, frames))
+    writeables = list(header["writeable"])
 
+    assert len(lengths) == len(writeables)
     assert sum(lengths) == sum(map(nbytes, frames))
 
-    if not all(len(f) == l for f, l in zip(frames, lengths)):
-        frames = frames[::-1]
-        lengths = lengths[::-1]
+    if all(len(f) == l for f, l in zip(frames, lengths)):
+        return [
+            (bytearray(f) if w else bytes(f)) if w == memoryview(f).readonly else f
+            for w, f in zip(header["writeable"], frames)
+        ]
 
-        out = []
-        while lengths:
-            l = lengths.pop()
-            L = []
-            while l:
-                frame = frames.pop()
-                if nbytes(frame) <= l:
-                    L.append(frame)
-                    l -= nbytes(frame)
-                else:
-                    L.append(frame[:l])
-                    frames.append(frame[l:])
-                    l = 0
-            if len(L) == 1:  # no work necessary
-                out.append(L[0])
+    frames = frames[::-1]
+    lengths = lengths[::-1]
+    writeables = writeables[::-1]
+
+    out = []
+    while lengths:
+        l = lengths.pop()
+        w = writeables.pop()
+        L = []
+        while l:
+            frame = frames.pop()
+            if nbytes(frame) <= l:
+                L.append(frame)
+                l -= nbytes(frame)
             else:
-                out.append(memoryview(bytearray().join(L)))
-        frames = out
+                frame = memoryview(frame)
+                L.append(frame[:l])
+                frames.append(frame[l:])
+                l = 0
+        if len(L) == 1 and w != memoryview(L[0]).readonly:  # no work necessary
+            out.extend(L)
+        elif w:
+            out.append(bytearray().join(L))
+        else:
+            out.append(bytes().join(L))
 
-    frames = [memoryview(bytearray(f)) if f.readonly else f for f in frames]
-
-    return frames
+    return out
 
 
 def pack_frames_prelude(frames):

@@ -47,6 +47,7 @@ def cuda_deserialize_cupy_ndarray(header, frames):
 @dask_serialize.register(cupy.ndarray)
 def dask_serialize_cupy_ndarray(x):
     header, frames = cuda_serialize_cupy_ndarray(x)
+    header["writeable"] = (None,) * len(frames)
     frames = [memoryview(cupy.asnumpy(f)) for f in frames]
     return header, frames
 

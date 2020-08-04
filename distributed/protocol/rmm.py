@@ -30,6 +30,7 @@ if hasattr(rmm, "DeviceBuffer"):
     @dask_serialize.register(rmm.DeviceBuffer)
     def dask_serialize_rmm_device_buffer(x):
         header, frames = cuda_serialize_rmm_device_buffer(x)
+        header["writeable"] = (None,) * len(frames)
         frames = [numba.cuda.as_cuda_array(f).copy_to_host().data for f in frames]
         return header, frames
 

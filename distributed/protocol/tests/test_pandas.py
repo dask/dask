@@ -4,7 +4,15 @@ import pytest
 
 from dask.dataframe.utils import assert_eq
 
-from distributed.protocol import serialize, deserialize, decompress
+from distributed.protocol import (
+    serialize,
+    deserialize,
+    decompress,
+    dumps,
+    loads,
+    to_serialize,
+)
+from distributed.utils import ensure_bytes
 
 
 dfs = [
@@ -63,10 +71,21 @@ dfs = [
 
 
 @pytest.mark.parametrize("df", dfs)
-def test_dumps_serialize_numpy(df):
+def test_dumps_serialize_pandas(df):
     header, frames = serialize(df)
     if "compression" in header:
         frames = decompress(header, frames)
     df2 = deserialize(header, frames)
 
     assert_eq(df, df2)
+
+
+def test_dumps_pandas_writable():
+    a1 = np.arange(1000)
+    s1 = pd.Series(a1)
+    fs = dumps([to_serialize(s1)])
+    # Make all frames read-only
+    fs = list(map(ensure_bytes, fs))
+    (s2,) = loads(fs)
+    assert (s1 == s2).all()
+    s2[...] = 0
