@@ -17,6 +17,7 @@ from dask.dataframe.utils import (
     is_series_like,
     is_index_like,
     PANDAS_GT_0240,
+    PANDAS_GT_100,
 )
 
 import pytest
@@ -443,6 +444,7 @@ def test_apply_and_enforce_message():
         apply_and_enforce(_func=func, _meta=meta)
 
 
+@pytest.mark.skipif(not PANDAS_GT_100, reason="Only pandas>1")
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
     with pytest.warns(None) as w:
