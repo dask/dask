@@ -570,7 +570,10 @@ def _nonempty_series(s, idx=None):
             entry = _scalar_from_dtype(dtype.subtype)
         else:
             entry = _scalar_from_dtype(dtype.subtype)
-        data = pd.SparseArray([entry, entry], dtype=dtype)
+        if PANDAS_GT_100:
+            data = pd.array([entry, entry], dtype=dtype)
+        else:
+            data = pd.SparseArray([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
         if PANDAS_GT_0240:
