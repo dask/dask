@@ -4,7 +4,6 @@ import math
 import operator
 import uuid
 import warnings
-from dask.sizeof import sizeof
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
 from functools import wraps, partial, reduce
@@ -42,6 +41,7 @@ from ..base import tokenize, dont_optimize, DaskMethodsMixin
 from ..bytes import open_files
 from ..context import globalmethod
 from ..core import quote, istask, get_dependencies, reverse_dict, flatten
+from ..sizeof import sizeof
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
@@ -1587,14 +1587,14 @@ class Bag(DaskMethodsMixin):
 
         Notes
         -----
-        Exactly one of `npartitions` or `partition_size` should be specified.
+        Exactly one of ``npartitions`` or ``partition_size`` should be specified.
         A ``ValueError`` will be raised when that is not the case.
 
         Examples
         --------
         >>> b.repartition(5)  # set to have 5 partitions  # doctest: +SKIP
         """
-        if not bool(npartitions) ^ bool(partition_size):
+        if sum([partition_size is not None, npartitions is not None]) != 1:
             raise ValueError(
                 "Please provide exactly one ``npartitions`` or ``partition_size`` keyword arguments"
             )
@@ -2503,13 +2503,15 @@ def repartition_npartitions(bag, npartitions):
         return _split_partitions(bag, nsplits, new_name)
 
 
-def total_mem_usage(bag):
+def total_mem_usage(partition):
     from copy import deepcopy
     from itertools import chain
 
-    if isinstance(bag, chain):
-        bag = reify(deepcopy(bag))
-    return sizeof(bag)
+    # if repartition is called multiple times prior to calling compute(), the partitions
+    # will be itertools.chain objects. Copy the object to avoid consuming the iterable.
+    if isinstance(partition, chain):
+        partition = reify(deepcopy(partition))
+    return sizeof(partition)
 
 
 def repartition_size(bag, size):

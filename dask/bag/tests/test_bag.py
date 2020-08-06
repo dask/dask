@@ -1200,7 +1200,7 @@ def test_multiple_repartition_partition_size():
 
 
 def test_repartition_partition_size_complex_dtypes():
-    import numpy as np
+    np = pytest.importorskip("numpy")
 
     b = db.from_sequence([np.array(range(100)) for _ in range(4)], npartitions=1)
     total_mem = sum(b.map_partitions(total_mem_usage).compute())
