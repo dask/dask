@@ -821,8 +821,36 @@ class ArrowEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
+        schema="sample",
+        index_cols=None,
         **kwargs,
     ):
+        # Infer schema if "sample" or "meta"...
+        # Note that "meta" is faster, but may fail to produce
+        # the correct schema for "object" types.
+        if schema == "sample":
+            # Use first partition with data to infer schema
+            for i in range(df.npartitions):
+                _df = df.get_partition(i)
+                size = len(_df)
+                if size:
+                    _df = _df.head(min(size, 5))
+                    break
+            schema = None
+            if size:
+                # We found data, reset schema with pyarrow
+                schema = pa.Schema.from_pandas(
+                    _df.set_index(index_cols) if index_cols else _df
+                )
+                del _df
+        elif schema == "meta":
+            # Use _meta_nonempty to infer schema
+            schema = pa.Schema.from_pandas(
+                df._meta_nonempty.set_index(index_cols)
+                if index_cols
+                else df._meta_nonempty
+            )
+
         dataset = fmd = None
         i_offset = 0
         if append and division_info is None:
@@ -906,7 +934,7 @@ class ArrowEngine(Engine):
                         "Previous: {} | New: {}".format(old_end, divisions[0])
                     )
 
-        return fmd, i_offset
+        return fmd, schema, i_offset
 
     @staticmethod
     def write_partition(

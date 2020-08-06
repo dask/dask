@@ -960,12 +960,15 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     )
 
     ddf = dd.from_pandas(df, npartitions=2)
-    # Note: `append_row_groups` will fail with pyarrow>17.1 for _metadata write
+    # In order to allow pyarrow to write an inconsistent schema,
+    # we need to avoid writing the _metadata file (will fail >0.17.1)
+    # and need to avoid schema inference (i.e. use `schema=None`)
     ddf.to_parquet(
         str(tmpdir),
         engine="pyarrow",
         partition_on=["partition_column"],
         write_metadata_file=False,
+        schema=None,
     )
 
     # Test that read fails because of default behavior when schema not provided
@@ -1067,6 +1070,46 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 
     # Check partition column
     assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
+
+
+@write_read_engines()
+@pytest.mark.parametrize("index", [False, True])
+@pytest.mark.parametrize("schema", ["meta", "sample"])
+def test_schema_inference(tmpdir, index, schema, write_engine, read_engine):
+
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "index": ["1", "2", "3", "2", "3", "1", "4"],
+            "date": pd.to_datetime(
+                [
+                    "2017-01-01",
+                    "2017-01-01",
+                    "2017-01-01",
+                    "2017-01-02",
+                    "2017-01-02",
+                    "2017-01-06",
+                    "2017-01-09",
+                ]
+            ),
+            "amount": [100, 200, 300, 400, 500, 600, 700],
+        },
+        index=range(7, 14),
+    )
+    if index:
+        df = dd.from_pandas(df, npartitions=2).set_index("index")
+    else:
+        df = dd.from_pandas(df, npartitions=2)
+
+    df.to_parquet(tmpdir, engine=write_engine, schema=schema)
+    df_out = dd.read_parquet(tmpdir, engine=read_engine)
+
+    if index and read_engine == "fastparquet":
+        # Fastparquet not handling divisions for
+        # pyarrow-written dataset with string index
+        assert_eq(df, df_out, check_divisions=False)
+    else:
+        assert_eq(df, df_out)
 
 
 def test_partition_on(tmpdir, engine):
@@ -2029,7 +2072,8 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
     assert_eq(ddf, ddf2, check_divisions=False)
 
 
-def test_timeseries_nulls_in_schema(tmpdir, engine):
+@pytest.mark.parametrize("schema", ["meta", None])
+def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     # GH#5608: relative path failing _metadata/_common_metadata detection.
     tmp_path = str(tmpdir.mkdir("files"))
     tmp_path = os.path.join(tmp_path, "../", "files")
@@ -2043,7 +2087,7 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
-    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False)
+    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
     ddf_read = dd.read_parquet(
         tmp_path, engine=engine, dataset={"validate_schema": False}
     )
@@ -2051,8 +2095,9 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
     # Can force schema validation on each partition in pyarrow
-    if engine == "pyarrow":
-        # The schema mismatch should raise an error
+    if engine == "pyarrow" and schema is None:
+        # The schema mismatch should raise an error if the
+        # dataset was written with `schema=None` (no inference)
         with pytest.raises(ValueError):
             ddf_read = dd.read_parquet(
                 tmp_path, dataset={"validate_schema": True}, engine=engine

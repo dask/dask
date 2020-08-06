@@ -98,7 +98,7 @@ def read_parquet(
     gather_statistics=None,
     split_row_groups=None,
     chunksize=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Read a Parquet file into a Dask DataFrame
@@ -236,7 +236,7 @@ def read_parquet(
         gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        **kwargs
+        **kwargs,
     )
 
     # Parse dataset statistics from metadata (if available)
@@ -301,7 +301,8 @@ def to_parquet(
     write_metadata_file=True,
     compute=True,
     compute_kwargs=None,
-    **kwargs
+    schema="sample",
+    **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
 
@@ -345,6 +346,13 @@ def to_parquet(
         then a ``dask.delayed`` object is returned for future computation.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
+    schema : Schema object, or {"sample", "meta", None}, optional
+        Global schema to use for the output dataset. If "sample" (default),
+        the `head` of the first non-empty partition will be used to infer
+        the global schema. If "meta", `_meta_nonempty` will be used to infer
+        the global schema. If None, we let the backend infer the schema
+        for each distinct output partition. Note that this argument is
+        currently ignored by the "fastparquet" engine.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -404,6 +412,14 @@ def to_parquet(
                 "will be set to the index (and renamed to None)."
             )
 
+    # There are some "resrved" names that may be used as the default column
+    # name after resetting the index. However, we don't want to treat it as
+    # a "special" name if the string is already used as a "real" column name.
+    reserved_names = []
+    for name in ["index", "level_0"]:
+        if name not in df.columns:
+            reserved_names.append(name)
+
     # If write_index==True (default), reset the index and record the
     # name of the original index in `index_cols` (we will set the name
     # to the NONE_LABEL constant if it is originally `None`).
@@ -418,7 +434,9 @@ def to_parquet(
         none_index = list(df._meta.index.names) == [None]
         df = df.reset_index()
         if none_index:
-            df.columns = [c if c != "index" else NONE_LABEL for c in df.columns]
+            df.columns = [
+                c if c not in reserved_names else NONE_LABEL for c in df.columns
+            ]
         index_cols = [c for c in set(df.columns).difference(real_cols)]
     else:
         # Not writing index - might as well drop it
@@ -439,7 +457,7 @@ def to_parquet(
 
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
-    meta, i_offset = engine.initialize_write(
+    meta, schema, i_offset = engine.initialize_write(
         df,
         fs,
         path,
@@ -448,7 +466,8 @@ def to_parquet(
         partition_on=partition_on,
         division_info=division_info,
         index_cols=index_cols,
-        **kwargs_pass
+        schema=schema,
+        **kwargs_pass,
     )
 
     # Use i_offset and df.npartitions to define file-name list
@@ -467,7 +486,8 @@ def to_parquet(
             fmd=meta,
             compression=compression,
             index_cols=index_cols,
-            **kwargs_pass
+            schema=schema,
+            **kwargs_pass,
         )
         for d, filename in zip(df.to_delayed(), filenames)
     ]
