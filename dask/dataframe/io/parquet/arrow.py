@@ -840,7 +840,8 @@ class ArrowEngine(Engine):
         **kwargs,
     ):
         # Infer schema if "infer"
-        if schema == "infer":
+        # (also start with inferred schema if user passes a dict)
+        if schema == "infer" or isinstance(schema, dict):
 
             # Start with schema from _meta_nonempty
             _meta = (
@@ -848,12 +849,20 @@ class ArrowEngine(Engine):
                 if index_cols
                 else df._meta_nonempty
             )
-            schema = pa.Schema.from_pandas(_meta)
-            sample = [col for col in df.columns if df[col].dtype == "object"]
+            _schema = pa.Schema.from_pandas(_meta)
+
+            # Use dict to update our inferred schema
+            if isinstance(schema, dict):
+                schema = pa.schema(schema)
+                for name in schema.names:
+                    i = _schema.get_field_index(name)
+                    j = schema.get_field_index(name)
+                    _schema.set(i, schema.field(j))
 
             # If we have object columns, we need to sample partitions
             # until we find non-null data for each column in `sample`
-            if sample:
+            sample = [col for col in df.columns if df[col].dtype == "object"]
+            if sample and schema == "infer":
                 for i in range(df.npartitions):
                     _df = df[sample].get_partition(i)
                     size = len(_df)
@@ -861,12 +870,15 @@ class ArrowEngine(Engine):
                         _s = pa.Schema.from_pandas(_df.compute())
                         for name, typ in zip(_s.names, _s.types):
                             if typ != "null":
-                                i = schema.get_field_index(name)
+                                i = _schema.get_field_index(name)
                                 j = _s.get_field_index(name)
-                                schema.set(i, _s.field(j))
+                                _schema.set(i, _s.field(j))
                                 sample.remove(name)
                     if not sample:
                         break
+
+            # Final (inferred) schema
+            schema = _schema
 
         dataset = fmd = None
         i_offset = 0
