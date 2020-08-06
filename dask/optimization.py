@@ -41,8 +41,6 @@ def cull(dsk, keys):
     if not isinstance(keys, (list, set)):
         keys = [keys]
 
-    convert = config.get("optimization.cull.convert-tasks", False)
-
     seen = set()
     dependencies = dict()
     out = {}
@@ -52,7 +50,7 @@ def cull(dsk, keys):
         new_work = []
         for k in work:
             dependencies_k = get_dependencies(dsk, k, as_list=True)  # fuse needs lists
-            out[k] = Task.from_spec(dsk[k]) if convert else dsk[k]
+            out[k] = dsk[k]
             dependencies[k] = dependencies_k
             for d in dependencies_k:
                 if d not in seen:
@@ -60,6 +58,9 @@ def cull(dsk, keys):
                     new_work.append(d)
 
         work = new_work
+
+    if config.get("optimization.cull.convert-tasks", False) is True:
+        out = Task.from_spec(out)
 
     return out, dependencies
 
