@@ -2486,10 +2486,11 @@ def repartition_npartitions(bag, npartitions):
     This can be used to reduce or increase the number of partitions
     of the bag.
     """
-    new_name = "repartition-%d-%s" % (npartitions, tokenize(bag, npartitions))
     if npartitions == bag.npartitions:
         return bag
-    elif bag.npartitions > npartitions:
+
+    new_name = "repartition-%d-%s" % (npartitions, tokenize(bag, npartitions))
+    if bag.npartitions > npartitions:
         ratio = bag.npartitions / npartitions
         new_partitions_boundaries = [
             int(old_partition_index * ratio)
