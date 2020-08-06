@@ -323,7 +323,9 @@ def subs(task, key, val, convert=False):
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
     (inc, 1)
     """
-    type_task = spec_type(task)
+    type_task = type(task)
+    if type_task is tuple and task and callable(task[0]):
+        type_task = TupleTask
 
     if type_task is Task:
         return Task(
@@ -340,7 +342,9 @@ def subs(task, key, val, convert=False):
         newargs = []
 
         for arg in task[1:]:
-            type_arg = spec_type(arg)
+            type_arg = type(arg)
+            if type_arg is tuple and arg and callable(arg[0]):
+                type_arg = TupleTask
 
             if type_arg is Task:
                 arg = subs(arg, key, val, convert)
