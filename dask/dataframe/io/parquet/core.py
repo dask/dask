@@ -346,12 +346,15 @@ def to_parquet(
         then a ``dask.delayed`` object is returned for future computation.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
-    schema : Schema object, or {"infer", None}, optional
-        Global schema to use for the output dataset. If "infer", the `head`
-        of the first non-empty partition will be used to infer the global
-        schema. If None (default), we let the backend infer the schema
-        for each distinct output partition. Note that this argument is
-        currently ignored by the "fastparquet" engine.
+    schema : Schema object, dict, or {"infer", None}, optional
+        Global schema to use for the output dataset. Alternatively, a `dict`
+        of pyarrow types can be specified (e.g. `schema={"id": pa.string()}`).
+        For this case, fields excluded from the dictionary will be inferred
+        from `_meta_nonempty`.  If "infer", the first non-empty and non-null
+        partition will be used to infer the type for "object" columns. If
+        None (default), we let the backend infer the schema for each distinct
+        output partition. Note that this argument is currently ignored by
+        the "fastparquet" engine.
     **kwargs :
         Extra options to be passed on to the specific backend.
 

@@ -1074,7 +1074,11 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 
 @write_read_engines()
 @pytest.mark.parametrize("index", [False, True])
-def test_schema_inference(tmpdir, index, write_engine, read_engine):
+@pytest.mark.parametrize(
+    "schema",
+    ["infer", {"index": pa.string(), "date": pa.string(), "amount": pa.int64()}],
+)
+def test_schema_inference(tmpdir, index, write_engine, read_engine, schema):
 
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
@@ -1100,7 +1104,7 @@ def test_schema_inference(tmpdir, index, write_engine, read_engine):
     else:
         df = dd.from_pandas(df, npartitions=2)
 
-    df.to_parquet(tmpdir, engine=write_engine, schema="infer")
+    df.to_parquet(tmpdir, engine=write_engine, schema=schema)
     df_out = dd.read_parquet(tmpdir, engine=read_engine)
 
     if index and read_engine == "fastparquet":
