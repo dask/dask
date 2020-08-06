@@ -1074,8 +1074,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 
 @write_read_engines()
 @pytest.mark.parametrize("index", [False, True])
-@pytest.mark.parametrize("schema", ["meta", "sample"])
-def test_schema_inference(tmpdir, index, schema, write_engine, read_engine):
+def test_schema_inference(tmpdir, index, write_engine, read_engine):
 
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
@@ -1101,7 +1100,7 @@ def test_schema_inference(tmpdir, index, schema, write_engine, read_engine):
     else:
         df = dd.from_pandas(df, npartitions=2)
 
-    df.to_parquet(tmpdir, engine=write_engine, schema=schema)
+    df.to_parquet(tmpdir, engine=write_engine, schema="infer")
     df_out = dd.read_parquet(tmpdir, engine=read_engine)
 
     if index and read_engine == "fastparquet":
@@ -2072,7 +2071,7 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
     assert_eq(ddf, ddf2, check_divisions=False)
 
 
-@pytest.mark.parametrize("schema", ["meta", None])
+@pytest.mark.parametrize("schema", ["infer", None])
 def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     # GH#5608: relative path failing _metadata/_common_metadata detection.
     tmp_path = str(tmpdir.mkdir("files"))

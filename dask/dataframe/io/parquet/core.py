@@ -301,7 +301,7 @@ def to_parquet(
     write_metadata_file=True,
     compute=True,
     compute_kwargs=None,
-    schema="sample",
+    schema=None,
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -346,11 +346,10 @@ def to_parquet(
         then a ``dask.delayed`` object is returned for future computation.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
-    schema : Schema object, or {"sample", "meta", None}, optional
-        Global schema to use for the output dataset. If "sample" (default),
-        the `head` of the first non-empty partition will be used to infer
-        the global schema. If "meta", `_meta_nonempty` will be used to infer
-        the global schema. If None, we let the backend infer the schema
+    schema : Schema object, or {"infer", None}, optional
+        Global schema to use for the output dataset. If "infer", the `head`
+        of the first non-empty partition will be used to infer the global
+        schema. If None (default), we let the backend infer the schema
         for each distinct output partition. Note that this argument is
         currently ignored by the "fastparquet" engine.
     **kwargs :

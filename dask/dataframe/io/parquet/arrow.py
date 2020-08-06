@@ -27,6 +27,20 @@ preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
 #
 
 
+def _append_row_groups(metadata, md):
+    try:
+        metadata.append_row_groups(md)
+    except RuntimeError as err:
+        if "requires equal schemas" in str(err):
+            raise RuntimeError(
+                "Schemas are inconsistent, try using "
+                '`to_parquet(..., schema="infer")`, or pass an explicit '
+                "pyarrow schema."
+            )
+        else:
+            raise err
+
+
 def _write_partitioned(
     table, root_path, filename, partition_cols, fs, index_cols=(), **kwargs
 ):
@@ -239,7 +253,7 @@ def _gather_metadata(
             elif fn:
                 md.set_file_path(fn)
             if metadata:
-                metadata.append_row_groups(md)
+                _append_row_groups(metadata, md)
             else:
                 metadata = md
         return (
@@ -821,35 +835,38 @@ class ArrowEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        schema="sample",
+        schema=None,
         index_cols=None,
         **kwargs,
     ):
-        # Infer schema if "sample" or "meta"...
-        # Note that "meta" is faster, but may fail to produce
-        # the correct schema for "object" types.
-        if schema == "sample":
-            # Use first partition with data to infer schema
-            for i in range(df.npartitions):
-                _df = df.get_partition(i)
-                size = len(_df)
-                if size:
-                    _df = _df.head(min(size, 5))
-                    break
-            schema = None
-            if size:
-                # We found data, reset schema with pyarrow
-                schema = pa.Schema.from_pandas(
-                    _df.set_index(index_cols) if index_cols else _df
-                )
-                del _df
-        elif schema == "meta":
-            # Use _meta_nonempty to infer schema
-            schema = pa.Schema.from_pandas(
+        # Infer schema if "infer"
+        if schema == "infer":
+
+            # Start with schema from _meta_nonempty
+            _meta = (
                 df._meta_nonempty.set_index(index_cols)
                 if index_cols
                 else df._meta_nonempty
             )
+            schema = pa.Schema.from_pandas(_meta)
+            sample = [col for col in df.columns if df[col].dtype == "object"]
+
+            # If we have object columns, we need to sample partitions
+            # until we find non-null data for each column in `sample`
+            if sample:
+                for i in range(df.npartitions):
+                    _df = df[sample].get_partition(i)
+                    size = len(_df)
+                    if size:
+                        _s = pa.Schema.from_pandas(_df.compute())
+                        for name, typ in zip(_s.names, _s.types):
+                            if typ != "null":
+                                i = schema.get_field_index(name)
+                                j = _s.get_field_index(name)
+                                schema.set(i, _s.field(j))
+                                sample.remove(name)
+                    if not sample:
+                        break
 
         dataset = fmd = None
         i_offset = 0
@@ -965,7 +982,7 @@ class ArrowEngine(Engine):
             if md_list:
                 _meta = md_list[0]
                 for i in range(1, len(md_list)):
-                    _meta.append_row_groups(md_list[i])
+                    _append_row_groups(_meta, md_list[i])
         else:
             md_list = []
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
@@ -1005,6 +1022,6 @@ class ArrowEngine(Engine):
                 _meta = parts[0][0]["meta"]
                 i_start = 1
             for i in range(i_start, len(parts)):
-                _meta.append_row_groups(parts[i][0]["meta"])
+                _append_row_groups(_meta, parts[i][0]["meta"])
             with fs.open(metadata_path, "wb") as fil:
                 _meta.write_metadata_file(fil)
