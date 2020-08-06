@@ -46,7 +46,7 @@ Dask Dataframe. Why would you choose to use one over the other?
 
 These days a database server can be a sharded/distributed system, capable of
 handling tables with millions of rows. Most database implementations are
-geared towards row-wise retreival and (atomic) updates of small subset of a
+geared towards row-wise retrieval and (atomic) updates of small subset of a
 table. Configuring a database to be fast for a particular
 sort of query can be challenging, but assuming all your data is already in the
 database, it may well be the best solution - particularly if you understand
@@ -101,7 +101,7 @@ Why the differences
 ^^^^^^^^^^^^^^^^^^^
 
 Dask is intended to make processing large volumes of data possible, including
-potentially distributing that processing across a cluster. For the retreival of
+potentially distributing that processing across a cluster. For the retrieval of
 data from SQL servers, this means that the query must be partitionable: that
 each partition can be fetched independently of others and not dependent on
 some global state, and that the definitions of the tasks must be serialisable,
@@ -182,7 +182,7 @@ the point of execution.
         "test", db, npartitions=2, index_col=number
     )
 
-Here we have also demonstrated the use of the function ``length `` to
+Here we have also demonstrated the use of the function ``length`` to
 perform an operation server-side. Note that it is necessary to *label* such
 operations, but you can use them for the index column (by name or expression),
 so long as it is also
@@ -234,7 +234,7 @@ dataframe this way. It might look something like
                           meta=known_types,
                           divisions=div_from_parts(parts))
 
-Where you must provide your own functins for setting up a connection to the server,
+Where you must provide your own functions for setting up a connection to the server,
 your own query, and a way to format that query to be specific to each partition.
 For example, you might have ranges or specific unique values with a WHERE
 clause. The ``known_types`` here is used to transform the dataframe partition and provide
