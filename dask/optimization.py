@@ -1025,6 +1025,4 @@ class SubgraphCallable(object):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
 
     def __hash__(self):
-        return hash(
-            (tuple(self.dsk.keys()), self.outkey, tuple(self.inkeys), self.name)
-        )
+        return hash((tuple(self.outkey, tuple(self.inkeys), self.name)))
