@@ -1310,8 +1310,9 @@ class Client:
 
         self.status = "closing"
 
-        for pc in self._periodic_callbacks.values():
-            pc.stop()
+        with suppress(AttributeError):
+            for pc in self._periodic_callbacks.values():
+                pc.stop()
 
         with log_errors():
             _del_global_client(self)
@@ -1405,8 +1406,9 @@ class Client:
             return
         self.status = "closing"
 
-        for pc in self._periodic_callbacks.values():
-            pc.stop()
+        with suppress(AttributeError):
+            for pc in self._periodic_callbacks.values():
+                pc.stop()
 
         if self.asynchronous:
             future = self._close()
@@ -2361,7 +2363,10 @@ class Client:
 
     async def _run_on_scheduler(self, function, *args, wait=True, **kwargs):
         response = await self.scheduler.run_function(
-            function=dumps(function), args=dumps(args), kwargs=dumps(kwargs), wait=wait
+            function=dumps(function, protocol=4),
+            args=dumps(args, protocol=4),
+            kwargs=dumps(kwargs, protocol=4),
+            wait=wait,
         )
         if response["status"] == "error":
             typ, exc, tb = clean_exception(**response)
@@ -2407,10 +2412,10 @@ class Client:
         responses = await self.scheduler.broadcast(
             msg=dict(
                 op="run",
-                function=dumps(function),
-                args=dumps(args),
+                function=dumps(function, protocol=4),
+                args=dumps(args, protocol=4),
                 wait=wait,
-                kwargs=dumps(kwargs),
+                kwargs=dumps(kwargs, protocol=4),
             ),
             workers=workers,
             nanny=nanny,
@@ -4082,7 +4087,7 @@ class Client:
 
     async def _register_worker_plugin(self, plugin=None, name=None):
         responses = await self.scheduler.register_worker_plugin(
-            plugin=dumps(plugin), name=name
+            plugin=dumps(plugin, protocol=4), name=name
         )
         for response in responses.values():
             if response["status"] == "error":

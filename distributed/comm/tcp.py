@@ -222,7 +222,11 @@ class TCP(Comm):
             allow_offload=self.allow_offload,
             serializers=serializers,
             on_error=on_error,
-            context={"sender": self._local_addr, "recipient": self._peer_addr},
+            context={
+                "sender": self.local_info,
+                "recipient": self.remote_info,
+                **self.handshake_options,
+            },
         )
 
         try:
@@ -356,9 +360,11 @@ class BaseTCPConnector(Connector, RequireEncryptionMixin):
             convert_stream_closed_error(self, e)
 
         local_address = self.prefix + get_stream_address(stream)
-        return self.comm_class(
+        comm = self.comm_class(
             stream, local_address, self.prefix + address, deserialize
         )
+
+        return comm
 
 
 class TCPConnector(BaseTCPConnector):
@@ -444,6 +450,12 @@ class BaseTCPListener(Listener, RequireEncryptionMixin):
         local_address = self.prefix + get_stream_address(stream)
         comm = self.comm_class(stream, local_address, address, self.deserialize)
         comm.allow_offload = self.allow_offload
+
+        try:
+            await self.on_connection(comm)
+        except CommClosedError:
+            logger.info("Connection closed before handshake completed")
+
         await self.comm_handler(comm)
 
     def get_host_port(self):

@@ -341,12 +341,12 @@ async def test_context_specific_serialization(c, s, a, b):
 
         result = await c.run(check, workers=[b.address])
         expected = {"sender": a.address, "recipient": b.address}
-        assert result[b.address]["sender"] == a.address  # see origin worker
+        assert result[b.address]["sender"]["address"] == a.address  # see origin worker
 
         z = await y  # bring object to local process
 
         assert z.x == 1 and z.y == 2
-        assert z.context["sender"] == b.address
+        assert z.context["sender"]["address"] == b.address
     finally:
         from distributed.protocol.serialize import families
 
@@ -371,13 +371,12 @@ async def test_context_specific_serialization_class(c, s, a, b):
         return my_obj.context
 
     result = await c.run(check, workers=[b.address])
-    expected = {"sender": a.address, "recipient": b.address}
-    assert result[b.address]["sender"] == a.address  # see origin worker
+    assert result[b.address]["sender"]["address"] == a.address  # see origin worker
 
     z = await y  # bring object to local process
 
     assert z.x == 1 and z.y == 2
-    assert z.context["sender"] == b.address
+    assert z.context["sender"]["address"] == b.address
 
 
 def test_serialize_raises():

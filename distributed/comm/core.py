@@ -4,6 +4,7 @@ from contextlib import suppress
 import inspect
 import logging
 import random
+import sys
 import weakref
 
 import dask
@@ -12,6 +13,8 @@ from ..metrics import time
 from ..utils import parse_timedelta, TimeoutError
 from . import registry
 from .addressing import parse_address
+from ..protocol.compression import get_default_compression
+from ..protocol import pickle
 
 
 logger = logging.getLogger(__name__)
@@ -43,6 +46,9 @@ class Comm(ABC):
         self._instances.add(self)
         self.allow_offload = True  # for deserialization in utils.from_frames
         self.name = None
+        self.local_info = {}
+        self.remote_info = {}
+        self.handshake_options = {}
 
     # XXX add set_close_callback()?
 
@@ -118,6 +124,27 @@ class Comm(ABC):
         """
         return {}
 
+    @staticmethod
+    def handshake_info():
+        return {
+            "compression": get_default_compression(),
+            "python": tuple(sys.version_info)[:3],
+            "pickle-protocol": pickle.HIGHEST_PROTOCOL,
+        }
+
+    @staticmethod
+    def handshake_configuration(local, remote):
+        out = {
+            "pickle-protocol": min(local["pickle-protocol"], remote["pickle-protocol"])
+        }
+
+        if local["compression"] == remote["compression"]:
+            out["compression"] = local["compression"]
+        else:
+            out["compression"] = None
+
+        return out
+
     def __repr__(self):
         clsname = self.__class__.__name__
         if self.closed():
@@ -175,6 +202,27 @@ class Listener(ABC):
 
         return _().__await__()
 
+    async def on_connection(self, comm: Comm, handshake_overrides=None):
+        local_info = {**comm.handshake_info(), **(handshake_overrides or {})}
+        try:
+            write = await asyncio.wait_for(comm.write(local_info), 1)
+            handshake = await asyncio.wait_for(comm.read(), 1)
+            # This would be better, but connections leak if worker is closed quickly
+            # write, handshake = await asyncio.gather(comm.write(local_info), comm.read())
+        except Exception:
+            with suppress(Exception):
+                await comm.close()
+            raise CommClosedError()
+
+        comm.remote_info = handshake
+        comm.remote_info["address"] = comm._peer_addr
+        comm.local_info = local_info
+        comm.local_info["address"] = comm._local_addr
+
+        comm.handshake_options = comm.handshake_configuration(
+            comm.local_info, comm.remote_info
+        )
+
 
 class Connector(ABC):
     @abstractmethod
@@ -187,7 +235,9 @@ class Connector(ABC):
         """
 
 
-async def connect(addr, timeout=None, deserialize=True, **connection_args):
+async def connect(
+    addr, timeout=None, deserialize=True, handshake_overrides=None, **connection_args
+):
     """
     Connect to the given address (a URI such as ``tcp://127.0.0.1:1234``)
     and yield a ``Comm`` object.  If the connection attempt fails, it is
@@ -225,12 +275,38 @@ async def connect(addr, timeout=None, deserialize=True, **connection_args):
     while True:
         try:
             while deadline - time() > 0:
-                future = connector.connect(
-                    loc, deserialize=deserialize, **connection_args
-                )
+
+                async def _():
+                    comm = await connector.connect(
+                        loc, deserialize=deserialize, **connection_args
+                    )
+                    local_info = {
+                        **comm.handshake_info(),
+                        **(handshake_overrides or {}),
+                    }
+                    try:
+                        handshake = await asyncio.wait_for(comm.read(), 1)
+                        write = await asyncio.wait_for(comm.write(local_info), 1)
+                        # This would be better, but connections leak if worker is closed quickly
+                        # write, handshake = await asyncio.gather(comm.write(local_info), comm.read())
+                    except Exception:
+                        with suppress(Exception):
+                            await comm.close()
+                        raise CommClosedError()
+
+                    comm.remote_info = handshake
+                    comm.remote_info["address"] = comm._peer_addr
+                    comm.local_info = local_info
+                    comm.local_info["address"] = comm._local_addr
+
+                    comm.handshake_options = comm.handshake_configuration(
+                        comm.local_info, comm.remote_info
+                    )
+                    return comm
+
                 with suppress(TimeoutError):
                     comm = await asyncio.wait_for(
-                        future, timeout=min(deadline - time(), retry_timeout_backoff)
+                        _(), timeout=min(deadline - time(), retry_timeout_backoff)
                     )
                     break
             if not comm:

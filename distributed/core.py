@@ -1148,13 +1148,13 @@ def error_message(e, status="error"):
     tb = get_traceback()
     e2 = truncate_exception(e, MAX_ERROR_LEN)
     try:
-        e3 = protocol.pickle.dumps(e2)
+        e3 = protocol.pickle.dumps(e2, protocol=4)
         protocol.pickle.loads(e3)
     except Exception:
         e2 = Exception(str(e2))
     e4 = protocol.to_serialize(e2)
     try:
-        tb2 = protocol.pickle.dumps(tb)
+        tb2 = protocol.pickle.dumps(tb, protocol=4)
     except Exception:
         tb = tb2 = "".join(traceback.format_tb(tb))
 

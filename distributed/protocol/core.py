@@ -27,10 +27,16 @@ def dumps(msg, serializers=None, on_error="message", context=None):
     """ Transform Python message to bytestream suitable for communication """
     try:
         data = {}
+
+        if context and "compression" in context:
+            compress_opts = {"compression": context["compression"]}
+        else:
+            compress_opts = {}
+
         # Only lists and dicts can contain serialized values
         if isinstance(msg, (list, dict)):
             msg, data, bytestrings = extract_serialize(msg)
-        small_header, small_payload = dumps_msgpack(msg)
+        small_header, small_payload = dumps_msgpack(msg, **compress_opts)
 
         if not data:  # fast path without serialized data
             return small_header, small_payload
@@ -67,7 +73,9 @@ def dumps(msg, serializers=None, on_error="message", context=None):
             ):
                 if compression is None:  # default behavior
                     _frames = frame_split_size(frame)
-                    _compression, _frames = zip(*map(maybe_compress, _frames))
+                    _compression, _frames = zip(
+                        *[maybe_compress(frame, **compress_opts) for frame in _frames]
+                    )
                     out_compression.extend(_compression)
                     _out_frames.extend(_frames)
                 else:  # already specified, so pass
@@ -164,7 +172,7 @@ def loads(frames, deserialize=True, deserializers=None):
         raise
 
 
-def dumps_msgpack(msg):
+def dumps_msgpack(msg, compression=None):
     """ Dump msg into header and payload, both bytestrings
 
     All of the message must be msgpack encodable
@@ -175,7 +183,7 @@ def dumps_msgpack(msg):
     header = {}
     payload = msgpack.dumps(msg, default=msgpack_encode_default, use_bin_type=True)
 
-    fmt, payload = maybe_compress(payload)
+    fmt, payload = maybe_compress(payload, compression=compression)
     if fmt:
         header["compression"] = fmt
 

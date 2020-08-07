@@ -263,6 +263,11 @@ class InProcListener(Listener):
             )
             # Notify connector
             conn_req.c_loop.add_callback(conn_req.conn_event.set)
+            try:
+                await self.on_connection(comm)
+            except CommClosedError:
+                logger.debug("Connection closed before handshake completed")
+                return
             IOLoop.current().add_callback(self.comm_handler, comm)
 
     def connect_threadsafe(self, conn_req):

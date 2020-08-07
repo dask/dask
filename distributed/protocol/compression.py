@@ -124,16 +124,22 @@ with suppress(ImportError):
     }
 
 
-default = dask.config.get("distributed.comm.compression")
-if default != "auto":
-    if default in compressions:
-        default_compression = default
+def get_default_compression():
+    default = dask.config.get("distributed.comm.compression")
+    if default != "auto":
+        if default in compressions:
+            return default
+        else:
+            raise ValueError(
+                "Default compression '%s' not found.\n"
+                "Choices include auto, %s"
+                % (default, ", ".join(sorted(map(str, compressions))))
+            )
     else:
-        raise ValueError(
-            "Default compression '%s' not found.\n"
-            "Choices include auto, %s"
-            % (default, ", ".join(sorted(map(str, compressions))))
-        )
+        return default_compression
+
+
+get_default_compression()
 
 
 def byte_sample(b, size, n):
@@ -157,7 +163,13 @@ def byte_sample(b, size, n):
     return b"".join(map(ensure_bytes, parts))
 
 
-def maybe_compress(payload, min_size=1e4, sample_size=1e4, nsamples=5):
+def maybe_compress(
+    payload,
+    min_size=1e4,
+    sample_size=1e4,
+    nsamples=5,
+    compression=dask.config.get("distributed.comm.compression"),
+):
     """
     Maybe compress payload
 
@@ -168,7 +180,6 @@ def maybe_compress(payload, min_size=1e4, sample_size=1e4, nsamples=5):
         return the original
     4.  We return the compressed result
     """
-    compression = dask.config.get("distributed.comm.compression")
     if compression == "auto":
         compression = default_compression
 

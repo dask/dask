@@ -2,10 +2,9 @@ import re
 import sys
 
 import pytest
-from toolz import first
 
 from distributed.versions import get_versions, error_message
-from distributed import Client, Worker, LocalCluster
+from distributed import Client, Worker
 from distributed.utils_test import gen_cluster, loop  # noqa: F401
 
 
@@ -145,38 +144,3 @@ def test_python_version():
     required = get_versions()["packages"]
     assert "python" in required
     assert required["python"] == ".".join(map(str, sys.version_info))
-
-
-def test_python_version_error(loop):
-
-    with LocalCluster(1, processes=False, silence_logs=False, loop=loop,) as cluster:
-        first(cluster.scheduler.workers.values()).versions["packages"][
-            "python"
-        ] = "3.5.1"
-        with pytest.raises(ImportError) as info:
-            with Client(cluster):
-                pass
-
-    assert "Python" in str(info.value)
-    assert "major" in str(info.value).lower()
-
-
-def test_lz4_version_error(loop):
-
-    with LocalCluster(
-        1, processes=False, silence_logs=False, dashboard_address=None, loop=loop,
-    ) as cluster:
-        try:
-            import lz4  # noqa: F401
-
-            first(cluster.scheduler.workers.values()).versions["packages"]["lz4"] = None
-        except ImportError:
-            first(cluster.scheduler.workers.values()).versions["packages"][
-                "lz4"
-            ] = "1.0.0"
-
-        with pytest.raises(ImportError) as info:
-            with Client(cluster):
-                pass
-
-    assert "lz4" in str(info.value)
