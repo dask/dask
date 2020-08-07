@@ -11,7 +11,7 @@ from collections.abc import Mapping
 import yaml
 
 try:
-    from jsonschema import validate, ValidationError
+    from jsonschema import Draft6Validator, ValidationError
 
     VALIDATE_CONFIG = True
 except ImportError:
@@ -43,24 +43,29 @@ config_lock = threading.Lock()
 defaults = []
 
 
+validators = []
+
+
 def schema_validate(new):
+    """Warn if config doesn't match schema
+
+    Submodules should append to the validators list to implement
+    checking.
+    """
     if not VALIDATE_CONFIG:
         pass
 
-    root = os.path.dirname(__file__)
-    with open(os.path.join(root, "dask-schema.yaml")) as f:
-        schema = yaml.safe_load(f)
+    for validator in validators:
+        # convert all '_' to '-'
+        alt = {k.replace("_", "-"): v for k, v in new.items()}
 
-    # convert all '_' to '-'
-    alt = {k.replace("_", "-"): v for k, v in new.items()}
-
-    try:
-        validate(instance=alt, schema=schema)
-    except ValidationError as err:
-        warnings.warn(
-            f'Configuration for "{".".join(err.path)}" is invalid: {err.message}.',
-            stacklevel=3,
-        )
+        try:
+            validator.validate(instance=alt)
+        except ValidationError as err:
+            warnings.warn(
+                f'Configuration for "{".".join(err.path)}" is invalid: {err.message}.',
+                stacklevel=3,
+            )
 
 
 def canonical_name(k, config):
@@ -679,5 +684,17 @@ def _initialize():
     update_defaults(_defaults)
 
 
+def _initialize_schema():
+    if VALIDATE_CONFIG:
+        fn = os.path.join(os.path.dirname(__file__), "dask-schema.yaml")
+        ensure_file(source=fn)
+
+        with open(fn) as f:
+            schema = yaml.safe_load(f)
+
+        validators.append(Draft6Validator(schema))
+
+
+_initialize_schema()
 refresh()
 _initialize()
