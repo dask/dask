@@ -20,6 +20,7 @@ from .utils import (
 )
 
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
+schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
 
 #
@@ -844,12 +845,11 @@ class ArrowEngine(Engine):
         if schema == "infer" or isinstance(schema, dict):
 
             # Start with schema from _meta_nonempty
-            _meta = (
+            _schema = pa.Schema.from_pandas(
                 df._meta_nonempty.set_index(index_cols)
                 if index_cols
                 else df._meta_nonempty
             )
-            _schema = pa.Schema.from_pandas(_meta)
 
             # Use dict to update our inferred schema
             if isinstance(schema, dict):
@@ -862,7 +862,7 @@ class ArrowEngine(Engine):
             # If we have object columns, we need to sample partitions
             # until we find non-null data for each column in `sample`
             sample = [col for col in df.columns if df[col].dtype == "object"]
-            if sample and schema == "infer":
+            if schema_field_supported and sample and schema == "infer":
                 for i in range(df.npartitions):
                     _df = df[sample].get_partition(i)
                     size = len(_df)
