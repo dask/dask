@@ -134,7 +134,10 @@ class GPUCurrentLoad(DashboardComponent):
             i = 0
 
             for ws in workers:
-                info = ws.extra["gpu"]
+                try:
+                    info = ws.extra["gpu"]
+                except KeyError:
+                    continue
                 metrics = ws.metrics["gpu"]
                 for j, (u, mem_used, mem_total) in enumerate(
                     zip(
