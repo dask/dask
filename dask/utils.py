@@ -1384,3 +1384,31 @@ def ndimlist(seq):
         return 1
     else:
         return 1 + ndimlist(seq[0])
+
+
+def iter_chunks(sizes, max_size):
+    """Split sizes into chunks of total max_size each
+
+    Parameters
+    ----------
+    sizes : iterable of numbers
+        The sizes to be chunked
+    max_size : number
+        Maximum total size per chunk.
+        It must be greater or equal than each size in sizes
+    """
+    chunk, chunk_sum = [], 0
+    iter_sizes = iter(sizes)
+    size = next(iter_sizes, None)
+    while size is not None:
+        assert size <= max_size
+        if chunk_sum + size <= max_size:
+            chunk.append(size)
+            chunk_sum += size
+            size = next(iter_sizes, None)
+        else:
+            assert chunk
+            yield chunk
+            chunk, chunk_sum = [], 0
+    if chunk:
+        yield chunk
