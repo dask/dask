@@ -1795,7 +1795,6 @@ class SeriesGroupBy(_GroupBy):
         """
         Examples
         --------
-        
         >>> import pandas as pd
         >>> import dask.dataframe as dd
         >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
