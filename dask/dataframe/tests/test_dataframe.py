@@ -22,7 +22,6 @@ from dask.dataframe.core import (
     _concat,
     Scalar,
     has_parallel_type,
-    iter_chunks,
     total_mem_usage,
     is_broadcastable,
 )
@@ -1916,21 +1915,6 @@ def test_repartition_partition_size_arg():
     a = dd.from_pandas(df, npartitions=2)
     b = a.repartition("1 MiB")
     assert b.npartitions == 1
-
-
-def test_iter_chunks():
-    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
-    assert list(iter_chunks(sizes, 19)) == [
-        [14],
-        [8, 5],
-        [9, 7],
-        [9, 1],
-        [19],
-        [8],
-        [19],
-    ]
-    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
-    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
 
 
 def test_repartition_npartitions_same_limits():
