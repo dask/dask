@@ -73,7 +73,7 @@ class Status(Enum):
             return self.value == other.value
         elif isinstance(other, str) or (other is None):
             warnings.warn(
-                f"Since distributed 2.19 `.status` is now an Enum, please compare with `Status.{other}`",
+                f"Since distributed 2.23 `.status` is now an Enum, please compare with `Status.{other}`",
                 PendingDeprecationWarning,
                 stacklevel=1,
             )
@@ -270,7 +270,7 @@ class Server:
             self._status = new_status
         elif isinstance(new_status, str) or new_status is None:
             warnings.warn(
-                f"Since distributed 2.19 `.status` is now an Enum, please assign `Status.{new_status}`",
+                f"Since distributed 2.23 `.status` is now an Enum, please assign `Status.{new_status}`",
                 PendingDeprecationWarning,
                 stacklevel=1,
             )
