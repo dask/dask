@@ -2673,3 +2673,41 @@ def test_divisions_with_null_partition(tmpdir, engine):
 
     ddf_read = dd.read_parquet(str(tmpdir), engine=engine, index="a")
     assert ddf_read.divisions == (None, None, None)
+
+
+def test_pa_dataset_simple(tmpdir, engine):
+    check_pyarrow()
+    fn = str(tmpdir)
+    df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
+    df.set_index("a", inplace=True, drop=True)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine=engine)
+    read_df = dd.read_parquet(fn, engine="pyarrow", dataset={"pa_dataset": True})
+    read_df.compute(scheduler="synchronous")
+    assert_eq(ddf, read_df)
+
+
+@pytest.mark.parametrize("test_filter", [True, False])
+def test_pa_dataset_partitioned(tmpdir, engine, test_filter):
+    check_pyarrow()
+
+    if pa.__version__ <= LooseVersion("0.17.1"):
+        # Using pyarrow.dataset API does not produce
+        # Categorical type for partitioned columns.
+        pytest.skip("PyArrow>0.17.1 Required.")
+
+    fn = str(tmpdir)
+    df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine=engine, partition_on="b")
+    read_df = dd.read_parquet(
+        fn,
+        engine="pyarrow",
+        dataset={"pa_dataset": True},
+        filters=[("b", "==", "a")] if test_filter else None,
+    )
+
+    if test_filter:
+        assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
+    else:
+        assert_eq(ddf, read_df)
