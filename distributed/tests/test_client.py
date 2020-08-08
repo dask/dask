@@ -1939,6 +1939,11 @@ async def test_badly_serialized_input(c, s, a, b):
     assert list(L) == list(map(inc, range(10)))
     assert future.status == "error"
 
+    with pytest.raises(Exception) as info:
+        await future
+
+    assert "hello!" in str(info.value)
+
 
 @pytest.mark.skipif("True", reason="")
 async def test_badly_serialized_input_stderr(capsys, c):
