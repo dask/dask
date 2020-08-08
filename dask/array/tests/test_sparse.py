@@ -59,6 +59,8 @@ functions = [
     pytest.param(lambda x: x.sum(axis=(1, 2)), marks=numpy_120_xfail),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=True),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=False),
     lambda x: x.round(1),
     lambda x: x.reshape((x.shape[0] * x.shape[1], x.shape[2])),
     lambda x: abs(x),

@@ -234,7 +234,11 @@ def trim_internal(x, axes, boundary=None):
     chunks = tuple(olist)
 
     return map_blocks(
-        partial(_trim, axes=axes, boundary=boundary), x, chunks=chunks, dtype=x.dtype
+        partial(_trim, axes=axes, boundary=boundary),
+        x,
+        chunks=chunks,
+        dtype=x.dtype,
+        meta=x._meta,
     )
 
 
