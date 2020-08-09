@@ -11,7 +11,7 @@ import dask.array as da
 from dask.array.core import normalize_chunks
 from dask.array.utils import assert_eq, same_keys, AxisError
 from dask.array.numpy_compat import _numpy_117, _numpy_118
-from dask.base import NormalizeTokenWarning
+from dask.base import SlowHashingWarning
 
 
 @pytest.mark.parametrize(
@@ -125,7 +125,7 @@ def test_pickle_hashing_warning(x, y, z):
 
     da.from_array(arr1, chunks=(x // 100, -1, -1))
 
-    with pytest.warns(NormalizeTokenWarning):
+    with pytest.warns(SlowHashingWarning):
         da.from_array(arr2, chunks=(x // 100,))
 
 

@@ -35,7 +35,7 @@ __all__ = (
 )
 
 
-class NormalizeTokenWarning(RuntimeWarning):
+class SlowHashingWarning(RuntimeWarning):
     """Warning for inefficient or slow token normalization"""
 
 
@@ -680,28 +680,25 @@ def tokenize(*args, **kwargs):
     start_time = default_timer()
     result = md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
     time_taken = default_timer() - start_time
-    warn_config_key = "tokenize.warn_time_secs"
-    warn_time = config.get(warn_config_key, default=2)
-    if (warn_time > 0) and (time_taken > float(warn_time)):
-        warnings.warn(
-            "tokenize ran for {} seconds."
-            " Configuration key {} controls this threshold"
-            " and was set to {}. Disable this warning by setting it to -1.".format(
-                time_taken, warn_config_key, warn_time
-            ),
-            NormalizeTokenWarning,
-        )
+    warn_config_key = "tokenize.warn_duration"
+    warn_duration = config.get(warn_config_key, None)
+    if warn_duration is not None:
+        warn_duration = float(warn_duration)
+        if time_taken > warn_duration:
+            warnings.warn(
+                "tokenize ran for {} seconds."
+                " Configuration key {} controls this threshold"
+                " and was set to {}.".format(
+                    time_taken, warn_config_key, warn_duration
+                ),
+                SlowHashingWarning,
+            )
     return result
 
 
 normalize_token = Dispatch()
 normalize_token.register(
     (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
-)
-
-normalize_token_array_pickle_warning = (
-    "normalize_token is using pickle to create a hash of your array data."
-    " To improve performance, disable hashing by setting name=False."
 )
 
 
@@ -918,7 +915,9 @@ def register_numpy():
                 try:
                     data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
                     warnings.warn(
-                        normalize_token_array_pickle_warning, NormalizeTokenWarning
+                        "normalize_token is using pickle to create a hash of your array data."
+                        " To improve performance, disable hashing by setting name=False.",
+                        SlowHashingWarning,
                     )
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
