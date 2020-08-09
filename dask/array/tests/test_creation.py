@@ -114,7 +114,7 @@ def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
         assert_eq(np_r, da_r)
 
 
-@pytest.mark.parametrize("x, y, z", [(100, 25, 25)])
+@pytest.mark.parametrize("x, y, z", [(1000, 250, 250)])
 def test_pickle_hashing_warning(x, y, z):
     # 3d numpy array
     arr1 = np.random.rand(x, y, z)
@@ -123,10 +123,12 @@ def test_pickle_hashing_warning(x, y, z):
     arr2 = np.full(x, None)
     arr2[:] = list(np.random.rand(x, y, z))
 
-    da.from_array(arr1, chunks=(x // 100, -1, -1))
+    with dask.config.set({"tokenize.warn_duration": 1}):
 
-    with pytest.warns(SlowHashingWarning):
-        da.from_array(arr2, chunks=(x // 100,))
+        da.from_array(arr1, chunks=(x // 100, -1, -1))
+
+        with pytest.warns(SlowHashingWarning):
+            da.from_array(arr2, chunks=(x // 100,))
 
 
 @pytest.mark.parametrize("endpoint", [True, False])
