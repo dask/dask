@@ -912,19 +912,11 @@ def register_numpy():
                     # bytes fast-path
                     data = hash_buffer_hex(b"-".join(x.flat))
             except (TypeError, UnicodeDecodeError):
-                using_pickle = False
                 try:
                     data = hash_buffer_hex(pickle.dumps(x, pickle.HIGHEST_PROTOCOL))
-                    using_pickle = True
                 except Exception:
                     # pickling not supported, use UUID4-based fallback
                     data = uuid.uuid4().hex
-                if using_pickle:
-                    warnings.warn(
-                        "normalize_token is using pickle to create a hash of your array data."
-                        " To improve performance, disable hashing by setting name=False.",
-                        SlowHashingWarning,
-                    )
         else:
             try:
                 data = hash_buffer_hex(x.ravel(order="K").view("i1"))
