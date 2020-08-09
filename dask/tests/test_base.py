@@ -157,12 +157,14 @@ def test_tokenize_numpy_array_on_object_dtype():
     assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
         np.array(["a", "aa", "aaa"], dtype=object)
     )
-    assert tokenize(np.array(["a", None, "aaa"], dtype=object)) == tokenize(
-        np.array(["a", None, "aaa"], dtype=object)
-    )
-    assert tokenize(
-        np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
-    ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
+    with pytest.warns(SlowHashingWarning):
+        assert tokenize(np.array(["a", None, "aaa"], dtype=object)) == tokenize(
+            np.array(["a", None, "aaa"], dtype=object)
+        )
+    with pytest.warns(SlowHashingWarning):
+        assert tokenize(
+            np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
+        ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
 
 
 @pytest.mark.skipif("not np")
@@ -257,9 +259,10 @@ def test_tokenize_pandas():
     a = pd.DataFrame({"x": [1, 2, 3], "y": ["4", "asd", None]}, index=[1, 2, 3])
     b = pd.DataFrame({"x": [1, 2, 3], "y": ["4", "asd", None]}, index=[1, 2, 3])
 
-    assert tokenize(a) == tokenize(b)
-    b.index.name = "foo"
-    assert tokenize(a) != tokenize(b)
+    with pytest.warns(SlowHashingWarning):
+        assert tokenize(a) == tokenize(b)
+        b.index.name = "foo"
+        assert tokenize(a) != tokenize(b)
 
     a = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
     b = pd.DataFrame({"x": [1, 2, 3], "y": ["a", "b", "a"]})
@@ -275,7 +278,8 @@ def test_tokenize_pandas_invalid_unicode():
     df = pd.DataFrame(
         {"x\ud83d": [1, 2, 3], "y\ud83d": ["4", "asd\ud83d", None]}, index=[1, 2, 3]
     )
-    tokenize(df)
+    with pytest.warns(SlowHashingWarning):
+        tokenize(df)
 
 
 @pytest.mark.skipif("not pd")
@@ -284,7 +288,8 @@ def test_tokenize_pandas_mixed_unicode_bytes():
         {u"ö".encode("utf8"): [1, 2, 3], u"ö": [u"ö", u"ö".encode("utf8"), None]},
         index=[1, 2, 3],
     )
-    tokenize(df)
+    with pytest.warns(SlowHashingWarning):
+        tokenize(df)
 
 
 @pytest.mark.skipif("not pd")
@@ -324,8 +329,9 @@ def test_tokenize_pandas_extension_array():
             ]
         )
 
-    for arr in arrays:
-        assert tokenize(arr) == tokenize(arr)
+    with pytest.warns(SlowHashingWarning):
+        for arr in arrays:
+            assert tokenize(arr) == tokenize(arr)
 
 
 @pytest.mark.skipif("not pd")
@@ -415,7 +421,8 @@ def test_tokenize_range():
 @pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
     a = np.array([u"foo", u"Jos\xe9", np.nan], dtype="O")
-    assert tokenize(a) == tokenize(a)
+    with pytest.warns(SlowHashingWarning):
+        assert tokenize(a) == tokenize(a)
 
 
 @pytest.mark.parametrize(
@@ -451,7 +458,9 @@ def test_tokenize_dense_sparse_array(cls_name):
         a = sp.rand(10, 10000, random_state=rng).asformat(cls_name)
     b = a.copy()
 
-    assert tokenize(a) == tokenize(b)
+    with pytest.warns(None):
+        # SlowHashingWarning may occur depending on random state
+        assert tokenize(a) == tokenize(b)
 
     # modifying the data values
     if hasattr(b, "data"):
@@ -461,14 +470,18 @@ def test_tokenize_dense_sparse_array(cls_name):
     else:
         raise ValueError
 
-    assert tokenize(a) != tokenize(b)
+    with pytest.warns(None):
+        # SlowHashingWarning may occur depending on random state
+        assert tokenize(a) != tokenize(b)
 
     # modifying the data indices
     with pytest.warns(None):
         b = a.copy().asformat("coo")
         b.row[:10] = np.arange(10)
         b = b.asformat(cls_name)
-    assert tokenize(a) != tokenize(b)
+
+        # SlowHashingWarning may occur depending on random state
+        assert tokenize(a) != tokenize(b)
 
 
 def test_tokenize_object_with_recursion_error_returns_uuid():
@@ -706,7 +719,8 @@ def test_compute_array_dataframe():
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe_valid_unicode_in_bytes():
     df = pd.DataFrame(data=np.random.random((3, 1)), columns=[u"ö".encode("utf8")])
-    dd.from_pandas(df, npartitions=4)
+    with pytest.warns(SlowHashingWarning):
+        dd.from_pandas(df, npartitions=4)
 
 
 @pytest.mark.skipif("not dd")
