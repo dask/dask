@@ -314,6 +314,12 @@ def _generate_dd_meta(schema, index, categories, partition_info):
     meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
+    import pdb
+
+    pdb.set_trace()
+
+    # TODO: Need to perform Categorical conversion below for pyarrow.dataset
+
     if partition_obj:
         for partition in partition_obj:
             if isinstance(index, list) and partition.name == index[0]:
@@ -772,7 +778,7 @@ class ArrowEngine(Engine):
 
         # Check if we are using pyarrow.dataset API
         dataset_kwargs = kwargs.get("dataset", {})
-        use_pa_ds = dataset_kwargs.pop("pa_dataset", False) and pa_ds is not None
+        use_pa_ds = dataset_kwargs.pop("pa_dataset", True) and pa_ds is not None
         _gather_func = (
             _gather_metadata_pyarrow_dataset if use_pa_ds else _gather_metadata
         )
