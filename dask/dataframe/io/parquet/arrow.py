@@ -857,7 +857,7 @@ class ArrowEngine(Engine):
                 for name in schema.names:
                     i = _schema.get_field_index(name)
                     j = schema.get_field_index(name)
-                    _schema.set(i, schema.field(j))
+                    _schema = _schema.set(i, schema.field(j))
 
             # If we have object columns, we need to sample partitions
             # until we find non-null data for each column in `sample`
