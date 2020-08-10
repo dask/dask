@@ -353,8 +353,9 @@ def to_parquet(
         from `_meta_nonempty`.  If "infer", the first non-empty and non-null
         partition will be used to infer the type for "object" columns. If
         None (default), we let the backend infer the schema for each distinct
-        output partition. Note that this argument is currently ignored by
-        the "fastparquet" engine.
+        output partition. If the partitions produce inconsistent schemas,
+        pyarrow will throw an error when writing the shared _metadata file.
+        Note that this argument is ignored by the "fastparquet" engine.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
