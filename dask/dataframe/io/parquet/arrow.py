@@ -11,6 +11,7 @@ from ....utils import getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
 from ....core import flatten
+from dask import delayed
 
 from .utils import (
     _parse_pandas_metadata,
@@ -864,16 +865,16 @@ class ArrowEngine(Engine):
             sample = [col for col in df.columns if df[col].dtype == "object"]
             if schema_field_supported and sample and schema == "infer":
                 for i in range(df.npartitions):
-                    _df = df[sample].get_partition(i)
-                    size = len(_df)
-                    if size:
-                        _s = pa.Schema.from_pandas(_df.compute())
-                        for name, typ in zip(_s.names, _s.types):
-                            if typ != "null":
-                                i = _schema.get_field_index(name)
-                                j = _s.get_field_index(name)
-                                _schema = _schema.set(i, _s.field(j))
-                                sample.remove(name)
+                    # Keep data on worker
+                    _s = delayed(lambda x: pa.Schema.from_pandas(x))(
+                        df[sample].to_delayed()[i]
+                    ).compute()
+                    for name, typ in zip(_s.names, _s.types):
+                        if typ != "null":
+                            i = _schema.get_field_index(name)
+                            j = _s.get_field_index(name)
+                            _schema = _schema.set(i, _s.field(j))
+                            sample.remove(name)
                     if not sample:
                         break
 
