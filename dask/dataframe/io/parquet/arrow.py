@@ -872,7 +872,7 @@ class ArrowEngine(Engine):
                             if typ != "null":
                                 i = _schema.get_field_index(name)
                                 j = _s.get_field_index(name)
-                                _schema.set(i, _s.field(j))
+                                _schema = _schema.set(i, _s.field(j))
                                 sample.remove(name)
                     if not sample:
                         break
