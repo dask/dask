@@ -515,7 +515,7 @@ def test_reduction_names():
 
 
 def test_general_reduction_names():
-    dtype = np.int
+    dtype = int
     a = da.reduction(
         da.ones(10, dtype, chunks=2), np.sum, np.sum, dtype=dtype, name="foo"
     )

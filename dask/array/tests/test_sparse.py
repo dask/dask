@@ -5,7 +5,7 @@ import pytest
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_117
+from dask.array.numpy_compat import _numpy_117, _numpy_120
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
 sparse = pytest.importorskip("sparse")
@@ -15,6 +15,10 @@ if sparse:
     # searchsorted() got an unexpected keyword argument 'side'
     pytest.importorskip("numba", minversion="0.40.0")
 
+numpy_120_xfail = pytest.mark.xfail(
+    _numpy_120, reason="https://github.com/pydata/sparse/issues/383"
+)
+
 
 functions = [
     lambda x: x,
@@ -22,15 +26,15 @@ functions = [
     lambda x: 2 * x,
     lambda x: x / 2,
     lambda x: x ** 2,
-    lambda x: x + x,
-    lambda x: x * x,
-    lambda x: x[0],
-    lambda x: x[:, 1],
-    lambda x: x[:1, None, 1:3],
+    pytest.param(lambda x: x + x, marks=numpy_120_xfail),
+    pytest.param(lambda x: x * x, marks=numpy_120_xfail),
+    pytest.param(lambda x: x[0], marks=numpy_120_xfail),
+    pytest.param(lambda x: x[:, 1], marks=numpy_120_xfail),
+    pytest.param(lambda x: x[:1, None, 1:3], marks=numpy_120_xfail),
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
-    lambda x: x.sum(),
-    lambda x: x.mean(),
+    pytest.param(lambda x: x.sum(), marks=numpy_120_xfail),
+    pytest.param(lambda x: x.mean(), marks=numpy_120_xfail),
     lambda x: x.moment(order=0),
     pytest.param(
         lambda x: x.std(),
@@ -44,20 +48,25 @@ functions = [
             reason="fixed in https://github.com/pydata/sparse/pull/243"
         ),
     ),
-    lambda x: x.dot(np.arange(x.shape[-1])),
-    lambda x: x.dot(np.eye(x.shape[-1])),
-    lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
-    lambda x: x.sum(axis=0),
-    lambda x: x.max(axis=0),
-    lambda x: x.sum(axis=(1, 2)),
+    pytest.param(lambda x: x.dot(np.arange(x.shape[-1])), marks=numpy_120_xfail),
+    pytest.param(lambda x: x.dot(np.eye(x.shape[-1])), marks=numpy_120_xfail),
+    pytest.param(
+        lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
+        marks=numpy_120_xfail,
+    ),
+    pytest.param(lambda x: x.sum(axis=0), marks=numpy_120_xfail),
+    pytest.param(lambda x: x.max(axis=0), marks=numpy_120_xfail),
+    pytest.param(lambda x: x.sum(axis=(1, 2)), marks=numpy_120_xfail),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=True),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=False),
     lambda x: x.round(1),
     lambda x: x.reshape((x.shape[0] * x.shape[1], x.shape[2])),
     lambda x: abs(x),
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
-    lambda x: x.rechunk((2, 2, 1)),
+    pytest.param(lambda x: x.rechunk((2, 2, 1)), marks=numpy_120_xfail),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
 ]
@@ -152,6 +161,7 @@ def test_mixed_output_type():
     assert zz.nnz == y.compute().nnz
 
 
+@numpy_120_xfail
 def test_metadata():
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
@@ -187,6 +197,7 @@ def test_html_repr():
     assert "Bytes" not in text
 
 
+@numpy_120_xfail
 def test_from_delayed_meta():
     def f():
         return sparse.COO.from_numpy(np.eye(3))
@@ -197,6 +208,7 @@ def test_from_delayed_meta():
     assert_eq(x, x)
 
 
+@numpy_120_xfail
 def test_from_array():
     x = sparse.COO.from_numpy(np.eye(10))
     d = da.from_array(x, chunks=(5, 5))
@@ -206,6 +218,7 @@ def test_from_array():
     assert isinstance(d.compute(), sparse.COO)
 
 
+@numpy_120_xfail
 def test_map_blocks():
     x = da.eye(10, chunks=5)
     y = x.map_blocks(sparse.COO.from_numpy, meta=sparse.COO.from_numpy(np.eye(1)))
@@ -213,6 +226,7 @@ def test_map_blocks():
     assert_eq(y, y)
 
 
+@numpy_120_xfail
 def test_meta_from_array():
     x = sparse.COO.from_numpy(np.eye(1))
     y = da.utils.meta_from_array(x, ndim=2)

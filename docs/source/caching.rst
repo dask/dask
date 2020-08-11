@@ -93,7 +93,7 @@ characteristics:
 
 We can activate a fixed sized cache as a callback_:
 
-.. _callback: diagnostics.rst
+.. _callback: diagnostics-local.html#custom-callbacks
 
 .. code-block:: python
 

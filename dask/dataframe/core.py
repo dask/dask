@@ -40,6 +40,7 @@ from ..utils import (
     OperatorMethodMixin,
     is_arraylike,
     typename,
+    iter_chunks,
 )
 from ..array.core import Array, normalize_arg
 from ..array.utils import zeros_like_safe
@@ -1120,6 +1121,8 @@ Dask Name: {name}, {task} tasks"""
         divisions : list, optional
             List of partitions to be used. Only used if npartitions and
             partition_size isn't specified.
+            For convenience if given an integer this will defer to npartitions
+            and if given a string it will defer to partition_size (see below)
         npartitions : int, optional
             Number of partitions of output. Only used if partition_size
             isn't specified.
@@ -1153,6 +1156,12 @@ Dask Name: {name}, {task} tasks"""
         >>> df = df.repartition(divisions=[0, 5, 10, 20])  # doctest: +SKIP
         >>> df = df.repartition(freq='7d')  # doctest: +SKIP
         """
+        if isinstance(divisions, int):
+            npartitions = divisions
+            divisions = None
+        if isinstance(divisions, str):
+            partition_size = divisions
+            divisions = None
         if (
             sum(
                 [
@@ -1166,7 +1175,7 @@ Dask Name: {name}, {task} tasks"""
         ):
             raise ValueError(
                 "Please provide exactly one of ``npartitions=``, ``freq=``, "
-                "``divisisions=``, ``partitions_size=`` keyword arguments"
+                "``divisions=``, ``partitions_size=`` keyword arguments"
             )
 
         if partition_size is not None:
@@ -2487,7 +2496,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             is_anchored = offset.isAnchored()
 
-        include_right = is_anchored or not hasattr(offset, "_inc")
+        include_right = is_anchored or not hasattr(offset, "delta")
 
         if end == self.npartitions - 1:
             divs = self.divisions
@@ -2827,7 +2836,7 @@ Dask Name: {name}, {task} tasks""".format(
                             "isn't monotonic_increasing"
                         )
                         raise ValueError(msg)
-                    res.divisions = tuple(new.tolist())
+                    res.divisions = tuple(methods.tolist(new))
                 else:
                     res = res.clear_divisions()
             if inplace:
@@ -3597,7 +3606,7 @@ class DataFrame(_Frame):
         return iter(self._meta)
 
     def _ipython_key_completions_(self):
-        return self.columns.tolist()
+        return methods.tolist(self.columns)
 
     @property
     def ndim(self):
@@ -4106,7 +4115,7 @@ class DataFrame(_Frame):
             left_index=on is None,
             right_index=True,
             left_on=on,
-            suffixes=[lsuffix, rsuffix],
+            suffixes=(lsuffix, rsuffix),
             npartitions=npartitions,
             shuffle=shuffle,
         )
@@ -4138,6 +4147,11 @@ class DataFrame(_Frame):
             df = self.get_partition(i).compute()
             for row in df.itertuples(index=index, name=name):
                 yield row
+
+    @derived_from(pd.DataFrame)
+    def items(self):
+        for col_idx, label in enumerate(self.columns):
+            yield label, self.iloc[:, col_idx]
 
     @classmethod
     def _bind_operator_method(cls, name, op, original=pd.DataFrame):
@@ -4747,7 +4761,7 @@ def elemwise(op, *args, **kwargs):
                 **kwargs,
             )
             if isinstance(divisions, pd.Index):
-                divisions = divisions.tolist()
+                divisions = methods.tolist(divisions)
         except Exception:
             pass
         else:
@@ -5238,7 +5252,7 @@ def map_partitions(
                 *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
             )
             if isinstance(divisions, pd.Index):
-                divisions = divisions.tolist()
+                divisions = methods.tolist(divisions)
         except Exception:
             pass
         else:
@@ -5857,7 +5871,9 @@ def repartition_freq(df, freq=None):
         start = df.divisions[0].ceil(freq)
     except ValueError:
         start = df.divisions[0]
-    divisions = pd.date_range(start=start, end=df.divisions[-1], freq=freq).tolist()
+    divisions = methods.tolist(
+        pd.date_range(start=start, end=df.divisions[-1], freq=freq)
+    )
     if not len(divisions):
         divisions = [df.divisions[0], df.divisions[-1]]
     else:
@@ -5905,34 +5921,6 @@ def total_mem_usage(df, index=True, deep=False):
     return mem_usage
 
 
-def iter_chunks(sizes, max_size):
-    """Split sizes into chunks of total max_size each
-
-    Parameters
-    ----------
-    sizes : iterable of numbers
-        The sizes to be chunked
-    max_size : number
-        Maximum total size per chunk.
-        It must be greater or equal than each size in sizes
-    """
-    chunk, chunk_sum = [], 0
-    iter_sizes = iter(sizes)
-    size = next(iter_sizes, None)
-    while size is not None:
-        assert size <= max_size
-        if chunk_sum + size <= max_size:
-            chunk.append(size)
-            chunk_sum += size
-            size = next(iter_sizes, None)
-        else:
-            assert chunk
-            yield chunk
-            chunk, chunk_sum = [], 0
-    if chunk:
-        yield chunk
-
-
 def repartition_npartitions(df, npartitions):
     """ Repartition dataframe to a smaller number of partitions """
     new_name = "repartition-%d-%s" % (npartitions, tokenize(df))
@@ -5964,8 +5952,8 @@ def repartition_npartitions(df, npartitions):
                 fp=divisions,
             )
             if np.issubdtype(original_divisions.dtype, np.datetime64):
-                divisions = (
-                    pd.Series(divisions).astype(original_divisions.dtype).tolist()
+                divisions = methods.tolist(
+                    pd.Series(divisions).astype(original_divisions.dtype)
                 )
             elif np.issubdtype(original_divisions.dtype, np.integer):
                 divisions = divisions.astype(original_divisions.dtype)

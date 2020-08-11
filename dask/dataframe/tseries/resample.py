@@ -7,6 +7,7 @@ from ...base import tokenize
 from ...utils import derived_from
 from ...highlevelgraph import HighLevelGraph
 from .._compat import PANDAS_GT_0240
+from .. import methods
 
 
 def getnanos(rule):
@@ -75,8 +76,8 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     else:
         outdivs = tempdivs
 
-    newdivs = newdivs.tolist()
-    outdivs = outdivs.tolist()
+    newdivs = methods.tolist(newdivs)
+    outdivs = methods.tolist(outdivs)
 
     # Adjust ends
     if newdivs[0] < divisions[0]:

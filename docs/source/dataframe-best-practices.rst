@@ -108,7 +108,7 @@ It is often ideal to load, filter, and shuffle data once and keep this result in
 memory.  Afterwards, each of the several complex queries can be based off of
 this in-memory data rather than have to repeat the full load-filter-shuffle
 process each time.  To do this, use the `client.persist
-<https://distributed.dask.org/en/latest/api.html#distributed.client.Client.persist>`_
+<https://distributed.dask.org/en/latest/api.html#distributed.Client.persist>`_
 method:
 
 .. code-block:: python

@@ -167,7 +167,7 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
 
     part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
-    q.index = ["{0:g}%".format(l * 100) for l in q.index.tolist()]
+    q.index = ["{0:g}%".format(l * 100) for l in tolist(q.index)]
     if is_series_like(q) and typ != type(q):
         q = q.to_frame()
     part3 = typ([max], index=["max"])
@@ -538,6 +538,19 @@ def concat_pandas(
     if ind is not None:
         out.index = ind
     return out
+
+
+tolist_dispatch = Dispatch("tolist")
+
+
+def tolist(obj):
+    func = tolist_dispatch.dispatch(type(obj))
+    return func(obj)
+
+
+@tolist_dispatch.register((pd.Series, pd.Index, pd.Categorical))
+def tolist_pandas(obj):
+    return obj.tolist()
 
 
 # cuDF may try to import old dispatch functions

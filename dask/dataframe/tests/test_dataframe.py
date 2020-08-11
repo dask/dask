@@ -9,7 +9,7 @@ from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_118
+from dask.array.numpy_compat import _numpy_118, _numpy_120
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
@@ -22,7 +22,6 @@ from dask.dataframe.core import (
     _concat,
     Scalar,
     has_parallel_type,
-    iter_chunks,
     total_mem_usage,
     is_broadcastable,
 )
@@ -37,6 +36,9 @@ dsk = {
 meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
 
 
 def test_dataframe_doc():
@@ -222,7 +224,18 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
-@pytest.mark.parametrize("npartitions", [1, pytest.param(2, marks=pytest.mark.xfail)])
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        1,
+        pytest.param(
+            2,
+            marks=pytest.mark.xfail(
+                not dd._compat.PANDAS_GT_110, reason="Fixed upstream."
+            ),
+        ),
+    ],
+)
 def test_timezone_freq(npartitions):
     s_naive = pd.Series(pd.date_range("20130101", periods=10))
     s_aware = pd.Series(pd.date_range("20130101", periods=10, tz="US/Eastern"))
@@ -385,12 +398,48 @@ def test_describe_numeric(method, test_values):
         (None, None, None, ["c", "d", "g"]),  # numeric + bool
         (None, None, None, ["c", "d", "f", "g"]),  # numeric + bool + timedelta
         (None, None, None, ["f", "g"]),  # bool + timedelta
-        ("all", None, None, None),
-        (["number"], None, [0.25, 0.5], None),
-        ([np.timedelta64], None, None, None),
-        (["number", "object"], None, [0.25, 0.75], None),
-        (None, ["number", "object"], None, None),
-        (["object", "datetime", "bool"], None, None, None),
+        pytest.param(
+            "all",
+            None,
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            ["number"],
+            None,
+            [0.25, 0.5],
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            [np.timedelta64],
+            None,
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            ["number", "object"],
+            None,
+            [0.25, 0.75],
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            None,
+            ["number", "object"],
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
+        pytest.param(
+            ["object", "datetime", "bool"],
+            None,
+            None,
+            None,
+            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+        ),
     ],
 )
 def test_describe(include, exclude, percentiles, subset):
@@ -1047,7 +1096,7 @@ def test_value_counts_with_dropna():
     result = ddf.x.value_counts(dropna=False)
     expected = df.x.value_counts(dropna=False)
     assert_eq(result, expected)
-    result2 = ddf.x.value_counts(split_every=2)
+    result2 = ddf.x.value_counts(split_every=2, dropna=False)
     assert_eq(result2, expected)
     assert result._name != result2._name
 
@@ -1836,7 +1885,7 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     )
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
-    b = a.repartition(npartitions=k)
+    b = a.repartition(k)
     assert_eq(a, b)
     assert b.npartitions == k
     parts = dask.get(b.dask, b.__dask_keys__())
@@ -1861,19 +1910,11 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     assert all(map(len, parts))
 
 
-def test_iter_chunks():
-    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
-    assert list(iter_chunks(sizes, 19)) == [
-        [14],
-        [8, 5],
-        [9, 7],
-        [9, 1],
-        [19],
-        [8],
-        [19],
-    ]
-    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
-    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
+def test_repartition_partition_size_arg():
+    df = pd.DataFrame({"x": range(10)},)
+    a = dd.from_pandas(df, npartitions=2)
+    b = a.repartition("1 MiB")
+    assert b.npartitions == 1
 
 
 def test_repartition_npartitions_same_limits():
@@ -2522,15 +2563,17 @@ def test_to_timestamp():
     index = pd.period_range(freq="A", start="1/1/2001", end="12/1/2004")
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]}, index=index)
     ddf = dd.from_pandas(df, npartitions=3)
-    assert_eq(ddf.to_timestamp(), df.to_timestamp())
+    assert_eq(ddf.to_timestamp(), df.to_timestamp(), **CHECK_FREQ)
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
+        **CHECK_FREQ
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
+        **CHECK_FREQ
     )
 
 
@@ -3002,6 +3045,22 @@ def test_dataframe_itertuples():
 
     for (a, b) in zip(df.itertuples(), ddf.itertuples()):
         assert a == b
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        ("x", "y"),
+        ("x", "x"),
+        pd.MultiIndex.from_tuples([("x", 1), ("x", 2)], names=("letter", "number")),
+    ],
+)
+def test_dataframe_items(columns):
+    df = pd.DataFrame([[1, 10], [2, 20], [3, 30], [4, 40]], columns=columns)
+    ddf = dd.from_pandas(df, npartitions=2)
+    for (a, b) in zip(df.items(), ddf.items()):
+        assert a[0] == b[0]  # column name
+        assert_eq(a[1], b[1].compute())  # column values
 
 
 def test_dataframe_itertuples_with_index_false():
@@ -3968,6 +4027,7 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
+@pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Aviod searchsorted failure.
