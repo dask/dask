@@ -4148,6 +4148,11 @@ class DataFrame(_Frame):
             for row in df.itertuples(index=index, name=name):
                 yield row
 
+    @derived_from(pd.DataFrame)
+    def items(self):
+        for key in self.columns:
+            yield key, self[key]
+
     @classmethod
     def _bind_operator_method(cls, name, op, original=pd.DataFrame):
         """ bind operator method like DataFrame.add to this class """

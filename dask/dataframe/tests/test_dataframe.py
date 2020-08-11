@@ -3047,6 +3047,14 @@ def test_dataframe_itertuples():
         assert a == b
 
 
+def test_dataframe_items():
+    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    for (a, b) in zip(df.items(), ddf.items()):
+        assert a[0] == b[0]  # column name
+        assert_eq(a[1], b[1].compute())  # column values
+
+
 def test_dataframe_itertuples_with_index_false():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
     ddf = dd.from_pandas(df, npartitions=2)
