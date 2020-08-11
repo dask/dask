@@ -932,7 +932,14 @@ class ArrowEngine(Engine):
         t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
         if partition_on:
             md_list = _write_partitioned(
-                t, path, filename, partition_on, fs, index_cols=index_cols, **kwargs
+                t,
+                path,
+                filename,
+                partition_on,
+                fs,
+                index_cols=index_cols,
+                compression=compression,
+                **kwargs,
             )
             if md_list:
                 _meta = md_list[0]
