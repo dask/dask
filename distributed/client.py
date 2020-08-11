@@ -3097,7 +3097,7 @@ class Client:
         --------
         >>> client.upload_file('mylibrary.egg')  # doctest: +SKIP
         >>> from mylibrary import myfunc  # doctest: +SKIP
-        >>> L = c.map(myfunc, seq)  # doctest: +SKIP
+        >>> L = client.map(myfunc, seq)  # doctest: +SKIP
         """
         result = self.sync(
             self._upload_file, filename, raise_on_error=self.asynchronous, **kwargs
