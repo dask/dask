@@ -3047,16 +3047,9 @@ def test_dataframe_itertuples():
         assert a == b
 
 
-def test_dataframe_items():
-    df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
-    ddf = dd.from_pandas(df, npartitions=2)
-    for (a, b) in zip(df.items(), ddf.items()):
-        assert a[0] == b[0]  # column name
-        assert_eq(a[1], b[1].compute())  # column values
-
-
-def test_dataframe_items_non_unique_columns():
-    df = pd.DataFrame([[1, 10], [2, 20], [3, 30], [4, 40]], columns=["x", "x"])
+@pytest.mark.parametrize("columns", [("x", "y"), ("x", "x")])
+def test_dataframe_items(columns):
+    df = pd.DataFrame([[1, 10], [2, 20], [3, 30], [4, 40]], columns=columns)
     ddf = dd.from_pandas(df, npartitions=2)
     for (a, b) in zip(df.items(), ddf.items()):
         assert a[0] == b[0]  # column name
