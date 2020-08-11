@@ -4150,8 +4150,8 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def items(self):
-        for key in self.columns:
-            yield key, self[key]
+        for label in self.columns:
+            yield label, self[label]
 
     @classmethod
     def _bind_operator_method(cls, name, op, original=pd.DataFrame):
