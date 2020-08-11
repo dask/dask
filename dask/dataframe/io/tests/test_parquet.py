@@ -1455,6 +1455,20 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     check_compression(engine, fn, compression)
 
 
+@pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
+def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, engine):
+    fn = str(tmpdir)
+    if compression in ["snappy", "default"]:
+        pytest.importorskip("snappy")
+
+    df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
+    df.index.name = "index"
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf.to_parquet(fn, compression=compression, engine=engine, partition_on=["x"])
+    check_compression(engine, fn, compression)
+
+
 @pytest.fixture(
     params=[
         # fastparquet 0.1.3
