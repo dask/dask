@@ -3047,7 +3047,14 @@ def test_dataframe_itertuples():
         assert a == b
 
 
-@pytest.mark.parametrize("columns", [("x", "y"), ("x", "x")])
+@pytest.mark.parametrize(
+    "columns",
+    [
+        ("x", "y"),
+        ("x", "x"),
+        pd.MultiIndex.from_tuples([("x", 1), ("x", 2)], names=("letter", "number")),
+    ],
+)
 def test_dataframe_items(columns):
     df = pd.DataFrame([[1, 10], [2, 20], [3, 30], [4, 40]], columns=columns)
     ddf = dd.from_pandas(df, npartitions=2)
