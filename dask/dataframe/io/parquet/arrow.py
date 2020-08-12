@@ -908,8 +908,16 @@ class ArrowEngine(Engine):
 
         return fmd, i_offset
 
-    @staticmethod
+    @classmethod
+    def _pandas_to_arrow_table(
+        cls, df: pd.DataFrame, preserve_index=False, schema=None
+    ) -> pa.Table:
+        table = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
+        return table
+
+    @classmethod
     def write_partition(
+        cls,
         df,
         path,
         fs,
@@ -929,7 +937,9 @@ class ArrowEngine(Engine):
             preserve_index = True
         else:
             index_cols = []
-        t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
+
+        t = cls._pandas_to_arrow_table(df, preserve_index, schema)
+
         if partition_on:
             md_list = _write_partitioned(
                 t,
