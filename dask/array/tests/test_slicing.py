@@ -7,6 +7,7 @@ from tlz import merge
 np = pytest.importorskip("numpy")
 
 import dask
+from dask import config, utils
 import dask.array as da
 from dask.array.slicing import (
     _sanitize_index_element,
@@ -191,7 +192,7 @@ def test_slice_array_1d():
         ("y", 2): (getitem, ("x", 2), (slice(0, 25, 2),)),
         ("y", 3): (getitem, ("x", 3), (slice(1, 25, 2),)),
     }
-    result, chunks = slice_array("y", "x", [[25] * 4], [slice(24, None, 2)])
+    result, chunks = slice_array("y", "x", [[25] * 4], [slice(24, None, 2)], 8)
 
     assert expected == result
 
@@ -202,7 +203,7 @@ def test_slice_array_1d():
         ("y", 2): (getitem, ("x", 3), (slice(1, 25, 2),)),
     }
 
-    result, chunks = slice_array("y", "x", [[25] * 4], [slice(26, None, 2)])
+    result, chunks = slice_array("y", "x", [[25] * 4], [slice(26, None, 2)], 8)
     assert expected == result
 
     # x[24::2]
@@ -212,7 +213,7 @@ def test_slice_array_1d():
         ("y", 2): (getitem, ("x", 2), (slice(0, 25, 2),)),
         ("y", 3): (getitem, ("x", 3), (slice(1, 25, 2),)),
     }
-    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(24, None, 2),))
+    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(24, None, 2),), 8)
 
     assert expected == result
 
@@ -223,7 +224,7 @@ def test_slice_array_1d():
         ("y", 2): (getitem, ("x", 3), (slice(1, 25, 2),)),
     }
 
-    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(26, None, 2),))
+    result, chunks = slice_array("y", "x", [(25,) * 4], (slice(26, None, 2),), 8)
     assert expected == result
 
 
@@ -244,7 +245,11 @@ def test_slice_array_2d():
     }
 
     result, chunks = slice_array(
-        "y", "x", [[20], [20, 20, 5]], [slice(13, None, 2), slice(10, None, 1)]
+        "y",
+        "x",
+        [[20], [20, 20, 5]],
+        [slice(13, None, 2), slice(10, None, 1)],
+        itemsize=8,
     )
 
     assert expected == result
@@ -256,7 +261,9 @@ def test_slice_array_2d():
         ("y", 2): (getitem, ("x", 0, 2), (5, slice(None, None, None))),
     }
 
-    result, chunks = slice_array("y", "x", ([20], [20, 20, 5]), [5, slice(10, None, 1)])
+    result, chunks = slice_array(
+        "y", "x", ([20], [20, 20, 5]), [5, slice(10, None, 1)], 8
+    )
 
     assert expected == result
 
@@ -264,7 +271,7 @@ def test_slice_array_2d():
 def test_slice_optimizations():
     # bar[:]
     expected = {("foo", 0): ("bar", 0)}
-    result, chunks = slice_array("foo", "bar", [[100]], (slice(None, None, None),))
+    result, chunks = slice_array("foo", "bar", [[100]], (slice(None, None, None),), 8)
     assert expected == result
 
     # bar[:,:,:]
@@ -274,12 +281,15 @@ def test_slice_optimizations():
         "bar",
         [(100, 1000, 10000)],
         (slice(None, None, None), slice(None, None, None), slice(None, None, None)),
+        itemsize=8,
     )
     assert expected == result
 
 
 def test_slicing_with_singleton_indices():
-    result, chunks = slice_array("y", "x", ([5, 5], [5, 5]), (slice(0, 5), 8))
+    result, chunks = slice_array(
+        "y", "x", ([5, 5], [5, 5]), (slice(0, 5), 8), itemsize=8
+    )
 
     expected = {("y", 0): (getitem, ("x", 0, 1), (slice(None, None, None), 3))}
 
@@ -288,7 +298,11 @@ def test_slicing_with_singleton_indices():
 
 def test_slicing_with_newaxis():
     result, chunks = slice_array(
-        "y", "x", ([5, 5], [5, 5]), (slice(0, 3), None, slice(None, None, None))
+        "y",
+        "x",
+        ([5, 5], [5, 5]),
+        (slice(0, 3), None, slice(None, None, None)),
+        itemsize=8,
     )
 
     expected = {
@@ -309,7 +323,7 @@ def test_slicing_with_newaxis():
 
 
 def test_take():
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], [5, 1, 47, 3], itemsize=8, axis=0)
     expected = {
         ("y", 0): (getitem, ("x", 0), (np.array([5, 1]),)),
         ("y", 1): (getitem, ("x", 2), (np.array([7]),)),
@@ -318,7 +332,9 @@ def test_take():
     np.testing.assert_equal(sorted(dsk.items()), sorted(expected.items()))
     assert chunks == ((2, 1, 1),)
 
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], axis=0)
+    chunks, dsk = take(
+        "y", "x", [(20, 20, 20, 20), (20, 20)], [5, 1, 47, 3], itemsize=8, axis=0
+    )
     expected = {
         ("y", 0, 0): (
             getitem,
@@ -340,7 +356,7 @@ def test_take():
 
 
 def test_take_sorted():
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    chunks, dsk = take("y", "x", [(20, 20, 20, 20)], [1, 3, 5, 47], itemsize=8, axis=0)
     expected = {
         ("y", 0): (getitem, ("x", 0), ([1, 3, 5],)),
         ("y", 1): (getitem, ("x", 2), ([7],)),
@@ -348,7 +364,9 @@ def test_take_sorted():
     np.testing.assert_equal(dsk, expected)
     assert chunks == ((3, 1),)
 
-    chunks, dsk = take("y", "x", [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], axis=1)
+    chunks, dsk = take(
+        "y", "x", [(20, 20, 20, 20), (20, 20)], [1, 3, 5, 37], itemsize=8, axis=1
+    )
     expected = merge(
         dict(
             (("y", i, 0), (getitem, ("x", i, 0), (slice(None, None, None), [1, 3, 5])))
@@ -364,15 +382,19 @@ def test_take_sorted():
 
 
 def test_slicing_chunks():
-    result, chunks = slice_array("y", "x", ([5, 5], [5, 5]), (1, np.array([2, 0, 3])))
+    result, chunks = slice_array(
+        "y", "x", ([5, 5], [5, 5]), (1, np.array([2, 0, 3])), itemsize=8
+    )
     assert chunks == ((3,),)
 
     result, chunks = slice_array(
-        "y", "x", ([5, 5], [5, 5]), (slice(0, 7), np.array([2, 0, 3]))
+        "y", "x", ([5, 5], [5, 5]), (slice(0, 7), np.array([2, 0, 3])), itemsize=8
     )
     assert chunks == ((5, 2), (3,))
 
-    result, chunks = slice_array("y", "x", ([5, 5], [5, 5]), (slice(0, 7), 1))
+    result, chunks = slice_array(
+        "y", "x", ([5, 5], [5, 5]), (slice(0, 7), 1), itemsize=8
+    )
     assert chunks == ((5, 2),)
 
 
@@ -382,12 +404,14 @@ def test_slicing_with_numpy_arrays():
         "x",
         ((3, 3, 3, 1), (3, 3, 3, 1)),
         (np.array([1, 2, 9]), slice(None, None, None)),
+        itemsize=8,
     )
     b, bd2 = slice_array(
         "y",
         "x",
         ((3, 3, 3, 1), (3, 3, 3, 1)),
         (np.array([1, 2, 9]), slice(None, None, None)),
+        itemsize=8,
     )
 
     assert bd1 == bd2
@@ -396,7 +420,7 @@ def test_slicing_with_numpy_arrays():
     i = [False, True, True, False, False, False, False, False, False, True]
     index = (i, slice(None, None, None))
     index = normalize_index(index, (10, 10))
-    c, bd3 = slice_array("y", "x", ((3, 3, 3, 1), (3, 3, 3, 1)), index)
+    c, bd3 = slice_array("y", "x", ((3, 3, 3, 1), (3, 3, 3, 1)), index, itemsize=8)
     assert bd1 == bd3
     np.testing.assert_equal(a, c)
 
@@ -575,7 +599,7 @@ def test_sanitize_index():
 def test_uneven_blockdims():
     blockdims = ((31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30), (100,))
     index = (slice(240, 270), slice(None))
-    dsk_out, bd_out = slice_array("in", "out", blockdims, index)
+    dsk_out, bd_out = slice_array("in", "out", blockdims, index, itemsize=8)
     sol = {
         ("in", 0, 0): (getitem, ("out", 7, 0), (slice(28, 31, 1), slice(None))),
         ("in", 1, 0): (getitem, ("out", 8, 0), (slice(0, 27, 1), slice(None))),
@@ -585,7 +609,7 @@ def test_uneven_blockdims():
 
     blockdims = ((31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30),) * 2
     index = (slice(240, 270), slice(180, 230))
-    dsk_out, bd_out = slice_array("in", "out", blockdims, index)
+    dsk_out, bd_out = slice_array("in", "out", blockdims, index, itemsize=8)
     sol = {
         ("in", 0, 0): (getitem, ("out", 7, 5), (slice(28, 31, 1), slice(29, 30, 1))),
         ("in", 0, 1): (getitem, ("out", 7, 6), (slice(28, 31, 1), slice(None))),
@@ -849,12 +873,60 @@ def test_take_semi_sorted():
     ],
 )
 def test_slicing_plan(chunks, index, expected):
-    plan = slicing_plan(chunks, index)
+    plan = slicing_plan(chunks, index=index)
     assert len(plan) == len(expected)
     for (i, x), (j, y) in zip(plan, expected):
         assert i == j
         assert len(x) == len(y)
         assert (x == y).all()
+
+
+def test_getitem_avoids_large_chunks():
+    a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
+    arr = da.from_array(a, chunks=(1, 500, 500))
+    indexer = [0, 1] + [2] * 100 + [3]
+    result = arr[indexer]
+    chunk_size = utils.parse_bytes(config.get("array.chunk-size"))
+    assert all(x.nbytes < chunk_size for x in result.blocks)
+    expected = a[indexer]
+
+    assert_eq(result, expected)
+
+
+def test_take_avoids_large_chunks():
+    # unit test for https://github.com/dask/dask/issues/6270
+    chunks = ((1, 1, 1, 1), (500,), (500,))
+    itemsize = 8
+    index = np.array([0, 1] + [2] * 101 + [3])
+    chunks2, dsk = take("a", "b", chunks, index, itemsize)
+    assert chunks2 == ((1, 1, 51, 50, 1), (500,), (500,))
+    assert len(dsk) == 5
+
+    index = np.array([0] * 101 + [1, 2, 3])
+    chunks2, dsk = take("a", "b", chunks, index, itemsize)
+    assert chunks2 == ((51, 50, 1, 1, 1), (500,), (500,))
+    assert len(dsk) == 5
+
+    index = np.array([0, 1, 2] + [3] * 101)
+    chunks2, dsk = take("a", "b", chunks, index, itemsize)
+    assert chunks2 == ((1, 1, 1, 51, 50), (500,), (500,))
+    assert len(dsk) == 5
+
+    chunks = ((500,), (1, 1, 1, 1), (500,))
+    index = np.array([0, 1, 2] + [3] * 101)
+    chunks2, dsk = take("a", "b", chunks, index, itemsize, axis=1)
+    assert chunks2 == ((500,), (1, 1, 1, 51, 50), (500,))
+    assert len(dsk) == 5
+
+
+def test_take_uses_config():
+    chunks = ((1, 1, 1, 1), (500,), (500,))
+    index = np.array([0, 1] + [2] * 101 + [3])
+    itemsize = 8
+    with config.set(**{"array.chunk-size": "10GB"}):
+        chunks2, dsk = take("a", "b", chunks, index, itemsize)
+    assert chunks2 == ((1, 1, 101, 1), (500,), (500,))
+    assert len(dsk) == 4
 
 
 def test_pathological_unsorted_slicing():
@@ -951,7 +1023,7 @@ def test_gh4043(lock, asarray, fancy):
 
 
 def test_slice_array_3d_with_bool_numpy_array():
-    # https://github.com/dask/dask/issues/6089
+    # https://github.com/ask/dask/issues/6089
     array = da.arange(0, 24).reshape((4, 3, 2))
     mask = np.arange(0, 24).reshape((4, 3, 2)) > 12
 
