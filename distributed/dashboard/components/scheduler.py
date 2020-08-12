@@ -297,6 +297,7 @@ class BandwidthTypes(DashboardComponent):
                 y_range=["a", "b"],
                 **kwargs,
             )
+            fig.xaxis.major_label_orientation = -0.5
             rect = fig.rect(
                 source=self.source,
                 x="bandwidth-half",
