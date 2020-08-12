@@ -864,9 +864,10 @@ class ArrowEngine(Engine):
             # until we find non-null data for each column in `sample`
             sample = [col for col in df.columns if df[col].dtype == "object"]
             if schema_field_supported and sample and schema == "infer":
+                delayed_schema_from_pandas = delayed(pa.Schema.from_pandas)
                 for i in range(df.npartitions):
                     # Keep data on worker
-                    _s = delayed(lambda x: pa.Schema.from_pandas(x))(
+                    _s = delayed_schema_from_pandas(
                         df[sample].to_delayed()[i]
                     ).compute()
                     for name, typ in zip(_s.names, _s.types):
