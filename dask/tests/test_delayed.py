@@ -563,7 +563,7 @@ def test_finalize_name():
     def key(s):
         if isinstance(s, tuple):
             s = s[0]
-        return s.split("-")[0].replace("_", "")
+        return s.split("-")[0]
 
     assert all(key(k).isalpha() for k in v.dask)
 

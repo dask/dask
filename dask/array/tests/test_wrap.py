@@ -12,7 +12,7 @@ def test_ones():
     x = np.array(a)
     assert (x == np.ones((10, 10), "i4")).all()
 
-    assert a.name.startswith("broadcast_trick_ones-")
+    assert a.name.startswith("ones-")
 
 
 def test_size_as_list():

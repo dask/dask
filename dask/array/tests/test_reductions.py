@@ -520,7 +520,7 @@ def test_general_reduction_names():
         da.ones(10, dtype, chunks=2), np.sum, np.sum, dtype=dtype, name="foo"
     )
     names, tokens = list(zip_longest(*[key[0].rsplit("-", 1) for key in a.dask]))
-    assert set(names) == {"broadcast_trick_ones", "foo", "foo-partial", "foo-aggregate"}
+    assert set(names) == {"ones", "foo", "foo-partial", "foo-aggregate"}
     assert all(tokens)
 
 
