@@ -12,6 +12,7 @@ if hasattr(rmm, "DeviceBuffer"):
     @cuda_serialize.register(rmm.DeviceBuffer)
     def cuda_serialize_rmm_device_buffer(x):
         header = x.__cuda_array_interface__.copy()
+        header["strides"] = (1,)
         header["lengths"] = [x.nbytes]
         frames = [x]
         return header, frames
