@@ -659,20 +659,55 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     """
     Blocked variant of :func:`numpy.histogram`.
 
-    Follows the signature of :func:`numpy.histogram` exactly with the following
-    exceptions:
+    Parameters
+    ----------
+    a : array_like
+        Input data. The histogram is computed over the flattened array.
+    bins : int or sequence of scalars, optional
+        Either an iterable specifying the ``bins`` or the number of ``bins``
+        and a ``range`` argument is required as computing ``min`` and ``max``
+        over blocked arrays is an expensive operation that must be performed
+        explicitly.
+        If `bins` is an int, it defines the number of equal-width
+        bins in the given range (10, by default). If `bins` is a
+        sequence, it defines a monotonically increasing array of bin edges,
+        including the rightmost edge, allowing for non-uniform bin widths.
+    range : (float, float), optional
+        The lower and upper range of the bins.  If not provided, range
+        is simply ``(a.min(), a.max())``.  Values outside the range are
+        ignored. The first element of the range must be less than or
+        equal to the second. `range` affects the automatic bin
+        computation as well. While bin width is computed to be optimal
+        based on the actual data within `range`, the bin count will fill
+        the entire range including portions containing no data.
+    normed : bool, optional
+        This is equivalent to the ``density`` argument, but produces incorrect
+        results for unequal bin widths. It should not be used.
+    weights : array_like, optional
+        A dask.array.Array of weights, of the same block structure as ``a``.  Each value in
+        ``a`` only contributes its associated weight towards the bin count
+        (instead of 1). If ``density`` is True, the weights are
+        normalized, so that the integral of the density over the range
+        remains 1.
+    density : bool, optional
+        If ``False``, the result will contain the number of samples in
+        each bin. If ``True``, the result is the value of the
+        probability *density* function at the bin, normalized such that
+        the *integral* over the range is 1. Note that the sum of the
+        histogram values will not be equal to 1 unless bins of unity
+        width are chosen; it is not a probability *mass* function.
+        Overrides the ``normed`` keyword if given.
+        If ``density`` is True, ``bins`` cannot be a single-number delayed
+        value. It must be a concrete number, or a (possibly-delayed)
+        array/sequence of the bin edges.
+    Returns
+    -------
+    hist : dask Array
+        The values of the histogram. See `density` and `weights` for a
+        description of the possible semantics.
+    bin_edges : dask Array of dtype float
+        Return the bin edges ``(length(hist)+1)``.
 
-    - Either an iterable specifying the ``bins`` or the number of ``bins``
-      and a ``range`` argument is required as computing ``min`` and ``max``
-      over blocked arrays is an expensive operation that must be performed
-      explicitly.
-
-    - ``weights`` must be a dask.array.Array with the same block structure
-      as ``a``.
-
-    - If ``density`` is True, ``bins`` cannot be a single-number delayed
-      value. It must be a concrete number, or a (possibly-delayed)
-      array/sequence of the bin edges.
 
     Examples
     --------
