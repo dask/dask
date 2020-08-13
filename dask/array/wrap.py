@@ -141,7 +141,7 @@ def broadcast_trick(func):
 
     Dask arrays are currently immutable; thus when we know an array is uniform,
     we can replace the actual data by a single value and have all elements point
-    to it, this reducing the size.
+    to it, thus reducing the size.
 
     >>> x = np.broadcast_to(1, (100,100,100))
     >>> x.base.nbytes
