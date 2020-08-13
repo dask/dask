@@ -237,7 +237,7 @@ def to_graphviz(
     graph_attr={},
     node_attr=None,
     edge_attr=None,
-    **kwargs
+    **kwargs,
 ):
     from .dot import graphviz, name, label
 
