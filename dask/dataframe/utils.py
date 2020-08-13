@@ -716,7 +716,10 @@ def index_summary(idx, name=None):
 def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
 
-    if hasattr(dsk, "dask"):
+    if hasattr(dsk, "__dask_graph__"):
+        graph = dsk.__dask_graph__()
+        if hasattr(graph, "validate"):
+            graph.validate()
         if result is None:
             result = dsk.compute(scheduler="sync")
         if isinstance(dsk, dd.Index):

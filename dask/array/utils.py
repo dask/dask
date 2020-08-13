@@ -178,6 +178,7 @@ def _check_dsk(dsk):
     if not isinstance(dsk, HighLevelGraph):
         return
 
+    dsk.validate()
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
