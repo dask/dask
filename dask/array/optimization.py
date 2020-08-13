@@ -5,8 +5,8 @@ import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
 from ..blockwise import optimize_blockwise, fuse_roots
-from ..core import flatten, reverse_dict
-from ..optimization import cull, fuse, inline_functions
+from ..core import flatten, reverse_dict, get_dependencies
+from ..optimization import cull, fuse, inline_functions, cull_highlevelgraph
 from ..utils import ensure_dict
 from ..highlevelgraph import HighLevelGraph
 
@@ -41,13 +41,17 @@ def optimize(
     if isinstance(dsk, HighLevelGraph):
         dsk = optimize_blockwise(dsk, keys=keys)
         dsk = fuse_roots(dsk, keys=keys)
+        dsk = cull_highlevelgraph(dsk, keys)
+        dsk2 = ensure_dict(dsk)
+        dependencies = {k: get_dependencies(dsk2, k, as_list=True) for k in dsk2}
+    else:
+        dsk = ensure_dict(dsk)
+        dsk2, dependencies = cull(dsk, keys)
 
     # Low level task optimizations
-    dsk = ensure_dict(dsk)
     if fast_functions is not None:
         inline_functions_fast_functions = fast_functions
 
-    dsk2, dependencies = cull(dsk, keys)
     hold = hold_keys(dsk2, dependencies)
 
     dsk3, dependencies = fuse(
