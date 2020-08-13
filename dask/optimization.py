@@ -1,3 +1,4 @@
+import copy
 import math
 import numbers
 from enum import Enum
@@ -963,3 +964,107 @@ class SubgraphCallable(object):
 
     def __reduce__(self):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
+
+
+def get_external_dependencies(dsk, known_keys):
+    """Get dependencies external to `dsk`
+
+    Parameters
+    ----------
+    dsk : dict
+        A dask graph (typically a layer in a HighLevelGraph)
+    known_keys : set
+        Set of known keys (typically all keys in a HighLevelGraph)
+
+    Returns
+    -------
+    deps: set
+        Set of dependencies
+    """
+    ret = set()
+    work = list(dsk.values())
+
+    while work:
+        new_work = []
+        for w in work:
+            typ = type(w)
+            if typ is tuple and w and callable(w[0]):  # istask(w)
+                new_work.extend(w[1:])
+            elif typ is list:
+                new_work.extend(w)
+            elif typ is dict:
+                new_work.extend(w.values())
+            else:
+                try:
+                    if w in known_keys and w not in dsk:
+                        ret.add(w)
+                except TypeError:  # not hashable
+                    pass
+        work = new_work
+    return ret
+
+
+def toposort_layers(hlg):
+    """Sort the layers in a high level graph topologically
+
+    Parameters
+    ----------
+    hlg : HighLevelGraph
+        The high level graph's layers to sort
+
+    Returns
+    -------
+    sorted: list
+        List of layer names sorted topologically
+    """
+    dependencies = copy.deepcopy(hlg.dependencies)
+    ready = {k for k, v in dependencies.items() if len(v) == 0}
+    ret = []
+    while len(ready) > 0:
+        layer = ready.pop()
+        ret.append(layer)
+        del dependencies[layer]
+        for k, v in dependencies.items():
+            v.discard(layer)
+            if len(v) == 0:
+                ready.add(k)
+    return ret
+
+
+def cull_highlevelgraph(hlg, keys):
+    """ Return new high level graph with only the tasks required to calculate keys.
+
+    In other words, remove unnecessary tasks from dask.
+    ``keys`` may be a single key or list of keys.
+
+    Returns
+    -------
+    hlg: HighLevelGraph
+        Culled high level graph
+    """
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    keys = set(flatten(keys))
+
+    layers = toposort_layers(hlg)
+    ret_layers = {}
+    known_keys = set(hlg.keys())
+
+    for layer_name in reversed(layers):
+        layer = hlg.layers[layer_name]
+        key_deps = {k for k in keys if k in layer}
+        # TODO: use `layer.cull()` when it exist
+        culled_layer, _ = cull(layer, key_deps)
+        # TODO: use `layer.get_external_dependencies()` when it exist
+        keys.update(get_external_dependencies(culled_layer, known_keys))
+        ret_layers[layer_name] = culled_layer
+
+    ret_dependencies = {}
+    for layer_name in ret_layers:
+        ret_dependencies[layer_name] = {
+            d for d in hlg.dependencies[layer_name] if d in ret_layers
+        }
+
+    from dask.highlevelgraph import HighLevelGraph
+
+    return HighLevelGraph(ret_layers, ret_dependencies)
