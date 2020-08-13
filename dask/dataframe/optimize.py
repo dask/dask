@@ -2,7 +2,7 @@
 import operator
 
 from dask.base import tokenize
-from ..optimization import cull, fuse
+from ..optimization import cull, fuse, cull_highlevelgraph
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
@@ -10,20 +10,21 @@ from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
 
 
 def optimize(dsk, keys, **kwargs):
-
     if isinstance(dsk, HighLevelGraph):
         # Think about an API for this.
         flat_keys = list(core.flatten(keys))
         dsk = optimize_read_parquet_getitem(dsk, keys=flat_keys)
         dsk = optimize_blockwise(dsk, keys=flat_keys)
         dsk = fuse_roots(dsk, keys=flat_keys)
-
-    dsk = ensure_dict(dsk)
-
-    if isinstance(keys, list):
-        dsk, dependencies = cull(dsk, list(core.flatten(keys)))
+        dsk = cull_highlevelgraph(dsk, flat_keys)
+        dsk = ensure_dict(dsk)
+        dependencies = None
     else:
-        dsk, dependencies = cull(dsk, [keys])
+        dsk = ensure_dict(dsk)
+        if isinstance(keys, list):
+            dsk, dependencies = cull(dsk, list(core.flatten(keys)))
+        else:
+            dsk, dependencies = cull(dsk, [keys])
 
     fuse_subgraphs = config.get("optimization.fuse.subgraphs")
     if fuse_subgraphs is None:
