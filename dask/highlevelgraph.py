@@ -217,6 +217,17 @@ class HighLevelGraph(Mapping):
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
 
+    def validate(self):
+        # Check dependencies
+        for layer_name, deps in self.dependencies.items():
+            if layer_name not in self.layers:
+                raise ValueError(
+                    f"dependencies[{repr(layer_name)}] not found in layers"
+                )
+            for dep in deps:
+                if dep not in self.dependencies:
+                    raise ValueError(f"{repr(dep)} not found in dependencies")
+
 
 def to_graphviz(
     hg,
