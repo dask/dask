@@ -11,6 +11,7 @@ import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_118, _numpy_120
 import dask.dataframe as dd
+from dask.blockwise import fuse_roots
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
