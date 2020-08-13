@@ -4368,3 +4368,16 @@ def test_dataframe_groupby_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum())
+
+
+def test_fuse_roots():
+    pdf1 = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({"a": [True, False, True] * 3, "b": [False, False, True] * 3})
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    res = ddf1.where(ddf2)
+    hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
+    hlg.validate()
