@@ -565,7 +565,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
 
     Mimics ``np.take``
 
-    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], 8, axis=0)
     >>> chunks
     ((2, 1, 1),)
     >>> dsk  # doctest: +SKIP
@@ -576,7 +576,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
 
     When list is sorted we retain original block structure
 
-    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], 8, axis=0)
     >>> chunks
     ((3, 1),)
     >>> dsk  # doctest: +SKIP
@@ -589,7 +589,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     >>> chunks, dsk = take('y', 'x', [(1, 1, 1), (1000, 1000), (1000, 1000)],
     ...                    [0] + [1] * 6 + [2], axis=0, itemsize=8)
     >>> chunks
-    ((1, 3, 3, 1), (1000, 1000), (1000, 1000)))
+    ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
