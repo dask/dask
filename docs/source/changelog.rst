@@ -1,6 +1,46 @@
 Changelog
 =========
 
+2.23.0 / 2020-08-14
+-------------------
+
+Array
++++++
+
+- Reduce ``np.zeros``, ``ones``, and ``full`` array size with broadcasting (:pr:`6491`) `Matthias Bussonnier`_
+- Add missing ``meta=`` for ``trim`` in ``map_overlap`` (:pr:`6494`) `Peter Andreas Entschev`_
+
+Bag
++++
+
+- Bag repartition partition size (:pr:`6371`) `joshreback`_
+
+Core
+++++
+
+- ``Scalar.__dask_layers__()`` to return ``self._name`` instead of ``self.key`` (:pr:`6507`) `Mads R. B. Kristensen`_
+- Update dependencies correctly in ``fuse_root`` optimization (:pr:`6508`) `Mads R. B. Kristensen`_
+
+
+DataFrame
++++++++++
+
+- Adds ``items`` to dataframe (:pr:`6503`) `Thomas J Fan`_
+- Include compression in ``write_table`` call (:pr:`6499`) `Julia Signell`_
+- Fixed warning in ``nonempty_series`` (:pr:`6485`) `Tom Augspurger`_
+- Intelligently determine partitions based on type of first arg (:pr:`6479`) `Matthew Rocklin`_
+- Fix pyarrow ``mkdirs`` (:pr:`6475`) `Julia Signell`_
+- Fix duplicate parquet output in ``to_parquet`` (:pr:`6451`) `michaelnarodovitch`_
+
+Documentation
++++++++++++++
+
+- Fix documentation ``da.histogram`` (:pr:`6439`) `Roberto Panai`_
+- Add ``agg`` ``nunique`` example (:pr:`6404`) `Ray Bell`_
+- Fixed a few typos in the SQL docs (:pr:`6489`) `Mike McCarty`_
+- Docs for SQLing (:pr:`6453`) `Martin Durant`_
+
+
 2.22.0 / 2020-07-31
 -------------------
 
@@ -3460,3 +3500,5 @@ Other
 .. _`Jun Han (Johnson) Ooi`: https://github.com/tebesfinwo
 .. _`Jim Circadian`: https://github.com/JimCircadian
 .. _`Jack Xiaosong Xu`: https://github.com/jackxxu
+.. _`Mike McCarty`: https://github.com/mmccarty
+.. _`michaelnarodovitch`: https://github.com/michaelnarodovitch
