@@ -238,9 +238,9 @@ class ProfileTimePlot(DashboardComponent):
             height=150,
             x_axis_type="datetime",
             active_drag="xbox_select",
-            y_range=[0, 1 / profile_interval],
             tools="xpan,xwheel_zoom,xbox_select,reset",
             sizing_mode="stretch_width",
+            toolbar_location="above",
         )
         self.ts_plot.line("time", "count", source=self.ts_source)
         self.ts_plot.circle(
@@ -391,9 +391,9 @@ class ProfileServer(DashboardComponent):
             height=150,
             x_axis_type="datetime",
             active_drag="xbox_select",
-            y_range=[0, 1 / profile_interval],
             tools="xpan,xwheel_zoom,xbox_select,reset",
             sizing_mode="stretch_width",
+            toolbar_location="above",
         )
         self.ts_plot.line("time", "count", source=self.ts_source)
         self.ts_plot.circle(
