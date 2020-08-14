@@ -1,6 +1,31 @@
 Changelog
 =========
 
+2.23.0 - 2020-08-14
+-------------------
+
+- Tidy up exception traceback in TCP Comms (:pr:`4042`) `Krishan Bhasin`_
+- Angle on the x-axis labels (:pr:`4030`) `Mathieu Dugré`_
+- Always set RMM's strides in the ``header`` (:pr:`4039`) `jakirkham`_
+- Fix documentation ``upload_file`` (:pr:`4038`) `Roberto Panai`_
+- Update UCX tests for new handshake step (:pr:`4036`) `jakirkham`_
+- Add test for informative errors in serialization cases (:pr:`4029`) `Matthew Rocklin`_
+- Add compression, pickle protocol to comm contexts (:pr:`4019`) `Matthew Rocklin`_
+- Make GPU plots robust to not having GPUs (:pr:`4008`) `Matthew Rocklin`_
+- Update ``PendingDeprecationWarning`` with correct version number (:pr:`4025`) `Matthias Bussonnier`_
+- Install PyTorch on CI (:pr:`4017`) `jakirkham`_
+- Try getting cluster ``dashboard_link`` before asking scheduler (:pr:`4018`) `Matthew Rocklin`_
+- Ignore writeable frames with builtin ``array`` (:pr:`4016`) `jakirkham`_
+- Just extend ``frames2`` by ``frames`` (:pr:`4015`) `jakirkham`_
+- Serialize builtin array (:pr:`4013`) `jakirkham`_
+- Use cuDF's ``assert_eq`` (:pr:`4014`) `jakirkham`_
+- Clear function cache whenever we upload a new file (:pr:`3993`) `Jack Xiaosong Xu`_
+- Emmit warning when assign/comparing string with ``Status`` ``Enum`` (:pr:`3875`) `Matthias Bussonnier`_
+- Track mutable frames (:pr:`4004`) `jakirkham`_
+- Improve ``bytes`` and ``bytearray`` serialization (:pr:`4009`) `jakirkham`_
+- Fix memory histogram values in dashboard (:pr:`4006`) `Willi Rath`_
+
+
 2.22.0 - 2020-07-31
 -------------------
 
@@ -1885,3 +1910,6 @@ significantly without many new features.
 .. _`Alexander Clausen`: https://github.com/sk1p
 .. _`Andrew Fulton`: https://github.com/andrewfulton9
 .. _`Jendrik Jördening`: https://github.com/jendrikjoe
+.. _`Jack Xiaosong Xu`: https://github.com/jackxxu
+.. _`Willi Rath`: https://github.com/willirath
+.. _`Roberto Panai`: https://github.com/rpanai
