@@ -103,23 +103,21 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
     def __array__(self, *args, **kwargs):
         return np.asarray(self.arr, *args, **kwargs)
 
-    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-        inputs = tuple(
-            arg.arr if isinstance(arg, type(self)) else arg for arg in inputs
-        )
-        return type(self)(getattr(ufunc, method)(*inputs, **kwargs), **self.attrs)
+    def _downcast_args(self, args):
+        for arg in args:
+            if isinstance(arg, type(self)):
+                yield arg.arr
+            elif isinstance(arg, (tuple, list)):
+                yield tuple(_downcast_args(arg))
+            else:
+                yield arg
 
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        inputs = tuple(self._downcast_args(inputs))
+        return type(self)(getattr(ufunc, method)(*inputs, **kwargs), **self.attrs)
+    
     def __array_function__(self, func, types, args, kwargs):
-        args = tuple(
-            arg.arr
-            if isinstance(arg, type(self))
-            else (
-                tuple(a.arr if isinstance(a, type(self)) else a for a in arg)
-                if isinstance(arg, (tuple, list))
-                else arg
-            )
-            for arg in args
-        )
+        args = tuple(self._downcast_args(args))
         return type(self)(func(*args, **kwargs), **self.attrs)
 
     shape = dispatch_property("shape")
