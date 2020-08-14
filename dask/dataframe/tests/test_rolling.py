@@ -273,7 +273,7 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
         if check_less_precise:
             check_less_precise = {"atol": 0.5e-3, "rtol": 0.5e-3}
         else:
-            check_less_precise = {"atol": 0.5e-5, "rtol": 0.5e-5}
+            check_less_precise = {}
     else:
         check_less_precise = {"check_less_precise": check_less_precise}
 
