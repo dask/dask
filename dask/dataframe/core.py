@@ -3502,6 +3502,9 @@ class DataFrame(_Frame):
         else:
             return len(s)
 
+    def __contains__(self, key):
+        return key in self._meta
+
     @property
     def empty(self):
         raise NotImplementedError(
