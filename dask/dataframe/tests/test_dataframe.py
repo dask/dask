@@ -1145,6 +1145,14 @@ def test_isin():
             d.isin(obj)
 
 
+def test_contains_frame():
+    df = dd.from_pandas(pd.DataFrame({"A": [1, 2], 0: [3, 4]}), 1)
+    assert "A" in df
+    assert 0 in df
+    assert "B" not in df
+    assert 1 not in df
+
+
 def test_len():
     assert len(d) == len(full)
     assert len(d.a) == len(full.a)
@@ -1912,7 +1920,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
 
 
 def test_repartition_partition_size_arg():
-    df = pd.DataFrame({"x": range(10)},)
+    df = pd.DataFrame({"x": range(10)})
     a = dd.from_pandas(df, npartitions=2)
     b = a.repartition("1 MiB")
     assert b.npartitions == 1
