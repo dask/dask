@@ -7,7 +7,7 @@ import numpy as np
 import tlz as toolz
 
 from .core import reverse_dict
-from .delayed import to_task_dask
+from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
@@ -420,7 +420,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     # Unpack delayed objects in kwargs
     dsk2 = {}
     if kwargs:
-        task, dsk2 = to_task_dask(kwargs)
+        task, dsk2 = unpack_collections(kwargs)
         if dsk2:
             kwargs2 = task
         else:
