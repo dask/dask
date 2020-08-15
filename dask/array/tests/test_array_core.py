@@ -22,7 +22,7 @@ import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
-from dask.utils_test import inc, dec, add_with_default
+from dask.utils_test import inc, dec
 
 from dask.array.core import (
     getem,
@@ -98,11 +98,9 @@ def test_top():
 
 
 def test_top_with_kwargs():
-    assert top(
-        add_with_default, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100
-    ) == {
-        ("z", 0): (apply, add_with_default, [("x", 0)], {"b": 100}),
-        ("z", 1): (apply, add_with_default, [("x", 1)], {"b": 100}),
+    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == {
+        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
+        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
     }
 
 

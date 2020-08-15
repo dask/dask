@@ -10,10 +10,6 @@ def add(x, y):
     return x + y
 
 
-def add_with_default(x, y=10):
-    return x + y
-
-
 class GetFunctionTestMixin(object):
     """
     The GetFunctionTestCase class can be imported and used to test foreign
