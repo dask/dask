@@ -1096,6 +1096,34 @@ def test_partition_on(tmpdir, engine):
         assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
 
 
+def test_partition_on_duplicates(tmpdir, engine):
+    # https://github.com/dask/dask/issues/6445
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "a1": np.random.choice(["A", "B", "C"], size=100),
+            "a2": np.random.choice(["X", "Y", "Z"], size=100),
+            "data": np.random.random(size=100),
+        }
+    )
+    d = dd.from_pandas(df, npartitions=2)
+
+    for _ in range(2):
+        d.to_parquet(tmpdir, partition_on=["a1", "a2"], engine=engine)
+
+    out = dd.read_parquet(tmpdir, engine=engine).compute()
+
+    assert len(df) == len(out)
+    for root, dirs, files in os.walk(tmpdir):
+        for file in files:
+            assert file in (
+                "part.0.parquet",
+                "part.1.parquet",
+                "_common_metadata",
+                "_metadata",
+            )
+
+
 @pytest.mark.parametrize("partition_on", ["aa", ["aa"]])
 def test_partition_on_string(tmpdir, partition_on):
     tmpdir = str(tmpdir)
@@ -1424,6 +1452,20 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, ddf)
+    check_compression(engine, fn, compression)
+
+
+@pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
+def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, engine):
+    fn = str(tmpdir)
+    if compression in ["snappy", "default"]:
+        pytest.importorskip("snappy")
+
+    df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
+    df.index.name = "index"
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf.to_parquet(fn, compression=compression, engine=engine, partition_on=["x"])
     check_compression(engine, fn, compression)
 
 

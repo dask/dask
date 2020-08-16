@@ -919,7 +919,7 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
     graph: HighLevelGraph
         The full graph of the computation
     keys: list
-        The output keys of the comptuation, to be passed on to fuse
+        The output keys of the computation, to be passed on to fuse
 
     See Also
     --------
@@ -943,6 +943,7 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
 
             for dep in deps:
                 del layers[dep]
+                del dependencies[dep]
 
             layers[name] = new
             dependencies[name] = set()
