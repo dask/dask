@@ -45,6 +45,10 @@ class LocalCluster(SpecCluster):
         'localhost:8787' or '0.0.0.0:8787'.  Defaults to ':8787'.
         Set to ``None`` to disable the dashboard.
         Use ':0' for a random port.
+    worker_dashboard_address: str
+        Address on which to listen for the Bokeh worker diagnostics server like
+        'localhost:8787' or '0.0.0.0:8787'.  Defaults to None which disables the dashboard.
+        Use ':0' for a random port.
     diagnostics_port: int
         Deprecated.  See dashboard_address.
     asynchronous: bool (False by default)
@@ -132,6 +136,13 @@ class LocalCluster(SpecCluster):
                 "Please set to None or to a specific int to get best behavior."
             )
             threads_per_worker = None
+
+        if "dashboard" in worker_kwargs:
+            warnings.warn(
+                "Setting `dashboard` is discouraged. "
+                "Please set `dashboard_address` to affect the scheduler (more common) "
+                "and `worker_dashboard_address` for the worker (less common)."
+            )
 
         self.status = None
         self.processes = processes
