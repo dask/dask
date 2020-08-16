@@ -323,15 +323,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
             )
         otypes = [output_dtypes]
 
-    # Validate meta, if present
-    if meta is not None:
-        if not isinstance(meta, tuple):
-            meta = tuple(meta)
-        if len(meta) != len(output_coredimss):
-            raise ValueError(
-                f"According to `signature`, meta should have length {len(output_coredimss)}, but had length {len(meta)}"
-            )
-
     ## Vectorize function, if required
     if vectorize:
         func = np.vectorize(func, signature=signature, otypes=otypes)
