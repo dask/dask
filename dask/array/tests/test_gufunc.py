@@ -623,11 +623,8 @@ def test_apply_gufunc_with_meta():
         return np.mean(x, axis=-1), np.std(x, axis=-1)
 
     a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
-    meta = (np.ones(0, dtype=np.float64), np.ones(0, dtype=np.float32))
+    meta = (np.ones(0, dtype=np.float64), np.ones(0, dtype=np.float64))
     result = apply_gufunc(stats, "(i)->(),()", a, meta=meta)
-    mean, std = result
-    assert isinstance(result, tuple)
-    assert mean.compute().shape == (10, 20)
-    assert std.compute().shape == (10, 20)
-    for expected, actual in zip(meta, result):
-        assert expected.dtype == actual._meta.dtype
+    expected = stats(a.compute())
+    assert_eq(expected[0], result[0])
+    assert_eq(expected[1], result[1])
