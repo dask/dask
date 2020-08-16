@@ -49,7 +49,7 @@ def register_chunk_type(type):
 
     >>> import numpy.lib.mixins
     >>> class FlaggedArray(numpy.lib.mixins.NDArrayOperatorsMixin):
-    ...     def __init__(self, a, flag):
+    ...     def __init__(self, a, flag=False):
     ...         self.a = a
     ...         self.flag = flag
     ...     def __repr__(self):
@@ -88,23 +88,21 @@ def register_chunk_type(type):
     Before registering ``FlaggedArray``, both types will attempt to defer to the
     other:
 
+    >>> import dask.array as da
     >>> da.ones(5) - FlaggedArray(np.ones(5), True)
-    TypeError: operand type(s) all returned NotImplemented from __array_ufunc__(<ufunc
-    'subtract'>, '__call__', dask.array<ones, shape=(5,), dtype=float64,
-    chunksize=(5,), chunktype=numpy.ndarray>, Flag: True, Array:
-    array([1., 1., 1., 1., 1.])): 'Array', 'FlaggedArray'
+    Traceback (most recent call last):
+    ...
+    TypeError: operand type(s) all returned NotImplemented ...
 
     However, once registered, Dask will be able to handle operations with this new
     type:
 
     >>> da.register_chunk_type(FlaggedArray)
-    >>> x = da.ones(5) - FlaggedArray(np.ones(5))
+    >>> x = da.ones(5) - FlaggedArray(np.ones(5), True)
     >>> x
-    dask.array<sub, shape=(5,), dtype=float64, chunksize=(5,),
-    chunktype=__main__.FlaggedArray>
+    dask.array<sub, shape=(5,), dtype=float64, chunksize=(5,), chunktype=dask.FlaggedArray>
     >>> x.compute()
     Flag: True, Array: array([0., 0., 0., 0., 0.])
-
     """
     _HANDLED_CHUNK_TYPES.append(type)
 
