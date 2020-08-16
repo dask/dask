@@ -170,7 +170,7 @@ def implements(*numpy_functions):
 def check_if_handled_given_other(f):
     """ Check if method is handled by Dask given type of other
 
-    Ensures proper deferal to upcast types in dunder operations without
+    Ensures proper deferral to upcast types in dunder operations without
     assuming unknown types are automatically downcast types.
     """
 
