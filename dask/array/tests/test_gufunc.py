@@ -174,6 +174,7 @@ def test_apply_gufunc_02():
     a = da.random.normal(size=(20, 30), chunks=(5, 30))
     b = da.random.normal(size=(10, 1, 40), chunks=(10, 1, 40))
     c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
+
     assert c.compute().shape == (10, 20, 30, 40)
 
 
@@ -615,3 +616,28 @@ def test_preserve_meta_type():
 
     assert_eq(sum, sum)
     assert_eq(mean, mean)
+
+
+def test_apply_gufunc_with_meta():
+    def stats(x):
+        return np.mean(x, axis=-1), np.std(x, axis=-1)
+
+    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    meta = (np.ones(0, dtype=np.float64), np.ones(0, dtype=np.float32))
+    result = apply_gufunc(stats, "(i)->(),()", a, meta=meta)
+    mean, std = result
+    assert isinstance(result, tuple)
+    assert mean.compute().shape == (10, 20)
+    assert std.compute().shape == (10, 20)
+    for expected, actual in zip(meta, result):
+        assert expected.dtype == actual._meta.dtype
+
+
+def test_apply_gufunc_with_invalid_length_meta():
+    def stats(x):
+        return np.mean(x, axis=-1), np.std(x, axis=-1)
+
+    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    meta = np.ones(0, dtype=np.float64)
+    with pytest.raises(ValueError):
+        apply_gufunc(stats, "(i)->(),()", a, meta=meta)
