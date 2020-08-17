@@ -1073,14 +1073,14 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 
 
 @pytest.mark.parametrize("index", [False, True])
-@pytest.mark.parametrize(
-    "schema", ["infer", {"index": pa.string(), "amount": pa.int64()}]
-)
+@pytest.mark.parametrize("schema", ["infer", "complex"])
 def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
 
     check_pyarrow()
     if pa.__version__ < LooseVersion("0.15.0"):
         pytest.skip("PyArrow>=0.15 Required.")
+    if schema == "complex":
+        schema = {"index": pa.string(), "amount": pa.int64()}
 
     tmpdir = str(tmpdir)
     df = pd.DataFrame(
