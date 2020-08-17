@@ -148,9 +148,7 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         # and/or splitting row-groups without a "_metadata" file
         base = paths[0]
         fns = [None]
-        dataset = pq.ParquetDataset(
-            paths[0], filesystem=fs, filters=filters, **dataset_kwargs
-        )
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
 
     return dataset, base, fns
 

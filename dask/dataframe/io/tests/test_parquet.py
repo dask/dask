@@ -1309,6 +1309,15 @@ def test_fiters_file_list(tmpdir, engine):
     assert ddf_out.npartitions == 3
     assert_eq(df[df["x"] > 3], ddf_out.compute(), check_index=False)
 
+    # Check that first parition gets filtered for single-path input
+    ddf2 = dd.read_parquet(
+        str(tmpdir.join("part.0.parquet")),
+        gather_statistics=True,
+        engine=engine,
+        filters=[("x", ">", 3)],
+    )
+    assert len(ddf2) == 0
+
 
 def test_divisions_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
