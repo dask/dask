@@ -10,11 +10,11 @@ import time
 import pytest
 import numpy as np
 
-
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
-moto = pytest.importorskip("moto")
-httpretty = pytest.importorskip("httpretty")
+moto = pytest.importorskip("moto", minversion="1.3.14")
+pytest.importorskip("flask")  # server mode needs flask too
+requests = pytest.importorskip("requests")
 
 from tlz import concat, valmap
 
@@ -70,10 +70,6 @@ def s3so():
 
 @pytest.fixture
 def s3():
-    pytest.importorskip("s3fs")
-    pytest.importorskip("boto3")
-    pytest.importorskip("moto", minversion="1.3.14")
-    pytest.importorskip("flask")  # server mode needs flask too
     with s3_context() as fs:
         yield fs
 
@@ -103,6 +99,7 @@ def s3_context(bucket=test_bucket_name, files=files):
                 pass
             timeout -= 0.1
             time.sleep(0.1)
+            assert time > 0, "Timed out waiting for moto server"
 
         client = boto3.client("s3", endpoint_url=endpoint_uri)
         client.create_bucket(Bucket=bucket, ACL="public-read-write")
