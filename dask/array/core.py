@@ -977,7 +977,7 @@ def blockdims_from_blockshape(shape, chunks):
     )
 
 
-def finalize(results):
+def _finalize(results):
     if not results:
         return concatenate3(results)
     results2 = results
@@ -987,6 +987,13 @@ def finalize(results):
         else:
             results2 = results2[0]
     return unpack_singleton(results)
+
+
+def finalize(results):
+    res = _finalize(results)
+    if isinstance(res, np.ndarray) and not res.flags.writeable:
+        res = np.array(res, copy=True)
+    return res
 
 
 CHUNKS_NONE_ERROR_MESSAGE = """

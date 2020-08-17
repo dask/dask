@@ -4426,3 +4426,16 @@ def test_rechunk_auto():
     y = x.rechunk()
 
     assert y.npartitions == 1
+
+
+def test_compute_writable():
+    """
+    Also ensure that not all items are backed by the same value.
+
+    In particular zeros_like and co use a broadcast trick.
+    """
+
+    dask_array = da.zeros_like(da.arange(2))
+    numpy_array = dask_array.compute()
+    numpy_array[0] = 1
+    assert all(numpy_array == np.array([1, 0]))
