@@ -116,7 +116,7 @@ address of the Dask scheduler.  This is available in Python in the ``config`` di
 .. code-block:: python
 
    >>> from dask.distributed import Client, config
-   >>> config['scheduler-address']
+   >>> config['scheduler_address']
    'bald-eel-scheduler:8786'
 
 Although you don't need to use this address, the Dask client will find this
