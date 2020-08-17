@@ -120,21 +120,14 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
             # open "_metadata" separately.
             paths.remove(fs.sep.join([base, "_metadata"]))
             fns.remove("_metadata")
-            proxy_metadata = (
-                pq.ParquetDataset(
-                    fs.sep.join([base, "_metadata"]),
-                    filesystem=fs,
-                    filters=filters,
-                    **dataset_kwargs,
-                )
-                .pieces[0]
-                .get_metadata()
-            )
+            with fs.open(fs.sep.join([base, "_metadata"]), mode="rb") as fil:
+                proxy_metadata = pq.ParquetFile(fil).metadata
         # Create our dataset from the list of data files.
-        # Note that this will not parse all the files (yet)
-        dataset = pq.ParquetDataset(
-            paths, filesystem=fs, filters=filters, **dataset_kwargs
-        )
+        # Note #1: that this will not parse all the files (yet)
+        # Note #2: Cannot pass filters for legacy pyarrow API (see issue#6512).
+        #          We can handle partitions + filtering for list input after
+        #          adopting new pyarrow.dataset API.
+        dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
         if proxy_metadata:
             dataset.metadata = proxy_metadata
     elif fs.isdir(paths[0]):
@@ -155,9 +148,7 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         # and/or splitting row-groups without a "_metadata" file
         base = paths[0]
         fns = [None]
-        dataset = pq.ParquetDataset(
-            paths[0], filesystem=fs, filters=filters, **dataset_kwargs
-        )
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
 
     return dataset, base, fns
 
