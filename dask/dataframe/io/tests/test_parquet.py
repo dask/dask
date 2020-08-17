@@ -1296,6 +1296,20 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     assert len(ddf2) > 0
 
 
+def test_fiters_file_list(tmpdir, engine):
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    ddf.to_parquet(str(tmpdir), engine=engine)
+    fils = str(tmpdir.join("*.parquet"))
+    ddf_out = dd.read_parquet(
+        fils, gather_statistics=True, engine=engine, filters=[("x", ">", 3)]
+    )
+
+    assert ddf_out.npartitions == 3
+    assert_eq(df[df["x"] > 3], ddf_out.compute(), check_index=False)
+
+
 def test_divisions_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)
