@@ -11,6 +11,7 @@ from ....utils import getargspec
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ...utils import clear_known_categories
 from ....core import flatten
+from dask import delayed
 
 from .utils import (
     _parse_pandas_metadata,
@@ -20,11 +21,26 @@ from .utils import (
 )
 
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
+schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
 
 #
 #  Private Helper Functions
 #
+
+
+def _append_row_groups(metadata, md):
+    try:
+        metadata.append_row_groups(md)
+    except RuntimeError as err:
+        if "requires equal schemas" in str(err):
+            raise RuntimeError(
+                "Schemas are inconsistent, try using "
+                '`to_parquet(..., schema="infer")`, or pass an explicit '
+                "pyarrow schema."
+            )
+        else:
+            raise err
 
 
 def _write_partitioned(
@@ -239,7 +255,7 @@ def _gather_metadata(
             elif fn:
                 md.set_file_path(fn)
             if metadata:
-                metadata.append_row_groups(md)
+                _append_row_groups(metadata, md)
             else:
                 metadata = md
         return (
@@ -821,8 +837,51 @@ class ArrowEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
+        schema=None,
+        index_cols=None,
         **kwargs,
     ):
+        # Infer schema if "infer"
+        # (also start with inferred schema if user passes a dict)
+        if schema == "infer" or isinstance(schema, dict):
+
+            # Start with schema from _meta_nonempty
+            _schema = pa.Schema.from_pandas(
+                df._meta_nonempty.set_index(index_cols)
+                if index_cols
+                else df._meta_nonempty
+            )
+
+            # Use dict to update our inferred schema
+            if isinstance(schema, dict):
+                schema = pa.schema(schema)
+                for name in schema.names:
+                    i = _schema.get_field_index(name)
+                    j = schema.get_field_index(name)
+                    _schema = _schema.set(i, schema.field(j))
+
+            # If we have object columns, we need to sample partitions
+            # until we find non-null data for each column in `sample`
+            sample = [col for col in df.columns if df[col].dtype == "object"]
+            if schema_field_supported and sample and schema == "infer":
+                delayed_schema_from_pandas = delayed(pa.Schema.from_pandas)
+                for i in range(df.npartitions):
+                    # Keep data on worker
+                    _s = delayed_schema_from_pandas(
+                        df[sample].to_delayed()[i]
+                    ).compute()
+                    for name, typ in zip(_s.names, _s.types):
+                        if typ != "null":
+                            i = _schema.get_field_index(name)
+                            j = _s.get_field_index(name)
+                            _schema = _schema.set(i, _s.field(j))
+                            sample.remove(name)
+                    if not sample:
+                        break
+
+            # Final (inferred) schema
+            schema = _schema
+
         dataset = fmd = None
         i_offset = 0
         if append and division_info is None:
@@ -906,7 +965,7 @@ class ArrowEngine(Engine):
                         "Previous: {} | New: {}".format(old_end, divisions[0])
                     )
 
-        return fmd, i_offset
+        return fmd, schema, i_offset
 
     @staticmethod
     def write_partition(
@@ -944,7 +1003,7 @@ class ArrowEngine(Engine):
             if md_list:
                 _meta = md_list[0]
                 for i in range(1, len(md_list)):
-                    _meta.append_row_groups(md_list[i])
+                    _append_row_groups(_meta, md_list[i])
         else:
             md_list = []
             with fs.open(fs.sep.join([path, filename]), "wb") as fil:
@@ -984,6 +1043,6 @@ class ArrowEngine(Engine):
                 _meta = parts[0][0]["meta"]
                 i_start = 1
             for i in range(i_start, len(parts)):
-                _meta.append_row_groups(parts[i][0]["meta"])
+                _append_row_groups(_meta, parts[i][0]["meta"])
             with fs.open(metadata_path, "wb") as fil:
                 _meta.write_metadata_file(fil)
