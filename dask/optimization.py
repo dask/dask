@@ -1075,11 +1075,12 @@ def cull_highlevelgraph(hlg, keys):
     for layer_name in reversed(layers):
         layer = hlg.layers[layer_name]
         key_deps = {k for k in keys if k in layer}
-        # TODO: use `layer.cull()` when it exist
-        culled_layer, _ = cull(layer, key_deps)
-        # TODO: use `layer.get_external_dependencies()` when it exist
-        keys.update(get_external_dependencies(culled_layer, known_keys))
-        ret_layers[layer_name] = culled_layer
+        if len(key_deps) > 0:
+            # TODO: use `layer.cull()` when it exist
+            culled_layer, _ = cull(layer, key_deps)
+            # TODO: use `layer.get_external_dependencies()` when it exist
+            keys.update(get_external_dependencies(culled_layer, known_keys))
+            ret_layers[layer_name] = culled_layer
 
     ret_dependencies = {}
     for layer_name in ret_layers:
