@@ -111,12 +111,12 @@ notebook server with the password, ``dask``.
 
 You can create a notebook and create a Dask client from there.  The
 ``DASK_SCHEDULER_ADDRESS`` environment variable has been populated with the
-address of the Dask scheduler.  This is available in Python in the ``config`` dictionary.
+address of the Dask scheduler.  This is available in Python from the ``dask.config`` object.
 
 .. code-block:: python
 
-   >>> from dask.distributed import Client, config
-   >>> config['scheduler_address']
+   >>> import dask
+   >>> dask.config.get('scheduler_address')
    'bald-eel-scheduler:8786'
 
 Although you don't need to use this address, the Dask client will find this
