@@ -750,9 +750,17 @@ def _process_metadata_pyarrow_dataset(
         statistics = row_group.statistics
         if gather_statistics:
             if single_rg_parts:
-                s = {"num-rows": row_group.num_rows, "columns": []}
+                s = {
+                    "file_path_0": fpath,
+                    "num-rows": row_group.num_rows,
+                    "total_byte_size": row_group.total_byte_size,
+                    "columns": [],
+                }
             else:
-                s = {"num-rows": row_group.num_rows}
+                s = {
+                    "num-rows": row_group.num_rows,
+                    "total_byte_size": row_group.total_byte_size,
+                }
             cstats = []
             for name, i in stat_col_indices.items():
                 if name in statistics:
