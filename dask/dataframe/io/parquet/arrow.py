@@ -1,5 +1,6 @@
 from functools import partial
 from collections import defaultdict
+from datetime import datetime
 import json
 import warnings
 from distutils.version import LooseVersion
@@ -764,16 +765,22 @@ def _process_metadata_pyarrow_dataset(
             cstats = []
             for name, i in stat_col_indices.items():
                 if name in statistics:
+                    cmin = statistics[name]["min"]
+                    cmax = statistics[name]["max"]
                     if single_rg_parts:
                         s["columns"].append(
                             {
                                 "name": name,
-                                "min": statistics[name]["min"],
-                                "max": statistics[name]["max"],
+                                "min": pd.Timestamp(cmin)
+                                if isinstance(cmin, datetime)
+                                else cmin,
+                                "max": pd.Timestamp(cmax)
+                                if isinstance(cmax, datetime)
+                                else cmax,
                             }
                         )
                     else:
-                        cstats += [statistics[name]["min"], statistics[name]["max"]]
+                        cstats += [cmin, cmax]
                 else:
                     if single_rg_parts:
                         s["columns"].append({"name": name})
