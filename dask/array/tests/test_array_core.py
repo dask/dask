@@ -24,7 +24,7 @@ import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
 from dask.task import Task
-from dask.utils import ignoring, tmpfile, tmpdir, key_split
+from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
 from dask.utils_test import inc, dec
 
 from dask.array.core import (
@@ -120,6 +120,13 @@ def test_top():
     assert top(identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}) == Task.from_spec(
         {("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])}
     )
+
+
+def test_top_with_kwargs():
+    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == Task.from_spec({
+        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
+        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
+    })
 
 
 def test_top_supports_broadcasting_rules():

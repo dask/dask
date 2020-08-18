@@ -510,6 +510,7 @@ class FastParquetEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
+        schema=None,
         **kwargs
     ):
         if append and division_info is None:
@@ -579,7 +580,8 @@ class FastParquetEngine(Engine):
             )
             i_offset = 0
 
-        return (fmd, i_offset)
+        schema = None  # ArrowEngine compatibility
+        return (fmd, schema, i_offset)
 
     @classmethod
     def write_partition(
