@@ -123,10 +123,14 @@ def test_top():
 
 
 def test_top_with_kwargs():
-    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == Task.from_spec({
-        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
-        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
-    })
+    assert top(
+        add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100
+    ) == Task.from_spec(
+        {
+            ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
+            ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
+        }
+    )
 
 
 def test_top_supports_broadcasting_rules():
