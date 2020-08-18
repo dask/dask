@@ -263,6 +263,12 @@ def _gather_metadata(
         )
 
 
+class PartitionObj:
+    def __init__(self, name, keys):
+        self.name = name
+        self.keys = sorted(keys)
+
+
 def _generate_dd_meta(schema, index, categories, partition_info):
     partition_obj = partition_info["partitions"]
     partitions = partition_info["partition_names"]
@@ -321,10 +327,19 @@ def _generate_dd_meta(schema, index, categories, partition_info):
     meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
-    # import pdb; pdb.set_trace()
-    # # TODO: Need to perform Categorical conversion below for pyarrow.dataset
+    if partitions:
 
-    if partition_obj:
+        if not partition_obj:
+            # Need to construct partition_obj
+            pkeys = defaultdict(list)
+            for path, d in partition_info["partition_keys"].items():
+                for k, v in d.items():
+                    if v not in pkeys[k]:
+                        pkeys[k].append(v)
+            partition_obj = []
+            for name in partitions:
+                partition_obj.append(PartitionObj(name, pkeys[name]))
+
         for partition in partition_obj:
             if isinstance(index, list) and partition.name == index[0]:
                 # Index from directory structure
