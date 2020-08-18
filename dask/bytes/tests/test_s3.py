@@ -5,6 +5,7 @@ from functools import partial
 from distutils.version import LooseVersion
 import shlex
 import subprocess
+import sys
 import time
 
 import pytest
@@ -115,7 +116,13 @@ def s3_context(bucket=test_bucket_name, files=files):
         finally:
             # shut down external process
             proc.terminate()
-            proc.wait()
+            try:
+                proc.wait(timeout=3)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                if sys.platform == "win32":
+                    # belt & braces
+                    subprocess.call("TASKKILL /F /PID {pid} /T".format(pid=proc.pid))
 
 
 @pytest.fixture()
