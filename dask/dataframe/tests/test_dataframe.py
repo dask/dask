@@ -11,6 +11,7 @@ import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_118, _numpy_120
 import dask.dataframe as dd
+from dask.blockwise import fuse_roots
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
@@ -1144,6 +1145,14 @@ def test_isin():
             d.isin(obj)
 
 
+def test_contains_frame():
+    df = dd.from_pandas(pd.DataFrame({"A": [1, 2], 0: [3, 4]}), 1)
+    assert "A" in df
+    assert 0 in df
+    assert "B" not in df
+    assert 1 not in df
+
+
 def test_len():
     assert len(d) == len(full)
     assert len(d.a) == len(full.a)
@@ -1911,7 +1920,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
 
 
 def test_repartition_partition_size_arg():
-    df = pd.DataFrame({"x": range(10)},)
+    df = pd.DataFrame({"x": range(10)})
     a = dd.from_pandas(df, npartitions=2)
     b = a.repartition("1 MiB")
     assert b.npartitions == 1
@@ -3045,6 +3054,22 @@ def test_dataframe_itertuples():
 
     for (a, b) in zip(df.itertuples(), ddf.itertuples()):
         assert a == b
+
+
+@pytest.mark.parametrize(
+    "columns",
+    [
+        ("x", "y"),
+        ("x", "x"),
+        pd.MultiIndex.from_tuples([("x", 1), ("x", 2)], names=("letter", "number")),
+    ],
+)
+def test_dataframe_items(columns):
+    df = pd.DataFrame([[1, 10], [2, 20], [3, 30], [4, 40]], columns=columns)
+    ddf = dd.from_pandas(df, npartitions=2)
+    for (a, b) in zip(df.items(), ddf.items()):
+        assert a[0] == b[0]  # column name
+        assert_eq(a[1], b[1].compute())  # column values
 
 
 def test_dataframe_itertuples_with_index_false():
@@ -4352,3 +4377,16 @@ def test_dataframe_groupby_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum())
+
+
+def test_fuse_roots():
+    pdf1 = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({"a": [True, False, True] * 3, "b": [False, False, True] * 3})
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    res = ddf1.where(ddf2)
+    hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
+    hlg.validate()

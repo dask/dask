@@ -134,7 +134,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return self._name
 
     def __dask_layers__(self):
-        return (self.key,)
+        return (self._name,)
 
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
@@ -3502,6 +3502,9 @@ class DataFrame(_Frame):
         else:
             return len(s)
 
+    def __contains__(self, key):
+        return key in self._meta
+
     @property
     def empty(self):
         raise NotImplementedError(
@@ -4147,6 +4150,11 @@ class DataFrame(_Frame):
             df = self.get_partition(i).compute()
             for row in df.itertuples(index=index, name=name):
                 yield row
+
+    @derived_from(pd.DataFrame)
+    def items(self):
+        for col_idx, label in enumerate(self.columns):
+            yield label, self.iloc[:, col_idx]
 
     @classmethod
     def _bind_operator_method(cls, name, op, original=pd.DataFrame):

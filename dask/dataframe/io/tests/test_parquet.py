@@ -960,12 +960,15 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     )
 
     ddf = dd.from_pandas(df, npartitions=2)
-    # Note: `append_row_groups` will fail with pyarrow>17.1 for _metadata write
+    # In order to allow pyarrow to write an inconsistent schema,
+    # we need to avoid writing the _metadata file (will fail >0.17.1)
+    # and need to avoid schema inference (i.e. use `schema=None`)
     ddf.to_parquet(
         str(tmpdir),
         engine="pyarrow",
         partition_on=["partition_column"],
         write_metadata_file=False,
+        schema=None,
     )
 
     # Test that read fails because of default behavior when schema not provided
@@ -1067,6 +1070,53 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 
     # Check partition column
     assert np.array_equal(ddf_after_write.partition_column, df.partition_column)
+
+
+@pytest.mark.parametrize("index", [False, True])
+@pytest.mark.parametrize("schema", ["infer", "complex"])
+def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
+
+    check_pyarrow()
+    if pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
+    if schema == "complex":
+        schema = {"index": pa.string(), "amount": pa.int64()}
+
+    tmpdir = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "index": ["1", "2", "3", "2", "3", "1", "4"],
+            "date": pd.to_datetime(
+                [
+                    "2017-01-01",
+                    "2017-01-01",
+                    "2017-01-01",
+                    "2017-01-02",
+                    "2017-01-02",
+                    "2017-01-06",
+                    "2017-01-09",
+                ]
+            ),
+            "amount": [100, 200, 300, 400, 500, 600, 700],
+        },
+        index=range(7, 14),
+    )
+    if index:
+        df = dd.from_pandas(df, npartitions=2).set_index("index")
+    else:
+        df = dd.from_pandas(df, npartitions=2)
+
+    df.to_parquet(tmpdir, engine="pyarrow", schema=schema, compute=False).compute(
+        scheduler="synchronous"
+    )
+    df_out = dd.read_parquet(tmpdir, engine=engine)
+
+    if index and engine == "fastparquet":
+        # Fastparquet not handling divisions for
+        # pyarrow-written dataset with string index
+        assert_eq(df, df_out, check_divisions=False)
+    else:
+        assert_eq(df, df_out)
 
 
 def test_partition_on(tmpdir, engine):
@@ -1244,6 +1294,29 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
     dd.read_parquet(fn, engine=read_engine, filters=[("at", "==", "aa")]).compute()
     assert len(ddf2) > 0
+
+
+def test_fiters_file_list(tmpdir, engine):
+    df = pd.DataFrame({"x": range(10), "y": list("aabbccddee")})
+    ddf = dd.from_pandas(df, npartitions=5)
+
+    ddf.to_parquet(str(tmpdir), engine=engine)
+    fils = str(tmpdir.join("*.parquet"))
+    ddf_out = dd.read_parquet(
+        fils, gather_statistics=True, engine=engine, filters=[("x", ">", 3)]
+    )
+
+    assert ddf_out.npartitions == 3
+    assert_eq(df[df["x"] > 3], ddf_out.compute(), check_index=False)
+
+    # Check that first parition gets filtered for single-path input
+    ddf2 = dd.read_parquet(
+        str(tmpdir.join("part.0.parquet")),
+        gather_statistics=True,
+        engine=engine,
+        filters=[("x", ">", 3)],
+    )
+    assert len(ddf2) == 0
 
 
 def test_divisions_read_with_filters(tmpdir):
@@ -1452,6 +1525,20 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
     assert_eq(out, ddf)
+    check_compression(engine, fn, compression)
+
+
+@pytest.mark.parametrize("compression,", ["default", None, "gzip", "snappy"])
+def test_writing_parquet_with_partition_on_and_compression(tmpdir, compression, engine):
+    fn = str(tmpdir)
+    if compression in ["snappy", "default"]:
+        pytest.importorskip("snappy")
+
+    df = pd.DataFrame({"x": ["a", "b", "c"] * 10, "y": [1, 2, 3] * 10})
+    df.index.name = "index"
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    ddf.to_parquet(fn, compression=compression, engine=engine, partition_on=["x"])
     check_compression(engine, fn, compression)
 
 
@@ -2029,7 +2116,16 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
     assert_eq(ddf, ddf2, check_divisions=False)
 
 
-def test_timeseries_nulls_in_schema(tmpdir, engine):
+@pytest.mark.parametrize("schema", ["infer", None])
+def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
+
+    if (
+        schema == "infer"
+        and engine == "pyarrow"
+        and pa.__version__ < LooseVersion("0.15.0")
+    ):
+        pytest.skip("PyArrow>=0.15 Required.")
+
     # GH#5608: relative path failing _metadata/_common_metadata detection.
     tmp_path = str(tmpdir.mkdir("files"))
     tmp_path = os.path.join(tmp_path, "../", "files")
@@ -2043,7 +2139,7 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
-    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False)
+    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
     ddf_read = dd.read_parquet(
         tmp_path, engine=engine, dataset={"validate_schema": False}
     )
@@ -2051,8 +2147,9 @@ def test_timeseries_nulls_in_schema(tmpdir, engine):
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
     # Can force schema validation on each partition in pyarrow
-    if engine == "pyarrow":
-        # The schema mismatch should raise an error
+    if engine == "pyarrow" and schema is None:
+        # The schema mismatch should raise an error if the
+        # dataset was written with `schema=None` (no inference)
         with pytest.raises(ValueError):
             ddf_read = dd.read_parquet(
                 tmp_path, dataset={"validate_schema": True}, engine=engine
