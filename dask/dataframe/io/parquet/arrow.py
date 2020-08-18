@@ -931,6 +931,9 @@ class ArrowEngine(Engine):
             if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
                 # `rg` is already a `ParquetFileFragment`, pyarrow
                 # knows how to convert this to a `table`
+                import pdb
+
+                pdb.set_trace()
                 arrow_table = rg.to_table(
                     use_threads=False,
                     schema=schema,
