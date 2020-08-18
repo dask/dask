@@ -88,7 +88,7 @@ def s3_context(bucket=test_bucket_name, files=files):
             shlex.split("moto_server s3 -p 5555"), stdout=subprocess.DEVNULL
         )
 
-        timeout = 5
+        timeout = 8
         while True:
             try:
                 # OK to go once server is accepting connections
