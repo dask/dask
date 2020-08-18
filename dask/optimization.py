@@ -1031,6 +1031,24 @@ def toposort_layers(hlg):
     return ret
 
 
+def find_layer_containing_key(hlg, key):
+    for k, v in hlg.layers.items():
+        if key in v:
+            return k
+    raise RuntimeError(f"{repr(key)} not found")
+
+
+def fix_hlg_dependencies_inplace(hlg):
+    """Makes sure that hlg.dependencies is correct"""
+    all_keys = set(hlg.keys())
+    fixed_layers_dependencies = {k: set() for k in hlg.layers.keys()}
+    for k, v in hlg.layers.items():
+        for key in get_external_dependencies(v, all_keys):
+            fixed_layers_dependencies[k].add(find_layer_containing_key(hlg, key))
+    hlg.dependencies = dict(fixed_layers_dependencies)
+    return hlg
+
+
 def cull_highlevelgraph(hlg, keys):
     """ Return new high level graph with only the tasks required to calculate keys.
 
@@ -1042,6 +1060,10 @@ def cull_highlevelgraph(hlg, keys):
     hlg: HighLevelGraph
         Culled high level graph
     """
+
+    # TODO: remove this when <https://github.com/dask/dask/pull/6509> passes
+    fix_hlg_dependencies_inplace(hlg)
+
     if not isinstance(keys, (list, set)):
         keys = [keys]
     keys = set(flatten(keys))
