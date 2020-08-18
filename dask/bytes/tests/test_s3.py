@@ -89,7 +89,7 @@ def s3_context(bucket=test_bucket_name, files=files):
         )
 
         timeout = 5
-        while timeout > 0:
+        while True:
             try:
                 # OK to go once server is accepting connections
                 r = requests.get(endpoint_uri)
@@ -99,7 +99,7 @@ def s3_context(bucket=test_bucket_name, files=files):
                 pass
             timeout -= 0.1
             time.sleep(0.1)
-            assert time > 0, "Timed out waiting for moto server"
+            assert timeout > 0, "Timed out waiting for moto server"
 
         client = boto3.client("s3", endpoint_url=endpoint_uri)
         client.create_bucket(Bucket=bucket, ACL="public-read-write")
