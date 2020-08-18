@@ -321,11 +321,8 @@ def _generate_dd_meta(schema, index, categories, partition_info):
     meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
-    import pdb
-
-    pdb.set_trace()
-
-    # TODO: Need to perform Categorical conversion below for pyarrow.dataset
+    # import pdb; pdb.set_trace()
+    # # TODO: Need to perform Categorical conversion below for pyarrow.dataset
 
     if partition_obj:
         for partition in partition_obj:
@@ -531,7 +528,7 @@ def _construct_parts(
 
     # Check if `metadata` is just a list of paths
     # (not splitting by row-group or collecting statistics)
-    if isinstance(metadata, list) and isinstance(metadata[0], str):
+    if isinstance(metadata, list) and len(metadata) and isinstance(metadata[0], str):
         for full_path in metadata:
             part = {
                 "piece": (full_path, None, partition_keys.get(full_path, None)),
@@ -543,7 +540,7 @@ def _construct_parts(
     # Check if we are using pyarrow.datset API
     use_pa_ds = False
     if isinstance(metadata, list) and pa_ds:
-        if isinstance(metadata[0], pa_ds.ParquetFileFragment):
+        if len(metadata) == 0 or isinstance(metadata[0], pa_ds.ParquetFileFragment):
             use_pa_ds = True
             _process_func = _process_metadata_pyarrow_dataset
         else:
@@ -563,6 +560,8 @@ def _construct_parts(
             stat_col_indices[name] = i
     stat_cols = list(stat_col_indices.keys())
     gather_statistics = gather_statistics and len(stat_cols) > 0
+    if split_row_groups is None:
+        split_row_groups = False
 
     # Convert metadata into simple dictionary structures
     (
@@ -814,9 +813,11 @@ class ArrowEngine(Engine):
         # of paths, or if we are building a multiindex (for now).
         # We also don't "need" to gather statistics if we don't
         # want to apply any filters or calculate divisions
-        if (isinstance(metadata, list) and isinstance(metadata[0], str)) or len(
-            index_cols
-        ) > 1:
+        if (
+            isinstance(metadata, list)
+            and len(metadata)
+            and isinstance(metadata[0], str)
+        ) or len(index_cols) > 1:
             gather_statistics = False
         elif filters is None and len(index_cols) == 0:
             gather_statistics = False
