@@ -2796,6 +2796,7 @@ def test_pa_dataset_partitioned(tmpdir, engine, test_filter):
 
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
+    df["b"] = df["b"].astype("category")
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine, partition_on="b")
     read_df = dd.read_parquet(

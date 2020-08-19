@@ -328,18 +328,7 @@ def _generate_dd_meta(schema, index, categories, partition_info):
     meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
     meta = clear_known_categories(meta, cols=categories)
 
-    if partitions:
-
-        if not partition_obj:
-            # Need to construct partition_obj
-            pkeys = defaultdict(list)
-            for path, d in partition_info["partition_keys"].items():
-                for k, v in d.items():
-                    if v not in pkeys[k]:
-                        pkeys[k].append(v)
-            partition_obj = []
-            for name in partitions:
-                partition_obj.append(PartitionObj(name, pkeys[name]))
+    if partition_obj:
 
         for partition in partition_obj:
             if isinstance(index, list) and partition.name == index[0]:
@@ -635,7 +624,7 @@ def _construct_parts(
     else:
         for filename, row_groups in file_row_groups.items():
             full_path = (
-                fs.sep.join([data_path, filename])
+                (fs.sep.join([data_path, filename]) if data_path != "" else filename)
                 if filename != ""
                 else data_path  # This is a single file
             )
@@ -670,25 +659,43 @@ def _construct_parts(
 #
 
 
+def _get_all_partition_keys(ds):
+    pkeys = defaultdict(list)
+    for file_frag in ds.get_fragments():
+        keys = pa_ds._get_partition_keys(file_frag.partition_expression)
+        for k, v in keys.items():
+            if v not in pkeys[k]:
+                pkeys[k].append(v)
+    return pkeys
+
+
 def _collect_pyarrow_dataset_frags(ds, filters):
     partition_names = []
+    partition_obj = []
     partition_keys = {}
     metadata = []
     ds_filters = None
     if filters is not None:
         ds_filters = pq._filters_to_expression(filters)
+    pkeys = None
     for file_frag in ds.get_fragments(ds_filters):
         for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
             metadata.append(rg_frag)
             keys = pa_ds._get_partition_keys(rg_frag.partition_expression)
             if keys:
-                partition_keys[rg_frag.path] = keys
+                if pkeys is None:
+                    # Get all partition keys without filters...
+                    pkeys = _get_all_partition_keys(ds)
+                partition_keys[rg_frag.path] = list(keys.items())
                 if not partition_names:
                     partition_names = list(keys)
 
+    for name in partition_names:
+        partition_obj.append(PartitionObj(name, pkeys[name]))
+
     metadata = sorted(metadata, key=lambda x: natural_sort_key(x.path))
     partition_info = {
-        "partitions": None,  # Not used with dataset API
+        "partitions": partition_obj,
         "partition_keys": partition_keys,
         "partition_names": partition_names,
     }
@@ -910,13 +917,14 @@ class ArrowEngine(Engine):
 
         # Ensure `columns` and `partitions` do not overlap
         columns_and_parts = columns.copy()
-        if columns_and_parts and partitions:
-            for part_name in partitions.partition_names:
-                if part_name in columns:
-                    columns.remove(part_name)
-                else:
-                    columns_and_parts.append(part_name)
-            columns = columns or None
+        if not isinstance(partitions, (list, tuple)):
+            if columns_and_parts and partitions:
+                for part_name in partitions.partition_names:
+                    if part_name in columns:
+                        columns.remove(part_name)
+                    else:
+                        columns_and_parts.append(part_name)
+                columns = columns or None
 
         if isinstance(piece, str):
             # `piece` is a file-path string
@@ -938,7 +946,7 @@ class ArrowEngine(Engine):
                 arrow_table = rg.to_table(
                     use_threads=False,
                     schema=schema,
-                    columns=columns,
+                    columns=[c for c in columns if c is not None],
                     # TODO: Modify tests to allow full filtering
                     # filter=pq._filters_to_expression(filters) if filters else None,
                 )
@@ -953,6 +961,19 @@ class ArrowEngine(Engine):
                     piece, columns, partitions, **kwargs
                 )
             df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+
+            # For pyarrow.dataset api, need to convert partition columns
+            # to categorigal manually...
+            if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
+                for partition in partitions:
+                    if partition.name in df.columns:
+                        df[partition.name] = pd.Series(
+                            pd.Categorical(
+                                categories=partition.keys,
+                                values=df[partition.name].values,
+                            ),
+                            index=df.index,
+                        )
 
             if len(row_group) > 1:
                 dfs.append(df)
