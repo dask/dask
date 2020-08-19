@@ -7,6 +7,60 @@ from .base import is_dask_collection
 from .core import reverse_dict
 
 
+class Layer(Mapping):
+    def cull(self, keys):
+        return self
+
+    def get_external_dependencies(self, known_keys):
+        """Get external dependencies
+
+        Parameters
+        ----------
+        known_keys : set
+            Set of known keys (typically all keys in a HighLevelGraph)
+
+        Returns
+        -------
+        deps: set
+            Set of dependencies
+        """
+        ret = set()
+        work = list(self.values())
+
+        while work:
+            new_work = []
+            for w in work:
+                typ = type(w)
+                if typ is tuple and w and callable(w[0]):  # istask(w)
+                    new_work.extend(w[1:])
+                elif typ is list:
+                    new_work.extend(w)
+                elif typ is dict:
+                    new_work.extend(w.values())
+                else:
+                    try:
+                        if w in known_keys and w not in self.keys():
+                            ret.add(w)
+                    except TypeError:  # not hashable
+                        pass
+            work = new_work
+        return ret
+
+
+class BasicLayer(Layer):
+    def __init__(self, mapping):
+        self.__mapping = mapping
+
+    def __getitem__(self, k):
+        return self.__mapping[k]
+
+    def __iter__(self):
+        return iter(self.__mapping)
+
+    def __len__(self):
+        return len(self.__mapping)
+
+
 class HighLevelGraph(Mapping):
     """ Task graph composed of layers of dependent subgraphs
 

@@ -3,7 +3,7 @@ import math
 import numbers
 from enum import Enum
 
-from . import config, core, utils
+from . import config, core, utils, highlevelgraph
 from .core import (
     istask,
     get_dependencies,
@@ -966,44 +966,6 @@ class SubgraphCallable(object):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
 
 
-def get_external_dependencies(dsk, known_keys):
-    """Get dependencies external to `dsk`
-
-    Parameters
-    ----------
-    dsk : dict
-        A dask graph (typically a layer in a HighLevelGraph)
-    known_keys : set
-        Set of known keys (typically all keys in a HighLevelGraph)
-
-    Returns
-    -------
-    deps: set
-        Set of dependencies
-    """
-    ret = set()
-    work = list(dsk.values())
-
-    while work:
-        new_work = []
-        for w in work:
-            typ = type(w)
-            if typ is tuple and w and callable(w[0]):  # istask(w)
-                new_work.extend(w[1:])
-            elif typ is list:
-                new_work.extend(w)
-            elif typ is dict:
-                new_work.extend(w.values())
-            else:
-                try:
-                    if w in known_keys and w not in dsk:
-                        ret.add(w)
-                except TypeError:  # not hashable
-                    pass
-        work = new_work
-    return ret
-
-
 def toposort_layers(hlg):
     """Sort the layers in a high level graph topologically
 
@@ -1031,6 +993,16 @@ def toposort_layers(hlg):
     return ret
 
 
+def fix_hlg_layers_inplace(hlg):
+    """Makes sure that all layers in hlg are `Layer`"""
+    new_layers = {}
+    for k, v in hlg.layers.items():
+        if not isinstance(v, highlevelgraph.Layer):
+            new_layers[k] = highlevelgraph.BasicLayer(v)
+    hlg.layers.update(new_layers)
+    return hlg
+
+
 def find_layer_containing_key(hlg, key):
     for k, v in hlg.layers.items():
         if key in v:
@@ -1043,7 +1015,7 @@ def fix_hlg_dependencies_inplace(hlg):
     all_keys = set(hlg.keys())
     fixed_layers_dependencies = {k: set() for k in hlg.layers.keys()}
     for k, v in hlg.layers.items():
-        for key in get_external_dependencies(v, all_keys):
+        for key in v.get_external_dependencies(all_keys):
             fixed_layers_dependencies[k].add(find_layer_containing_key(hlg, key))
     hlg.dependencies = dict(fixed_layers_dependencies)
     return hlg
@@ -1061,6 +1033,8 @@ def cull_highlevelgraph(hlg, keys):
         Culled high level graph
     """
 
+    fix_hlg_layers_inplace(hlg)
+
     # TODO: remove this when <https://github.com/dask/dask/pull/6509> passes
     fix_hlg_dependencies_inplace(hlg)
 
@@ -1076,10 +1050,8 @@ def cull_highlevelgraph(hlg, keys):
         layer = hlg.layers[layer_name]
         key_deps = {k for k in keys if k in layer}
         if len(key_deps) > 0:
-            # TODO: use `layer.cull()` when it exist
-            culled_layer, _ = cull(layer, key_deps)
-            # TODO: use `layer.get_external_dependencies()` when it exist
-            keys.update(get_external_dependencies(culled_layer, known_keys))
+            culled_layer = layer.cull(key_deps)
+            keys.update(culled_layer.get_external_dependencies(known_keys))
             ret_layers[layer_name] = culled_layer
 
     ret_dependencies = {}
@@ -1088,6 +1060,4 @@ def cull_highlevelgraph(hlg, keys):
             d for d in hlg.dependencies[layer_name] if d in ret_layers
         }
 
-    from dask.highlevelgraph import HighLevelGraph
-
-    return HighLevelGraph(ret_layers, ret_dependencies)
+    return highlevelgraph.HighLevelGraph(ret_layers, ret_dependencies)
