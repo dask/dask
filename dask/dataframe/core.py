@@ -134,7 +134,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return self._name
 
     def __dask_layers__(self):
-        return (self.key,)
+        return (self._name,)
 
     __dask_optimize__ = globalmethod(
         optimize, key="dataframe_optimize", falsey=dont_optimize
@@ -3501,6 +3501,9 @@ class DataFrame(_Frame):
             return super().__len__()
         else:
             return len(s)
+
+    def __contains__(self, key):
+        return key in self._meta
 
     @property
     def empty(self):
