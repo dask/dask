@@ -603,7 +603,11 @@ def _construct_parts(
                 i_end = i + split_row_groups
                 rg_list = row_groups[i:i_end]
                 full_path = (
-                    fs.sep.join([data_path, filename])
+                    (
+                        fs.sep.join([data_path, filename])
+                        if data_path != ""
+                        else filename
+                    )
                     if filename != ""
                     else data_path  # This is a single file
                 )
@@ -931,9 +935,6 @@ class ArrowEngine(Engine):
             if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
                 # `rg` is already a `ParquetFileFragment`, pyarrow
                 # knows how to convert this to a `table`
-                import pdb
-
-                pdb.set_trace()
                 arrow_table = rg.to_table(
                     use_threads=False,
                     schema=schema,
