@@ -69,20 +69,14 @@ def s3so():
     return dict(client_kwargs={"endpoint_url": "http://127.0.0.1:5555/"})
 
 
-@pytest.fixture
-def s3():
-    with s3_context() as fs:
-        yield fs
+endpoint_uri = "http://127.0.0.1:5555/"
 
 
-@contextmanager
-def s3_context(bucket=test_bucket_name, files=files):
+@pytest.fixture(scope="module")
+def s3_base():
     with ensure_safe_environment_variables():
-        # see https://github.com/spulec/moto/issues/1924 & 1952
         os.environ["AWS_ACCESS_KEY_ID"] = "foobar_key"
         os.environ["AWS_SECRET_ACCESS_KEY"] = "foobar_secret"
-
-        endpoint_uri = "http://127.0.0.1:5555/"
 
         # pipe to null to avoid logging in terminal
         proc = subprocess.Popen(
@@ -101,28 +95,40 @@ def s3_context(bucket=test_bucket_name, files=files):
             timeout -= 0.1
             time.sleep(0.1)
             assert timeout > 0, "Timed out waiting for moto server"
+        yield
 
-        client = boto3.client("s3", endpoint_url=endpoint_uri)
-        client.create_bucket(Bucket=bucket, ACL="public-read-write")
-        for f, data in files.items():
-            client.put_object(Bucket=bucket, Key=f, Body=data)
-        fs = s3fs.S3FileSystem(
-            anon=True, client_kwargs={"endpoint_url": "http://127.0.0.1:5555/"}
-        )
-        s3fs.S3FileSystem.clear_instance_cache()
-        fs.invalidate_cache()
+        # shut down external process
+        proc.terminate()
         try:
-            yield fs
-        finally:
-            # shut down external process
-            proc.terminate()
-            try:
-                proc.wait(timeout=3)
-            except subprocess.TimeoutExpired:
-                proc.kill()
-                if sys.platform == "win32":
-                    # belt & braces
-                    subprocess.call("TASKKILL /F /PID {pid} /T".format(pid=proc.pid))
+            proc.wait(timeout=3)
+        except subprocess.TimeoutExpired:
+            proc.kill()
+            if sys.platform == "win32":
+                # belt & braces
+                subprocess.call("TASKKILL /F /PID {pid} /T".format(pid=proc.pid))
+
+
+@pytest.fixture
+def s3(s3_base):
+    with s3_context() as fs:
+        yield fs
+
+
+@contextmanager
+def s3_context(bucket=test_bucket_name, files=files):
+    client = boto3.client("s3", endpoint_url=endpoint_uri)
+    client.create_bucket(Bucket=bucket, ACL="public-read-write")
+    for f, data in files.items():
+        client.put_object(Bucket=bucket, Key=f, Body=data)
+    fs = s3fs.S3FileSystem(
+        anon=True, client_kwargs={"endpoint_url": "http://127.0.0.1:5555/"}
+    )
+    s3fs.S3FileSystem.clear_instance_cache()
+    fs.invalidate_cache()
+    try:
+        yield fs
+    finally:
+        fs.rm(bucket, recursive=True)
 
 
 @pytest.fixture()
