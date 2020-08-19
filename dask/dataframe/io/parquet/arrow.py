@@ -713,7 +713,10 @@ def _gather_metadata_pyarrow_dataset(
     # Use pyarrow.dataset API
     ds = None
     if len(paths) == 1 and fs.isdir(paths[0]):
-        paths = paths[0]
+
+        base, fns = _analyze_paths(paths, fs)
+        paths = fs.sep.join([base, fns[0]])
+        # paths = paths[0]
         meta_path = fs.sep.join([paths, "_metadata"])
         if fs.exists(meta_path):
             # Use _metadata file if available

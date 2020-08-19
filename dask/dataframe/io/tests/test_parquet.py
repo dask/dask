@@ -2140,21 +2140,23 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
+    dataset = {"validate_schema": False}
+    if schema != "infer":
+        dataset["pa_dataset"] = False
     ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
-    ddf_read = dd.read_parquet(
-        tmp_path, engine=engine, dataset={"validate_schema": False}
-    )
+    ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset=dataset)
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
     # Can force schema validation on each partition in pyarrow
     if engine == "pyarrow" and schema is None:
+        dataset = {"validate_schema": True}
+        if schema != "infer":
+            dataset["pa_dataset"] = False
         # The schema mismatch should raise an error if the
         # dataset was written with `schema=None` (no inference)
         with pytest.raises(ValueError):
-            ddf_read = dd.read_parquet(
-                tmp_path, dataset={"validate_schema": True}, engine=engine
-            )
+            ddf_read = dd.read_parquet(tmp_path, dataset=dataset, engine=engine)
 
 
 @pytest.mark.parametrize("numerical", [True, False])
