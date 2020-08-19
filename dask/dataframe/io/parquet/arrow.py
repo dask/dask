@@ -796,6 +796,7 @@ def _process_metadata_pyarrow_dataset(
                 if name in statistics:
                     cmin = statistics[name]["min"]
                     cmax = statistics[name]["max"]
+                    cnull = 0  # Not yet available
                     if single_rg_parts:
                         s["columns"].append(
                             {
@@ -806,10 +807,11 @@ def _process_metadata_pyarrow_dataset(
                                 "max": pd.Timestamp(cmax)
                                 if isinstance(cmax, datetime)
                                 else cmax,
+                                "null_count": cnull,
                             }
                         )
                     else:
-                        cstats += [cmin, cmax]
+                        cstats += [cmin, cmax, cnull]
                 else:
                     if single_rg_parts:
                         s["columns"].append({"name": name})

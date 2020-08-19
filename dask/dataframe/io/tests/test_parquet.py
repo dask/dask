@@ -2638,8 +2638,9 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     )
 
     # This will raise by default due to overflow
+    dataset = {"pa_dataset": False}
     with pytest.raises(pa.lib.ArrowInvalid) as e:
-        dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
+        dd.read_parquet(str(tmpdir), engine="pyarrow", dataset=dataset).compute()
     assert "out of bounds" in str(e.value)
 
     from dask.dataframe.io.parquet.arrow import ArrowEngine
@@ -2691,7 +2692,10 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range
-    dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
+    dataset = {"pa_dataset": False}
+    dd.read_parquet(
+        str(tmpdir), engine=ArrowEngineWithTimestampClamp, dataset=dataset
+    ).compute()
 
 
 @write_read_engines_xfail
