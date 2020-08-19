@@ -1,9 +1,8 @@
 import math
 import numbers
-import re
 from enum import Enum
 
-from . import config, core
+from . import config, core, utils
 from .core import (
     istask,
     get_dependencies,
@@ -69,11 +68,11 @@ def default_fused_linear_keys_renamer(keys):
     """Create new keys for fused tasks"""
     typ = type(keys[0])
     if typ is str:
-        names = [key_split(x) for x in keys[:0:-1]]
+        names = [utils.key_split(x) for x in keys[:0:-1]]
         names.append(keys[0])
         return "-".join(names)
     elif typ is tuple and len(keys[0]) > 0 and isinstance(keys[0][0], str):
-        names = [key_split(x) for x in keys[:0:-1]]
+        names = [utils.key_split(x) for x in keys[:0:-1]]
         names.append(keys[0][0])
         return ("-".join(names),) + keys[0][1:]
     else:
@@ -416,16 +415,16 @@ def default_fused_keys_renamer(keys, max_fused_key_length=120):
         return key_name
 
     if typ is str:
-        first_name = key_split(first_key)
-        names = {key_split(k) for k in it}
+        first_name = utils.key_split(first_key)
+        names = {utils.key_split(k) for k in it}
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key)
         concatenated_name = "-".join(names)
         return _enforce_max_key_limit(concatenated_name)
     elif typ is tuple and len(first_key) > 0 and isinstance(first_key[0], str):
-        first_name = key_split(first_key)
-        names = {key_split(k) for k in it}
+        first_name = utils.key_split(first_key)
+        names = {utils.key_split(k) for k in it}
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key[0])
@@ -944,65 +943,6 @@ def _inplace_fuse_subgraphs(
                 else:
                     chain2.append(k)
             fused_trees[outkey] = chain2
-
-
-# Defining `key_split` (used by key renamers in `fuse`) in utils.py
-# results in messy circular imports, so define it here instead.
-hex_pattern = re.compile("[a-f]+")
-
-
-def key_split(s):
-    """
-    >>> key_split('x')
-    'x'
-    >>> key_split('x-1')
-    'x'
-    >>> key_split('x-1-2-3')
-    'x'
-    >>> key_split(('x-2', 1))
-    'x'
-    >>> key_split("('x-2', 1)")
-    'x'
-    >>> key_split('hello-world-1')
-    'hello-world'
-    >>> key_split(b'hello-world-1')
-    'hello-world'
-    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
-    'data'
-    >>> key_split('<module.submodule.myclass object at 0xdaf372')
-    'myclass'
-    >>> key_split(None)
-    'Other'
-    >>> key_split('x-abcdefab')  # ignores hex
-    'x'
-    >>> key_split('_(x)')  # strips unpleasant characters
-    'x'
-    """
-    if type(s) is bytes:
-        s = s.decode()
-    if type(s) is tuple:
-        s = s[0]
-    try:
-        words = s.split("-")
-        if not words[0][0].isalpha():
-            result = words[0].strip("_'()\"")
-        else:
-            result = words[0]
-        for word in words[1:]:
-            if word.isalpha() and not (
-                len(word) == 8 and hex_pattern.match(word) is not None
-            ):
-                result += "-" + word
-            else:
-                break
-        if len(result) == 32 and re.match(r"[a-f0-9]{32}", result):
-            return "data"
-        else:
-            if result[0] == "<":
-                result = result.strip("<>").split()[0].split(".")[-1]
-            return result
-    except Exception:
-        return "Other"
 
 
 class SubgraphCallable(object):
