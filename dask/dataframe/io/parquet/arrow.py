@@ -714,15 +714,28 @@ def _gather_metadata_pyarrow_dataset(
     ds = None
     if len(paths) == 1 and fs.isdir(paths[0]):
         paths = paths[0]
-        # Use _metadata file if available
-        # TODO: Handle _metadata within a list of files
         meta_path = fs.sep.join([paths, "_metadata"])
         if fs.exists(meta_path):
+            # Use _metadata file if available
             ds = pa_ds.parquet_dataset(
                 meta_path, partitioning=dataset_kwargs.get("partitioning", "hive")
             )
             if gather_statistics is None:
                 gather_statistics = True
+    elif len(paths) > 1:
+        base, fns = _analyze_paths(paths, fs)
+        meta_path = fs.sep.join([base, "_metadata"])
+        if "_metadata" in fns:
+            # Use _metadata file if available
+            # Pyarrow cannot handle "_metadata" when `paths` is a list
+            paths.remove(meta_path)
+            fns.remove("_metadata")
+            ds = pa_ds.parquet_dataset(
+                meta_path, partitioning=dataset_kwargs.get("partitioning", "hive")
+            )
+            if gather_statistics is None:
+                gather_statistics = True
+
     if ds is None:
         ds = pa_ds.dataset(
             paths,
