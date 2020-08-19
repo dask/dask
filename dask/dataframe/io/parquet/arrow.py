@@ -963,10 +963,17 @@ class ArrowEngine(Engine):
             if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
                 # `rg` is already a `ParquetFileFragment`, pyarrow
                 # knows how to convert this to a `table`
+                cols = []
+                for name in columns:
+                    if name is None:
+                        if "__index_level_0__" in schema.names:
+                            columns.append("__index_level_0__")
+                    else:
+                        cols.append(name)
                 arrow_table = rg.to_table(
                     use_threads=False,
                     schema=schema,
-                    columns=[c for c in columns if c is not None],
+                    columns=cols,
                     # TODO: Modify tests to allow full filtering
                     # filter=pq._filters_to_expression(filters) if filters else None,
                 )
