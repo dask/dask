@@ -26,9 +26,11 @@ class PublishExtension:
         self.scheduler.handlers.update(handlers)
         self.scheduler.extensions["publish"] = self
 
-    def put(self, comm=None, keys=None, data=None, name=None, client=None):
+    def put(
+        self, comm=None, keys=None, data=None, name=None, override=False, client=None
+    ):
         with log_errors():
-            if name in self.datasets:
+            if not override and name in self.datasets:
                 raise KeyError("Dataset %s already exists" % name)
             self.scheduler.client_desires_keys(keys, "published-%s" % tokey(name))
             self.datasets[name] = {"data": data, "keys": keys}

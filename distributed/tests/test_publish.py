@@ -179,6 +179,7 @@ def test_datasets_setitem(client):
         value = "value"
         client.datasets[key] = value
         assert client.get_dataset(key) == value
+        assert client.get_dataset(key, default="something else") == value
 
 
 def test_datasets_getitem(client):
@@ -186,6 +187,17 @@ def test_datasets_getitem(client):
         value = "value"
         client.publish_dataset(value, name=key)
         assert client.datasets[key] == value
+        assert client.datasets.get(key) == value
+        assert client.datasets.get(key, default="something else") == value
+
+
+def test_datasets_getitem_default(client):
+    with pytest.raises(KeyError) as exc_info:
+        client.get_dataset("key")
+
+    assert client.datasets.get("key", default="value") == "value"
+    assert client.datasets.get("key", default=None) is None
+    assert client.get_dataset("key", default="value") == "value"
 
 
 def test_datasets_delitem(client):
@@ -206,6 +218,18 @@ def test_datasets_contains(client):
     key, value = "key", "value"
     client.publish_dataset(key=value)
     assert key in client.datasets
+
+
+def test_datasets_republish(client):
+    key, value, value2 = "key", "value", "value2"
+    client.publish_dataset(key=value)
+    assert client.get_dataset(key) == value
+
+    with pytest.raises(KeyError) as exc_info:
+        client.publish_dataset(key=value)
+
+    client.publish_dataset(key=value2, override=True)
+    assert client.get_dataset(key) == value2
 
 
 def test_datasets_iter(client):
