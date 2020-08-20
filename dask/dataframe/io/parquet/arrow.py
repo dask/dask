@@ -110,6 +110,8 @@ def _index_in_schema(index, schema):
 def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     """ Generate a ParquetDataset object
     """
+    if "validate_schema" not in dataset_kwargs:
+        dataset_kwargs["validate_schema"] = False
     if len(paths) > 1:
         # This is a list of files
         base, fns = _analyze_paths(paths, fs)
@@ -138,8 +140,6 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         #       expensive in storage systems like S3.
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         base, fns = _analyze_paths(allpaths, fs)
-        if "_metadata" in fns and "validate_schema" not in dataset_kwargs:
-            dataset_kwargs["validate_schema"] = False
         dataset = pq.ParquetDataset(
             paths[0], filesystem=fs, filters=filters, **dataset_kwargs
         )
