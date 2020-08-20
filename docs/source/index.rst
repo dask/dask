@@ -111,6 +111,7 @@ Contents
    configuration
    ipython
    prometheus
+   http_services
    publish
    resources
    task-launch

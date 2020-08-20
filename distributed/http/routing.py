@@ -1,11 +1,49 @@
+import os
 from tornado import web
 import tornado.httputil
+import tornado.routing
+
+
+def _descend_routes(router, routers=set(), out=set()):
+    if router in routers:
+        return
+    routers.add(router)
+    for rule in list(router.named_rules.values()) + router.rules:
+        if isinstance(rule.matcher, tornado.routing.PathMatches):
+            if issubclass(rule.target, tornado.web.StaticFileHandler):
+                prefix = rule.matcher.regex.pattern.rstrip("(.*)$").rstrip("/")
+                path = rule.target_kwargs["path"]
+                for d, dirs, files in os.walk(path):
+                    for fn in files:
+                        fullpath = d + "/" + fn
+                        ourpath = fullpath.replace(path, prefix).replace("\\", "/")
+                        out.add(ourpath)
+            else:
+                out.add(rule.matcher.regex.pattern.rstrip("$"))
+        if isinstance(rule.target, tornado.routing.RuleRouter):
+            _descend_routes(rule.target, routers, out)
+
+
+class DirectoryHandler(web.RequestHandler):
+    """Crawls the HTTP application to find all routes"""
+
+    def get(self):
+        out = set()
+        routers = set()
+        for app in self.application.applications + [self.application]:
+            if "bokeh" in str(app):
+                out.update(set(app.app_paths))
+            else:
+                _descend_routes(app.default_router, routers, out)
+                _descend_routes(app.wildcard_router, routers, out)
+        self.write({"paths": sorted(out)})
 
 
 class RoutingApplication(web.Application):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.applications = []
+        self.add_handlers(".*$", [(r"/sitemap.json", DirectoryHandler),])
 
     def find_handler(self, request: tornado.httputil.HTTPServerRequest, **kwargs):
         handler = super().find_handler(request, **kwargs)

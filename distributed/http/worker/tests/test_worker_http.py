@@ -1,5 +1,5 @@
 import pytest
-
+import json
 from tornado.httpclient import AsyncHTTPClient
 from distributed.utils_test import gen_cluster
 
@@ -37,3 +37,17 @@ async def test_health(c, s, a, b):
 
     txt = response.body.decode("utf8")
     assert txt == "ok"
+
+
+@gen_cluster()
+async def test_sitemap(s, a, b):
+    http_client = AsyncHTTPClient()
+
+    response = await http_client.fetch(
+        "http://localhost:%d/sitemap.json" % a.http_server.port
+    )
+    out = json.loads(response.body.decode())
+    assert "paths" in out
+    assert "/sitemap.json" in out["paths"]
+    assert "/health" in out["paths"]
+    assert "/statics/css/base.css" in out["paths"]
