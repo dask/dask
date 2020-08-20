@@ -4,12 +4,55 @@ import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .core import reverse_dict
+from .core import reverse_dict, get_dependencies, flatten
 
 
 class Layer(Mapping):
     def cull(self, keys):
-        return self
+        """ Return new dask with only the tasks required to calculate keys.
+
+        In other words, remove unnecessary tasks from dask.
+        ``keys`` may be a single key or list of keys.
+
+        Examples
+        --------
+        >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
+        >>> dsk, dependencies = cull(d, 'out')  # doctest: +SKIP
+        >>> dsk  # doctest: +SKIP
+        {'x': 1, 'out': (add, 'x', 10)}
+        >>> dependencies  # doctest: +SKIP
+        {'x': set(), 'out': set(['x'])}
+
+        Returns
+        -------
+        dsk: culled dask graph
+        dependencies: Dict mapping {key: [deps]}.  Useful side effect to accelerate
+            other optimizations, notably fuse.
+        """
+        if not isinstance(keys, (list, set)):
+            keys = [keys]
+
+        seen = set()
+        dependencies = dict()
+        out = {}
+        work = list(set(flatten(keys)))
+
+        while work:
+            new_work = []
+            for k in work:
+                dependencies_k = get_dependencies(
+                    self, k, as_list=True
+                )  # fuse needs lists
+                out[k] = self[k]
+                dependencies[k] = dependencies_k
+                for d in dependencies_k:
+                    if d not in seen:
+                        seen.add(d)
+                        new_work.append(d)
+
+            work = new_work
+
+        return BasicLayer(out)
 
     def get_external_dependencies(self, known_keys):
         """Get external dependencies
