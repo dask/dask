@@ -938,9 +938,7 @@ class ArrowEngine(Engine):
         else:
             index_cols = []
 
-        t = cls._pandas_to_arrow_table(
-            df, preserve_index=preserve_index, schema=schema
-        )
+        t = cls._pandas_to_arrow_table(df, preserve_index=preserve_index, schema=schema)
 
         if partition_on:
             md_list = _write_partitioned(
