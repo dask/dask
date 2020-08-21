@@ -712,6 +712,9 @@ def _gather_metadata_pyarrow_dataset(
     """
     # Use pyarrow.dataset API
     ds = None
+    default_partitioning = pa_ds.HivePartitioning.discover(
+        max_partition_dictionary_size=-1
+    )
     if len(paths) == 1 and fs.isdir(paths[0]):
 
         # Use _analyze_paths to avoid relative-path
@@ -723,7 +726,8 @@ def _gather_metadata_pyarrow_dataset(
         if fs.exists(meta_path):
             # Use _metadata file if available
             ds = pa_ds.parquet_dataset(
-                meta_path, partitioning=dataset_kwargs.get("partitioning", "hive")
+                meta_path,
+                partitioning=dataset_kwargs.get("partitioning", default_partitioning),
             )
             if gather_statistics is None:
                 gather_statistics = True
@@ -736,7 +740,8 @@ def _gather_metadata_pyarrow_dataset(
             paths.remove(meta_path)
             fns.remove("_metadata")
             ds = pa_ds.parquet_dataset(
-                meta_path, partitioning=dataset_kwargs.get("partitioning", "hive")
+                meta_path,
+                partitioning=dataset_kwargs.get("partitioning", default_partitioning),
             )
             if gather_statistics is None:
                 gather_statistics = True
@@ -746,7 +751,7 @@ def _gather_metadata_pyarrow_dataset(
             paths,
             format="parquet",
             partitioning=dataset_kwargs.get(
-                "partitioning", "hive"
+                "partitioning", default_partitioning
             ),  # Assume "hive" by default
         )
 
@@ -990,17 +995,18 @@ class ArrowEngine(Engine):
             df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
 
             # For pyarrow.dataset api, need to convert partition columns
-            # to categorigal manually...
+            # to categorigal manually for integer types...
             if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
                 for partition in partitions:
                     if partition.name in df.columns:
-                        df[partition.name] = pd.Series(
-                            pd.Categorical(
-                                categories=partition.keys,
-                                values=df[partition.name].values,
-                            ),
-                            index=df.index,
-                        )
+                        if df[partition.name].dtype != pd.Categorical:
+                            df[partition.name] = pd.Series(
+                                pd.Categorical(
+                                    categories=partition.keys,
+                                    values=df[partition.name].values,
+                                ),
+                                index=df.index,
+                            )
 
             if len(row_group) > 1:
                 dfs.append(df)
