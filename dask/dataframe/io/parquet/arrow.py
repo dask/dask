@@ -110,8 +110,9 @@ def _index_in_schema(index, schema):
 def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     """ Generate a ParquetDataset object
     """
-    if "validate_schema" not in dataset_kwargs:
-        dataset_kwargs["validate_schema"] = False
+    kwargs = dataset_kwargs.copy()
+    if "validate_schema" not in kwargs:
+        kwargs["validate_schema"] = False
     if len(paths) > 1:
         # This is a list of files
         base, fns = _analyze_paths(paths, fs)
@@ -129,7 +130,7 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         # Note #2: Cannot pass filters for legacy pyarrow API (see issue#6512).
         #          We can handle partitions + filtering for list input after
         #          adopting new pyarrow.dataset API.
-        dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
+        dataset = pq.ParquetDataset(paths, filesystem=fs, **kwargs)
         if proxy_metadata:
             dataset.metadata = proxy_metadata
     elif fs.isdir(paths[0]):
@@ -140,15 +141,13 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         #       expensive in storage systems like S3.
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         base, fns = _analyze_paths(allpaths, fs)
-        dataset = pq.ParquetDataset(
-            paths[0], filesystem=fs, filters=filters, **dataset_kwargs
-        )
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs, filters=filters, **kwargs)
     else:
         # This is a single file.  No danger in gathering statistics
         # and/or splitting row-groups without a "_metadata" file
         base = paths[0]
         fns = [None]
-        dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs, **kwargs)
 
     return dataset, base, fns
 
