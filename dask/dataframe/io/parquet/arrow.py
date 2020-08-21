@@ -554,10 +554,10 @@ def _construct_parts(
         return parts, stats
 
     # Check if we are using pyarrow.datset API
-    use_pa_ds = False
+    use_legacy_dataset = True
     if isinstance(metadata, list) and pa_ds:
         if len(metadata) == 0 or isinstance(metadata[0], pa_ds.ParquetFileFragment):
-            use_pa_ds = True
+            use_legacy_dataset = False
             _process_func = _process_metadata_pyarrow_dataset
         else:
             raise TypeError("metadata type not recognized")
@@ -642,7 +642,7 @@ def _construct_parts(
             pkeys = partition_keys.get(full_path, None)
             if partition_obj and pkeys is None:
                 continue  # This partition was filtered
-            rgs = row_groups if use_pa_ds else None
+            rgs = None if use_legacy_dataset else row_groups
             part = {
                 "piece": (full_path, rgs, pkeys),
                 "kwargs": {
@@ -806,6 +806,8 @@ def _process_metadata_pyarrow_dataset(
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
     for rg_frag in metadata:
+        if gather_statistics:
+            rg_frag.ensure_complete_metadata()
         row_group = rg_frag.row_groups[0]
         fpath = rg_frag.path
         file_row_groups[fpath].append(rg_frag)
@@ -877,9 +879,11 @@ class ArrowEngine(Engine):
 
         # Check if we are using pyarrow.dataset API
         dataset_kwargs = kwargs.get("dataset", {})
-        use_pa_ds = dataset_kwargs.pop("pa_dataset", False) and pa_ds is not None
+        use_legacy_dataset = (
+            dataset_kwargs.pop("use_legacy_dataset", False) or pa_ds is None
+        )
         _gather_func = (
-            _gather_metadata_pyarrow_dataset if use_pa_ds else _gather_metadata
+            _gather_metadata if use_legacy_dataset else _gather_metadata_pyarrow_dataset
         )
 
         # Gather necessary metadata information. This includes

@@ -1,4 +1,5 @@
 import math
+import glob
 import os
 import sys
 import warnings
@@ -810,8 +811,6 @@ def test_ordering(tmpdir, write_engine, read_engine):
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
-    import glob
-
     tmp = str(tmpdir)
     data = pd.DataFrame(
         {"i32": np.arange(1000, dtype=np.int32), "f": np.arange(1000, dtype=np.float64)}
@@ -821,8 +820,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     df2 = dd.read_parquet(tmp, columns=["i32", "f"], engine=engine)
     assert_eq(df[["i32", "f"]], df2, check_index=False)
-
-    import glob
 
     fns = glob.glob(os.path.join(tmp, "*.parquet"))
     df2 = dd.read_parquet(fns, columns=["i32"], engine=engine).compute()
@@ -978,7 +975,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
             str(tmpdir),
             engine="pyarrow",
             gather_statistics=False,
-            dataset={"validate_schema": True, "pa_dataset": False},
+            dataset={"validate_schema": True, "use_legacy_dataset": True},
         ).compute()
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
@@ -2077,7 +2074,7 @@ def test_categories_large(tmpdir, engine):
 
 
 @write_read_engines()
-def test_read_glob_no_stats(tmpdir, write_engine, read_engine):
+def test_read_glob_no_meta(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
 
@@ -2088,11 +2085,9 @@ def test_read_glob_no_stats(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
-def test_read_glob_yes_stats(tmpdir, write_engine, read_engine):
+def test_read_glob_yes_meta(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
-    import glob
-
     paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
     paths.append(os.path.join(tmp_path, "_metadata"))
     ddf2 = dd.read_parquet(paths, engine=read_engine, gather_statistics=False)
@@ -2142,7 +2137,7 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
     dataset = {"validate_schema": False}
     if schema != "infer":
-        dataset["pa_dataset"] = False
+        dataset["use_legacy_dataset"] = True
     ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
     ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset=dataset)
 
@@ -2152,7 +2147,7 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     if engine == "pyarrow" and schema is None:
         dataset = {"validate_schema": True}
         if schema != "infer":
-            dataset["pa_dataset"] = False
+            dataset["use_legacy_dataset"] = True
         # The schema mismatch should raise an error if the
         # dataset was written with `schema=None` (no inference)
         with pytest.raises(ValueError):
@@ -2638,7 +2633,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     )
 
     # This will raise by default due to overflow
-    dataset = {"pa_dataset": False}
+    dataset = {"use_legacy_dataset": True}
     with pytest.raises(pa.lib.ArrowInvalid) as e:
         dd.read_parquet(str(tmpdir), engine="pyarrow", dataset=dataset).compute()
     assert "out of bounds" in str(e.value)
@@ -2692,7 +2687,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range
-    dataset = {"pa_dataset": False}
+    dataset = {"use_legacy_dataset": True}
     dd.read_parquet(
         str(tmpdir), engine=ArrowEngineWithTimestampClamp, dataset=dataset
     ).compute()
@@ -2781,20 +2776,22 @@ def test_divisions_with_null_partition(tmpdir, engine):
     assert ddf_read.divisions == (None, None, None)
 
 
-def test_pa_dataset_simple(tmpdir, engine):
+def test_pyarrow_dataset_simple(tmpdir, engine):
     check_pyarrow()
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine)
-    read_df = dd.read_parquet(fn, engine="pyarrow", dataset={"pa_dataset": True})
+    read_df = dd.read_parquet(
+        fn, engine="pyarrow", dataset={"use_legacy_dataset": False}
+    )
     read_df.compute(scheduler="synchronous")
     assert_eq(ddf, read_df)
 
 
 @pytest.mark.parametrize("test_filter", [True, False])
-def test_pa_dataset_partitioned(tmpdir, engine, test_filter):
+def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
     check_pyarrow()
 
     if pa.__version__ <= LooseVersion("0.17.1"):
@@ -2810,7 +2807,7 @@ def test_pa_dataset_partitioned(tmpdir, engine, test_filter):
     read_df = dd.read_parquet(
         fn,
         engine="pyarrow",
-        dataset={"pa_dataset": True},
+        dataset={"use_legacy_dataset": False},
         filters=[("b", "==", "a")] if test_filter else None,
     )
 
