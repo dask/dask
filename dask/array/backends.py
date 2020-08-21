@@ -23,8 +23,8 @@ def register_cupyx():
     from cupyx.scipy.sparse import spmatrix
 
     try:
-        from cupy.sparse import hstack
-        from cupy.sparse import vstack
+        from cupyx.scipy.sparse import hstack
+        from cupyx.scipy.sparse import vstack
     except ImportError as e:
         raise ImportError(
             "Stacking of sparse arrays requires at least CuPy version 8.0.0"

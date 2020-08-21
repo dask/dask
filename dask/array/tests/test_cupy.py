@@ -7,6 +7,7 @@ from dask.array.gufunc import apply_gufunc
 from dask.sizeof import sizeof
 
 cupy = pytest.importorskip("cupy")
+cupyx = pytest.importorskip("cupyx")
 
 
 functions = [
@@ -820,11 +821,11 @@ def test_sparse_hstack_vstack_csr():
     x = cupy.arange(24, dtype=cupy.float32).reshape(4, 6)
 
     sp = da.from_array(x, chunks=(2, 3), asarray=False, fancy=False)
-    sp = sp.map_blocks(cupy.sparse.csr_matrix, dtype=cupy.float32)
+    sp = sp.map_blocks(cupyx.scipy.sparse.csr_matrix, dtype=cupy.float32)
 
     y = sp.compute()
 
-    assert cupy.sparse.isspmatrix(y)
+    assert cupyx.scipy.sparse.isspmatrix(y)
     assert_eq(x, y.todense())
 
 
@@ -833,7 +834,7 @@ def test_cupy_sparse_concatenate(axis):
     pytest.importorskip("cupyx")
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
-    meta = cupy.sparse.csr_matrix((0, 0))
+    meta = cupyx.scipy.sparse.csr_matrix((0, 0))
 
     xs = []
     ys = []
@@ -841,16 +842,18 @@ def test_cupy_sparse_concatenate(axis):
         x = rs.random((1000, 10), chunks=(100, 10))
         x[x < 0.9] = 0
         xs.append(x)
-        ys.append(x.map_blocks(cupy.sparse.csr_matrix, meta=meta))
+        ys.append(x.map_blocks(cupyx.scipy.sparse.csr_matrix, meta=meta))
 
     z = da.concatenate(ys, axis=axis)
     z = z.compute()
 
     if axis == 0:
-        sp_concatenate = cupy.sparse.vstack
+        sp_concatenate = cupyx.scipy.sparse.vstack
     elif axis == 1:
-        sp_concatenate = cupy.sparse.hstack
-    z_expected = sp_concatenate([cupy.sparse.csr_matrix(e.compute()) for e in xs])
+        sp_concatenate = cupyx.scipy.sparse.hstack
+    z_expected = sp_concatenate(
+        [cupyx.scipy.sparse.csr_matrix(e.compute()) for e in xs]
+    )
 
     assert (z.toarray() == z_expected.toarray()).all()
 
