@@ -180,6 +180,17 @@ def _gather_metadata(
 
     # Step 2: Construct necessary (parquet) partitioning information
     partition_info = {"partitions": None, "partition_keys": {}, "partition_names": []}
+    # The `partition_info` dict summarizes information needed to handle
+    # nested-directory (hive) partitioning.
+    #
+    #    - "partitions" : (ParquetPartitions) PyArrow-specific  object
+    #          needed to read in each partition correctly
+    #    - "partition_keys" : (dict) The keys and values correspond to
+    #          file paths and partition values, respectively. The partition
+    #          values (or partition "keys") will be represented as a list
+    #          of tuples. E.g. `[("year", 2020), ("state", "CA")]`
+    #    - "partition_names" : (list)  This is a list containing the names
+    #          of partitioned columns.
     fn_partitioned = False
     if dataset.partitions is not None:
         fn_partitioned = True
@@ -670,17 +681,15 @@ def _get_all_partition_keys(ds):
 
 
 def _collect_pyarrow_dataset_frags(ds, filters):
-    partition_names = []
-    partition_obj = []
-    partition_keys = {}
-    metadata = []
+
+    # Get/transate filters
     ds_filters = None
     if filters is not None:
         ds_filters = pq._filters_to_expression(filters)
-    # Get all partition keys without filters
-    pkeys = _get_all_partition_keys(ds)
-    partition_names = list(pkeys)
+
     # Split by row-groups and apply filters
+    partition_keys = {}  # See `partition_info` description below
+    metadata = []  # List of row-group fragments
     for file_frag in ds.get_fragments(ds_filters):
         for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
             metadata.append(rg_frag)
@@ -688,10 +697,32 @@ def _collect_pyarrow_dataset_frags(ds, filters):
             if keys:
                 partition_keys[rg_frag.path] = list(keys.items())
 
+    # Get all partition keys (without filters) to populate partition_obj
+    partition_obj = []  # See `partition_info` description below
+    pkeys = _get_all_partition_keys(ds)
+    partition_names = list(pkeys)
     for name in partition_names:
         partition_obj.append(PartitionObj(name, pkeys[name]))
 
+    # The `metadata` object is a sorted list of row-group fragments.
+    # This is different from a `FileMetadata` object (used by the legacy
+    # code path), but it does contain much of the same information.
     metadata = sorted(metadata, key=lambda x: natural_sort_key(x.path))
+
+    # The `partition_info` dict summarizes information needed to handle
+    # nested-directory (hive) partitioning.
+    #
+    #    - "partitions" : (list of PartitionObj) This is a list of simple
+    #          objects providing `name` and `keys` attributes for each
+    #          partition column. The list is designed to "duck type" a
+    #          `ParquetPartitions` object, so that the same code path can
+    #          be used for both legacy and pyarrow.dataset-based logic.
+    #    - "partition_keys" : (dict) The keys and values correspond to
+    #          file paths and partition values, respectively. The partition
+    #          values (or partition "keys") will be represented as a list
+    #          of tuples. E.g. `[("year", 2020), ("state", "CA")]`
+    #    - "partition_names" : (list)  This is a list containing the names
+    #          of partitioned columns.
     partition_info = {
         "partitions": partition_obj,
         "partition_keys": partition_keys,
@@ -735,8 +766,6 @@ def _gather_metadata_pyarrow_dataset(
         if "_metadata" in fns:
             # Use _metadata file if available
             # Pyarrow cannot handle "_metadata" when `paths` is a list
-            paths.remove(meta_path)
-            fns.remove("_metadata")
             ds = pa_ds.parquet_dataset(
                 meta_path,
                 partitioning=dataset_kwargs.get("partitioning", default_partitioning),
@@ -848,7 +877,7 @@ class ArrowEngine(Engine):
 
         # Check if we are using pyarrow.dataset API
         dataset_kwargs = kwargs.get("dataset", {})
-        use_pa_ds = dataset_kwargs.pop("pa_dataset", True) and pa_ds is not None
+        use_pa_ds = dataset_kwargs.pop("pa_dataset", False) and pa_ds is not None
         _gather_func = (
             _gather_metadata_pyarrow_dataset if use_pa_ds else _gather_metadata
         )
