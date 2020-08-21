@@ -677,18 +677,16 @@ def _collect_pyarrow_dataset_frags(ds, filters):
     ds_filters = None
     if filters is not None:
         ds_filters = pq._filters_to_expression(filters)
-    pkeys = None
+    # Get all partition keys without filters
+    pkeys = _get_all_partition_keys(ds)
+    partition_names = list(pkeys)
+    # Split by row-groups and apply filters
     for file_frag in ds.get_fragments(ds_filters):
         for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
             metadata.append(rg_frag)
             keys = pa_ds._get_partition_keys(rg_frag.partition_expression)
             if keys:
-                if pkeys is None:
-                    # Get all partition keys without filters...
-                    pkeys = _get_all_partition_keys(ds)
                 partition_keys[rg_frag.path] = list(keys.items())
-                if not partition_names:
-                    partition_names = list(keys)
 
     for name in partition_names:
         partition_obj.append(PartitionObj(name, pkeys[name]))
