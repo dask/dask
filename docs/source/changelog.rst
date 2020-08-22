@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2.24.0 - 2020-08-22
+-------------------
+
+-   Move toolbar to above and fix y axis (#4043) `Julia Signell`_
+-   Make behavior clearer for how to get worker dashboard (#4047) `Julia Signell`_
+-   Worker dashboard clean up (#4046) `Julia Signell`_
+-   Add a default argument to the datasets and a possibility to override datasets (#4052) `Nils Braun`_
+-   Discover HTTP endpoints (#3744) `Martin Durant`_
+
+
 2.23.0 - 2020-08-14
 -------------------
 
