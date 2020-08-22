@@ -969,8 +969,13 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     )
 
     # Test that schema is not validated by default
-    # (shouldn't raise error)
-    dd.read_parquet(str(tmpdir), engine="pyarrow", gather_statistics=False).compute()
+    # (shouldn't raise error with legacy dataset)
+    dd.read_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        gather_statistics=False,
+        dataset={"use_legacy_dataset": True},
+    ).compute()
 
     # Test that read fails when validate_schema=True
     # Note: This fails differently for pyarrow.dataset api

@@ -805,12 +805,13 @@ def _process_metadata_pyarrow_dataset(
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
     for rg_frag in metadata:
-        if gather_statistics:
-            rg_frag.ensure_complete_metadata()
         row_group = rg_frag.row_groups[0]
+        if gather_statistics and row_group.statistics is None:
+            rg_frag.ensure_complete_metadata()
+            row_group = rg_frag.row_groups[0]
+        statistics = row_group.statistics
         fpath = rg_frag.path
         file_row_groups[fpath].append(rg_frag)
-        statistics = row_group.statistics
         if gather_statistics:
             if single_rg_parts:
                 s = {
