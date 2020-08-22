@@ -482,10 +482,10 @@ class Server:
 
                 try:
                     op = msg.pop("op")
-                except KeyError:
+                except KeyError as e:
                     raise ValueError(
                         "Received unexpected message without 'op' key: " + str(msg)
-                    )
+                    ) from e
                 if self.counters is not None:
                     self.counters["op"].add(op)
                 self._comms[comm] = op

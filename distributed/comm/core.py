@@ -209,10 +209,10 @@ class Listener(ABC):
             handshake = await asyncio.wait_for(comm.read(), 1)
             # This would be better, but connections leak if worker is closed quickly
             # write, handshake = await asyncio.gather(comm.write(local_info), comm.read())
-        except Exception:
+        except Exception as e:
             with suppress(Exception):
                 await comm.close()
-            raise CommClosedError()
+            raise CommClosedError() from e
 
         comm.remote_info = handshake
         comm.remote_info["address"] = comm._peer_addr
@@ -289,10 +289,10 @@ async def connect(
                         write = await asyncio.wait_for(comm.write(local_info), 1)
                         # This would be better, but connections leak if worker is closed quickly
                         # write, handshake = await asyncio.gather(comm.write(local_info), comm.read())
-                    except Exception:
+                    except Exception as e:
                         with suppress(Exception):
                             await comm.close()
-                        raise CommClosedError()
+                        raise CommClosedError() from e
 
                     comm.remote_info = handshake
                     comm.remote_info["address"] = comm._peer_addr
