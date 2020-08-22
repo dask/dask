@@ -43,8 +43,8 @@ distributed:
         keep_alive_milliseconds: 500
         check_unused_sessions_milliseconds: 500
     locks:
-      lease-validation-interval: 10s  # The time to wait until an acquired semaphore is released if the Client goes out of scope
-      lease-timeout: 30s  # The timeout after which a lease will be released if not refreshed
+      lease-validation-interval: 10s  # The interval in which the scheduler validates staleness of all acquired leases. Must always be smaller than the lease-timeout itself.
+      lease-timeout: 30s  # Maximum interval to wait for a Client refresh before a lease is invalidated and released.
 
     http:
       routes:

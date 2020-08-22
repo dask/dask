@@ -206,11 +206,11 @@ properties:
               lease-validation-interval:
                 type: string
                 description: |
-                  The time to wait until an acquired semaphore is released if the Client goes out of scope
+                  The interval in which the scheduler validates staleness of all acquired leases. Must always be smaller than the lease-timeout itself.
               lease-timeout:
                 type: string
                 description: |
-                  The timeout after which a lease will be released if not refreshed
+                  Maximum interval to wait for a Client refresh before a lease is invalidated and released.
 
           http:
             type: object
