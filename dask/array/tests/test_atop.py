@@ -8,13 +8,21 @@ import numpy as np
 import dask
 import dask.array as da
 from dask.highlevelgraph import HighLevelGraph
-from dask.blockwise import Blockwise, rewrite_blockwise, optimize_blockwise, index_subs
+from dask.blockwise import (
+    Blockwise,
+    rewrite_blockwise,
+    optimize_blockwise,
+    index_subs,
+    blockwise_default_prefix,
+)
 from dask.array.utils import assert_eq
 from dask.array.numpy_compat import _numpy_116
 from dask.utils_test import inc, dec
 
 a, b, c, d, e, f, g = "abcdefg"
-_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = ["_%d" % i for i in range(10)]
+_0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = [
+    blockwise_default_prefix + "%d" % i for i in range(10)
+]
 i, j, k = "ijk"
 
 

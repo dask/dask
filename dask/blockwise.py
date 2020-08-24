@@ -37,7 +37,10 @@ def index_subs(ind, substitution):
         return tuple([substitution.get(c, c) for c in ind])
 
 
-def blockwise_token(i, prefix="_"):
+blockwise_default_prefix = "__default__"
+
+
+def blockwise_token(i, prefix=blockwise_default_prefix):
     return prefix + "%d" % i
 
 

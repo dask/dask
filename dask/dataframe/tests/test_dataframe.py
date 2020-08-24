@@ -708,6 +708,11 @@ def test_dropna():
     assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
 
+    # Regression test for https://github.com/dask/dask/issues/6540
+    df = pd.DataFrame({"_0": [0, 0, np.nan], "_1": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.dropna(subset=["_0"]), df.dropna(subset=["_0"]))
+
 
 @pytest.mark.parametrize("lower, upper", [(2, 5), (2.5, 3.5)])
 def test_clip(lower, upper):
