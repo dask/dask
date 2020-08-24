@@ -526,8 +526,9 @@ async def test_TaskGraph_limit(c, s, a, b):
     assert len(gp.node_source.data["x"]) == 2
     f3 = c.submit(func, 3)
     await wait(f3)
+    # Breached task limit, clearing graph
     gp.update()
-    assert len(gp.node_source.data["x"]) == 2
+    assert len(gp.node_source.data["x"]) == 0
 
 
 @gen_cluster(client=True, timeout=30)
