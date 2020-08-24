@@ -1,4 +1,5 @@
 import asyncio
+import datetime
 from contextlib import suppress
 import logging
 import threading
@@ -50,12 +51,14 @@ class Cluster:
 
     _supports_scaling = True
 
-    def __init__(self, asynchronous):
+    def __init__(self, asynchronous, quiet=False):
         self.scheduler_info = {"workers": {}}
         self.periodic_callbacks = {}
         self._asynchronous = asynchronous
         self._watch_worker_status_comm = None
         self._watch_worker_status_task = None
+        self._cluster_manager_logs = []
+        self.quiet = quiet
         self.scheduler_comm = None
 
         self.status = Status.created
@@ -170,8 +173,29 @@ class Cluster:
         else:
             return sync(self.loop, func, *args, **kwargs)
 
-    async def _get_logs(self, scheduler=True, workers=True):
+    def _log(self, log):
+        """Log a message.
+
+        Output a message to the user and also store for future retrieval.
+
+        For use in subclasses where initialisation may take a while and it would
+        be beneficial to feed back to the user.
+
+        Examples
+        --------
+        >>> self._log("Submitted job X to batch scheduler")
+        """
+        self._cluster_manager_logs.append((datetime.datetime.now(), log))
+        if not self.quiet:
+            print(log)
+
+    async def _get_logs(self, cluster=True, scheduler=True, workers=True):
         logs = Logs()
+
+        if cluster:
+            logs["Cluster"] = Log(
+                "\n".join(line[1] for line in self._cluster_manager_logs)
+            )
 
         if scheduler:
             L = await self.scheduler_comm.get_logs()
@@ -184,11 +208,13 @@ class Cluster:
 
         return logs
 
-    def get_logs(self, scheduler=True, workers=True):
-        """ Return logs for the scheduler and workers
+    def get_logs(self, cluster=True, scheduler=True, workers=True):
+        """ Return logs for the cluster, scheduler and workers
 
         Parameters
         ----------
+        cluster : boolean
+            Whether or not to collect logs for the cluster manager
         scheduler : boolean
             Whether or not to collect logs for the scheduler
         workers : boolean or Iterable[str], optional
@@ -201,7 +227,9 @@ class Cluster:
             A dictionary of logs, with one item for the scheduler and one for
             each worker
         """
-        return self.sync(self._get_logs, scheduler=scheduler, workers=workers)
+        return self.sync(
+            self._get_logs, cluster=cluster, scheduler=scheduler, workers=workers
+        )
 
     def logs(self, *args, **kwargs):
         warnings.warn("logs is deprecated, use get_logs instead", DeprecationWarning)

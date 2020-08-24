@@ -292,17 +292,20 @@ async def test_logs(cleanup):
 
         assert "Registered" in str(logs)
 
-        logs = await cluster.get_logs(scheduler=True, workers=False)
+        logs = await cluster.get_logs(cluster=True, scheduler=False, workers=False)
+        assert list(logs) == ["Cluster"]
+
+        logs = await cluster.get_logs(cluster=False, scheduler=True, workers=False)
         assert list(logs) == ["Scheduler"]
 
-        logs = await cluster.get_logs(scheduler=False, workers=False)
+        logs = await cluster.get_logs(cluster=False, scheduler=False, workers=False)
         assert list(logs) == []
 
-        logs = await cluster.get_logs(scheduler=False, workers=True)
+        logs = await cluster.get_logs(cluster=False, scheduler=False, workers=True)
         assert set(logs) == set(cluster.scheduler.workers)
 
         w = toolz.first(cluster.scheduler.workers)
-        logs = await cluster.get_logs(scheduler=False, workers=[w])
+        logs = await cluster.get_logs(cluster=False, scheduler=False, workers=[w])
         assert set(logs) == {w}
 
 
