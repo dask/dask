@@ -1,8 +1,3 @@
-.. note::
-
-    Help inform future development and improve the Dask community experience -
-    take the `2020 Dask User Survey <https://forms.gle/7k9fWx3rwRWL2sPG8>`_
-
 ====
 Dask
 ====
