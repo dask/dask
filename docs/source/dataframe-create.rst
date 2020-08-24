@@ -67,7 +67,7 @@ a protocol:
    >>> df = dd.read_csv('hdfs:///path/to/my-data-*.csv')
    >>> df = dd.read_csv('s3://bucket-name/my-data-*.csv')
 
-For remote systems like HDFS or S3, credentials may be an issue.  Usually, these
+For remote systems like HDFS, S3 or GS credentials may be an issue.  Usually, these
 are handled by configuration files on disk (such as a ``.boto`` file for S3),
 but in some cases you may want to pass storage-specific options through to the
 storage backend.  You can do this with the ``storage_options=`` keyword:
@@ -76,6 +76,8 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
 
    >>> df = dd.read_csv('s3://bucket-name/my-data-*.csv',
    ...                  storage_options={'anon': True})
+   >>> df = dd.read_parquet('gs://dask-nyc-taxi/yellowtrip.parquet',
+   ...                      storage_options={'token': 'anon'})
 
 Dask Delayed
 ~~~~~~~~~~~~
