@@ -108,7 +108,7 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
             if isinstance(arg, type(self)):
                 yield arg.arr
             elif isinstance(arg, (tuple, list)):
-                yield tuple(self._downcast_args(arg))
+                yield type(arg)(self._downcast_args(arg))
             else:
                 yield arg
 
