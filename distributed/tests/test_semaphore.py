@@ -11,6 +11,7 @@ from distributed.core import ConnectionPool
 from distributed.metrics import time
 from distributed.utils_test import (  # noqa: F401
     client,
+    cleanup,
     cluster,
     async_wait_for,
     captured_logger,
@@ -491,3 +492,29 @@ async def test_metrics(c, s, a, b):
         "pending": defaultdict(int, {"test": 0}),
     }
     assert actual == expected
+
+
+def test_threadpoolworkers_pick_correct_ioloop(cleanup):
+    # gh4057
+
+    with dask.config.set(
+        {
+            "distributed.scheduler.locks.lease-validation-interval": 0.01,
+            "distributed.scheduler.locks.lease-timeout": 0.05,
+        }
+    ):
+        with Client(processes=False, threads_per_worker=4) as client:
+            sem = Semaphore(max_leases=1, name="database")
+            protected_ressource = []
+
+            def access_limited(val, sem):
+                import time
+
+                with sem:
+                    assert len(protected_ressource) == 0
+                    protected_ressource.append(val)
+                    # Interact with the DB
+                    time.sleep(0.1)
+                    protected_ressource.remove(val)
+
+            client.gather(client.map(access_limited, range(10), sem=sem))
