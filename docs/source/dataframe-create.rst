@@ -77,7 +77,7 @@ storage backend.  You can do this with the ``storage_options=`` keyword:
    >>> df = dd.read_csv('s3://bucket-name/my-data-*.csv',
    ...                  storage_options={'anon': True})
    >>> df = dd.read_parquet('gs://dask-nyc-taxi/yellowtrip.parquet',
-   ...                      storage_options={'anon': True})
+   ...                      storage_options={'token': 'anon'})
 
 Dask Delayed
 ~~~~~~~~~~~~
