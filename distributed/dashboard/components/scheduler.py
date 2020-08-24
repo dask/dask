@@ -1433,6 +1433,9 @@ class TaskGraph(DashboardComponent):
         )
 
         self.root = figure(title="Task Graph", **kwargs)
+        self.subtitle = Title(text=" ", text_font_style="italic")
+        self.root.add_layout(self.subtitle, "above")
+
         self.root.multi_line(
             xs="x",
             ys="y",
@@ -1471,10 +1474,12 @@ class TaskGraph(DashboardComponent):
             # compoonents to not overload scheduler or client. Once we drop
             # below the threshold, the data is filled up again as usual
             if len(self.scheduler.tasks) > self.max_items:
+                self.subtitle.text = "Scheduler has too many tasks to display."
                 for container in [self.node_source, self.edge_source]:
                     container.data = {col: [] for col in container.column_names}
             else:
                 # occasionally reset the column data source to remove old nodes
+                self.subtitle.text = " "
                 if self.invisible_count > len(self.node_source.data["x"]) / 2:
                     self.layout.reset_index()
                     self.invisible_count = 0
@@ -1489,6 +1494,9 @@ class TaskGraph(DashboardComponent):
                 self.add_new_nodes_edges(new, new_edges, update=update)
 
                 self.patch_updates()
+
+                if len(self.scheduler.tasks) == 0:
+                    self.subtitle.text = "Scheduler is empty."
 
     @without_property_validation
     def add_new_nodes_edges(self, new, new_edges, update=False):
