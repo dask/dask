@@ -134,9 +134,18 @@ class Comm(ABC):
 
     @staticmethod
     def handshake_configuration(local, remote):
-        out = {
-            "pickle-protocol": min(local["pickle-protocol"], remote["pickle-protocol"])
-        }
+        try:
+            out = {
+                "pickle-protocol": min(
+                    local["pickle-protocol"], remote["pickle-protocol"]
+                )
+            }
+        except KeyError:
+            raise ValueError(
+                "Your Dask versions may not be in sync. "
+                "Please ensure that you have the same version of dask "
+                "and distributed on your client, scheduler, and worker machines"
+            )
 
         if local["compression"] == remote["compression"]:
             out["compression"] = local["compression"]
