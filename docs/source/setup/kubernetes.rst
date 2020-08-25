@@ -13,6 +13,7 @@ particularly in the cloud.  You can use Kubernetes to launch Dask workers in the
 following two ways:
 
 1.  **Helm**:
+
     You can launch a Dask scheduler, several workers, and an optional Jupyter Notebook server
     on a Kubernetes easily using Helm_
 
@@ -20,12 +21,15 @@ following two ways:
 
        helm repo add dask https://helm.dask.org/    # add the Dask Helm chart repository
        helm repo update                             # get latest Helm charts
-       helm install dask/dask                     # deploy standard Dask chart
+       # For single-user deployments, use dask/dask
+       helm install dask/dask                       # deploy standard Dask chart
+       # For multi-user deployments, use dask/daskhub
+       helm install dask/daskhub                    # deploy JupyterHub & Dask
 
     This is a good choice if you want to do the following:
 
     1.  Run a managed Dask cluster for a long period of time
-    2.  Also deploy a Jupyter server from which to run code
+    2.  Also deploy a Jupyter / JupyterHub server from which to run code
     3.  Share the same Dask cluster between many automated services
     4.  Try out Dask for the first time on a cloud-based system
         like Amazon, Google, or Microsoft Azure
