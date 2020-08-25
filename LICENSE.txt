@@ -1,4 +1,4 @@
-﻿BSD 3-Clause License
+BSD 3-Clause License
 
 Copyright (c) 2014-2018, Anaconda, Inc. and contributors
 All rights reserved.
