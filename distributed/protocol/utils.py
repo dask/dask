@@ -100,9 +100,7 @@ def pack_frames(frames):
     --------
     unpack_frames
     """
-    data = [pack_frames_prelude(frames)]
-    data.extend(frames)
-    return b"".join(data)
+    return b"".join([pack_frames_prelude(frames), *frames])
 
 
 def unpack_frames(b):
