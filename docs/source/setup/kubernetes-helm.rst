@@ -1,11 +1,12 @@
 Kubernetes and Helm
 ===================
 
-It is easy to launch a Dask cluster and a Jupyter notebook server on cloud
+It is easy to launch a Dask cluster and a Jupyter_ notebook server on cloud
 resources using Kubernetes_ and Helm_.
 
 .. _Kubernetes: https://kubernetes.io/
 .. _Helm: https://helm.sh/
+.. _Jupyter: https://jupyter.org/
 
 This is particularly useful when you want to deploy a fresh Python environment
 on Cloud services like Amazon Web Services, Google Compute Engine, or
@@ -50,7 +51,7 @@ deploying Dask for a single user or for many users.
 ================  =====================================================================
 Helm Chart        Use Case
 ================  =====================================================================
-``dask/dask``     Single-user deployment with one notebook server and one Dask Cluster.Q
+``dask/dask``     Single-user deployment with one notebook server and one Dask Cluster.
 ``dask/daskhub``  Multi-user deployment with JupyterHub and Dask Gateway.
 ================  =====================================================================
 
@@ -274,7 +275,7 @@ Sometimes you do not need to run a Jupyter server alongside your Dask cluster.
 Helm Install Dask for Mulitple Users
 ------------------------------------
 
-The ``dask/daskhub`` Helm Chart deploys JupyterHub, Dask Gateway, and configures
+The ``dask/daskhub`` Helm Chart deploys JupyterHub_, `Dask Gateway`_, and configures
 the two to work well together. In particular, Dask Gateway is registered as
 a JupyterHub service so that Dask Gateway can re-use JupyterHub's authentication,
 and the JupyterHub environment is configured to connect to the Dask Gateway
@@ -286,6 +287,13 @@ without any arguments.
    platform for big data geoscience.
    
 .. _Pangeo: http://pangeo.io/
+.. _Dask Gateway: https://gateway.dask.org/
+.. _JupyterHub: https://jupyterhub.readthedocs.io/en/stable/
+
+The ``dask/daskhub`` helm chart uses the JupyterHub and Dask-Gateway helm charts.
+You'll want to consult the `JupyterHub helm documentation <https://zero-to-jupyterhub.readthedocs.io/en/latest/setup-jupyterhub/setup-jupyterhub.html>`_ and
+and `Dask Gateway helm documentation <https://gateway.dask.org/install-kube.html>`_ for further customization. The default values
+are at https://github.com/dask/helm-chart/blob/master/daskhub/values.yaml.
 
 Verify that you've set up a Kubernetes cluster and added Dask's helm charts:
 
@@ -293,7 +301,6 @@ Verify that you've set up a Kubernetes cluster and added Dask's helm charts:
 
    $ helm repo add dask https://helm.dask.org/
    $ helm repo update
-
 
 JupyterHub and Dask Gateway require a few secret tokens. We'll generate them
 on the command line and insert the tokens in a ``secrets.yaml`` file that will
