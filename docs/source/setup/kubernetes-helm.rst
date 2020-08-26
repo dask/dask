@@ -47,12 +47,12 @@ We provides two Helm charts. The right one to choose depends on whether you're
 deploying Dask for a single user or for many users.
 
 
-================  ==================================================================
+================  =====================================================================
 Helm Chart        Use Case
-================  ==================================================================
-``dask/dask``     Single-user deployments with 1 notebook server and 1 Dask Cluster.
-``dask/daskhub``  Multi-user deployments with JupyterHub and Dask Gateway.
-================  ==================================================================
+================  =====================================================================
+``dask/dask``     Single-user deployment with one notebook server and one Dask Cluster.Q
+``dask/daskhub``  Multi-user deployment with JupyterHub and Dask Gateway.
+================  =====================================================================
 
 See :ref:`kubernetes-helm.single` or :ref:`kubernetes-helm.multi` for detailed
 instructions on deploying either of these.
@@ -65,7 +65,7 @@ using ``dask/dask``.
 Helm Install Dask for a Single User
 -----------------------------------
 
-Now, you can launch Dask on your Kubernetes cluster using the Dask Helm_ chart::
+Once your Kubernetes cluster is ready, you can deploy dask using the Dask Helm_ chart::
 
    helm install my-dask dask/dask
 
@@ -276,7 +276,9 @@ Helm Install Dask for Mulitple Users
 
 The ``dask/daskhub`` Helm Chart deploys JupyterHub, Dask Gateway, and configures
 the two to work well together. In particular, Dask Gateway is registered as
-a JupyterHub service so that Dask Gateway can re-use JupyterHub's authentication.
+a JupyterHub service so that Dask Gateway can re-use JupyterHub's authentication,
+and the JupyterHub environment is configured to connect to the Dask Gateway
+without any arguments.
 
 .. note::
 

@@ -14,8 +14,8 @@ following two ways:
 
 1.  **Helm**:
 
-    You can launch a Dask scheduler, several workers, and an optional Jupyter Notebook server
-    on a Kubernetes easily using Helm_
+    You can deploy Dask and (optionally) Jupyter or JupyterHub on Kubernetes
+    easily using Helm_
 
     .. code-block:: bash
 
@@ -32,8 +32,9 @@ following two ways:
     2.  Also deploy a Jupyter / JupyterHub server from which to run code
     3.  Share the same Dask cluster between many automated services
     4.  Try out Dask for the first time on a cloud-based system
-        like Amazon, Google, or Microsoft Azure
-        (see also our :doc:`Cloud documentation <cloud>`)
+        like Amazon, Google, or Microsoft Azure where you already have
+        a Kubernetes cluster. If you don't already have Kubernetes deployed,
+        see our :doc:`Cloud documentation <cloud>`.
 
     .. note::
 
