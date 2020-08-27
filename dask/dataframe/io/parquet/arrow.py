@@ -676,30 +676,31 @@ def _collect_pyarrow_dataset_frags(ds, filters, valid_paths, fs):
     if filters is not None:
         ds_filters = pq._filters_to_expression(filters)
 
-    # Split by row-groups and apply filters
-    partition_keys = {}  # See `partition_info` description below
-    metadata = []  # List of row-group fragments
-    for file_frag in ds.get_fragments(ds_filters):
-        if valid_paths and file_frag.path.split(fs.sep)[-1] not in valid_paths:
-            # If valid_paths is not None, the user passed in a list
-            # of files containing a _metadata file.  Since we used
-            # the _metadata file to generate our dataset object , we need
-            # to ignore any file fragments that are not in the list.
-            continue
-        # Check if there are partition keys to store
-        keys = pa_ds._get_partition_keys(file_frag.partition_expression)
-        if keys:
-            partition_keys[file_frag.path] = list(keys.items())
-
-        for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
-            metadata.append(rg_frag)
-
     # Get all partition keys (without filters) to populate partition_obj
     partition_obj = []  # See `partition_info` description below
     pkeys = _get_all_partition_keys(ds)
     partition_names = list(pkeys)
     for name in partition_names:
         partition_obj.append(PartitionObj(name, pkeys[name]))
+
+    # Split by row-groups and apply filters
+    partition_keys = {}  # See `partition_info` description below
+    metadata = []  # List of row-group fragments
+    # Loop over file fragments
+    for file_frag in ds.get_fragments(ds_filters):
+        # If valid_paths is not None, the user passed in a list
+        # of files containing a _metadata file.  Since we used
+        # the _metadata file to generate our dataset object , we need
+        # to ignore any file fragments that are not in the list.
+        if valid_paths and file_frag.path.split(fs.sep)[-1] not in valid_paths:
+            continue
+        # Store (filtered) partition keys
+        if pkeys:
+            partition_keys[file_frag.path] = pkeys[file_frag.path]
+
+        # Loop over row-group fragments
+        for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
+            metadata.append(rg_frag)
 
     # The `metadata` object is a sorted list of row-group fragments.
     # This is different from a `FileMetadata` object (used by the legacy
