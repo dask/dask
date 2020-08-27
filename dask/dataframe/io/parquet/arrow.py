@@ -762,6 +762,7 @@ def _gather_metadata_pyarrow_dataset(
             # Use _metadata file
             ds = pa_ds.parquet_dataset(
                 meta_path,
+                filesystem=fs,
                 partitioning=dataset_kwargs.get("partitioning", default_partitioning),
             )
             if gather_statistics is None:
@@ -774,6 +775,7 @@ def _gather_metadata_pyarrow_dataset(
             # Use _metadata file
             ds = pa_ds.parquet_dataset(
                 meta_path,
+                filesystem=fs,
                 partitioning=dataset_kwargs.get("partitioning", default_partitioning),
             )
             if gather_statistics is None:
@@ -787,6 +789,7 @@ def _gather_metadata_pyarrow_dataset(
     if ds is None:
         ds = pa_ds.dataset(
             paths,
+            filesystem=fs,
             format="parquet",
             partitioning=dataset_kwargs.get(
                 "partitioning", default_partitioning
