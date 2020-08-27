@@ -3535,7 +3535,10 @@ class DataFrame(_Frame):
             # Slicing with integer labels is always iloc based except for a
             # float indexer for some reason
             if is_integer_slice and not is_float_dtype(self.index.dtype):
-                self.iloc[key]
+                # NOTE: this always fails currently, as iloc is mostly
+                # unsupported, but we call it anyway here for future-proofing
+                # and error-attribution purposes
+                return self.iloc[key]
             else:
                 return self.loc[key]
 
