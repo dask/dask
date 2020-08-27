@@ -287,7 +287,6 @@ def subs(task, key, val):
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
     (inc, 1)
     """
-    hash_key = {key}
     type_task = type(task)
     if not (type_task is tuple and task and callable(task[0])):  # istask(task):
         try:
@@ -299,6 +298,7 @@ def subs(task, key, val):
             return [subs(x, key, val) for x in task]
         return task
     newargs = []
+    hash_key = {key}
     for arg in task[1:]:
         type_arg = type(arg)
         if type_arg is tuple and arg and callable(arg[0]):  # istask(task):
