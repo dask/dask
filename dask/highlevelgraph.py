@@ -34,23 +34,16 @@ class Layer(Mapping):
         """
 
         seen = set()
-        dependencies = dict()
         out = {}
-        work = list(set(flatten(keys)))
-
+        work = set(flatten(keys))
         while work:
-            new_work = []
+            new_work = set()
             for k in work:
-                dependencies_k = get_dependencies(
-                    self, k, as_list=True
-                )  # fuse needs lists
                 out[k] = self[k]
-                dependencies[k] = dependencies_k
-                for d in dependencies_k:
+                for d in get_dependencies(self, k):
                     if d not in seen:
                         seen.add(d)
-                        new_work.append(d)
-
+                        new_work.add(d)
             work = new_work
 
         return BasicLayer(out)
