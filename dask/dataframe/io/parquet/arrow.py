@@ -702,7 +702,11 @@ def _collect_pyarrow_dataset_frags(
 
         if split_row_groups is False and ds_filters is None:
             # Avoid row-group splitting.
-            # We cannot do this (for now) if we have a filter
+            # NOTE: We may NOT want to do this if we are filtering.
+            # The resulting divisions (if there is an index) will be
+            # calculated with UNFILTERED row-groups.  This is probably
+            # fine in practice, but could also be an issue if the
+            # divisions change dramatically.
             if gather_statistics:
                 file_frag.ensure_complete_metadata()
             metadata.append(file_frag)
@@ -814,15 +818,11 @@ def _gather_metadata_pyarrow_dataset(
 def _process_metadata_pyarrow_dataset(
     metadata, single_rg_parts, gather_statistics, stat_col_indices, no_filters
 ):
-
-    #
-    # TODO: Use `no_filters` to perform "early bail" opt.
-    #
-
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
+    cmax_last = {}
     for frag in metadata:
         for row_group in frag.row_groups:
             statistics = row_group.statistics
@@ -846,7 +846,23 @@ def _process_metadata_pyarrow_dataset(
                     if name in statistics:
                         cmin = statistics[name]["min"]
                         cmax = statistics[name]["max"]
-                        cnull = 0  # Not yet available
+                        cnull = 0  # Not yet available/needed
+                        last = cmax_last.get(name, None)
+                        if no_filters:
+                            # Only think about bailing if we don't need
+                            # stats for filtering
+                            if cmin is None or (last and cmin < last):
+                                # We are collecting statistics for divisions
+                                # only (no filters) - Column isn't sorted, or
+                                # we have an all-null partition, so lets bail.
+                                #
+                                # Note: This assumes ascending order.
+                                #
+                                gather_statistics = False
+                                file_row_group_stats = {}
+                                file_row_group_column_stats = {}
+                                break
+
                         if single_rg_parts:
                             s["columns"].append(
                                 {
@@ -862,14 +878,16 @@ def _process_metadata_pyarrow_dataset(
                             )
                         else:
                             cstats += [cmin, cmax, cnull]
+                        cmax_last[name] = cmax
                     else:
                         if single_rg_parts:
                             s["columns"].append({"name": name})
                         else:
                             cstats += [None, None, None]
-                file_row_group_stats[fpath].append(s)
-                if not single_rg_parts:
-                    file_row_group_column_stats[fpath].append(tuple(cstats))
+                if gather_statistics:
+                    file_row_group_stats[fpath].append(s)
+                    if not single_rg_parts:
+                        file_row_group_column_stats[fpath].append(tuple(cstats))
 
     return (
         file_row_groups,
