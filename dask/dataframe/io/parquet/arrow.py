@@ -669,7 +669,9 @@ def _get_all_partition_keys(ds):
     return pkeys
 
 
-def _collect_pyarrow_dataset_frags(ds, filters, valid_paths, fs):
+def _collect_pyarrow_dataset_frags(
+    ds, filters, valid_paths, fs, split_row_groups, gather_statistics
+):
 
     # Get/transate filters
     ds_filters = None
@@ -698,9 +700,16 @@ def _collect_pyarrow_dataset_frags(ds, filters, valid_paths, fs):
         if pkeys:
             partition_keys[file_frag.path] = pkeys[file_frag.path]
 
-        # Loop over row-group fragments
-        for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
-            metadata.append(rg_frag)
+        if split_row_groups is False and ds_filters is None:
+            # Avoid row-group splitting.
+            # We cannot do this (for now) if we have a filter
+            if gather_statistics:
+                file_frag.ensure_complete_metadata()
+            metadata.append(file_frag)
+        else:
+            # Loop over row-group fragments
+            for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
+                metadata.append(rg_frag)
 
     # The `metadata` object is a sorted list of row-group fragments.
     # This is different from a `FileMetadata` object (used by the legacy
@@ -794,7 +803,7 @@ def _gather_metadata_pyarrow_dataset(
 
     # Generate list of row-group fragments and call it `metadata`
     metadata, partition_info = _collect_pyarrow_dataset_frags(
-        ds, filters, valid_paths, fs
+        ds, filters, valid_paths, fs, split_row_groups, gather_statistics
     )
     schema = ds.schema
     base = ""
@@ -814,56 +823,53 @@ def _process_metadata_pyarrow_dataset(
     file_row_groups = defaultdict(list)
     file_row_group_stats = defaultdict(list)
     file_row_group_column_stats = defaultdict(list)
-    for rg_frag in metadata:
-        row_group = rg_frag.row_groups[0]
-        if gather_statistics and row_group.statistics is None:
-            rg_frag.ensure_complete_metadata()
-            row_group = rg_frag.row_groups[0]
-        statistics = row_group.statistics
-        fpath = rg_frag.path
-        file_row_groups[fpath].append(rg_frag)
-        if gather_statistics:
-            if single_rg_parts:
-                s = {
-                    "file_path_0": fpath,
-                    "num-rows": row_group.num_rows,
-                    "total_byte_size": row_group.total_byte_size,
-                    "columns": [],
-                }
-            else:
-                s = {
-                    "num-rows": row_group.num_rows,
-                    "total_byte_size": row_group.total_byte_size,
-                }
-            cstats = []
-            for name, i in stat_col_indices.items():
-                if name in statistics:
-                    cmin = statistics[name]["min"]
-                    cmax = statistics[name]["max"]
-                    cnull = 0  # Not yet available
-                    if single_rg_parts:
-                        s["columns"].append(
-                            {
-                                "name": name,
-                                "min": pd.Timestamp(cmin)
-                                if isinstance(cmin, datetime)
-                                else cmin,
-                                "max": pd.Timestamp(cmax)
-                                if isinstance(cmax, datetime)
-                                else cmax,
-                                "null_count": cnull,
-                            }
-                        )
-                    else:
-                        cstats += [cmin, cmax, cnull]
+    for frag in metadata:
+        for row_group in frag.row_groups:
+            statistics = row_group.statistics
+            fpath = frag.path
+            file_row_groups[fpath].append(frag)
+            if gather_statistics:
+                if single_rg_parts:
+                    s = {
+                        "file_path_0": fpath,
+                        "num-rows": row_group.num_rows,
+                        "total_byte_size": row_group.total_byte_size,
+                        "columns": [],
+                    }
                 else:
-                    if single_rg_parts:
-                        s["columns"].append({"name": name})
+                    s = {
+                        "num-rows": row_group.num_rows,
+                        "total_byte_size": row_group.total_byte_size,
+                    }
+                cstats = []
+                for name, i in stat_col_indices.items():
+                    if name in statistics:
+                        cmin = statistics[name]["min"]
+                        cmax = statistics[name]["max"]
+                        cnull = 0  # Not yet available
+                        if single_rg_parts:
+                            s["columns"].append(
+                                {
+                                    "name": name,
+                                    "min": pd.Timestamp(cmin)
+                                    if isinstance(cmin, datetime)
+                                    else cmin,
+                                    "max": pd.Timestamp(cmax)
+                                    if isinstance(cmax, datetime)
+                                    else cmax,
+                                    "null_count": cnull,
+                                }
+                            )
+                        else:
+                            cstats += [cmin, cmax, cnull]
                     else:
-                        cstats += [None, None, None]
-            file_row_group_stats[fpath].append(s)
-            if not single_rg_parts:
-                file_row_group_column_stats[fpath].append(tuple(cstats))
+                        if single_rg_parts:
+                            s["columns"].append({"name": name})
+                        else:
+                            cstats += [None, None, None]
+                file_row_group_stats[fpath].append(s)
+                if not single_rg_parts:
+                    file_row_group_column_stats[fpath].append(tuple(cstats))
 
     return (
         file_row_groups,
