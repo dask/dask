@@ -686,11 +686,13 @@ def _collect_pyarrow_dataset_frags(ds, filters, valid_paths, fs):
             # the _metadata file to generate our dataset object , we need
             # to ignore any file fragments that are not in the list.
             continue
+        # Check if there are partition keys to store
+        keys = pa_ds._get_partition_keys(file_frag.partition_expression)
+        if keys:
+            partition_keys[file_frag.path] = list(keys.items())
+
         for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
             metadata.append(rg_frag)
-            keys = pa_ds._get_partition_keys(rg_frag.partition_expression)
-            if keys:
-                partition_keys[rg_frag.path] = list(keys.items())
 
     # Get all partition keys (without filters) to populate partition_obj
     partition_obj = []  # See `partition_info` description below
