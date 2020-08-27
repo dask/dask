@@ -1,4 +1,5 @@
 from collections.abc import Mapping
+from typing import Set, Dict
 
 import tlz as toolz
 
@@ -8,29 +9,28 @@ from .core import reverse_dict, get_dependencies, flatten
 
 
 class Layer(Mapping):
-    def cull(self, keys):
-        """ Return new dask with only the tasks required to calculate keys.
+    """ High level graph layer
 
-        In other words, remove unnecessary tasks from dask.
-        ``keys`` may be a single key or list of keys.
+    This abstract class establish a protocol for high level graph layers.
+    """
+
+    def cull(self, keys: Set) -> "Layer":
+        """ Return a new Layer with only the tasks required to calculate `keys`.
+
+        In other words, remove unnecessary tasks from the layer.
 
         Examples
         --------
-        >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
-        >>> dsk, dependencies = cull(d, 'out')  # doctest: +SKIP
+        >>> d = Layer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
+        >>> dsk = d.cull({'out'})
         >>> dsk  # doctest: +SKIP
         {'x': 1, 'out': (add, 'x', 10)}
-        >>> dependencies  # doctest: +SKIP
-        {'x': set(), 'out': set(['x'])}
 
         Returns
         -------
-        dsk: culled dask graph
-        dependencies: Dict mapping {key: [deps]}.  Useful side effect to accelerate
-            other optimizations, notably fuse.
+        layer: Layer
+            Culled layer
         """
-        if not isinstance(keys, (list, set)):
-            keys = [keys]
 
         seen = set()
         dependencies = dict()
@@ -54,7 +54,7 @@ class Layer(Mapping):
 
         return BasicLayer(out)
 
-    def get_external_dependencies(self, known_keys):
+    def get_external_dependencies(self, known_keys: Set) -> Set:
         """Get external dependencies
 
         Parameters
@@ -91,6 +91,8 @@ class Layer(Mapping):
 
 
 class BasicLayer(Layer):
+    """ Basic implementation of `Layer` that takes a mapping """
+
     def __init__(self, mapping):
         self.__mapping = mapping
 
@@ -168,7 +170,7 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
 
-    def __init__(self, layers, dependencies):
+    def __init__(self, layers: Dict[str, Mapping], dependencies: Dict[str, Set]):
         self.layers = layers
         self.dependencies = dependencies
 
