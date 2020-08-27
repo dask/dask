@@ -6,7 +6,7 @@ import numpy as np
 from .core import getter, getter_nofancy, getter_inline
 from ..blockwise import optimize_blockwise, fuse_roots
 from ..core import flatten, reverse_dict, get_dependencies
-from ..optimization import fuse, inline_functions, cull_highlevelgraph
+from ..optimization import fuse, inline_functions
 from ..utils import ensure_dict
 from ..highlevelgraph import HighLevelGraph
 
@@ -41,7 +41,7 @@ def optimize(
     if isinstance(dsk, HighLevelGraph):
         dsk = optimize_blockwise(dsk, keys=keys)
         dsk = fuse_roots(dsk, keys=keys)
-        dsk = cull_highlevelgraph(dsk, keys)
+        dsk = dsk.cull(set(keys))
     dsk = ensure_dict(dsk)
     dependencies = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
 

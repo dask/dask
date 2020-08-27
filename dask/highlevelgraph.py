@@ -1,5 +1,6 @@
 from collections.abc import Mapping
 from typing import Set, Dict
+import copy
 
 import tlz as toolz
 
@@ -326,6 +327,95 @@ class HighLevelGraph(Mapping):
             for dep in deps:
                 if dep not in self.dependencies:
                     raise ValueError(f"{repr(dep)} not found in dependencies")
+
+    def _fix_hlg_layers_inplace(self):
+        """Makes sure that all layers in hlg are `Layer`"""
+        new_layers = {}
+        for k, v in self.layers.items():
+            if not isinstance(v, Layer):
+                new_layers[k] = BasicLayer(v)
+        self.layers.update(new_layers)
+
+    def _find_layer_containing_key(self, key):
+        for k, v in self.layers.items():
+            if key in v:
+                return k
+        raise RuntimeError(f"{repr(key)} not found")
+
+    def _fix_hlg_dependencies_inplace(self):
+        """Makes sure that self.dependencies is correct"""
+        all_keys = set(self.keys())
+        self.dependencies = {k: set() for k in self.layers.keys()}
+        for k, v in self.layers.items():
+            for key in v.get_external_dependencies(all_keys):
+                self.dependencies[k].add(self._find_layer_containing_key(key))
+
+    def _toposort_layers(self):
+        """Sort the layers in a high level graph topologically
+
+        Parameters
+        ----------
+        hlg : HighLevelGraph
+            The high level graph's layers to sort
+
+        Returns
+        -------
+        sorted: list
+            List of layer names sorted topologically
+        """
+        dependencies = copy.deepcopy(self.dependencies)
+        ready = {k for k, v in dependencies.items() if len(v) == 0}
+        ret = []
+        while len(ready) > 0:
+            layer = ready.pop()
+            ret.append(layer)
+            del dependencies[layer]
+            for k, v in dependencies.items():
+                v.discard(layer)
+                if len(v) == 0:
+                    ready.add(k)
+        return ret
+
+    def cull(self, keys):
+        """ Return new high level graph with only the tasks required to calculate keys.
+
+        In other words, remove unnecessary tasks from dask.
+        ``keys`` may be a single key or list of keys.
+
+        Returns
+        -------
+        hlg: HighLevelGraph
+            Culled high level graph
+        """
+
+        self._fix_hlg_layers_inplace()
+
+        # TODO: remove this when <https://github.com/dask/dask/pull/6509> passes
+        self._fix_hlg_dependencies_inplace()
+
+        if not isinstance(keys, (list, set)):
+            keys = [keys]
+        keys = set(flatten(keys))
+
+        layers = self._toposort_layers()
+        ret_layers = {}
+        known_keys = set(self.keys())
+
+        for layer_name in reversed(layers):
+            layer = self.layers[layer_name]
+            key_deps = keys.intersection(layer)
+            if len(key_deps) > 0:
+                culled_layer = layer.cull(key_deps)
+                keys.update(culled_layer.get_external_dependencies(known_keys))
+                ret_layers[layer_name] = culled_layer
+
+        ret_dependencies = {}
+        for layer_name in ret_layers:
+            ret_dependencies[layer_name] = {
+                d for d in self.dependencies[layer_name] if d in ret_layers
+            }
+
+        return HighLevelGraph(ret_layers, ret_dependencies)
 
 
 def to_graphviz(

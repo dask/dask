@@ -2,7 +2,7 @@
 import operator
 
 from dask.base import tokenize
-from ..optimization import cull, fuse, cull_highlevelgraph
+from ..optimization import cull, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ensure_dict
@@ -16,7 +16,7 @@ def optimize(dsk, keys, **kwargs):
         dsk = optimize_read_parquet_getitem(dsk, keys=flat_keys)
         dsk = optimize_blockwise(dsk, keys=flat_keys)
         dsk = fuse_roots(dsk, keys=flat_keys)
-        dsk = cull_highlevelgraph(dsk, flat_keys)
+        dsk = dsk.cull(set(flat_keys))
         dsk = ensure_dict(dsk)
         dependencies = None
     else:
