@@ -1882,6 +1882,13 @@ def test_repartition_on_pandas_dataframe():
     assert_eq(ddf, df.y)
 
 
+def test_repartition_gh6543():
+    df = pd.DataFrame({"a": np.arange(16)})
+    a = dd.from_pandas(df, chunksize=4)
+    b = a.repartition(npartitions=16)
+    assert b.npartitions == 15
+
+
 @pytest.mark.parametrize("use_index", [True, False])
 @pytest.mark.parametrize("n", [1, 2, 4, 5])
 @pytest.mark.parametrize("k", [1, 2, 4, 5])

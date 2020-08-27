@@ -5964,7 +5964,7 @@ def repartition_npartitions(df, npartitions):
             if isinstance(divisions, np.ndarray):
                 divisions = divisions.tolist()
 
-            divisions = list(divisions)
+            divisions = sorted(set(divisions))
             divisions[0] = df.divisions[0]
             divisions[-1] = df.divisions[-1]
 
