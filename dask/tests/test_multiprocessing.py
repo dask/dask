@@ -45,8 +45,7 @@ def test_pickle_globals():
 
 @requires_cloudpickle
 def test_pickle_locals():
-    """Unrelated locals should not be included in serialized bytes
-    """
+    """Unrelated locals should not be included in serialized bytes"""
 
     def unrelated_function_local(a):
         return np.array([a])
@@ -78,8 +77,7 @@ def test_pickle_kwargs():
 
 @pytest.mark.skipif(pickle.HIGHEST_PROTOCOL < 5, reason="requires pickle protocol 5")
 def test_out_of_band_pickling():
-    """Test that out-of-band pickling works
-    """
+    """Test that out-of-band pickling works"""
     if has_cloudpickle:
         if cloudpickle.__version__ < LooseVersion("1.3.0"):
             pytest.skip("when using cloudpickle, it must be version 1.3.0+")
@@ -229,7 +227,7 @@ def check_for_pytest():
     sys.platform == "win32", reason="Windows doesn't support different contexts"
 )
 def test_custom_context_used_python3_posix():
-    """ The 'multiprocessing.context' config is used to create the pool.
+    """The 'multiprocessing.context' config is used to create the pool.
 
     We assume default is 'spawn', and therefore test for 'fork'.
     """
@@ -257,7 +255,7 @@ def test_custom_context_used_python3_posix():
     sys.platform == "win32", reason="Windows doesn't support different contexts"
 )
 def test_get_context_using_python3_posix():
-    """ get_context() respects configuration.
+    """get_context() respects configuration.
 
     If default context is changed this test will need to change too.
     """
@@ -270,7 +268,7 @@ def test_get_context_using_python3_posix():
 
 @pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_custom_context_ignored_elsewhere():
-    """ On Windows, setting 'multiprocessing.context' doesn't explode.
+    """On Windows, setting 'multiprocessing.context' doesn't explode.
 
     Presumption is it's not used since it's unsupported, but mostly we care about
     not breaking anything.

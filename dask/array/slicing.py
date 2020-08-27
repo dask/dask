@@ -31,7 +31,7 @@ def _sanitize_index_element(ind):
 
 
 def sanitize_index(ind):
-    """ Sanitize the elements for indexing along one axis
+    """Sanitize the elements for indexing along one axis
 
     >>> sanitize_index([2, 3, 5])
     array([2, 3, 5])
@@ -509,7 +509,7 @@ def partition_by_size(sizes, seq):
 
 
 def issorted(seq):
-    """ Is sequence sorted?
+    """Is sequence sorted?
 
     >>> issorted([1, 2, 3])
     True
@@ -522,7 +522,7 @@ def issorted(seq):
 
 
 def slicing_plan(chunks, index):
-    """ Construct a plan to slice chunks with the given index
+    """Construct a plan to slice chunks with the given index
 
     Parameters
     ----------
@@ -555,7 +555,7 @@ def slicing_plan(chunks, index):
 
 
 def take(outname, inname, chunks, index, axis=0):
-    """ Index array with an iterable of index
+    """Index array with an iterable of index
 
     Handles a single index by a single list
 
@@ -615,7 +615,7 @@ def take(outname, inname, chunks, index, axis=0):
 
 
 def posify_index(shape, ind):
-    """ Flip negative indices around to positive ones
+    """Flip negative indices around to positive ones
 
     >>> posify_index(10, 3)
     3
@@ -707,7 +707,7 @@ def new_blockdim(dim_shape, lengths, index):
 
 
 def replace_ellipsis(n, index):
-    """ Replace ... with slices, :, : ,:
+    """Replace ... with slices, :, : ,:
 
     >>> replace_ellipsis(4, (3, Ellipsis, 2))
     (3, slice(None, None, None), slice(None, None, None), 2)
@@ -728,7 +728,7 @@ def replace_ellipsis(n, index):
 
 
 def normalize_slice(idx, dim):
-    """ Normalize slices to canonical form
+    """Normalize slices to canonical form
 
     Parameters
     ----------
@@ -764,7 +764,7 @@ def normalize_slice(idx, dim):
 
 
 def normalize_index(idx, shape):
-    """ Normalize slicing indexes
+    """Normalize slicing indexes
 
     1.  Replaces ellipses with many full slices
     2.  Adds full slices to end of index
@@ -832,7 +832,7 @@ def normalize_index(idx, shape):
 
 
 def check_index(ind, dimension):
-    """ Check validity of index for a given dimension
+    """Check validity of index for a given dimension
 
     Examples
     --------
@@ -902,7 +902,7 @@ def check_index(ind, dimension):
 
 
 def slice_with_int_dask_array(x, index):
-    """ Slice x with at most one 1D dask arrays of ints.
+    """Slice x with at most one 1D dask arrays of ints.
 
     This is a helper function of :meth:`Array.__getitem__`.
 
@@ -955,7 +955,7 @@ def slice_with_int_dask_array(x, index):
 
 
 def slice_with_int_dask_array_on_axis(x, idx, axis):
-    """ Slice a ND dask array with a 1D dask arrays of ints along the given
+    """Slice a ND dask array with a 1D dask arrays of ints along the given
     axis.
 
     This is a helper function of :func:`slice_with_int_dask_array`.
@@ -1019,7 +1019,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
 
 def slice_with_bool_dask_array(x, index):
-    """ Slice x with one or more dask arrays of bools
+    """Slice x with one or more dask arrays of bools
 
     This is a helper function of `Array.__getitem__`.
 
