@@ -679,7 +679,7 @@ def _get_all_partition_keys(ds):
     return pkeys
 
 
-def _collect_pyarrow_dataset_frags(ds, filters):
+def _collect_pyarrow_dataset_frags(ds, filters, valid_paths, fs):
 
     # Get/transate filters
     ds_filters = None
@@ -690,6 +690,12 @@ def _collect_pyarrow_dataset_frags(ds, filters):
     partition_keys = {}  # See `partition_info` description below
     metadata = []  # List of row-group fragments
     for file_frag in ds.get_fragments(ds_filters):
+        if valid_paths and file_frag.path.split(fs.sep)[-1] not in valid_paths:
+            # If valid_paths is not None, the user passed in a list
+            # of files containing a _metadata file.  Since we used
+            # the _metadata file to generate our dataset object , we need
+            # to ignore any file fragments that are not in the list.
+            continue
         for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
             metadata.append(rg_frag)
             keys = pa_ds._get_partition_keys(rg_frag.partition_expression)
@@ -740,6 +746,7 @@ def _gather_metadata_pyarrow_dataset(
     """
     # Use pyarrow.dataset API
     ds = None
+    valid_paths = None  # Only used if `paths` is a list containing _metadata
     default_partitioning = pa_ds.HivePartitioning.discover(
         max_partition_dictionary_size=-1
     )
@@ -752,7 +759,7 @@ def _gather_metadata_pyarrow_dataset(
 
         meta_path = fs.sep.join([paths, "_metadata"])
         if fs.exists(meta_path):
-            # Use _metadata file if available
+            # Use _metadata file
             ds = pa_ds.parquet_dataset(
                 meta_path,
                 partitioning=dataset_kwargs.get("partitioning", default_partitioning),
@@ -763,14 +770,19 @@ def _gather_metadata_pyarrow_dataset(
         base, fns = _analyze_paths(paths, fs)
         meta_path = fs.sep.join([base, "_metadata"])
         if "_metadata" in fns:
-            # Use _metadata file if available
             # Pyarrow cannot handle "_metadata" when `paths` is a list
+            # Use _metadata file
             ds = pa_ds.parquet_dataset(
                 meta_path,
                 partitioning=dataset_kwargs.get("partitioning", default_partitioning),
             )
             if gather_statistics is None:
                 gather_statistics = True
+
+            # Populate valid_paths, since the original path list
+            # must be used to filter the _metadata-based dataset
+            fns.remove("_metadata")
+            valid_paths = fns
 
     if ds is None:
         ds = pa_ds.dataset(
@@ -785,7 +797,9 @@ def _gather_metadata_pyarrow_dataset(
         split_row_groups = True
 
     # Generate list of row-group fragments and call it `metadata`
-    metadata, partition_info = _collect_pyarrow_dataset_frags(ds, filters)
+    metadata, partition_info = _collect_pyarrow_dataset_frags(
+        ds, filters, valid_paths, fs
+    )
     schema = ds.schema
     base = ""
 
@@ -994,7 +1008,7 @@ class ArrowEngine(Engine):
         if not isinstance(row_group, list):
             row_group = [row_group]
 
-        dfs = []
+        tables = []
         for rg in row_group:
             if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
                 # `rg` is already a `ParquetFileFragment`, pyarrow
@@ -1023,27 +1037,28 @@ class ArrowEngine(Engine):
                 arrow_table = cls._parquet_piece_as_arrow(
                     piece, columns, partitions, **kwargs
                 )
-            df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
-
-            # For pyarrow.dataset api, need to convert partition columns
-            # to categorigal manually for integer types...
-            if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
-                for partition in partitions:
-                    if partition.name in df.columns:
-                        if df[partition.name].dtype != pd.Categorical:
-                            df[partition.name] = pd.Series(
-                                pd.Categorical(
-                                    categories=partition.keys,
-                                    values=df[partition.name].values,
-                                ),
-                                index=df.index,
-                            )
-
-            if len(row_group) > 1:
-                dfs.append(df)
+            tables.append(arrow_table)
 
         if len(row_group) > 1:
-            df = pd.concat(dfs)
+            arrow_table = pa.concat_table(tables)
+        else:
+            arrow_table = tables[0]
+
+        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+
+        # For pyarrow.dataset api, need to convert partition columns
+        # to categorigal manually for integer types...
+        if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
+            for partition in partitions:
+                if partition.name in df.columns:
+                    if df[partition.name].dtype != pd.Categorical:
+                        df[partition.name] = pd.Series(
+                            pd.Categorical(
+                                categories=partition.keys,
+                                values=df[partition.name].values,
+                            ),
+                            index=df.index,
+                        )
 
         # Note that `to_pandas(ignore_metadata=False)` means
         # pyarrow will use the pandas metadata to set the index.
