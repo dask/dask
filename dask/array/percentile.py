@@ -127,7 +127,7 @@ def percentile(a, q, interpolation="linear", method="default"):
     # Otherwise use the custom percentile algorithm
     else:
         # Add 0 and 100 during calculation for more robust behavior (hopefully)
-        calc_q = np.pad(q, 1)
+        calc_q = np.pad(q, 1, mode="constant")
         calc_q[-1] = 100
         name = "percentile_chunk-" + token
         dsk = dict(
