@@ -601,15 +601,8 @@ def _construct_parts(
             for i in range(0, row_group_count, split_row_groups):
                 i_end = i + split_row_groups
                 rg_list = row_groups[i:i_end]
-                full_path = (
-                    (
-                        fs.sep.join([data_path, filename])
-                        if data_path != ""
-                        else filename
-                    )
-                    if filename != ""
-                    else data_path  # This is a single file
-                )
+                # Get full path (empty strings should be ignored)
+                full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
                 pkeys = partition_keys.get(full_path, None)
                 if partition_obj and pkeys is None:
                     continue  # This partition was filtered
@@ -633,11 +626,8 @@ def _construct_parts(
                     stats.append(stat)
     else:
         for filename, row_groups in file_row_groups.items():
-            full_path = (
-                (fs.sep.join([data_path, filename]) if data_path != "" else filename)
-                if filename != ""
-                else data_path  # This is a single file
-            )
+            # Get full path (empty strings should be ignored)
+            full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
             pkeys = partition_keys.get(full_path, None)
             if partition_obj and pkeys is None:
                 continue  # This partition was filtered
