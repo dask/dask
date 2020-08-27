@@ -1048,7 +1048,7 @@ def cull_highlevelgraph(hlg, keys):
 
     for layer_name in reversed(layers):
         layer = hlg.layers[layer_name]
-        key_deps = {k for k in keys if k in layer}
+        key_deps = keys.intersection(layer)
         if len(key_deps) > 0:
             culled_layer = layer.cull(key_deps)
             keys.update(culled_layer.get_external_dependencies(known_keys))
