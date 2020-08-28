@@ -6,7 +6,7 @@ import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .core import reverse_dict, get_dependencies, flatten
+from .core import reverse_dict, get_dependencies, flatten, keys_in_tasks
 
 
 class Layer(Mapping):
@@ -61,27 +61,9 @@ class Layer(Mapping):
         deps: set
             Set of dependencies
         """
-        ret = set()
-        work = list(self.values())
 
-        while work:
-            new_work = []
-            for w in work:
-                typ = type(w)
-                if typ is tuple and w and callable(w[0]):  # istask(w)
-                    new_work.extend(w[1:])
-                elif typ is list:
-                    new_work.extend(w)
-                elif typ is dict:
-                    new_work.extend(w.values())
-                else:
-                    try:
-                        if w in known_keys and w not in self.keys():
-                            ret.add(w)
-                    except TypeError:  # not hashable
-                        pass
-            work = new_work
-        return ret
+        all_deps = keys_in_tasks(known_keys, self.values())
+        return all_deps.difference(self.keys())
 
 
 class BasicLayer(Layer):
