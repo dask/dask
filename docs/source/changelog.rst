@@ -1,6 +1,22 @@
 Changelog
 =========
 
+2.25.0 - 2020-08-28
+-------------------
+
+- Update for black (:pr:`4081`) `Tom Augspurger`_
+- Provide informative error when connecting an older version of Dask (:pr:`4076`) `Matthew Rocklin`_
+- Simplify ``pack_frames`` (:pr:`4068`) `jakirkham`_
+- Simplify ``frame_split_size`` (:pr:`4067`) `jakirkham`_
+- Use ``list.insert`` to add prelude up front (:pr:`4066`) `jakirkham`_
+- Graph helper text (:pr:`4064`) `Julia Signell`_
+- Graph dashboard: Reset container data if task number is too large (:pr:`4056`) `Florian Jetter`_
+- Ensure semaphore picks correct ``IOLoop`` for threadpool workers (:pr:`4060`) `Florian Jetter`_
+- Add cluster log method (:pr:`4051`) `Jacob Tomlinson`_
+- Cleanup more exception tracebacks (:pr:`4054`) `Krishan Bhasin`_
+- Improve documentation of ``scheduler.locks`` options (:pr:`4062`) `Florian Jetter`_
+
+
 2.24.0 - 2020-08-22
 -------------------
 
