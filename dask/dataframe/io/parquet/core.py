@@ -269,7 +269,7 @@ def read_parquet(
 
 
 def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
-    """ Read a part of a parquet dataset
+    """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
     if isinstance(part, list):
@@ -567,7 +567,7 @@ def get_engine(engine):
 
 
 def sorted_columns(statistics):
-    """ Find sorted columns given row-group statistics
+    """Find sorted columns given row-group statistics
 
     This finds all columns that are sorted, along with appropriate divisions
     values for those columns
@@ -609,7 +609,7 @@ def sorted_columns(statistics):
 
 
 def apply_filters(parts, statistics, filters):
-    """ Apply filters onto parts/statistics pairs
+    """Apply filters onto parts/statistics pairs
 
     Parameters
     ----------

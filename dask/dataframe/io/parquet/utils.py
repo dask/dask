@@ -15,7 +15,7 @@ class Engine:
         filters=None,
         **kwargs
     ):
-        """ Gather metadata about a Parquet Dataset to prepare for a read
+        """Gather metadata about a Parquet Dataset to prepare for a read
 
         This function is called once in the user's Python session to gather
         important metadata about the parquet dataset.
@@ -69,7 +69,7 @@ class Engine:
 
     @classmethod
     def read_partition(cls, fs, piece, columns, index, **kwargs):
-        """ Read a single piece of a Parquet dataset into a Pandas DataFrame
+        """Read a single piece of a Parquet dataset into a Pandas DataFrame
 
         This function is called many times in individual tasks
 

@@ -807,7 +807,10 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
                 reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
             ),
         ),
-        pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
+        pytest.param(
+            "median",
+            marks=pytest.mark.skip(reason="Not implemented"),
+        ),
         pytest.param(
             "empty",
             marks=pytest.mark.skip(

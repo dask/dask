@@ -12,7 +12,7 @@ thread_state = threading.local()
 
 
 def globalmethod(default=None, key=None, falsey=None):
-    """ Allow function to be taken over by globals
+    """Allow function to be taken over by globals
 
     This modifies a method so that occurrences of it may be taken over by
     functions registered in the global options. Can be used as a decorator or a

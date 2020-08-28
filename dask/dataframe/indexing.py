@@ -283,7 +283,7 @@ class _LocIndexer(_IndexerBase):
 
 
 def _partition_of_index_value(divisions, val):
-    """ In which partition does this value lie?
+    """In which partition does this value lie?
 
     >>> _partition_of_index_value([0, 5, 10], 3)
     0
@@ -303,7 +303,7 @@ def _partition_of_index_value(divisions, val):
 
 
 def _partitions_of_index_values(divisions, values):
-    """ Return defaultdict of division and values pairs
+    """Return defaultdict of division and values pairs
     Each key corresponds to the division which values are index values belong
     to the division.
 
@@ -326,7 +326,7 @@ def _partitions_of_index_values(divisions, values):
 
 
 def _coerce_loc_index(divisions, o):
-    """ Transform values to be comparable against divisions
+    """Transform values to be comparable against divisions
 
     This is particularly valuable to use with pandas datetimes
     """

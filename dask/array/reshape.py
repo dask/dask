@@ -111,7 +111,7 @@ def expand_tuple(chunks, factor):
 
 
 def contract_tuple(chunks, factor):
-    """ Return simple chunks tuple such that factor divides all elements
+    """Return simple chunks tuple such that factor divides all elements
 
     Examples
     --------
@@ -134,7 +134,7 @@ def contract_tuple(chunks, factor):
 
 
 def reshape(x, shape):
-    """ Reshape array to new shape
+    """Reshape array to new shape
 
     This is a parallelized version of the ``np.reshape`` function with the
     following limitations:

@@ -82,7 +82,7 @@ from .utils_test import add, inc  # noqa: F401
 
 
 def order(dsk, dependencies=None):
-    """ Order nodes in dask graph
+    """Order nodes in dask graph
 
     This produces an ordering over our tasks that we use to break ties when
     executing.  We do this ahead of time to reduce a bit of stress on the
@@ -154,7 +154,7 @@ def order(dsk, dependencies=None):
     initial_stack_key = init_stack.__getitem__
 
     def dependents_key(x):
-        """ Choose a path from our starting task to our tactical goal
+        """Choose a path from our starting task to our tactical goal
 
         This path is connected to a large goal, but focuses on completing
         a small goal and being memory efficient.
@@ -168,7 +168,7 @@ def order(dsk, dependencies=None):
         )
 
     def dependencies_key(x):
-        """ Choose which dependency to run as part of a reverse DFS
+        """Choose which dependency to run as part of a reverse DFS
 
         This is very similar to both ``initial_stack_key``.
         """
@@ -493,7 +493,7 @@ def order(dsk, dependencies=None):
 
 
 def graph_metrics(dependencies, dependents, total_dependencies):
-    r""" Useful measures of a graph used by ``dask.order.order``
+    r"""Useful measures of a graph used by ``dask.order.order``
 
     Example DAG (a1 has no dependencies; b2 and c1 are root nodes):
 
@@ -620,7 +620,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
 
 
 def ndependencies(dependencies, dependents):
-    """ Number of total data elements on which this key depends
+    """Number of total data elements on which this key depends
 
     For each key we return the number of tasks that must be run for us to run
     this task.
@@ -666,7 +666,7 @@ def ndependencies(dependencies, dependents):
 
 
 class StrComparable(object):
-    """ Wrap object so that it defaults to string comparison
+    """Wrap object so that it defaults to string comparison
 
     When comparing two objects of different types Python fails
 

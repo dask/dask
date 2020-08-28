@@ -681,7 +681,7 @@ def test_index_with_int_dask_array_dtypes(dtype):
 
 
 def test_index_with_int_dask_array_nocompute():
-    """ Test that when the indices are a dask array
+    """Test that when the indices are a dask array
     they are not accidentally computed
     """
 
@@ -895,7 +895,7 @@ def test_cached_cumsum_non_tuple():
 
 @pytest.mark.parametrize("params", [(2, 2, 1), (5, 3, 2)])
 def test_setitem_with_different_chunks_preserves_shape(params):
-    """ Reproducer for https://github.com/dask/dask/issues/3730.
+    """Reproducer for https://github.com/dask/dask/issues/3730.
 
     Mutating based on an array with different chunks can cause new chunks to be
     used.  We need to ensure those new chunk sizes are applied to the mutated

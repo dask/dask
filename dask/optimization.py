@@ -16,7 +16,7 @@ from .utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
-    """ Return new dask with only the tasks required to calculate keys.
+    """Return new dask with only the tasks required to calculate keys.
 
     In other words, remove unnecessary tasks from dask.
     ``keys`` may be a single key or list of keys.
@@ -76,7 +76,7 @@ def default_fused_linear_keys_renamer(keys):
 
 
 def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
-    """ Return new dask graph with linear sequence of tasks fused together.
+    """Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
     Supply ``dependencies`` from output of ``cull`` if available to avoid
@@ -225,7 +225,7 @@ def _flat_set(x):
 
 
 def inline(dsk, keys=None, inline_constants=True, dependencies=None):
-    """ Return new dask with the given keys inlined with their values.
+    """Return new dask with the given keys inlined with their values.
 
     Inlines all constants if ``inline_constants`` keyword is True. Note that
     the constant keys will remain in the graph, to remove them follow
@@ -287,7 +287,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 def inline_functions(
     dsk, output, fast_functions=None, inline_constants=False, dependencies=None
 ):
-    """ Inline cheap functions into larger operations
+    """Inline cheap functions into larger operations
 
     Examples
     --------
@@ -347,7 +347,7 @@ def unwrap_partial(func):
 
 
 def functions_of(task):
-    """ Set of functions contained within nested task
+    """Set of functions contained within nested task
 
     Examples
     --------
@@ -434,7 +434,7 @@ def fuse(
     rename_keys=_default,
     fuse_subgraphs=_default,
 ):
-    """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
+    """Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
     This trades parallelism opportunities for faster scheduling by making tasks
     less granular.  It can replace ``fuse_linear`` in optimization passes.

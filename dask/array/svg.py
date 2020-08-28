@@ -5,7 +5,7 @@ import numpy as np
 
 
 def svg(chunks, size=200, **kwargs):
-    """ Convert chunks from Dask Array into an SVG Image
+    """Convert chunks from Dask Array into an SVG Image
 
     Parameters
     ----------
@@ -161,7 +161,7 @@ def svg_nd(chunks, size=200):
 
 
 def svg_lines(x1, y1, x2, y2):
-    """ Convert points into lines of text for an SVG plot
+    """Convert points into lines of text for an SVG plot
 
     Examples
     --------
@@ -181,7 +181,7 @@ def svg_lines(x1, y1, x2, y2):
 
 
 def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
-    """ Create lines of SVG text that show a grid
+    """Create lines of SVG text that show a grid
 
     Parameters
     ----------
@@ -253,7 +253,7 @@ def draw_sizes(shape, size=200):
 
 
 def ratio_response(x):
-    """ How we display actual size ratios
+    """How we display actual size ratios
 
     Common ratios in sizes span several orders of magnitude,
     which is hard for us to perceive.

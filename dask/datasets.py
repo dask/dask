@@ -12,7 +12,7 @@ def timeseries(
     seed=None,
     **kwargs
 ):
-    """ Create timeseries dataframe with random data
+    """Create timeseries dataframe with random data
 
     Parameters
     ----------
@@ -65,7 +65,7 @@ def timeseries(
 
 
 def _generate_mimesis(field, schema_description, records_per_partition, seed):
-    """ Generate data for a single partition of a dask bag
+    """Generate data for a single partition of a dask bag
 
     See Also
     --------
@@ -122,7 +122,7 @@ def _make_mimesis(field, schema, npartitions, records_per_partition, seed=None):
 
 
 def make_people(npartitions=10, records_per_partition=1000, seed=None, locale="en"):
-    """ Make a dataset of random people
+    """Make a dataset of random people
 
     This makes a Dask Bag with dictionary records of randomly generated people.
     This requires the optional library ``mimesis`` to generate records.

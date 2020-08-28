@@ -90,7 +90,7 @@ def make_timeseries(
     seed=None,
     **kwargs
 ):
-    """ Create timeseries dataframe with random data
+    """Create timeseries dataframe with random data
 
     Parameters
     ----------
@@ -206,7 +206,7 @@ def daily_stock(
     data_source="yahoo",
     random_state=None,
 ):
-    """ Create artificial stock data
+    """Create artificial stock data
 
     This data matches daily open/high/low/close values from Yahoo! Finance, but
     interpolates values within each day with random values.  This makes the

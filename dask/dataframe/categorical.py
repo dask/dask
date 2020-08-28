@@ -16,7 +16,7 @@ from ..utils import Dispatch
 
 
 def _categorize_block(df, categories, index):
-    """ Categorize a dataframe with given categories
+    """Categorize a dataframe with given categories
 
     df: DataFrame
     categories: dict mapping column name to iterable of categories

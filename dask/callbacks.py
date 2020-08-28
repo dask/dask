@@ -4,7 +4,7 @@ __all__ = ["Callback", "add_callbacks"]
 
 
 class Callback(object):
-    """ Base class for using the callback mechanism
+    """Base class for using the callback mechanism
 
     Create a callback with functions of the following signatures:
 

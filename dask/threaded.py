@@ -31,7 +31,7 @@ def pack_exception(e, dumps):
 
 
 def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
-    """ Threaded cached implementation of dask.get
+    """Threaded cached implementation of dask.get
 
     Parameters
     ----------

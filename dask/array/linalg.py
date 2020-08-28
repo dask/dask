@@ -48,7 +48,7 @@ def _wrapped_qr(a):
 
 
 def tsqr(data, compute_svd=False, _max_vchunk_size=None):
-    """ Direct Tall-and-Skinny QR algorithm
+    """Direct Tall-and-Skinny QR algorithm
 
     As presented in:
 
@@ -506,7 +506,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
 
 def sfqr(data, name=None):
-    """ Direct Short-and-Fat QR
+    """Direct Short-and-Fat QR
 
     Currently, this is a quick hack for non-tall-and-skinny matrices which
     are one chunk tall and (unless they are one chunk wide) have chunks
@@ -611,7 +611,7 @@ def sfqr(data, name=None):
 
 
 def compression_level(n, q, oversampling=10, min_subspace_size=20):
-    """ Compression level to use in svd_compressed
+    """Compression level to use in svd_compressed
 
     Given the size ``n`` of a space, compress that that to one of size
     ``q`` plus oversampling.
@@ -630,7 +630,7 @@ def compression_level(n, q, oversampling=10, min_subspace_size=20):
 
 
 def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
-    """ Randomly sample matrix to find most active subspace
+    """Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
     compute both the QR decomposition and the Singular Value
@@ -685,7 +685,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
 
 
 def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
-    """ Randomly compressed rank-k thin Singular Value Decomposition.
+    """Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
     array.  This algorithm is generally faster than the normal algorithm

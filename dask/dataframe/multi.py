@@ -91,7 +91,7 @@ from ..utils import M
 
 
 def align_partitions(*dfs):
-    """ Mutually partition and align DataFrame blocks
+    """Mutually partition and align DataFrame blocks
 
     This serves as precursor to multi-dataframe operations like join, concat,
     or merge.
@@ -168,7 +168,7 @@ def _maybe_align_partitions(args):
 
 
 def require(divisions, parts, required=None):
-    """ Clear out divisions where required components are not present
+    """Clear out divisions where required components are not present
 
     In left, right, or inner joins we exclude portions of the dataset if one
     side or the other is not present.  We can achieve this at the partition
@@ -276,7 +276,7 @@ def hash_join(
     shuffle=None,
     indicator=False,
 ):
-    """ Join two DataFrames on particular columns with hash join
+    """Join two DataFrames on particular columns with hash join
 
     This shuffles both datasets on the joined column and then performs an
     embarrassingly parallel join partition-by-partition
@@ -375,8 +375,7 @@ def single_partition_join(left, right, **kwargs):
 
 
 def warn_dtype_mismatch(left, right, left_on, right_on):
-    """ Checks for merge column dtype mismatches and throws a warning (#4574)
-    """
+    """Checks for merge column dtype mismatches and throws a warning (#4574)"""
 
     if not isinstance(left_on, list):
         left_on = [left_on]
@@ -591,7 +590,7 @@ def most_recent_tail_summary(left, right, by=None):
 
 
 def compute_tails(ddf, by=None):
-    """ For each partition, returns the last row of the most recent nonempty
+    """For each partition, returns the last row of the most recent nonempty
     partition.
     """
     empty = ddf._meta.iloc[0:0]
@@ -614,7 +613,7 @@ def most_recent_head_summary(left, right, by=None):
 
 
 def compute_heads(ddf, by=None):
-    """ For each partition, returns the first row of the next nonempty
+    """For each partition, returns the first row of the next nonempty
     partition.
     """
     empty = ddf._meta.iloc[0:0]
@@ -627,7 +626,7 @@ def compute_heads(ddf, by=None):
 
 
 def pair_partitions(L, R):
-    """ Returns which partitions to pair for the merge_asof algorithm and the
+    """Returns which partitions to pair for the merge_asof algorithm and the
     bounds on which to split them up
     """
     result = []
@@ -976,7 +975,7 @@ def concat(
     ignore_unknown_divisions=False,
     **kwargs
 ):
-    """ Concatenate DataFrames along rows.
+    """Concatenate DataFrames along rows.
 
     - When axis=0 (default), concatenate DataFrames row-wise:
 

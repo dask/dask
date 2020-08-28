@@ -96,6 +96,5 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
 
 
 def _guid():
-    """ Simple utility function to get random hex string
-    """
+    """Simple utility function to get random hex string"""
     return uuid4().hex

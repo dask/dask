@@ -112,7 +112,7 @@ _out_chunk_fns = {
 
 
 def fft_wrap(fft_func, kind=None, dtype=None):
-    """ Wrap 1D, 2D, and ND real and complex FFT functions
+    """Wrap 1D, 2D, and ND real and complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
     a specified kind to match it to that are named after the functions
