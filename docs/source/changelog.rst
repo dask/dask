@@ -1,6 +1,29 @@
 Changelog
 =========
 
+2.25.0 / 2020-08-28
+-------------------
+
+Core
+++++
+
+- Compare key hashes in ``subs()`` (:pr:`6559`) `Mads R. B. Kristensen`_
+- Rerun with latest ``black`` release (:pr:`6568`) `James Bourbeau`_
+- License update (:pr:`6554`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Add gs ``read_parquet`` example (:pr:`6548`) `Ray Bell`_
+
+Documentation
++++++++++++++
+
+- Remove version from documentation page names (:pr:`6558`) `James Bourbeau`_
+- Update ``kubernetes-helm.rst`` (:pr:`6523`) `David Sheldon`_
+- Stop 2020 survey (:pr:`6547`) `Tom Augspurger`_
+
+
 2.24.0 / 2020-08-22
 -------------------
 
@@ -3530,3 +3553,4 @@ Other
 .. _`Jack Xiaosong Xu`: https://github.com/jackxxu
 .. _`Mike McCarty`: https://github.com/mmccarty
 .. _`michaelnarodovitch`: https://github.com/michaelnarodovitch
+.. _`David Sheldon`: https://github.com/davidsmf
