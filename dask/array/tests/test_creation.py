@@ -740,7 +740,9 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
             {"end_values": ((-1, -2), (4, 3))},
         ),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {"reflect_type": "odd"}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {"reflect_type": "odd"}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "wrap", {}),
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
@@ -789,28 +791,10 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         "maximum",
         "mean",
         "minimum",
-        pytest.param(
-            "reflect",
-            marks=pytest.mark.skip(
-                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
-            ),
-        ),
-        pytest.param(
-            "symmetric",
-            marks=pytest.mark.skip(
-                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
-            ),
-        ),
-        pytest.param(
-            "wrap",
-            marks=pytest.mark.skip(
-                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
-            ),
-        ),
-        pytest.param(
-            "median",
-            marks=pytest.mark.skip(reason="Not implemented"),
-        ),
+        "reflect",
+        "symmetric",
+        "wrap",
+        pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
         pytest.param(
             "empty",
             marks=pytest.mark.skip(
