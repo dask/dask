@@ -298,26 +298,19 @@ def subs(task, key, val):
             return [subs(x, key, val) for x in task]
         return task
     newargs = []
+    hash_key = {key}
     for arg in task[1:]:
         type_arg = type(arg)
         if type_arg is tuple and arg and callable(arg[0]):  # istask(task):
             arg = subs(arg, key, val)
         elif type_arg is list:
             arg = [subs(x, key, val) for x in arg]
-        elif type_arg is type(key):
+        else:
             try:
-                # Can't do a simple equality check, since this may trigger
-                # a FutureWarning from NumPy about array equality
-                # https://github.com/dask/dask/pull/2457
-                if len(arg) == len(key) and all(
-                    type(aa) == type(bb) and aa == bb for aa, bb in zip(arg, key)
-                ):
+                if arg in hash_key:  # Hash and equality match
                     arg = val
-
-            except (TypeError, AttributeError):
-                # Handle keys which are not sized (len() fails), but are hashable
-                if arg == key:
-                    arg = val
+            except TypeError:  # not hashable
+                pass
         newargs.append(arg)
     return task[:1] + tuple(newargs)
 
