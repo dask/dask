@@ -339,10 +339,10 @@ def _worker_process(worker_ready, child_pipe):
 
 
 def _parent_process(child_pipe):
-    """ Simulate starting an AsyncProcess and then dying.
+    """Simulate starting an AsyncProcess and then dying.
 
     The child_alive pipe is held open for as long as the child is alive, and can
-    be used to determine if it exited correctly. """
+    be used to determine if it exited correctly."""
 
     async def parent_process_coroutine():
         worker_ready = mp_context.Event()
@@ -369,7 +369,7 @@ def _parent_process(child_pipe):
 
 
 def test_asyncprocess_child_teardown_on_parent_exit():
-    r""" Check that a child process started by AsyncProcess exits if its parent
+    r"""Check that a child process started by AsyncProcess exits if its parent
     exits.
 
     The motivation is to ensure that if an AsyncProcess is created and the

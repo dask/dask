@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class EventExtension:
-    """ An extension for the scheduler to manage Events
+    """An extension for the scheduler to manage Events
 
     This adds the following routes to the scheduler
 
@@ -60,7 +60,7 @@ class EventExtension:
         self.scheduler.extensions["events"] = self
 
     async def event_wait(self, comm=None, name=None, timeout=None):
-        """ Wait until the event is set to true.
+        """Wait until the event is set to true.
         Returns false, when this did not happen in the given time
         and true otherwise.
         """
@@ -89,7 +89,7 @@ class EventExtension:
             return True
 
     def event_set(self, comm=None, name=None):
-        """ Set the event with the given name to true.
+        """Set the event with the given name to true.
 
         All waiters on this event will be notified.
         """
@@ -150,7 +150,7 @@ class EventExtension:
 
 
 class Event:
-    """ Distributed Centralized Event equivalent to asyncio.Event
+    """Distributed Centralized Event equivalent to asyncio.Event
 
     An event stores a single flag, which is set to false on start.
     The flag can be set to true (using the set() call) or back to false
@@ -186,7 +186,7 @@ class Event:
         self.name = name or "event-" + uuid.uuid4().hex
 
     def __await__(self):
-        """ async constructor
+        """async constructor
 
         Make it possible to write
 
@@ -201,7 +201,7 @@ class Event:
         return _().__await__()
 
     def wait(self, timeout=None):
-        """ Wait until the event is set.
+        """Wait until the event is set.
 
         Parameters
         ----------
@@ -223,28 +223,28 @@ class Event:
         timeout = parse_timedelta(timeout)
 
         result = self.client.sync(
-            self.client.scheduler.event_wait, name=self.name, timeout=timeout,
+            self.client.scheduler.event_wait, name=self.name, timeout=timeout
         )
         return result
 
     def clear(self):
-        """ Clear the event (set its flag to false).
+        """Clear the event (set its flag to false).
 
         All waiters will now block.
         """
         return self.client.sync(self.client.scheduler.event_clear, name=self.name)
 
     def set(self):
-        """ Set the event (set its flag to false).
+        """Set the event (set its flag to false).
 
         All waiters will now be released.
         """
-        result = self.client.sync(self.client.scheduler.event_set, name=self.name,)
+        result = self.client.sync(self.client.scheduler.event_set, name=self.name)
         return result
 
     def is_set(self):
         """ Check if the event is set """
-        result = self.client.sync(self.client.scheduler.event_is_set, name=self.name,)
+        result = self.client.sync(self.client.scheduler.event_is_set, name=self.name)
         return result
 
     def __reduce__(self):

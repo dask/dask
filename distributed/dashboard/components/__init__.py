@@ -42,7 +42,7 @@ profile_interval = parse_timedelta(profile_interval, default="ms")
 
 
 class DashboardComponent:
-    """ Base class for Dask.distributed UI dashboard components.
+    """Base class for Dask.distributed UI dashboard components.
 
     This class must have two attributes, ``root`` and ``source``, and one
     method ``update``:
@@ -62,7 +62,7 @@ class DashboardComponent:
 
 
 def add_periodic_callback(doc, component, interval):
-    """ Add periodic callback to doc in a way that avoids reference cycles
+    """Add periodic callback to doc in a way that avoids reference cycles
 
     If we instead use ``doc.add_periodic_callback(component.update, 100)`` then
     the component stays in memory as a reference cycle because its method is

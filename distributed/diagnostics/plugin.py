@@ -4,7 +4,7 @@ logger = logging.getLogger(__name__)
 
 
 class SchedulerPlugin:
-    """ Interface to extend the Scheduler
+    """Interface to extend the Scheduler
 
     The scheduler operates by triggering and responding to events like
     ``task_finished``, ``update_graph``, ``task_erred``, etc..
@@ -38,14 +38,14 @@ class SchedulerPlugin:
     """
 
     async def start(self, scheduler):
-        """ Run when the scheduler starts up
+        """Run when the scheduler starts up
 
         This runs at the end of the Scheduler startup process
         """
         pass
 
     async def close(self):
-        """ Run when the scheduler closes down
+        """Run when the scheduler closes down
 
         This runs at the beginning of the Scheduler shutdown process, but after
         workers have been asked to shut down gracefully
@@ -59,7 +59,7 @@ class SchedulerPlugin:
         """ Run when the scheduler restarts itself """
 
     def transition(self, key, start, finish, *args, **kwargs):
-        """ Run whenever a task changes state
+        """Run whenever a task changes state
 
         Parameters
         ----------
@@ -87,7 +87,7 @@ class SchedulerPlugin:
 
 
 class WorkerPlugin:
-    """ Interface to extend the Worker
+    """Interface to extend the Worker
 
     A worker plugin enables custom code to run at different stages of the Workers'
     lifecycle: at setup, during task state transitions, when a task or dependency

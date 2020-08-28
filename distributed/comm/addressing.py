@@ -216,7 +216,7 @@ def addresses_from_user_args(
     security=None,
     default_port=0,
 ) -> list:
-    """ Get a list of addresses if the inputs are lists
+    """Get a list of addresses if the inputs are lists
 
     This is like ``address_from_user_args`` except that it also accepts lists
     for some of the arguments.  If these arguments are lists then it will map

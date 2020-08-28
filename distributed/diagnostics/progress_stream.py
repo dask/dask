@@ -24,7 +24,7 @@ def counts(scheduler, allprogress):
 
 
 async def progress_stream(address, interval):
-    """ Open a TCP connection to scheduler, receive progress messages
+    """Open a TCP connection to scheduler, receive progress messages
 
     The messages coming back are dicts containing counts of key groups::
 

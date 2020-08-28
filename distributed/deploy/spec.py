@@ -75,7 +75,7 @@ class ProcessInterface:
         return _().__await__()
 
     async def start(self):
-        """ Submit the process to the resource manager
+        """Submit the process to the resource manager
 
         For workers this doesn't have to wait until the process actually starts,
         but can return once the resource manager has the request, and will work
@@ -87,7 +87,7 @@ class ProcessInterface:
         self.status = Status.running
 
     async def close(self):
-        """ Close the process
+        """Close the process
 
         This will be called by the Cluster object when we scale down a node,
         but only after we ask the Scheduler to close the worker gracefully.
@@ -126,7 +126,7 @@ class NoOpAwaitable:
 
 
 class SpecCluster(Cluster):
-    """ Cluster that requires a full specification of workers
+    """Cluster that requires a full specification of workers
 
     The SpecCluster class expects a full specification of the Scheduler and
     Workers to use.  It removes any handling of user inputs (like threads vs
@@ -483,7 +483,7 @@ class SpecCluster(Cluster):
             return NoOpAwaitable()
 
     def _new_worker_name(self, worker_number):
-        """ Returns new worker name.
+        """Returns new worker name.
 
         This can be overriden in SpecCluster derived classes to customise the
         worker names.
@@ -491,7 +491,7 @@ class SpecCluster(Cluster):
         return worker_number
 
     def new_worker_spec(self):
-        """ Return name and spec for the next worker
+        """Return name and spec for the next worker
 
         Returns
         -------
@@ -567,7 +567,7 @@ class SpecCluster(Cluster):
         maximum_memory: str = None,
         **kwargs,
     ) -> Adaptive:
-        """ Turn on adaptivity
+        """Turn on adaptivity
 
         This scales Dask clusters automatically based on scheduler activity.
 

@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 class Process(ProcessInterface):
-    """ A superclass for SSH Workers and Nannies
+    """A superclass for SSH Workers and Nannies
 
     See Also
     --------
@@ -47,7 +47,7 @@ class Process(ProcessInterface):
 
 
 class Worker(Process):
-    """ A Remote Dask Worker controled by SSH
+    """A Remote Dask Worker controled by SSH
 
     Parameters
     ----------
@@ -138,7 +138,7 @@ class Worker(Process):
 
 
 class Scheduler(Process):
-    """ A Remote Dask Scheduler controlled by SSH
+    """A Remote Dask Scheduler controlled by SSH
 
     Parameters
     ----------
@@ -238,7 +238,7 @@ def SSHCluster(
     remote_python: str = None,
     **kwargs,
 ):
-    """ Deploy a Dask cluster using SSH
+    """Deploy a Dask cluster using SSH
 
     The SSHCluster function deploys a Dask Scheduler and Workers for you on a
     set of machine addresses that you provide.  The first address will be used

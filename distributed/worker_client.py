@@ -7,7 +7,7 @@ from .worker import thread_state, get_client, get_worker
 
 @contextmanager
 def worker_client(timeout=3, separate_thread=True):
-    """ Get client for this thread
+    """Get client for this thread
 
     This context manager is intended to be called within functions that we run
     on workers.  When run as a context manager it delivers a client

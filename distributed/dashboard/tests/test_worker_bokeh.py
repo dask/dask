@@ -24,9 +24,7 @@ from distributed.dashboard.components.worker import (
 
 
 @gen_cluster(
-    client=True,
-    worker_kwargs={"dashboard": True},
-    scheduler_kwargs={"dashboard": True},
+    client=True, worker_kwargs={"dashboard": True}, scheduler_kwargs={"dashboard": True}
 )
 async def test_routes(c, s, a, b):
     port = a.http_server.port
@@ -64,9 +62,7 @@ async def test_simple(c, s, a, b):
         assert "bokeh" in response.body.decode().lower()
 
 
-@gen_cluster(
-    client=True, worker_kwargs={"dashboard": True},
-)
+@gen_cluster(client=True, worker_kwargs={"dashboard": True})
 async def test_services_kwargs(c, s, a, b):
     assert s.workers[a.address].services == {"dashboard": a.http_server.port}
 
@@ -157,7 +153,7 @@ async def test_CommunicatingStream(c, s, a, b):
 
 
 @gen_cluster(
-    client=True, clean_kwargs={"threads": False}, worker_kwargs={"dashboard": True},
+    client=True, clean_kwargs={"threads": False}, worker_kwargs={"dashboard": True}
 )
 async def test_prometheus(c, s, a, b):
     pytest.importorskip("prometheus_client")

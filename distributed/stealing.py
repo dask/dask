@@ -109,7 +109,7 @@ class WorkStealing(SchedulerPlugin):
             pass
 
     def steal_time_ratio(self, ts):
-        """ The compute to communication time ratio of a key
+        """The compute to communication time ratio of a key
 
         Returns
         -------

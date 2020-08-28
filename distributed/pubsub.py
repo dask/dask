@@ -199,7 +199,7 @@ class PubSubClientExtension:
 
 
 class Pub:
-    """ Publish data with Publish-Subscribe pattern
+    """Publish data with Publish-Subscribe pattern
 
     This allows clients and workers to directly communicate data between each
     other with a typical Publish-Subscribe pattern.  This involves two
@@ -355,7 +355,7 @@ class Pub:
 
 
 class Sub:
-    """ Subscribe to a Publish/Subscribe topic
+    """Subscribe to a Publish/Subscribe topic
 
     See Also
     --------
@@ -429,7 +429,7 @@ class Sub:
     __anext__ = _get
 
     def get(self, timeout=None):
-        """ Get a single message
+        """Get a single message
 
         Parameters
         ----------

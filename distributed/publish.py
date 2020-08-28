@@ -4,7 +4,7 @@ from .utils import log_errors, tokey
 
 
 class PublishExtension:
-    """ An extension for the scheduler to manage collections
+    """An extension for the scheduler to manage collections
 
     *  publish_list
     *  publish_put

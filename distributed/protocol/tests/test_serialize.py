@@ -81,7 +81,7 @@ def test_serialize_bytestrings():
 
 
 @pytest.mark.parametrize(
-    "typecode", ["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q", "f", "d"],
+    "typecode", ["b", "B", "h", "H", "i", "I", "l", "L", "q", "Q", "f", "d"]
 )
 def test_serialize_arrays(typecode):
     a = array(typecode)
@@ -212,9 +212,7 @@ def test_empty_loads_deep():
     assert isinstance(e2[0][0][0], Empty)
 
 
-@pytest.mark.parametrize(
-    "kwargs", [{}, {"serializers": ["pickle"]},],
-)
+@pytest.mark.parametrize("kwargs", [{}, {"serializers": ["pickle"]}])
 def test_serialize_bytes(kwargs):
     for x in [
         1,
@@ -464,7 +462,7 @@ def test_serialize_lists(serializers):
 
 
 @pytest.mark.parametrize(
-    "data_in", [memoryview(b"hello"), memoryview(np.random.random((3, 4)))],
+    "data_in", [memoryview(b"hello"), memoryview(np.random.random((3, 4)))]
 )
 def test_deser_memoryview(data_in):
     header, frames = serialize(data_in)

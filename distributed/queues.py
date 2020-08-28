@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class QueueExtension:
-    """ An extension for the scheduler to manage queues
+    """An extension for the scheduler to manage queues
 
     This adds the following routes to the scheduler
 
@@ -127,7 +127,7 @@ class QueueExtension:
 
 
 class Queue:
-    """ Distributed Queue
+    """Distributed Queue
 
     This allows multiple clients to share futures or small bits of data between
     each other with a multi-producer/multi-consumer queue.  All metadata is
@@ -209,7 +209,7 @@ class Queue:
             )
 
     def put(self, value, timeout=None, **kwargs):
-        """ Put data into the queue
+        """Put data into the queue
 
         Parameters
         ----------
@@ -222,7 +222,7 @@ class Queue:
         return self.client.sync(self._put, value, timeout=timeout, **kwargs)
 
     def get(self, timeout=None, batch=False, **kwargs):
-        """ Get data from the queue
+        """Get data from the queue
 
         Parameters
         ----------
@@ -234,7 +234,7 @@ class Queue:
             If True then return all elements currently waiting in the queue.
             If an integer than return that many elements from the queue
             If False (default) then return one item at a time
-         """
+        """
         timeout = parse_timedelta(timeout)
         return self.client.sync(self._get, timeout=timeout, batch=batch, **kwargs)
 

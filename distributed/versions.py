@@ -33,7 +33,7 @@ scheduler_relevant_packages = set(pkg for pkg, _ in required_packages) | set(
 
 # notes to be displayed for mismatch packages
 notes_mismatch_package = {
-    "msgpack": "Variation is ok, as long as everything is above 0.6",
+    "msgpack": "Variation is ok, as long as everything is above 0.6"
 }
 
 

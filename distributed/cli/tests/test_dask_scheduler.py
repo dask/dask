@@ -320,7 +320,7 @@ def test_preload_remote_module(loop, tmp_path):
                 str(tmp_path / "scheduler-file.json"),
                 "--preload",
                 "http://localhost:9382/scheduler_info.py",
-            ],
+            ]
         ) as proc:
             with Client(
                 scheduler_file=tmp_path / "scheduler-file.json", loop=loop

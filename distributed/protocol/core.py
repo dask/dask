@@ -173,7 +173,7 @@ def loads(frames, deserialize=True, deserializers=None):
 
 
 def dumps_msgpack(msg, compression=None):
-    """ Dump msg into header and payload, both bytestrings
+    """Dump msg into header and payload, both bytestrings
 
     All of the message must be msgpack encodable
 
@@ -196,7 +196,7 @@ def dumps_msgpack(msg, compression=None):
 
 
 def loads_msgpack(header, payload):
-    """ Read msgpack header and payload back to Python object
+    """Read msgpack header and payload back to Python object
 
     See Also:
         dumps_msgpack

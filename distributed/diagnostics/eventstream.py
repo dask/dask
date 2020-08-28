@@ -34,7 +34,7 @@ def teardown(scheduler, es):
 
 
 async def eventstream(address, interval):
-    """ Open a TCP connection to scheduler, receive batched task messages
+    """Open a TCP connection to scheduler, receive batched task messages
 
     The messages coming back are lists of dicts.  Each dict is of the following
     form::

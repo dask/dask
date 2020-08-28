@@ -40,7 +40,7 @@ def dependent_keys(tasks, complete=False):
 
 
 class Progress(SchedulerPlugin):
-    """ Tracks progress of a set of keys or futures
+    """Tracks progress of a set of keys or futures
 
     On creation we provide a set of keys or futures that interest us as well as
     a scheduler.  We traverse through the scheduler's dependencies to find all
@@ -130,7 +130,7 @@ class Progress(SchedulerPlugin):
 
 
 class MultiProgress(Progress):
-    """ Progress variant that keeps track of different groups of keys
+    """Progress variant that keeps track of different groups of keys
 
     See Progress for most details.  This only adds a function ``func=``
     that splits keys.  This defaults to ``key_split`` which aligns with naming

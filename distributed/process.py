@@ -162,7 +162,7 @@ class AsyncProcess:
 
     @staticmethod
     def reset_logger_locks():
-        """ Python 2's logger's locks don't survive a fork event
+        """Python 2's logger's locks don't survive a fork event
 
         https://github.com/dask/distributed/issues/1491
         """

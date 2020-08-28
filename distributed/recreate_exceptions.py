@@ -8,7 +8,7 @@ logger = logging.getLogger(__name__)
 
 
 class ReplayExceptionScheduler:
-    """ A plugin for the scheduler to recreate exceptions locally
+    """A plugin for the scheduler to recreate exceptions locally
 
     This adds the following routes to the scheduler
 

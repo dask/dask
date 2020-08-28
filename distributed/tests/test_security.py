@@ -285,13 +285,11 @@ async def test_tls_listen_connect():
 
         # No SSL context for client
         with pytest.raises(TypeError):
-            await connect(
-                listener.contact_address, **sec.get_connection_args("client"),
-            )
+            await connect(listener.contact_address, **sec.get_connection_args("client"))
 
         # Check forced cipher
         comm = await connect(
-            listener.contact_address, **forced_cipher_sec.get_connection_args("worker"),
+            listener.contact_address, **forced_cipher_sec.get_connection_args("worker")
         )
         cipher, _, _ = comm.extra_info["cipher"]
         assert cipher in [FORCED_CIPHER] + TLS_13_CIPHERS
@@ -325,7 +323,7 @@ async def test_require_encryption():
             listen_addr, handle_comm, **sec.get_listen_args("scheduler")
         ) as listener:
             comm = await connect(
-                listener.contact_address, **sec2.get_connection_args("worker"),
+                listener.contact_address, **sec2.get_connection_args("worker")
             )
             comm.abort()
 
@@ -333,7 +331,7 @@ async def test_require_encryption():
             listen_addr, handle_comm, **sec2.get_listen_args("scheduler")
         ) as listener:
             comm = await connect(
-                listener.contact_address, **sec2.get_connection_args("worker"),
+                listener.contact_address, **sec2.get_connection_args("worker")
             )
             comm.abort()
 
@@ -348,19 +346,17 @@ async def test_require_encryption():
             listen_addr, handle_comm, **sec.get_listen_args("scheduler")
         ) as listener:
             comm = await connect(
-                listener.contact_address, **sec.get_connection_args("worker"),
+                listener.contact_address, **sec.get_connection_args("worker")
             )
             comm.abort()
 
             with pytest.raises(RuntimeError):
                 await connect(
-                    listener.contact_address, **sec2.get_connection_args("worker"),
+                    listener.contact_address, **sec2.get_connection_args("worker")
                 )
 
         with pytest.raises(RuntimeError):
-            listen(
-                listen_addr, handle_comm, **sec2.get_listen_args("scheduler"),
-            )
+            listen(listen_addr, handle_comm, **sec2.get_listen_args("scheduler"))
 
 
 def test_temporary_credentials():

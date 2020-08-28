@@ -106,7 +106,7 @@ class ThreadPoolExecutor(thread.ThreadPoolExecutor):
 
 
 def secede(adjust=True):
-    """ Have this thread secede from the ThreadPoolExecutor
+    """Have this thread secede from the ThreadPoolExecutor
 
     See Also
     --------
@@ -120,7 +120,7 @@ def secede(adjust=True):
 
 
 def rejoin():
-    """ Have this thread rejoin the ThreadPoolExecutor
+    """Have this thread rejoin the ThreadPoolExecutor
 
     This will block until a new slot opens up in the executor.  The next thread
     to finish a task will leave the pool to allow this one to join.

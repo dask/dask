@@ -1759,7 +1759,7 @@ class TaskProgress(DashboardComponent):
 
 
 class WorkerTable(DashboardComponent):
-    """ Status of the current workers
+    """Status of the current workers
 
     This is two plots, a text-based table for each host and a thin horizontal
     plot laying out hosts by their current memory use.

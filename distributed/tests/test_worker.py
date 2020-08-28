@@ -30,12 +30,7 @@ from distributed.compatibility import WINDOWS
 from distributed.core import rpc, CommClosedError, Status
 from distributed.scheduler import Scheduler
 from distributed.metrics import time
-from distributed.worker import (
-    Worker,
-    error_message,
-    logger,
-    parse_memory_limit,
-)
+from distributed.worker import Worker, error_message, logger, parse_memory_limit
 from distributed.utils import tmpfile, TimeoutError
 from distributed.utils_test import (  # noqa: F401
     cleanup,

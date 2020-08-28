@@ -33,7 +33,7 @@ class WebsocketPlugin(SchedulerPlugin):
         self.socket.send("update_graph", {"client": client})
 
     def transition(self, key, start, finish, *args, **kwargs):
-        """ Run whenever a task changes state
+        """Run whenever a task changes state
 
         Parameters
         ----------

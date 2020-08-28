@@ -110,7 +110,7 @@ LOG_PDB = dask.config.get("distributed.admin.pdb-on-err")
 
 
 class Server:
-    """ Dask Distributed Server
+    """Dask Distributed Server
 
     Superclass for endpoints in a distributed cluster, such as Worker
     and Scheduler objects.
@@ -319,7 +319,7 @@ class Server:
         await self.close()
 
     def start_periodic_callbacks(self):
-        """ Start Periodic Callbacks consistently
+        """Start Periodic Callbacks consistently
 
         This starts all PeriodicCallbacks stored in self.periodic_callbacks if
         they are not yet running.  It does this safely on the IOLoop.
@@ -437,7 +437,7 @@ class Server:
         self.listeners.append(listener)
 
     async def handle_comm(self, comm, shutting_down=shutting_down):
-        """ Dispatch new communications to coroutine-handlers
+        """Dispatch new communications to coroutine-handlers
 
         Handlers is a dictionary mapping operation names to functions or
         coroutines.
@@ -645,7 +645,7 @@ def pingpong(comm):
 
 
 async def send_recv(comm, reply=True, serializers=None, deserializers=None, **kwargs):
-    """ Send and recv with a Comm.
+    """Send and recv with a Comm.
 
     Keyword arguments turn into the message
 
@@ -696,7 +696,7 @@ def addr_from_args(addr=None, ip=None, port=None):
 
 
 class rpc:
-    """ Conveniently interact with a remote server
+    """Conveniently interact with a remote server
 
     >>> remote = rpc(address)  # doctest: +SKIP
     >>> response = yield remote.add(x=10, y=20)  # doctest: +SKIP
@@ -736,7 +736,7 @@ class rpc:
         rpc.active.add(self)
 
     async def live_comm(self):
-        """ Get an open communication
+        """Get an open communication
 
         Some comms to the ip/port target may be in current use by other
         coroutines.  We track this with the `comms` dict
@@ -855,7 +855,7 @@ class rpc:
 
 
 class PooledRPCCall:
-    """ The result of ConnectionPool()('host:port')
+    """The result of ConnectionPool()('host:port')
 
     See Also:
         ConnectionPool
@@ -904,7 +904,7 @@ class PooledRPCCall:
 
 
 class ConnectionPool:
-    """ A maximum sized pool of Comm objects.
+    """A maximum sized pool of Comm objects.
 
     This provides a connect method that mirrors the normal distributed.connect
     method, but provides connection sharing and tracks connection limits.
@@ -1129,7 +1129,7 @@ def collect_causes(e):
 
 
 def error_message(e, status="error"):
-    """ Produce message to send back given an exception has occurred
+    """Produce message to send back given an exception has occurred
 
     This does the following:
 
@@ -1167,7 +1167,7 @@ def error_message(e, status="error"):
 
 
 def clean_exception(exception, traceback, **kwargs):
-    """ Reraise exception and traceback. Deserialize if necessary
+    """Reraise exception and traceback. Deserialize if necessary
 
     See Also
     --------

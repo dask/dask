@@ -14,7 +14,7 @@ logger = logging.getLogger(__name__)
 
 
 class VariableExtension:
-    """ An extension for the scheduler to manage queues
+    """An extension for the scheduler to manage queues
 
     This adds the following routes to the scheduler
 
@@ -123,7 +123,7 @@ class VariableExtension:
 
 
 class Variable:
-    """ Distributed Global Variable
+    """Distributed Global Variable
 
     This allows multiple clients to share futures and data between each other
     with a single mutable variable.  All metadata is sequentialized through the
@@ -176,7 +176,7 @@ class Variable:
             await self.client.scheduler.variable_set(data=value, name=self.name)
 
     def set(self, value, **kwargs):
-        """ Set the value of this variable
+        """Set the value of this variable
 
         Parameters
         ----------
@@ -206,7 +206,7 @@ class Variable:
         return value
 
     def get(self, timeout=None, **kwargs):
-        """ Get the value of this variable
+        """Get the value of this variable
 
         Parameters
         ----------
@@ -219,7 +219,7 @@ class Variable:
         return self.client.sync(self._get, timeout=timeout, **kwargs)
 
     def delete(self):
-        """ Delete this variable
+        """Delete this variable
 
         Caution, this affects all clients currently pointing to this variable.
         """

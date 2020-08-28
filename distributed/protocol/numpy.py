@@ -8,7 +8,7 @@ from ..utils import log_errors, nbytes
 
 
 def itemsize(dt):
-    """ Itemsize of dtype
+    """Itemsize of dtype
 
     Try to return the itemsize of the base element, return 8 as a fallback
     """

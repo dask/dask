@@ -7,6 +7,4 @@ class HealthHandler(web.RequestHandler):
         self.set_header("Content-Type", "text/plain")
 
 
-routes = [
-    ("/health", HealthHandler, {}),
-]
+routes = [("/health", HealthHandler, {})]

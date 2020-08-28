@@ -34,7 +34,7 @@ def _always_use_pickle_for(x):
 
 
 def dumps(x, *, buffer_callback=None, protocol=HIGHEST_PROTOCOL):
-    """ Manage between cloudpickle and pickle
+    """Manage between cloudpickle and pickle
 
     1.  Try pickle
     2.  If it is short then check if it contains __main__

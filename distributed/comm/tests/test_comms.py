@@ -326,7 +326,7 @@ async def test_comm_failure_threading():
     sleep_future = sleep_for_60ms()
     with pytest.raises(IOError):
         await connect(
-            "tls://localhost:28400", 0.052, ssl_context=get_client_ssl_context(),
+            "tls://localhost:28400", 0.052, ssl_context=get_client_ssl_context()
         )
     max_thread_count = await sleep_future
     assert max_thread_count <= 2 + original_thread_count
@@ -639,7 +639,7 @@ async def test_tls_reject_certificate():
 
     with pytest.raises(EnvironmentError) as excinfo:
         comm = await connect(
-            listener.contact_address, timeout=0.5, ssl_context=bad_cli_ctx,
+            listener.contact_address, timeout=0.5, ssl_context=bad_cli_ctx
         )
         await comm.write({"x": "foo"})  # TODO: why is this necessary in Tornado 6 ?
 
@@ -657,16 +657,14 @@ async def test_tls_reject_certificate():
                 raise
 
     # Sanity check
-    comm = await connect(listener.contact_address, timeout=2, ssl_context=cli_ctx,)
+    comm = await connect(listener.contact_address, timeout=2, ssl_context=cli_ctx)
     await comm.close()
 
     # Connector refuses a listener not signed by the CA
     listener = await listen("tls://", handle_comm, ssl_context=bad_serv_ctx)
 
     with pytest.raises(EnvironmentError) as excinfo:
-        await connect(
-            listener.contact_address, timeout=2, ssl_context=cli_ctx,
-        )
+        await connect(listener.contact_address, timeout=2, ssl_context=cli_ctx)
     assert "certificate verify failed" in str(excinfo.value)
 
 

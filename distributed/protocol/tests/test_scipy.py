@@ -20,7 +20,7 @@ scipy_sparse = pytest.importorskip("scipy.sparse")
 )
 @pytest.mark.parametrize(
     "dtype",
-    [numpy.dtype("<f4"), numpy.dtype(">f4"), numpy.dtype("<f8"), numpy.dtype(">f8"),],
+    [numpy.dtype("<f4"), numpy.dtype(">f4"), numpy.dtype("<f8"), numpy.dtype(">f8")],
 )
 def test_serialize_scipy_sparse(sparse_type, dtype):
     a = numpy.array([[0, 1, 0], [2, 0, 3], [0, 4, 0]], dtype=dtype)

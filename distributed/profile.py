@@ -38,7 +38,7 @@ from .utils import format_time, color_of, parse_timedelta
 
 
 def identifier(frame):
-    """ A string identifier from a frame
+    """A string identifier from a frame
 
     Strings are cheaper to use as indexes into dicts than tuples or dicts
     """
@@ -74,7 +74,7 @@ def info_frame(frame):
 
 
 def process(frame, child, state, stop=None, omit=None):
-    """ Add counts from a frame stack onto existing state
+    """Add counts from a frame stack onto existing state
 
     This recursively adds counts to the existing state dictionary and creates
     new entries for new functions.
@@ -157,7 +157,7 @@ def create():
 
 
 def call_stack(frame):
-    """ Create a call text stack from a frame
+    """Create a call text stack from a frame
 
     Returns
     -------
@@ -171,7 +171,7 @@ def call_stack(frame):
 
 
 def plot_data(state, profile_interval=0.010):
-    """ Convert a profile state into data useful by Bokeh
+    """Convert a profile state into data useful by Bokeh
 
     See Also
     --------
@@ -277,7 +277,7 @@ def watch(
     omit=None,
     stop=lambda: False,
 ):
-    """ Gather profile information on a particular thread
+    """Gather profile information on a particular thread
 
     This starts a new thread to watch a particular thread and returns a deque
     that holds periodic profile information.
@@ -324,7 +324,7 @@ def watch(
 
 
 def get_profile(history, recent=None, start=None, stop=None, key=None):
-    """ Collect profile information from a sequence of profile states
+    """Collect profile information from a sequence of profile states
 
     Parameters
     ----------
@@ -366,7 +366,7 @@ def get_profile(history, recent=None, start=None, stop=None, key=None):
 
 
 def plot_figure(data, **kwargs):
-    """ Plot profile data using Bokeh
+    """Plot profile data using Bokeh
 
     This takes the output from the function ``plot_data`` and produces a Bokeh
     figure
@@ -444,7 +444,7 @@ def _remove_py_stack(frames):
 
 
 def llprocess(frames, child, state):
-    """ Add counts from low level profile information onto existing state
+    """Add counts from low level profile information onto existing state
 
     This uses the ``stacktrace`` module to collect low level stack trace
     information and place it onto the given sttate.

@@ -21,10 +21,7 @@ from distributed.utils import ensure_bytes, is_writeable
     ],
 )
 def test_merge_frames(lengths, writeable, frames):
-    header = {
-        "lengths": lengths,
-        "writeable": writeable,
-    }
+    header = {"lengths": lengths, "writeable": writeable}
     result = merge_frames(header, frames)
 
     data = b"".join(frames)

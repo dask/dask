@@ -17,7 +17,7 @@ logger = logging.getLogger(__name__)
 
 
 async def gather_from_workers(who_has, rpc, close=True, serializers=None, who=None):
-    """ Gather data directly from peers
+    """Gather data directly from peers
 
     Parameters
     ----------
@@ -97,7 +97,7 @@ async def gather_from_workers(who_has, rpc, close=True, serializers=None, who=No
 
 
 class WrappedKey:
-    """ Interface for a key in a dask graph.
+    """Interface for a key in a dask graph.
 
     Subclasses must have .key attribute that refers to a key in a dask graph.
 
@@ -118,7 +118,7 @@ _round_robin_counter = [0]
 
 
 async def scatter_to_workers(nthreads, data, rpc=rpc, report=True, serializers=None):
-    """ Scatter data directly to workers
+    """Scatter data directly to workers
 
     This distributes data in a round-robin fashion to a set of workers based on
     how many cores they have.  nthreads should be a dictionary mapping worker
@@ -164,7 +164,7 @@ collection_types = (tuple, list, set, frozenset)
 
 
 def unpack_remotedata(o, byte_keys=False, myset=None):
-    """ Unpack WrappedKey objects from collection
+    """Unpack WrappedKey objects from collection
 
     Returns original collection and set of all found WrappedKey objects
 
@@ -246,7 +246,7 @@ def unpack_remotedata(o, byte_keys=False, myset=None):
 
 
 def pack_data(o, d, key_types=object):
-    """ Merge known data into tuple or dict
+    """Merge known data into tuple or dict
 
     Parameters
     ----------
@@ -281,7 +281,7 @@ def pack_data(o, d, key_types=object):
 
 
 def subs_multiple(o, d):
-    """ Perform substitutions on a tasks
+    """Perform substitutions on a tasks
 
     Parameters
     ----------

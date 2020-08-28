@@ -6,7 +6,7 @@ logger = logging.getLogger(__name__)
 
 
 def safe_sizeof(obj, default_size=1e6):
-    """ Safe variant of sizeof that captures and logs exceptions
+    """Safe variant of sizeof that captures and logs exceptions
 
     This returns a default size of 1e6 if the sizeof function fails
     """

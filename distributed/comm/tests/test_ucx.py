@@ -228,9 +228,7 @@ async def test_ping_pong_cupy(shape):
 
 @pytest.mark.slow
 @pytest.mark.asyncio
-@pytest.mark.parametrize(
-    "n", [int(1e9), int(2.5e9),],
-)
+@pytest.mark.parametrize("n", [int(1e9), int(2.5e9)])
 async def test_large_cupy(n, cleanup):
     cupy = pytest.importorskip("cupy")
     com, serv_com = await get_comm_pair()

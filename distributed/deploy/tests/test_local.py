@@ -1004,7 +1004,7 @@ async def test_threads_per_worker_set_to_0(cleanup):
         Warning, match="Setting `threads_per_worker` to 0 is discouraged."
     ):
         async with LocalCluster(
-            n_workers=2, processes=False, threads_per_worker=0, asynchronous=True,
+            n_workers=2, processes=False, threads_per_worker=0, asynchronous=True
         ) as cluster:
             assert len(cluster.workers) == 2
             assert all(w.nthreads < CPU_COUNT for w in cluster.workers.values())

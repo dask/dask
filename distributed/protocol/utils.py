@@ -35,7 +35,7 @@ def frame_split_size(frame, n=BIG_BYTES_SHARD_SIZE) -> list:
 
 
 def merge_frames(header, frames):
-    """ Merge frames into original lengths
+    """Merge frames into original lengths
 
     Examples
     --------
@@ -92,7 +92,7 @@ def pack_frames_prelude(frames):
 
 
 def pack_frames(frames):
-    """ Pack frames into a byte-like object
+    """Pack frames into a byte-like object
 
     This prepends length information to the front of the bytes-like object
 
@@ -104,7 +104,7 @@ def pack_frames(frames):
 
 
 def unpack_frames(b):
-    """ Unpack bytes into a sequence of frames
+    """Unpack bytes into a sequence of frames
 
     This assumes that length information is at the front of the bytestring,
     as performed by pack_frames

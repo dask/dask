@@ -74,8 +74,7 @@ except ImportError:
     )
 
     class GlobalProxyHandler(web.RequestHandler):
-        """Minimal Proxy handler when jupyter-server-proxy is not installed
-        """
+        """Minimal Proxy handler when jupyter-server-proxy is not installed"""
 
         def initialize(self, dask_server=None, extra=None):
             self.server = dask_server
@@ -130,6 +129,4 @@ def check_worker_dashboard_exits(scheduler, worker):
     return False
 
 
-routes = [
-    (r"proxy/(\d+)/(.*?)/(.*)", GlobalProxyHandler, {}),
-]
+routes = [(r"proxy/(\d+)/(.*?)/(.*)", GlobalProxyHandler, {})]

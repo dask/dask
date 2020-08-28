@@ -93,6 +93,4 @@ class PrometheusHandler(RequestHandler):
         self.set_header("Content-Type", "text/plain; version=0.0.4")
 
 
-routes = [
-    (r"metrics", PrometheusHandler, {}),
-]
+routes = [(r"metrics", PrometheusHandler, {})]

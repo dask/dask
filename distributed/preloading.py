@@ -72,7 +72,7 @@ def is_webaddress(s: str) -> bool:
 
 
 def _import_module(name, file_dir=None) -> ModuleType:
-    """ Imports module and extract preload interface functions.
+    """Imports module and extract preload interface functions.
 
     Import modules specified by name and extract 'dask_setup'
     and 'dask_teardown' if present.

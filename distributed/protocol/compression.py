@@ -143,7 +143,7 @@ get_default_compression()
 
 
 def byte_sample(b, size, n):
-    """ Sample a bytestring from many locations
+    """Sample a bytestring from many locations
 
     Parameters
     ----------

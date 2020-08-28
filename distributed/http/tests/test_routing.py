@@ -17,8 +17,8 @@ class TwoHandler(web.RequestHandler):
 
 @pytest.mark.asyncio
 async def test_basic():
-    application = RoutingApplication([(r"/one", OneHandler),])
-    two = web.Application([(r"/two", TwoHandler),])
+    application = RoutingApplication([(r"/one", OneHandler)])
+    two = web.Application([(r"/two", TwoHandler)])
     server = application.listen(1234)
 
     client = AsyncHTTPClient("http://localhost:1234")

@@ -195,7 +195,7 @@ async def test_min_max():
 
 @pytest.mark.asyncio
 async def test_avoid_churn(cleanup):
-    """ We want to avoid creating and deleting workers frequently
+    """We want to avoid creating and deleting workers frequently
 
     Instead we want to wait a few beats before removing a worker in case the
     user is taking a brief pause between work
@@ -220,7 +220,7 @@ async def test_avoid_churn(cleanup):
 
 @pytest.mark.asyncio
 async def test_adapt_quickly():
-    """ We want to avoid creating and deleting workers frequently
+    """We want to avoid creating and deleting workers frequently
 
     Instead we want to wait a few beats before removing a worker in case the
     user is taking a brief pause between work

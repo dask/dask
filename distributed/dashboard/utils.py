@@ -44,7 +44,7 @@ def transpose(lod):
 
 @without_property_validation
 def update(source, data):
-    """ Update source with data
+    """Update source with data
 
     This checks a few things first
 

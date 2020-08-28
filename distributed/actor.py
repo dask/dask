@@ -11,7 +11,7 @@ from .worker import get_worker
 
 
 class Actor(WrappedKey):
-    """ Controls an object on a remote worker
+    """Controls an object on a remote worker
 
     An actor allows remote control of a stateful object living on a remote
     worker.  Method calls on this object trigger operations on the remote
@@ -195,7 +195,7 @@ class ProxyRPC:
 
 
 class ActorFuture:
-    """ Future to an actor's method call
+    """Future to an actor's method call
 
     Whenever you call a method on an Actor you get an ActorFuture immediately
     while the computation happens in the background.  You can call ``.result``

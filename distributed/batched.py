@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class BatchedSend:
-    """ Batch messages in batches on a stream
+    """Batch messages in batches on a stream
 
     This takes an IOStream and an interval (in ms) and ensures that we send no
     more than one message every interval milliseconds.  We send lists of
@@ -109,7 +109,7 @@ class BatchedSend:
         self.stopped.set()
 
     def send(self, msg):
-        """ Schedule a message for sending to the other side
+        """Schedule a message for sending to the other side
 
         This completes quickly and synchronously
         """
@@ -124,7 +124,7 @@ class BatchedSend:
 
     @gen.coroutine
     def close(self, timeout=None):
-        """ Flush existing messages and then close comm
+        """Flush existing messages and then close comm
 
         If set, raises `tornado.util.TimeoutError` after a timeout.
         """

@@ -43,7 +43,7 @@ class RoutingApplication(web.Application):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.applications = []
-        self.add_handlers(".*$", [(r"/sitemap.json", DirectoryHandler),])
+        self.add_handlers(".*$", [(r"/sitemap.json", DirectoryHandler)])
 
     def find_handler(self, request: tornado.httputil.HTTPServerRequest, **kwargs):
         handler = super().find_handler(request, **kwargs)

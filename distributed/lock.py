@@ -12,7 +12,7 @@ logger = logging.getLogger(__name__)
 
 
 class LockExtension:
-    """ An extension for the scheduler to manage Locks
+    """An extension for the scheduler to manage Locks
 
     This adds the following routes to the scheduler
 
@@ -73,7 +73,7 @@ class LockExtension:
 
 
 class Lock:
-    """ Distributed Centralized Lock
+    """Distributed Centralized Lock
 
     Parameters
     ----------
@@ -104,7 +104,7 @@ class Lock:
         self._locked = False
 
     def acquire(self, blocking=True, timeout=None):
-        """ Acquire the lock
+        """Acquire the lock
 
         Parameters
         ----------

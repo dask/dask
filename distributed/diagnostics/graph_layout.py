@@ -2,7 +2,7 @@ from .plugin import SchedulerPlugin
 
 
 class GraphLayout(SchedulerPlugin):
-    """ Dynamic graph layout during computation
+    """Dynamic graph layout during computation
 
     This assigns (x, y) locations to all tasks quickly and dynamically as new
     tasks are added.  This scales to a few thousand nodes.
@@ -116,7 +116,7 @@ class GraphLayout(SchedulerPlugin):
                 del collection[key]
 
     def reset_index(self):
-        """ Reset the index and refill new and new_edges
+        """Reset the index and refill new and new_edges
 
         From time to time TaskGraph wants to remove invisible nodes and reset
         all of its indices.  This helps.

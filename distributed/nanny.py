@@ -41,7 +41,7 @@ logger = logging.getLogger(__name__)
 
 
 class Nanny(ServerNode):
-    """ A process to manage worker processes
+    """A process to manage worker processes
 
     The nanny spins up Worker processes, watches then, and kills or restarts
     them as necessary. It is necessary if you want to use the
@@ -304,7 +304,7 @@ class Nanny(ServerNode):
         return self
 
     async def kill(self, comm=None, timeout=2):
-        """ Kill the local worker process
+        """Kill the local worker process
 
         Blocks until both the process is down and the scheduler is properly
         informed
@@ -317,7 +317,7 @@ class Nanny(ServerNode):
         await self.process.kill(timeout=0.8 * (deadline - self.loop.time()))
 
     async def instantiate(self, comm=None) -> Status:
-        """ Start a local worker process
+        """Start a local worker process
 
         Blocks until the process is up and the scheduler is properly informed
         """
