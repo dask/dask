@@ -196,12 +196,17 @@ def test_array_broadcasting():
     assert da.random.normal(
         np.ones((1, 4)), da.ones((2, 3, 4), chunks=(2, 3, 4)), chunks=(2, 3, 4)
     ).compute().shape == (2, 3, 4)
-    assert da.random.normal(
-        scale=np.ones((1, 4)),
-        loc=da.ones((2, 3, 4), chunks=(2, 3, 4)),
-        size=(2, 2, 3, 4),
-        chunks=(2, 2, 3, 4),
-    ).compute().shape == (2, 2, 3, 4)
+    assert (
+        da.random.normal(
+            scale=np.ones((1, 4)),
+            loc=da.ones((2, 3, 4), chunks=(2, 3, 4)),
+            size=(2, 2, 3, 4),
+            chunks=(2, 2, 3, 4),
+        )
+        .compute()
+        .shape
+        == (2, 2, 3, 4)
+    )
 
     with pytest.raises(ValueError):
         da.random.normal(arr, np.ones((3, 1)), size=(2, 3, 4), chunks=3)

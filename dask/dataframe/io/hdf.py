@@ -47,7 +47,7 @@ def to_hdf(
     dask_kwargs={},
     **kwargs
 ):
-    """ Store Dask Dataframe to Hierarchical Data Format (HDF) files
+    """Store Dask Dataframe to Hierarchical Data Format (HDF) files
 
     This is a parallel version of the Pandas function of the same name.  Please
     see the Pandas docstring for more detailed information about shared keyword

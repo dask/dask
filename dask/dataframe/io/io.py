@@ -78,7 +78,7 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
 
 
 def from_array(x, chunksize=50000, columns=None, meta=None):
-    """ Read any sliceable array into a Dask Dataframe
+    """Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
     a NumPy array but must support slicing syntax
@@ -228,7 +228,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
-    """ Read BColz CTable into a Dask Dataframe
+    """Read BColz CTable into a Dask Dataframe
 
     BColz is a fast on-disk compressed column store with careful attention
     given to compression.  https://bcolz.readthedocs.io/en/latest/
@@ -318,7 +318,7 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
 
 
 def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
-    """ Get DataFrame from bcolz.ctable
+    """Get DataFrame from bcolz.ctable
 
     Parameters
     ----------
@@ -394,7 +394,7 @@ def dataframe_from_ctable(x, slc, columns=None, categories=None, lock=lock):
 
 
 def from_dask_array(x, columns=None, index=None, meta=None):
-    """ Create a Dask DataFrame from a Dask Array.
+    """Create a Dask DataFrame from a Dask Array.
 
     Converts a 2d array into a DataFrame and a 1d array into a Series.
 
@@ -485,7 +485,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
 
 
 def _link(token, result):
-    """ A dummy function to link results together in a graph
+    """A dummy function to link results together in a graph
 
     We use this to enforce an artificial sequential ordering on tasks that
     don't explicitly pass around a shared resource
@@ -527,7 +527,7 @@ def to_bag(df, index=False):
 
 
 def to_records(df):
-    """ Create Dask Array from a Dask Dataframe
+    """Create Dask Array from a Dask Dataframe
 
     Warning: This creates a dask.array without precise shape information.
     Operations that depend on shape information, like slicing or reshaping,
@@ -550,7 +550,7 @@ def to_records(df):
 def from_delayed(
     dfs, meta=None, divisions=None, prefix="from-delayed", verify_meta=True
 ):
-    """ Create Dask DataFrame from many Dask Delayed objects
+    """Create Dask DataFrame from many Dask Delayed objects
 
     Parameters
     ----------
@@ -614,7 +614,7 @@ def from_delayed(
 
 
 def sorted_division_locations(seq, npartitions=None, chunksize=None):
-    """ Find division locations and values in sorted list
+    """Find division locations and values in sorted list
 
     Examples
     --------

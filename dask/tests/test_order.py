@@ -546,7 +546,7 @@ def test_map_overlap(abcde):
 
 
 def test_use_structure_not_keys(abcde):
-    """ See https://github.com/dask/dask/issues/5584#issuecomment-554963958
+    """See https://github.com/dask/dask/issues/5584#issuecomment-554963958
 
     We were using key names to infer structure, which could result in funny behavior.
     """
@@ -601,7 +601,7 @@ def test_dont_run_all_dependents_too_early(abcde):
 
 
 def test_many_branches_use_ndependencies(abcde):
-    """ From https://github.com/dask/dask/pull/5646#issuecomment-562700533
+    """From https://github.com/dask/dask/pull/5646#issuecomment-562700533
 
     Sometimes we need larger or wider DAGs to test behavior.  This test
     ensures we choose the branch with more work twice in successtion.
@@ -714,7 +714,7 @@ def test_switching_dependents(abcde):
 
 
 def test_order_with_equal_dependents(abcde):
-    """ From https://github.com/dask/dask/issues/5859#issuecomment-608422198
+    """From https://github.com/dask/dask/issues/5859#issuecomment-608422198
 
     See the visualization of `(maxima, argmax)` example from the above comment.
 

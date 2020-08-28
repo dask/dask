@@ -455,7 +455,7 @@ def test_has_keyword():
 def test_derived_from():
     class Foo:
         def f(a, b):
-            """ A super docstring
+            """A super docstring
 
             An explanation
 

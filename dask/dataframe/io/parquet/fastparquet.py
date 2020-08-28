@@ -97,7 +97,7 @@ paths_to_cats = (
 
 
 def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
-    """ Determine how to access metadata and break read into ``parts``
+    """Determine how to access metadata and break read into ``parts``
 
     This logic is mostly to handle `gather_statistics=False` cases,
     because this also means we should avoid scanning every file in the

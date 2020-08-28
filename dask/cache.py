@@ -7,7 +7,7 @@ overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
 
 
 class Cache(Callback):
-    """ Use cache for computation
+    """Use cache for computation
 
     Examples
     --------

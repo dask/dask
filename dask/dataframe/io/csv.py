@@ -120,7 +120,7 @@ def pandas_read_text(
     enforce=False,
     path=None,
 ):
-    """ Convert a block of bytes to a Pandas DataFrame
+    """Convert a block of bytes to a Pandas DataFrame
 
     Parameters
     ----------
@@ -164,7 +164,7 @@ def pandas_read_text(
 
 
 def coerce_dtypes(df, dtypes):
-    """ Coerce dataframe to dtypes safely
+    """Coerce dataframe to dtypes safely
 
     Operates in place
 
@@ -265,7 +265,7 @@ def text_blocks_to_pandas(
     specified_dtypes=None,
     path=None,
 ):
-    """ Convert blocks of bytes to a dask.dataframe
+    """Convert blocks of bytes to a dask.dataframe
 
     This accepts a list of lists of values of bytes where each list corresponds
     to one file, and the value of bytes concatenate to comprise the entire

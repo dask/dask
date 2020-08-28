@@ -15,7 +15,7 @@ def add_leading_dimension(x):
 
 
 def imread(filename, imread=None, preprocess=None):
-    """ Read a stack of images into a dask array
+    """Read a stack of images into a dask array
 
     Parameters
     ----------

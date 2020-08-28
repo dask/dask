@@ -105,7 +105,7 @@ def label(x, cache=None):
 
 
 def box_label(key, verbose=False):
-    """ Label boxes in graph by chunk index
+    """Label boxes in graph by chunk index
 
     >>> box_label(('x', 1, 2, 3))
     '(1, 2, 3)'

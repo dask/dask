@@ -97,7 +97,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
 
 
 class Resampler(object):
-    """ Class for resampling timeseries data.
+    """Class for resampling timeseries data.
 
     This class is commonly encountered when using ``obj.resample(...)`` which
     return ``Resampler`` objects.
@@ -129,7 +129,7 @@ class Resampler(object):
         self._kwargs = kwargs
 
     def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
-        """ Aggregate using one or more operations
+        """Aggregate using one or more operations
 
         Parameters
         ----------

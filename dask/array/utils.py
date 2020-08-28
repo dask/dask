@@ -29,7 +29,7 @@ def normalize_to_array(x):
 
 
 def meta_from_array(x, ndim=None, dtype=None):
-    """ Normalize an array to appropriate meta object
+    """Normalize an array to appropriate meta object
 
     Parameters
     ----------
