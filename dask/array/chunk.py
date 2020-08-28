@@ -87,7 +87,7 @@ with ignoring(AttributeError):
 
 
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
-    """ Coarsen array by applying reduction to fixed size neighborhoods
+    """Coarsen array by applying reduction to fixed size neighborhoods
 
     Parameters
     ----------
@@ -144,7 +144,7 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
 
 
 def trim(x, axes=None):
-    """ Trim boundaries off of array
+    """Trim boundaries off of array
 
     >>> x = np.arange(24).reshape((4, 6))
     >>> trim(x, axes={0: 0, 1: 1})
@@ -166,7 +166,7 @@ def trim(x, axes=None):
 
 
 def topk(a, k, axis, keepdims):
-    """ Chunk and combine function of topk
+    """Chunk and combine function of topk
 
     Extract the k largest elements from a on the given axis.
     If k is negative, extract the -k smallest elements instead.
@@ -184,7 +184,7 @@ def topk(a, k, axis, keepdims):
 
 
 def topk_aggregate(a, k, axis, keepdims):
-    """ Final aggregation function of topk
+    """Final aggregation function of topk
 
     Invoke topk one final time and then sort the results internally.
     """
@@ -202,7 +202,7 @@ def topk_aggregate(a, k, axis, keepdims):
 
 
 def argtopk_preprocess(a, idx):
-    """ Preparatory step for argtopk
+    """Preparatory step for argtopk
 
     Put data together with its original indices in a tuple.
     """
@@ -210,7 +210,7 @@ def argtopk_preprocess(a, idx):
 
 
 def argtopk(a_plus_idx, k, axis, keepdims):
-    """ Chunk and combine function of argtopk
+    """Chunk and combine function of argtopk
 
     Extract the indices of the k largest elements from a on the given axis.
     If k is negative, extract the indices of the -k smallest elements instead.
@@ -239,7 +239,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
-    """ Final aggregation function of argtopk
+    """Final aggregation function of argtopk
 
     Invoke argtopk one final time, sort the results internally, drop the data
     and return the index only.
@@ -278,7 +278,7 @@ def view(x, dtype, order="C"):
 
 
 def slice_with_int_dask_array(x, idx, offset, x_size, axis):
-    """ Chunk function of `slice_with_int_dask_array_on_axis`.
+    """Chunk function of `slice_with_int_dask_array_on_axis`.
     Slice one chunk of x by one chunk of idx.
 
     Parameters
@@ -320,7 +320,7 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
 
 
 def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
-    """ Final aggregation function of `slice_with_int_dask_array_on_axis`.
+    """Final aggregation function of `slice_with_int_dask_array_on_axis`.
     Aggregate all chunks of x by one chunk of idx, reordering the output of
     `slice_with_int_dask_array`.
 

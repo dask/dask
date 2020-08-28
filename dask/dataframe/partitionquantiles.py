@@ -429,8 +429,7 @@ def dtype_info(df):
 
 
 def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
-    """ Approximate quantiles of Series used for repartitioning
-    """
+    """Approximate quantiles of Series used for repartitioning"""
     assert isinstance(df, Series)
     # currently, only Series has quantile method
     # Index.quantile(list-like) must be pd.Series, not pd.Index
