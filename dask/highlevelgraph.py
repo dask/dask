@@ -83,7 +83,7 @@ class BasicLayer(Layer):
 
 
 class HighLevelGraph(Mapping):
-    """ Task graph composed of layers of dependent subgraphs
+    """Task graph composed of layers of dependent subgraphs
 
     This object encodes a Dask task graph that is composed of layers of
     dependent subgraphs, such as commonly occurs when building task graphs
@@ -184,7 +184,7 @@ class HighLevelGraph(Mapping):
 
     @classmethod
     def from_collections(cls, name, layer, dependencies=()):
-        """ Construct a HighLevelGraph from a new layer and a set of collections
+        """Construct a HighLevelGraph from a new layer and a set of collections
 
         This constructs a HighLevelGraph in the common case where we have a single
         new layer and a set of old collections on which we want to depend.

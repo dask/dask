@@ -1430,7 +1430,7 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
 
 
 def split_at_breaks(array, breaks, axis=0):
-    """ Split an array into a list of arrays (using slices) at the given breaks
+    """Split an array into a list of arrays (using slices) at the given breaks
 
     >>> split_at_breaks(np.arange(6), [3, 5])
     [array([0, 1, 2]), array([3, 4]), array([5])]

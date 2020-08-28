@@ -15,7 +15,7 @@ import dask.array as da
 
 
 def test_rechunk_internals_1():
-    """ Test the cumdims_label and _breakpoints and
+    """Test the cumdims_label and _breakpoints and
     _intersect_1d internal funcs to rechunk."""
     new = cumdims_label(((1, 1, 2), (1, 5, 1)), "n")
     old = cumdims_label(((4,), (1,) * 5), "o")
