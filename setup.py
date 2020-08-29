@@ -23,7 +23,7 @@ extras_require = {
         "fsspec >= 0.6.0",
     ],
     "distributed": ["distributed >= 2.0"],
-    "diagnostics": ["bokeh >= 1.0.0"],
+    "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
     "delayed": ["cloudpickle >= 0.2.2", "toolz >= 0.8.2"],
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
