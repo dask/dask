@@ -5807,6 +5807,12 @@ async def test_wait_for_workers(c, s, a, b):
     assert time() < start + 1
     await w.close()
 
+    with pytest.raises(TimeoutError) as info:
+        await c.wait_for_workers(n_workers=10, timeout="1 ms")
+
+    assert "2/10" in str(info.value).replace(" ", "")
+    assert "1 ms" in str(info.value)
+
 
 @pytest.mark.skipif(WINDOWS, reason="num_fds not supported on windows")
 @pytest.mark.asyncio

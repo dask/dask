@@ -1157,15 +1157,24 @@ class Client:
         except EnvironmentError:
             logger.debug("Not able to query scheduler for identity")
 
-    async def _wait_for_workers(self, n_workers=0):
+    async def _wait_for_workers(self, n_workers=0, timeout=None):
         info = await self.scheduler.identity()
+        if timeout:
+            deadline = time() + parse_timedelta(timeout)
+        else:
+            deadline = None
         while n_workers and len(info["workers"]) < n_workers:
+            if deadline and time() > deadline:
+                raise TimeoutError(
+                    "Only %d/%d workers arrived after %s"
+                    % (len(info["workers"]), n_workers, timeout)
+                )
             await asyncio.sleep(0.1)
             info = await self.scheduler.identity()
 
-    def wait_for_workers(self, n_workers=0):
+    def wait_for_workers(self, n_workers=0, timeout=None):
         """Blocking call to wait for n workers before continuing"""
-        return self.sync(self._wait_for_workers, n_workers)
+        return self.sync(self._wait_for_workers, n_workers, timeout=timeout)
 
     def _heartbeat(self):
         if self.scheduler_comm:
