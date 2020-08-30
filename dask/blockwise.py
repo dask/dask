@@ -1,14 +1,13 @@
 import itertools
 import warnings
-from collections.abc import Mapping
 
 import numpy as np
 
 import tlz as toolz
 
-from .core import reverse_dict
+from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
-from .highlevelgraph import HighLevelGraph
+from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
@@ -132,7 +131,7 @@ def blockwise(
     return subgraph
 
 
-class Blockwise(Mapping):
+class Blockwise(Layer):
     """Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.
@@ -206,21 +205,31 @@ class Blockwise(Mapping):
     @property
     def _dict(self):
         if hasattr(self, "_cached_dict"):
-            return self._cached_dict
+            return self._cached_dict["dsk"]
         else:
             keys = tuple(map(blockwise_token, range(len(self.indices))))
             dsk, _ = fuse(self.dsk, [self.output])
             func = SubgraphCallable(dsk, self.output, keys)
-            self._cached_dict = make_blockwise_graph(
+
+            key_deps = {}
+            non_blockwise_tasks = {}
+            dsk = make_blockwise_graph(
                 func,
                 self.output,
                 self.output_indices,
                 *list(toolz.concat(self.indices)),
                 new_axes=self.new_axes,
                 numblocks=self.numblocks,
-                concatenate=self.concatenate
+                concatenate=self.concatenate,
+                key_deps=key_deps,
+                non_blockwise_tasks=non_blockwise_tasks,
             )
-        return self._cached_dict
+            self._cached_dict = {
+                "dsk": dsk,
+                "key_deps": key_deps,
+                "non_blockwise_tasks": non_blockwise_tasks,
+            }
+        return self._cached_dict["dsk"]
 
     def __getitem__(self, key):
         return self._dict[key]
@@ -242,6 +251,32 @@ class Blockwise(Mapping):
                     out_d[a] = d[a]
 
         return out_d
+
+    def get_external_dependencies(self, known_keys):
+        _ = self._dict  # trigger materialization
+        key_deps = self._cached_dict["key_deps"]
+        non_blockwise_tasks = self._cached_dict["non_blockwise_tasks"]
+        ext_deps = self._cached_dict.get("ext_deps", None)
+        if ext_deps is None:
+            ext_deps = set()
+            for v in key_deps.values():
+                ext_deps.update(v)
+            self._cached_dict["ext_deps"] = ext_deps
+            ext_deps |= keys_in_tasks(known_keys, non_blockwise_tasks.values())
+
+        org = super().get_external_dependencies(known_keys=known_keys)
+        assert ext_deps == org
+        return ext_deps
+
+    def cull(self, keys):
+        _ = self._dict  # trigger materialization
+
+        # TODO: Are we sure that tasks in `self` never depend on
+        # other tasks in `self`?
+        return BasicLayer(
+            mapping={k: self[k] for k in keys},
+            external_dependencies=self._cached_dict["ext_deps"],
+        )
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
@@ -353,6 +388,8 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     numblocks = kwargs.pop("numblocks")
     concatenate = kwargs.pop("concatenate", None)
     new_axes = kwargs.pop("new_axes", {})
+    key_deps = kwargs.pop("key_deps", None)
+    non_blockwise_tasks = kwargs.pop("non_blockwise_tasks", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
@@ -429,28 +466,39 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     dsk = {}
     # Create argument lists
     for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
+        deps = []
+        non_blockwise_task = []
         coords = out_coords + dummies
         args = []
         for cmap, axes, arg_ind in zip(coord_maps, concat_axes, argpairs):
             arg, ind = arg_ind
             if ind is None:
                 args.append(arg)
+                non_blockwise_task.append(arg)
             else:
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
                     tups = lol_product((arg,), arg_coords)
+                    deps.extend(flatten(tups))
 
                     if concatenate:
                         tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
+                    deps.append(tups)
                 args.append(tups)
+        out_key = (output,) + out_coords
+
+        if key_deps is not None and len(deps):
+            key_deps[out_key] = deps
+            non_blockwise_tasks[out_key] = non_blockwise_task
+
         if kwargs:
             val = (apply, func, args, kwargs2)
         else:
             args.insert(0, func)
             val = tuple(args)
-        dsk[(output,) + out_coords] = val
+        dsk[out_key] = val
 
     if dsk2:
         dsk.update(ensure_dict(dsk2))
