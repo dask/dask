@@ -10,13 +10,13 @@ from .core import reverse_dict, get_dependencies, flatten, keys_in_tasks
 
 
 class Layer(Mapping):
-    """ High level graph layer
+    """High level graph layer
 
     This abstract class establish a protocol for high level graph layers.
     """
 
     def cull(self, keys: Set) -> "Layer":
-        """ Return a new Layer with only the tasks required to calculate `keys`.
+        """Return a new Layer with only the tasks required to calculate `keys`.
 
         In other words, remove unnecessary tasks from the layer.
 
@@ -352,7 +352,7 @@ class HighLevelGraph(Mapping):
         return ret
 
     def cull(self, keys):
-        """ Return new high level graph with only the tasks required to calculate keys.
+        """Return new high level graph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
         ``keys`` may be a single key or list of keys.

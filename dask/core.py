@@ -6,7 +6,7 @@ no_default = "__no_default__"
 
 
 def ishashable(x):
-    """ Is x hashable?
+    """Is x hashable?
 
     Examples
     --------
@@ -24,7 +24,7 @@ def ishashable(x):
 
 
 def istask(x):
-    """ Is x a runnable task?
+    """Is x a runnable task?
 
     A task is a tuple with a callable first argument
 
@@ -84,7 +84,7 @@ def lists_to_tuples(res, keys):
 
 
 def _execute_task(arg, cache, dsk=None):
-    """ Do the actual work of collecting data and executing a function
+    """Do the actual work of collecting data and executing a function
 
     Examples
     --------
@@ -128,7 +128,7 @@ def _execute_task(arg, cache, dsk=None):
 
 
 def get(dsk, out, cache=None):
-    """ Get value from Dask
+    """Get value from Dask
 
     Examples
     --------
@@ -157,7 +157,7 @@ def get(dsk, out, cache=None):
 
 
 def keys_in_tasks(keys, tasks, as_list=False):
-    """ Returns the keys in `keys` that are in `tasks`
+    """Returns the keys in `keys` that are in `tasks`
 
     Examples
     --------
@@ -192,7 +192,7 @@ def keys_in_tasks(keys, tasks, as_list=False):
 
 
 def get_dependencies(dsk, key=None, task=no_default, as_list=False):
-    """ Get the immediate tasks on which this task depends
+    """Get the immediate tasks on which this task depends
 
     Examples
     --------
@@ -231,7 +231,7 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
 
 
 def get_deps(dsk):
-    """ Get dependencies and dependents from dask dask graph
+    """Get dependencies and dependents from dask dask graph
 
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
@@ -293,7 +293,7 @@ def reverse_dict(d):
 
 
 def subs(task, key, val):
-    """ Perform a substitution on a task
+    """Perform a substitution on a task
 
     Examples
     --------
@@ -404,7 +404,7 @@ def toposort(dsk, dependencies=None):
 
 
 def getcycle(d, keys):
-    """ Return a list of nodes that form a cycle if Dask is not a DAG.
+    """Return a list of nodes that form a cycle if Dask is not a DAG.
 
     Returns an empty list if no cycle is found.
 
@@ -425,7 +425,7 @@ def getcycle(d, keys):
 
 
 def isdag(d, keys):
-    """ Does Dask form a directed acyclic graph when calculating keys?
+    """Does Dask form a directed acyclic graph when calculating keys?
 
     ``keys`` may be a single key or list of keys.
 
@@ -464,7 +464,7 @@ class literal(object):
 
 
 def quote(x):
-    """ Ensure that this value remains this value in a dask graph
+    """Ensure that this value remains this value in a dask graph
 
     Some values in dask graph take on special meaning. Sometimes we want to
     ensure that our data is not interpreted but remains literal.
