@@ -690,7 +690,9 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "edge", {}),
         ((10, 11), (4, 5), 0, "linear_ramp", {"end_values": 2}),
         ((10, 11), (4, 5), 0, "reflect", {}),
+        ((10, 11), (4, 5), 0, "reflect", {"reflect_type": "odd"}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
+        ((10, 11), (4, 5), 0, "symmetric", {"reflect_type": "odd"}),
         ((10, 11), (4, 5), 0, "wrap", {}),
         pytest.param(
             (10, 11),
@@ -712,6 +714,37 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
     da_r = da.pad(da_a, pad_width, mode, **kwargs)
 
     assert da_r is da_a
+
+    assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize(
+    "shape, pad_width, mode, kwargs",
+    [
+        ((0, 1), ((0, 0), (2, 3)), "constant", {"constant_values": 2}),
+        ((0, 1), ((2, 0), (2, 3)), "constant", {"constant_values": 2}),
+        ((0, 1), ((0, 0), (2, 3)), "edge", {}),
+        ((0, 1), ((0, 0), (2, 3)), "linear_ramp", {"end_values": 2}),
+        ((0, 1), ((0, 0), (2, 3)), "reflect", {}),
+        ((0, 1), ((0, 0), (2, 3)), "symmetric", {}),
+        ((0, 1), ((0, 0), (2, 3)), "wrap", {}),
+        pytest.param(
+            (0, 1),
+            ((0, 0), (2, 3)),
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
+    ],
+)
+def test_pad_1_width(shape, pad_width, mode, kwargs):
+    np_a = np.random.random(shape)
+    da_a = da.from_array(np_a)
+
+    np_r = np.pad(np_a, pad_width, mode, **kwargs)
+    da_r = da.pad(da_a, pad_width, mode, **kwargs)
 
     assert_eq(np_r, da_r)
 
@@ -794,7 +827,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         "reflect",
         "symmetric",
         "wrap",
-        pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
+        pytest.param("median", marks=pytest.mark.xfail(raises=NotImplementedError)),
         pytest.param(
             "empty",
             marks=pytest.mark.skip(

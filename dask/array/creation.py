@@ -1013,18 +1013,24 @@ def pad_edge(array, pad_width, mode, **kwargs):
 
 
 def _slice_at_axis(sl, axis):
-    """ See https://github.com/numpy/numpy/blob/master/numpy/lib/arraypad.py#L33
+    """
+    Construct tuple of slices to slice an array in the given dimension.
     """
     return (slice(None),) * axis + (sl,) + (...,)
 
 
 def _pad_wrap_both(array, axis, left_pad, right_pad):
+    """
+    Wraps array along axis with at most left_pad and right_pad
+    Returns padded array along with left_pad and right_pad to iteratively
+    call this method.
+    """
     out = []
 
     if left_pad > 0:
         chunk_length = min(array.shape[axis], left_pad)
 
-        left_slice = _slice_at_axis(slice( - chunk_length, None), axis)
+        left_slice = _slice_at_axis(slice(-chunk_length, None), axis)
         left_chunk = array[left_slice]
         out.append(left_chunk)
 
@@ -1044,7 +1050,12 @@ def _pad_wrap_both(array, axis, left_pad, right_pad):
     return concatenate(out, axis=axis), left_pad, right_pad
 
 
-def _pad_reflect_both(array, axis, pad_left, pad_right, mode, reflect_type):
+def _pad_reflect_both(array, axis, left_pad, right_pad, mode, reflect_type):
+    """
+    Pads array along axis with symmetric or reflect method.
+    Returns padded array along with left_pad and right_pad to iteratively
+    call this method.
+    """
     out = []
 
     if mode == "symmetric":
@@ -1058,8 +1069,8 @@ def _pad_reflect_both(array, axis, pad_left, pad_right, mode, reflect_type):
 
     old_length = array.shape[axis] + old_length_correction
 
-    if pad_left > 0:
-        chunk_length = min(old_length, pad_left)
+    if left_pad > 0:
+        chunk_length = min(old_length, left_pad)
 
         # stop cannot be -1, set to None to include last element
         stop = None if edge_offset == 1 else 0
@@ -1073,13 +1084,13 @@ def _pad_reflect_both(array, axis, pad_left, pad_right, mode, reflect_type):
             edge_slice = _slice_at_axis(slice(0, 1), axis)
             left_chunk = 2 * array[edge_slice] - left_chunk
 
-        pad_left -= chunk_length
+        left_pad -= chunk_length
         out.append(left_chunk)
 
     out.append(array)
 
-    if pad_right > 0:
-        chunk_length = min(old_length, pad_right)
+    if right_pad > 0:
+        chunk_length = min(old_length, right_pad)
 
         start = edge_offset - 2
         stop = start - chunk_length
@@ -1093,9 +1104,9 @@ def _pad_reflect_both(array, axis, pad_left, pad_right, mode, reflect_type):
             right_chunk = 2 * array[edge_slice] - right_chunk
 
         out.append(right_chunk)
-        pad_right -= chunk_length
+        right_pad -= chunk_length
 
-    return concatenate(out, axis=axis), pad_left, pad_right
+    return concatenate(out, axis=axis), left_pad, right_pad
 
 
 def pad_reuse(array, pad_width, mode, reflect_type):
@@ -1109,16 +1120,21 @@ def pad_reuse(array, pad_width, mode, reflect_type):
     assert reflect_type in {"even", "odd"}
 
     if mode == "wrap":
-        for axis, (pad_left, pad_right) in enumerate(pad_width):
-            while pad_left > 0 or pad_right > 0:
-                array, pad_left, pad_right = _pad_wrap_both(array, axis, pad_left, pad_right)
+        for axis, (left_pad, right_pad) in enumerate(pad_width):
+            while left_pad > 0 or right_pad > 0:
+                array, left_pad, right_pad = _pad_wrap_both(
+                    array, axis, left_pad, right_pad
+                )
 
     else:
-        for axis, (pad_left, pad_right) in enumerate(pad_width):
-            while pad_left > 0 or pad_right > 0:
-                array, pad_left, pad_right = _pad_reflect_both(array, axis, pad_left, pad_right, mode, reflect_type)
+        for axis, (left_pad, right_pad) in enumerate(pad_width):
+            while left_pad > 0 or right_pad > 0:
+                array, left_pad, right_pad = _pad_reflect_both(
+                    array, axis, left_pad, right_pad, mode, reflect_type
+                )
 
     return array
+
 
 def pad_stats(array, pad_width, mode, stat_length):
     """
