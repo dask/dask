@@ -67,10 +67,14 @@ class Layer(Mapping):
 
 
 class BasicLayer(Layer):
-    """ Basic implementation of `Layer` that takes a mapping """
+    """Basic implementation of `Layer` that takes a mapping and
 
-    def __init__(self, mapping):
+    optionally an external_dependencies.
+    """
+
+    def __init__(self, mapping, external_dependencies=None):
         self.__mapping = mapping
+        self.__external_dependencies = external_dependencies
 
     def __getitem__(self, k):
         return self.__mapping[k]
@@ -80,6 +84,12 @@ class BasicLayer(Layer):
 
     def __len__(self):
         return len(self.__mapping)
+
+    def get_external_dependencies(self, known_keys):
+        if self.__external_dependencies is not None:
+            return self.__external_dependencies
+        else:
+            return super().get_external_dependencies(known_keys)
 
 
 class HighLevelGraph(Mapping):
