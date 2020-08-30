@@ -167,7 +167,7 @@ def keys_in_tasks(keys, tasks, as_list=False):
     ...        'w': (inc, 'z'),
     ...        'a': (add, (inc, 'x'), 1)}
 
-    >>> keys_in_tasks(dsk, ['x', 'y', 'j'])
+    >>> keys_in_tasks(dsk, ['x', 'y', 'j'])  # doctest: +SKIP
     set({'x', 'y'})
     """
     ret = []
