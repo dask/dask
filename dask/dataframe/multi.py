@@ -11,7 +11,7 @@ There are two important cases:
 2.  We combine along an unpartitioned index or other column
 
 In the first case we know which partitions of each dataframe interact with
-which others.  This lets uss be significantly more clever and efficient.
+which others.  This lets us be significantly more clever and efficient.
 
 In the second case each partition from one dataset interacts with all
 partitions from the other.  We handle this through a shuffle operation.

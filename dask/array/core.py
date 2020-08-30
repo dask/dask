@@ -3903,7 +3903,7 @@ def elemwise(op, *args, **kwargs):
     for arg in args:
         shape = getattr(arg, "shape", ())
         if any(is_dask_collection(x) for x in shape):
-            # Want to excluded Delayed shapes and dd.Scalar
+            # Want to exclude Delayed shapes and dd.Scalar
             shape = ()
         shapes.append(shape)
 
