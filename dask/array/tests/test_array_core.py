@@ -4138,7 +4138,7 @@ def test_dask_array_holds_scipy_sparse_containers():
 
     z = x.T.map_blocks(scipy.sparse.csr_matrix)
     zz = z.compute(scheduler="single-threaded")
-    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert isinstance(zz, scipy.sparse.spmatrix)
     assert (zz == xx.T).all()
 
 
