@@ -1416,7 +1416,7 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
     (4, 4, 2)
     >>> align_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
     (20, 4, 4)
-    >>> align_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multple=10)
+    >>> align_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
     (20, 10, 20, 20, 20, 2)
     """
 
