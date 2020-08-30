@@ -381,12 +381,6 @@ class Serialized:
         self.header = header
         self.frames = frames
 
-    def deserialize(self):
-        from .core import decompress
-
-        frames = decompress(self.header, self.frames)
-        return deserialize(self.header, frames)
-
     def __eq__(self, other):
         return (
             isinstance(other, Serialized)
