@@ -5,6 +5,7 @@ from collections.abc import Iterable
 from functools import wraps, partial
 from numbers import Real, Integral
 from distutils.version import LooseVersion
+from typing import List
 
 import numpy as np
 from tlz import concat, sliding_window, interleave
@@ -1403,16 +1404,68 @@ def piecewise(x, condlist, funclist, *args, **kw):
     )
 
 
+def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
+    """ Returns a new chunking aligned with the coarsening multiple"""
+
+    def choose_new_size(multiple, q, left):
+        """
+        See if multiple * q is a good choice when 'left' elements are remaining.
+        Else return multiple * (q-1)
+        """
+        possible = multiple * q
+        if (left - possible) > 0:
+            return possible
+        else:
+            return multiple * (q - 1)
+
+    newchunks = []
+    left = sum(chunks) - sum(newchunks)
+    chunkgen = (c for c in chunks)
+    while left > 0:
+        if left < multiple:
+            newchunks.append(left)
+            break
+
+        chunk_size = next(chunkgen, 0)
+        if chunk_size == 0:
+            chunk_size = multiple
+
+        q, r = divmod(chunk_size, multiple)
+        if q == 0:
+            continue
+        elif r == 0:
+            newchunks.append(chunk_size)
+        elif r >= 5:
+            newchunks.append(choose_new_size(multiple, q + 1, left))
+        else:
+            newchunks.append(choose_new_size(multiple, q, left))
+
+        left = sum(chunks) - sum(newchunks)
+
+    # checks
+    assert sum(chunks) == sum(newchunks)
+    if sum(chunks) % multiple == 0:
+        lastind = None
+    else:
+        lastind = -1
+    assert all(c % multiple == 0 for c in newchunks[slice(lastind)])
+
+    return tuple(newchunks)
+
+
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
-    if not trim_excess and not all(
-        bd % div == 0 for i, div in axes.items() for bd in x.chunks[i]
-    ):
+    if not trim_excess and not all(x.shape[i] % div == 0 for i, div in axes.items()):
         msg = "Coarsening factor does not align with block dimensions"
         raise ValueError(msg)
 
     if "dask" in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
+
+    for i, div in axes.items():
+        newchunks = aligned_coarsen_chunks(x.chunks[i], div)
+        if newchunks != x.chunks[i]:
+            x = x.rechunk({i: newchunks})
 
     name = "coarsen-" + tokenize(reduction, x, axes, trim_excess)
     dsk = {
