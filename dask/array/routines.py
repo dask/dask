@@ -1442,14 +1442,6 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
 
         left = sum(chunks) - sum(newchunks)
 
-    # checks
-    assert sum(chunks) == sum(newchunks)
-    if sum(chunks) % multiple == 0:
-        lastind = None
-    else:
-        lastind = -1
-    assert all(c % multiple == 0 for c in newchunks[slice(lastind)])
-
     return tuple(newchunks)
 
 
