@@ -92,8 +92,13 @@ async def test_prometheus(c, s, a, b):
         assert response.headers["Content-Type"] == "text/plain; version=0.0.4"
 
         txt = response.body.decode("utf8")
-        families = {familiy.name for familiy in text_string_to_metric_families(txt)}
+        families = {
+            family.name: family for family in text_string_to_metric_families(txt)
+        }
         assert "dask_scheduler_workers" in families
+
+        client = families["dask_scheduler_clients"]
+        assert client.samples[0].value == 1.0
 
 
 @gen_cluster(client=True, clean_kwargs={"threads": False})
