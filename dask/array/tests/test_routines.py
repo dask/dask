@@ -347,7 +347,7 @@ def test_dot_method():
 
 @pytest.mark.parametrize("shape, chunks", [((20,), (6,)), ((4, 5), (2, 3))])
 def test_vdot(shape, chunks):
-    np.random.random(1337)
+    np.random.seed(1337)
 
     x = 2 * np.random.random((2,) + shape) - 1
     x = x[0] + 1j * x[1]
@@ -365,7 +365,7 @@ def test_vdot(shape, chunks):
 
 @pytest.mark.parametrize("shape1, shape2", [((20,), (6,)), ((4, 5), (2, 3))])
 def test_outer(shape1, shape2):
-    np.random.random(1337)
+    np.random.seed(1337)
 
     x = 2 * np.random.random(shape1) - 1
     y = 2 * np.random.random(shape2) - 1
@@ -1521,11 +1521,29 @@ def test_coarsen():
 
 def test_coarsen_with_excess():
     x = da.arange(10, chunks=5)
-    assert_eq(da.coarsen(np.min, x, {0: 3}, trim_excess=True), np.array([0, 5]))
+    assert_eq(da.coarsen(np.min, x, {0: 5}, trim_excess=True), np.array([0, 5]))
     assert_eq(
         da.coarsen(np.sum, x, {0: 3}, trim_excess=True),
-        np.array([0 + 1 + 2, 5 + 6 + 7]),
+        np.array([0 + 1 + 2, 3 + 4 + 5, 6 + 7 + 8]),
     )
+
+
+def test_coarsen_bad_chunks():
+
+    x1 = da.arange(10, chunks=5)
+    x2 = x1.rechunk((1, 2, 3, 4))
+    assert_eq(da.coarsen(np.sum, x1, {0: 5}), da.coarsen(np.sum, x2, {0: 5}))
+
+
+def test_aligned_coarsen_chunks():
+
+    from ..routines import aligned_coarsen_chunks as acc
+
+    assert acc((20, 10, 15, 23, 24), 10) == (20, 10, 20, 20, 20, 2)
+    assert acc((20, 10, 15, 42, 23, 24), 10) == (20, 10, 20, 40, 20, 20, 4)
+    assert acc((20, 10, 15, 47, 23, 24), 10) == (20, 10, 20, 50, 20, 10, 9)
+    assert acc((2, 10, 15, 47, 23, 24), 10) == (10, 20, 50, 20, 20, 1)
+    assert acc((10, 20, 30, 40, 2), 10) == (10, 20, 30, 40, 2)
 
 
 def test_insert():

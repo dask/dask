@@ -21,7 +21,7 @@ import dask.array as da
 import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
-from dask.utils import ignoring, tmpfile, tmpdir, key_split
+from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
 from dask.utils_test import inc, dec
 
 from dask.array.core import (
@@ -94,6 +94,13 @@ def test_top():
 
     assert top(identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}) == {
         ("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])
+    }
+
+
+def test_top_with_kwargs():
+    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == {
+        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
+        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
     }
 
 
@@ -2406,7 +2413,12 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(dx.dask[dx.name,], np.ndarray)
+    assert isinstance(
+        dx.dask[
+            dx.name,
+        ],
+        np.ndarray,
+    )
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
@@ -4126,7 +4138,7 @@ def test_dask_array_holds_scipy_sparse_containers():
 
     z = x.T.map_blocks(scipy.sparse.csr_matrix)
     zz = z.compute(scheduler="single-threaded")
-    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert isinstance(zz, scipy.sparse.spmatrix)
     assert (zz == xx.T).all()
 
 
