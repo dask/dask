@@ -108,10 +108,7 @@ def read_text(
             for start in range(0, len(files), files_per_partition):
                 block_files = files[start : (start + files_per_partition)]
                 block_lines = delayed(concat)(
-                    delayed(map)(
-                        partial(file_to_blocks, include_path),
-                        block_files,
-                    )
+                    delayed(map)(partial(file_to_blocks, include_path), block_files,)
                 )
                 blocks.append(block_lines)
     else:

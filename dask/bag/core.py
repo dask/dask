@@ -2356,10 +2356,7 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     name = "shuffle-" + token
 
     end = dict(
-        (
-            (name, i),
-            (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),
-        )
+        ((name, i), (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),)
         for i, j in enumerate(join)
     )
 

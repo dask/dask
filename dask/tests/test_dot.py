@@ -285,9 +285,7 @@ def test_immutable_attributes():
     attrs_data_test = copy.deepcopy(attrs_data)
 
     to_graphviz(
-        dsk,
-        function_attributes=attrs_func,
-        data_attributes=attrs_data,
+        dsk, function_attributes=attrs_func, data_attributes=attrs_data,
     )
 
     assert attrs_func_test == attrs_func

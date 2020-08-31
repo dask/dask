@@ -29,10 +29,7 @@ def optimize(dsk, keys, **kwargs):
     if fuse_subgraphs is None:
         fuse_subgraphs = True
     dsk, dependencies = fuse(
-        dsk,
-        keys,
-        dependencies=dependencies,
-        fuse_subgraphs=fuse_subgraphs,
+        dsk, keys, dependencies=dependencies, fuse_subgraphs=fuse_subgraphs,
     )
     dsk, _ = cull(dsk, keys)
     return dsk

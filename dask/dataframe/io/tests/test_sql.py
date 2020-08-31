@@ -347,12 +347,7 @@ def tmp_db_uri():
 @pytest.mark.parametrize("parallel", (False, True))
 def test_to_sql(npartitions, parallel):
     df_by_age = df.set_index("age")
-    df_appended = pd.concat(
-        [
-            df,
-            df,
-        ]
-    )
+    df_appended = pd.concat([df, df,])
 
     ddf = dd.from_pandas(df, npartitions)
     ddf_by_age = ddf.set_index("age")
