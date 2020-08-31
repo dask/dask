@@ -1023,7 +1023,7 @@ def test_gh4043(lock, asarray, fancy):
 
 
 def test_slice_array_3d_with_bool_numpy_array():
-    # https://github.com/ask/dask/issues/6089
+    # https://github.com/dask/dask/issues/6089
     array = da.arange(0, 24).reshape((4, 3, 2))
     mask = np.arange(0, 24).reshape((4, 3, 2)) > 12
 
