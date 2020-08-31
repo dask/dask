@@ -1,6 +1,57 @@
 Changelog
 =========
 
+2.25.0 / 2020-08-28
+-------------------
+
+Core
+++++
+
+- Compare key hashes in ``subs()`` (:pr:`6559`) `Mads R. B. Kristensen`_
+- Rerun with latest ``black`` release (:pr:`6568`) `James Bourbeau`_
+- License update (:pr:`6554`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Add gs ``read_parquet`` example (:pr:`6548`) `Ray Bell`_
+
+Documentation
++++++++++++++
+
+- Remove version from documentation page names (:pr:`6558`) `James Bourbeau`_
+- Update ``kubernetes-helm.rst`` (:pr:`6523`) `David Sheldon`_
+- Stop 2020 survey (:pr:`6547`) `Tom Augspurger`_
+
+
+2.24.0 / 2020-08-22
+-------------------
+
+Array
++++++
+
+-   Fix setting random seed in tests. (:pr:`6518`) `Elliott Sales de Andrade`_
+-   Support meta in apply gufunc (:pr:`6521`) `joshreback`_
+-   Replace `cupy.sparse` with `cupyx.scipy.sparse` (:pr:`6530`) `John A Kirkham`_
+
+Dataframe
++++++++++
+
+-   Bump up tolerance for rolling tests (:pr:`6502`) `Julia Signell`_
+-   Implement DatFrame.__len__ (:pr:`6515`) `Tom Augspurger`_
+-   Infer arrow schema in to_parquet  (for ArrowEngine`) (:pr:`6490`) `Richard Zamora`_
+-   Fix parquet test when no pyarrow (:pr:`6524`) `Martin Durant`_
+-   Remove problematic ``filter`` arguments in ArrowEngine (:pr:`6527`) `Richard Zamora`_
+-   Avoid schema validation by default in ArrowEngine (:pr:`6536`) `Richard Zamora`_
+
+Core
+++++
+
+-   Use unpack_collections in make_blockwise_graph (:pr:`6517`) `Thomas Fan`_
+-   Move key_split() from optimization.py to utils.py (:pr:`6529`) `Mads R. B. Kristensen`_
+-   Make tests run on moto server (:pr:`6528`) `Martin Durant`_
+
+
 2.23.0 / 2020-08-14
 -------------------
 
@@ -3502,3 +3553,4 @@ Other
 .. _`Jack Xiaosong Xu`: https://github.com/jackxxu
 .. _`Mike McCarty`: https://github.com/mmccarty
 .. _`michaelnarodovitch`: https://github.com/michaelnarodovitch
+.. _`David Sheldon`: https://github.com/davidsmf

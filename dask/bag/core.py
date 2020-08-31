@@ -130,7 +130,7 @@ def lazify(dsk):
 
 
 def inline_singleton_lists(dsk, keys, dependencies=None):
-    """ Inline lists that are only used once.
+    """Inline lists that are only used once.
 
     >>> d = {'b': (list, 'a'),
     ...      'c': (f, 'b', 1)}     # doctest: +SKIP
@@ -204,7 +204,7 @@ def to_textfiles(
     last_endline=False,
     **kwargs
 ):
-    """ Write dask Bag to disk, one filename per partition, one line per element.
+    """Write dask Bag to disk, one filename per partition, one line per element.
 
     **Paths**: This will create one file for each partition in your bag. You
     can specify the filenames in a variety of ways.
@@ -303,7 +303,7 @@ def finalize_item(results):
 
 
 class StringAccessor(object):
-    """ String processing functions
+    """String processing functions
 
     Examples
     --------
@@ -340,7 +340,7 @@ class StringAccessor(object):
                 raise
 
     def match(self, pattern):
-        """ Filter strings by those that match a pattern.
+        """Filter strings by those that match a pattern.
 
         Examples
         --------
@@ -395,7 +395,7 @@ class Item(DaskMethodsMixin):
 
     @staticmethod
     def from_delayed(value):
-        """ Create bag item from a dask.delayed value.
+        """Create bag item from a dask.delayed value.
 
         See ``dask.bag.from_delayed`` for details
         """
@@ -442,7 +442,7 @@ class Item(DaskMethodsMixin):
 
 
 class Bag(DaskMethodsMixin):
-    """ Parallel collection of Python objects
+    """Parallel collection of Python objects
 
     Examples
     --------
@@ -638,7 +638,7 @@ class Bag(DaskMethodsMixin):
         self.dask, self.name, self.npartitions = state
 
     def filter(self, predicate):
-        """ Filter elements in collection by a predicate function.
+        """Filter elements in collection by a predicate function.
 
         >>> def iseven(x):
         ...     return x % 2 == 0
@@ -657,7 +657,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(graph, name, self.npartitions)
 
     def random_sample(self, prob, random_state=None):
-        """ Return elements from bag with probability of ``prob``.
+        """Return elements from bag with probability of ``prob``.
 
         Parameters
         ----------
@@ -692,7 +692,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(graph, name, self.npartitions)
 
     def remove(self, predicate):
-        """ Remove elements in collection that match predicate.
+        """Remove elements in collection that match predicate.
 
         >>> def iseven(x):
         ...     return x % 2 == 0
@@ -754,7 +754,7 @@ class Bag(DaskMethodsMixin):
         return map_partitions(func, self, *args, **kwargs)
 
     def pluck(self, key, default=no_default):
-        """ Select item from all tuples/dicts in collection.
+        """Select item from all tuples/dicts in collection.
 
         >>> b = from_sequence([{'name': 'Alice', 'credits': [1, 2, 3]},
         ...                    {'name': 'Bob',   'credits': [10, 20]}])
@@ -849,7 +849,7 @@ class Bag(DaskMethodsMixin):
     def fold(
         self, binop, combine=None, initial=no_default, split_every=None, out_type=Item
     ):
-        """ Parallelizable reduction
+        """Parallelizable reduction
 
         Fold is like the builtin function ``reduce`` except that it works in
         parallel.  Fold takes two binary operator functions, one to reduce each
@@ -913,7 +913,7 @@ class Bag(DaskMethodsMixin):
             )
 
     def frequencies(self, split_every=None, sort=False):
-        """ Count number of occurrences of each distinct element.
+        """Count number of occurrences of each distinct element.
 
         >>> b = from_sequence(['Alice', 'Bob', 'Alice'])
         >>> dict(b.frequencies())  # doctest: +SKIP
@@ -931,7 +931,7 @@ class Bag(DaskMethodsMixin):
         return result
 
     def topk(self, k, key=None, split_every=None):
-        """ K largest elements in collection
+        """K largest elements in collection
 
         Optionally ordered by some key function
 
@@ -957,7 +957,7 @@ class Bag(DaskMethodsMixin):
         )
 
     def distinct(self, key=None):
-        """ Distinct elements of collection
+        """Distinct elements of collection
 
         Unordered without repeats.
 
@@ -985,7 +985,7 @@ class Bag(DaskMethodsMixin):
     def reduction(
         self, perpartition, aggregate, split_every=None, out_type=Item, name=None
     ):
-        """ Reduce collection with reduction operators.
+        """Reduce collection with reduction operators.
 
         Parameters
         ----------
@@ -1102,7 +1102,7 @@ class Bag(DaskMethodsMixin):
         return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
-        """ Joins collection with another collection.
+        """Joins collection with another collection.
 
         Other collection must be one of the following:
 
@@ -1194,7 +1194,7 @@ class Bag(DaskMethodsMixin):
         combine_initial=no_default,
         split_every=None,
     ):
-        """ Combined reduction and groupby.
+        """Combined reduction and groupby.
 
         Foldby provides a combined groupby and reduce for efficient parallel
         split-apply-combine tasks.
@@ -1369,7 +1369,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(graph, e, 1)
 
     def take(self, k, npartitions=1, compute=True, warn=True):
-        """ Take the first k elements.
+        """Take the first k elements.
 
         Parameters
         ----------
@@ -1423,7 +1423,7 @@ class Bag(DaskMethodsMixin):
             return b
 
     def flatten(self):
-        """ Concatenate nested lists into one long list.
+        """Concatenate nested lists into one long list.
 
         >>> b = from_sequence([[1], [2, 3]])
         >>> list(b)
@@ -1452,7 +1452,7 @@ class Bag(DaskMethodsMixin):
         max_branch=None,
         shuffle=None,
     ):
-        """ Group collection by key function
+        """Group collection by key function
 
         This requires a full dataset read, serialization and shuffle.
         This is expensive.  If possible you should use ``foldby``.
@@ -1505,7 +1505,7 @@ class Bag(DaskMethodsMixin):
             raise NotImplementedError(msg)
 
     def to_dataframe(self, meta=None, columns=None):
-        """ Create Dask Dataframe from a Dask Bag.
+        """Create Dask Dataframe from a Dask Bag.
 
         Bag should contain tuples, dict records, or scalars.
 
@@ -1599,7 +1599,7 @@ class Bag(DaskMethodsMixin):
         return [Delayed(k, dsk) for k in keys]
 
     def repartition(self, npartitions=None, partition_size=None):
-        """ Repartition Bag across new divisions.
+        """Repartition Bag across new divisions.
 
         Parameters
         ----------
@@ -1633,7 +1633,7 @@ class Bag(DaskMethodsMixin):
             return repartition_size(self, partition_size)
 
     def accumulate(self, binop, initial=no_default):
-        """ Repeatedly apply binary function to a sequence, accumulating results.
+        """Repeatedly apply binary function to a sequence, accumulating results.
 
         This assumes that the bag is ordered.  While this is typically the case
         not all Dask.bag functions preserve this property.
@@ -1697,7 +1697,7 @@ def collect(grouper, group, p, barrier_token):
 
 
 def from_sequence(seq, partition_size=None, npartitions=None):
-    """ Create a dask Bag from Python sequence.
+    """Create a dask Bag from Python sequence.
 
     This sequence should be relatively small in memory.  Dask Bag works
     best when it handles loading your data itself.  Commonly we load a
@@ -1775,7 +1775,7 @@ def from_url(urls):
 
 
 def dictitems(d):
-    """ A pickleable version of dict.items
+    """A pickleable version of dict.items
 
     >>> dictitems({'x': 1})
     [('x', 1)]
@@ -1784,7 +1784,7 @@ def dictitems(d):
 
 
 def concat(bags):
-    """ Concatenate many bags together, unioning all elements.
+    """Concatenate many bags together, unioning all elements.
 
     >>> import dask.bag as db
     >>> a = db.from_sequence([1, 2, 3])
@@ -1810,7 +1810,7 @@ def reify(seq):
 
 
 def from_delayed(values):
-    """ Create bag from many dask Delayed objects.
+    """Create bag from many dask Delayed objects.
 
     These objects will become the partitions of the resulting Bag.  They should
     evaluate to a ``list`` or some other concrete sequence.
@@ -1879,7 +1879,7 @@ def merge_frequencies(seqs):
 
 
 def bag_range(n, npartitions):
-    """ Numbers from zero to n
+    """Numbers from zero to n
 
     Examples
     --------
@@ -1902,7 +1902,7 @@ def bag_range(n, npartitions):
 
 
 def bag_zip(*bags):
-    """ Partition-wise bag zip
+    """Partition-wise bag zip
 
     All passed bags must have the same number of partitions.
 
@@ -2356,7 +2356,10 @@ def groupby_tasks(b, grouper, hash=hash, max_branch=32):
     name = "shuffle-" + token
 
     end = dict(
-        ((name, i), (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),)
+        (
+            (name, i),
+            (list, (dict.items, (groupby, grouper, (pluck, 1, j)))),
+        )
         for i, j in enumerate(join)
     )
 
@@ -2484,7 +2487,7 @@ def random_state_data_python(n, random_state=None):
 
 
 def split(seq, n):
-    """ Split apart a sequence into n equal pieces.
+    """Split apart a sequence into n equal pieces.
 
     >>> split(range(10), 3)
     [[0, 1, 2], [3, 4, 5], [6, 7, 8, 9]]
@@ -2510,7 +2513,7 @@ def to_dataframe(seq, columns, dtypes):
 
 
 def repartition_npartitions(bag, npartitions):
-    """ Changes the number of partitions of the bag.
+    """Changes the number of partitions of the bag.
 
     This can be used to reduce or increase the number of partitions
     of the bag.

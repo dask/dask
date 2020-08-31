@@ -24,7 +24,7 @@ def blockwise(
     meta=None,
     **kwargs
 ):
-    """ Tensor operation: Generalized inner and outer products
+    """Tensor operation: Generalized inner and outer products
 
     A broad class of blocked algorithms and patterns can be specified with a
     concise multi-index notation.  The ``blockwise`` function applies an in-memory

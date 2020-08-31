@@ -231,7 +231,7 @@ def describe_nonnumeric_aggregate(stats, name):
 
 
 def _cum_aggregate_apply(aggregate, x, y):
-    """ Apply aggregation function within a cumulative aggregation
+    """Apply aggregation function within a cumulative aggregation
 
     Parameters
     ----------

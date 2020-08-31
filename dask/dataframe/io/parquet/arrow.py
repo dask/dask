@@ -46,13 +46,13 @@ def _append_row_groups(metadata, md):
 def _write_partitioned(
     table, root_path, filename, partition_cols, fs, index_cols=(), **kwargs
 ):
-    """ Write table to a partitioned dataset with pyarrow.
+    """Write table to a partitioned dataset with pyarrow.
 
-        Logic copied from pyarrow.parquet.
-        (arrow/python/pyarrow/parquet.py::write_to_dataset)
+    Logic copied from pyarrow.parquet.
+    (arrow/python/pyarrow/parquet.py::write_to_dataset)
 
-        TODO: Remove this in favor of pyarrow's `write_to_dataset`
-              once ARROW-8244 is addressed.
+    TODO: Remove this in favor of pyarrow's `write_to_dataset`
+          once ARROW-8244 is addressed.
     """
     fs.mkdirs(root_path, exist_ok=True)
 
@@ -108,8 +108,10 @@ def _index_in_schema(index, schema):
 
 
 def _get_dataset_object(paths, fs, filters, dataset_kwargs):
-    """ Generate a ParquetDataset object
-    """
+    """Generate a ParquetDataset object"""
+    kwargs = dataset_kwargs.copy()
+    if "validate_schema" not in kwargs:
+        kwargs["validate_schema"] = False
     if len(paths) > 1:
         # This is a list of files
         base, fns = _analyze_paths(paths, fs)
@@ -127,7 +129,7 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         # Note #2: Cannot pass filters for legacy pyarrow API (see issue#6512).
         #          We can handle partitions + filtering for list input after
         #          adopting new pyarrow.dataset API.
-        dataset = pq.ParquetDataset(paths, filesystem=fs, **dataset_kwargs)
+        dataset = pq.ParquetDataset(paths, filesystem=fs, **kwargs)
         if proxy_metadata:
             dataset.metadata = proxy_metadata
     elif fs.isdir(paths[0]):
@@ -138,17 +140,13 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         #       expensive in storage systems like S3.
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         base, fns = _analyze_paths(allpaths, fs)
-        if "_metadata" in fns and "validate_schema" not in dataset_kwargs:
-            dataset_kwargs["validate_schema"] = False
-        dataset = pq.ParquetDataset(
-            paths[0], filesystem=fs, filters=filters, **dataset_kwargs
-        )
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs, filters=filters, **kwargs)
     else:
         # This is a single file.  No danger in gathering statistics
         # and/or splitting row-groups without a "_metadata" file
         base = paths[0]
         fns = [None]
-        dataset = pq.ParquetDataset(paths[0], filesystem=fs, **dataset_kwargs)
+        dataset = pq.ParquetDataset(paths[0], filesystem=fs, **kwargs)
 
     return dataset, base, fns
 
@@ -156,11 +154,11 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
 def _gather_metadata(
     paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
 ):
-    """ Gather parquet metadata into a single data structure.
+    """Gather parquet metadata into a single data structure.
 
-        Use _metadata or aggregate footer metadata into a single
-        object.  Also, collect other information necessary for
-        parquet-to-ddf mapping (e.g. schema, partition_info).
+    Use _metadata or aggregate footer metadata into a single
+    object.  Also, collect other information necessary for
+    parquet-to-ddf mapping (e.g. schema, partition_info).
     """
 
     # Step 1: Create a ParquetDataset object
@@ -341,8 +339,8 @@ def _generate_dd_meta(schema, index, categories, partition_info):
 def _aggregate_stats(
     file_path, file_row_group_stats, file_row_group_column_stats, stat_col_indices
 ):
-    """ Utility to aggregate the statistics for N row-groups
-        into a single dictionary.
+    """Utility to aggregate the statistics for N row-groups
+    into a single dictionary.
     """
     if len(file_row_group_stats) < 1:
         # Empty statistics
@@ -506,11 +504,11 @@ def _construct_parts(
     split_row_groups,
     gather_statistics,
 ):
-    """ Construct ``parts`` for ddf construction
+    """Construct ``parts`` for ddf construction
 
-        Use metadata (along with other data) to define a tuple
-        for each ddf partition.  Also gather statistics if
-        ``gather_statistics=True``, and other criteria is met.
+    Use metadata (along with other data) to define a tuple
+    for each ddf partition.  Also gather statistics if
+    ``gather_statistics=True``, and other criteria is met.
     """
 
     parts = []

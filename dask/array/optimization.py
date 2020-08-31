@@ -30,7 +30,7 @@ def optimize(
     rename_fused_keys=True,
     **kwargs
 ):
-    """ Optimize dask for array computation
+    """Optimize dask for array computation
 
     1.  Cull tasks not necessary to evaluate keys
     2.  Remove full slicing, e.g. x[:]
@@ -72,7 +72,7 @@ def optimize(
 
 
 def hold_keys(dsk, dependencies):
-    """ Find keys to avoid fusion
+    """Find keys to avoid fusion
 
     We don't want to fuse data present in the graph because it is easier to
     serialize as a raw value.
@@ -164,7 +164,7 @@ def _maybe_extract_getters(t):
 
 
 def optimize_slices(dsk):
-    """ Optimize slices
+    """Optimize slices
 
     1.  Fuse repeated slices, like x[5:][2:6] -> x[7:11]
     2.  Remove full slices, like         x[:] -> x
@@ -246,7 +246,7 @@ def optimize_slices(dsk):
 
 
 def normalize_slice(s):
-    """ Replace Nones in slices with integers
+    """Replace Nones in slices with integers
 
     >>> normalize_slice(slice(None, None, None))
     slice(0, None, 1)
@@ -278,7 +278,7 @@ def check_for_nonfusible_fancy_indexing(fancy, normal):
 
 
 def fuse_slice(a, b):
-    """ Fuse stacked slices together
+    """Fuse stacked slices together
 
     Fuse a pair of repeated slices into a single slice:
 
