@@ -227,7 +227,12 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
                 _opt_list.append(_opt)
             groups = group
 
-        dsk = merge(*map(ensure_dict, _opt_list,))
+        dsk = merge(
+            *map(
+                ensure_dict,
+                _opt_list,
+            )
+        )
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 

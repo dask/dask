@@ -122,7 +122,12 @@ def test_task_from_spec():
             "a": 0.1,
             "b": (
                 SubgraphCallable(
-                    {"x-1": 1, "add-1": (inc, "x-1", "x-1"),}, "add-1", (),
+                    {
+                        "x-1": 1,
+                        "add-1": (inc, "x-1", "x-1"),
+                    },
+                    "add-1",
+                    (),
                 ),
             ),
             "w": N(inc, 1),
@@ -160,7 +165,14 @@ def test_task_from_spec():
 
     # SubgraphCallables
     task = Task(
-        SubgraphCallable({"x-1": 1, "add-1": Task(inc, ["x-1", "x-1"]),}, "add-1", ())
+        SubgraphCallable(
+            {
+                "x-1": 1,
+                "add-1": Task(inc, ["x-1", "x-1"]),
+            },
+            "add-1",
+            (),
+        )
     )
     assert dsk["b"] == task
 
@@ -218,13 +230,25 @@ def test_task_to_spec():
     dsk = {
         "z": Task(
             SubgraphCallable(
-                {"x-1": 1, "add-1": Task(inc, ["x-1", "x-1"]),}, "add-1", (),
+                {
+                    "x-1": 1,
+                    "add-1": Task(inc, ["x-1", "x-1"]),
+                },
+                "add-1",
+                (),
             ),
         )
     }
     expected = {
         "z": (
-            SubgraphCallable({"x-1": 1, "add-1": (inc, "x-1", "x-1"),}, "add-1", (),),
+            SubgraphCallable(
+                {
+                    "x-1": 1,
+                    "add-1": (inc, "x-1", "x-1"),
+                },
+                "add-1",
+                (),
+            ),
         )
     }
 
@@ -259,7 +283,10 @@ def test_task_complex():
     from dask.core import get_dependencies, get
 
     dsk = {
-        ("a", i): (tuple, [(apply, slice, ("b", i)), (slice, 0, "c")],)
+        ("a", i): (
+            tuple,
+            [(apply, slice, ("b", i)), (slice, 0, "c")],
+        )
         for i in range(4)
     }
 

@@ -1161,12 +1161,15 @@ def test_from_delayed_iterator():
 
     delayed_records = delayed(lazy_records, pure=False)
     bag = db.from_delayed([delayed_records(5) for _ in range(5)])
-    assert db.compute(
-        bag.count(),
-        bag.pluck("operations").count(),
-        bag.pluck("operations").flatten().count(),
-        scheduler="sync",
-    ) == (25, 25, 50)
+    assert (
+        db.compute(
+            bag.count(),
+            bag.pluck("operations").count(),
+            bag.pluck("operations").flatten().count(),
+            scheduler="sync",
+        )
+        == (25, 25, 50)
+    )
 
 
 def test_range():
@@ -1199,7 +1202,17 @@ def test_repartition_npartitions(nin, nout):
 
 @pytest.mark.parametrize(
     "nin, nout",
-    [(1, 1), (2, 1), (5, 1), (1, 2), (2, 2), (5, 2), (1, 5), (2, 5), (5, 5),],
+    [
+        (1, 1),
+        (2, 1),
+        (5, 1),
+        (1, 2),
+        (2, 2),
+        (5, 2),
+        (1, 5),
+        (2, 5),
+        (5, 5),
+    ],
 )
 def test_repartition_partition_size(nin, nout):
     b = db.from_sequence(range(1, 100), npartitions=nin)

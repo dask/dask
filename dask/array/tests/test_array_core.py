@@ -2453,7 +2453,12 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(dx.dask[dx.name,], np.ndarray,)
+    assert isinstance(
+        dx.dask[
+            dx.name,
+        ],
+        np.ndarray,
+    )
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])

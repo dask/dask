@@ -315,7 +315,7 @@ def reverse_dict(d):
 
 
 def subs(task, key, val, convert=False, hash_key=None):
-    """ Perform a substitution on a task
+    """Perform a substitution on a task
 
     Examples
     --------
