@@ -314,7 +314,7 @@ def reverse_dict(d):
     return result
 
 
-def subs(task, key, val, convert=False):
+def subs(task, key, val, convert=False, hash_key=None):
     """ Perform a substitution on a task
 
     Examples
@@ -323,7 +323,9 @@ def subs(task, key, val, convert=False):
     >>> subs((inc, 'x'), 'x', 1)  # doctest: +SKIP
     (inc, 1)
     """
-    hash_key = {key}
+    if hash_key is None:
+        hash_key = {key}
+
     type_task = type(task)
     if type_task is tuple and task and callable(task[0]):
         type_task = TupleTask
@@ -331,12 +333,12 @@ def subs(task, key, val, convert=False):
     if type_task is Task:
         return Task(
             task.function,
-            [subs(a, key, val, convert) for a in task.args]
+            [subs(a, key, val, convert, hash_key) for a in task.args]
             if type(task.args) is list
             else subs(task.args, key, val, convert),
-            {k: subs(v, key, val, convert) for k, v in task.kwargs.items()}
+            {k: subs(v, key, val, convert, hash_key) for k, v in task.kwargs.items()}
             if type(task.kwargs) is dict
-            else subs(task.kwargs, key, val, convert),
+            else subs(task.kwargs, key, val, convert, hash_key),
             task.annotations,
         )
     elif type_task is TupleTask:
@@ -348,11 +350,11 @@ def subs(task, key, val, convert=False):
                 type_arg = TupleTask
 
             if type_arg is Task:
-                arg = subs(arg, key, val, convert)
+                arg = subs(arg, key, val, convert, hash_key)
             elif type_arg is TupleTask:
-                arg = subs(arg, key, val, convert)
+                arg = subs(arg, key, val, convert, hash_key)
             elif type_arg is list:
-                arg = [subs(x, key, val, convert) for x in arg]
+                arg = [subs(x, key, val, convert, hash_key) for x in arg]
             elif type_arg is type(key):
                 try:
                     if arg in hash_key:  # Hash and equality match
@@ -374,7 +376,7 @@ def subs(task, key, val, convert=False):
             pass
 
         if type_task is list:
-            return [subs(x, key, val, convert) for x in task]
+            return [subs(x, key, val, convert, hash_key) for x in task]
 
         return task
 
