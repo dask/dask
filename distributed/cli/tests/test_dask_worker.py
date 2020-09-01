@@ -8,6 +8,7 @@ import requests
 import sys
 import os
 from time import sleep
+from multiprocessing import cpu_count
 
 import distributed.cli.dask_worker
 from distributed import Client, Scheduler
@@ -236,6 +237,13 @@ def test_nprocs_requires_nanny(loop):
                 b"Failed to launch worker" in worker.stderr.readline()
                 for i in range(15)
             )
+
+
+def test_nprocs_negative(loop):
+    with popen(["dask-scheduler", "--no-dashboard"]) as sched:
+        with popen(["dask-worker", "127.0.0.1:8786", "--nprocs=-1"]) as worker:
+            with Client("tcp://127.0.0.1:8786", loop=loop) as c:
+                c.wait_for_workers(cpu_count(), timeout="10 seconds")
 
 
 def test_nprocs_expands_name(loop):
