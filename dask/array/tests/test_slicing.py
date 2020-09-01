@@ -893,21 +893,26 @@ def test_getitem_avoids_large_chunks():
     assert_eq(result, expected)
 
 
-def test_getitem_avoids_large_chunks_missing():
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        ((1, 1, 1, 1), (np.nan,), (np.nan,)),
+        pytest.param(
+            ((np.nan, np.nan, np.nan, np.nan), (500,), (500,)),
+            marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/6586"),
+        ),
+    ],
+)
+def test_getitem_avoids_large_chunks_missing(chunks):
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
     a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
     arr = da.from_array(a, chunks=(1, 500, 500))
-    arr._chunks = ((1, 1, 1, 1), (np.nan,), (np.nan,))
+    arr._chunks = chunks
     indexer = [0, 1] + [2] * 100 + [3]
     expected = a[indexer]
     result = arr[indexer]
-    # Just verifying that we have something reasonable here. Ideally
-    # the 100 would be split, but we can't.
-    assert result.chunks == ((1, 1, 100, 1), (np.nan,), (np.nan,))
     assert_eq(result, expected)
-
-    arr._chunks = ((np.nan, np.nan, np.nan, np.nan), (500,), (500,))
 
 
 def test_take_avoids_large_chunks():
