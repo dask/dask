@@ -152,9 +152,7 @@ def read_sql_table(
         if meta is None:
             meta = head.iloc[:0]
     elif meta is None:
-        raise ValueError(
-            "Must provide meta if head_rows is 0"
-        )
+        raise ValueError("Must provide meta if head_rows is 0")
     else:
         if divisions is None and npartitions is None:
             raise ValueError(
