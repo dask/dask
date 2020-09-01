@@ -1,3 +1,4 @@
+from os.path import basename
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -329,6 +330,12 @@ def text_blocks_to_pandas(
     name = "read-csv-" + tokenize(reader, columns, enforce, head)
 
     if path:
+        block_file_names = [basename(b[1].path) for b in blocks]
+        path = (
+            path[0],
+            [p for p in path[1] if basename(p) in block_file_names],
+        )
+
         colname, paths = path
         head = head.assign(
             **{
