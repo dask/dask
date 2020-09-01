@@ -1028,13 +1028,6 @@ class Client:
                     **self._startup_kwargs,
                 )
 
-            # Wait for all workers to be ready
-            # XXX should be a LocalCluster method instead
-            while not self.cluster.workers or len(self.cluster.scheduler.workers) < len(
-                self.cluster.workers
-            ):
-                await asyncio.sleep(0.01)
-
             address = self.cluster.scheduler_address
 
         self._gather_semaphore = asyncio.Semaphore(5)

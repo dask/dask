@@ -1050,3 +1050,11 @@ async def test_async_with():
         assert w
 
     assert not w
+
+
+@pytest.mark.asyncio
+async def test_no_workers(cleanup):
+    async with Client(
+        n_workers=0, silence_logs=False, dashboard_address=None, asynchronous=True
+    ) as c:
+        pass
