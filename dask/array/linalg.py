@@ -569,7 +569,10 @@ def sfqr(data, name=None):
     layers[name_A_rest] = {
         (name_A_rest, 0, idx): (data.name, 0, 1 + idx) for idx in range(nc - 1)
     }
-    dependencies[name_A_rest] = data.__dask_layers__()
+    if len(layers[name_A_rest]) > 0:
+        dependencies[name_A_rest] = set(data.__dask_layers__())
+    else:
+        dependencies[name_A_rest] = set()
 
     # Q R_1 = A_1
     name_Q_R1 = prefix + "Q_R_1"
