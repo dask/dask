@@ -7,6 +7,24 @@ from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 
 
+
+def compute_layer_dependencies(layers):
+    """Returns the dependencies between layers"""
+
+    def _find_layer_containing_key(key):
+        for k, v in layers.items():
+            if key in v:
+                return k
+        raise RuntimeError(f"{repr(key)} not found")
+
+    all_keys = set(key for layer in layers.values() for key in layer)
+    ret = {k: set() for k in layers.keys()}
+    for k, v in layers.items():
+        for key in keys_in_tasks(all_keys.difference(v.keys()), v.values()):
+            ret[k].add(_find_layer_containing_key(key))
+    return ret
+
+
 class HighLevelGraph(Mapping):
     """Task graph composed of layers of dependent subgraphs
 
@@ -217,12 +235,6 @@ class HighLevelGraph(Mapping):
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
 
-    def _find_layer_containing_key(self, key):
-        for k, v in self.layers.items():
-            if key in v:
-                return k
-        raise RuntimeError(f"{repr(key)} not found")
-
     def validate(self):
         # Check dependencies
         for layer_name, deps in self.dependencies.items():
@@ -235,11 +247,7 @@ class HighLevelGraph(Mapping):
                     raise ValueError(f"{repr(dep)} not found in dependencies")
 
         # Re-calculate all layer dependencies
-        all_keys = set(self.keys())
-        dependencies = {k: set() for k in self.layers.keys()}
-        for k, v in self.layers.items():
-            for key in keys_in_tasks(all_keys.difference(v.keys()), v.values()):
-                dependencies[k].add(self._find_layer_containing_key(key))
+        dependencies = compute_layer_dependencies(self.layers)
 
         # Check keys
         dep_key1 = set(self.dependencies.keys())
