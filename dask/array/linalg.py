@@ -350,7 +350,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                 dsk_n, dsk_q2_shapes, dsk_q2_cumsum, dsk_block_slices
             )
 
-            deps = {data.name, name_q2bs, name_q2cs}
+            deps = {data.name}
             block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
         layers["q-blocksizes" + token] = dsk_q_blockslices
