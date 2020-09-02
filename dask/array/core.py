@@ -57,6 +57,8 @@ from ..highlevelgraph import HighLevelGraph
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
+from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
+
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -163,6 +165,27 @@ def implements(*numpy_functions):
         return dask_func
 
     return decorator
+
+
+def check_if_handled_given_other(f):
+    """ Check if method is handled by Dask given type of other
+
+    Ensures proper deferral to upcast types in dunder operations without
+    assuming unknown types are automatically downcast types.
+    """
+
+    @wraps(f)
+    def wrapper(self, other):
+        if (
+            is_valid_array_chunk(other)
+            or isinstance(other, (self.__class__, list, tuple, np.generic))
+            or "dask.dataframe.core.Scalar" in str(other.__class__)
+        ):
+            return f(self, other)
+        else:
+            return NotImplemented
+
+    return wrapper
 
 
 def slices_from_chunks(chunks):
@@ -1194,7 +1217,8 @@ class Array(DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
-            if not isinstance(x, (np.ndarray, Number, Array)):
+            # Verify all arrays are properly handled by Dask
+            if not isinstance(x, Array) and not is_valid_array_chunk(x):
                 return NotImplemented
 
         if method == "__call__":
@@ -1367,7 +1391,11 @@ class Array(DaskMethodsMixin):
 
             return _HANDLED_FUNCTIONS[func](*args, **kwargs)
 
-        # First try to find a matching function name.  If that doesn't work, we may
+        # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
+        if not all(type is Array or is_valid_chunk_type(type) for type in types):
+            return NotImplemented
+
+        # Now try to find a matching function name.  If that doesn't work, we may
         # be dealing with an alias or a function that's simply not in the Dask API.
         # Handle aliases via the _HANDLED_FUNCTIONS dict mapping, and warn otherwise.
         for submodule in func.__module__.split(".")[1:]:
@@ -1818,126 +1846,162 @@ class Array(DaskMethodsMixin):
     def __abs__(self):
         return elemwise(operator.abs, self)
 
+    @check_if_handled_given_other
     def __add__(self, other):
         return elemwise(operator.add, self, other)
 
+    @check_if_handled_given_other
     def __radd__(self, other):
         return elemwise(operator.add, other, self)
 
+    @check_if_handled_given_other
     def __and__(self, other):
         return elemwise(operator.and_, self, other)
 
+    @check_if_handled_given_other
     def __rand__(self, other):
         return elemwise(operator.and_, other, self)
 
+    @check_if_handled_given_other
     def __div__(self, other):
         return elemwise(operator.div, self, other)
 
+    @check_if_handled_given_other
     def __rdiv__(self, other):
         return elemwise(operator.div, other, self)
 
+    @check_if_handled_given_other
     def __eq__(self, other):
         return elemwise(operator.eq, self, other)
 
+    @check_if_handled_given_other
     def __gt__(self, other):
         return elemwise(operator.gt, self, other)
 
+    @check_if_handled_given_other
     def __ge__(self, other):
         return elemwise(operator.ge, self, other)
 
     def __invert__(self):
         return elemwise(operator.invert, self)
 
+    @check_if_handled_given_other
     def __lshift__(self, other):
         return elemwise(operator.lshift, self, other)
 
+    @check_if_handled_given_other
     def __rlshift__(self, other):
         return elemwise(operator.lshift, other, self)
 
+    @check_if_handled_given_other
     def __lt__(self, other):
         return elemwise(operator.lt, self, other)
 
+    @check_if_handled_given_other
     def __le__(self, other):
         return elemwise(operator.le, self, other)
 
+    @check_if_handled_given_other
     def __mod__(self, other):
         return elemwise(operator.mod, self, other)
 
+    @check_if_handled_given_other
     def __rmod__(self, other):
         return elemwise(operator.mod, other, self)
 
+    @check_if_handled_given_other
     def __mul__(self, other):
         return elemwise(operator.mul, self, other)
 
+    @check_if_handled_given_other
     def __rmul__(self, other):
         return elemwise(operator.mul, other, self)
 
+    @check_if_handled_given_other
     def __ne__(self, other):
         return elemwise(operator.ne, self, other)
 
     def __neg__(self):
         return elemwise(operator.neg, self)
 
+    @check_if_handled_given_other
     def __or__(self, other):
         return elemwise(operator.or_, self, other)
 
     def __pos__(self):
         return self
 
+    @check_if_handled_given_other
     def __ror__(self, other):
         return elemwise(operator.or_, other, self)
 
+    @check_if_handled_given_other
     def __pow__(self, other):
         return elemwise(operator.pow, self, other)
 
+    @check_if_handled_given_other
     def __rpow__(self, other):
         return elemwise(operator.pow, other, self)
 
+    @check_if_handled_given_other
     def __rshift__(self, other):
         return elemwise(operator.rshift, self, other)
 
+    @check_if_handled_given_other
     def __rrshift__(self, other):
         return elemwise(operator.rshift, other, self)
 
+    @check_if_handled_given_other
     def __sub__(self, other):
         return elemwise(operator.sub, self, other)
 
+    @check_if_handled_given_other
     def __rsub__(self, other):
         return elemwise(operator.sub, other, self)
 
+    @check_if_handled_given_other
     def __truediv__(self, other):
         return elemwise(operator.truediv, self, other)
 
+    @check_if_handled_given_other
     def __rtruediv__(self, other):
         return elemwise(operator.truediv, other, self)
 
+    @check_if_handled_given_other
     def __floordiv__(self, other):
         return elemwise(operator.floordiv, self, other)
 
+    @check_if_handled_given_other
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
 
+    @check_if_handled_given_other
     def __xor__(self, other):
         return elemwise(operator.xor, self, other)
 
+    @check_if_handled_given_other
     def __rxor__(self, other):
         return elemwise(operator.xor, other, self)
 
+    @check_if_handled_given_other
     def __matmul__(self, other):
         from .routines import matmul
 
         return matmul(self, other)
 
+    @check_if_handled_given_other
     def __rmatmul__(self, other):
         from .routines import matmul
 
         return matmul(other, self)
 
+    @check_if_handled_given_other
     def __divmod__(self, other):
         from .ufunc import divmod
 
         return divmod(self, other)
 
+    @check_if_handled_given_other
     def __rdivmod__(self, other):
         from .ufunc import divmod
 
