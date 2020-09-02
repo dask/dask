@@ -78,7 +78,7 @@ class RandomState(object):
     def _wrap(
         self, funcname, *args, size=None, chunks="auto", extra_chunks=(), **kwargs
     ):
-        """ Wrap numpy random function to produce dask.array random function
+        """Wrap numpy random function to produce dask.array random function
 
         extra_chunks should be a chunks tuple to append to the end of chunks
         """

@@ -2413,7 +2413,12 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(dx.dask[dx.name,], np.ndarray)
+    assert isinstance(
+        dx.dask[
+            dx.name,
+        ],
+        np.ndarray,
+    )
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
@@ -4133,7 +4138,7 @@ def test_dask_array_holds_scipy_sparse_containers():
 
     z = x.T.map_blocks(scipy.sparse.csr_matrix)
     zz = z.compute(scheduler="single-threaded")
-    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert isinstance(zz, scipy.sparse.spmatrix)
     assert (zz == xx.T).all()
 
 

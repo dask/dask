@@ -1,3 +1,4 @@
+from os.path import basename
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -120,7 +121,7 @@ def pandas_read_text(
     enforce=False,
     path=None,
 ):
-    """ Convert a block of bytes to a Pandas DataFrame
+    """Convert a block of bytes to a Pandas DataFrame
 
     Parameters
     ----------
@@ -164,7 +165,7 @@ def pandas_read_text(
 
 
 def coerce_dtypes(df, dtypes):
-    """ Coerce dataframe to dtypes safely
+    """Coerce dataframe to dtypes safely
 
     Operates in place
 
@@ -265,7 +266,7 @@ def text_blocks_to_pandas(
     specified_dtypes=None,
     path=None,
 ):
-    """ Convert blocks of bytes to a dask.dataframe
+    """Convert blocks of bytes to a dask.dataframe
 
     This accepts a list of lists of values of bytes where each list corresponds
     to one file, and the value of bytes concatenate to comprise the entire
@@ -329,6 +330,12 @@ def text_blocks_to_pandas(
     name = "read-csv-" + tokenize(reader, columns, enforce, head)
 
     if path:
+        block_file_names = [basename(b[1].path) for b in blocks]
+        path = (
+            path[0],
+            [p for p in path[1] if basename(p) in block_file_names],
+        )
+
         colname, paths = path
         head = head.assign(
             **{

@@ -63,7 +63,7 @@ def is_integer_na_dtype(t):
 
 
 def shard_df_on_index(df, divisions):
-    """ Shard a DataFrame by ranges on its index
+    """Shard a DataFrame by ranges on its index
 
     Examples
     --------
@@ -693,8 +693,7 @@ def check_matching_columns(meta, actual):
 
 
 def index_summary(idx, name=None):
-    """Summarized representation of an Index.
-    """
+    """Summarized representation of an Index."""
     n = len(idx)
     if name is None:
         name = idx.__class__.__name__
@@ -934,7 +933,7 @@ def assert_max_deps(x, n, eq=True):
 
 
 def valid_divisions(divisions):
-    """ Are the provided divisions valid?
+    """Are the provided divisions valid?
 
     Examples
     --------
@@ -971,8 +970,7 @@ def valid_divisions(divisions):
 
 
 def drop_by_shallow_copy(df, columns, errors="raise"):
-    """ Use shallow copy to drop columns in place
-    """
+    """Use shallow copy to drop columns in place"""
     df2 = df.copy(deep=False)
     if not pd.api.types.is_list_like(columns):
         columns = [columns]
