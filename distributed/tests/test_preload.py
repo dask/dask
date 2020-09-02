@@ -9,7 +9,7 @@ from tornado import web
 
 import dask
 from distributed import Client, Scheduler, Worker, Nanny
-from distributed.utils_test import cluster
+from distributed.utils_test import cluster, captured_logger
 from distributed.utils_test import loop, cleanup  # noqa F401
 
 
@@ -139,7 +139,9 @@ def dask_setup(dask_server):
     app = web.Application([(r"/preload", MyHandler)])
     server = app.listen(12345)
     try:
-        async with Scheduler(preload=["http://localhost:12345/preload"]) as s:
-            assert s.foo == 1
+        with captured_logger("distributed.preloading") as log:
+            async with Scheduler(preload=["http://localhost:12345/preload"]) as s:
+                assert s.foo == 1
+        assert "12345/preload" in log.getvalue()
     finally:
         server.stop()

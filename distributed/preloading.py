@@ -120,6 +120,7 @@ def _import_module(name, file_dir=None) -> ModuleType:
 
 
 async def _download_module(url: str) -> ModuleType:
+    logger.info("Downloading preload at %s", url)
     assert is_webaddress(url)
 
     client = AsyncHTTPClient()
