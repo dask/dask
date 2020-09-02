@@ -139,7 +139,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         numblocks={data.name: numblocks},
     )
     layers[name_qr_st1] = dsk_qr_st1
-    dependencies[name_qr_st1] = data.__dask_layers__()
+    dependencies[name_qr_st1] = set(data.__dask_layers__())
 
     # Block qr[0]
     name_q_st1 = "getitem" + token + "-q1"
@@ -248,13 +248,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             )
         )
         layers[name_q_st2] = dsk_q_st2
-        dependencies[name_q_st2] = q_inner.__dask_layers__()
+        dependencies[name_q_st2] = set(q_inner.__dask_layers__())
 
         # R: R_inner
         name_r_st2 = "r-inner" + token
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
         layers[name_r_st2] = dsk_r_st2
-        dependencies[name_r_st2] = r_inner.__dask_layers__()
+        dependencies[name_r_st2] = set(r_inner.__dask_layers__())
 
         # Q: Block qr[0] (*) Q_inner
         name_q_st3 = "dot" + token + "-q3"
@@ -565,7 +565,7 @@ def sfqr(data, name=None):
     name_A_1 = prefix + "A_1"
     name_A_rest = prefix + "A_rest"
     layers[name_A_1] = {(name_A_1, 0, 0): (data.name, 0, 0)}
-    dependencies[name_A_1] = data.__dask_layers__()
+    dependencies[name_A_1] = set(data.__dask_layers__())
     layers[name_A_rest] = {
         (name_A_rest, 0, idx): (data.name, 0, 1 + idx) for idx in range(nc - 1)
     }
