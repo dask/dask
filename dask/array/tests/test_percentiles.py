@@ -84,7 +84,8 @@ def test_percentiles_with_empty_arrays(method):
 def test_percentiles_with_empty_q(method):
     x = da.ones(10, chunks=((5, 0, 5),))
     assert_eq(
-        da.percentile(x, [], method=method), np.array([], dtype=x.dtype),
+        da.percentile(x, [], method=method),
+        np.array([], dtype=x.dtype),
     )
 
 
