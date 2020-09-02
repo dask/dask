@@ -301,7 +301,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         layers[name_q_st2_aux] = dsk_q_st2_aux
         dependencies[name_q_st2_aux] = {name_qr_st2}
 
-        if not any(np.isnan(c) for cs in data.chunks for c in cs):
+        chucks_are_all_known = not any(np.isnan(c) for cs in data.chunks for c in cs)
+        if chucks_are_all_known:
             # when chunks are all known...
             # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
             q2_block_sizes = [min(e, n) for e in data.chunks[0]]
@@ -362,7 +363,10 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             for i, b in enumerate(block_slices)
         )
         layers[name_q_st2] = dsk_q_st2
-        dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
+        if chucks_are_all_known:
+            dependencies[name_q_st2] = {name_q_st2_aux}
+        else:
+            dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
 
         # Q: Block qr[0] (*) In-core qr[0]
         name_q_st3 = "dot" + token + "-q3"
