@@ -23,6 +23,7 @@ try:
     )
     from .tiledb_io import from_tiledb, to_tiledb
     from .numpy_compat import rollaxis, moveaxis
+    from .chunk_types import register_chunk_type
     from .routines import (
         take,
         choose,

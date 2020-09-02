@@ -2617,7 +2617,7 @@ def test_to_dask_array_raises(as_frame):
         a.to_dask_array(5)
 
 
-@pytest.mark.parametrize("as_frame", [False, False])
+@pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_unknown(as_frame):
     s = pd.Series([1, 2, 3, 4, 5], name="foo")
     a = dd.from_pandas(s, chunksize=2)
@@ -2630,11 +2630,12 @@ def test_to_dask_array_unknown(as_frame):
     result = result.chunks
 
     if as_frame:
+        assert len(result) == 2
         assert result[1] == (1,)
+    else:
+        assert len(result) == 1
 
-    assert len(result) == 1
     result = result[0]
-
     assert len(result) == 2
     assert all(np.isnan(x) for x in result)
 

@@ -52,7 +52,7 @@ def _percentiles_from_tdigest(qs, digests):
 
 
 def percentile(a, q, interpolation="linear", method="default"):
-    """ Approximate percentile of 1-D array
+    """Approximate percentile of 1-D array
 
     Parameters
     ----------
@@ -152,7 +152,7 @@ def percentile(a, q, interpolation="linear", method="default"):
 
 
 def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
-    """ Combine several percentile calculations of different data.
+    """Combine several percentile calculations of different data.
 
     Parameters
     ----------

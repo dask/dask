@@ -1564,3 +1564,26 @@ def test_to_csv_line_ending():
 def test_block_mask(block_lists):
     mask = list(block_mask(block_lists))
     assert len(mask) == len(list(flatten(block_lists)))
+
+
+def test_reading_empty_csv_files_with_path():
+    with tmpdir() as tdir:
+        for k, content in enumerate(["0, 1, 2", "", "6, 7, 8"]):
+            with open(os.path.join(tdir, str(k) + ".csv"), "w") as file:
+                file.write(content)
+        result = dd.read_csv(
+            os.path.join(tdir, "*.csv"),
+            include_path_column=True,
+            converters={"path": parse_filename},
+            names=["A", "B", "C"],
+        ).compute()
+        df = pd.DataFrame(
+            {
+                "A": [0, 6],
+                "B": [1, 7],
+                "C": [2, 8],
+                "path": ["0.csv", "2.csv"],
+            }
+        )
+        df["path"] = df["path"].astype("category")
+        assert_eq(result, df, check_index=False)

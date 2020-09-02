@@ -94,7 +94,7 @@ class Accessor(object):
 
 
 class DatetimeAccessor(Accessor):
-    """ Accessor object for datetimelike properties of the Series values.
+    """Accessor object for datetimelike properties of the Series values.
 
     Examples
     --------
@@ -106,7 +106,7 @@ class DatetimeAccessor(Accessor):
 
 
 class StringAccessor(Accessor):
-    """ Accessor object for string properties of the Series values.
+    """Accessor object for string properties of the Series values.
 
     Examples
     --------

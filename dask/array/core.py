@@ -57,6 +57,8 @@ from ..highlevelgraph import HighLevelGraph
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
+from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
+
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -105,7 +107,7 @@ def getter(a, b, asarray=True, lock=None):
 
 
 def getter_nofancy(a, b, asarray=True, lock=None):
-    """ A simple wrapper around ``getter``.
+    """A simple wrapper around ``getter``.
 
     Used to indicate to the optimization passes that the backend doesn't
     support fancy indexing.
@@ -114,7 +116,7 @@ def getter_nofancy(a, b, asarray=True, lock=None):
 
 
 def getter_inline(a, b, asarray=True, lock=None):
-    """ A getter function that optimizations feel comfortable inlining
+    """A getter function that optimizations feel comfortable inlining
 
     Slicing operations with this function may be inlined into a graph, such as
     in the following rewrite
@@ -165,8 +167,29 @@ def implements(*numpy_functions):
     return decorator
 
 
+def check_if_handled_given_other(f):
+    """ Check if method is handled by Dask given type of other
+
+    Ensures proper deferral to upcast types in dunder operations without
+    assuming unknown types are automatically downcast types.
+    """
+
+    @wraps(f)
+    def wrapper(self, other):
+        if (
+            is_valid_array_chunk(other)
+            or isinstance(other, (self.__class__, list, tuple, np.generic))
+            or "dask.dataframe.core.Scalar" in str(other.__class__)
+        ):
+            return f(self, other)
+        else:
+            return NotImplemented
+
+    return wrapper
+
+
 def slices_from_chunks(chunks):
-    """ Translate chunks tuple to a set of slices in product order
+    """Translate chunks tuple to a set of slices in product order
 
     >>> slices_from_chunks(((2, 2), (3, 3, 3)))  # doctest: +NORMALIZE_WHITESPACE
      [(slice(0, 2, None), slice(0, 3, None)),
@@ -194,7 +217,7 @@ def getem(
     asarray=True,
     dtype=None,
 ):
-    """ Dask getting various chunks from an array-like
+    """Dask getting various chunks from an array-like
 
     >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
     {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
@@ -227,7 +250,7 @@ def getem(
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
-    """ Dot product of many aligned chunks
+    """Dot product of many aligned chunks
 
     >>> x = np.array([[1, 2], [1, 2]])
     >>> y = np.array([[10, 20], [10, 20]])
@@ -249,7 +272,7 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
 
 
 def _concatenate2(arrays, axes=[]):
-    """ Recursively Concatenate nested lists of arrays along axes
+    """Recursively Concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
     length of axes should correspond to the level of nesting of arrays.
@@ -369,7 +392,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
 
 
 def normalize_arg(x):
-    """ Normalize user provided arguments to blockwise or map_blocks
+    """Normalize user provided arguments to blockwise or map_blocks
 
     We do a few things:
 
@@ -391,7 +414,7 @@ def normalize_arg(x):
 
 
 def _pass_extra_kwargs(func, keys, *args, **kwargs):
-    """ Helper for :func:`map_blocks` to pass `block_info` or `block_id`.
+    """Helper for :func:`map_blocks` to pass `block_info` or `block_id`.
 
     For each element of `keys`, a corresponding element of args is changed
     to a keyword argument with that key, before all arguments re passed on
@@ -413,7 +436,7 @@ def map_blocks(
     meta=None,
     **kwargs,
 ):
-    """ Map a function across all blocks of a dask array.
+    """Map a function across all blocks of a dask array.
 
     Parameters
     ----------
@@ -760,7 +783,7 @@ def map_blocks(
 
 
 def broadcast_chunks(*chunkss):
-    """ Construct a chunks tuple that broadcasts many chunks tuples
+    """Construct a chunks tuple that broadcasts many chunks tuples
 
     >>> a = ((5, 5),)
     >>> b = ((5, 5),)
@@ -812,7 +835,7 @@ def store(
     return_stored=False,
     **kwargs,
 ):
-    """ Store dask arrays in array-like objects, overwrite data in target
+    """Store dask arrays in array-like objects, overwrite data in target
 
     This stores dask arrays into object that supports numpy-style setitem
     indexing.  It stores values chunk by chunk so that it does not have to
@@ -999,7 +1022,7 @@ See the following documentation page for details:
 
 
 class Array(DaskMethodsMixin):
-    """ Parallel Dask Array
+    """Parallel Dask Array
 
     A parallel nd-array comprised of many numpy arrays arranged in a grid.
 
@@ -1194,7 +1217,8 @@ class Array(DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
-            if not isinstance(x, (np.ndarray, Number, Array)):
+            # Verify all arrays are properly handled by Dask
+            if not isinstance(x, Array) and not is_valid_array_chunk(x):
                 return NotImplemented
 
         if method == "__call__":
@@ -1367,7 +1391,11 @@ class Array(DaskMethodsMixin):
 
             return _HANDLED_FUNCTIONS[func](*args, **kwargs)
 
-        # First try to find a matching function name.  If that doesn't work, we may
+        # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
+        if not all(type is Array or is_valid_chunk_type(type) for type in types):
+            return NotImplemented
+
+        # Now try to find a matching function name.  If that doesn't work, we may
         # be dealing with an alias or a function that's simply not in the Dask API.
         # Handle aliases via the _HANDLED_FUNCTIONS dict mapping, and warn otherwise.
         for submodule in func.__module__.split(".")[1:]:
@@ -1398,7 +1426,7 @@ class Array(DaskMethodsMixin):
         return r
 
     def to_svg(self, size=500):
-        """ Convert chunks from Dask Array into an SVG Image
+        """Convert chunks from Dask Array into an SVG Image
 
         Parameters
         ----------
@@ -1419,7 +1447,7 @@ class Array(DaskMethodsMixin):
         return svg(self.chunks, size=size)
 
     def to_hdf5(self, filename, datapath, **kwargs):
-        """ Store array in HDF5 file
+        """Store array in HDF5 file
 
         >>> x.to_hdf5('myfile.hdf5', '/x')  # doctest: +SKIP
 
@@ -1435,7 +1463,7 @@ class Array(DaskMethodsMixin):
         return to_hdf5(filename, datapath, self, **kwargs)
 
     def to_dask_dataframe(self, columns=None, index=None, meta=None):
-        """ Convert dask Array to dask Dataframe
+        """Convert dask Array to dask Dataframe
 
         Parameters
         ----------
@@ -1636,7 +1664,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def blocks(self):
-        """ Slice an array by blocks
+        """Slice an array by blocks
 
         This allows blockwise slicing of a Dask array.  You can perform normal
         Numpy-style slicing but now rather than slice elements of the array you
@@ -1818,126 +1846,162 @@ class Array(DaskMethodsMixin):
     def __abs__(self):
         return elemwise(operator.abs, self)
 
+    @check_if_handled_given_other
     def __add__(self, other):
         return elemwise(operator.add, self, other)
 
+    @check_if_handled_given_other
     def __radd__(self, other):
         return elemwise(operator.add, other, self)
 
+    @check_if_handled_given_other
     def __and__(self, other):
         return elemwise(operator.and_, self, other)
 
+    @check_if_handled_given_other
     def __rand__(self, other):
         return elemwise(operator.and_, other, self)
 
+    @check_if_handled_given_other
     def __div__(self, other):
         return elemwise(operator.div, self, other)
 
+    @check_if_handled_given_other
     def __rdiv__(self, other):
         return elemwise(operator.div, other, self)
 
+    @check_if_handled_given_other
     def __eq__(self, other):
         return elemwise(operator.eq, self, other)
 
+    @check_if_handled_given_other
     def __gt__(self, other):
         return elemwise(operator.gt, self, other)
 
+    @check_if_handled_given_other
     def __ge__(self, other):
         return elemwise(operator.ge, self, other)
 
     def __invert__(self):
         return elemwise(operator.invert, self)
 
+    @check_if_handled_given_other
     def __lshift__(self, other):
         return elemwise(operator.lshift, self, other)
 
+    @check_if_handled_given_other
     def __rlshift__(self, other):
         return elemwise(operator.lshift, other, self)
 
+    @check_if_handled_given_other
     def __lt__(self, other):
         return elemwise(operator.lt, self, other)
 
+    @check_if_handled_given_other
     def __le__(self, other):
         return elemwise(operator.le, self, other)
 
+    @check_if_handled_given_other
     def __mod__(self, other):
         return elemwise(operator.mod, self, other)
 
+    @check_if_handled_given_other
     def __rmod__(self, other):
         return elemwise(operator.mod, other, self)
 
+    @check_if_handled_given_other
     def __mul__(self, other):
         return elemwise(operator.mul, self, other)
 
+    @check_if_handled_given_other
     def __rmul__(self, other):
         return elemwise(operator.mul, other, self)
 
+    @check_if_handled_given_other
     def __ne__(self, other):
         return elemwise(operator.ne, self, other)
 
     def __neg__(self):
         return elemwise(operator.neg, self)
 
+    @check_if_handled_given_other
     def __or__(self, other):
         return elemwise(operator.or_, self, other)
 
     def __pos__(self):
         return self
 
+    @check_if_handled_given_other
     def __ror__(self, other):
         return elemwise(operator.or_, other, self)
 
+    @check_if_handled_given_other
     def __pow__(self, other):
         return elemwise(operator.pow, self, other)
 
+    @check_if_handled_given_other
     def __rpow__(self, other):
         return elemwise(operator.pow, other, self)
 
+    @check_if_handled_given_other
     def __rshift__(self, other):
         return elemwise(operator.rshift, self, other)
 
+    @check_if_handled_given_other
     def __rrshift__(self, other):
         return elemwise(operator.rshift, other, self)
 
+    @check_if_handled_given_other
     def __sub__(self, other):
         return elemwise(operator.sub, self, other)
 
+    @check_if_handled_given_other
     def __rsub__(self, other):
         return elemwise(operator.sub, other, self)
 
+    @check_if_handled_given_other
     def __truediv__(self, other):
         return elemwise(operator.truediv, self, other)
 
+    @check_if_handled_given_other
     def __rtruediv__(self, other):
         return elemwise(operator.truediv, other, self)
 
+    @check_if_handled_given_other
     def __floordiv__(self, other):
         return elemwise(operator.floordiv, self, other)
 
+    @check_if_handled_given_other
     def __rfloordiv__(self, other):
         return elemwise(operator.floordiv, other, self)
 
+    @check_if_handled_given_other
     def __xor__(self, other):
         return elemwise(operator.xor, self, other)
 
+    @check_if_handled_given_other
     def __rxor__(self, other):
         return elemwise(operator.xor, other, self)
 
+    @check_if_handled_given_other
     def __matmul__(self, other):
         from .routines import matmul
 
         return matmul(self, other)
 
+    @check_if_handled_given_other
     def __rmatmul__(self, other):
         from .routines import matmul
 
         return matmul(other, self)
 
+    @check_if_handled_given_other
     def __divmod__(self, other):
         from .ufunc import divmod
 
         return divmod(self, other)
 
+    @check_if_handled_given_other
     def __rdivmod__(self, other):
         from .ufunc import divmod
 
@@ -2118,7 +2182,7 @@ class Array(DaskMethodsMixin):
         return map_blocks(func, self, *args, **kwargs)
 
     def map_overlap(self, func, depth, boundary=None, trim=True, **kwargs):
-        """ Map a function over blocks of the array with some overlap
+        """Map a function over blocks of the array with some overlap
 
         We share neighboring zones between blocks of the array, then map a
         function, then trim away the neighboring strips.
@@ -2224,7 +2288,7 @@ class Array(DaskMethodsMixin):
         return clip(self, min, max)
 
     def view(self, dtype=None, order="C"):
-        """ Get a view of the array as a new data type
+        """Get a view of the array as a new data type
 
         Parameters
         ----------
@@ -2355,7 +2419,7 @@ def ensure_int(f):
 
 
 def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks=None):
-    """ Normalize chunks to tuple of tuples
+    """Normalize chunks to tuple of tuples
 
     This takes in a variety of input types and information and produces a full
     tuple-of-tuples result for chunks, suitable to be passed to Array or
@@ -2529,7 +2593,7 @@ def _compute_multiplier(limit: int, dtype, largest_block: int, result):
 
 
 def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
-    """ Determine automatic chunks
+    """Determine automatic chunks
 
     This takes in a chunks value that contains ``"auto"`` values in certain
     dimensions and replaces those values with concrete dimension sizes that try
@@ -2654,7 +2718,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
 
 
 def round_to(c, s):
-    """ Return a chunk dimension that is close to an even multiple or factor
+    """Return a chunk dimension that is close to an even multiple or factor
 
     We want values for c that are nicely aligned with s.
 
@@ -2690,7 +2754,7 @@ def from_array(
     getitem=None,
     meta=None,
 ):
-    """ Create dask array from something that looks like an array
+    """Create dask array from something that looks like an array
 
     Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
 
@@ -3029,7 +3093,7 @@ def _check_regular_chunks(chunkset):
 
 
 def from_delayed(value, shape, dtype=None, meta=None, name=None):
-    """ Create a dask array from a dask delayed value
+    """Create a dask array from a dask delayed value
 
     This routine is useful for constructing dask arrays in an ad-hoc fashion
     using dask delayed, particularly when combined with stack and concatenate.
@@ -3062,7 +3126,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
 
 
 def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
-    """ Create dask array in a single block by calling a function
+    """Create dask array in a single block by calling a function
 
     Calling the provided function with func(*args, **kwargs) should return a
     NumPy array of the indicated shape and dtype.
@@ -3090,7 +3154,7 @@ def from_func(func, shape, dtype=None, name=None, args=(), kwargs={}):
 
 
 def common_blockdim(blockdims):
-    """ Find the common block dimensions from the list of block dimensions
+    """Find the common block dimensions from the list of block dimensions
 
     Currently only implements the simplest possible heuristic: the common
     block-dimension is the only one that does not span fully span a dimension.
@@ -3877,7 +3941,7 @@ def broadcast_shapes(*shapes):
 
 
 def elemwise(op, *args, **kwargs):
-    """ Apply elementwise function across arguments
+    """Apply elementwise function across arguments
 
     Respects broadcasting rules
 
@@ -3903,7 +3967,7 @@ def elemwise(op, *args, **kwargs):
     for arg in args:
         shape = getattr(arg, "shape", ())
         if any(is_dask_collection(x) for x in shape):
-            # Want to excluded Delayed shapes and dd.Scalar
+            # Want to exclude Delayed shapes and dd.Scalar
             shape = ()
         shapes.append(shape)
 
@@ -3960,7 +4024,7 @@ def elemwise(op, *args, **kwargs):
 
 
 def handle_out(out, result):
-    """ Handle out parameters
+    """Handle out parameters
 
     If out is a dask.array then this overwrites the contents of that array with
     the result
@@ -4127,7 +4191,7 @@ def broadcast_arrays(*args, **kwargs):
 
 
 def offset_func(func, offset, *args):
-    """  Offsets inputs by offset
+    """Offsets inputs by offset
 
     >>> double = lambda x: x * 2
     >>> f = offset_func(double, (10,))
@@ -4148,7 +4212,7 @@ def offset_func(func, offset, *args):
 
 
 def chunks_from_arrays(arrays):
-    """ Chunks tuple from nested list of arrays
+    """Chunks tuple from nested list of arrays
 
     >>> x = np.array([1, 2])
     >>> chunks_from_arrays([x, x])
@@ -4184,7 +4248,7 @@ def chunks_from_arrays(arrays):
 
 
 def deepfirst(seq):
-    """ First element in a nested list
+    """First element in a nested list
 
     >>> deepfirst([[[1, 2], [3, 4]], [5, 6], [7, 8]])
     1
@@ -4204,7 +4268,7 @@ def shapelist(a):
 
 
 def reshapelist(shape, seq):
-    """ Reshape iterator to nested shape
+    """Reshape iterator to nested shape
 
     >>> reshapelist((2, 3), range(6))
     [[0, 1, 2], [3, 4, 5]]
@@ -4217,7 +4281,7 @@ def reshapelist(shape, seq):
 
 
 def transposelist(arrays, axes, extradims=0):
-    """ Permute axes of nested list
+    """Permute axes of nested list
 
     >>> transposelist([[1,1,1],[1,1,1]], [2,1])
     [[[1, 1], [1, 1], [1, 1]]]
@@ -4357,7 +4421,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
 
 
 def concatenate3(arrays):
-    """ Recursive np.concatenate
+    """Recursive np.concatenate
 
     Input should be a nested list of numpy arrays arranged in the order they
     should appear in the array itself.  Each array should have the same number
@@ -4436,7 +4500,7 @@ def concatenate_axes(arrays, axes):
 
 
 def to_hdf5(filename, *args, **kwargs):
-    """ Store arrays in HDF5 file
+    """Store arrays in HDF5 file
 
     This saves several dask arrays into several datapaths in an HDF5 file.
     It creates the necessary datasets and handles clean file opening/closing.
@@ -4670,7 +4734,7 @@ def _vindex_array(x, dict_indexes):
 
 
 def _get_axis(indexes):
-    """ Get axis along which point-wise slicing results lie
+    """Get axis along which point-wise slicing results lie
 
     This is mostly a hack because I can't figure out NumPy's rule on this and
     can't be bothered to go reading.
@@ -4735,7 +4799,7 @@ def _vindex_merge(locations, values):
 
 
 def to_npy_stack(dirname, x, axis=0):
-    """ Write dask array to a stack of .npy files
+    """Write dask array to a stack of .npy files
 
     This partitions the dask.array along one axis and stores each block along
     that axis as a single .npy file in the specified directory
@@ -4787,7 +4851,7 @@ def to_npy_stack(dirname, x, axis=0):
 
 
 def from_npy_stack(dirname, mmap_mode="r"):
-    """ Load dask array from stack of npy files
+    """Load dask array from stack of npy files
 
     See ``da.to_npy_stack`` for docstring
 

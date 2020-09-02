@@ -6,7 +6,7 @@ no_default = "__no_default__"
 
 
 def ishashable(x):
-    """ Is x hashable?
+    """Is x hashable?
 
     Examples
     --------
@@ -24,7 +24,7 @@ def ishashable(x):
 
 
 def istask(x):
-    """ Is x a runnable task?
+    """Is x a runnable task?
 
     A task is a tuple with a callable first argument
 
@@ -84,7 +84,7 @@ def lists_to_tuples(res, keys):
 
 
 def _execute_task(arg, cache, dsk=None):
-    """ Do the actual work of collecting data and executing a function
+    """Do the actual work of collecting data and executing a function
 
     Examples
     --------
@@ -128,7 +128,7 @@ def _execute_task(arg, cache, dsk=None):
 
 
 def get(dsk, out, cache=None):
-    """ Get value from Dask
+    """Get value from Dask
 
     Examples
     --------
@@ -157,7 +157,7 @@ def get(dsk, out, cache=None):
 
 
 def get_dependencies(dsk, key=None, task=no_default, as_list=False):
-    """ Get the immediate tasks on which this task depends
+    """Get the immediate tasks on which this task depends
 
     Examples
     --------
@@ -217,7 +217,7 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
 
 
 def get_deps(dsk):
-    """ Get dependencies and dependents from dask dask graph
+    """Get dependencies and dependents from dask dask graph
 
     >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
     >>> dependencies, dependents = get_deps(dsk)
@@ -279,7 +279,7 @@ def reverse_dict(d):
 
 
 def subs(task, key, val):
-    """ Perform a substitution on a task
+    """Perform a substitution on a task
 
     Examples
     --------
@@ -298,26 +298,19 @@ def subs(task, key, val):
             return [subs(x, key, val) for x in task]
         return task
     newargs = []
+    hash_key = {key}
     for arg in task[1:]:
         type_arg = type(arg)
         if type_arg is tuple and arg and callable(arg[0]):  # istask(task):
             arg = subs(arg, key, val)
         elif type_arg is list:
             arg = [subs(x, key, val) for x in arg]
-        elif type_arg is type(key):
+        else:
             try:
-                # Can't do a simple equality check, since this may trigger
-                # a FutureWarning from NumPy about array equality
-                # https://github.com/dask/dask/pull/2457
-                if len(arg) == len(key) and all(
-                    type(aa) == type(bb) and aa == bb for aa, bb in zip(arg, key)
-                ):
+                if arg in hash_key:  # Hash and equality match
                     arg = val
-
-            except (TypeError, AttributeError):
-                # Handle keys which are not sized (len() fails), but are hashable
-                if arg == key:
-                    arg = val
+            except TypeError:  # not hashable
+                pass
         newargs.append(arg)
     return task[:1] + tuple(newargs)
 
@@ -397,7 +390,7 @@ def toposort(dsk, dependencies=None):
 
 
 def getcycle(d, keys):
-    """ Return a list of nodes that form a cycle if Dask is not a DAG.
+    """Return a list of nodes that form a cycle if Dask is not a DAG.
 
     Returns an empty list if no cycle is found.
 
@@ -418,7 +411,7 @@ def getcycle(d, keys):
 
 
 def isdag(d, keys):
-    """ Does Dask form a directed acyclic graph when calculating keys?
+    """Does Dask form a directed acyclic graph when calculating keys?
 
     ``keys`` may be a single key or list of keys.
 
@@ -457,7 +450,7 @@ class literal(object):
 
 
 def quote(x):
-    """ Ensure that this value remains this value in a dask graph
+    """Ensure that this value remains this value in a dask graph
 
     Some values in dask graph take on special meaning. Sometimes we want to
     ensure that our data is not interpreted but remains literal.
