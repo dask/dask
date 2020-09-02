@@ -1268,7 +1268,7 @@ def lstsq(a, b):
             (np.sqrt, (np.linalg.eigvals, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
         )
     }
-    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
+    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt, r])
     _, _, _, ss = np.linalg.lstsq(
         np.array([[1, 0], [1, 2]], dtype=a.dtype),
         np.array([0, 1], dtype=b.dtype),
