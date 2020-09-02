@@ -161,6 +161,7 @@ Top level user functions:
    real
    rechunk
    reduction
+   register_chunk_type
    repeat
    reshape
    result_type
