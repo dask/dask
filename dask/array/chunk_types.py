@@ -8,7 +8,7 @@ _HANDLED_CHUNK_TYPES = [np.ndarray, np.ma.MaskedArray]
 
 
 def register_chunk_type(type):
-    """ Register the given type as a valid chunk and downcast array type
+    """Register the given type as a valid chunk and downcast array type
 
     Parameters
     ----------
