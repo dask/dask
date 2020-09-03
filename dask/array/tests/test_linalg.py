@@ -808,6 +808,56 @@ def test_no_chunks_svd():
         assert_eq(abs(u), abs(du))
 
 
+@pytest.mark.parametrize("chunks", [(10, -1), (-1, 10), (9, -1), (-1, 9)])
+@pytest.mark.parametrize("shape", [(10, 100), (100, 10), (10, 10)])
+def test_svd_supported_array_shapes(chunks, shape):
+    x = np.random.random(shape)
+    dx = da.from_array(x, chunks=chunks)
+
+    def svd_flip(u, v):
+        """Sign correction to ensure deterministic output from SVD.
+
+        See:
+        - https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/extmath.py#L504
+        - https://github.com/dask/dask/issues/6599
+        """
+        max_abs_cols = np.argmax(np.abs(u), axis=0)
+        signs = np.sign(u[max_abs_cols, range(u.shape[1])])
+        u *= signs
+        v *= signs[:, np.newaxis]
+        return u, v
+
+    du, ds, dv = da.linalg.svd(dx)
+    du, dv = da.compute(du, dv)
+    # Workaround for no `full_matrices=False`
+    # https://github.com/dask/dask/issues/3576
+    k = min(du.shape + dv.shape)
+    du, dv = du[:, :k], dv[:k, :]
+
+    nu, ns, nv = np.linalg.svd(x)
+
+    # Correct signs before comparison
+    du, dv = svd_flip(du, dv)
+    nu, nv = svd_flip(du, dv)
+
+    assert_eq(du, nu)
+    assert_eq(ds, ns)
+    assert_eq(dv, nv)
+
+
+def test_svd_incompatible_chunking():
+    with pytest.raises(ValueError, match="Array must be chunked in one dimension only"):
+        x = da.random.random((10, 10), chunks=(5, 5))
+        da.linalg.svd(x)
+
+
+@pytest.mark.parametrize("ndim", [0, 1, 3])
+def test_svd_incompatible_dimensions(ndim):
+    with pytest.raises(ValueError, match="Array must be 2D"):
+        x = da.random.random((10,) * ndim, chunks=(-1,) * ndim)
+        da.linalg.svd(x)
+
+
 @pytest.mark.parametrize(
     "shape, chunks, axis",
     [[(5,), (2,), None], [(5,), (2,), 0], [(5,), (2,), (0,)], [(5, 6), (2, 2), None]],
