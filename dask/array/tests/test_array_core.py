@@ -2413,12 +2413,7 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(
-        dx.dask[
-            dx.name,
-        ],
-        np.ndarray,
-    )
+    assert isinstance(dx.dask[dx.name,], np.ndarray)
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
@@ -2489,36 +2484,42 @@ def test_from_array_dask_collection_warns():
         da.array(x)
 
 
-def test_asarray():
-    assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray(asarray):
+    assert_eq(asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
-    x = da.asarray([1, 2, 3])
-    assert da.asarray(x) is x
+    x = asarray([1, 2, 3])
+    assert asarray(x) is x
+
+    y = [x[0], 2, x[2]]
+    assert_eq(asarray(y), x)
 
 
-def test_asarray_dask_dataframe():
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray_dask_dataframe(asarray):
     # https://github.com/dask/dask/issues/3885
     dd = pytest.importorskip("dask.dataframe")
     import pandas as pd
 
     s = dd.from_pandas(pd.Series([1, 2, 3, 4]), 2)
-    result = da.asarray(s)
+    result = asarray(s)
     expected = s.values
     assert_eq(result, expected)
 
     df = s.to_frame(name="s")
-    result = da.asarray(df)
+    result = asarray(df)
     expected = df.values
     assert_eq(result, expected)
 
 
-def test_asarray_h5py():
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray_h5py(asarray):
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
         with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
-            x = da.asarray(d)
+            x = asarray(d)
             assert d in x.dask.values()
             assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
 
