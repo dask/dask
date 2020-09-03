@@ -134,6 +134,7 @@ def wrap(wrap_func, func, **kwargs):
 
 w = wrap(wrap_func_shape_as_first_arg)
 
+
 @curry
 def _broadcast_trick_inner(func, shape, *args, **kwargs):
     return np.broadcast_to(func((), *args, **kwargs), shape)
@@ -200,12 +201,7 @@ def full_like(a, fill_value, *args, **kwargs):
         raise ValueError(
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
-    return _full_like(
-        a=a,
-        fill_value=fill_value,
-        *args,
-        **kwargs,
-    )
+    return _full_like(a=a, fill_value=fill_value, *args, **kwargs,)
 
 
 full.__doc__ = _full.__doc__
