@@ -168,7 +168,7 @@ def keys_in_tasks(keys, tasks, as_list=False):
     ...        'a': (add, (inc, 'x'), 1)}
 
     >>> keys_in_tasks(dsk, ['x', 'y', 'j'])
-    set({'x', 'y'})
+    {'x', 'y'}
     """
     ret = []
     while tasks:
