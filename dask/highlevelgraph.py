@@ -7,7 +7,6 @@ from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 
 
-
 def compute_layer_dependencies(layers):
     """Returns the dependencies between layers"""
 
@@ -254,9 +253,9 @@ class HighLevelGraph(Mapping):
         dep_key2 = set(dependencies.keys())
         if dep_key1 != dep_key2:
             raise ValueError(
-                    f"incorrect dependencies keys {repr(dep_key1)} "
-                    f"expected {repr(dep_key2)}"
-                )
+                f"incorrect dependencies keys {repr(dep_key1)} "
+                f"expected {repr(dep_key2)}"
+            )
 
         # Check values
         for k in dep_key1:
