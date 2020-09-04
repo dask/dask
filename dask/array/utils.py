@@ -178,7 +178,9 @@ def _check_dsk(dsk):
     if not isinstance(dsk, HighLevelGraph):
         return
 
-    assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
+    assert all(isinstance(k, (tuple, str)) for k in dsk.layers), [
+        type(k) for k in dsk.layers
+    ]
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     assert not non_one, non_one
@@ -188,9 +190,9 @@ def assert_eq_shape(a, b, check_nan=True):
     for aa, bb in zip(a, b):
         if math.isnan(aa) or math.isnan(bb):
             if check_nan:
-                assert math.isnan(aa) == math.isnan(bb)
+                assert math.isnan(aa) == math.isnan(bb), (aa, bb)
         else:
-            assert aa == bb
+            assert aa == bb, (aa, bb)
 
 
 def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
@@ -199,7 +201,7 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
     x_computed = None
 
     if isinstance(x, Array):
-        assert x.dtype is not None
+        assert x.dtype is not None, x.dtype
         adt = x.dtype
         if check_graph:
             _check_dsk(x.dask)
@@ -211,7 +213,7 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
         if not hasattr(x, "dtype"):
             x = np.array(x, dtype="O")
         if _not_empty(x):
-            assert x.dtype == x_original.dtype
+            assert x.dtype == x_original.dtype, (x.dtype, x_original.dtype)
         if check_shape:
             assert_eq_shape(x_original.shape, x.shape, check_nan=False)
     else:
@@ -223,6 +225,8 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
 
 
 def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwargs):
+    __tracebackhide__ = True
+
     a_original = a
     b_original = b
 
@@ -243,22 +247,34 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
             )
 
     try:
-        assert a.shape == b.shape
+        assert a.shape == b.shape, (a.shape, b.shape)
         if check_meta:
             if hasattr(a, "_meta") and hasattr(b, "_meta"):
                 assert_eq(a._meta, b._meta)
             if hasattr(a_original, "_meta"):
-                assert a_original._meta.ndim == a.ndim
+                assert a_original._meta.ndim == a.ndim, (a_original._meta.ndim, a.ndim)
                 if a_meta is not None:
-                    assert type(a_original._meta) == type(a_meta)
+                    assert type(a_original._meta) == type(a_meta), (
+                        type(a_original._meta),
+                        type(a_meta),
+                    )
                     if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
-                        assert type(a_meta) == type(a_computed)
+                        assert type(a_meta) == type(a_computed), (
+                            type(a_meta),
+                            type(a_computed),
+                        )
             if hasattr(b_original, "_meta"):
-                assert b_original._meta.ndim == b.ndim
+                assert b_original._meta.ndim == b.ndim, (b_original._meta.ndim, b.ndim)
                 if b_meta is not None:
-                    assert type(b_original._meta) == type(b_meta)
+                    assert type(b_original._meta) == type(b_meta), (
+                        type(b_original._meta),
+                        type(b_meta),
+                    )
                     if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
-                        assert type(b_meta) == type(b_computed)
+                        assert type(b_meta) == type(b_computed), (
+                            type(b_meta),
+                            type(b_computed),
+                        )
         assert allclose(a, b, **kwargs)
         return True
     except TypeError:
@@ -267,7 +283,7 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
     c = a == b
 
     if isinstance(c, np.ndarray):
-        assert c.all()
+        assert c.all()  # TODO: use np.testing.assert_array_equal?
     else:
         assert c
 
