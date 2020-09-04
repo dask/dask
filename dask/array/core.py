@@ -920,6 +920,7 @@ def store(
     store_keys = list(store_dsk.keys())
 
     store_dsk = HighLevelGraph.merge(store_dsk, targets_dsk, sources_dsk)
+    store_dsk = HighLevelGraph.from_collections(id(store_dsk), dict(store_dsk))
 
     if return_stored:
         load_store_dsk = store_dsk
