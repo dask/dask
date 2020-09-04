@@ -3298,12 +3298,18 @@ def test_from_array_names():
     assert set(names.values()) == set([1, 5])
 
 
-def test_array_picklable():
+@pytest.mark.parametrize(
+    "array",
+    [
+        da.arange(100, chunks=25),
+        da.ones((10, 10), chunks=25),
+    ],
+)
+def test_array_picklable(array):
     from pickle import loads, dumps
 
-    a = da.arange(100, chunks=25)
-    a2 = loads(dumps(a))
-    assert_eq(a, a2)
+    a2 = loads(dumps(array))
+    assert_eq(array, a2)
 
 
 def test_from_array_raises_on_bad_chunks():

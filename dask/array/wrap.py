@@ -135,6 +135,11 @@ def wrap(wrap_func, func, **kwargs):
 w = wrap(wrap_func_shape_as_first_arg)
 
 
+@curry
+def _broadcast_trick_inner(func, shape, *args, **kwargs):
+    return np.broadcast_to(func((), *args, **kwargs), shape)
+
+
 def broadcast_trick(func):
     """
     Provide a decorator to wrap common numpy function with a broadcast trick.
@@ -155,8 +160,7 @@ def broadcast_trick(func):
     so should be safe.
     """
 
-    def inner(shape, *args, **kwargs):
-        return np.broadcast_to(func((), *args, **kwargs), shape)
+    inner = _broadcast_trick_inner(func)
 
     if func.__doc__ is not None:
         inner.__doc__ = func.__doc__
