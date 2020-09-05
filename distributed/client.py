@@ -1429,7 +1429,7 @@ class Client:
 
                     self.sync(_)
 
-        sync(self.loop, self._close, fast=True)
+        sync(self.loop, self._close, fast=True, callback_timeout=timeout)
 
         assert self.status == "closed"
 
@@ -4817,7 +4817,8 @@ def _close_global_client():
     c = _get_global_client()
     if c is not None:
         c._should_close_loop = False
-        c.close(timeout=2)
+        with suppress(TimeoutError):
+            c.close(timeout=2)
 
 
 atexit.register(_close_global_client)
