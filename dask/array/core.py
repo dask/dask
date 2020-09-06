@@ -2866,9 +2866,22 @@ def from_array(
     if lock is True:
         lock = SerializableLock()
 
+    limit = config.get("array.chunk-size")
+    if isinstance(limit, str):
+        limit = parse_bytes(limit)
+    array_too_big = type(x) is np.ndarray and x.nbytes > limit
+    is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
-    if type(x) is np.ndarray and all(len(c) == 1 for c in chunks):
+    if type(x) is np.ndarray and not is_single_block and array_too_big and not lock:
+        # eagerly slice numpy arrays to prevent memory blowup
+        slices = slices_from_chunks(chunks)
+        keys = product([name], *(range(len(bds)) for bds in chunks))
+        slices = slices_from_chunks(chunks)
+        values = [x[slc] for slc in slices]
+        dsk = dict(zip(keys, values))
+
+    elif type(x) is np.ndarray and is_single_block:
         # No slicing needed
         dsk = {(name,) + (0,) * x.ndim: x}
     else:
