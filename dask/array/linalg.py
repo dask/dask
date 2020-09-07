@@ -806,13 +806,45 @@ def svd(a):
     s:  Array, singular values in decreasing order (largest first)
     v:  Array, unitary / orthogonal
 
+    Warnings
+    --------
+
+    SVD is only supported for arrays with chunking in one dimension.
+    This requires that all inputs either contain a single column
+    of chunks (tall-and-skinny) or a single row of chunks (short-and-fat).
+    For arrays with chunking in both dimensions, see da.linalg.svd_compressed.
+
     See Also
     --------
 
     np.linalg.svd : Equivalent NumPy Operation
-    dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
+    da.linalg.svd_compressed : Randomized SVD for fully chunked arrays
+    dask.array.linalg.tsqr: QR factorization for tall-and-skinny arrays
     """
-    return tsqr(a, compute_svd=True)
+    nb = a.numblocks
+    if a.ndim != 2:
+        raise ValueError(
+            "Array must be 2D.\n"
+            "Input shape: {}\n"
+            "Input ndim: {}\n".format(a.shape, a.ndim)
+        )
+    if nb[0] > 1 and nb[1] > 1:
+        raise ValueError(
+            "Array must be chunked in one dimension only. "
+            "This function (svd) only supports tall-and-skinny or short-and-fat "
+            "matrices (see da.linalg.svd_compressed for SVD on fully chunked arrays).\n"
+            "Input shape: {}\n"
+            "Input numblocks: {}\n".format(a.shape, nb)
+        )
+
+    # Tall-and-skinny case
+    if nb[0] >= nb[1]:
+        u, s, v = tsqr(a, compute_svd=True)
+        return u, s, v
+    # Short-and-fat case
+    else:
+        vt, s, ut = tsqr(a.T, compute_svd=True)
+        return ut.T, s, vt.T
 
 
 def _solve_triangular_lower(a, b):
