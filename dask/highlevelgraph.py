@@ -40,9 +40,8 @@ class Layer(Mapping):
 
         Examples
         --------
-        >>> d = Layer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
-        >>> dsk = d.cull({'out'})
-        >>> dsk  # doctest: +SKIP
+        >>> d = Layer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})  # doctest: +SKIP
+        >>> d.cull({'out'})  # doctest: +SKIP
         {'x': 1, 'out': (add, 'x', 10)}
 
         Returns
