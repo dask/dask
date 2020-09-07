@@ -264,8 +264,6 @@ class Blockwise(Layer):
             self._cached_dict["ext_deps"] = ext_deps
             ext_deps |= keys_in_tasks(known_keys, non_blockwise_tasks.values())
 
-        org = super().get_external_dependencies(known_keys=known_keys)
-        assert ext_deps == org
         return ext_deps
 
     def cull(self, keys):
