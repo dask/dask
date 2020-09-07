@@ -157,7 +157,7 @@ def get(dsk, out, cache=None):
 
 
 def keys_in_tasks(keys, tasks, as_list=False):
-    """Returns the keys in `keys` that are in `tasks`
+    """Returns the keys in `keys` that are also in `tasks`
 
     Examples
     --------
@@ -168,7 +168,7 @@ def keys_in_tasks(keys, tasks, as_list=False):
     ...        'a': (add, (inc, 'x'), 1)}
 
     >>> keys_in_tasks(dsk, ['x', 'y', 'j'])  # doctest: +SKIP
-    set({'x', 'y'})
+    {'x', 'y'}
     """
     ret = []
     while tasks:

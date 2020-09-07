@@ -1141,8 +1141,8 @@ Dask Name: {name}, {task} tasks"""
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
         force : bool, default False
             Allows the expansion of the existing divisions.
-            If False then the new divisions lower and upper bounds must be
-            the same as the old divisions.
+            If False then the new divisions' lower and upper bounds must be
+            the same as the old divisions'.
 
         Notes
         -----
@@ -2801,7 +2801,7 @@ Dask Name: {name}, {task} tasks""".format(
             from the input series and the transformation. Ignored for
             non-callable/dict-like ``index`` or when the input series has
             unknown divisions. Note that this may only be set to ``True`` if
-            you know that the transformed index is monotonicly increasing. Dask
+            you know that the transformed index is monotonically increasing. Dask
             will check that transformed divisions are monotonic, but cannot
             check all the values between divisions, so incorrectly setting this
             can result in bugs.
@@ -3535,7 +3535,10 @@ class DataFrame(_Frame):
             # Slicing with integer labels is always iloc based except for a
             # float indexer for some reason
             if is_integer_slice and not is_float_dtype(self.index.dtype):
-                self.iloc[key]
+                # NOTE: this always fails currently, as iloc is mostly
+                # unsupported, but we call it anyway here for future-proofing
+                # and error-attribution purposes
+                return self.iloc[key]
             else:
                 return self.loc[key]
 
@@ -4740,6 +4743,7 @@ def elemwise(op, *args, **kwargs):
     dfs = [df for df in dasks if isinstance(df, _Frame)]
 
     # Clean up dask arrays if present
+    deps = dasks.copy()
     for i, a in enumerate(dasks):
         if not isinstance(a, Array):
             continue
@@ -4782,7 +4786,7 @@ def elemwise(op, *args, **kwargs):
     # adjust the key length of Scalar
     dsk = partitionwise_graph(op, _name, *args, **kwargs)
 
-    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=dasks)
+    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
 
     if meta is no_default:
         if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
@@ -5336,7 +5340,7 @@ def _rename_dask(df, names):
     Destructively rename columns of dd.DataFrame or name of dd.Series.
     Not for pd.DataFrame or pd.Series.
 
-    Internaly used to overwrite dd.DataFrame.columns and dd.Series.name
+    Internally used to overwrite dd.DataFrame.columns and dd.Series.name
     We can't use map_partition because it applies function then rename
 
     Parameters
