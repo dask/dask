@@ -7,6 +7,7 @@ import tlz as toolz
 from .utils import ignoring
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks, flatten, get_dependencies
+from .utils_test import add, inc  # noqa: F401
 
 
 def compute_layer_dependencies(layers):
