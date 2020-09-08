@@ -2832,20 +2832,10 @@ def from_array(
     >>> token = dask.base.tokenize(x)  # doctest: +SKIP
     >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
 
-    Numpy ndarrays that are smaller than ``array.chunk-size`` are wholly embedded in the graph,
-    communicated to all workers and then sliced at compute time. So ``operator.getitem``
-    tasks are present in the graph.
+    Numpy ndarrays are eagerly sliced and then embedded in the graph.
 
-    >>> import dask.array as da
-    >>> a = da.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,))
-    >>> a.dask[a.name, 0, 0][0]
-    <function _operator.getitem(a, b, /)>
-
-    Numpy ndarrays that are bigger than ``array.chunk-size`` are eagerly sliced and then
-    embedded in the graph.
-
-    >>> with dask.config.set({"array.chunk-size": "1B"}):
-    >>>     a = dask.array.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,1))
+    >>> import dask.array
+    >>> a = dask.array.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,1))
     >>> a.dask[a.name, 0, 0][0]
     array([1])
 
@@ -2888,11 +2878,10 @@ def from_array(
     if isinstance(limit, str):
         limit = parse_bytes(limit)
     is_ndarray = type(x) is np.ndarray
-    array_too_big = is_ndarray and x.nbytes > limit
     is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
-    if is_ndarray and not is_single_block and array_too_big and not lock:
+    if is_ndarray and not is_single_block and not lock:
         # eagerly slice numpy arrays to prevent memory blowup
         # GH5367, GH5601
         slices = slices_from_chunks(chunks)
@@ -2905,10 +2894,7 @@ def from_array(
         dsk = {(name,) + (0,) * x.ndim: x}
     else:
         if getitem is None:
-            if type(x) is np.ndarray and not lock:
-                # simpler and cleaner, but missing all the nuances of getter
-                getitem = operator.getitem
-            elif fancy:
+            if fancy:
                 getitem = getter
             else:
                 getitem = getter_nofancy
