@@ -65,13 +65,13 @@ class Layer(Mapping):
 
         return BasicLayer(out)
 
-    def get_external_dependencies(self, known_keys: Set) -> Set:
+    def get_external_dependencies(self, all_hlg_keys: Set) -> Set:
         """Get external dependencies
 
         Parameters
         ----------
-        known_keys : set
-            Set of known keys (typically all keys in a HighLevelGraph)
+        all_hlg_keys : set
+            Set of all keys in the high level graph.
 
         Returns
         -------
@@ -79,34 +79,68 @@ class Layer(Mapping):
             Set of dependencies
         """
 
-        all_deps = keys_in_tasks(known_keys, self.values())
+        all_deps = keys_in_tasks(all_hlg_keys, self.values())
         return all_deps.difference(self.keys())
 
 
 class BasicLayer(Layer):
-    """Basic implementation of `Layer` that takes a mapping and
+    """Basic implementation of `Layer`
 
-    optionally an external_dependencies.
+    Parameters
+    ----------
+    mapping : Mapping
+        The mapping between keys and tasks, typically a dask graph.
+    key_dependencies : Mapping[Hashable, Set], optional
+        Mapping between keys and their dependencies
+    unstructured_tasks : Mapping[Hashable, Set], optional
+        Mapping between keys and unstructured tasks, which are tasks
+        that have no dependencies information.
     """
 
-    def __init__(self, mapping, external_dependencies=None):
-        self.__mapping = mapping
-        self.__external_dependencies = external_dependencies
+    def __init__(self, mapping, key_dependencies=None, unstructured_tasks=None):
+        self._mapping = mapping
+        self._key_dependencies = key_dependencies
+        self._unstructured_tasks = unstructured_tasks
 
     def __getitem__(self, k):
-        return self.__mapping[k]
+        return self._mapping[k]
 
     def __iter__(self):
-        return iter(self.__mapping)
+        return iter(self._mapping)
 
     def __len__(self):
-        return len(self.__mapping)
+        return len(self._mapping)
 
-    def get_external_dependencies(self, known_keys):
-        if self.__external_dependencies is not None:
-            return self.__external_dependencies
-        else:
-            return super().get_external_dependencies(known_keys)
+    def get_external_dependencies(self, all_hlg_keys):
+        if self._key_dependencies is None or self._unstructured_tasks is None:
+            return super().get_external_dependencies(all_hlg_keys)
+
+        ret = set()
+        for v in self._key_dependencies.values():
+            ret.update(v)
+        ret |= keys_in_tasks(all_hlg_keys, self._unstructured_tasks.values())
+        return ret
+
+    def cull(self, keys):
+        if self._key_dependencies is None or self._unstructured_tasks is None:
+            return super().cull(keys)
+
+        # TODO: Are we sure that tasks in `self` never depend on
+        # other tasks in `self`?
+        ret = BasicLayer(
+            mapping={k: self[k] for k in keys},
+            key_dependencies={
+                k: self._key_dependencies[k]
+                for k in keys
+                if k in self._key_dependencies
+            },
+            unstructured_tasks={
+                k: self._unstructured_tasks[k]
+                for k in keys
+                if k in self._unstructured_tasks
+            },
+        )
+        return ret
 
 
 class HighLevelGraph(Mapping):

@@ -226,8 +226,7 @@ class Blockwise(Layer):
             )
             self._cached_dict = {
                 "dsk": dsk,
-                "key_deps": key_deps,
-                "non_blockwise_tasks": non_blockwise_tasks,
+                "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_tasks),
             }
         return self._cached_dict["dsk"]
 
@@ -252,29 +251,13 @@ class Blockwise(Layer):
 
         return out_d
 
-    def get_external_dependencies(self, known_keys):
+    def get_external_dependencies(self, all_hlg_keys):
         _ = self._dict  # trigger materialization
-        key_deps = self._cached_dict["key_deps"]
-        non_blockwise_tasks = self._cached_dict["non_blockwise_tasks"]
-        ext_deps = self._cached_dict.get("ext_deps", None)
-        if ext_deps is None:
-            ext_deps = set()
-            for v in key_deps.values():
-                ext_deps.update(v)
-            self._cached_dict["ext_deps"] = ext_deps
-            ext_deps |= keys_in_tasks(known_keys, non_blockwise_tasks.values())
-
-        return ext_deps
+        return self._cached_dict["basic_layer"].get_external_dependencies(all_hlg_keys)
 
     def cull(self, keys):
         _ = self._dict  # trigger materialization
-
-        # TODO: Are we sure that tasks in `self` never depend on
-        # other tasks in `self`?
-        return BasicLayer(
-            mapping={k: self[k] for k in keys},
-            external_dependencies=self._cached_dict["ext_deps"],
-        )
+        return self._cached_dict["basic_layer"].cull(keys)
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
@@ -468,8 +451,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
         non_blockwise_task = []
         coords = out_coords + dummies
         args = []
-        for cmap, axes, arg_ind in zip(coord_maps, concat_axes, argpairs):
-            arg, ind = arg_ind
+        for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
             if ind is None:
                 args.append(arg)
                 non_blockwise_task.append(arg)
