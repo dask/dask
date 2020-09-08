@@ -874,3 +874,19 @@ def test_bincount():
 
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
+
+@pytest.mark.skipif(
+    np.__version__ < "1.20", reason="NEP35 is not available"
+)
+def test_compress():
+    carr = cupy.random.randint(0, 3, size=(10, 10))
+
+    darr = da.from_array(carr, chunks=(20, 5))
+
+    c = cupy.asarray([True])
+    res = da.compress(c, darr, axis=0)
+
+    # cupy.compress is not implemented but dask implementation does not
+    # rely on np.compress -- move originial data back to host and
+    # compare da.compress with np.compress
+    assert_eq(np.compress(c.tolist(), carr.tolist(), axis=0), res)
