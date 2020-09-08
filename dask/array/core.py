@@ -2831,6 +2831,20 @@ def from_array(
     >>> import dask.base
     >>> token = dask.base.tokenize(x)  # doctest: +SKIP
     >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
+
+    Numpy ndarrays that are smaller than array.chunk-size are wholly embedded in the graph,
+    communicated to all workers and then sliced at compute time. So operator.getitem
+    tasks are present in the graph.
+    >>> a = da.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,))
+    >>> a.dask[a.name, 0, 0][0]
+    <function _operator.getitem(a, b, /)>
+
+    Numpy ndarrays that are bigger than array.chunk-size are eagerly sliced and then
+    embedded in the graph.
+    >>> with dask.config.set({"array.chunk-size": "1B"}):
+    >>>     a = dask.array.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,1))
+    >>> a.dask[a.name, 0, 0][0]
+    array([1])
     """
     if isinstance(x, Array):
         raise ValueError(
@@ -2869,19 +2883,21 @@ def from_array(
     limit = config.get("array.chunk-size")
     if isinstance(limit, str):
         limit = parse_bytes(limit)
-    array_too_big = type(x) is np.ndarray and x.nbytes > limit
+    is_ndarray = type(x) is np.ndarray
+    array_too_big = is_ndarray and x.nbytes > limit
     is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
     # because np.matrix is a subclass of np.ndarray.
-    if type(x) is np.ndarray and not is_single_block and array_too_big and not lock:
+    if is_ndarray and not is_single_block and array_too_big and not lock:
         # eagerly slice numpy arrays to prevent memory blowup
+        # GH5367, GH5601
         slices = slices_from_chunks(chunks)
         keys = product([name], *(range(len(bds)) for bds in chunks))
         slices = slices_from_chunks(chunks)
         values = [x[slc] for slc in slices]
         dsk = dict(zip(keys, values))
 
-    elif type(x) is np.ndarray and is_single_block:
+    elif is_ndarray and is_single_block:
         # No slicing needed
         dsk = {(name,) + (0,) * x.ndim: x}
     else:
