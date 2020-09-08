@@ -2832,20 +2832,23 @@ def from_array(
     >>> token = dask.base.tokenize(x)  # doctest: +SKIP
     >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
 
-    Numpy ndarrays that are smaller than array.chunk-size are wholly embedded in the graph,
-    communicated to all workers and then sliced at compute time. So operator.getitem
+    Numpy ndarrays that are smaller than ``array.chunk-size`` are wholly embedded in the graph,
+    communicated to all workers and then sliced at compute time. So ``operator.getitem``
     tasks are present in the graph.
+
     >>> import dask.array as da
     >>> a = da.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,))
     >>> a.dask[a.name, 0, 0][0]
     <function _operator.getitem(a, b, /)>
 
-    Numpy ndarrays that are bigger than array.chunk-size are eagerly sliced and then
+    Numpy ndarrays that are bigger than ``array.chunk-size`` are eagerly sliced and then
     embedded in the graph.
+
     >>> with dask.config.set({"array.chunk-size": "1B"}):
     >>>     a = dask.array.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,1))
     >>> a.dask[a.name, 0, 0][0]
     array([1])
+
     """
     if isinstance(x, Array):
         raise ValueError(
@@ -2894,7 +2897,6 @@ def from_array(
         # GH5367, GH5601
         slices = slices_from_chunks(chunks)
         keys = product([name], *(range(len(bds)) for bds in chunks))
-        slices = slices_from_chunks(chunks)
         values = [x[slc] for slc in slices]
         dsk = dict(zip(keys, values))
 
