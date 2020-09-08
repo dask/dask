@@ -164,10 +164,11 @@ class _LocIndexer(_IndexerBase):
                 divisions.append(sorted(indexer)[0])
             # append maximum value of the last division
             divisions.append(sorted(items[-1][1])[-1])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
         else:
             divisions = [None, None]
             dsk = {(name, 0): meta.head(0)}
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+            graph = HighLevelGraph.from_collections(name, dsk)
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):

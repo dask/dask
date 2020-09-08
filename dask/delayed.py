@@ -470,12 +470,19 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "dask", "_length")
+    __slots__ = ("_key", "dask", "_length", "_dask_layers")
 
     def __init__(self, key, dsk, length=None):
         self._key = key
         self.dask = dsk
         self._length = length
+
+        # `__dask_layers__` of an one-layered HLG is the layer name
+        # TODO: what is the name of a multi-layered HLG?
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            self._dask_layers = set(iter(dsk.layers))
+        else:
+            self._dask_layers = (self.key,)
 
     def __dask_graph__(self):
         return self.dask
@@ -484,7 +491,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        return (self.key,)
+        if hasattr(self, "_dask_layers"):
+            return self._dask_layers
+        else:
+            return (self.key,)
 
     def __dask_tokenize__(self):
         return self.key
