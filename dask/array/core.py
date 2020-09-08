@@ -2874,9 +2874,6 @@ def from_array(
     if lock is True:
         lock = SerializableLock()
 
-    limit = config.get("array.chunk-size")
-    if isinstance(limit, str):
-        limit = parse_bytes(limit)
     is_ndarray = type(x) is np.ndarray
     is_single_block = all(len(c) == 1 for c in chunks)
     # Always use the getter for h5py etc. Not using isinstance(x, np.ndarray)
