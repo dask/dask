@@ -415,9 +415,6 @@ class HighLevelGraph(Mapping):
 
         self._fix_hlg_layers_inplace()
 
-        # TODO: remove this when <https://github.com/dask/dask/pull/6509> passes
-        self._fix_hlg_dependencies_inplace()
-
         if not isinstance(keys, (list, set)):
             keys = [keys]
         keys = set(flatten(keys))
