@@ -2387,7 +2387,7 @@ def test_from_array_ndarray_getitem():
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=(1, 2))
     assert_eq(x, dx)
-    assert dx.dask[dx.name, 0, 0][0] == operator.getitem
+    assert (dx.dask[dx.name, 0, 0] == np.array([[1, 2]])).all()
 
 
 @pytest.mark.parametrize("x", [[1, 2], (1, 2), memoryview(b"abc")])
@@ -2399,8 +2399,7 @@ def test_from_array_list(x):
 
     dx = da.from_array(x, chunks=1)
     assert_eq(np.array(x), dx)
-    assert dx.dask[dx.name, 0][0] == operator.getitem
-    assert isinstance(dx.dask[dx.name.replace("array", "array-original")], np.ndarray)
+    assert dx.dask[dx.name, 0][0] == x[0]
 
 
 @pytest.mark.parametrize("type_", [t for t in np.ScalarType if t is not memoryview])
@@ -3295,7 +3294,7 @@ def test_from_array_names():
     d = da.from_array(x, chunks=2)
 
     names = countby(key_split, d.dask)
-    assert set(names.values()) == set([1, 5])
+    assert set(names.values()) == set([5])
 
 
 @pytest.mark.parametrize(
