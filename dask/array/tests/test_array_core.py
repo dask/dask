@@ -2392,7 +2392,7 @@ def test_from_array_ndarray_getitem():
     with dask.config.set({"array.chunk-size": "1B"}):
         dx = da.from_array(x, chunks=(1, 2))
         assert_eq(x, dx)
-        assert dx.dask[dx.name, 0, 0] == np.array([[1, 2]])
+        assert (dx.dask[dx.name, 0, 0] == np.array([[1, 2]])).all()
 
 
 @pytest.mark.parametrize("x", [[1, 2], (1, 2), memoryview(b"abc")])
