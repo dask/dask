@@ -2835,6 +2835,7 @@ def from_array(
     Numpy ndarrays that are smaller than array.chunk-size are wholly embedded in the graph,
     communicated to all workers and then sliced at compute time. So operator.getitem
     tasks are present in the graph.
+    >>> import dask.array as da
     >>> a = da.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,))
     >>> a.dask[a.name, 0, 0][0]
     <function _operator.getitem(a, b, /)>
