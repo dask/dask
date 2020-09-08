@@ -6,7 +6,7 @@ import numpy as np
 
 import tlz as toolz
 
-from .core import reverse_dict
+from .core import reverse_dict, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable, fuse
@@ -636,7 +636,14 @@ def _optimize_blockwise(full_graph, keys=()):
             # Merge these Blockwise layers into one
             new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
             out[layer] = new_layer
-            dependencies[layer] = {k for k, v in new_layer.indices if v is not None}
+
+            new_deps = set()
+            for k, v in new_layer.indices:
+                if v is None:
+                    new_deps |= keys_in_tasks(full_graph.dependencies, [k])
+                else:
+                    new_deps.add(k)
+            dependencies[layer] = new_deps
         else:
             out[layer] = layers[layer]
             dependencies[layer] = full_graph.dependencies.get(layer, set())

@@ -156,6 +156,41 @@ def get(dsk, out, cache=None):
     return result
 
 
+def keys_in_tasks(keys, tasks, as_list=False):
+    """Returns the keys in `keys` that are also in `tasks`
+
+    Examples
+    --------
+    >>> dsk = {'x': 1,
+    ...        'y': (inc, 'x'),
+    ...        'z': (add, 'x', 'y'),
+    ...        'w': (inc, 'z'),
+    ...        'a': (add, (inc, 'x'), 1)}
+
+    >>> keys_in_tasks(dsk, ['x', 'y', 'j'])  # doctest: +SKIP
+    {'x', 'y'}
+    """
+    ret = []
+    while tasks:
+        work = []
+        for w in tasks:
+            typ = type(w)
+            if typ is tuple and w and callable(w[0]):  # istask(w)
+                work.extend(w[1:])
+            elif typ is list:
+                work.extend(w)
+            elif typ is dict:
+                work.extend(w.values())
+            else:
+                try:
+                    if w in keys:
+                        ret.append(w)
+                except TypeError:  # not hashable
+                    pass
+        tasks = work
+    return ret if as_list else set(ret)
+
+
 def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     """Get the immediate tasks on which this task depends
 
@@ -192,28 +227,7 @@ def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     else:
         raise ValueError("Provide either key or task")
 
-    result = []
-    work = [arg]
-
-    while work:
-        new_work = []
-        for w in work:
-            typ = type(w)
-            if typ is tuple and w and callable(w[0]):  # istask(w)
-                new_work.extend(w[1:])
-            elif typ is list:
-                new_work.extend(w)
-            elif typ is dict:
-                new_work.extend(w.values())
-            else:
-                try:
-                    if w in dsk:
-                        result.append(w)
-                except TypeError:  # not hashable
-                    pass
-        work = new_work
-
-    return result if as_list else set(result)
+    return keys_in_tasks(dsk, [arg], as_list=as_list)
 
 
 def get_deps(dsk):
