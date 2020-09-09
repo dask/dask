@@ -1567,7 +1567,6 @@ class Array(DaskMethodsMixin):
         )
 
         index2 = normalize_index(index, self.shape)
-
         dependencies = {self.name}
         for i in index2:
             if isinstance(i, Array):
@@ -1582,7 +1581,7 @@ class Array(DaskMethodsMixin):
             return self
 
         out = "getitem-" + tokenize(self, index2)
-        dsk, chunks = slice_array(out, self.name, self.chunks, index2)
+        dsk, chunks = slice_array(out, self.name, self.chunks, index2, self.itemsize)
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
 
