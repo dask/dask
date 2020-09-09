@@ -404,20 +404,6 @@ class HighLevelGraph(Mapping):
                 new_layers[k] = BasicLayer(v)
         self.layers.update(new_layers)
 
-    def _find_layer_containing_key(self, key):
-        for k, v in self.layers.items():
-            if key in v:
-                return k
-        raise RuntimeError(f"{repr(key)} not found")
-
-    def _fix_hlg_dependencies_inplace(self):
-        """Makes sure that self.dependencies is correct"""
-        all_keys = set(self.keys())
-        self.dependencies = {k: set() for k in self.layers.keys()}
-        for k, v in self.layers.items():
-            for key in v.get_external_dependencies(all_keys):
-                self.dependencies[k].add(self._find_layer_containing_key(key))
-
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
 
