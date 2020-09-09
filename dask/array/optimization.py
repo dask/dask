@@ -42,8 +42,10 @@ def optimize(
         dsk = optimize_blockwise(dsk, keys=keys)
         dsk = fuse_roots(dsk, keys=keys)
         dsk = dsk.cull(set(keys))
+        dependencies = dsk.get_dependencies()
+    else:
+        dependencies = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
     dsk = ensure_dict(dsk)
-    dependencies = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
 
     # Low level task optimizations
     if fast_functions is not None:

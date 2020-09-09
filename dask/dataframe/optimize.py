@@ -17,8 +17,8 @@ def optimize(dsk, keys, **kwargs):
         dsk = optimize_blockwise(dsk, keys=flat_keys)
         dsk = fuse_roots(dsk, keys=flat_keys)
         dsk = dsk.cull(set(flat_keys))
+        dependencies = dsk.get_dependencies()
         dsk = ensure_dict(dsk)
-        dependencies = None
     else:
         dsk = ensure_dict(dsk)
         if isinstance(keys, list):
