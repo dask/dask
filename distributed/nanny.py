@@ -438,7 +438,7 @@ class Nanny(ServerNode):
         self.loop.add_callback(self._on_exit, exitcode)
 
     async def _on_exit(self, exitcode):
-        if self.status not in (Status.closing, Status.closed):
+        if self.status not in (Status.init, Status.closing, Status.closed):
             try:
                 await self.scheduler.unregister(address=self.worker_address)
             except (EnvironmentError, CommClosedError):
