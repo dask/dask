@@ -3878,7 +3878,7 @@ def asanyarray(a):
     elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
         return asanyarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        a = stack(a)
+        return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asanyarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
