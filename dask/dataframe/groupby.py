@@ -64,8 +64,7 @@ from ..highlevelgraph import HighLevelGraph
 
 
 def _determine_levels(index):
-    """Determine the correct levels argument to groupby.
-    """
+    """Determine the correct levels argument to groupby."""
     if isinstance(index, (tuple, list)) and len(index) > 1:
         return list(range(len(index)))
     else:
@@ -73,8 +72,7 @@ def _determine_levels(index):
 
 
 def _normalize_index(df, index):
-    """Replace series with column names in an index wherever possible.
-    """
+    """Replace series with column names in an index wherever possible."""
     if not isinstance(df, DataFrame):
         return index
 
@@ -983,7 +981,7 @@ def _cumcount_aggregate(a, b, fill_value=None):
 
 
 class _GroupBy(object):
-    """ Superclass for DataFrameGroupBy and SeriesGroupBy
+    """Superclass for DataFrameGroupBy and SeriesGroupBy
 
     Parameters
     ----------
@@ -1545,7 +1543,7 @@ class _GroupBy(object):
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, *args, **kwargs):
-        """ Parallel version of pandas GroupBy.apply
+        """Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
 
@@ -1633,7 +1631,7 @@ class _GroupBy(object):
 
     @insert_meta_param_description(pad=12)
     def transform(self, func, *args, **kwargs):
-        """ Parallel version of pandas GroupBy.transform
+        """Parallel version of pandas GroupBy.transform
 
         This mimics the pandas version except for the following:
 

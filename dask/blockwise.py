@@ -6,7 +6,7 @@ import numpy as np
 
 import tlz as toolz
 
-from .core import reverse_dict
+from .core import reverse_dict, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable, fuse
@@ -14,7 +14,7 @@ from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
 def subs(task, substitution):
-    """ Create a new task with the values substituted
+    """Create a new task with the values substituted
 
     This is like dask.core.subs, but takes a dict of many substitutions to
     perform simultaneously.  It is not as concerned with micro performance.
@@ -52,7 +52,7 @@ def blockwise(
     dependencies=(),
     **kwargs
 ):
-    """ Create a Blockwise symbolic mutable mapping
+    """Create a Blockwise symbolic mutable mapping
 
     This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
     returns a symbolic Blockwise object.
@@ -133,7 +133,7 @@ def blockwise(
 
 
 class Blockwise(Mapping):
-    """ Tensor Operation
+    """Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.
     This defines a dictionary using an operation and an indexing pattern.
@@ -245,7 +245,7 @@ class Blockwise(Mapping):
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
-    """ Tensor operation
+    """Tensor operation
 
     Applies a function, ``func``, across blocks from many different input
     collections.  We arrange the pattern with which those blocks interact with
@@ -459,7 +459,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
 
 def lol_product(head, values):
-    """ List of list of tuple keys, similar to `itertools.product`.
+    """List of list of tuple keys, similar to `itertools.product`.
 
     Parameters
     ----------
@@ -487,7 +487,7 @@ def lol_product(head, values):
 
 
 def lol_tuples(head, ind, values, dummies):
-    """ List of list of tuple keys
+    """List of list of tuple keys
 
     Parameters
     ----------
@@ -526,7 +526,7 @@ def lol_tuples(head, ind, values, dummies):
 
 
 def optimize_blockwise(graph, keys=()):
-    """ High level optimization of stacked Blockwise layers
+    """High level optimization of stacked Blockwise layers
 
     For operations that have multiple Blockwise operations one after the other, like
     ``x.T + 123`` we can fuse these into a single Blockwise operation.  This happens
@@ -636,7 +636,14 @@ def _optimize_blockwise(full_graph, keys=()):
             # Merge these Blockwise layers into one
             new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
             out[layer] = new_layer
-            dependencies[layer] = {k for k, v in new_layer.indices if v is not None}
+
+            new_deps = set()
+            for k, v in new_layer.indices:
+                if v is None:
+                    new_deps |= keys_in_tasks(full_graph.dependencies, [k])
+                else:
+                    new_deps.add(k)
+            dependencies[layer] = new_deps
         else:
             out[layer] = layers[layer]
             dependencies[layer] = full_graph.dependencies.get(layer, set())
@@ -646,7 +653,7 @@ def _optimize_blockwise(full_graph, keys=()):
 
 
 def rewrite_blockwise(inputs):
-    """ Rewrite a stack of Blockwise expressions into a single blockwise expression
+    """Rewrite a stack of Blockwise expressions into a single blockwise expression
 
     Given a set of Blockwise layers, combine them into a single layer.  The provided
     layers are expected to fit well together.  That job is handled by
@@ -806,7 +813,7 @@ def zero_broadcast_dimensions(lol, nblocks):
 
 
 def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=None):
-    """ Find block dimensions from arguments
+    """Find block dimensions from arguments
 
     Parameters
     ----------

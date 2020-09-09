@@ -48,7 +48,7 @@ def _wrapped_qr(a):
 
 
 def tsqr(data, compute_svd=False, _max_vchunk_size=None):
-    """ Direct Tall-and-Skinny QR algorithm
+    """Direct Tall-and-Skinny QR algorithm
 
     As presented in:
 
@@ -139,7 +139,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         numblocks={data.name: numblocks},
     )
     layers[name_qr_st1] = dsk_qr_st1
-    dependencies[name_qr_st1] = data.__dask_layers__()
+    dependencies[name_qr_st1] = set(data.__dask_layers__())
 
     # Block qr[0]
     name_q_st1 = "getitem" + token + "-q1"
@@ -248,13 +248,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             )
         )
         layers[name_q_st2] = dsk_q_st2
-        dependencies[name_q_st2] = q_inner.__dask_layers__()
+        dependencies[name_q_st2] = set(q_inner.__dask_layers__())
 
         # R: R_inner
         name_r_st2 = "r-inner" + token
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
         layers[name_r_st2] = dsk_r_st2
-        dependencies[name_r_st2] = r_inner.__dask_layers__()
+        dependencies[name_r_st2] = set(r_inner.__dask_layers__())
 
         # Q: Block qr[0] (*) Q_inner
         name_q_st3 = "dot" + token + "-q3"
@@ -301,7 +301,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         layers[name_q_st2_aux] = dsk_q_st2_aux
         dependencies[name_q_st2_aux] = {name_qr_st2}
 
-        if not any(np.isnan(c) for cs in data.chunks for c in cs):
+        chucks_are_all_known = not any(np.isnan(c) for cs in data.chunks for c in cs)
+        if chucks_are_all_known:
             # when chunks are all known...
             # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
             q2_block_sizes = [min(e, n) for e in data.chunks[0]]
@@ -349,7 +350,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                 dsk_n, dsk_q2_shapes, dsk_q2_cumsum, dsk_block_slices
             )
 
-            deps = {data.name, name_q2bs, name_q2cs}
+            deps = {data.name}
             block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
         layers["q-blocksizes" + token] = dsk_q_blockslices
@@ -362,7 +363,10 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             for i, b in enumerate(block_slices)
         )
         layers[name_q_st2] = dsk_q_st2
-        dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
+        if chucks_are_all_known:
+            dependencies[name_q_st2] = {name_q_st2_aux}
+        else:
+            dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
 
         # Q: Block qr[0] (*) In-core qr[0]
         name_q_st3 = "dot" + token + "-q3"
@@ -506,7 +510,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
 
 
 def sfqr(data, name=None):
-    """ Direct Short-and-Fat QR
+    """Direct Short-and-Fat QR
 
     Currently, this is a quick hack for non-tall-and-skinny matrices which
     are one chunk tall and (unless they are one chunk wide) have chunks
@@ -565,11 +569,14 @@ def sfqr(data, name=None):
     name_A_1 = prefix + "A_1"
     name_A_rest = prefix + "A_rest"
     layers[name_A_1] = {(name_A_1, 0, 0): (data.name, 0, 0)}
-    dependencies[name_A_1] = data.__dask_layers__()
+    dependencies[name_A_1] = set(data.__dask_layers__())
     layers[name_A_rest] = {
         (name_A_rest, 0, idx): (data.name, 0, 1 + idx) for idx in range(nc - 1)
     }
-    dependencies[name_A_rest] = data.__dask_layers__()
+    if len(layers[name_A_rest]) > 0:
+        dependencies[name_A_rest] = set(data.__dask_layers__())
+    else:
+        dependencies[name_A_rest] = set()
 
     # Q R_1 = A_1
     name_Q_R1 = prefix + "Q_R_1"
@@ -611,7 +618,7 @@ def sfqr(data, name=None):
 
 
 def compression_level(n, q, oversampling=10, min_subspace_size=20):
-    """ Compression level to use in svd_compressed
+    """Compression level to use in svd_compressed
 
     Given the size ``n`` of a space, compress that that to one of size
     ``q`` plus oversampling.
@@ -630,7 +637,7 @@ def compression_level(n, q, oversampling=10, min_subspace_size=20):
 
 
 def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
-    """ Randomly sample matrix to find most active subspace
+    """Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
     compute both the QR decomposition and the Singular Value
@@ -685,7 +692,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
 
 
 def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
-    """ Randomly compressed rank-k thin Singular Value Decomposition.
+    """Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
     array.  This algorithm is generally faster than the normal algorithm
@@ -799,13 +806,45 @@ def svd(a):
     s:  Array, singular values in decreasing order (largest first)
     v:  Array, unitary / orthogonal
 
+    Warnings
+    --------
+
+    SVD is only supported for arrays with chunking in one dimension.
+    This requires that all inputs either contain a single column
+    of chunks (tall-and-skinny) or a single row of chunks (short-and-fat).
+    For arrays with chunking in both dimensions, see da.linalg.svd_compressed.
+
     See Also
     --------
 
     np.linalg.svd : Equivalent NumPy Operation
-    dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
+    da.linalg.svd_compressed : Randomized SVD for fully chunked arrays
+    dask.array.linalg.tsqr: QR factorization for tall-and-skinny arrays
     """
-    return tsqr(a, compute_svd=True)
+    nb = a.numblocks
+    if a.ndim != 2:
+        raise ValueError(
+            "Array must be 2D.\n"
+            "Input shape: {}\n"
+            "Input ndim: {}\n".format(a.shape, a.ndim)
+        )
+    if nb[0] > 1 and nb[1] > 1:
+        raise ValueError(
+            "Array must be chunked in one dimension only. "
+            "This function (svd) only supports tall-and-skinny or short-and-fat "
+            "matrices (see da.linalg.svd_compressed for SVD on fully chunked arrays).\n"
+            "Input shape: {}\n"
+            "Input numblocks: {}\n".format(a.shape, nb)
+        )
+
+    # Tall-and-skinny case
+    if nb[0] >= nb[1]:
+        u, s, v = tsqr(a, compute_svd=True)
+        return u, s, v
+    # Short-and-fat case
+    else:
+        vt, s, ut = tsqr(a.T, compute_svd=True)
+        return ut.T, s, vt.T
 
 
 def _solve_triangular_lower(a, b):
@@ -1268,7 +1307,7 @@ def lstsq(a, b):
             (np.sqrt, (np.linalg.eigvals, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
         )
     }
-    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
+    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt, r])
     _, _, _, ss = np.linalg.lstsq(
         np.array([[1, 0], [1, 2]], dtype=a.dtype),
         np.array([0, 1], dtype=b.dtype),

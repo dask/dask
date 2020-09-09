@@ -56,7 +56,7 @@ def _process_get_id():
 # To enable testing of the ``RemoteException`` class even when tblib is
 # installed, we don't wrap the class in the try block below
 class RemoteException(Exception):
-    """ Remote Exception
+    """Remote Exception
 
     Contains the exception and traceback from a remotely run task
     """
@@ -160,7 +160,7 @@ def get(
     pool=None,
     **kwargs
 ):
-    """ Multiprocessed get function appropriate for Bags
+    """Multiprocessed get function appropriate for Bags
 
     Parameters
     ----------
