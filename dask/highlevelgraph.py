@@ -96,31 +96,31 @@ class BasicLayer(Layer):
     """
 
     def __init__(self, mapping, dependencies=None, unstructured_tasks=None):
-        self._mapping = mapping
-        self._dependencies = dependencies
-        self._unstructured_tasks = unstructured_tasks
+        self.mapping = mapping
+        self.dependencies = dependencies
+        self.unstructured_tasks = unstructured_tasks
 
     def __getitem__(self, k):
-        return self._mapping[k]
+        return self.mapping[k]
 
     def __iter__(self):
-        return iter(self._mapping)
+        return iter(self.mapping)
 
     def __len__(self):
-        return len(self._mapping)
+        return len(self.mapping)
 
     def get_external_dependencies(self, all_hlg_keys):
-        if self._dependencies is None or self._unstructured_tasks is None:
+        if self.dependencies is None or self.unstructured_tasks is None:
             return super().get_external_dependencies(all_hlg_keys)
 
         ret = set()
-        for v in self._dependencies.values():
+        for v in self.dependencies.values():
             ret.update(v)
-        ret |= keys_in_tasks(all_hlg_keys, self._unstructured_tasks.values())
+        ret |= keys_in_tasks(all_hlg_keys, self.unstructured_tasks.values())
         return ret
 
     def cull(self, keys):
-        if self._dependencies is None or self._unstructured_tasks is None:
+        if self.dependencies is None or self.unstructured_tasks is None:
             return super().cull(keys)
 
         # TODO: Are we sure that tasks in `self` never depend on
@@ -128,12 +128,12 @@ class BasicLayer(Layer):
         ret = BasicLayer(
             mapping={k: self[k] for k in keys},
             dependencies={
-                k: self._dependencies[k] for k in keys if k in self._dependencies
+                k: self.dependencies[k] for k in keys if k in self.dependencies
             },
             unstructured_tasks={
-                k: self._unstructured_tasks[k]
+                k: self.unstructured_tasks[k]
                 for k in keys
-                if k in self._unstructured_tasks
+                if k in self.unstructured_tasks
             },
         )
         return ret
