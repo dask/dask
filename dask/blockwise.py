@@ -447,7 +447,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     dsk = {}
     # Create argument lists
     for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
-        deps = []
+        deps = set()
         non_blockwise_task = []
         coords = out_coords + dummies
         args = []
@@ -459,17 +459,17 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
                     tups = lol_product((arg,), arg_coords)
-                    deps.extend(flatten(tups))
+                    deps.update(flatten(tups))
 
                     if concatenate:
                         tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
-                    deps.append(tups)
+                    deps.add(tups)
                 args.append(tups)
         out_key = (output,) + out_coords
 
-        if key_deps is not None and len(deps):
+        if key_deps is not None:
             key_deps[out_key] = deps
             non_blockwise_tasks[out_key] = non_blockwise_task
 
