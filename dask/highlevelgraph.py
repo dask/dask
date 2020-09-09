@@ -54,14 +54,12 @@ class Layer(Mapping):
         out = {}
         work = set(flatten(keys))
         while work:
-            new_work = set()
-            for k in work:
-                out[k] = self[k]
-                for d in get_dependencies(self, k):
-                    if d not in seen:
-                        seen.add(d)
-                        new_work.add(d)
-            work = new_work
+            k = work.pop()
+            out[k] = self[k]
+            for d in get_dependencies(self, k):
+                if d not in seen:
+                    seen.add(d)
+                    work.add(d)
 
         return BasicLayer(out)
 
