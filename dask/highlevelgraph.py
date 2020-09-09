@@ -1,5 +1,5 @@
-from collections.abc import Mapping
-from typing import Set, Dict
+import collections.abc
+from typing import Hashable, Set, Dict, Mapping
 import copy
 
 import tlz as toolz
@@ -27,7 +27,7 @@ def compute_layer_dependencies(layers):
     return ret
 
 
-class Layer(Mapping):
+class Layer(collections.abc.Mapping):
     """High level graph layer
 
     This abstract class establish a protocol for high level graph layers.
@@ -80,6 +80,21 @@ class Layer(Mapping):
         all_deps = keys_in_tasks(all_hlg_keys, self.values())
         return all_deps.difference(self.keys())
 
+    def get_dependencies(self, keys) -> Mapping[Hashable, Set]:
+        """Get dependencies of `keys`
+
+        Parameters
+        ----------
+        keys : container
+            The keys to get dependencies of.
+
+        Returns
+        -------
+        map: Mapping
+            A map that maps each key in `keys` to its dependencies
+        """
+        return {k: keys_in_tasks(keys, [v]) for k, v in self.items()}
+
 
 class BasicLayer(Layer):
     """Basic implementation of `Layer`
@@ -117,6 +132,15 @@ class BasicLayer(Layer):
         for v in self.dependencies.values():
             ret.update(v)
         ret |= keys_in_tasks(all_hlg_keys, self.unstructured_tasks.values())
+        return ret
+
+    def get_dependencies(self, keys):
+        if self.dependencies is None or self.unstructured_tasks is None:
+            return super().get_dependencies(keys)
+
+        ret = self.dependencies.copy()
+        for k, v in self.unstructured_tasks.items():
+            ret[k] = ret.get(k, set()) | keys_in_tasks(keys, v)
         return ret
 
     def cull(self, keys):
@@ -348,6 +372,29 @@ class HighLevelGraph(Mapping):
 
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
+
+    def get_dependencies(self, keys=None) -> Mapping[Hashable, Set]:
+        """Get dependencies of `keys`
+
+        If `keys` is None, dependencies of all keys in the HLG is found.
+
+        Parameters
+        ----------
+        keys : container, optional
+            The keys to get dependencies of.
+
+        Returns
+        -------
+        map: Mapping
+            A map that maps each key in `keys` to its dependencies
+        """
+
+        if keys is None:
+            keys = set(self.keys())
+        ret = {}
+        for layer in self.layers.values():
+            ret.update(layer.get_dependencies(keys))
+        return ret
 
     def _fix_hlg_layers_inplace(self):
         """Makes sure that all layers in hlg are `Layer`"""
