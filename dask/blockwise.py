@@ -5,7 +5,7 @@ import numpy as np
 
 import tlz as toolz
 
-from .core import reverse_dict, flatten, keys_in_tasks
+from .core import reverse_dict, flatten, keys_in_tasks, find_all_possible_keys
 from .delayed import unpack_collections
 from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
@@ -212,7 +212,7 @@ class Blockwise(Layer):
             func = SubgraphCallable(dsk, self.output, keys)
 
             key_deps = {}
-            non_blockwise_tasks = {}
+            non_blockwise_keys = {}
             dsk = make_blockwise_graph(
                 func,
                 self.output,
@@ -222,11 +222,11 @@ class Blockwise(Layer):
                 numblocks=self.numblocks,
                 concatenate=self.concatenate,
                 key_deps=key_deps,
-                non_blockwise_tasks=non_blockwise_tasks,
+                non_blockwise_keys=non_blockwise_keys,
             )
             self._cached_dict = {
                 "dsk": dsk,
-                "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_tasks),
+                "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_keys),
             }
         return self._cached_dict["dsk"]
 
@@ -374,7 +374,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     concatenate = kwargs.pop("concatenate", None)
     new_axes = kwargs.pop("new_axes", {})
     key_deps = kwargs.pop("key_deps", None)
-    non_blockwise_tasks = kwargs.pop("non_blockwise_tasks", None)
+    non_blockwise_keys = kwargs.pop("non_blockwise_keys", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
@@ -452,13 +452,13 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     # Create argument lists
     for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
         deps = set()
-        non_blockwise_task = []
+        non_blockwise_key = set()
         coords = out_coords + dummies
         args = []
         for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
             if ind is None:
                 args.append(arg)
-                non_blockwise_task.append(arg)
+                non_blockwise_key |= find_all_possible_keys([arg])
             else:
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
@@ -475,7 +475,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
         if key_deps is not None:
             key_deps[out_key] = deps
-            non_blockwise_tasks[out_key] = non_blockwise_task
+            non_blockwise_keys[out_key] = non_blockwise_key
 
         if kwargs:
             val = (apply, func, args, kwargs2)

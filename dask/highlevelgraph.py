@@ -105,15 +105,15 @@ class BasicLayer(Layer):
         The mapping between keys and tasks, typically a dask graph.
     dependencies : Mapping[Hashable, Set], optional
         Mapping between keys and their dependencies
-    unstructured_tasks : Mapping[Hashable, Set], optional
-        Mapping between keys and unstructured tasks, which are tasks
-        that have no dependencies information.
+    possible_dependencies : Mapping[Hashable, Set], optional
+        Mapping between keys and possible dependencies, which are dependencies
+        that might also be literals.
     """
 
-    def __init__(self, mapping, dependencies=None, unstructured_tasks=None):
+    def __init__(self, mapping, dependencies=None, possible_dependencies=None):
         self.mapping = mapping
         self.dependencies = dependencies
-        self.unstructured_tasks = unstructured_tasks
+        self.possible_dependencies = possible_dependencies
 
     def __getitem__(self, k):
         return self.mapping[k]
@@ -125,26 +125,29 @@ class BasicLayer(Layer):
         return len(self.mapping)
 
     def get_external_dependencies(self, all_hlg_keys):
-        if self.dependencies is None or self.unstructured_tasks is None:
+        if self.dependencies is None or self.possible_dependencies is None:
             return super().get_external_dependencies(all_hlg_keys)
 
         ret = set()
         for v in self.dependencies.values():
             ret.update(v)
-        ret |= keys_in_tasks(all_hlg_keys, self.unstructured_tasks.values())
+
+        for v in self.possible_dependencies.values():
+            ret.update(v.intersection(all_hlg_keys))
+
         return ret
 
     def get_dependencies(self, all_hlg_keys):
-        if self.dependencies is None or self.unstructured_tasks is None:
+        if self.dependencies is None or self.possible_dependencies is None:
             return super().get_dependencies(all_hlg_keys)
 
         ret = self.dependencies.copy()
-        for k, v in self.unstructured_tasks.items():
-            ret[k] = ret.get(k, set()) | keys_in_tasks(all_hlg_keys, v)
+        for k, v in self.possible_dependencies.items():
+            ret[k] = ret.get(k, set()) | v.intersection(all_hlg_keys)
         return ret
 
     def cull(self, keys):
-        if self.dependencies is None or self.unstructured_tasks is None:
+        if self.dependencies is None or self.possible_dependencies is None:
             return super().cull(keys)
 
         # TODO: Are we sure that tasks in `self` never depend on
@@ -154,10 +157,10 @@ class BasicLayer(Layer):
             dependencies={
                 k: self.dependencies[k] for k in keys if k in self.dependencies
             },
-            unstructured_tasks={
-                k: self.unstructured_tasks[k]
+            possible_dependencies={
+                k: self.possible_dependencies[k]
                 for k in keys
-                if k in self.unstructured_tasks
+                if k in self.possible_dependencies
             },
         )
         return ret
