@@ -63,13 +63,13 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer(out)
 
-    def get_external_dependencies(self, all_hlg_keys: Set) -> Set:
+    def get_external_dependencies(self, all_hlg_keys) -> Set:
         """Get external dependencies
 
         Parameters
         ----------
-        all_hlg_keys : set
-            Set of all keys in the high level graph.
+        all_hlg_keys : container
+            All keys in the high level graph.
 
         Returns
         -------
@@ -80,20 +80,20 @@ class Layer(collections.abc.Mapping):
         all_deps = keys_in_tasks(all_hlg_keys, self.values())
         return all_deps.difference(self.keys())
 
-    def get_dependencies(self, keys) -> Mapping[Hashable, Set]:
-        """Get dependencies of `keys`
+    def get_dependencies(self, all_hlg_keys) -> Mapping[Hashable, Set]:
+        """Get dependencies of all keys in the layer
 
         Parameters
         ----------
-        keys : container
-            The keys to get dependencies of.
+        all_hlg_keys : container
+            All keys in the high level graph.
 
         Returns
         -------
         map: Mapping
-            A map that maps each key in `keys` to its dependencies
+            A map that maps each key in the layer to its dependencies
         """
-        return {k: keys_in_tasks(keys, [v]) for k, v in self.items()}
+        return {k: keys_in_tasks(all_hlg_keys, [v]) for k, v in self.items()}
 
 
 class BasicLayer(Layer):
@@ -134,13 +134,13 @@ class BasicLayer(Layer):
         ret |= keys_in_tasks(all_hlg_keys, self.unstructured_tasks.values())
         return ret
 
-    def get_dependencies(self, keys):
+    def get_dependencies(self, all_hlg_keys):
         if self.dependencies is None or self.unstructured_tasks is None:
-            return super().get_dependencies(keys)
+            return super().get_dependencies(all_hlg_keys)
 
         ret = self.dependencies.copy()
         for k, v in self.unstructured_tasks.items():
-            ret[k] = ret.get(k, set()) | keys_in_tasks(keys, v)
+            ret[k] = ret.get(k, set()) | keys_in_tasks(all_hlg_keys, v)
         return ret
 
     def cull(self, keys):
@@ -373,24 +373,16 @@ class HighLevelGraph(Mapping):
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
 
-    def get_dependencies(self, keys=None) -> Mapping[Hashable, Set]:
-        """Get dependencies of `keys`
-
-        If `keys` is None, dependencies of all keys in the HLG is found.
-
-        Parameters
-        ----------
-        keys : container, optional
-            The keys to get dependencies of.
+    def get_dependencies(self) -> Mapping[Hashable, Set]:
+        """Get dependencies of all keys in the HLG
 
         Returns
         -------
         map: Mapping
-            A map that maps each key in `keys` to its dependencies
+            A map that maps each key to its dependencies
         """
 
-        if keys is None:
-            keys = set(self.keys())
+        keys = set(self.keys())
         ret = {}
         for layer in self.layers.values():
             ret.update(layer.get_dependencies(keys))

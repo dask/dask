@@ -255,6 +255,10 @@ class Blockwise(Layer):
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].get_external_dependencies(all_hlg_keys)
 
+    def get_dependencies(self, all_hlg_keys):
+        _ = self._dict  # trigger materialization
+        return self._cached_dict["basic_layer"].get_dependencies(all_hlg_keys)
+
     def cull(self, keys):
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].cull(keys)
