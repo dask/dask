@@ -1660,7 +1660,9 @@ Dask Name: {name}, {task} tasks"""
             if is_series_like(cond):
                 return result.where(cond, other=np.NaN)
             else:
-                return result if cond.compute() else np.NaN
+                return _scalar_binary(
+                    lambda x, y: result if x is y else np.NaN, cond, True
+                )
         else:
             return result
 
@@ -1678,9 +1680,13 @@ Dask Name: {name}, {task} tasks"""
             "prod", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
         if min_count:
-            return result.where(
-                self.notnull().sum(axis=axis) >= min_count, other=np.NaN
-            )
+            cond = self.notnull().sum(axis=axis) >= min_count
+            if is_series_like(cond):
+                return result.where(cond, other=np.NaN)
+            else:
+                return _scalar_binary(
+                    lambda x, y: result if x is y else np.NaN, cond, True
+                )
         else:
             return result
 
