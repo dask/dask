@@ -10,21 +10,20 @@ from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
 
 
 def optimize(dsk, keys, **kwargs):
-    if isinstance(dsk, HighLevelGraph):
-        # Think about an API for this.
-        flat_keys = list(core.flatten(keys))
-        dsk = optimize_read_parquet_getitem(dsk, keys=flat_keys)
-        dsk = optimize_blockwise(dsk, keys=flat_keys)
-        dsk = fuse_roots(dsk, keys=flat_keys)
-        dsk = dsk.cull(set(flat_keys))
-        dependencies = dsk.get_dependencies()
-        dsk = ensure_dict(dsk)
-    else:
-        dsk = ensure_dict(dsk)
-        if isinstance(keys, list):
-            dsk, dependencies = cull(dsk, list(core.flatten(keys)))
-        else:
-            dsk, dependencies = cull(dsk, [keys])
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    keys = list(core.flatten(keys))
+
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+
+    dsk = optimize_read_parquet_getitem(dsk, keys=keys)
+    dsk = optimize_blockwise(dsk, keys=keys)
+    dsk = fuse_roots(dsk, keys=keys)
+    dsk = dsk.cull(set(keys))
+
+    dependencies = dsk.get_dependencies()
+    dsk = ensure_dict(dsk)
 
     fuse_subgraphs = config.get("optimization.fuse.subgraphs")
     if fuse_subgraphs is None:

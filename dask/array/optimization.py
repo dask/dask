@@ -5,7 +5,7 @@ import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
 from ..blockwise import optimize_blockwise, fuse_roots
-from ..core import flatten, reverse_dict, get_dependencies
+from ..core import flatten, reverse_dict
 from ..optimization import fuse, inline_functions
 from ..utils import ensure_dict
 from ..highlevelgraph import HighLevelGraph
@@ -35,16 +35,17 @@ def optimize(
     2.  Remove full slicing, e.g. x[:]
     3.  Inline fast functions like getitem and np.transpose
     """
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
     keys = list(flatten(keys))
 
-    # High level stage optimization
-    if isinstance(dsk, HighLevelGraph):
-        dsk = optimize_blockwise(dsk, keys=keys)
-        dsk = fuse_roots(dsk, keys=keys)
-        dsk = dsk.cull(set(keys))
-        dependencies = dsk.get_dependencies()
-    else:
-        dependencies = {k: get_dependencies(dsk, k, as_list=True) for k in dsk}
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+
+    dsk = optimize_blockwise(dsk, keys=keys)
+    dsk = fuse_roots(dsk, keys=keys)
+    dsk = dsk.cull(set(keys))
+    dependencies = dsk.get_dependencies()
     dsk = ensure_dict(dsk)
 
     # Low level task optimizations
