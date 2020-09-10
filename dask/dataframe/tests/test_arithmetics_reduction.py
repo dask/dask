@@ -1369,7 +1369,12 @@ def test_empty_df_reductions(func):
     assert_eq(dsk_func(ddf), pd_func(pdf))
 
 
-def test_series_with_min_count():
+@pytest.mark.parametrize("min_count", [0, 9])
+def test_series_sum_with_min_count(min_count):
     df = pd.DataFrame([[1]], columns=["a"])
     ddf = dd.from_pandas(df, npartitions=1)
-    assert ddf["a"].sum(min_count=1).compute() == 1
+    result = ddf["a"].sum(min_count=min_count).compute()
+    if min_count == 0:
+        assert result == 1
+    else:
+        assert result is np.nan
