@@ -8,7 +8,7 @@ import scipy.linalg
 
 import dask.array as da
 from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
-from dask.array.utils import assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
 @pytest.mark.parametrize(
@@ -808,31 +808,40 @@ def test_no_chunks_svd():
         assert_eq(abs(u), abs(du))
 
 
+def _svd_truncate(u, v):
+    # Workaround for no `full_matrices=False`
+    # https://github.com/dask/dask/issues/3576
+    k = min(u.shape[-1], v.shape[-2])
+    return u[..., :k], v[..., :k, :]
+
+
+@pytest.mark.parametrize("shape", [(10, 20), (10, 10), (20, 10)])
+@pytest.mark.parametrize("chunks", [(-1, -1), (10, -1), (-1, 10)])
+def test_svd_flip(shape, chunks):
+    # Verify that sign-corrected SVD results can still
+    # be used to reconstruct inputs
+    x = da.random.random(size=shape, chunks=chunks)
+    u, s, v = da.linalg.svd(x)
+    u, v = _svd_truncate(u, v)
+
+    # Validate w/ dask inputs
+    uf, vf = svd_flip(u, v)
+    np.testing.assert_almost_equal(np.asarray(np.dot(uf * s, vf)), x, decimal=9)
+
+    # Validate w/ numpy inputs
+    uc, vc = svd_flip(*da.compute(u, v))
+    np.testing.assert_almost_equal(np.asarray(np.dot(uc * s, vc)), x, decimal=9)
+
+
 @pytest.mark.parametrize("chunks", [(10, -1), (-1, 10), (9, -1), (-1, 9)])
 @pytest.mark.parametrize("shape", [(10, 100), (100, 10), (10, 10)])
 def test_svd_supported_array_shapes(chunks, shape):
     x = np.random.random(shape)
     dx = da.from_array(x, chunks=chunks)
 
-    def svd_flip(u, v):
-        """Sign correction to ensure deterministic output from SVD.
-
-        See:
-        - https://github.com/scikit-learn/scikit-learn/blob/master/sklearn/utils/extmath.py#L504
-        - https://github.com/dask/dask/issues/6599
-        """
-        max_abs_cols = np.argmax(np.abs(u), axis=0)
-        signs = np.sign(u[max_abs_cols, range(u.shape[1])])
-        u *= signs
-        v *= signs[:, np.newaxis]
-        return u, v
-
     du, ds, dv = da.linalg.svd(dx)
     du, dv = da.compute(du, dv)
-    # Workaround for no `full_matrices=False`
-    # https://github.com/dask/dask/issues/3576
-    k = min(du.shape + dv.shape)
-    du, dv = du[:, :k], dv[:k, :]
+    du, dv = _svd_truncate(du, dv)
 
     nu, ns, nv = np.linalg.svd(x)
 
