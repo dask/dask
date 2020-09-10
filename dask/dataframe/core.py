@@ -1656,9 +1656,11 @@ Dask Name: {name}, {task} tasks"""
             "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
         if min_count:
-            return result.where(
-                self.notnull().sum(axis=axis) >= min_count, other=np.NaN
-            )
+            cond = self.notnull().sum(axis=axis) >= min_count
+            if is_series_like(cond):
+                return result.where(cond, other=np.NaN)
+            else:
+                return result if cond.compute() else np.NaN
         else:
             return result
 
