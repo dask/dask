@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Hashable, Set, Dict, Mapping, Container
+from typing import Hashable, Set, Mapping, Container
 import copy
 
 import tlz as toolz
@@ -208,7 +208,7 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
 
-    def __init__(self, layers: Dict[str, Mapping], dependencies: Dict[str, Set]):
+    def __init__(self, layers: Mapping[str, Mapping], dependencies: Mapping[str, Set]):
         self.layers = layers
         self.dependencies = dependencies
 
