@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Hashable, Set, Dict, Mapping
+from typing import Hashable, Set, Dict, Mapping, Container
 import copy
 
 import tlz as toolz
@@ -52,7 +52,7 @@ class Layer(collections.abc.Mapping):
 
         seen = set()
         out = {}
-        work = set(flatten(keys))
+        work = keys.copy()
         while work:
             k = work.pop()
             out[k] = self[k]
@@ -63,12 +63,12 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer(out)
 
-    def get_external_dependencies(self, all_hlg_keys) -> Set:
+    def get_external_dependencies(self, all_hlg_keys: Container) -> Set:
         """Get external dependencies
 
         Parameters
         ----------
-        all_hlg_keys : container
+        all_hlg_keys : Container
             All keys in the high level graph.
 
         Returns
@@ -80,12 +80,12 @@ class Layer(collections.abc.Mapping):
         all_deps = keys_in_tasks(all_hlg_keys, self.values())
         return all_deps.difference(self.keys())
 
-    def get_dependencies(self, all_hlg_keys) -> Mapping[Hashable, Set]:
+    def get_dependencies(self, all_hlg_keys: Container) -> Mapping[Hashable, Set]:
         """Get dependencies of all keys in the layer
 
         Parameters
         ----------
-        all_hlg_keys : container
+        all_hlg_keys : Container
             All keys in the high level graph.
 
         Returns
@@ -425,7 +425,7 @@ class HighLevelGraph(Mapping):
                     ready.add(k)
         return ret
 
-    def cull(self, keys):
+    def cull(self, keys: Set):
         """Return new high level graph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
@@ -438,10 +438,6 @@ class HighLevelGraph(Mapping):
         """
 
         self._fix_hlg_layers_inplace()
-
-        if not isinstance(keys, (list, set)):
-            keys = [keys]
-        keys = set(flatten(keys))
 
         layers = self._toposort_layers()
         ret_layers = {}
