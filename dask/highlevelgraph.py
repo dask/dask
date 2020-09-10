@@ -6,7 +6,7 @@ import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .core import reverse_dict, keys_in_tasks, flatten, get_dependencies
+from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -49,15 +49,15 @@ class Layer(collections.abc.Mapping):
         layer: Layer
             Culled layer
         """
-
+        deps = self.get_dependencies(self)
         seen = set()
         out = {}
         work = keys.copy()
         while work:
             k = work.pop()
             out[k] = self[k]
-            for d in get_dependencies(self, k):
-                if d not in seen:
+            for d in deps[k]:
+                if d in self and d not in seen:
                     seen.add(d)
                     work.add(d)
 
@@ -144,25 +144,6 @@ class BasicLayer(Layer):
         ret = self.dependencies.copy()
         for k, v in self.possible_dependencies.items():
             ret[k] = ret.get(k, set()) | v.intersection(all_hlg_keys)
-        return ret
-
-    def cull(self, keys):
-        if self.dependencies is None or self.possible_dependencies is None:
-            return super().cull(keys)
-
-        # TODO: Are we sure that tasks in `self` never depend on
-        # other tasks in `self`?
-        ret = BasicLayer(
-            mapping={k: self[k] for k in keys},
-            dependencies={
-                k: self.dependencies[k] for k in keys if k in self.dependencies
-            },
-            possible_dependencies={
-                k: self.possible_dependencies[k]
-                for k in keys
-                if k in self.possible_dependencies
-            },
-        )
         return ret
 
 
