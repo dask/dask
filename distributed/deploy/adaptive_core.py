@@ -1,4 +1,5 @@
 import collections
+import logging
 import math
 
 from tornado.ioloop import IOLoop, PeriodicCallback
@@ -6,6 +7,9 @@ import tlz as toolz
 
 from ..metrics import time
 from ..utils import parse_timedelta
+
+
+logger = logging.getLogger(__name__)
 
 
 class AdaptiveCore:
@@ -103,6 +107,8 @@ class AdaptiveCore:
         self.log = collections.deque(maxlen=10000)
 
     def stop(self):
+        logger.info("Adaptive stop")
+
         if self.periodic_callback:
             self.periodic_callback.stop()
             self.periodic_callback = None

@@ -103,6 +103,8 @@ class Adaptive(AdaptiveCore):
 
         self.target_duration = parse_timedelta(target_duration)
 
+        logger.info("Adaptive scaling started: minimum=%s maximum=%s", minimum, maximum)
+
         super().__init__(
             minimum=minimum, maximum=maximum, wait_count=wait_count, interval=interval
         )
