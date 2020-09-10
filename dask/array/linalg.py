@@ -5,10 +5,11 @@ import numpy as np
 import tlz as toolz
 
 from ..base import tokenize, wait
+from ..delayed import delayed
 from ..blockwise import blockwise
 from ..highlevelgraph import HighLevelGraph
 from ..utils import derived_from, apply
-from .core import dotmany, Array, concatenate, asarray
+from .core import dotmany, Array, concatenate, from_delayed
 from .creation import eye
 from .random import RandomState
 from .utils import meta_from_array, svd_flip
@@ -691,7 +692,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
+def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=True):
     """Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -715,6 +716,10 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
         pressure, but means that we have to compute the input multiple times.
         This is a good choice if the data is larger than memory and cheap to
         recreate.
+    coerce_signs : bool
+        Whether or not to apply sign coercion to singular vectors in
+        order to maintain deterministic results, by default True.
+
 
     Examples
     --------
@@ -748,6 +753,8 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
     u = u[:, :k]
     s = s[:k]
     v = v[:k, :]
+    if coerce_signs:
+        u, v = svd_flip(u, v)
     return u, s, v
 
 
@@ -797,6 +804,9 @@ def svd(a, coerce_signs=True):
     Parameters
     ----------
     a : (M, N) Array
+    coerce_signs : bool
+        Whether or not to apply sign coercion to singular vectors in
+        order to maintain deterministic results, by default True.
 
     Examples
     --------
@@ -814,9 +824,6 @@ def svd(a, coerce_signs=True):
     v : (K, N) Array, unitary / orthogonal
         Right-singular vectors of `a` (in rows) with shape (K, N)
         where K = min(M, N).
-    coerce_signs : bool
-        Whether or not to apply sign correction to singular vectors in
-        order to maintain deterministic results, by default True.
 
     Warnings
     --------
@@ -852,7 +859,13 @@ def svd(a, coerce_signs=True):
 
     # Single-chunk case
     if nb[0] == nb[1] == 1:
-        u, s, v = map(asarray, np.linalg.svd(np.asarray(a), full_matrices=False))
+        m, n = a.shape
+        k = min(a.shape)
+        mu, ms, mv = np.linalg.svd(np.ones((1, 1), dtype=a.dtype))
+        u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
+        u = from_delayed(u, shape=(m, k), meta=mu)
+        s = from_delayed(s, shape=(k,), meta=ms)
+        v = from_delayed(v, shape=(k, n), meta=mv)
     # Multi-chunk cases
     else:
         # Tall-and-skinny case
@@ -870,8 +883,6 @@ def svd(a, coerce_signs=True):
         if truncate:
             k = min(a.shape)
             u, v = u[:, :k], v[:k, :]
-    # Optionally force singular vectors to have
-    # arbitrary but stable signs
     if coerce_signs:
         u, v = svd_flip(u, v)
     return u, s, v
