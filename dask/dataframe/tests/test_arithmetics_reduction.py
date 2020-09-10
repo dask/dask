@@ -1371,7 +1371,7 @@ def test_empty_df_reductions(func):
 
 @pytest.mark.parametrize("method", ["sum", "prod"])
 @pytest.mark.parametrize("min_count", [0, 9])
-def test_series_agg_with_min_count(min_count, method):
+def test_series_agg_with_min_count(method, min_count):
     df = pd.DataFrame([[1]], columns=["a"])
     ddf = dd.from_pandas(df, npartitions=1)
     func = getattr(ddf["a"], method)
