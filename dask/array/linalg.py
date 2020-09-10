@@ -861,7 +861,7 @@ def svd(a, coerce_signs=True):
     if nb[0] == nb[1] == 1:
         m, n = a.shape
         k = min(a.shape)
-        mu, ms, mv = np.linalg.svd(np.ones((1, 1), dtype=a.dtype))
+        mu, ms, mv = np.linalg.svd(a._meta)
         u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
         u = from_delayed(u, shape=(m, k), meta=mu)
         s = from_delayed(s, shape=(k,), meta=ms)
