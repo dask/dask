@@ -212,7 +212,7 @@ class Blockwise(Layer):
             func = SubgraphCallable(dsk, self.output, keys)
 
             key_deps = {}
-            non_blockwise_keys = {}
+            non_blockwise_keys = set()
             dsk = make_blockwise_graph(
                 func,
                 self.output,
@@ -439,6 +439,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
         else:
             coord_maps.append(None)
             concat_axes.append(None)
+
     # Unpack delayed objects in kwargs
     dsk2 = {}
     if kwargs:
@@ -447,18 +448,24 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             kwargs2 = task
         else:
             kwargs2 = kwargs
+        if non_blockwise_keys is not None:
+            non_blockwise_keys |= find_all_possible_keys([kwargs2])
+
+    # Find all non-blockwise keys in the input arguments
+    if non_blockwise_keys is not None:
+        for arg, ind in argpairs:
+            if ind is None:
+                non_blockwise_keys |= find_all_possible_keys([arg])
 
     dsk = {}
     # Create argument lists
     for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
         deps = set()
-        non_blockwise_key = set()
         coords = out_coords + dummies
         args = []
         for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
             if ind is None:
                 args.append(arg)
-                non_blockwise_key |= find_all_possible_keys([arg])
             else:
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
@@ -473,10 +480,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                 args.append(tups)
         out_key = (output,) + out_coords
 
-        if key_deps is not None:
-            key_deps[out_key] = deps
-            non_blockwise_keys[out_key] = non_blockwise_key
-
         if kwargs:
             val = (apply, func, args, kwargs2)
         else:
@@ -484,6 +487,8 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             val = tuple(args)
         dsk[out_key] = val
 
+        if key_deps is not None:
+            key_deps[out_key] = deps
     if dsk2:
         dsk.update(ensure_dict(dsk2))
 

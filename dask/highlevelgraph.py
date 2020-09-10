@@ -105,15 +105,15 @@ class BasicLayer(Layer):
         The mapping between keys and tasks, typically a dask graph.
     dependencies : Mapping[Hashable, Set], optional
         Mapping between keys and their dependencies
-    possible_dependencies : Mapping[Hashable, Set], optional
-        Mapping between keys and possible dependencies, which are dependencies
-        that might also be literals.
+    global_dependencies: Set, optional
+        Set of dependencies that all keys in the layer depend on. Notice,
+        the set might also contain literals that will be ignored.
     """
 
-    def __init__(self, mapping, dependencies=None, possible_dependencies=None):
+    def __init__(self, mapping, dependencies=None, global_dependencies=None):
         self.mapping = mapping
         self.dependencies = dependencies
-        self.possible_dependencies = possible_dependencies
+        self.global_dependencies = global_dependencies
 
     def __getitem__(self, k):
         return self.mapping[k]
@@ -125,25 +125,22 @@ class BasicLayer(Layer):
         return len(self.mapping)
 
     def get_external_dependencies(self, all_hlg_keys):
-        if self.dependencies is None or self.possible_dependencies is None:
+        if self.dependencies is None or self.global_dependencies is None:
             return super().get_external_dependencies(all_hlg_keys)
 
-        ret = set()
+        ret = self.global_dependencies.intersection(all_hlg_keys)
         for v in self.dependencies.values():
             ret.update(v)
-
-        for v in self.possible_dependencies.values():
-            ret.update(v.intersection(all_hlg_keys))
-
         return ret
 
     def get_dependencies(self, all_hlg_keys):
-        if self.dependencies is None or self.possible_dependencies is None:
+        if self.dependencies is None or self.global_dependencies is None:
             return super().get_dependencies(all_hlg_keys)
 
+        global_deps = self.global_dependencies.intersection(all_hlg_keys)
         ret = self.dependencies.copy()
-        for k, v in self.possible_dependencies.items():
-            ret[k] = ret.get(k, set()) | v.intersection(all_hlg_keys)
+        for v in ret.values():
+            v |= global_deps
         return ret
 
 

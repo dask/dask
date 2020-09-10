@@ -46,7 +46,7 @@ def test_cull():
     a = {"x": 1, "y": (inc, "x")}
     layers = {
         "a": BasicLayer(
-            a, dependencies={"x": set(), "y": {"x"}}, possible_dependencies={}
+            a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
         )
     }
     dependencies = {"a": set()}
