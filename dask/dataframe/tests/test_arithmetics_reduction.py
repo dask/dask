@@ -1367,3 +1367,9 @@ def test_empty_df_reductions(func):
     ddf = dd.from_pandas(pdf, npartitions=1)
 
     assert_eq(dsk_func(ddf), pd_func(pdf))
+
+
+def test_series_with_min_count():
+    df = pd.DataFrame([[1]], columns=["a"])
+    ddf = dd.from_pandas(df, npartitions=1)
+    assert ddf["a"].sum(min_count=1).compute() == 1

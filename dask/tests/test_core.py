@@ -259,15 +259,3 @@ def test_quote():
 def test_literal_serializable():
     l = literal((add, 1, 2))
     assert pickle.loads(pickle.dumps(l)).data == (add, 1, 2)
-
-
-def test_series_with_min_count():
-    try:
-        import pandas as pd
-        import dask.dataframe as dd
-    except ImportError:
-        return
-    else:
-        df = pd.DataFrame([[1]], columns=["a"])
-        ddf = dd.from_pandas(df, npartitions=1)
-        assert ddf["a"].sum(min_count=1).compute() == 1
