@@ -404,6 +404,18 @@ def test_groupby_get_group():
         assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
+def test_dataframe_groupby_nlargest():
+    data = {}
+    data["location"] = ["A", "B", "C", "C", "D", "D", "D", "D"]
+    data["category"] = [5, 3, 2, 4, 2, 3, 2, 5]
+    data["percent"] = [100, 100, 50, 13, 75, 59, 13, 4]
+    data["total"] = [45, 26, 72, 9, 52, 70, 60, 11]
+    df = pd.DataFrame.from_dict(data)
+    dask_df = dd.from_pandas(df, npartitions=3)
+    expected = dask_df.groupby(["location", "category"])["percent"].nlargest(1)
+    assert_eq(df.groupby(["location", "category"])["percent"].nlargest(1), expected)
+
+
 def test_dataframe_groupby_nunique():
     strings = list("aaabbccccdddeee")
     data = np.random.randn(len(strings))

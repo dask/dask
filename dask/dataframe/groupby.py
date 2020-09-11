@@ -1789,6 +1789,24 @@ class SeriesGroupBy(_GroupBy):
         super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
+    def nlargest(self, n=5, keep="first", split_every=None, split_out=1):
+        name = self._meta.obj.name
+        return aca(
+            [self.obj, self.index]
+            if not isinstance(self.index, list)
+            else [self.obj] + self.index,
+            chunk=_nlargest_chunk,
+            chunk_kwargs={"n": n, "keep": keep, "name": name},
+            aggregate=_nlargest_aggregate,
+            aggregate_kwargs={"n": n, "keep": keep, "name": name, "index": self.index},
+            token="series-groupby-nlargest",
+            split_every=split_every,
+            split_out=split_out,
+            split_out_setup=split_out_on_index,
+            sort=self.sort,
+        )
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
         """
         Examples
@@ -1864,6 +1882,37 @@ class SeriesGroupBy(_GroupBy):
             split_every=split_every,
             split_out=split_out,
         )
+
+
+def _nlargest_chunk(df, *index, **kwargs):
+    n = kwargs.pop("n")
+    keep = kwargs.pop("keep")
+    name = kwargs.pop("name")
+    indices = list(index)
+    series_grouped = df.groupby(indices)[name].nlargest(n, keep)
+    if len(series_grouped) == len(df):
+        df_grouped = series_grouped.to_frame()
+        num_indices = len(indices)
+
+        all_missing_columns = []
+        for i in range(num_indices):
+            temp = df[indices].iloc[:, i]
+            all_missing_columns.append(temp)
+
+        all_missing_columns.append(df.index)
+
+        return df_grouped.set_index(all_missing_columns)[name]
+    else:
+        return series_grouped
+
+
+def _nlargest_aggregate(df, **kwargs):
+    n = kwargs.pop("n")
+    keep = kwargs.pop("keep")
+    name = kwargs.pop("name")
+    index = kwargs.pop("index")
+    indices = list(index)
+    return df.reset_index().groupby(indices)[name].nlargest(n, keep)
 
 
 def _unique_aggregate(series_gb, name=None):
