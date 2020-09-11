@@ -1896,13 +1896,18 @@ def _nlargest_chunk(df, *index, **kwargs):
 
         all_missing_columns = []
         for i in range(num_indices):
-            temp = df[indices].iloc[:, i]
-            all_missing_columns.append(temp)
+            if indices[i] == name:
+                pass
+            else:
+                temp = df[indices].iloc[:, i]
+                all_missing_columns.append(temp)
 
         all_missing_columns.append(df.index)
 
         return df_grouped.set_index(all_missing_columns)[name]
     else:
+        if name in indices:
+            return series_grouped.reset_index(name, drop=True)
         return series_grouped
 
 
