@@ -178,6 +178,7 @@ def _check_dsk(dsk):
     if not isinstance(dsk, HighLevelGraph):
         return
 
+    dsk.validate()
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
@@ -347,6 +348,40 @@ def validate_axis(axis, ndim):
     if axis < 0:
         axis += ndim
     return axis
+
+
+def svd_flip(u, v):
+    """Sign correction to ensure deterministic output from SVD.
+
+    This function is useful for orienting eigenvectors such that
+    they all lie in a shared but arbitrary half-space. This makes
+    it possible to ensure that results are equivalent across SVD
+    implementations and random number generator states.
+
+    Parameters
+    ----------
+
+    u : (M, K) array_like
+        Left singular vectors
+    v : (K, N) array_like
+        Right singular vectors
+
+    Returns
+    -------
+
+    u : (M, K) array_like
+        Left singular vectors with corrected sign
+    v:  (K, N) array_like
+        Right singular vectors with corrected sign
+    """
+    # Determine half-space in which all left singular vectors
+    # lie relative to an arbitrary vector; this is equivalent
+    # to dot product with a row vector of ones
+    signs = np.sum(u, axis=0, keepdims=True)
+    signs = 2 * ((signs >= 0) - 0.5)
+    # Force all singular vectors into same half-space
+    u, v = u * signs, v * signs.T
+    return u, v
 
 
 def _is_nep18_active():

@@ -264,7 +264,8 @@ def test_dont_fuse_numpy_arrays():
 
 
 def test_minimize_data_transfer():
-    x = np.ones(100)
+    zarr = pytest.importorskip("zarr")
+    x = zarr.ones((100,))
     y = da.from_array(x, chunks=25)
     z = y + 1
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
