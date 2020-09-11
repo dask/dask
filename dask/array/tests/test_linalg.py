@@ -489,6 +489,30 @@ def test_svd_compressed_deterministic():
     assert all(da.compute((u == u2).all(), (s == s2).all(), (vt == vt2).all()))
 
 
+@pytest.mark.parametrize("m", [5, 10, 15, 20])
+@pytest.mark.parametrize("n", [5, 10, 15, 20])
+@pytest.mark.parametrize("k", [5])
+@pytest.mark.parametrize("chunks", [(5, 10), (10, 5)])
+def test_svd_compressed_shapes(m, n, k, chunks):
+    x = da.random.random(size=(m, n), chunks=chunks)
+    u, s, v = svd_compressed(x, k=k, n_power_iter=1, compute=True, seed=1)
+    u, s, v = da.compute(u, s, v)
+    r = min(m, n, k)
+    assert u.shape == (m, r)
+    assert s.shape == (r,)
+    assert v.shape == (r, n)
+
+
+def test_svd_compressed_compute():
+    x = da.ones((100, 100), chunks=(10, 10))
+    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
+    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
+
+    assert len(v.dask) < len(vv.dask)
+
+    assert_eq(v, vv)
+
+
 def _check_lu_result(p, l, u, A):
     assert np.allclose(p.dot(l).dot(u), A)
 
@@ -954,13 +978,3 @@ def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
     if len(shape) > 2 and len(axis) == 2:
         with pytest.raises(NotImplementedError):
             da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
-
-
-def test_svd_compressed_compute():
-    x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
-    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
-
-    assert len(v.dask) < len(vv.dask)
-
-    assert_eq(v, vv)
