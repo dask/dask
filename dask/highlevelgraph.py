@@ -4,7 +4,24 @@ import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .core import reverse_dict
+from .core import reverse_dict, keys_in_tasks
+
+
+def compute_layer_dependencies(layers):
+    """Returns the dependencies between layers"""
+
+    def _find_layer_containing_key(key):
+        for k, v in layers.items():
+            if key in v:
+                return k
+        raise RuntimeError(f"{repr(key)} not found")
+
+    all_keys = set(key for layer in layers.values() for key in layer)
+    ret = {k: set() for k in layers.keys()}
+    for k, v in layers.items():
+        for key in keys_in_tasks(all_keys.difference(v.keys()), v.values()):
+            ret[k].add(_find_layer_containing_key(key))
+    return ret
 
 
 class HighLevelGraph(Mapping):
@@ -227,6 +244,26 @@ class HighLevelGraph(Mapping):
             for dep in deps:
                 if dep not in self.dependencies:
                     raise ValueError(f"{repr(dep)} not found in dependencies")
+
+        # Re-calculate all layer dependencies
+        dependencies = compute_layer_dependencies(self.layers)
+
+        # Check keys
+        dep_key1 = set(self.dependencies.keys())
+        dep_key2 = set(dependencies.keys())
+        if dep_key1 != dep_key2:
+            raise ValueError(
+                f"incorrect dependencies keys {repr(dep_key1)} "
+                f"expected {repr(dep_key2)}"
+            )
+
+        # Check values
+        for k in dep_key1:
+            if self.dependencies[k] != dependencies[k]:
+                raise ValueError(
+                    f"incorrect dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
+                    f"expected {repr(dependencies[k])}"
+                )
 
 
 def to_graphviz(

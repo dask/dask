@@ -5,13 +5,14 @@ import numpy as np
 import tlz as toolz
 
 from ..base import tokenize, wait
+from ..delayed import delayed
 from ..blockwise import blockwise
 from ..highlevelgraph import HighLevelGraph
 from ..utils import derived_from, apply
-from .core import dotmany, Array, concatenate
+from .core import dotmany, Array, concatenate, from_delayed
 from .creation import eye
 from .random import RandomState
-from .utils import meta_from_array
+from .utils import meta_from_array, svd_flip, ones_like_safe
 
 
 def _cumsum_blocks(it):
@@ -112,7 +113,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             "  1. Have two dimensions\n"
             "  2. Have only one column of blocks\n\n"
             "Note: This function (tsqr) supports QR decomposition in the case of\n"
-            "tall-and-skinny matrices (single column chunk/block; see qr)"
+            "tall-and-skinny matrices (single column chunk/block; see qr)\n"
             "Current shape: {},\nCurrent chunksize: {}".format(
                 data.shape, data.chunksize
             )
@@ -139,7 +140,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         numblocks={data.name: numblocks},
     )
     layers[name_qr_st1] = dsk_qr_st1
-    dependencies[name_qr_st1] = data.__dask_layers__()
+    dependencies[name_qr_st1] = set(data.__dask_layers__())
 
     # Block qr[0]
     name_q_st1 = "getitem" + token + "-q1"
@@ -248,13 +249,13 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             )
         )
         layers[name_q_st2] = dsk_q_st2
-        dependencies[name_q_st2] = q_inner.__dask_layers__()
+        dependencies[name_q_st2] = set(q_inner.__dask_layers__())
 
         # R: R_inner
         name_r_st2 = "r-inner" + token
         dsk_r_st2 = {(name_r_st2, 0, 0): (r_inner.name, 0, 0)}
         layers[name_r_st2] = dsk_r_st2
-        dependencies[name_r_st2] = r_inner.__dask_layers__()
+        dependencies[name_r_st2] = set(r_inner.__dask_layers__())
 
         # Q: Block qr[0] (*) Q_inner
         name_q_st3 = "dot" + token + "-q3"
@@ -301,7 +302,8 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
         layers[name_q_st2_aux] = dsk_q_st2_aux
         dependencies[name_q_st2_aux] = {name_qr_st2}
 
-        if not any(np.isnan(c) for cs in data.chunks for c in cs):
+        chucks_are_all_known = not any(np.isnan(c) for cs in data.chunks for c in cs)
+        if chucks_are_all_known:
             # when chunks are all known...
             # obtain slices on q from in-core compute (e.g.: (slice(10, 20), slice(0, 5)))
             q2_block_sizes = [min(e, n) for e in data.chunks[0]]
@@ -349,7 +351,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
                 dsk_n, dsk_q2_shapes, dsk_q2_cumsum, dsk_block_slices
             )
 
-            deps = {data.name, name_q2bs, name_q2cs}
+            deps = {data.name}
             block_slices = [(name_blockslice, i) for i in range(numblocks[0])]
 
         layers["q-blocksizes" + token] = dsk_q_blockslices
@@ -362,7 +364,10 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             for i, b in enumerate(block_slices)
         )
         layers[name_q_st2] = dsk_q_st2
-        dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
+        if chucks_are_all_known:
+            dependencies[name_q_st2] = {name_q_st2_aux}
+        else:
+            dependencies[name_q_st2] = {name_q_st2_aux, "q-blocksizes" + token}
 
         # Q: Block qr[0] (*) In-core qr[0]
         name_q_st3 = "dot" + token + "-q3"
@@ -565,11 +570,14 @@ def sfqr(data, name=None):
     name_A_1 = prefix + "A_1"
     name_A_rest = prefix + "A_rest"
     layers[name_A_1] = {(name_A_1, 0, 0): (data.name, 0, 0)}
-    dependencies[name_A_1] = data.__dask_layers__()
+    dependencies[name_A_1] = set(data.__dask_layers__())
     layers[name_A_rest] = {
         (name_A_rest, 0, idx): (data.name, 0, 1 + idx) for idx in range(nc - 1)
     }
-    dependencies[name_A_rest] = data.__dask_layers__()
+    if len(layers[name_A_rest]) > 0:
+        dependencies[name_A_rest] = set(data.__dask_layers__())
+    else:
+        dependencies[name_A_rest] = set()
 
     # Q R_1 = A_1
     name_Q_R1 = prefix + "Q_R_1"
@@ -661,8 +669,8 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     pp. 217-288, June 2011
     https://arxiv.org/abs/0909.4061
     """
-    n = data.shape[1]
-    comp_level = compression_level(n, q)
+    m, n = data.shape
+    comp_level = compression_level(min(m, n), q)
     if isinstance(seed, RandomState):
         state = seed
     else:
@@ -684,7 +692,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
+def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=True):
     """Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -708,6 +716,10 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
         pressure, but means that we have to compute the input multiple times.
         This is a good choice if the data is larger than memory and cheap to
         recreate.
+    coerce_signs : bool
+        Whether or not to apply sign coercion to singular vectors in
+        order to maintain deterministic results, by default True.
+
 
     Examples
     --------
@@ -741,6 +753,8 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
     u = u[:, :k]
     s = s[:k]
     v = v[:k, :]
+    if coerce_signs:
+        u, v = svd_flip(u, v)
     return u, s, v
 
 
@@ -783,9 +797,16 @@ def qr(a):
         )
 
 
-def svd(a):
+def svd(a, coerce_signs=True):
     """
     Compute the singular value decomposition of a matrix.
+
+    Parameters
+    ----------
+    a : (M, N) Array
+    coerce_signs : bool
+        Whether or not to apply sign coercion to singular vectors in
+        order to maintain deterministic results, by default True.
 
     Examples
     --------
@@ -795,17 +816,76 @@ def svd(a):
     Returns
     -------
 
-    u:  Array, unitary / orthogonal
-    s:  Array, singular values in decreasing order (largest first)
-    v:  Array, unitary / orthogonal
+    u : (M, K) Array, unitary / orthogonal
+        Left-singular vectors of `a` (in columns) with shape (M, K)
+        where K = min(M, N).
+    s : (K,) Array, singular values in decreasing order (largest first)
+        Singular values of `a`.
+    v : (K, N) Array, unitary / orthogonal
+        Right-singular vectors of `a` (in rows) with shape (K, N)
+        where K = min(M, N).
+
+    Warnings
+    --------
+
+    SVD is only supported for arrays with chunking in one dimension.
+    This requires that all inputs either contain a single column
+    of chunks (tall-and-skinny) or a single row of chunks (short-and-fat).
+    For arrays with chunking in both dimensions, see da.linalg.svd_compressed.
 
     See Also
     --------
 
     np.linalg.svd : Equivalent NumPy Operation
-    dask.array.linalg.tsqr: Implementation for tall-and-skinny arrays
+    da.linalg.svd_compressed : Randomized SVD for fully chunked arrays
+    dask.array.linalg.tsqr : QR factorization for tall-and-skinny arrays
+    dask.array.utils.svd_flip : Sign normalization for singular vectors
     """
-    return tsqr(a, compute_svd=True)
+    nb = a.numblocks
+    if a.ndim != 2:
+        raise ValueError(
+            "Array must be 2D.\n"
+            "Input shape: {}\n"
+            "Input ndim: {}\n".format(a.shape, a.ndim)
+        )
+    if nb[0] > 1 and nb[1] > 1:
+        raise NotImplementedError(
+            "Array must be chunked in one dimension only. "
+            "This function (svd) only supports tall-and-skinny or short-and-fat "
+            "matrices (see da.linalg.svd_compressed for SVD on fully chunked arrays).\n"
+            "Input shape: {}\n"
+            "Input numblocks: {}\n".format(a.shape, nb)
+        )
+
+    # Single-chunk case
+    if nb[0] == nb[1] == 1:
+        m, n = a.shape
+        k = min(a.shape)
+        mu, ms, mv = np.linalg.svd(ones_like_safe(a._meta, shape=(1, 1)))
+        u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
+        u = from_delayed(u, shape=(m, k), dtype=mu.dtype)
+        s = from_delayed(s, shape=(k,), dtype=ms.dtype)
+        v = from_delayed(v, shape=(k, n), dtype=mv.dtype)
+    # Multi-chunk cases
+    else:
+        # Tall-and-skinny case
+        if nb[0] > nb[1]:
+            u, s, v = tsqr(a, compute_svd=True)
+            truncate = a.shape[0] < a.shape[1]
+        # Short-and-fat case
+        else:
+            vt, s, ut = tsqr(a.T, compute_svd=True)
+            u, s, v = ut.T, s, vt.T
+            truncate = a.shape[0] > a.shape[1]
+        # Only when necessary, remove extra singular vectors if array
+        # has shape that contradicts chunking, e.g. the array is a
+        # column of chunks but still has more columns than rows overall
+        if truncate:
+            k = min(a.shape)
+            u, v = u[:, :k], v[:k, :]
+    if coerce_signs:
+        u, v = svd_flip(u, v)
+    return u, s, v
 
 
 def _solve_triangular_lower(a, b):
@@ -1268,7 +1348,7 @@ def lstsq(a, b):
             (np.sqrt, (np.linalg.eigvals, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
         )
     }
-    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt])
+    graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt, r])
     _, _, _, ss = np.linalg.lstsq(
         np.array([[1, 0], [1, 2]], dtype=a.dtype),
         np.array([0, 1], dtype=b.dtype),

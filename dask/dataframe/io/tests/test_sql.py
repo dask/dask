@@ -232,6 +232,50 @@ def test_division_or_partition(db):
     assert_eq(out, df)
 
 
+def test_meta(db):
+    data = read_sql_table(
+        "test", db, index_col="number", meta=dd.from_pandas(df, npartitions=1)
+    ).compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_meta_no_head_rows(db):
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        npartitions=2,
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        divisions=[0, 3, 6],
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_no_meta_no_head_rows(db):
+    with pytest.raises(ValueError):
+        read_sql_table("test", db, index_col="number", head_rows=0, npartitions=1)
+
+
 def test_range(db):
     data = read_sql_table("test", db, npartitions=2, index_col="number", limits=[1, 4])
     assert data.index.min().compute() == 1

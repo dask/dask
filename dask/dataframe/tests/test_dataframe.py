@@ -1191,7 +1191,7 @@ def test_nbytes():
 
 @pytest.mark.parametrize(
     "method,expected",
-    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 5.4, 1.2, 7.8, 5.0))],
+    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 4.0, 1.2, 6.2, 2.0))],
 )
 def test_quantile(method, expected):
     if method == "tdigest":
@@ -1279,9 +1279,9 @@ def test_empty_quantile(method):
         (
             "dask",
             (
-                pd.Series([16.5, 36.5, 26.5], index=["A", "X", "B"]),
+                pd.Series([7.0, 27.0, 17.0], index=["A", "X", "B"]),
                 pd.DataFrame(
-                    [[1.50, 21.50, 11.50], [17.75, 37.75, 27.75]],
+                    [[1.50, 21.50, 11.50], [14.0, 34.0, 24.0]],
                     index=[0.25, 0.75],
                     columns=["A", "X", "B"],
                 ),
@@ -1354,6 +1354,14 @@ def test_quantile_for_possibly_unsorted_q():
 
     r = ds.quantile(0.25).compute()
     assert_eq(r, 25.0)
+
+
+def test_quantile_tiny_partitions():
+    """ See https://github.com/dask/dask/issues/6551 """
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    r = ddf["a"].quantile(0.5).compute()
+    assert r == 2
 
 
 def test_index():
