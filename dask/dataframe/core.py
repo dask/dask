@@ -5457,16 +5457,19 @@ def quantile(df, q, method="default"):
 
         from dask.array.percentile import _percentile, merge_percentiles
 
+        # Add 0 and 100 during calculation for more robust behavior (hopefully)
+        calc_qs = np.pad(qs, 1, mode="constant")
+        calc_qs[-1] = 100
         name = "quantiles-1-" + token
         val_dsk = {
-            (name, i): (_percentile, (getattr, key, "values"), qs)
+            (name, i): (_percentile, (getattr, key, "values"), calc_qs)
             for i, key in enumerate(df.__dask_keys__())
         }
 
         name2 = "quantiles-2-" + token
         merge_dsk = {
             (name2, 0): finalize_tsk(
-                (merge_percentiles, qs, [qs] * df.npartitions, sorted(val_dsk))
+                (merge_percentiles, qs, [calc_qs] * df.npartitions, sorted(val_dsk))
             )
         }
     dsk = merge(val_dsk, merge_dsk)

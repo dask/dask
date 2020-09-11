@@ -179,7 +179,13 @@ def test_non_existent_func():
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
-    "func", [np.equal, np.matmul, np.dot, lambda x, y: np.stack([x, y])]
+    "func",
+    [
+        np.equal,
+        np.matmul,
+        np.dot,
+        lambda x, y: np.stack([x, y]),
+    ],
 )
 @pytest.mark.parametrize(
     "arr_upcast, arr_downcast",
