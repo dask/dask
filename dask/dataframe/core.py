@@ -3586,7 +3586,7 @@ class DataFrame(_Frame):
             key = list(key)
             df = self.assign(**{k: value for k in key})
         elif isinstance(key, (pd.DataFrame, DataFrame)):
-            df = self.where(key, value)
+            df = self.where(~key, value)
         elif not isinstance(key, str):
             raise NotImplementedError(f"Item assignment with {type(key)} not supported")
         else:

@@ -3517,6 +3517,12 @@ def test_getitem_column_types(col_type):
     assert_eq(df[cols], ddf[cols])
 
 
+def test_getitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    assert_eq(df[df > 3], ddf[ddf > 3])
+
+
 def test_ipython_completion():
     df = pd.DataFrame({"a": [1], "b": [2]})
     ddf = dd.from_pandas(df, npartitions=1)
@@ -4194,6 +4200,14 @@ def test_setitem():
     ddf = dd.from_pandas(df.copy(), 2)
     df[df.columns] = 1
     ddf[ddf.columns] = 1
+    assert_eq(df, ddf)
+
+
+def test_setitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 4], "B": [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df > 2] = 5
+    ddf[ddf > 2] = 5
     assert_eq(df, ddf)
 
 
