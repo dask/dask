@@ -170,7 +170,6 @@ Required Packages
 Bokeh must be installed in your scheduler's environment to run the dashboard. If it's not the dashboard page will instruct you to install it.
 
 Depending on your configuration, you might also need to install ``jupyter-server-proxy`` to access the dashboard.
-installed. 
 
 API
 ---
