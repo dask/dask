@@ -5,13 +5,14 @@ import numpy as np
 import tlz as toolz
 
 from ..base import tokenize, wait
+from ..delayed import delayed
 from ..blockwise import blockwise
 from ..highlevelgraph import HighLevelGraph
 from ..utils import derived_from, apply
-from .core import dotmany, Array, concatenate
+from .core import dotmany, Array, concatenate, from_delayed
 from .creation import eye
 from .random import RandomState
-from .utils import meta_from_array
+from .utils import meta_from_array, svd_flip
 
 
 def _cumsum_blocks(it):
@@ -112,7 +113,7 @@ def tsqr(data, compute_svd=False, _max_vchunk_size=None):
             "  1. Have two dimensions\n"
             "  2. Have only one column of blocks\n\n"
             "Note: This function (tsqr) supports QR decomposition in the case of\n"
-            "tall-and-skinny matrices (single column chunk/block; see qr)"
+            "tall-and-skinny matrices (single column chunk/block; see qr)\n"
             "Current shape: {},\nCurrent chunksize: {}".format(
                 data.shape, data.chunksize
             )
@@ -691,7 +692,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
+def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=True):
     """Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -715,6 +716,10 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
         pressure, but means that we have to compute the input multiple times.
         This is a good choice if the data is larger than memory and cheap to
         recreate.
+    coerce_signs : bool
+        Whether or not to apply sign coercion to singular vectors in
+        order to maintain deterministic results, by default True.
+
 
     Examples
     --------
@@ -748,6 +753,8 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False):
     u = u[:, :k]
     s = s[:k]
     v = v[:k, :]
+    if coerce_signs:
+        u, v = svd_flip(u, v)
     return u, s, v
 
 
@@ -790,9 +797,16 @@ def qr(a):
         )
 
 
-def svd(a):
+def svd(a, coerce_signs=True):
     """
     Compute the singular value decomposition of a matrix.
+
+    Parameters
+    ----------
+    a : (M, N) Array
+    coerce_signs : bool
+        Whether or not to apply sign coercion to singular vectors in
+        order to maintain deterministic results, by default True.
 
     Examples
     --------
@@ -802,9 +816,14 @@ def svd(a):
     Returns
     -------
 
-    u:  Array, unitary / orthogonal
-    s:  Array, singular values in decreasing order (largest first)
-    v:  Array, unitary / orthogonal
+    u : (M, K) Array, unitary / orthogonal
+        Left-singular vectors of `a` (in columns) with shape (M, K)
+        where K = min(M, N).
+    s : (K,) Array, singular values in decreasing order (largest first)
+        Singular values of `a`.
+    v : (K, N) Array, unitary / orthogonal
+        Right-singular vectors of `a` (in rows) with shape (K, N)
+        where K = min(M, N).
 
     Warnings
     --------
@@ -819,7 +838,8 @@ def svd(a):
 
     np.linalg.svd : Equivalent NumPy Operation
     da.linalg.svd_compressed : Randomized SVD for fully chunked arrays
-    dask.array.linalg.tsqr: QR factorization for tall-and-skinny arrays
+    dask.array.linalg.tsqr : QR factorization for tall-and-skinny arrays
+    dask.array.utils.svd_flip : Sign normalization for singular vectors
     """
     nb = a.numblocks
     if a.ndim != 2:
@@ -829,7 +849,7 @@ def svd(a):
             "Input ndim: {}\n".format(a.shape, a.ndim)
         )
     if nb[0] > 1 and nb[1] > 1:
-        raise ValueError(
+        raise NotImplementedError(
             "Array must be chunked in one dimension only. "
             "This function (svd) only supports tall-and-skinny or short-and-fat "
             "matrices (see da.linalg.svd_compressed for SVD on fully chunked arrays).\n"
@@ -837,14 +857,35 @@ def svd(a):
             "Input numblocks: {}\n".format(a.shape, nb)
         )
 
-    # Tall-and-skinny case
-    if nb[0] >= nb[1]:
-        u, s, v = tsqr(a, compute_svd=True)
-        return u, s, v
-    # Short-and-fat case
+    # Single-chunk case
+    if nb[0] == nb[1] == 1:
+        m, n = a.shape
+        k = min(a.shape)
+        mu, ms, mv = np.linalg.svd(np.ones((1, 1), dtype=a.dtype))
+        u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
+        u = from_delayed(u, shape=(m, k), meta=mu)
+        s = from_delayed(s, shape=(k,), meta=ms)
+        v = from_delayed(v, shape=(k, n), meta=mv)
+    # Multi-chunk cases
     else:
-        vt, s, ut = tsqr(a.T, compute_svd=True)
-        return ut.T, s, vt.T
+        # Tall-and-skinny case
+        if nb[0] > nb[1]:
+            u, s, v = tsqr(a, compute_svd=True)
+            truncate = a.shape[0] < a.shape[1]
+        # Short-and-fat case
+        else:
+            vt, s, ut = tsqr(a.T, compute_svd=True)
+            u, s, v = ut.T, s, vt.T
+            truncate = a.shape[0] > a.shape[1]
+        # Only when necessary, remove extra singular vectors if array
+        # has shape that contradicts chunking, e.g. the array is a
+        # column of chunks but still has more columns than rows overall
+        if truncate:
+            k = min(a.shape)
+            u, v = u[:, :k], v[:k, :]
+    if coerce_signs:
+        u, v = svd_flip(u, v)
+    return u, s, v
 
 
 def _solve_triangular_lower(a, b):
