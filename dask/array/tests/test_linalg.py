@@ -789,7 +789,7 @@ def test_lstsq(nrow, ncol, chunk):
 
 def test_no_chunks_svd():
     x = np.random.random((100, 10))
-    u, s, v = np.linalg.svd(x, full_matrices=0)
+    u, s, v = np.linalg.svd(x, full_matrices=False)
 
     for chunks in [((np.nan,) * 10, (10,)), ((np.nan,) * 10, (np.nan,))]:
         dx = da.from_array(x, chunks=(10, 10))
@@ -808,13 +808,6 @@ def test_no_chunks_svd():
         assert_eq(abs(u), abs(du))
 
 
-def _svd_truncate(u, v):
-    # Workaround for no `full_matrices=False`
-    # https://github.com/dask/dask/issues/3576
-    k = min(u.shape[-1], v.shape[-2])
-    return u[..., :k], v[..., :k, :]
-
-
 @pytest.mark.parametrize("shape", [(10, 20), (10, 10), (20, 10)])
 @pytest.mark.parametrize("chunks", [(-1, -1), (10, -1), (-1, 10)])
 def test_svd_flip(shape, chunks):
@@ -822,7 +815,6 @@ def test_svd_flip(shape, chunks):
     # be used to reconstruct inputs
     x = da.random.random(size=shape, chunks=chunks)
     u, s, v = da.linalg.svd(x)
-    u, v = _svd_truncate(u, v)
 
     # Validate w/ dask inputs
     uf, vf = svd_flip(u, v)
@@ -836,18 +828,21 @@ def test_svd_flip(shape, chunks):
 @pytest.mark.parametrize("chunks", [(10, -1), (-1, 10), (9, -1), (-1, 9)])
 @pytest.mark.parametrize("shape", [(10, 100), (100, 10), (10, 10)])
 def test_svd_supported_array_shapes(chunks, shape):
+    # Test the following cases for tall-skinny, short-fat and square arrays:
+    # - no chunking
+    # - chunking that contradicts shape (e.g. a 10x100 array with 9x100 chunks)
+    # - chunking that aligns with shape (e.g. a 10x100 array with 10x9 chunks)
     x = np.random.random(shape)
     dx = da.from_array(x, chunks=chunks)
 
     du, ds, dv = da.linalg.svd(dx)
     du, dv = da.compute(du, dv)
-    du, dv = _svd_truncate(du, dv)
 
-    nu, ns, nv = np.linalg.svd(x)
+    nu, ns, nv = np.linalg.svd(x, full_matrices=False)
 
     # Correct signs before comparison
     du, dv = svd_flip(du, dv)
-    nu, nv = svd_flip(du, dv)
+    nu, nv = svd_flip(nu, nv)
 
     assert_eq(du, nu)
     assert_eq(ds, ns)
@@ -855,7 +850,9 @@ def test_svd_supported_array_shapes(chunks, shape):
 
 
 def test_svd_incompatible_chunking():
-    with pytest.raises(ValueError, match="Array must be chunked in one dimension only"):
+    with pytest.raises(
+        NotImplementedError, match="Array must be chunked in one dimension only"
+    ):
         x = da.random.random((10, 10), chunks=(5, 5))
         da.linalg.svd(x)
 
