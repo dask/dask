@@ -668,8 +668,8 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     pp. 217-288, June 2011
     https://arxiv.org/abs/0909.4061
     """
-    n = data.shape[1]
-    comp_level = compression_level(n, q)
+    m, n = data.shape
+    comp_level = compression_level(min(m, n), q)
     if isinstance(seed, RandomState):
         state = seed
     else:
