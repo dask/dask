@@ -576,7 +576,15 @@ Dask Name: {name}, {task} tasks"""
             be the first argument, and these will be passed *after*. Arguments
             and keywords may contain ``Scalar``, ``Delayed`` or regular
             python objects. DataFrame-like args (both dask and pandas) will be
-            repartitioned to align (if necessary) before applying the function.
+            repartitioned to align (if necessary) before applying the function
+            (see ``enforce_alignment` to control).
+        enforce_metadata : bool
+            Whether or not to enforce the structure of the metadata at runtime.
+            This will rename and reorder columns for each partition,
+            and will raise an error if this doesn't work or types don't match.
+        enforce_alignment : bool
+            Whether or not to repartition DataFrame-like args (both dask and pandas)
+            before applying the function.
         $META
 
         Examples
@@ -5163,6 +5171,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
+    enforce_alignment=True,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -5176,11 +5185,14 @@ def map_partitions(
         args should be a Dask.dataframe. Arguments and keywords may contain
         ``Scalar``, ``Delayed`` or regular python objects. DataFrame-like args
         (both dask and pandas) will be repartitioned to align (if necessary)
-        before applying the function.
+        before applying the function (see ``enforce_alignment` to control).
     enforce_metadata : bool
         Whether or not to enforce the structure of the metadata at runtime.
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
+    enforce_alignment : bool
+        Whether or not to repartition DataFrame-like args (both dask and pandas)
+        before applying the function.
     $META
     """
     name = kwargs.pop("token", None)
@@ -5195,8 +5207,10 @@ def map_partitions(
 
     from .multi import _maybe_align_partitions
 
-    args = _maybe_from_pandas(args)
-    args = _maybe_align_partitions(args)
+    if enforce_alignment:
+        args = _maybe_from_pandas(args)
+        args = _maybe_align_partitions(args)
+
     dfs = [df for df in args if isinstance(df, _Frame)]
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
 
