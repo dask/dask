@@ -412,8 +412,8 @@ def test_dataframe_groupby_nlargest():
     data["total"] = [45, 26, 72, 9, 52, 70, 60, 11]
     df = pd.DataFrame.from_dict(data)
     dask_df = dd.from_pandas(df, npartitions=3)
-    expected = dask_df.groupby(["location", "category"])["percent"].nlargest(1)
-    assert_eq(df.groupby(["location", "category"])["percent"].nlargest(1), expected)
+    expected = dask_df.groupby(["location", "category"])["percent"].nlargest(2)
+    assert_eq(df.groupby(["location", "category"])["percent"].nlargest(2), expected)
 
 
 def test_dataframe_groupby_nunique():
