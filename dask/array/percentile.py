@@ -126,10 +126,12 @@ def percentile(a, q, interpolation="linear", method="default"):
 
     # Otherwise use the custom percentile algorithm
     else:
-
+        # Add 0 and 100 during calculation for more robust behavior (hopefully)
+        calc_q = np.pad(q, 1, mode="constant")
+        calc_q[-1] = 100
         name = "percentile_chunk-" + token
         dsk = dict(
-            ((name, i), (_percentile, key, q, interpolation))
+            ((name, i), (_percentile, key, calc_q, interpolation))
             for i, key in enumerate(a.__dask_keys__())
         )
 
@@ -138,7 +140,7 @@ def percentile(a, q, interpolation="linear", method="default"):
             (name2, 0): (
                 merge_percentiles,
                 q,
-                [q] * len(a.chunks[0]),
+                [calc_q] * len(a.chunks[0]),
                 sorted(dsk),
                 interpolation,
             )
