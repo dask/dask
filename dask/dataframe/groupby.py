@@ -1791,6 +1791,7 @@ class SeriesGroupBy(_GroupBy):
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def nlargest(self, n=5, keep="first", split_every=None, split_out=1):
         name = self._meta.obj.name
+        num_records = len(self.obj)
         return aca(
             [self.obj, self.index]
             if not isinstance(self.index, list)
@@ -1798,7 +1799,7 @@ class SeriesGroupBy(_GroupBy):
             chunk=_nlargest_chunk,
             chunk_kwargs={"n": n, "keep": keep, "name": name},
             aggregate=_nlargest_aggregate,
-            aggregate_kwargs={"n": n, "keep": keep, "name": name, "index": self.index},
+            aggregate_kwargs={"n": n, "keep": keep, "name": name, "index": self.index, "len": num_records},
             token="series-groupby-nlargest",
             split_every=split_every,
             split_out=split_out,
@@ -1916,8 +1917,21 @@ def _nlargest_aggregate(df, **kwargs):
     keep = kwargs.pop("keep")
     name = kwargs.pop("name")
     index = kwargs.pop("index")
+    num_records = kwargs.pop("len")
     indices = list(index)
-    return df.reset_index().groupby(indices)[name].nlargest(n, keep)
+    df = df.reset_index()
+    level_num = list(df.columns).index(name)-1
+    if name in indices:
+        original_indices = df[df.columns[level_num]].rename(None)
+        indices[indices.index(name)] = df[name]
+        indices.append(original_indices)
+        ret = df.set_index(indices)[name]
+        if len(ret) == num_records:
+            return ret.reset_index(drop=True)
+        else:
+            return ret
+    df.index = df["level_{0}".format(level_num)].rename(None)
+    return df.groupby(indices)[name].nlargest(n, keep)
 
 
 def _unique_aggregate(series_gb, name=None):
