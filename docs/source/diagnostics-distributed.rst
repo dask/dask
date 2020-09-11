@@ -167,7 +167,9 @@ forward port 8888 (the default Jupyter port) to port 8001 with
 Required Packages
 ~~~~~~~~~~~~~~~~~
 
-If you are unable to see the dashboard (404 error), you might also be missing some of the
+Bokeh must be installed in your scheduler's environment to run the dashboard. If it's not the dashboard page will instruct you to install it.
+
+Depending on your configuration, you might also need to install ``jupyter-server-proxy`` to access the dashboard.
 packages required to build it. Check that you have both ``bokeh`` and ``jupyter-server-proxy``
 installed. 
 
