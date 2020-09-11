@@ -77,8 +77,9 @@ def reduction(
     keepdims: boolean, optional
         Whether the reduction function should preserve the reduced axes,
         leaving them at size ``output_size``, or remove them.
-    dtype: np.dtype, optional
-        Force output dtype. Defaults to x.dtype if omitted.
+    dtype: np.dtype
+        data type of output. This argument was previously optional, but
+        leaving as ``None`` will now raise an exception.
     split_every: int >= 2 or dict(axis: int), optional
         Determines the depth of the recursive aggregation. If set to or more
         than the number of input chunks, the aggregation will be performed in
