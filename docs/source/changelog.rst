@@ -1,6 +1,51 @@
 Changelog
 =========
 
+2.26.0 / 2020-09-11
+-------------------
+
+Array
++++++
+
+- Backend-aware dtype inference for single-chunk svd (:pr:`6623`) `Eric Czech`_
+- Make ``array.reduction`` docstring match for dtype (:pr:`6624`) `Martin Durant`_
+- Set lower bound on compression level for ``svd_compressed`` using rows and cols (:pr:`6622`) `Eric Czech`_
+- Improve SVD consistency and small array handling (:pr:`6616`) `Eric Czech`_
+- Add ``svd_flip`` #6599 (:pr:`6613`) `Eric Czech`_
+- Handle sequences containing dask Arrays (:pr:`6595`) `Gabe Joseph`_
+- Avoid large chunks from ``getitem`` with lists (:pr:`6514`) `Tom Augspurger`_
+- Eagerly slice numpy arrays in ``from_array`` (:pr:`6605`) `Deepak Cherian`_
+- Restore ability to pickle dask arrays (:pr:`6594`) `Noah D Brenowitz`_
+- Add SVD support for short-and-fat arrays (:pr:`6591`) `Eric Czech`_
+- Add simple chunk type registry and defer as appropriate to upcast types (:pr:`6393`) `Jon Thielen`_
+- Align coarsen chunks by default (:pr:`6580`) `Deepak Cherian`_
+- Fixup reshape on unknown dimensions and other testing fixes (:pr:`6578`) `Ryan Williams`_
+
+Core
+++++
+
+- Add validation and fixes for ``HighLevelGraph`` dependencies (:pr:`6588`) `Mads R. B. Kristensen`_
+- Fix linting issue (:pr:`6598`) `Tom Augspurger`_
+- Skip ``bokeh`` version 2.0.0 (:pr:`6572`) `John A Kirkham`_
+
+DataFrame
++++++++++
+
+- Added bytes/row calculation when using meta (:pr:`6585`) `McToel`_
+- Handle ``min_count`` in ``Series.sum`` / ``prod`` (:pr:`6618`) `Daniel Saxton`_
+- Update ``DataFrame.set_index`` docstring (:pr:`6549`) `Timost`_
+- Always compute 0 and 1 quantiles during quantile calculations (:pr:`6564`) `Erik Welch`_
+- Fix wrong path when reading empty csv file (:pr:`6573`) `Abdulelah Bin Mahfoodh`_
+
+Documentation
++++++++++++++
+
+- Doc: Troubleshooting dashboard 404 (:pr:`6215`) `Kilian Lieret`_
+- Fixup ``extraConfig`` example (:pr:`6625`) `Tom Augspurger`_
+- Update supported Python versions (:pr:`6609`) `Julia Signell`_
+- Document dask/daskhub helm chart (:pr:`6560`) `Tom Augspurger`_
+
+
 2.25.0 / 2020-08-28
 -------------------
 
@@ -3554,3 +3599,7 @@ Other
 .. _`Mike McCarty`: https://github.com/mmccarty
 .. _`michaelnarodovitch`: https://github.com/michaelnarodovitch
 .. _`David Sheldon`: https://github.com/davidsmf
+.. _`McToel`: https://github.com/McToel
+.. _`Kilian Lieret`: https://github.com/klieret
+.. _`Noah D Brenowitz`: https://github.com/nbren12
+.. _`Jon Thielen`: https://github.com/jthielen
