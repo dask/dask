@@ -1799,7 +1799,13 @@ class SeriesGroupBy(_GroupBy):
             chunk=_nlargest_chunk,
             chunk_kwargs={"n": n, "keep": keep, "name": name},
             aggregate=_nlargest_aggregate,
-            aggregate_kwargs={"n": n, "keep": keep, "name": name, "index": self.index, "len": num_records},
+            aggregate_kwargs={
+                "n": n,
+                "keep": keep,
+                "name": name,
+                "index": self.index,
+                "len": num_records,
+            },
             token="series-groupby-nlargest",
             split_every=split_every,
             split_out=split_out,
@@ -1920,7 +1926,7 @@ def _nlargest_aggregate(df, **kwargs):
     num_records = kwargs.pop("len")
     indices = list(index)
     df = df.reset_index()
-    level_num = list(df.columns).index(name)-1
+    level_num = list(df.columns).index(name) - 1
     if name in indices:
         original_indices = df[df.columns[level_num]].rename(None)
         indices[indices.index(name)] = df[name]
