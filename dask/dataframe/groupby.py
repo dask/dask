@@ -1756,9 +1756,7 @@ class DataFrameGroupBy(_GroupBy):
         if arg == "size":
             return self.size()
 
-        return super().aggregate(
-            arg, split_every=split_every, split_out=split_out
-        )
+        return super().aggregate(arg, split_every=split_every, split_out=split_out)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def agg(self, arg, split_every=None, split_out=1):
@@ -1828,9 +1826,7 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
-        result = super().aggregate(
-            arg, split_every=split_every, split_out=split_out
-        )
+        result = super().aggregate(arg, split_every=split_every, split_out=split_out)
         if self._slice:
             result = result[self._slice]
 

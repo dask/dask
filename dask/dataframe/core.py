@@ -3083,9 +3083,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def align(self, other, join="outer", axis=None, fill_value=None):
-        return super().align(
-            other, join=join, axis=axis, fill_value=fill_value
-        )
+        return super().align(other, join=join, axis=axis, fill_value=fill_value)
 
     @derived_from(pd.Series)
     def combine(self, other, func, fill_value=None):
@@ -4146,9 +4144,7 @@ class DataFrame(_Frame):
             raise ValueError(msg)
         elif is_series_like(other):
             other = other.to_frame().T
-        return super().append(
-            other, interleave_partitions=interleave_partitions
-        )
+        return super().append(other, interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def iterrows(self):
