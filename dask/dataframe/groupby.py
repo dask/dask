@@ -1756,7 +1756,7 @@ class DataFrameGroupBy(_GroupBy):
         if arg == "size":
             return self.size()
 
-        return super(DataFrameGroupBy, self).aggregate(
+        return super().aggregate(
             arg, split_every=split_every, split_out=split_out
         )
 
@@ -1786,7 +1786,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
+        super().__init__(df, by=by, slice=slice, **kwargs)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
@@ -1828,7 +1828,7 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
-        result = super(SeriesGroupBy, self).aggregate(
+        result = super().aggregate(
             arg, split_every=split_every, split_out=split_out
         )
         if self._slice:
