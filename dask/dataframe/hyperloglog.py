@@ -1,4 +1,4 @@
-u"""Implementation of HyperLogLog
+"""Implementation of HyperLogLog
 
 This implements the HyperLogLog algorithm for cardinality estimation, found
 in

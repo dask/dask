@@ -760,7 +760,7 @@ def typename(typ):
 def ensure_bytes(s):
     """Turn string or bytes to bytes
 
-    >>> ensure_bytes(u'123')
+    >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes('123')
     b'123'
@@ -778,7 +778,7 @@ def ensure_bytes(s):
 def ensure_unicode(s):
     """Turn string or bytes to bytes
 
-    >>> ensure_unicode(u'123')
+    >>> ensure_unicode('123')
     '123'
     >>> ensure_unicode('123')
     '123'

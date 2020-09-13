@@ -405,7 +405,7 @@ def test_dataframe_format_long():
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = u"""<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>
