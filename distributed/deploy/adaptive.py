@@ -152,7 +152,7 @@ class Adaptive(AdaptiveCore):
             # are in sync before making recommendations.
             await self.cluster
 
-        return await super(Adaptive, self).recommendations(target)
+        return await super().recommendations(target)
 
     async def workers_to_close(self, target: int):
         """

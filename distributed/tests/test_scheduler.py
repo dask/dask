@@ -1963,12 +1963,12 @@ class FlakyConnectionPool(ConnectionPool):
     def __init__(self, *args, failing_connections=0, **kwargs):
         self.cnn_count = 0
         self.failing_connections = failing_connections
-        super(FlakyConnectionPool, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     async def connect(self, *args, **kwargs):
         self.cnn_count += 1
         if self.cnn_count > self.failing_connections:
-            return await super(FlakyConnectionPool, self).connect(*args, **kwargs)
+            return await super().connect(*args, **kwargs)
         else:
             return BrokenComm()
 

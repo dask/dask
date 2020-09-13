@@ -78,9 +78,7 @@ class PrometheusHandler(RequestHandler):
     def __init__(self, *args, dask_server=None, **kwargs):
         import prometheus_client
 
-        super(PrometheusHandler, self).__init__(
-            *args, dask_server=dask_server, **kwargs
-        )
+        super().__init__(*args, dask_server=dask_server, **kwargs)
 
         if PrometheusHandler._collectors:
             # Especially during testing, multiple schedulers are started

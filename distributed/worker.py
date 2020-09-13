@@ -627,7 +627,7 @@ class Worker(ServerNode):
             "steal-request": self.steal_request,
         }
 
-        super(Worker, self).__init__(
+        super().__init__(
             handlers=handlers,
             stream_handlers=stream_handlers,
             io_loop=self.loop,

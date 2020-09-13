@@ -70,7 +70,7 @@ class ThreadPoolExecutor(thread.ThreadPoolExecutor):
     _counter = itertools.count()
 
     def __init__(self, *args, **kwargs):
-        super(ThreadPoolExecutor, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._rejoin_list = []
         self._rejoin_lock = threading.Lock()
         self._thread_name_prefix = kwargs.get(

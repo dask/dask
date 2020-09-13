@@ -198,7 +198,7 @@ class Nanny(ServerNode):
             "run": self.run,
         }
 
-        super(Nanny, self).__init__(
+        super().__init__(
             handlers=handlers, io_loop=self.loop, connection_args=self.connection_args
         )
 

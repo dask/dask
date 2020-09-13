@@ -1379,7 +1379,7 @@ class Scheduler(ServerNode):
 
         connection_limit = get_fileno_limit() / 2
 
-        super(Scheduler, self).__init__(
+        super().__init__(
             handlers=self.handlers,
             stream_handlers=merge(worker_handlers, client_handlers),
             io_loop=self.loop,
@@ -1580,7 +1580,7 @@ class Scheduler(ServerNode):
 
         self.status = Status.closed
         self.stop()
-        await super(Scheduler, self).close()
+        await super().close()
 
         setproctitle("dask-scheduler [closed]")
         disable_gc_diagnosis()
@@ -5586,7 +5586,7 @@ def heartbeat_interval(n):
 
 class KilledWorker(Exception):
     def __init__(self, task, last_worker):
-        super(KilledWorker, self).__init__(task, last_worker)
+        super().__init__(task, last_worker)
         self.task = task
         self.last_worker = last_worker
 

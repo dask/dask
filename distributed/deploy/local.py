@@ -226,7 +226,7 @@ class LocalCluster(SpecCluster):
 
         workers = {i: worker for i in range(n_workers)}
 
-        super(LocalCluster, self).__init__(
+        super().__init__(
             scheduler=scheduler,
             workers=workers,
             worker=worker,

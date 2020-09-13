@@ -77,7 +77,7 @@ class PrometheusHandler(RequestHandler):
     def __init__(self, *args, **kwargs):
         import prometheus_client
 
-        super(PrometheusHandler, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
         if PrometheusHandler._initialized:
             return

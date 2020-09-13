@@ -4202,7 +4202,7 @@ class Executor(Client):
 
     def __init__(self, *args, **kwargs):
         warnings.warn("Executor has been renamed to Client")
-        super(Executor, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
 
 def CompatibleExecutor(*args, **kwargs):

@@ -1150,7 +1150,7 @@ class DequeHandler(logging.Handler):
 
     def __init__(self, *args, n=10000, **kwargs):
         self.deque = deque(maxlen=n)
-        super(DequeHandler, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
         self._instances.add(self)
 
     def emit(self, record):
