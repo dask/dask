@@ -310,7 +310,7 @@ def _read_single_hdf(
                         n._v_pathname
                         for n in hdf._handle.walk_nodes("/", classname="Table")
                         if fnmatch(n._v_pathname, key)
-                        and n._v_name != u"table"
+                        and n._v_name != "table"
                         and n._v_pathname not in keys
                     )
             else:

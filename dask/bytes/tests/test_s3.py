@@ -449,9 +449,7 @@ def test_parquet(s3, engine, s3so):
             "i32": np.arange(1000, dtype=np.int32),
             "i64": np.arange(1000, dtype=np.int64),
             "f": np.arange(1000, dtype=np.float64),
-            "bhello": np.random.choice([u"hello", u"you", u"people"], size=1000).astype(
-                "O"
-            ),
+            "bhello": np.random.choice(["hello", "yo", "people"], size=1000).astype("O"),
         },
         index=pd.Index(np.arange(1000), name="foo"),
     )
