@@ -24,6 +24,38 @@ from . import methods
 logger = logging.getLogger(__name__)
 
 
+# class ShuffleStage(Layer):
+#     """ Shuffle HLG Layer
+
+#     High-level graph layer corresponding to a single stage of
+#     an inter-partition shuffle operation.
+
+
+#     Stage: (shuffle-group) -> (shuffle-split) -> (shuffle-join)
+
+
+#     """
+#     def __init__(
+#         self, ddf, column, name, inputs, stage, npartitions, k, max_branch=32, ignore_index=False
+#     ):
+#         self._ddf = ddf
+#         self.column = column
+#         self.name = name
+#         self.inputs = inputs
+#         self.stage = stage
+#         self.npartitions = npartitions
+#         self.k = k
+#         self.max_branch = max_branch
+#         self.ignore_index = ignore_index
+
+#     def __repr__(self):
+#         return (
+#             "ShuffleStage<name='{}', stage={}, k={}, npartitions={}, ignore_index={}>".format(
+#                 self.name, self.stage, self.k, self.npartitions, self.ignore_index
+#             )
+#         )
+
+
 def set_index(
     df,
     index,
@@ -530,7 +562,108 @@ def _simple_rearrange_by_column_tasks(df, column, npartitions, ignore_index=Fals
     )
 
 
+def _rbc_tasks_stage(df, column, inputs, stage, npartitions, n, k, ignore_index):
+    token = tokenize(df, stage, column, n, k)
+    shuffle_join_name = "shuffle-join-" + token
+    shuffle_group_name = "shuffle-group-" + token
+    shuffle_split_name = "shuffle-split-" + token
+    shuffle_token = "shuffle-" + token
+
+    dsk = {}
+    for idx, inp in enumerate(inputs):
+
+        # Initial partitions (output of previous stage)
+        if stage == 0:
+            dsk[(shuffle_join_name, 0, inp)] = (
+                (df._name, idx) if idx < df.npartitions else df._meta
+            )
+        else:
+            dsk[(shuffle_join_name, 0, inp)] = (df._name, idx)
+
+        # Convert partition into dict of dataframe pieces
+        dsk[(shuffle_group_name, inp)] = (
+            shuffle_group,
+            (shuffle_join_name, 0, inp),
+            column,
+            stage,
+            k,
+            n,
+            ignore_index,
+            npartitions,
+        )
+
+        _concat_list = []
+        for i in range(k):
+            # Get out each individual dataframe piece from the dicts
+            dsk[(shuffle_split_name, i, inp)] = (getitem, (shuffle_group_name, inp), i)
+
+            _concat_list.append((shuffle_split_name, inp[stage], insert(inp, stage, i)))
+
+        # concatenate those pieces together, with their friends
+        dsk[(shuffle_token, idx)] = (_concat, _concat_list, ignore_index)
+
+    graph = HighLevelGraph.from_collections(shuffle_token, dsk, dependencies=[df])
+    return new_dd_object(graph, shuffle_token, df._meta, df.divisions)
+
+
 def rearrange_by_column_tasks(
+    df, column, max_branch=32, npartitions=None, ignore_index=False
+):
+    max_branch = max_branch or 32
+    n = df.npartitions
+
+    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
+    if stages > 1:
+        k = int(math.ceil(n ** (1 / stages)))
+    else:
+        k = n
+
+    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
+
+    npartitions_orig = df.npartitions
+    for stage in range(stages):
+        df = _rbc_tasks_stage(
+            df, column, inputs, stage, npartitions, n, k, ignore_index
+        )
+
+    if npartitions is not None and npartitions != npartitions_orig:
+        token = tokenize(df, npartitions)
+        repartition_group_token = "repartition-group-" + token
+
+        dsk = {
+            (repartition_group_token, i): (
+                shuffle_group_2,
+                k,
+                column,
+                ignore_index,
+                npartitions,
+            )
+            for i, k in enumerate(df.__dask_keys__())
+        }
+
+        repartition_get_name = "repartition-get-" + token
+
+        for p in range(npartitions):
+            dsk[(repartition_get_name, p)] = (
+                shuffle_group_get,
+                (repartition_group_token, p % npartitions_orig),
+                p,
+            )
+
+        graph2 = HighLevelGraph.from_collections(
+            repartition_get_name, dsk, dependencies=[df]
+        )
+        df2 = new_dd_object(
+            graph2, repartition_get_name, df._meta, [None] * (npartitions + 1)
+        )
+    else:
+        df2 = df
+        df2.divisions = (None,) * (npartitions_orig + 1)
+
+    return df2
+
+
+def rearrange_by_column_tasks_original(
     df, column, max_branch=32, npartitions=None, ignore_index=False
 ):
     """Order divisions of DataFrame so that all values within column(s) align
