@@ -133,8 +133,9 @@ def test_meta_nonempty():
             "H": pd.Timedelta("1 hours"),
             "I": np.void(b" "),
             "J": pd.Categorical([UNKNOWN_CATEGORIES] * 3),
+            "K": pd.Categorical([None, None, None]),
         },
-        columns=list("DCBAHGFEIJ"),
+        columns=list("DCBAHGFEIJK"),
     )
     df2 = df1.iloc[0:0]
     df3 = meta_nonempty(df2)
@@ -151,6 +152,7 @@ def test_meta_nonempty():
     assert df3["H"][0] == pd.Timedelta("1")
     assert df3["I"][0] == "foo"
     assert df3["J"][0] == UNKNOWN_CATEGORIES
+    assert len(df3["K"].cat.categories) == 0
 
     s = meta_nonempty(df2["A"])
     assert s.dtype == df2["A"].dtype
