@@ -36,6 +36,16 @@ following two ways:
         a Kubernetes cluster. If you don't already have Kubernetes deployed,
         see our :doc:`Cloud documentation <cloud>`.
 
+    You can also use the ``HelmCluster`` cluster manager from dask-kubernetes to manage your
+    Helm Dask cluster from within your Python session.
+
+    .. code-block:: python
+
+       from dask_kubernetes import HelmCluster
+
+       cluster = HelmCluster(release_name="myrelease")
+       cluster.scale(10)
+
     .. note::
 
       For more information, see :doc:`Dask and Helm documentation <kubernetes-helm>`.
