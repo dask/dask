@@ -333,6 +333,9 @@ class HighLevelGraph(Mapping):
     def values(self):
         return [value for _, value in self.items()]
 
+    def copy(self):
+        return HighLevelGraph(self.layers.copy(), self.dependencies.copy())
+
     @classmethod
     def merge(cls, *graphs):
         layers = {}
