@@ -653,7 +653,7 @@ class DelayedAttr(Delayed):
         # code). See https://github.com/dask/dask/pull/4374#issuecomment-454381465
         if attr == "dtype" and self._attr == "dtype":
             raise AttributeError("Attribute %s not found" % attr)
-        return super(DelayedAttr, self).__getattr__(attr)
+        return super().__getattr__(attr)
 
     @property
     def dask(self):

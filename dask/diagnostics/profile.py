@@ -61,7 +61,7 @@ class Profiler(Callback):
 
     def __enter__(self):
         self.clear()
-        return super(Profiler, self).__enter__()
+        return super().__enter__()
 
     def _start(self, dsk):
         self._dsk.update(dsk)
@@ -166,13 +166,13 @@ class ResourceProfiler(Callback):
         self._entered = True
         self.clear()
         self._start_collect()
-        return super(ResourceProfiler, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args):
         self._entered = False
         self._stop_collect()
         self.close()
-        super(ResourceProfiler, self).__exit__(*args)
+        super().__exit__(*args)
 
     def _start(self, dsk):
         self._start_collect()
@@ -335,7 +335,7 @@ class CacheProfiler(Callback):
 
     def __enter__(self):
         self.clear()
-        return super(CacheProfiler, self).__enter__()
+        return super().__enter__()
 
     def _start(self, dsk):
         self._dsk.update(dsk)
