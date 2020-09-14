@@ -10,7 +10,8 @@ dependencies:
   # test dependencies
   - pytest
   - pytest-xdist
-  - moto
+  - moto>=1.3.14
+  - flask
   - fastparquet
   - h5py
   - pytables
@@ -28,6 +29,7 @@ dependencies:
   - botocore
   - bokeh
   - httpretty
+  - aiohttp
   - chest
   - s3fs
   - cloudpickle

@@ -15,7 +15,7 @@ import dask.array as da
 
 
 def test_rechunk_internals_1():
-    """ Test the cumdims_label and _breakpoints and
+    """Test the cumdims_label and _breakpoints and
     _intersect_1d internal funcs to rechunk."""
     new = cumdims_label(((1, 1, 2), (1, 5, 1)), "n")
     old = cumdims_label(((4,), (1,) * 5), "o")
@@ -211,6 +211,20 @@ def test_rechunk_empty():
     x = da.ones((0, 10), chunks=(5, 5))
     y = x.rechunk((2, 2))
     assert y.chunks == ((0,), (2,) * 5)
+    assert_eq(x, y)
+
+
+def test_rechunk_zero_dim_array():
+    x = da.zeros((4, 0), chunks=3)
+    y = x.rechunk({0: 4})
+    assert y.chunks == ((4,), (0,))
+    assert_eq(x, y)
+
+
+def test_rechunk_zero_dim_array_II():
+    x = da.zeros((4, 0, 6, 10), chunks=3)
+    y = x.rechunk({0: 4, 2: 2})
+    assert y.chunks == ((4,), (0,), (2, 2, 2), (3, 3, 3, 1))
     assert_eq(x, y)
 
 

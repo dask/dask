@@ -176,7 +176,7 @@ def test_npartitions(db):
         "test",
         db,
         columns=list(df.columns),
-        bytes_per_chunk=2 ** 30,
+        bytes_per_chunk="2 GiB",
         index_col="number",
     )
     assert data.npartitions == 1
@@ -230,6 +230,50 @@ def test_division_or_partition(db):
     ).compute()
     assert (50 < m).all() and (m < 200).all()
     assert_eq(out, df)
+
+
+def test_meta(db):
+    data = read_sql_table(
+        "test", db, index_col="number", meta=dd.from_pandas(df, npartitions=1)
+    ).compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_meta_no_head_rows(db):
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        npartitions=2,
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        divisions=[0, 3, 6],
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_no_meta_no_head_rows(db):
+    with pytest.raises(ValueError):
+        read_sql_table("test", db, index_col="number", head_rows=0, npartitions=1)
 
 
 def test_range(db):
@@ -347,7 +391,12 @@ def tmp_db_uri():
 @pytest.mark.parametrize("parallel", (False, True))
 def test_to_sql(npartitions, parallel):
     df_by_age = df.set_index("age")
-    df_appended = pd.concat([df, df,])
+    df_appended = pd.concat(
+        [
+            df,
+            df,
+        ]
+    )
 
     ddf = dd.from_pandas(df, npartitions)
     ddf_by_age = ddf.set_index("age")

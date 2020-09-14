@@ -1,5 +1,6 @@
 import pandas as pd
 import json
+from uuid import uuid4
 
 
 def _get_pyarrow_dtypes(schema, categories):
@@ -92,3 +93,8 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
     if len(column_index_names) > 1:
         df.columns.names = column_index_names
     return df
+
+
+def _guid():
+    """Simple utility function to get random hex string"""
+    return uuid4().hex

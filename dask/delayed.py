@@ -250,7 +250,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         object. If provided, the ``Delayed`` output of the call can be iterated
         into ``nout`` objects, allowing for unpacking of results. By default
         iteration over ``Delayed`` objects will error. Note, that ``nout=1``
-        expects ``obj``, to return a tuple of length 1, and consequently for
+        expects ``obj`` to return a tuple of length 1, and consequently for
         ``nout=0``, ``obj`` should return an empty tuple.
     traverse : bool, optional
         By default dask traverses builtin python collections looking for dask
@@ -470,12 +470,19 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "dask", "_length")
+    __slots__ = ("_key", "dask", "_length", "_dask_layers")
 
     def __init__(self, key, dsk, length=None):
         self._key = key
         self.dask = dsk
         self._length = length
+
+        # `__dask_layers__` of an one-layered HLG is the layer name
+        # TODO: what is the name of a multi-layered HLG?
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            self._dask_layers = set(iter(dsk.layers))
+        else:
+            self._dask_layers = (self.key,)
 
     def __dask_graph__(self):
         return self.dask
@@ -484,7 +491,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        return (self.key,)
+        if hasattr(self, "_dask_layers"):
+            return self._dask_layers
+        else:
+            return (self.key,)
 
     def __dask_tokenize__(self):
         return self.key
@@ -523,10 +533,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
             raise AttributeError("Attribute {0} not found".format(attr))
 
         if attr == "visualise":
-            # added to warn users incase of spelling error
+            # added to warn users in case of spelling error
             # for more details: https://github.com/dask/dask/issues/5721
             warnings.warn(
-                "dask.delayed objects have no `visualise` method, perhaps you meant `visualize`?"
+                "dask.delayed objects have no `visualise` method. Perhaps you meant `visualize`?"
             )
 
         return DelayedAttr(self, attr)

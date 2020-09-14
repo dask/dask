@@ -1,6 +1,4 @@
-# We pin numpydoc to avoid doubly-escaped *args and **kwargs in rendered docs
-# due to a weird interaction between sphinx autosummary and numpydoc >= 0.9.0
-numpydoc==0.8.0
+numpydoc
 sphinx
 dask-sphinx-theme>=1.1.0
 sphinx-click
@@ -10,3 +8,6 @@ pandas>=0.23.0
 distributed>=2.14.0
 fsspec
 scipy
+pytest
+pytest-check-links
+requests-cache

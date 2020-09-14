@@ -23,6 +23,8 @@ except (ImportError, AttributeError):
 
 __all__ = ("read_parquet", "to_parquet")
 
+NONE_LABEL = "__null_dask_index__"
+
 # ----------------------------------------------------------------------
 # User API
 
@@ -94,9 +96,9 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
-    split_row_groups=True,
+    split_row_groups=None,
     chunksize=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Read a Parquet file into a Dask DataFrame
@@ -152,11 +154,14 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
-    split_row_groups : bool
-        If True (default) then output dataframe partitions will correspond
-        to parquet-file row-groups (when enough row-group metadata is
-        available). Otherwise, partitions correspond to distinct files.
-        Only the "pyarrow" engine currently supports this argument.
+    split_row_groups : bool or int
+        Default is True if a _metadata file is available or if
+        the dataset is composed of a single file (otherwise defult is False).
+        If True, then each output dataframe partition will correspond to a single
+        parquet-file row-group. If False, each partition will correspond to a
+        complete file.  If a positive integer value is given, each dataframe
+        partition will correspond to that number of parquet row-groups (or fewer).
+        Only the "pyarrow" engine supports this argument.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -223,7 +228,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts = engine.read_metadata(
+    meta, statistics, parts, index = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -231,10 +236,8 @@ def read_parquet(
         gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        **kwargs
+        **kwargs,
     )
-    if meta.index.name is not None:
-        index = meta.index.name
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -246,12 +249,16 @@ def read_parquet(
     meta, index, columns = set_index_columns(
         meta, index, columns, index_in_columns, auto_index_allowed
     )
+    if meta.index.name == NONE_LABEL:
+        meta.index.name = None
 
     subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
         meta = meta.set_index(index)
+        if meta.index.name == NONE_LABEL:
+            meta.index.name = None
 
     if len(divisions) < 2:
         # empty dataframe - just use meta
@@ -262,7 +269,7 @@ def read_parquet(
 
 
 def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
-    """ Read a part of a parquet dataset
+    """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
     if isinstance(part, list):
@@ -275,7 +282,10 @@ def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
         df.columns.name = meta.columns.name
     columns = columns or []
     index = index or []
-    return df[[c for c in columns if c not in index]]
+    df = df[[c for c in columns if c not in index]]
+    if index == [NONE_LABEL]:
+        df.index.name = None
+    return df
 
 
 def to_parquet(
@@ -291,7 +301,8 @@ def to_parquet(
     write_metadata_file=True,
     compute=True,
     compute_kwargs=None,
-    **kwargs
+    schema=None,
+    **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
 
@@ -335,6 +346,16 @@ def to_parquet(
         then a ``dask.delayed`` object is returned for future computation.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
+    schema : Schema object, dict, or {"infer", None}, optional
+        Global schema to use for the output dataset. Alternatively, a `dict`
+        of pyarrow types can be specified (e.g. `schema={"id": pa.string()}`).
+        For this case, fields excluded from the dictionary will be inferred
+        from `_meta_nonempty`.  If "infer", the first non-empty and non-null
+        partition will be used to infer the type for "object" columns. If
+        None (default), we let the backend infer the schema for each distinct
+        output partition. If the partitions produce inconsistent schemas,
+        pyarrow will throw an error when writing the shared _metadata file.
+        Note that this argument is ignored by the "fastparquet" engine.
     **kwargs :
         Extra options to be passed on to the specific backend.
 
@@ -381,12 +402,30 @@ def to_parquet(
     if division_info["name"] is None:
         # As of 0.24.2, pandas will rename an index with name=None
         # when df.reset_index() is called.  The default name is "index",
-        # (or "level_0" if "index" is already a column name)
-        division_info["name"] = "index" if "index" not in df.columns else "level_0"
+        # but dask will always change the name to the NONE_LABEL constant
+        if NONE_LABEL not in df.columns:
+            division_info["name"] = NONE_LABEL
+        elif write_index:
+            raise ValueError(
+                "Index must have a name if __null_dask_index__ is a column."
+            )
+        else:
+            warnings.warn(
+                "If read back by Dask, column named __null_dask_index__ "
+                "will be set to the index (and renamed to None)."
+            )
+
+    # There are some "resrved" names that may be used as the default column
+    # name after resetting the index. However, we don't want to treat it as
+    # a "special" name if the string is already used as a "real" column name.
+    reserved_names = []
+    for name in ["index", "level_0"]:
+        if name not in df.columns:
+            reserved_names.append(name)
 
     # If write_index==True (default), reset the index and record the
-    # name of the original index in `index_cols` (will be `index` if None,
-    # or `level_0` if `index` is already a column name).
+    # name of the original index in `index_cols` (we will set the name
+    # to the NONE_LABEL constant if it is originally `None`).
     # `fastparquet` will use `index_cols` to specify the index column(s)
     # in the metadata.  `pyarrow` will revert the `reset_index` call
     # below if `index_cols` is populated (because pyarrow will want to handle
@@ -395,7 +434,12 @@ def to_parquet(
     index_cols = []
     if write_index:
         real_cols = set(df.columns)
+        none_index = list(df._meta.index.names) == [None]
         df = df.reset_index()
+        if none_index:
+            df.columns = [
+                c if c not in reserved_names else NONE_LABEL for c in df.columns
+            ]
         index_cols = [c for c in set(df.columns).difference(real_cols)]
     else:
         # Not writing index - might as well drop it
@@ -416,7 +460,7 @@ def to_parquet(
 
     # Engine-specific initialization steps to write the dataset.
     # Possibly create parquet metadata, and load existing stuff if appending
-    meta, i_offset = engine.initialize_write(
+    meta, schema, i_offset = engine.initialize_write(
         df,
         fs,
         path,
@@ -425,7 +469,8 @@ def to_parquet(
         partition_on=partition_on,
         division_info=division_info,
         index_cols=index_cols,
-        **kwargs_pass
+        schema=schema,
+        **kwargs_pass,
     )
 
     # Use i_offset and df.npartitions to define file-name list
@@ -444,7 +489,8 @@ def to_parquet(
             fmd=meta,
             compression=compression,
             index_cols=index_cols,
-            **kwargs_pass
+            schema=schema,
+            **kwargs_pass,
         )
         for d, filename in zip(df.to_delayed(), filenames)
     ]
@@ -521,7 +567,7 @@ def get_engine(engine):
 
 
 def sorted_columns(statistics):
-    """ Find sorted columns given row-group statistics
+    """Find sorted columns given row-group statistics
 
     This finds all columns that are sorted, along with appropriate divisions
     values for those columns
@@ -563,7 +609,7 @@ def sorted_columns(statistics):
 
 
 def apply_filters(parts, statistics, filters):
-    """ Apply filters onto parts/statistics pairs
+    """Apply filters onto parts/statistics pairs
 
     Parameters
     ----------
@@ -678,9 +724,9 @@ def process_statistics(parts, statistics, filters, index, chunksize):
             elif index != [out[0]["name"]]:
                 raise ValueError("Specified index is invalid.\nindex: {}".format(index))
         elif index is not False and len(out) > 1:
-            if any(o["name"] == "index" for o in out):
-                # Use sorted column named "index" as the index
-                [o] = [o for o in out if o["name"] == "index"]
+            if any(o["name"] == NONE_LABEL for o in out):
+                # Use sorted column maching NONE_LABEL as the index
+                [o] = [o for o in out if o["name"] == NONE_LABEL]
                 divisions = o["divisions"]
                 if index is None:
                     index = [o["name"]]

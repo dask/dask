@@ -7,7 +7,7 @@ overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
 
 
 class Cache(Callback):
-    """ Use cache for computation
+    """Use cache for computation
 
     Examples
     --------
@@ -33,7 +33,7 @@ class Cache(Callback):
         except ImportError as ex:
             raise ImportError(
                 'Cache requires cachey, "{ex}" problem ' "importing".format(ex=str(ex))
-            )
+            ) from ex
         self._nbytes = cachey.nbytes
         if isinstance(cache, Number):
             cache = cachey.Cache(cache, *args, **kwargs)

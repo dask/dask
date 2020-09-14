@@ -23,6 +23,7 @@ try:
     )
     from .tiledb_io import from_tiledb, to_tiledb
     from .numpy_compat import rollaxis, moveaxis
+    from .chunk_types import register_chunk_type
     from .routines import (
         take,
         choose,
@@ -247,4 +248,4 @@ except ImportError as e:
         "  conda install dask                 # either conda install\n"
         '  python -m pip install "dask[array]" --upgrade  # or python -m pip install'
     )
-    raise ImportError(str(e) + "\n\n" + msg)
+    raise ImportError(str(e) + "\n\n" + msg) from e

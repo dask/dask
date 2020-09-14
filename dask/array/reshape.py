@@ -111,7 +111,7 @@ def expand_tuple(chunks, factor):
 
 
 def contract_tuple(chunks, factor):
-    """ Return simple chunks tuple such that factor divides all elements
+    """Return simple chunks tuple such that factor divides all elements
 
     Examples
     --------
@@ -134,7 +134,7 @@ def contract_tuple(chunks, factor):
 
 
 def reshape(x, shape):
-    """ Reshape array to new shape
+    """Reshape array to new shape
 
     This is a parallelized version of the ``np.reshape`` function with the
     following limitations:
@@ -159,7 +159,7 @@ def reshape(x, shape):
     shape = tuple(map(sanitize_index, shape))
     known_sizes = [s for s in shape if s != -1]
     if len(known_sizes) < len(shape):
-        if len(known_sizes) - len(shape) > 1:
+        if len(shape) - len(known_sizes) > 1:
             raise ValueError("can only specify one unknown dimension")
         # Fastpath for x.reshape(-1) on 1D arrays, allows unknown shape in x
         # for this case only.

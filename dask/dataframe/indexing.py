@@ -58,7 +58,13 @@ class _iLocIndexer(_IndexerBase):
         if iindexer != slice(None):
             raise NotImplementedError(msg)
 
-        return self._iloc(iindexer, cindexer)
+        if not self.obj.columns.is_unique:
+            # if there are any duplicate column names, do an iloc
+            return self._iloc(iindexer, cindexer)
+        else:
+            # otherwise dispatch to dask.dataframe.core.DataFrame.__getitem__
+            col_names = self.obj.columns[cindexer]
+            return self.obj.__getitem__(col_names)
 
     def _iloc(self, iindexer, cindexer):
         assert iindexer == slice(None)
@@ -158,10 +164,11 @@ class _LocIndexer(_IndexerBase):
                 divisions.append(sorted(indexer)[0])
             # append maximum value of the last division
             divisions.append(sorted(items[-1][1])[-1])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
         else:
             divisions = [None, None]
             dsk = {(name, 0): meta.head(0)}
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+            graph = HighLevelGraph.from_collections(name, dsk)
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):
@@ -277,7 +284,7 @@ class _LocIndexer(_IndexerBase):
 
 
 def _partition_of_index_value(divisions, val):
-    """ In which partition does this value lie?
+    """In which partition does this value lie?
 
     >>> _partition_of_index_value([0, 5, 10], 3)
     0
@@ -297,7 +304,7 @@ def _partition_of_index_value(divisions, val):
 
 
 def _partitions_of_index_values(divisions, values):
-    """ Return defaultdict of division and values pairs
+    """Return defaultdict of division and values pairs
     Each key corresponds to the division which values are index values belong
     to the division.
 
@@ -320,7 +327,7 @@ def _partitions_of_index_values(divisions, values):
 
 
 def _coerce_loc_index(divisions, o):
-    """ Transform values to be comparable against divisions
+    """Transform values to be comparable against divisions
 
     This is particularly valuable to use with pandas datetimes
     """

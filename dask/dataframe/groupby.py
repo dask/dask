@@ -64,8 +64,7 @@ from ..highlevelgraph import HighLevelGraph
 
 
 def _determine_levels(index):
-    """Determine the correct levels argument to groupby.
-    """
+    """Determine the correct levels argument to groupby."""
     if isinstance(index, (tuple, list)) and len(index) > 1:
         return list(range(len(index)))
     else:
@@ -73,8 +72,7 @@ def _determine_levels(index):
 
 
 def _normalize_index(df, index):
-    """Replace series with column names in an index wherever possible.
-    """
+    """Replace series with column names in an index wherever possible."""
     if not isinstance(df, DataFrame):
         return index
 
@@ -983,7 +981,7 @@ def _cumcount_aggregate(a, b, fill_value=None):
 
 
 class _GroupBy(object):
-    """ Superclass for DataFrameGroupBy and SeriesGroupBy
+    """Superclass for DataFrameGroupBy and SeriesGroupBy
 
     Parameters
     ----------
@@ -1545,7 +1543,7 @@ class _GroupBy(object):
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, *args, **kwargs):
-        """ Parallel version of pandas GroupBy.apply
+        """Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
 
@@ -1633,7 +1631,7 @@ class _GroupBy(object):
 
     @insert_meta_param_description(pad=12)
     def transform(self, func, *args, **kwargs):
-        """ Parallel version of pandas GroupBy.transform
+        """Parallel version of pandas GroupBy.transform
 
         This mimics the pandas version except for the following:
 
@@ -1751,7 +1749,7 @@ class DataFrameGroupBy(_GroupBy):
         try:
             return self[key]
         except KeyError as e:
-            raise AttributeError(e)
+            raise AttributeError(e) from e
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
@@ -1792,6 +1790,16 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
+        """
+        Examples
+        --------
+        >>> import pandas as pd
+        >>> import dask.dataframe as dd
+        >>> d = {'col1': [1, 2, 3, 4], 'col2': [5, 6, 7, 8]}
+        >>> df = pd.DataFrame(data=d)
+        >>> ddf = dd.from_pandas(df, 2)
+        >>> ddf.groupby(['col1']).col2.nunique().compute()
+        """
         name = self._meta.obj.name
         levels = _determine_levels(self.index)
 

@@ -30,7 +30,7 @@ For local use this happens when you create a client with no arguments:
    from dask.distributed import Client
    client = Client()  # start distributed scheduler locally.  Launch dashboard
 
-It is typically served at http://localhost:8787/status ,
+It is typically served at ``http://localhost:8787/status`` ,
 but may be served elsewhere if this port is taken.
 The address of the dashboard will be displayed if you are in a Jupyter Notebook,
 or can be queried from ``client.scheduler_info()['services']``.
@@ -163,6 +163,13 @@ not specific to dask.distributed, but can be used by any service that operates o
 network, such as Jupyter notebooks. For example, if we chose to do this we could
 forward port 8888 (the default Jupyter port) to port 8001 with
 ``ssh -L 8001:localhost:8888 user@remote``.
+
+Required Packages
+~~~~~~~~~~~~~~~~~
+
+Bokeh must be installed in your scheduler's environment to run the dashboard. If it's not the dashboard page will instruct you to install it.
+
+Depending on your configuration, you might also need to install ``jupyter-server-proxy`` to access the dashboard.
 
 API
 ---

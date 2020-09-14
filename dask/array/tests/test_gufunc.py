@@ -12,6 +12,7 @@ from dask.array.gufunc import (
     gufunc,
     as_gufunc,
 )
+from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import IS_NEP18_ACTIVE
 
 
@@ -173,6 +174,7 @@ def test_apply_gufunc_02():
     a = da.random.normal(size=(20, 30), chunks=(5, 30))
     b = da.random.normal(size=(10, 1, 40), chunks=(10, 1, 40))
     c = apply_gufunc(outer_product, "(i),(j)->(i,j)", a, b, output_dtypes=a.dtype)
+
     assert c.compute().shape == (10, 20, 30, 40)
 
 
@@ -597,6 +599,7 @@ def test_apply_gufunc_via_numba_02():
 @pytest.mark.skipif(
     not IS_NEP18_ACTIVE, reason="NEP18 required for sparse meta propagation"
 )
+@pytest.mark.xfail(_numpy_120, reason="https://github.com/pydata/sparse/issues/383")
 def test_preserve_meta_type():
     sparse = pytest.importorskip("sparse")
 
@@ -613,3 +616,15 @@ def test_preserve_meta_type():
 
     assert_eq(sum, sum)
     assert_eq(mean, mean)
+
+
+def test_apply_gufunc_with_meta():
+    def stats(x):
+        return np.mean(x, axis=-1), np.std(x, axis=-1, dtype=np.float32)
+
+    a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
+    meta = (np.ones(0, dtype=np.float64), np.ones(0, dtype=np.float32))
+    result = apply_gufunc(stats, "(i)->(),()", a, meta=meta)
+    expected = stats(a.compute())
+    assert_eq(expected[0], result[0])
+    assert_eq(expected[1], result[1])

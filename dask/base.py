@@ -54,8 +54,9 @@ class DaskMethodsMixin(object):
         Parameters
         ----------
         filename : str or None, optional
-            The name (without an extension) of the file to write to disk.  If
-            `filename` is None, no file will be written, and we communicate
+            The name of the file to write to disk. If the provided `filename`
+            doesn't include an extension, '.png' will be used by default.
+            If `filename` is None, no file will be written, and we communicate
             with dot using only pipes.
         format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
             Format in which to write output file.  Default is 'png'.
@@ -143,7 +144,7 @@ class DaskMethodsMixin(object):
         """Compute this dask collection
 
         This turns a lazy Dask collection into its in-memory equivalent.
-        For example a Dask.array turns into a  :func:`numpy.array` and a Dask.dataframe
+        For example a Dask array turns into a NumPy array and a Dask dataframe
         turns into a Pandas dataframe.  The entire dataset must fit into memory
         before calling this operation.
 
@@ -169,10 +170,10 @@ class DaskMethodsMixin(object):
     def __await__(self):
         try:
             from distributed import wait, futures_of
-        except ImportError:
+        except ImportError as e:
             raise ImportError(
                 "Using async/await with dask requires the `distributed` package"
-            )
+            ) from e
         from tornado import gen
 
         @gen.coroutine
@@ -212,19 +213,26 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
 
         _opt_list = []
         for opt, val in groups.items():
-            _graph_and_keys = _extract_graph_and_keys(val)
-            groups[opt] = _graph_and_keys
-            _opt_list.append(opt(_graph_and_keys[0], _graph_and_keys[1], **kwargs))
+            dsk, keys = _extract_graph_and_keys(val)
+            groups[opt] = (dsk, keys)
+            _opt = opt(dsk, keys, **kwargs)
+            _opt_list.append(_opt)
 
         for opt in optimizations:
             _opt_list = []
             group = {}
             for k, (dsk, keys) in groups.items():
-                group[k] = (opt(dsk, keys), keys)
-                _opt_list.append(opt(dsk, keys, **kwargs))
+                _opt = opt(dsk, keys, **kwargs)
+                group[k] = (_opt, keys)
+                _opt_list.append(_opt)
             groups = group
 
-        dsk = merge(*map(ensure_dict, _opt_list,))
+        dsk = merge(
+            *map(
+                ensure_dict,
+                _opt_list,
+            )
+        )
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -457,8 +465,9 @@ def visualize(*args, **kwargs):
     dsk : dict(s) or collection(s)
         The dask graph(s) to visualize.
     filename : str or None, optional
-        The name (without an extension) of the file to write to disk.  If
-        `filename` is None, no file will be written, and we communicate
+        The name of the file to write to disk. If the provided `filename`
+        doesn't include an extension, '.png' will be used by default.
+        If `filename` is None, no file will be written, and we communicate
         with dot using only pipes.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
@@ -550,7 +559,7 @@ def visualize(*args, **kwargs):
 
 
 def persist(*args, **kwargs):
-    """ Persist multiple Dask collections into memory
+    """Persist multiple Dask collections into memory
 
     This turns lazy Dask collections into Dask collections with the same
     metadata, but now with their results fully computed or actively computing
@@ -657,7 +666,7 @@ def persist(*args, **kwargs):
 
 
 def tokenize(*args, **kwargs):
-    """ Deterministic token
+    """Deterministic token
 
     >>> tokenize([1, 2, '3'])
     '7d6a880cd9ec03506eee6973ff551339'
@@ -693,7 +702,13 @@ def normalize_set(s):
 
 @normalize_token.register((tuple, list))
 def normalize_seq(seq):
-    return type(seq).__name__, list(map(normalize_token, seq))
+    def func(seq):
+        try:
+            return list(map(normalize_token, seq))
+        except RecursionError:
+            return str(uuid.uuid4())
+
+    return type(seq).__name__, func(seq)
 
 
 @normalize_token.register(literal)
@@ -935,7 +950,7 @@ def register_scipy():
 
 
 def _colorize(t):
-    """ Convert (r, g, b) triple to "#RRGGBB" string
+    """Convert (r, g, b) triple to "#RRGGBB" string
 
     For use with ``visualize(color=...)``
 
@@ -995,12 +1010,12 @@ or with a Dask client
 
 
 def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
-    """ Get scheduler function
+    """Get scheduler function
 
     There are various ways to specify the scheduler to use:
 
     1.  Passing in scheduler= parameters
-    2.  Passing these into global confiuration
+    2.  Passing these into global configuration
     3.  Using defaults of a dask collection
 
     This function centralizes the logic to determine the right scheduler to use
@@ -1059,7 +1074,7 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
 
 
 def wait(x, timeout=None, return_when="ALL_COMPLETED"):
-    """ Wait until computation has finished
+    """Wait until computation has finished
 
     This is a compatibility alias for ``dask.distributed.wait``.
     If it is applied onto Dask collections without Dask Futures or if Dask

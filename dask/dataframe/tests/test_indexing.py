@@ -3,6 +3,7 @@ import numpy as np
 
 import pytest
 
+import dask
 import dask.dataframe as dd
 
 from dask.dataframe._compat import tm, PANDAS_GT_100
@@ -18,6 +19,9 @@ dsk = {
 meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
 
 
 def test_loc():
@@ -368,24 +372,35 @@ def test_loc_timestamp_str():
     assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
     assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
-    assert_eq(df.loc["2011-01-02 10:00"].to_frame().T, ddf.loc["2011-01-02 10:00"])
+    assert_eq(
+        df.loc["2011-01-02 10:00"].to_frame().T,
+        ddf.loc["2011-01-02 10:00"],
+        **CHECK_FREQ
+    )
 
     # series
-    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"])
-    assert_eq(df.A.loc["2011-01-02":"2011-01-10"], ddf.A.loc["2011-01-02":"2011-01-10"])
+    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], **CHECK_FREQ)
+    assert_eq(
+        df.A.loc["2011-01-02":"2011-01-10"],
+        ddf.A.loc["2011-01-02":"2011-01-10"],
+        **CHECK_FREQ
+    )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
+        **CHECK_FREQ
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
+        **CHECK_FREQ
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
+        **CHECK_FREQ
     )
 
     df = pd.DataFrame(
@@ -549,3 +564,67 @@ def test_iloc_raises():
 
     with pytest.raises(IndexError):
         ddf.iloc[:, [5, 6]]
+
+
+def test_iloc_duplicate_columns():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    df.columns = ["A", "A", "C"]
+    ddf.columns = ["A", "A", "C"]
+
+    selection = ddf.iloc[:, 2]
+    # Check that `iloc` is called instead of getitem
+    assert any([key.startswith("iloc") for key in selection.dask.layers.keys()])
+
+    select_first = ddf.iloc[:, 1]
+    assert_eq(select_first, df.iloc[:, 1])
+
+    select_zeroth = ddf.iloc[:, 0]
+    assert_eq(select_zeroth, df.iloc[:, 0])
+
+    select_list_cols = ddf.iloc[:, [0, 2]]
+    assert_eq(select_list_cols, df.iloc[:, [0, 2]])
+
+    select_negative = ddf.iloc[:, -1:-3:-1]
+    assert_eq(select_negative, df.iloc[:, -1:-3:-1])
+
+
+def test_iloc_dispatch_to_getitem():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+
+    selection = ddf.iloc[:, 2]
+
+    assert all([not key.startswith("iloc") for key in selection.dask.layers.keys()])
+    assert any([key.startswith("getitem") for key in selection.dask.layers.keys()])
+
+    select_first = ddf.iloc[:, 1]
+    assert_eq(select_first, df.iloc[:, 1])
+
+    select_zeroth = ddf.iloc[:, 0]
+    assert_eq(select_zeroth, df.iloc[:, 0])
+
+    select_list_cols = ddf.iloc[:, [0, 2]]
+    assert_eq(select_list_cols, df.iloc[:, [0, 2]])
+
+    select_negative = ddf.iloc[:, -1:-3:-1]
+    assert_eq(select_negative, df.iloc[:, -1:-3:-1])
+
+
+def test_iloc_out_of_order_selection():
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    ddf = ddf[["C", "A", "B"]]
+    a = ddf.iloc[:, 0]
+    b = ddf.iloc[:, 1]
+    c = ddf.iloc[:, 2]
+
+    assert a.name == "C"
+    assert b.name == "A"
+    assert c.name == "B"
+
+    a1, b1, c1 = dask.compute(a, b, c)
+
+    assert a1.name == "C"
+    assert b1.name == "A"
+    assert c1.name == "B"

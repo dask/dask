@@ -97,7 +97,7 @@ paths_to_cats = (
 
 
 def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
-    """ Determine how to access metadata and break read into ``parts``
+    """Determine how to access metadata and break read into ``parts``
 
     This logic is mostly to handle `gather_statistics=False` cases,
     because this also means we should avoid scanning every file in the
@@ -230,14 +230,13 @@ class FastParquetEngine(Engine):
                 column_index_names,
             ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
             #  auto-ranges should not be created by fastparquet
-            index_names = [n for n in index_names if n is not None]
             column_names.extend(pf.cats)
 
         else:
             raise ValueError("File has multiple entries for 'pandas' metadata")
 
         if index is None and len(index_names) > 0:
-            if len(index_names) == 1:
+            if len(index_names) == 1 and index_names[0] is not None:
                 index = index_names[0]
             else:
                 index = index_names
@@ -437,13 +436,29 @@ class FastParquetEngine(Engine):
             }
             parts.append(part_item)
 
-        return (meta, stats, parts)
+        # Cannot allow `None` in columns if the user has specified index=False
+        if index is False and None in meta.columns:
+            meta.drop(columns=[None], inplace=True)
+
+        return (meta, stats, parts, index)
 
     @classmethod
     def read_partition(
         cls, fs, piece, columns, index, categories=(), pf=None, **kwargs
     ):
+
+        null_index_name = False
         if isinstance(index, list):
+            if index == [None]:
+                # Handling a None-labeled index...
+                # The pandas metadata told us to read in an index
+                # labeled `None`. If this corresponds to a `RangeIndex`,
+                # fastparquet will need use the pandas metadata to
+                # construct the index. Otherwise, the index will correspond
+                # to a column named "__index_level_0__".  We will need to
+                # check the `ParquetFile` object for this column below.
+                index = []
+                null_index_name = True
             columns += index
 
         if pf is None:
@@ -457,6 +472,10 @@ class FastParquetEngine(Engine):
             pf.file_scheme = scheme
             pf.cats = paths_to_cats(fns, scheme)
             pf.fn = base
+            if null_index_name and "__index_level_0__" in pf.columns:
+                # See "Handling a None-labeled index" comment above
+                index = ["__index_level_0__"]
+                columns += index
             return pf.to_pandas(columns, categories, index=index)
         else:
             if isinstance(pf, tuple):
@@ -469,7 +488,14 @@ class FastParquetEngine(Engine):
                 pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
                 pf.fmd.row_groups = None
             rg_piece = pf.row_groups[piece]
-            pf.fmd.key_value_metadata = None
+            if null_index_name:
+                if "__index_level_0__" in pf.columns:
+                    # See "Handling a None-labeled index" comment above
+                    index = ["__index_level_0__"]
+                    columns += index
+                    pf.fmd.key_value_metadata = None
+            else:
+                pf.fmd.key_value_metadata = None
             return pf.read_row_group_file(
                 rg_piece, columns, categories, index=index, **kwargs.get("read", {})
             )
@@ -484,6 +510,7 @@ class FastParquetEngine(Engine):
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
+        schema=None,
         **kwargs
     ):
         if append and division_info is None:
@@ -553,7 +580,8 @@ class FastParquetEngine(Engine):
             )
             i_offset = 0
 
-        return (fmd, i_offset)
+        schema = None  # ArrowEngine compatibility
+        return (fmd, schema, i_offset)
 
     @classmethod
     def write_partition(

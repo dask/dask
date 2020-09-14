@@ -137,7 +137,7 @@ DEBUG = False
 
 
 def start_state_from_dask(dsk, cache=None, sortkey=None):
-    """ Start state from a dask
+    """Start state from a dask
 
     Examples
     --------
@@ -215,7 +215,7 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
 
     See Also
     --------
-    _execute_task - actually execute task
+    _execute_task : actually execute task
     """
     try:
         task, data = loads(task_info)
@@ -230,7 +230,7 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
 
 
 def release_data(key, state, delete=True):
-    """ Remove data from temporary storage
+    """Remove data from temporary storage
 
     See Also
         finish_task
@@ -283,7 +283,7 @@ def finish_task(
 
 
 def nested_get(ind, coll):
-    """ Get nested index from collection
+    """Get nested index from collection
 
     Examples
     --------
@@ -317,7 +317,7 @@ def reraise(exc, tb=None):
 
 
 def identity(x):
-    """ Identity function. Returns x.
+    """Identity function. Returns x.
 
     >>> identity(3)
     3
@@ -359,7 +359,7 @@ def get_async(
     loads=identity,
     **kwargs
 ):
-    """ Asynchronous get function
+    """Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
     takes a an apply_async function as found on Pool objects to form a more
@@ -528,7 +528,7 @@ def get_sync(dsk, keys, **kwargs):
 
 
 def sortkey(item):
-    """ Sorting key function that is robust to different types
+    """Sorting key function that is robust to different types
 
     Both strings and tuples are common key types in dask graphs.
     However In Python 3 one can not compare strings with tuples directly.

@@ -73,6 +73,46 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name,
         assert not np.isfortran(da_r.compute())
 
 
+@pytest.mark.skipif(
+    not _numpy_117, reason="requires NumPy>=1.17 for shape argument support"
+)
+@pytest.mark.parametrize(
+    "funcname, kwargs",
+    [
+        ("empty_like", {}),
+        ("ones_like", {}),
+        ("zeros_like", {}),
+        ("full_like", {"fill_value": 5}),
+    ],
+)
+@pytest.mark.parametrize(
+    "shape, chunks, out_shape",
+    [
+        ((10, 10), (4, 4), None),
+        ((10, 10), (4, 4), (20, 3)),
+        ((10, 10), (4), (20)),
+        ((10, 10, 10), (4, 2), (5, 5)),
+        ((2, 3, 5, 7), None, (3, 5, 7)),
+        ((2, 3, 5, 7), (2, 5, 3), (3, 5, 7)),
+        ((2, 3, 5, 7), (2, 5, 3, "auto", 3), (11,) + (2, 3, 5, 7)),
+        ((2, 3, 5, 7), "auto", (3, 5, 7)),
+    ],
+)
+@pytest.mark.parametrize("dtype", ["i4"])
+def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+    a = np.random.randint(0, 10, shape).astype(dtype)
+    np_r = np_func(a, shape=out_shape, **kwargs)
+    da_r = da_func(a, chunks=chunks, shape=out_shape, **kwargs)
+
+    assert np_r.shape == da_r.shape
+    assert np_r.dtype == da_r.dtype
+
+    if "empty" not in funcname:
+        assert_eq(np_r, da_r)
+
+
 @pytest.mark.parametrize("endpoint", [True, False])
 def test_linspace(endpoint):
     darr = da.linspace(6, 49, endpoint=endpoint, chunks=5)
@@ -767,7 +807,10 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
                 reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
             ),
         ),
-        pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
+        pytest.param(
+            "median",
+            marks=pytest.mark.skip(reason="Not implemented"),
+        ),
         pytest.param(
             "empty",
             marks=pytest.mark.skip(

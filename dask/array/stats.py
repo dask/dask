@@ -37,8 +37,8 @@ from dask import delayed
 
 try:
     import scipy.stats
-except ImportError:
-    raise ImportError("`dask.array.stats` requires `scipy` to be installed.")
+except ImportError as e:
+    raise ImportError("`dask.array.stats` requires `scipy` to be installed.") from e
 from scipy.stats import distributions
 from scipy import special
 from scipy.stats.stats import (

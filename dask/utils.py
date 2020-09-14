@@ -18,8 +18,6 @@ from functools import lru_cache
 
 from .core import get_deps
 
-from .optimization import key_split  # noqa: F401
-
 
 system_encoding = sys.getdefaultencoding()
 if system_encoding == "ascii":
@@ -34,7 +32,7 @@ def apply(func, args, kwargs=None):
 
 
 def deepmap(func, *seqs):
-    """ Apply function inside nested lists
+    """Apply function inside nested lists
 
     >>> inc = lambda x: x + 1
     >>> deepmap(inc, [[1, 2], [3, 4]])
@@ -63,7 +61,7 @@ def homogeneous_deepmap(func, seq):
 
 
 def ndeepmap(n, func, seq):
-    """ Call a function on every element within a nested container
+    """Call a function on every element within a nested container
 
     >>> def inc(x):
     ...     return x + 1
@@ -96,8 +94,8 @@ def import_required(mod_name, error_msg):
     """
     try:
         return import_module(mod_name)
-    except ImportError:
-        raise RuntimeError(error_msg)
+    except ImportError as e:
+        raise RuntimeError(error_msg) from e
 
 
 @contextmanager
@@ -172,7 +170,7 @@ def noop_context():
 
 
 class IndexCallable(object):
-    """ Provide getitem syntax for functions
+    """Provide getitem syntax for functions
 
     >>> def inc(x):
     ...     return x + 1
@@ -193,7 +191,7 @@ class IndexCallable(object):
 
 @contextmanager
 def filetexts(d, open=open, mode="t", use_tmpdir=True):
-    """ Dumps a number of textfiles to disk
+    """Dumps a number of textfiles to disk
 
     d - dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
@@ -226,7 +224,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
 
 
 def concrete(seq):
-    """ Make nested iterators concrete lists
+    """Make nested iterators concrete lists
 
     >>> data = [[1, 2], [3, 4]]
     >>> seq = iter(map(iter, data))
@@ -241,7 +239,7 @@ def concrete(seq):
 
 
 def pseudorandom(n, p, random_state=None):
-    """ Pseudorandom array of integer indexes
+    """Pseudorandom array of integer indexes
 
     >>> pseudorandom(5, [0.5, 0.5], random_state=123)
     array([1, 0, 0, 1, 1], dtype=int8)
@@ -383,7 +381,7 @@ def getargspec(func):
 
 
 def takes_multiple_arguments(func, varargs=True):
-    """ Does this function take multiple arguments?
+    """Does this function take multiple arguments?
 
     >>> def f(x, y): pass
     >>> takes_multiple_arguments(f)
@@ -760,9 +758,9 @@ def typename(typ):
 
 
 def ensure_bytes(s):
-    """ Turn string or bytes to bytes
+    """Turn string or bytes to bytes
 
-    >>> ensure_bytes(u'123')
+    >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes('123')
     b'123'
@@ -778,9 +776,9 @@ def ensure_bytes(s):
 
 
 def ensure_unicode(s):
-    """ Turn string or bytes to bytes
+    """Turn string or bytes to bytes
 
-    >>> ensure_unicode(u'123')
+    >>> ensure_unicode('123')
     '123'
     >>> ensure_unicode('123')
     '123'
@@ -1010,7 +1008,7 @@ class SerializableLock(object):
 
 def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
-       scheduler used."""
+    scheduler used."""
     from . import multiprocessing
     from .base import get_scheduler
 
@@ -1091,7 +1089,7 @@ def partial_by_order(*args, **kwargs):
 
 
 def is_arraylike(x):
-    """ Is this object a numpy array or something similar?
+    """Is this object a numpy array or something similar?
 
     Examples
     --------
@@ -1174,7 +1172,7 @@ def natural_sort_key(s):
 
 
 def factors(n):
-    """ Return the factors of an integer
+    """Return the factors of an integer
 
     https://stackoverflow.com/a/6800214/616616
     """
@@ -1183,7 +1181,7 @@ def factors(n):
 
 
 def parse_bytes(s):
-    """ Parse byte string to numbers
+    """Parse byte string to numbers
 
     >>> parse_bytes('100')
     100
@@ -1211,7 +1209,7 @@ def parse_bytes(s):
     if isinstance(s, (int, float)):
         return int(s)
     s = s.replace(" ", "")
-    if not s[0].isdigit():
+    if not any(char.isdigit() for char in s):
         s = "1" + s
 
     for i in range(len(s) - 1, -1, -1):
@@ -1224,13 +1222,13 @@ def parse_bytes(s):
 
     try:
         n = float(prefix)
-    except ValueError:
-        raise ValueError("Could not interpret '%s' as a number" % prefix)
+    except ValueError as e:
+        raise ValueError("Could not interpret '%s' as a number" % prefix) from e
 
     try:
         multiplier = byte_sizes[suffix.lower()]
-    except KeyError:
-        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
+    except KeyError as e:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix) from e
 
     result = n * multiplier
     return int(result)
@@ -1256,7 +1254,7 @@ byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 
 
 def format_time(n):
-    """ format integers as time
+    """format integers as time
 
     >>> format_time(1)
     '1.00 s'
@@ -1275,7 +1273,7 @@ def format_time(n):
 
 
 def format_bytes(n):
-    """ Format bytes as text
+    """Format bytes as text
 
     >>> format_bytes(1)
     '1 B'
@@ -1328,7 +1326,7 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 def parse_timedelta(s, default="seconds"):
-    """ Parse timedelta string to number of seconds
+    """Parse timedelta string to number of seconds
 
     Examples
     --------
@@ -1384,3 +1382,88 @@ def ndimlist(seq):
         return 1
     else:
         return 1 + ndimlist(seq[0])
+
+
+def iter_chunks(sizes, max_size):
+    """Split sizes into chunks of total max_size each
+
+    Parameters
+    ----------
+    sizes : iterable of numbers
+        The sizes to be chunked
+    max_size : number
+        Maximum total size per chunk.
+        It must be greater or equal than each size in sizes
+    """
+    chunk, chunk_sum = [], 0
+    iter_sizes = iter(sizes)
+    size = next(iter_sizes, None)
+    while size is not None:
+        assert size <= max_size
+        if chunk_sum + size <= max_size:
+            chunk.append(size)
+            chunk_sum += size
+            size = next(iter_sizes, None)
+        else:
+            assert chunk
+            yield chunk
+            chunk, chunk_sum = [], 0
+    if chunk:
+        yield chunk
+
+
+hex_pattern = re.compile("[a-f]+")
+
+
+def key_split(s):
+    """
+    >>> key_split('x')
+    'x'
+    >>> key_split('x-1')
+    'x'
+    >>> key_split('x-1-2-3')
+    'x'
+    >>> key_split(('x-2', 1))
+    'x'
+    >>> key_split("('x-2', 1)")
+    'x'
+    >>> key_split('hello-world-1')
+    'hello-world'
+    >>> key_split(b'hello-world-1')
+    'hello-world'
+    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
+    'data'
+    >>> key_split('<module.submodule.myclass object at 0xdaf372')
+    'myclass'
+    >>> key_split(None)
+    'Other'
+    >>> key_split('x-abcdefab')  # ignores hex
+    'x'
+    >>> key_split('_(x)')  # strips unpleasant characters
+    'x'
+    """
+    if type(s) is bytes:
+        s = s.decode()
+    if type(s) is tuple:
+        s = s[0]
+    try:
+        words = s.split("-")
+        if not words[0][0].isalpha():
+            result = words[0].strip("_'()\"")
+        else:
+            result = words[0]
+        for word in words[1:]:
+            if word.isalpha() and not (
+                len(word) == 8 and hex_pattern.match(word) is not None
+            ):
+                result += "-" + word
+            else:
+                break
+        if len(result) == 32 and re.match(r"[a-f0-9]{32}", result):
+            return "data"
+        else:
+            if result[0] == "<":
+                result = result.strip("<>").split()[0].split(".")[-1]
+            return result
+    except Exception:
+        return "Other"

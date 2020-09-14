@@ -12,6 +12,10 @@ from dask.utils import tmpdir
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
+errs = (requests.exceptions.RequestException,)
+if LooseVersion(fsspec.__version__) > "0.7.4":
+    aiohttp = pytest.importorskip("aiohttp")
+    errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
 
 
 @pytest.fixture(scope="module")
@@ -28,11 +32,11 @@ def dir_server():
             try:
                 requests.get("http://localhost:8999")
                 break
-            except requests.exceptions.ConnectionError:
+            except requests.exceptions.ConnectionError as e:
                 time.sleep(0.1)
                 timeout -= 0.1
                 if timeout < 0:
-                    raise RuntimeError("Server did not appear")
+                    raise RuntimeError("Server did not appear") from e
         yield d
         p.terminate()
 
@@ -112,7 +116,7 @@ def test_ops_blocksize(dir_server):
 
 def test_errors(dir_server):
     f = open_files("http://localhost:8999/doesnotexist")[0]
-    with pytest.raises(requests.exceptions.RequestException):
+    with pytest.raises(errs):
         with f as f:
             f.read()
     f = open_files("http://nohost/")[0]

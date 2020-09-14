@@ -5,13 +5,15 @@ from collections.abc import Iterable
 from functools import wraps, partial
 from numbers import Real, Integral
 from distutils.version import LooseVersion
+from typing import List
 
 import numpy as np
 from tlz import concat, sliding_window, interleave
 
 from ..compatibility import apply
 from ..core import flatten
-from ..base import tokenize
+from ..base import tokenize, is_dask_collection
+from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
@@ -24,7 +26,6 @@ from .core import (
     Array,
     map_blocks,
     elemwise,
-    from_array,
     asarray,
     asanyarray,
     concatenate,
@@ -182,10 +183,10 @@ def flip(m, axis):
     sl = m.ndim * [slice(None)]
     try:
         sl[axis] = slice(None, None, -1)
-    except IndexError:
+    except IndexError as e:
         raise ValueError(
             "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
-        )
+        ) from e
     sl = tuple(sl)
 
     return m[sl]
@@ -545,7 +546,7 @@ def gradient(f, *varargs, **kwargs):
                 raise ValueError(
                     "Chunk size must be larger than edge_order + 1. "
                     "Minimum chunk for axis {} is {}. Rechunk to "
-                    "proceed.".format(np.min(c), ax)
+                    "proceed.".format(ax, np.min(c))
                 )
 
         if np.isscalar(varargs[i]):
@@ -635,20 +636,79 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
+# TODO: dask linspace doesn't support delayed values
+def _linspace_from_delayed(start, stop, num=50):
+    linspace_name = "linspace-" + tokenize(start, stop, num)
+    (start_ref, stop_ref, num_ref), deps = unpack_collections([start, stop, num])
+    if len(deps) == 0:
+        return np.linspace(start, stop, num=num)
+
+    linspace_dsk = {(linspace_name, 0): (np.linspace, start_ref, stop_ref, num_ref)}
+    linspace_graph = HighLevelGraph.from_collections(
+        linspace_name, linspace_dsk, dependencies=deps
+    )
+
+    chunks = ((np.nan,),) if is_dask_collection(num) else ((num,),)
+    return Array(linspace_graph, linspace_name, chunks, dtype=float)
+
+
+def _block_hist(x, bins, range=None, weights=None):
+    return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
+
+
 def histogram(a, bins=None, range=None, normed=False, weights=None, density=None):
     """
     Blocked variant of :func:`numpy.histogram`.
 
-    Follows the signature of :func:`numpy.histogram` exactly with the following
-    exceptions:
+    Parameters
+    ----------
+    a : array_like
+        Input data. The histogram is computed over the flattened array.
+    bins : int or sequence of scalars, optional
+        Either an iterable specifying the ``bins`` or the number of ``bins``
+        and a ``range`` argument is required as computing ``min`` and ``max``
+        over blocked arrays is an expensive operation that must be performed
+        explicitly.
+        If `bins` is an int, it defines the number of equal-width
+        bins in the given range (10, by default). If `bins` is a
+        sequence, it defines a monotonically increasing array of bin edges,
+        including the rightmost edge, allowing for non-uniform bin widths.
+    range : (float, float), optional
+        The lower and upper range of the bins.  If not provided, range
+        is simply ``(a.min(), a.max())``.  Values outside the range are
+        ignored. The first element of the range must be less than or
+        equal to the second. `range` affects the automatic bin
+        computation as well. While bin width is computed to be optimal
+        based on the actual data within `range`, the bin count will fill
+        the entire range including portions containing no data.
+    normed : bool, optional
+        This is equivalent to the ``density`` argument, but produces incorrect
+        results for unequal bin widths. It should not be used.
+    weights : array_like, optional
+        A dask.array.Array of weights, of the same block structure as ``a``.  Each value in
+        ``a`` only contributes its associated weight towards the bin count
+        (instead of 1). If ``density`` is True, the weights are
+        normalized, so that the integral of the density over the range
+        remains 1.
+    density : bool, optional
+        If ``False``, the result will contain the number of samples in
+        each bin. If ``True``, the result is the value of the
+        probability *density* function at the bin, normalized such that
+        the *integral* over the range is 1. Note that the sum of the
+        histogram values will not be equal to 1 unless bins of unity
+        width are chosen; it is not a probability *mass* function.
+        Overrides the ``normed`` keyword if given.
+        If ``density`` is True, ``bins`` cannot be a single-number delayed
+        value. It must be a concrete number, or a (possibly-delayed)
+        array/sequence of the bin edges.
+    Returns
+    -------
+    hist : dask Array
+        The values of the histogram. See `density` and `weights` for a
+        description of the possible semantics.
+    bin_edges : dask Array of dtype float
+        Return the bin edges ``(length(hist)+1)``.
 
-    - Either an iterable specifying the ``bins`` or the number of ``bins``
-      and a ``range`` argument is required as computing ``min`` and ``max``
-      over blocked arrays is an expensive operation that must be performed
-      explicitly.
-
-    - ``weights`` must be a dask.array.Array with the same block structure
-      as ``a``.
 
     Examples
     --------
@@ -672,7 +732,15 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> h.compute()
     array([5000, 5000])
     """
-    if not np.iterable(bins) and (range is None or bins is None):
+    if isinstance(bins, Array):
+        scalar_bins = bins.ndim == 0
+        # ^ `np.ndim` is not implemented by Dask array.
+    elif isinstance(bins, Delayed):
+        scalar_bins = bins._length is None or bins._length == 1
+    else:
+        scalar_bins = np.ndim(bins) == 0
+
+    if bins is None or (scalar_bins and range is None):
         raise ValueError(
             "dask.array.histogram requires either specifying "
             "bins as an iterable or specifying both a range and "
@@ -689,30 +757,55 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             "See the numpy.histogram docstring for more information."
         )
 
-    if not np.iterable(bins):
-        bin_token = bins
-        mn, mx = range
-        if mn == mx:
-            mn -= 0.5
-            mx += 0.5
+    if density and scalar_bins and isinstance(bins, (Array, Delayed)):
+        raise NotImplementedError(
+            "When `density` is True, `bins` cannot be a scalar Dask object. "
+            "It must be a concrete number or a (possibly-delayed) array/sequence of bin edges."
+        )
 
-        bins = np.linspace(mn, mx, bins + 1, endpoint=True)
-    else:
-        bin_token = bins
-    token = tokenize(a, bin_token, range, weights, density)
+    for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
+        if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
+            raise TypeError(
+                "Dask types besides Array and Delayed are not supported "
+                "for `histogram`. For argument `{}`, got: {!r}".format(argname, val)
+            )
 
-    nchunks = len(list(flatten(a.__dask_keys__())))
-    chunks = ((1,) * nchunks, (len(bins) - 1,))
+    if range is not None:
+        try:
+            if len(range) != 2:
+                raise ValueError(
+                    f"range must be a sequence or array of length 2, but got {len(range)} items"
+                )
+            if isinstance(range, (Array, np.ndarray)) and range.shape != (2,):
+                raise ValueError(
+                    f"range must be a 1-dimensional array of two items, but got an array of shape {range.shape}"
+                )
+        except TypeError:
+            raise TypeError(
+                f"Expected a sequence or array for range, not {range}"
+            ) from None
 
+    token = tokenize(a, bins, range, weights, density)
     name = "histogram-sum-" + token
 
-    # Map the histogram to all bins
-    def block_hist(x, range=None, weights=None):
-        return np.histogram(x, bins, range=range, weights=weights)[0][np.newaxis]
+    if scalar_bins:
+        bins = _linspace_from_delayed(range[0], range[1], bins + 1)
+        # ^ NOTE `range[1]` is safe because of the above check, and the initial check
+        # that range must not be None if `scalar_bins`
+    else:
+        if not isinstance(bins, (Array, np.ndarray)):
+            bins = asarray(bins)
+        if bins.ndim != 1:
+            raise ValueError(
+                f"bins must be a 1-dimensional array or sequence, got shape {bins.shape}"
+            )
 
+    (bins_ref, range_ref), deps = unpack_collections([bins, range])
+
+    # Map the histogram to all bins, forming a 2D array of histograms, stacked for each chunk
     if weights is None:
         dsk = {
-            (name, i, 0): (block_hist, k, range)
+            (name, i, 0): (_block_hist, k, bins_ref, range_ref)
             for i, k in enumerate(flatten(a.__dask_keys__()))
         }
         dtype = np.histogram([])[0].dtype
@@ -720,22 +813,29 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, 0): (block_hist, k, range, w)
+            (name, i, 0): (_block_hist, k, bins_ref, range_ref, w)
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
 
-    graph = HighLevelGraph.from_collections(
-        name, dsk, dependencies=[a] if weights is None else [a, weights]
-    )
+    deps = (a,) + deps
+    if weights is not None:
+        deps += (weights,)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
 
+    # Turn graph into a 2D Array of shape (nchunks, nbins)
+    nchunks = len(list(flatten(a.__dask_keys__())))
+    nbins = bins.size - 1  # since `bins` is 1D
+    chunks = ((1,) * nchunks, (nbins,))
     mapped = Array(graph, name, chunks, dtype=dtype)
+
+    # Sum over chunks to get the final histogram
     n = mapped.sum(axis=0)
 
     # We need to replicate normed and density options from numpy
     if density is not None:
         if density:
-            db = from_array(np.diff(bins).astype(float), chunks=n.chunks)
+            db = asarray(np.diff(bins).astype(float), chunks=n.chunks)
             return n / db / n.sum(), bins
         else:
             return n, bins
@@ -1300,20 +1400,79 @@ def piecewise(x, condlist, funclist, *args, **kw):
         name="piecewise",
         funclist=funclist,
         func_args=args,
-        func_kw=kw
+        func_kw=kw,
     )
+
+
+def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
+    """
+    Returns a new chunking aligned with the coarsening multiple.
+    Any excess is at the end of the array.
+
+    Examples
+    --------
+    >>> aligned_coarsen_chunks(chunks=(1, 2, 3), multiple=4)
+    (4, 2)
+    >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
+    (20, 4, 4)
+    >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
+    (20, 10, 20, 20, 20, 2)
+    """
+
+    def choose_new_size(multiple, q, left):
+        """
+        See if multiple * q is a good choice when 'left' elements are remaining.
+        Else return multiple * (q-1)
+        """
+        possible = multiple * q
+        if (left - possible) > 0:
+            return possible
+        else:
+            return multiple * (q - 1)
+
+    newchunks = []
+    left = sum(chunks) - sum(newchunks)
+    chunkgen = (c for c in chunks)
+    while left > 0:
+        if left < multiple:
+            newchunks.append(left)
+            break
+
+        chunk_size = next(chunkgen, 0)
+        if chunk_size == 0:
+            chunk_size = multiple
+
+        q, r = divmod(chunk_size, multiple)
+        if q == 0:
+            continue
+        elif r == 0:
+            newchunks.append(chunk_size)
+        elif r >= 5:
+            newchunks.append(choose_new_size(multiple, q + 1, left))
+        else:
+            newchunks.append(choose_new_size(multiple, q, left))
+
+        left = sum(chunks) - sum(newchunks)
+
+    return tuple(newchunks)
 
 
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
-    if not trim_excess and not all(
-        bd % div == 0 for i, div in axes.items() for bd in x.chunks[i]
-    ):
+    if not trim_excess and not all(x.shape[i] % div == 0 for i, div in axes.items()):
         msg = "Coarsening factor does not align with block dimensions"
         raise ValueError(msg)
 
     if "dask" in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
+
+    new_chunks = {}
+    for i, div in axes.items():
+        aligned = aligned_coarsen_chunks(x.chunks[i], div)
+        if aligned != x.chunks[i]:
+            new_chunks[i] = aligned
+    if new_chunks:
+        x = x.rechunk(new_chunks)
 
     name = "coarsen-" + tokenize(reduction, x, axes, trim_excess)
     dsk = {
@@ -1331,7 +1490,7 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
 
 
 def split_at_breaks(array, breaks, axis=0):
-    """ Split an array into a list of arrays (using slices) at the given breaks
+    """Split an array into a list of arrays (using slices) at the given breaks
 
     >>> split_at_breaks(np.arange(6), [3, 5])
     [array([0, 1, 2]), array([3, 4]), array([5])]

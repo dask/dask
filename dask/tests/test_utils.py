@@ -28,6 +28,7 @@ from dask.utils import (
     parse_timedelta,
     parse_bytes,
     is_arraylike,
+    iter_chunks,
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
@@ -454,7 +455,7 @@ def test_has_keyword():
 def test_derived_from():
     class Foo:
         def f(a, b):
-            """ A super docstring
+            """A super docstring
 
             An explanation
 
@@ -525,6 +526,7 @@ def test_parse_bytes():
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
     assert parse_bytes(123) == 123
+    assert parse_bytes(".5GB") == 500000000
 
 
 def test_parse_timedelta():
@@ -565,3 +567,18 @@ def test_is_arraylike():
     assert is_arraylike(np.empty(())) is True
     assert is_arraylike(np.empty((0,))) is True
     assert is_arraylike(np.empty((0, 0))) is True
+
+
+def test_iter_chunks():
+    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
+    assert list(iter_chunks(sizes, 19)) == [
+        [14],
+        [8, 5],
+        [9, 7],
+        [9, 1],
+        [19],
+        [8],
+        [19],
+    ]
+    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
+    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]

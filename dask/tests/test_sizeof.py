@@ -1,4 +1,5 @@
 import sys
+from array import array
 
 import pytest
 
@@ -18,11 +19,24 @@ def test_containers():
     assert sizeof([1, 2, [3]]) > (getsizeof(3) * 3 + getsizeof([]))
 
 
+def test_bytes_like():
+    assert 1000 <= sizeof(bytes(1000)) <= 2000
+    assert 1000 <= sizeof(bytearray(1000)) <= 2000
+    assert 1000 <= sizeof(memoryview(bytes(1000))) <= 2000
+    assert 8000 <= sizeof(array("d", range(1000))) <= 9000
+
+
 def test_numpy():
     np = pytest.importorskip("numpy")
     assert 8000 <= sizeof(np.empty(1000, dtype="f8")) <= 9000
     dt = np.dtype("f8")
     assert sizeof(dt) == sys.getsizeof(dt)
+
+
+def test_numpy_0_strided():
+    np = pytest.importorskip("numpy")
+    x = np.broadcast_to(1, (100, 100, 100))
+    assert sizeof(x) <= 8
 
 
 def test_pandas():

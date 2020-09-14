@@ -26,7 +26,7 @@ from .. import config
 
 
 def cumdims_label(chunks, const):
-    """ Internal utility for cumulative sum with label.
+    """Internal utility for cumulative sum with label.
 
     >>> cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')  # doctest: +NORMALIZE_WHITESPACE
     [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
@@ -112,7 +112,7 @@ def _intersect_1d(breaks):
 
 
 def _old_to_new(old_chunks, new_chunks):
-    """ Helper to build old_chunks to new_chunks.
+    """Helper to build old_chunks to new_chunks.
 
     Handles missing values, as long as the missing dimension
     is unchanged.
@@ -221,7 +221,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
     """
     # don't rechunk if array is empty
-    if x.ndim > 0 and x.shape[-1] == 0:
+    if x.ndim > 0 and all(s == 0 for s in x.shape):
         return x
     if isinstance(chunks, dict):
         chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
@@ -263,8 +263,7 @@ def _largest_block_size(chunks):
 
 
 def estimate_graph_size(old_chunks, new_chunks):
-    """ Estimate the graph size during a rechunk computation.
-    """
+    """Estimate the graph size during a rechunk computation."""
     # Estimate the number of intermediate blocks that will be produced
     # (we don't use intersect_chunks() which is much more expensive)
     crossed_size = reduce(
@@ -278,7 +277,7 @@ def estimate_graph_size(old_chunks, new_chunks):
 
 
 def divide_to_width(desired_chunks, max_width):
-    """ Minimally divide the given chunks so as to make the largest chunk
+    """Minimally divide the given chunks so as to make the largest chunk
     width less or equal than *max_width*.
     """
     chunks = []
@@ -293,7 +292,7 @@ def divide_to_width(desired_chunks, max_width):
 
 
 def merge_to_number(desired_chunks, max_number):
-    """ Minimally merge the given chunks so as to drop the number of
+    """Minimally merge the given chunks so as to drop the number of
     chunks below *max_number*, while minimizing the largest width.
     """
     if len(desired_chunks) <= max_number:
@@ -450,7 +449,7 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
 def plan_rechunk(
     old_chunks, new_chunks, itemsize, threshold=None, block_size_limit=None
 ):
-    """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
+    """Plan an iterative rechunking from *old_chunks* to *new_chunks*.
     The plan aims to minimize the rechunk graph size.
 
     Parameters
@@ -530,8 +529,7 @@ def plan_rechunk(
 
 
 def _compute_rechunk(x, chunks):
-    """ Compute the rechunk of *x* to the given *chunks*.
-    """
+    """Compute the rechunk of *x* to the given *chunks*."""
     if x.size == 0:
         # Special case for empty array, as the algorithm below does not behave correctly
         return empty(x.shape, chunks=chunks, dtype=x.dtype)

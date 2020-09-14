@@ -131,7 +131,7 @@ The following additional options may be passed to the ``PyArrow`` driver via
 PyArrow's ``libhdfs`` driver can also be affected by a few environment
 variables. For more information on these, see the `PyArrow documentation`_.
 
-.. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
+.. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems_deprecated.html#hadoop-file-system-hdfs
 
 
 Amazon S3
@@ -186,7 +186,7 @@ The following parameters may be passed to s3fs using ``storage_options``:
 
 .. _boto3 client: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client
 .. _boto3 Session: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html
-.. _here: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html#shared-credentials-file
+.. _here: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#shared-credentials-file
 .. _s3fs.S3FileSystem: https://s3fs.readthedocs.io/en/latest/api.html#s3fs.core.S3FileSystem
 .. _boto3 client's config: https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
 

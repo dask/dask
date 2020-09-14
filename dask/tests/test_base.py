@@ -270,7 +270,7 @@ def test_tokenize_pandas_invalid_unicode():
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_mixed_unicode_bytes():
     df = pd.DataFrame(
-        {u"ö".encode("utf8"): [1, 2, 3], u"ö": [u"ö", u"ö".encode("utf8"), None]},
+        {"ö".encode("utf8"): [1, 2, 3], "ö": ["ö", "ö".encode("utf8"), None]},
         index=[1, 2, 3],
     )
     tokenize(df)
@@ -403,7 +403,7 @@ def test_tokenize_range():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
-    a = np.array([u"foo", u"Jos\xe9", np.nan], dtype="O")
+    a = np.array(["foo", "Jos\xe9", np.nan], dtype="O")
     assert tokenize(a) == tokenize(a)
 
 
@@ -458,6 +458,13 @@ def test_tokenize_dense_sparse_array(cls_name):
         b.row[:10] = np.arange(10)
         b = b.asformat(cls_name)
     assert tokenize(a) != tokenize(b)
+
+
+def test_tokenize_object_with_recursion_error_returns_uuid():
+    cycle = dict(a=None)
+    cycle["a"] = cycle
+
+    assert len(tokenize(cycle)) == 32
 
 
 def test_is_dask_collection():
@@ -687,7 +694,7 @@ def test_compute_array_dataframe():
 
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe_valid_unicode_in_bytes():
-    df = pd.DataFrame(data=np.random.random((3, 1)), columns=[u"ö".encode("utf8")])
+    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["ö".encode("utf8")])
     dd.from_pandas(df, npartitions=4)
 
 

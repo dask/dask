@@ -1,5 +1,6 @@
 import random
 import sys
+from array import array
 from distutils.version import LooseVersion
 
 from .utils import Dispatch
@@ -19,6 +20,22 @@ sizeof = Dispatch(name="sizeof")
 @sizeof.register(object)
 def sizeof_default(o):
     return getsizeof(o)
+
+
+@sizeof.register(bytes)
+@sizeof.register(bytearray)
+def sizeof_bytes(o):
+    return len(o)
+
+
+@sizeof.register(memoryview)
+def sizeof_memoryview(o):
+    return o.nbytes
+
+
+@sizeof.register(array)
+def sizeof_array(o):
+    return o.itemsize * len(o)
 
 
 @sizeof.register(list)
@@ -83,6 +100,9 @@ def register_numpy():
 
     @sizeof.register(np.ndarray)
     def sizeof_numpy_ndarray(x):
+        if 0 in x.strides:
+            xs = x[tuple(slice(None) if s != 0 else slice(1) for s in x.strides)]
+            return xs.nbytes
         return int(x.nbytes)
 
 

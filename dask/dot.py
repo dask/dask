@@ -105,7 +105,7 @@ def label(x, cache=None):
 
 
 def box_label(key, verbose=False):
-    """ Label boxes in graph by chunk index
+    """Label boxes in graph by chunk index
 
     >>> box_label(('x', 1, 2, 3))
     '(1, 2, 3)'
@@ -234,17 +234,18 @@ def dot_graph(dsk, filename="mydask", format=None, **kwargs):
     """
     Render a task graph using dot.
 
-    If `filename` is not None, write a file to disk with that name in the
-    format specified by `format`.  `filename` should not include an extension.
+    If `filename` is not None, write a file to disk with the specified name and extension.
+    If no extension is specified, '.png' will be used by default.
 
     Parameters
     ----------
     dsk : dict
         The graph to display.
     filename : str or None, optional
-        The name (without an extension) of the file to write to disk.  If
-        `filename` is None, no file will be written, and we communicate with
-        dot using only pipes.  Default is 'mydask'.
+        The name of the file to write to disk. If the provided `filename`
+        doesn't include an extension, '.png' will be used by default.
+        If `filename` is None, no file will be written, and we communicate
+        with dot using only pipes.  Default is 'mydask'.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
     **kwargs

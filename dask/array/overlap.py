@@ -61,7 +61,7 @@ def fractional_slice(task, axes):
 
 
 def expand_key(k, dims, name=None, axes=None):
-    """ Get all neighboring keys around center
+    """Get all neighboring keys around center
 
     Parameters
     ----------
@@ -116,7 +116,7 @@ def expand_key(k, dims, name=None, axes=None):
 
 
 def overlap_internal(x, axes):
-    """ Share boundaries between neighboring blocks
+    """Share boundaries between neighboring blocks
 
     Parameters
     ----------
@@ -197,7 +197,7 @@ def trim_overlap(x, depth, boundary=None):
 
 
 def trim_internal(x, axes, boundary=None):
-    """ Trim sides from each block
+    """Trim sides from each block
 
     This couples well with the overlap operation, which may leave excess data on
     each block
@@ -234,7 +234,11 @@ def trim_internal(x, axes, boundary=None):
     chunks = tuple(olist)
 
     return map_blocks(
-        partial(_trim, axes=axes, boundary=boundary), x, chunks=chunks, dtype=x.dtype
+        partial(_trim, axes=axes, boundary=boundary),
+        x,
+        chunks=chunks,
+        dtype=x.dtype,
+        meta=x._meta,
     )
 
 
@@ -275,7 +279,7 @@ def _trim(x, axes, boundary, block_info):
 
 
 def periodic(x, axis, depth):
-    """ Copy a slice of an array around to its other side
+    """Copy a slice of an array around to its other side
 
     Useful to create periodic boundary conditions for overlap
     """
@@ -299,7 +303,7 @@ def periodic(x, axis, depth):
 
 
 def reflect(x, axis, depth):
-    """ Reflect boundaries of array on the same side
+    """Reflect boundaries of array on the same side
 
     This is the converse of ``periodic``
     """
@@ -329,7 +333,7 @@ def reflect(x, axis, depth):
 
 
 def nearest(x, axis, depth):
-    """ Each reflect each boundary value outwards
+    """Each reflect each boundary value outwards
 
     This mimics what the skimage.filters.gaussian_filter(... mode="nearest")
     does.
@@ -386,7 +390,7 @@ def _remove_overlap_boundaries(l, r, axis, depth):
 
 
 def boundaries(x, depth=None, kind=None):
-    """ Add boundary conditions to an array before overlaping
+    """Add boundary conditions to an array before overlaping
 
     See Also
     --------
@@ -419,7 +423,7 @@ def boundaries(x, depth=None, kind=None):
 
 
 def overlap(x, depth, boundary):
-    """ Share boundaries between neighboring blocks
+    """Share boundaries between neighboring blocks
 
     Parameters
     ----------
@@ -537,7 +541,7 @@ def add_dummy_padding(x, depth, boundary):
 def map_overlap(
     func, *args, depth=None, boundary=None, trim=True, align_arrays=True, **kwargs
 ):
-    """ Map a function over blocks of arrays with some overlap
+    """Map a function over blocks of arrays with some overlap
 
     We share neighboring zones between blocks of the array, map a
     function, and then trim away the neighboring strips.

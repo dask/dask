@@ -27,7 +27,6 @@ from dask.dataframe.shuffle import (
 )
 from dask.dataframe.utils import assert_eq, make_meta
 
-
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [2, 5, 8]}, index=[5, 6, 8]),
@@ -36,6 +35,9 @@ dsk = {
 meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
 d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
 full = d.compute()
+CHECK_FREQ = {}
+if dd._compat.PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
 
 
 shuffle_func = shuffle  # conflicts with keyword argument
@@ -772,7 +774,7 @@ def test_set_index_on_empty():
         ddf = ddf[ddf.y > df.y.max()].set_index("x")
         expected_df = df[df.y > df.y.max()].set_index("x")
 
-        assert assert_eq(ddf, expected_df)
+        assert assert_eq(ddf, expected_df, **CHECK_FREQ)
         assert ddf.npartitions == 1
 
 
@@ -916,8 +918,8 @@ def test_set_index_timestamp():
         assert ts1.value == ts2.value
         assert ts1.tz == ts2.tz
 
-    assert_eq(df2, ddf_new_div)
-    assert_eq(df2, ddf.set_index("A"))
+    assert_eq(df2, ddf_new_div, **CHECK_FREQ)
+    assert_eq(df2, ddf.set_index("A"), **CHECK_FREQ)
 
 
 @pytest.mark.parametrize("compression", [None, "ZLib"])
@@ -991,7 +993,12 @@ def test_dataframe_shuffle_on_tasks_api(on, ignore_index, max_branch):
     )
     df_out_2 = df_in.shuffle(ext_on, shuffle="tasks", ignore_index=ignore_index)
 
-    assert_eq(df_out_1, df_out_2)
+    assert_eq(df_out_1, df_out_2, check_index=(not ignore_index))
+
+    if ignore_index:
+        assert df_out_1.index.dtype != df_in.index.dtype
+    else:
+        assert df_out_1.index.dtype == df_in.index.dtype
 
 
 def test_set_index_overlap():

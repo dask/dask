@@ -6,6 +6,7 @@ from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
+from .. import methods
 
 
 def read_sql_table(
@@ -16,7 +17,7 @@ def read_sql_table(
     npartitions=None,
     limits=None,
     columns=None,
-    bytes_per_chunk=256 * 2 ** 20,
+    bytes_per_chunk="256 MiB",
     head_rows=5,
     schema=None,
     meta=None,
@@ -73,7 +74,7 @@ def read_sql_table(
         ``sql.func.abs(sql.column('value')).label('abs(value)')``.
         Labeling columns created by functions or arithmetic operations is
         recommended.
-    bytes_per_chunk : int
+    bytes_per_chunk : str, int
         If both divisions and npartitions is None, this is the target size of
         each partition, in bytes
     head_rows : int
@@ -104,6 +105,7 @@ def read_sql_table(
 
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
+
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(uri, **engine_kwargs)
     m = sa.MetaData()
@@ -134,7 +136,7 @@ def read_sql_table(
         # function names get pandas auto-named
         kwargs["index_col"] = index_col.name
 
-    if meta is None:
+    if head_rows > 0:
         # derive metadata from first few rows
         q = sql.select(columns).limit(head_rows).select_from(table)
         head = pd.read_sql(q, engine, **kwargs)
@@ -147,7 +149,10 @@ def read_sql_table(
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
-        meta = head.iloc[:0]
+        if meta is None:
+            meta = head.iloc[:0]
+    elif meta is None:
+        raise ValueError("Must provide meta if head_rows is 0")
     else:
         if divisions is None and npartitions is None:
             raise ValueError(
@@ -170,13 +175,22 @@ def read_sql_table(
         if npartitions is None:
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)["count_1"][0]
-            npartitions = int(round(count * bytes_per_row / bytes_per_chunk)) or 1
+            npartitions = (
+                int(
+                    round(
+                        count * bytes_per_row / dask.utils.parse_bytes(bytes_per_chunk)
+                    )
+                )
+                or 1
+            )
         if dtype.kind == "M":
-            divisions = pd.date_range(
-                start=mini,
-                end=maxi,
-                freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
-            ).tolist()
+            divisions = methods.tolist(
+                pd.date_range(
+                    start=mini,
+                    end=maxi,
+                    freq="%iS" % ((maxi - mini).total_seconds() / npartitions),
+                )
+            )
             divisions[0] = mini
             divisions[-1] = maxi
         elif dtype.kind in ["i", "u", "f"]:
@@ -230,7 +244,7 @@ def to_sql(
     compute=True,
     parallel=False,
 ):
-    """ Store Dask Dataframe to a SQL table
+    """Store Dask Dataframe to a SQL table
 
     An empty table is created based on the "meta" DataFrame (and conforming to the caller's "if_exists" preference), and
     then each block calls pd.DataFrame.to_sql (with `if_exists="append"`).

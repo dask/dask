@@ -1,6 +1,327 @@
 Changelog
 =========
 
+2.26.0 / 2020-09-11
+-------------------
+
+Array
++++++
+
+- Backend-aware dtype inference for single-chunk svd (:pr:`6623`) `Eric Czech`_
+- Make ``array.reduction`` docstring match for dtype (:pr:`6624`) `Martin Durant`_
+- Set lower bound on compression level for ``svd_compressed`` using rows and cols (:pr:`6622`) `Eric Czech`_
+- Improve SVD consistency and small array handling (:pr:`6616`) `Eric Czech`_
+- Add ``svd_flip`` #6599 (:pr:`6613`) `Eric Czech`_
+- Handle sequences containing dask Arrays (:pr:`6595`) `Gabe Joseph`_
+- Avoid large chunks from ``getitem`` with lists (:pr:`6514`) `Tom Augspurger`_
+- Eagerly slice numpy arrays in ``from_array`` (:pr:`6605`) `Deepak Cherian`_
+- Restore ability to pickle dask arrays (:pr:`6594`) `Noah D Brenowitz`_
+- Add SVD support for short-and-fat arrays (:pr:`6591`) `Eric Czech`_
+- Add simple chunk type registry and defer as appropriate to upcast types (:pr:`6393`) `Jon Thielen`_
+- Align coarsen chunks by default (:pr:`6580`) `Deepak Cherian`_
+- Fixup reshape on unknown dimensions and other testing fixes (:pr:`6578`) `Ryan Williams`_
+
+Core
+++++
+
+- Add validation and fixes for ``HighLevelGraph`` dependencies (:pr:`6588`) `Mads R. B. Kristensen`_
+- Fix linting issue (:pr:`6598`) `Tom Augspurger`_
+- Skip ``bokeh`` version 2.0.0 (:pr:`6572`) `John A Kirkham`_
+
+DataFrame
++++++++++
+
+- Added bytes/row calculation when using meta (:pr:`6585`) `McToel`_
+- Handle ``min_count`` in ``Series.sum`` / ``prod`` (:pr:`6618`) `Daniel Saxton`_
+- Update ``DataFrame.set_index`` docstring (:pr:`6549`) `Timost`_
+- Always compute 0 and 1 quantiles during quantile calculations (:pr:`6564`) `Erik Welch`_
+- Fix wrong path when reading empty csv file (:pr:`6573`) `Abdulelah Bin Mahfoodh`_
+
+Documentation
++++++++++++++
+
+- Doc: Troubleshooting dashboard 404 (:pr:`6215`) `Kilian Lieret`_
+- Fixup ``extraConfig`` example (:pr:`6625`) `Tom Augspurger`_
+- Update supported Python versions (:pr:`6609`) `Julia Signell`_
+- Document dask/daskhub helm chart (:pr:`6560`) `Tom Augspurger`_
+
+
+2.25.0 / 2020-08-28
+-------------------
+
+Core
+++++
+
+- Compare key hashes in ``subs()`` (:pr:`6559`) `Mads R. B. Kristensen`_
+- Rerun with latest ``black`` release (:pr:`6568`) `James Bourbeau`_
+- License update (:pr:`6554`) `Tom Augspurger`_
+
+DataFrame
++++++++++
+
+- Add gs ``read_parquet`` example (:pr:`6548`) `Ray Bell`_
+
+Documentation
++++++++++++++
+
+- Remove version from documentation page names (:pr:`6558`) `James Bourbeau`_
+- Update ``kubernetes-helm.rst`` (:pr:`6523`) `David Sheldon`_
+- Stop 2020 survey (:pr:`6547`) `Tom Augspurger`_
+
+
+2.24.0 / 2020-08-22
+-------------------
+
+Array
++++++
+
+-   Fix setting random seed in tests. (:pr:`6518`) `Elliott Sales de Andrade`_
+-   Support meta in apply gufunc (:pr:`6521`) `joshreback`_
+-   Replace `cupy.sparse` with `cupyx.scipy.sparse` (:pr:`6530`) `John A Kirkham`_
+
+Dataframe
++++++++++
+
+-   Bump up tolerance for rolling tests (:pr:`6502`) `Julia Signell`_
+-   Implement DatFrame.__len__ (:pr:`6515`) `Tom Augspurger`_
+-   Infer arrow schema in to_parquet  (for ArrowEngine`) (:pr:`6490`) `Richard Zamora`_
+-   Fix parquet test when no pyarrow (:pr:`6524`) `Martin Durant`_
+-   Remove problematic ``filter`` arguments in ArrowEngine (:pr:`6527`) `Richard Zamora`_
+-   Avoid schema validation by default in ArrowEngine (:pr:`6536`) `Richard Zamora`_
+
+Core
+++++
+
+-   Use unpack_collections in make_blockwise_graph (:pr:`6517`) `Thomas Fan`_
+-   Move key_split() from optimization.py to utils.py (:pr:`6529`) `Mads R. B. Kristensen`_
+-   Make tests run on moto server (:pr:`6528`) `Martin Durant`_
+
+
+2.23.0 / 2020-08-14
+-------------------
+
+Array
++++++
+
+- Reduce ``np.zeros``, ``ones``, and ``full`` array size with broadcasting (:pr:`6491`) `Matthias Bussonnier`_
+- Add missing ``meta=`` for ``trim`` in ``map_overlap`` (:pr:`6494`) `Peter Andreas Entschev`_
+
+Bag
++++
+
+- Bag repartition partition size (:pr:`6371`) `joshreback`_
+
+Core
+++++
+
+- ``Scalar.__dask_layers__()`` to return ``self._name`` instead of ``self.key`` (:pr:`6507`) `Mads R. B. Kristensen`_
+- Update dependencies correctly in ``fuse_root`` optimization (:pr:`6508`) `Mads R. B. Kristensen`_
+
+
+DataFrame
++++++++++
+
+- Adds ``items`` to dataframe (:pr:`6503`) `Thomas J Fan`_
+- Include compression in ``write_table`` call (:pr:`6499`) `Julia Signell`_
+- Fixed warning in ``nonempty_series`` (:pr:`6485`) `Tom Augspurger`_
+- Intelligently determine partitions based on type of first arg (:pr:`6479`) `Matthew Rocklin`_
+- Fix pyarrow ``mkdirs`` (:pr:`6475`) `Julia Signell`_
+- Fix duplicate parquet output in ``to_parquet`` (:pr:`6451`) `michaelnarodovitch`_
+
+Documentation
++++++++++++++
+
+- Fix documentation ``da.histogram`` (:pr:`6439`) `Roberto Panai`_
+- Add ``agg`` ``nunique`` example (:pr:`6404`) `Ray Bell`_
+- Fixed a few typos in the SQL docs (:pr:`6489`) `Mike McCarty`_
+- Docs for SQLing (:pr:`6453`) `Martin Durant`_
+
+
+2.22.0 / 2020-07-31
+-------------------
+
+Array
++++++
+
+- Compatibility for NumPy dtype deprecation (:pr:`6430`) `Tom Augspurger`_
+
+Core
+++++
+
+- Implement ``sizeof`` for some ``bytes``-like objects (:pr:`6457`) `John A Kirkham`_
+- HTTP error for new ``fsspec`` (:pr:`6446`) `Martin Durant`_
+- When ``RecursionError`` is raised, return uuid from ``tokenize`` function (:pr:`6437`) `Julia Signell`_
+- Install deps of upstream-dev packages (:pr:`6431`) `Tom Augspurger`_
+- Use updated link in ``setup.cfg`` (:pr:`6426`) `Zhengnan`_
+
+DataFrame
++++++++++
+
+- Add single quotes around column names if strings (:pr:`6471`) `Gil Forsyth`_
+- Refactor ``ArrowEngine`` for better ``read_parquet`` performance (:pr:`6346`) `Richard (Rick) Zamora`_
+- Add ``tolist`` dispatch (:pr:`6444`) `GALI PREM SAGAR`_
+- Compatibility with pandas 1.1.0rc0 (:pr:`6429`) `Tom Augspurger`_
+- Multi value pivot table (:pr:`6428`) `joshreback`_
+- Duplicate argument definitions in ``to_csv`` docstring (:pr:`6411`) `Jun Han (Johnson) Ooi`_
+
+Documentation
++++++++++++++
+
+- Add utility to docs to convert YAML config to env vars and back (:pr:`6472`) `Jacob Tomlinson`_
+- Fix parameter server rendering (:pr:`6466`) `Scott Sievert`_
+- Fixes broken links (:pr:`6403`) `Jim Circadian`_
+- Complete parameter server implementation in docs (:pr:`6449`) `Scott Sievert`_
+- Fix typo (:pr:`6436`) `Jack Xiaosong Xu`_
+
+
+2.21.0 / 2020-07-17
+-------------------
+
+Array
++++++
+
+- Correct error message in ``array.routines.gradient()`` (:pr:`6417`) `johnomotani`_
+- Fix blockwise concatenate for array with some ``dimension=1`` (:pr:`6342`) `Matthias Bussonnier`_
+
+Bag
++++
+
+- Fix ``bag.take`` example (:pr:`6418`) `Roberto Panai`_
+
+Core
+++++
+
+- Groups values in optimization pass should only be graph and keys -- not an optimization + keys (:pr:`6409`) `Ben Zaitlen`_
+- Call custom optimizations once, with ``kwargs`` provided (:pr:`6382`) `Clark Zinzow`_
+- Include ``pickle5`` for testing on Python 3.7 (:pr:`6379`) `John A Kirkham`_
+
+DataFrame
++++++++++
+
+- Correct typo in error message (:pr:`6422`) `Tom McTiernan`_
+- Use ``pytest.warns`` to check for ``UserWarning`` (:pr:`6378`) `Richard (Rick) Zamora`_
+- Parse ``bytes_per_chunk keyword`` from string (:pr:`6370`) `Matthew Rocklin`_
+
+Documentation
++++++++++++++
+
+- Numpydoc formatting (:pr:`6421`) `Matthias Bussonnier`_
+- Unpin ``numpydoc`` following 1.1 release (:pr:`6407`) `Gil Forsyth`_
+- Numpydoc formatting (:pr:`6402`) `Matthias Bussonnier`_
+- Add instructions for using conda when installing code for development (:pr:`6399`) `Ray Bell`_
+- Update ``visualize`` docstrings (:pr:`6383`) `Zhengnan`_
+
+
+2.20.0 / 2020-07-02
+-------------------
+
+Array
++++++
+
+- Register ``sizeof`` for numpy zero-strided arrays (:pr:`6343`) `Matthias Bussonnier`_
+- Use ``concatenate_lookup`` in ``concatenate`` (:pr:`6339`) `John A Kirkham`_
+- Fix rechunking of arrays with some zero-length dimensions (:pr:`6335`) `Matthias Bussonnier`_
+
+DataFrame
++++++++++
+
+- Dispatch ``iloc``` calls to ``getitem`` (:pr:`6355`) `Gil Forsyth`_
+- Handle unnamed pandas ``RangeIndex`` in fastparquet engine (:pr:`6350`) `Richard (Rick) Zamora`_
+- Preserve index when writing partitioned parquet datasets with pyarrow (:pr:`6282`) `Richard (Rick) Zamora`_
+- Use ``ignore_index`` for pandas' ``group_split_dispatch`` (:pr:`6251`) `Richard (Rick) Zamora`_
+
+Documentation
++++++++++++++
+
+- Add doc describing argument (:pr:`6318`) `asmith26`_
+
+
+2.19.0 / 2020-06-19
+-------------------
+
+Array
++++++
+
+- Cast chunk sizes to python int ``dtype`` (:pr:`6326`) `Gil Forsyth`_
+- Add ``shape=None`` to ``*_like()`` array creation functions (:pr:`6064`) `Anderson Banihirwe`_
+
+Core
+++++
+
+- Update expected error msg for protocol difference in fsspec (:pr:`6331`) `Gil Forsyth`_
+- Fix for floats < 1 in ``parse_bytes`` (:pr:`6311`) `Gil Forsyth`_
+- Fix exception causes all over the codebase (:pr:`6308`) `Ram Rachum`_
+- Fix duplicated tests (:pr:`6303`) `James Lamb`_
+- Remove unused testing function (:pr:`6304`) `James Lamb`_
+
+DataFrame
++++++++++
+
+- Add high-level CSV Subgraph (:pr:`6262`) `Gil Forsyth`_
+- Fix ``ValueError`` when merging an index-only 1-partition dataframe (:pr:`6309`) `Krishan Bhasin`_
+- Make ``index.map`` clear divisions. (:pr:`6285`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Add link to 2020 survey (:pr:`6328`) `Tom Augspurger`_
+- Update ``bag.rst`` (:pr:`6317`) `Ben Shaver`_
+
+
+2.18.1 / 2020-06-09
+-------------------
+
+Array
++++++
+
+- Don't try to set name on ``full`` (:pr:`6299`) `Julia Signell`_
+- Histogram: support lazy values for range/bins (another way) (:pr:`6252`) `Gabe Joseph`_
+
+Core
+++++
+
+- Fix exception causes in ``utils.py`` (:pr:`6302`) `Ram Rachum`_
+- Improve performance of ``HighLevelGraph`` construction (:pr:`6293`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Now readthedocs builds unrelased features' docstrings (:pr:`6295`) `Antonio Ercole De Luca`_
+- Add ``asyncssh`` intersphinx mappings (:pr:`6298`) `Jacob Tomlinson`_
+
+
+2.18.0 / 2020-06-05
+-------------------
+
+Array
++++++
+
+- Cast slicing index to dask array if same shape as original (:pr:`6273`) `Julia Signell`_
+- Fix ``stack`` error message (:pr:`6268`) `Stephanie Gott`_
+- ``full`` & ``full_like``: error on non-scalar ``fill_value`` (:pr:`6129`) `Huite`_
+- Support for multiple arrays in ``map_overlap`` (:pr:`6165`) `Eric Czech`_
+- Pad resample divisions so that edges are counted (:pr:`6255`) `Julia Signell`_
+
+Bag
++++
+
+- Random sampling of k elements from a dask bag #4799 (:pr:`6239`) `Antonio Ercole De Luca`_
+
+DataFrame
++++++++++
+
+- Add ``dropna``, ``sort``, and ``ascending`` to ``sort_values`` (:pr:`5880`) `Julia Signell`_
+- Generalize ``from_dask_array`` (:pr:`6263`) `GALI PREM SAGAR`_
+- Add derived docstring for ``SeriesGroupby.nunique`` (:pr:`6284`) `Julia Signell`_
+- Remove ``NotImplementedError`` in resample with rule  (:pr:`6274`) `Abdulelah Bin Mahfoodh`_
+- Add ``dd.to_sql`` (:pr:`6038`) `Ryan Williams`_
+
+Documentation
++++++++++++++
+
+- Update remote data section (:pr:`6258`) `Ray Bell`_
+
+
 2.17.2 / 2020-05-28
 -------------------
 
@@ -3015,7 +3336,7 @@ Other
 .. _`Albert DeFusco`: https://github.com/AlbertDeFusco
 .. _`Markus Gonser`: https://github.com/magonser
 .. _`Martijn Arts`: https://github.com/mfaafm
-.. _`Jon Mease`: https://github.com/jmmease
+.. _`Jon Mease`: https://github.com/jonmmease
 .. _`Xander Johnson`: https://github.com/metasyn
 .. _`Nir`: https://github.com/nirizr
 .. _`Keisuke Fujii`: https://github.com/fujiisoup
@@ -3104,7 +3425,7 @@ Other
 .. _`Adam Beberg`: https://github.com/beberg
 .. _`Johnnie Gray`: https://github.com/jcmgray
 .. _`Roma Sokolov`: https://github.com/little-arhat
-.. _`Daniel Severo`: https://github.com/daniel-severo
+.. _`Daniel Severo`: https://github.com/dsevero
 .. _`Michał Jastrzębski`: https://github.com/inc0
 .. _`Janne Vuorela`: https://github.com/Dimplexion
 .. _`Ross Petchler`: https://github.com/rpetchler
@@ -3116,7 +3437,7 @@ Other
 .. _`@HSR05`: https://github.com/HSR05
 .. _`Ben Zaitlen`: https://github.com/quasiben
 .. _`Brett Naul`: https://github.com/bnaul
-.. _`Justin Poehnelt`: https://github.com/justinwp
+.. _`Justin Poehnelt`: https://github.com/jpoehnelt
 .. _`Dan O'Donovan`: https://github.com/danodonovan
 .. _`amerkel2`: https://github.com/amerkel2
 .. _`Justin Waugh`: https://github.com/bluecoconut
@@ -3259,3 +3580,26 @@ Other
 .. _`Scott Sanderson`: https://github.com/ssanderson
 .. _`Gaurav Sheni`: https://github.com/gsheni
 .. _`Andrew Fulton`: https://github.com/andrewfulton9
+.. _`Stephanie Gott`: https://github.com/stephaniegott
+.. _`Huite`: https://github.com/Huite
+.. _`Ryan Williams`: https://github.com/ryan-williams
+.. _`Eric Czech`: https://github.com/eric-czech
+.. _`Abdulelah Bin Mahfoodh`: https://github.com/abduhbm
+.. _`Ben Shaver`: https://github.com/bpshaver
+.. _`Matthias Bussonnier`: https://github.com/Carreau
+.. _`johnomotani`: https://github.com/johnomotani
+.. _`Roberto Panai`: https://github.com/rpanai
+.. _`Clark Zinzow`: https://github.com/clarkzinzow
+.. _`Tom McTiernan`: https://github.com/tmct
+.. _`Zhengnan`: https://github.com/ZhengnanZhao
+.. _`joshreback`: https://github.com/joshreback
+.. _`Jun Han (Johnson) Ooi`: https://github.com/tebesfinwo
+.. _`Jim Circadian`: https://github.com/JimCircadian
+.. _`Jack Xiaosong Xu`: https://github.com/jackxxu
+.. _`Mike McCarty`: https://github.com/mmccarty
+.. _`michaelnarodovitch`: https://github.com/michaelnarodovitch
+.. _`David Sheldon`: https://github.com/davidsmf
+.. _`McToel`: https://github.com/McToel
+.. _`Kilian Lieret`: https://github.com/klieret
+.. _`Noah D Brenowitz`: https://github.com/nbren12
+.. _`Jon Thielen`: https://github.com/jthielen
