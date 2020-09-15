@@ -53,6 +53,8 @@ def sanitize_index(ind):
     ...
     IndexError: Bad index.  Must be integer-like: 0.5
     """
+    from .utils import asanyarray_safe
+
     if ind is None:
         return None
     elif isinstance(ind, slice):
@@ -65,13 +67,13 @@ def sanitize_index(ind):
         return _sanitize_index_element(ind)
     elif is_dask_collection(ind):
         return ind
-    index_array = np.asanyarray(ind, like=ind)
+    index_array = asanyarray_safe(ind, like=ind)
     if index_array.dtype == bool:
         nonzero = np.nonzero(index_array)
         if len(nonzero) == 1:
             # If a 1-element tuple, unwrap the element
             nonzero = nonzero[0]
-        return np.asanyarray(nonzero, like=nonzero)
+        return asanyarray_safe(nonzero, like=nonzero)
     elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
     elif np.issubdtype(index_array.dtype, np.floating):
@@ -541,8 +543,10 @@ def slicing_plan(chunks, index):
     out : List[Tuple[int, np.ndarray]]
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
+    from .utils import asanyarray_safe
+
     index = index.tolist()
-    index = np.asanyarray(index, like=index)
+    index = asanyarray_safe(index, like=index)
     cum_chunks = cached_cumsum(chunks)
 
     cum_chunks = np.asarray(cum_chunks, like=index)
@@ -919,8 +923,10 @@ def check_index(ind, dimension):
     if np.isnan(dimension):
         return
     elif isinstance(ind, (list, np.ndarray)) or is_arraylike(ind):
+        from .utils import asanyarray_safe
+
         i = ind[0]
-        x = np.asanyarray(ind, like=i)
+        x = asanyarray_safe(ind, i)
         if x.dtype == bool:
             if x.size != dimension:
                 raise IndexError(
