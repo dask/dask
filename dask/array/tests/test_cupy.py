@@ -875,6 +875,21 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
+
+@pytest.mark.skipif(
+    np.__version__ < "1.20", reason="NEP35 is not available"
+)
+@pytest.mark.parametrize("arr", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))])
+@pytest.mark.parametrize("like", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))])
+def test_asanyarray(arr, like):
+    if isinstance(like, np.ndarray) and isinstance(da.utils.meta_from_array(arr), cupy.ndarray):
+        with pytest.raises(ValueError):
+            a = da.utils.asanyarray_safe(arr, like=like)
+    else:
+        a = da.utils.asanyarray_safe(arr, like=like)
+        assert type(a) is type(like)
+
+
 @pytest.mark.skipif(
     np.__version__ < "1.20", reason="NEP35 is not available"
 )
