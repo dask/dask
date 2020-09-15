@@ -335,6 +335,25 @@ def zeros_like_safe(a, shape, **kwargs):
         return np.zeros(shape, **kwargs)
 
 
+def asanyarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asanyarray(a, **kwargs),
+    otherwise return np.asanyarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asanyarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asanyarray
+
+    if isinstance(like, Array):
+        return asanyarray(a, **kwargs)
+    elif isinstance(a, Array):
+        a = a.compute(scheduler="sync")
+
+    return np.asanyarray(a, like=meta_from_array(like), **kwargs)
+
+
 def validate_axis(axis, ndim):
     """ Validate an input to axis= keywords """
     if isinstance(axis, (tuple, list)):
