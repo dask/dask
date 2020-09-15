@@ -4,6 +4,7 @@ repos:
     hooks:
     - id: black
       language_version: python3
+      exclude: versioneer.py
 -   repo: https://gitlab.com/pycqa/flake8
     rev: 3.8.3
     hooks:
