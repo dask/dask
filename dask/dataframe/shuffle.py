@@ -70,12 +70,6 @@ class ShuffleStage(Layer):
         if hasattr(self, "_cached_dict"):
             return self._cached_dict["dsk"]
         else:
-            key_deps = {}
-            for i in range(len(self.inputs)):
-                if self.stage > 0 or i < self._ddf.npartitions:
-                    key_deps[(self.name, i)] = {(self._ddf._name, i)}
-                else:
-                    key_deps[(self.name, i)] = set()
             dsk = _rbc_tasks_stage(
                 self._ddf,
                 self.name,
@@ -87,7 +81,7 @@ class ShuffleStage(Layer):
                 self.k,
                 self.ignore_index,
             )
-            self._cached_dict = {"dsk": dsk, "basic_layer": BasicLayer(dsk, key_deps)}
+            self._cached_dict = {"dsk": dsk, "basic_layer": BasicLayer(dsk)}
         return self._cached_dict["dsk"]
 
     def __getitem__(self, key):
