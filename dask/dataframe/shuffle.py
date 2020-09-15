@@ -15,7 +15,7 @@ from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_obj
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
 from ..delayed import delayed
-from ..highlevelgraph import HighLevelGraph
+from ..highlevelgraph import BasicLayer, HighLevelGraph, Layer
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
@@ -24,64 +24,92 @@ from . import methods
 logger = logging.getLogger(__name__)
 
 
-# class ShuffleStage(Layer):
-#     """ Shuffle HLG Layer
+class ShuffleStage(Layer):
+    """ Shuffle HLG Layer
 
-#     High-level graph layer corresponding to a single stage of
-#     an inter-partition shuffle operation.
-
-
-#     Stage: (shuffle-group) -> (shuffle-split) -> (shuffle-join)
+    High-level graph layer corresponding to a single stage of
+    an inter-partition shuffle operation.
 
 
-#     """
-#     def __init__(
-#         self, ddf, column, name, inputs, stage, npartitions, k, max_branch=32, ignore_index=False
-#     ):
-#         self._ddf = ddf
-#         self.column = column
-#         self.name = name
-#         self.inputs = inputs
-#         self.stage = stage
-#         self.npartitions = npartitions
-#         self.k = k
-#         self.max_branch = max_branch
-#         self.ignore_index = ignore_index
+    Stage: (shuffle-group) -> (shuffle-split) -> (shuffle-join)
 
-#     def __repr__(self):
-#         return (
-#             "ShuffleStage<name='{}', stage={}, k={}, npartitions={}, ignore_index={}>".format(
-#                 self.name, self.stage, self.k, self.npartitions, self.ignore_index
-#             )
-#         )
 
-#     @property
-#     def _dict(self):
-#         if hasattr(self, "_cached_dict"):
-#             return self._cached_dict["dsk"]
-#         else:
-#             keys = tuple(map(blockwise_token, range(len(self.indices))))
-#             dsk, _ = fuse(self.dsk, [self.output])
-#             func = SubgraphCallable(dsk, self.output, keys)
+    """
 
-#             key_deps = {}
-#             non_blockwise_keys = set()
-#             dsk = make_blockwise_graph(
-#                 func,
-#                 self.output,
-#                 self.output_indices,
-#                 *list(toolz.concat(self.indices)),
-#                 new_axes=self.new_axes,
-#                 numblocks=self.numblocks,
-#                 concatenate=self.concatenate,
-#                 key_deps=key_deps,
-#                 non_blockwise_keys=non_blockwise_keys,
-#             )
-#             self._cached_dict = {
-#                 "dsk": dsk,
-#                 "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_keys),
-#             }
-#         return self._cached_dict["dsk"]
+    def __init__(
+        self,
+        ddf,
+        name,
+        column,
+        inputs,
+        stage,
+        stages,
+        npartitions,
+        n,
+        k,
+        ignore_index=False,
+    ):
+        self._ddf = ddf
+        self.column = column
+        self.name = name
+        self.inputs = inputs
+        self.stage = stage
+        self.stages = stages
+        self.npartitions = npartitions
+        self.n = n
+        self.k = k
+        self.ignore_index = ignore_index
+
+    def __repr__(self):
+        return "ShuffleStage<name='{}', stage={}, k={}, npartitions={}, ignore_index={}>".format(
+            self.name, self.stage, self.k, self.npartitions, self.ignore_index
+        )
+
+    @property
+    def _dict(self):
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict["dsk"]
+        else:
+            key_deps = {}
+            for i in range(len(self.inputs)):
+                if self.stage > 0 or i < self._ddf.npartitions:
+                    key_deps[(self.name, i)] = {(self._ddf._name, i)}
+                else:
+                    key_deps[(self.name, i)] = set()
+            dsk = _rbc_tasks_stage(
+                self._ddf,
+                self.name,
+                self.column,
+                self.inputs,
+                self.stage,
+                self.npartitions,
+                self.n,
+                self.k,
+                self.ignore_index,
+            )
+            self._cached_dict = {"dsk": dsk, "basic_layer": BasicLayer(dsk, key_deps)}
+        return self._cached_dict["dsk"]
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def get_external_dependencies(self, all_hlg_keys):
+        _ = self._dict  # trigger materialization
+        return self._cached_dict["basic_layer"].get_external_dependencies(all_hlg_keys)
+
+    def get_dependencies(self, all_hlg_keys):
+        _ = self._dict  # trigger materialization
+        return self._cached_dict["basic_layer"].get_dependencies(all_hlg_keys)
+
+    def cull(self, keys):
+        _ = self._dict  # trigger materialization
+        return self._cached_dict["basic_layer"].cull(keys)
 
 
 def set_index(
@@ -94,7 +122,7 @@ def set_index(
     upsample=1.0,
     divisions=None,
     partition_size=128e6,
-    **kwargs
+    **kwargs,
 ):
     """ See _Frame.set_index for docstring """
     if isinstance(index, Series) and index._name == df.index._name:
@@ -646,11 +674,20 @@ def rearrange_by_column_tasks(
     inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
 
     npartitions_orig = df.npartitions
+    token = tokenize(df, stages, column, n, k)
     for stage in range(stages):
-        token = tokenize(df, stage, column, n, k)
-        stage_name = "shuffle-stage-" + token
-        stage_layer = _rbc_tasks_stage(
-            df, stage_name, column, inputs, stage, npartitions, n, k, ignore_index
+        stage_name = f"shuffle-{stage}-{token}"
+        stage_layer = ShuffleStage(
+            df,
+            stage_name,
+            column,
+            inputs,
+            stage,
+            stages,
+            npartitions,
+            n,
+            k,
+            ignore_index=ignore_index,
         )
         graph = HighLevelGraph.from_collections(
             stage_name, stage_layer, dependencies=[df]
