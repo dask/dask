@@ -15,7 +15,7 @@ from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_obj
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
 from ..delayed import delayed
-from ..highlevelgraph import BasicLayer, HighLevelGraph, Layer
+from ..highlevelgraph import HighLevelGraph, Layer
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
@@ -81,7 +81,7 @@ class ShuffleStage(Layer):
                 self.k,
                 self.ignore_index,
             )
-            self._cached_dict = {"dsk": dsk, "basic_layer": BasicLayer(dsk)}
+            self._cached_dict = {"dsk": dsk}
         return self._cached_dict["dsk"]
 
     def __getitem__(self, key):
@@ -92,18 +92,6 @@ class ShuffleStage(Layer):
 
     def __len__(self):
         return len(self._dict)
-
-    def get_external_dependencies(self, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].get_external_dependencies(all_hlg_keys)
-
-    def get_dependencies(self, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].get_dependencies(all_hlg_keys)
-
-    def cull(self, keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].cull(keys)
 
 
 def set_index(
