@@ -406,6 +406,7 @@ Other functions
 .. autofunction:: stack
 .. autofunction:: concatenate
 
+.. autofunction:: add
 .. autofunction:: all
 .. autofunction:: allclose
 .. autofunction:: angle
@@ -441,6 +442,7 @@ Other functions
 .. autofunction:: blockwise
 .. autofunction:: broadcast_arrays
 .. autofunction:: broadcast_to
+.. autofunction:: cbrt
 .. autofunction:: coarsen
 .. autofunction:: ceil
 .. autofunction:: choose
@@ -467,8 +469,10 @@ Other functions
 .. autofunction:: ediff1d
 .. autofunction:: empty
 .. autofunction:: empty_like
+.. autofunction:: equal
 .. autofunction:: einsum
 .. autofunction:: exp
+.. autofunction:: exp2
 .. autofunction:: expm1
 .. autofunction:: eye
 .. autofunction:: fabs
@@ -477,7 +481,9 @@ Other functions
 .. autofunction:: flip
 .. autofunction:: flipud
 .. autofunction:: fliplr
+.. autofunction:: float_power
 .. autofunction:: floor
+.. autofunction:: floor_divide
 .. autofunction:: fmax
 .. autofunction:: fmin
 .. autofunction:: fmod
@@ -487,6 +493,8 @@ Other functions
 .. autofunction:: full
 .. autofunction:: full_like
 .. autofunction:: gradient
+.. autofunction:: greater
+.. autofunction:: greater_equal
 .. autofunction:: histogram
 .. autofunction:: hstack
 .. autofunction:: hypot
@@ -505,6 +513,7 @@ Other functions
 .. autofunction:: isposinf
 .. autofunction:: isreal
 .. autofunction:: ldexp
+.. autofunction:: less
 .. autofunction:: linspace
 .. autofunction:: log
 .. autofunction:: log10
@@ -525,9 +534,11 @@ Other functions
 .. autofunction:: meshgrid
 .. autofunction:: min
 .. autofunction:: minimum
+.. autofunction:: mod
 .. autofunction:: modf
 .. autofunction:: moment
 .. autofunction:: moveaxis
+.. autofunction:: multiply
 .. autofunction:: nanargmax
 .. autofunction:: nanargmin
 .. autofunction:: nancumprod
@@ -541,8 +552,10 @@ Other functions
 .. autofunction:: nansum
 .. autofunction:: nanvar
 .. autofunction:: nan_to_num
+.. autofunction:: negative
 .. autofunction:: nextafter
 .. autofunction:: nonzero
+.. autofunction:: not_equal
 .. autofunction:: notnull
 .. autofunction:: ones
 .. autofunction:: ones_like
@@ -550,14 +563,18 @@ Other functions
 .. autofunction:: pad
 .. autofunction:: percentile
 .. autofunction:: piecewise
+.. autofunction:: power
 .. autofunction:: prod
 .. autofunction:: ptp
 .. autofunction:: rad2deg
 .. autofunction:: radians
 .. autofunction:: ravel
 .. autofunction:: real
+.. autofunction:: reciprocal
 .. autofunction:: rechunk
 .. autofunction:: reduction
+.. autofunction:: register_chunk_type
+.. autofunction:: remainder
 .. autofunction:: repeat
 .. autofunction:: reshape
 .. autofunction:: result_type
@@ -568,12 +585,14 @@ Other functions
 .. autofunction:: sign
 .. autofunction:: signbit
 .. autofunction:: sin
+.. autofunction:: sinc
 .. autofunction:: sinh
 .. autofunction:: sqrt
 .. autofunction:: square
 .. autofunction:: squeeze
 .. autofunction:: stack
 .. autofunction:: std
+.. autofunction:: subtract
 .. autofunction:: sum
 .. autofunction:: take
 .. autofunction:: tan
@@ -582,6 +601,7 @@ Other functions
 .. autofunction:: tile
 .. autofunction:: topk
 .. autofunction:: transpose
+.. autofunction:: true_divide
 .. autofunction:: tril
 .. autofunction:: triu
 .. autofunction:: trunc
