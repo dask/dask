@@ -590,12 +590,10 @@ def _simple_rearrange_by_column_tasks(df, column, npartitions, ignore_index=Fals
     )
 
 
-def _rbc_tasks_stage(df, column, inputs, stage, npartitions, n, k, ignore_index):
-    token = tokenize(df, stage, column, n, k)
-    shuffle_join_name = "shuffle-join-" + token
-    shuffle_group_name = "shuffle-group-" + token
-    shuffle_split_name = "shuffle-split-" + token
-    shuffle_token = "shuffle-" + token
+def _rbc_tasks_stage(df, name, column, inputs, stage, npartitions, n, k, ignore_index):
+    shuffle_join_name = "join-" + name
+    shuffle_group_name = "group-" + name
+    shuffle_split_name = "split-" + name
 
     dsk = {}
     for idx, inp in enumerate(inputs):
@@ -628,9 +626,9 @@ def _rbc_tasks_stage(df, column, inputs, stage, npartitions, n, k, ignore_index)
             _concat_list.append((shuffle_split_name, inp[stage], insert(inp, stage, i)))
 
         # concatenate those pieces together, with their friends
-        dsk[(shuffle_token, idx)] = (_concat, _concat_list, ignore_index)
+        dsk[(name, idx)] = (_concat, _concat_list, ignore_index)
 
-    return shuffle_token, dsk
+    return dsk
 
 
 def rearrange_by_column_tasks(
@@ -649,11 +647,15 @@ def rearrange_by_column_tasks(
 
     npartitions_orig = df.npartitions
     for stage in range(stages):
-        new_key, new_layer = _rbc_tasks_stage(
-            df, column, inputs, stage, npartitions, n, k, ignore_index
+        token = tokenize(df, stage, column, n, k)
+        stage_name = "shuffle-stage-" + token
+        stage_layer = _rbc_tasks_stage(
+            df, stage_name, column, inputs, stage, npartitions, n, k, ignore_index
         )
-        graph = HighLevelGraph.from_collections(new_key, new_layer, dependencies=[df])
-        df = new_dd_object(graph, new_key, df._meta, df.divisions)
+        graph = HighLevelGraph.from_collections(
+            stage_name, stage_layer, dependencies=[df]
+        )
+        df = new_dd_object(graph, stage_name, df._meta, df.divisions)
 
     if npartitions is not None and npartitions != npartitions_orig:
         token = tokenize(df, npartitions)
