@@ -55,6 +55,34 @@ logger = logging.getLogger(__name__)
 #             )
 #         )
 
+#     @property
+#     def _dict(self):
+#         if hasattr(self, "_cached_dict"):
+#             return self._cached_dict["dsk"]
+#         else:
+#             keys = tuple(map(blockwise_token, range(len(self.indices))))
+#             dsk, _ = fuse(self.dsk, [self.output])
+#             func = SubgraphCallable(dsk, self.output, keys)
+
+#             key_deps = {}
+#             non_blockwise_keys = set()
+#             dsk = make_blockwise_graph(
+#                 func,
+#                 self.output,
+#                 self.output_indices,
+#                 *list(toolz.concat(self.indices)),
+#                 new_axes=self.new_axes,
+#                 numblocks=self.numblocks,
+#                 concatenate=self.concatenate,
+#                 key_deps=key_deps,
+#                 non_blockwise_keys=non_blockwise_keys,
+#             )
+#             self._cached_dict = {
+#                 "dsk": dsk,
+#                 "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_keys),
+#             }
+#         return self._cached_dict["dsk"]
+
 
 def set_index(
     df,
@@ -602,8 +630,7 @@ def _rbc_tasks_stage(df, column, inputs, stage, npartitions, n, k, ignore_index)
         # concatenate those pieces together, with their friends
         dsk[(shuffle_token, idx)] = (_concat, _concat_list, ignore_index)
 
-    graph = HighLevelGraph.from_collections(shuffle_token, dsk, dependencies=[df])
-    return new_dd_object(graph, shuffle_token, df._meta, df.divisions)
+    return shuffle_token, dsk
 
 
 def rearrange_by_column_tasks(
@@ -622,9 +649,11 @@ def rearrange_by_column_tasks(
 
     npartitions_orig = df.npartitions
     for stage in range(stages):
-        df = _rbc_tasks_stage(
+        new_key, new_layer = _rbc_tasks_stage(
             df, column, inputs, stage, npartitions, n, k, ignore_index
         )
+        graph = HighLevelGraph.from_collections(new_key, new_layer, dependencies=[df])
+        df = new_dd_object(graph, new_key, df._meta, df.divisions)
 
     if npartitions is not None and npartitions != npartitions_orig:
         token = tokenize(df, npartitions)
