@@ -11,6 +11,8 @@ from tlz import memoize, merge, pluck, concat, accumulate
 
 from ..utils import is_arraylike
 from .. import core
+from .. import config
+from .. import utils
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
 
@@ -84,7 +86,7 @@ def sanitize_index(ind):
         raise TypeError("Invalid index type", type(ind), ind)
 
 
-def slice_array(out_name, in_name, blockdims, index):
+def slice_array(out_name, in_name, blockdims, index, itemsize):
     """
     Master function for array slicing
 
@@ -105,6 +107,8 @@ def slice_array(out_name, in_name, blockdims, index):
       This is the dask variable output name
     blockshape - iterable of integers
     index - iterable of integers, slices, lists, or None
+    itemsize : int
+        The number of bytes required for each element of the array.
 
     Returns
     -------
@@ -156,13 +160,13 @@ def slice_array(out_name, in_name, blockdims, index):
     index += (slice(None, None, None),) * missing
 
     # Pass down to next function
-    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index)
+    dsk_out, bd_out = slice_with_newaxes(out_name, in_name, blockdims, index, itemsize)
 
     bd_out = tuple(map(tuple, bd_out))
     return dsk_out, bd_out
 
 
-def slice_with_newaxes(out_name, in_name, blockdims, index):
+def slice_with_newaxes(out_name, in_name, blockdims, index, itemsize):
     """
     Handle indexing with Nones
 
@@ -178,7 +182,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
             where_none[i] -= n
 
     # Pass down and do work
-    dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2)
+    dsk, blockdims2 = slice_wrap_lists(out_name, in_name, blockdims, index2, itemsize)
 
     if where_none:
         expand = expander(where_none)
@@ -203,7 +207,7 @@ def slice_with_newaxes(out_name, in_name, blockdims, index):
         return dsk, blockdims2
 
 
-def slice_wrap_lists(out_name, in_name, blockdims, index):
+def slice_wrap_lists(out_name, in_name, blockdims, index, itemsize):
     """
     Fancy indexing along blocked array dasks
 
@@ -245,7 +249,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
     if all(is_arraylike(i) or i == slice(None, None, None) for i in index):
         axis = where_list[0]
         blockdims2, dsk3 = take(
-            out_name, in_name, blockdims, index[where_list[0]], axis=axis
+            out_name, in_name, blockdims, index[where_list[0]], itemsize, axis=axis
         )
     # Mixed case. Both slices/integers and lists. slice/integer then take
     else:
@@ -262,7 +266,7 @@ def slice_wrap_lists(out_name, in_name, blockdims, index):
         )
 
         # Do work
-        blockdims2, dsk2 = take(out_name, tmp, blockdims2, index[axis], axis=axis2)
+        blockdims2, dsk2 = take(out_name, tmp, blockdims2, index[axis], 8, axis=axis2)
         dsk3 = merge(dsk, dsk2)
 
     return dsk3, blockdims2
@@ -564,14 +568,14 @@ def slicing_plan(chunks, index):
     return out
 
 
-def take(outname, inname, chunks, index, axis=0):
+def take(outname, inname, chunks, index, itemsize, axis=0):
     """Index array with an iterable of index
 
     Handles a single index by a single list
 
     Mimics ``np.take``
 
-    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], axis=0)
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [5, 1, 47, 3], 8, axis=0)
     >>> chunks
     ((2, 1, 1),)
     >>> dsk  # doctest: +SKIP
@@ -582,12 +586,20 @@ def take(outname, inname, chunks, index, axis=0):
 
     When list is sorted we retain original block structure
 
-    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], axis=0)
+    >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], 8, axis=0)
     >>> chunks
     ((3, 1),)
     >>> dsk  # doctest: +SKIP
     {('y', 0): (getitem, ('x', 0), ([1, 3, 5],)),
      ('y', 2): (getitem, ('x', 2), ([7],))}
+
+    When any indexed blocks would otherwise grow larger than
+    dask.config.array.chunk-size, we split them.
+
+    >>> chunks, dsk = take('y', 'x', [(1, 1, 1), (1000, 1000), (1000, 1000)],
+    ...                    [0] + [1] * 6 + [2], axis=0, itemsize=8)
+    >>> chunks
+    ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
@@ -600,9 +612,29 @@ def take(outname, inname, chunks, index, axis=0):
             PerformanceWarning,
             stacklevel=6,
         )
+    index = np.asarray(index)
 
-    index_lists = [idx for _, idx in plan]
-    where_index = [i for i, _ in plan]
+    # Check for chunks from the plan that would violate the user's
+    # configured chunk size.
+    nbytes = utils.parse_bytes(config.get("array.chunk-size"))
+    other_chunks = [chunks[i] for i in range(len(chunks)) if i != axis]
+    other_numel = np.prod([sum(x) for x in other_chunks])
+
+    maxsize = nbytes / (other_numel * itemsize)
+
+    where_index = []
+    index_lists = []
+    for where_idx, index_list in plan:
+        index_length = len(index_list)
+        if index_length > maxsize:
+            index_sublist = np.array_split(
+                index_list, math.ceil(index_length / maxsize)
+            )
+            index_lists.extend(index_sublist)
+            where_index.extend([where_idx] * len(index_sublist))
+        else:
+            index_lists.append(np.array(index_list))
+            where_index.append(where_idx)
 
     dims = [range(len(bd)) for bd in chunks]
 

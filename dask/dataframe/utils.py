@@ -555,7 +555,7 @@ def _nonempty_series(s, idx=None):
             cats = s.cat.categories
         else:
             data = _nonempty_index(s.cat.categories)
-            cats = None
+            cats = s.cat.categories[:0]
         data = pd.Categorical(data, categories=cats, ordered=s.cat.ordered)
     elif is_integer_na_dtype(dtype):
         data = pd.array([1, None], dtype=dtype)
@@ -715,7 +715,10 @@ def index_summary(idx, name=None):
 def _check_dask(dsk, check_names=True, check_dtypes=True, result=None):
     import dask.dataframe as dd
 
-    if hasattr(dsk, "dask"):
+    if hasattr(dsk, "__dask_graph__"):
+        graph = dsk.__dask_graph__()
+        if hasattr(graph, "validate"):
+            graph.validate()
         if result is None:
             result = dsk.compute(scheduler="sync")
         if isinstance(dsk, dd.Index):

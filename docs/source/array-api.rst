@@ -6,6 +6,7 @@ API
 Top level user functions:
 
 .. autosummary::
+   add
    all
    allclose
    angle
@@ -41,6 +42,7 @@ Top level user functions:
    blockwise
    broadcast_arrays
    broadcast_to
+   cbrt
    coarsen
    ceil
    choose
@@ -69,7 +71,9 @@ Top level user functions:
    einsum
    empty
    empty_like
+   equal
    exp
+   exp2
    expm1
    eye
    fabs
@@ -78,7 +82,9 @@ Top level user functions:
    flip
    flipud
    fliplr
+   float_power
    floor
+   floor_divide
    fmax
    fmin
    fmod
@@ -88,6 +94,8 @@ Top level user functions:
    full
    full_like
    gradient
+   greater
+   greater_equal
    histogram
    hstack
    hypot
@@ -106,6 +114,7 @@ Top level user functions:
    isposinf
    isreal
    ldexp
+   less
    linspace
    log
    log10
@@ -127,9 +136,11 @@ Top level user functions:
    meshgrid
    min
    minimum
+   mod
    modf
    moment
    moveaxis
+   multiply
    nanargmax
    nanargmin
    nancumprod
@@ -143,8 +154,10 @@ Top level user functions:
    nansum
    nanvar
    nan_to_num
+   negative
    nextafter
    nonzero
+   not_equal
    notnull
    ones
    ones_like
@@ -153,14 +166,18 @@ Top level user functions:
    percentile
    ~core.PerformanceWarning
    piecewise
+   power
    prod
    ptp
    rad2deg
    radians
    ravel
    real
+   reciprocal
    rechunk
    reduction
+   register_chunk_type
+   remainder
    repeat
    reshape
    result_type
@@ -171,12 +188,14 @@ Top level user functions:
    sign
    signbit
    sin
+   sinc
    sinh
    sqrt
    square
    squeeze
    stack
    std
+   subtract
    sum
    take
    tan
@@ -186,6 +205,7 @@ Top level user functions:
    topk
    trace
    transpose
+   true_divide
    tril
    triu
    trunc
