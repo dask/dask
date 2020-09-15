@@ -378,7 +378,7 @@ def svd_flip(u, v):
     # lie relative to an arbitrary vector; this is equivalent
     # to dot product with a row vector of ones
     signs = np.sum(u, axis=0, keepdims=True)
-    signs = 2 * ((signs >= 0) - 0.5)
+    signs = signs.dtype.type(2) * ((signs >= 0) - signs.dtype.type(0.5))
     # Force all singular vectors into same half-space
     u, v = u * signs, v * signs.T
     return u, v
