@@ -195,7 +195,16 @@ class HighLevelGraph(Mapping):
         if layers_key_deps is None:
             self.layers_key_deps = {k: None for k in self.layers}
         else:
-            self.layers_key_deps = layers_key_deps
+            # Stripping dependencies not in any layer
+            self.layers_key_deps = {}
+            for layer_name, layer in self.layers.items():
+                layer_deps = layers_key_deps.get(layer_name)
+                if layer_deps is not None:
+                    self.layers_key_deps[layer_name] = {}
+                    for k in layer:
+                        self.layers_key_deps[layer_name][k] = {
+                            d for d in layer_deps[k] if d in self
+                        }
 
     def get_layer_key_dependencies(self, layer_name):
         layer = self.layers[layer_name]
@@ -443,7 +452,7 @@ class HighLevelGraph(Mapping):
                 d for d in self.dependencies[layer_name] if d in ret_layers
             }
 
-        return HighLevelGraph(ret_layers, ret_dependencies)
+        return HighLevelGraph(ret_layers, ret_dependencies, self.layers_key_deps)
 
     def validate(self):
         # Check dependencies
