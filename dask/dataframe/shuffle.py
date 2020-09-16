@@ -43,22 +43,22 @@ class ShuffleStage(Layer):
         column,
         inputs,
         stage,
-        stages,
         npartitions,
         n,
         k,
-        ignore_index=False,
+        ignore_index,
+        parts_out=None,
     ):
         self._ddf = ddf
         self.column = column
         self.name = name
         self.inputs = inputs
         self.stage = stage
-        self.stages = stages
         self.npartitions = npartitions
         self.n = n
         self.k = k
         self.ignore_index = ignore_index
+        self.parts_out = parts_out or range(len(inputs))
 
     def __repr__(self):
         return "ShuffleStage<name='{}', stage={}, k={}, npartitions={}, ignore_index={}>".format(
@@ -75,6 +75,7 @@ class ShuffleStage(Layer):
                 self.name,
                 self.column,
                 self.inputs,
+                self.parts_out,
                 self.stage,
                 self.npartitions,
                 self.n,
@@ -92,6 +93,31 @@ class ShuffleStage(Layer):
 
     def __len__(self):
         return len(self._dict)
+
+    def cull(self, keys):
+        _parts_out = set()
+        for key in keys:
+            try:
+                _name, _part = key
+            except ValueError:
+                # too many / few values to unpack
+                raise KeyError(key) from None
+            if _name != self.name:
+                # Key name is not an output
+                raise KeyError(key) from None
+            _parts_out.add(_part)
+        return ShuffleStage(
+            self._ddf,
+            self.name,
+            self.column,
+            self.inputs,
+            self.stage,
+            self.npartitions,
+            self.n,
+            self.k,
+            ignore_index=self.ignore_index,
+            parts_out=_parts_out,
+        )
 
 
 def set_index(
@@ -600,43 +626,58 @@ def _simple_rearrange_by_column_tasks(df, column, npartitions, ignore_index=Fals
     )
 
 
-def _rbc_tasks_stage(df, name, column, inputs, stage, npartitions, n, k, ignore_index):
+def _rbc_tasks_stage(
+    df, name, column, inputs, parts_out, stage, npartitions, n, k, ignore_index
+):
     shuffle_join_name = "join-" + name
     shuffle_group_name = "group-" + name
     shuffle_split_name = "split-" + name
 
     dsk = {}
-    for idx, inp in enumerate(inputs):
+    inp_part_map = {inp: i for i, inp in enumerate(inputs)}
+    for part in parts_out:
 
-        # Initial partitions (output of previous stage)
-        if stage == 0:
-            dsk[(shuffle_join_name, 0, inp)] = (
-                (df._name, idx) if idx < df.npartitions else df._meta
-            )
-        else:
-            dsk[(shuffle_join_name, 0, inp)] = (df._name, idx)
+        out = inputs[part]
 
-        # Convert partition into dict of dataframe pieces
-        dsk[(shuffle_group_name, inp)] = (
-            shuffle_group,
-            (shuffle_join_name, 0, inp),
-            column,
-            stage,
-            k,
-            n,
-            ignore_index,
-            npartitions,
-        )
-
-        _concat_list = []
+        _concat_list = []  # get_item tasks to concat for this output partition
         for i in range(k):
             # Get out each individual dataframe piece from the dicts
-            dsk[(shuffle_split_name, i, inp)] = (getitem, (shuffle_group_name, inp), i)
-
-            _concat_list.append((shuffle_split_name, inp[stage], insert(inp, stage, i)))
+            _inp = insert(out, stage, i)
+            _idx = out[stage]
+            _concat_list.append((shuffle_split_name, _idx, _inp))
 
         # concatenate those pieces together, with their friends
-        dsk[(name, idx)] = (_concat, _concat_list, ignore_index)
+        dsk[(name, part)] = (_concat, _concat_list, ignore_index)
+
+        for _, _idx, _inp in _concat_list:
+            dsk[(shuffle_split_name, _idx, _inp)] = (
+                getitem,
+                (shuffle_group_name, _inp),
+                _idx,
+            )
+
+            if (shuffle_group_name, _inp) not in dsk:
+
+                # Convert partition into dict of dataframe pieces
+                dsk[(shuffle_group_name, _inp)] = (
+                    shuffle_group,
+                    (shuffle_join_name, 0, _inp),
+                    column,
+                    stage,
+                    k,
+                    n,
+                    ignore_index,
+                    npartitions,
+                )
+
+                # Initial partitions (output of previous stage)
+                _part = inp_part_map[_inp]
+                if stage == 0:
+                    dsk[(shuffle_join_name, 0, _inp)] = (
+                        (df._name, _part) if _part < df.npartitions else df._meta
+                    )
+                else:
+                    dsk[(shuffle_join_name, 0, _inp)] = (df._name, _part)
 
     return dsk
 
@@ -660,16 +701,7 @@ def rearrange_by_column_tasks(
     for stage in range(stages):
         stage_name = f"shuffle-{stage}-{token}"
         stage_layer = ShuffleStage(
-            df,
-            stage_name,
-            column,
-            inputs,
-            stage,
-            stages,
-            npartitions,
-            n,
-            k,
-            ignore_index=ignore_index,
+            df, stage_name, column, inputs, stage, npartitions, n, k, ignore_index
         )
         graph = HighLevelGraph.from_collections(
             stage_name, stage_layer, dependencies=[df]
