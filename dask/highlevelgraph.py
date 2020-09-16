@@ -33,7 +33,7 @@ class Layer(collections.abc.Mapping):
     This abstract class establish a protocol for high level graph layers.
     """
 
-    def cull(self, keys: Set) -> "Layer":
+    def cull(self, keys: Set, dependencies: Mapping[Hashable, Set]) -> "Layer":
         """Return a new Layer with only the tasks required to calculate `keys`.
 
         In other words, remove unnecessary tasks from the layer.
@@ -49,36 +49,18 @@ class Layer(collections.abc.Mapping):
         layer: Layer
             Culled layer
         """
-        deps = self.get_dependencies(self)
         seen = set()
         out = {}
         work = keys.copy()
         while work:
             k = work.pop()
             out[k] = self[k]
-            for d in deps[k]:
+            for d in dependencies[k]:
                 if d in self and d not in seen:
                     seen.add(d)
                     work.add(d)
 
         return BasicLayer(out)
-
-    def get_external_dependencies(self, all_hlg_keys: Container) -> Set:
-        """Get external dependencies
-
-        Parameters
-        ----------
-        all_hlg_keys : Container
-            All keys in the high level graph.
-
-        Returns
-        -------
-        deps: set
-            Set of dependencies
-        """
-
-        all_deps = keys_in_tasks(all_hlg_keys, self.values())
-        return all_deps.difference(self.keys())
 
     def get_dependencies(self, all_hlg_keys: Container) -> Mapping[Hashable, Set]:
         """Get dependencies of all keys in the layer
@@ -115,6 +97,9 @@ class BasicLayer(Layer):
         self.dependencies = dependencies
         self.global_dependencies = global_dependencies
 
+    def __contains__(self, k):
+        return k in self.mapping
+
     def __getitem__(self, k):
         return self.mapping[k]
 
@@ -123,15 +108,6 @@ class BasicLayer(Layer):
 
     def __len__(self):
         return len(self.mapping)
-
-    def get_external_dependencies(self, all_hlg_keys):
-        if self.dependencies is None or self.global_dependencies is None:
-            return super().get_external_dependencies(all_hlg_keys)
-
-        ret = self.global_dependencies.intersection(all_hlg_keys)
-        for v in self.dependencies.values():
-            ret.update(v)
-        return ret
 
     def get_dependencies(self, all_hlg_keys):
         if self.dependencies is None or self.global_dependencies is None:
@@ -208,9 +184,34 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
 
-    def __init__(self, layers: Mapping[str, Mapping], dependencies: Mapping[str, Set]):
+    def __init__(
+        self,
+        layers: Mapping[str, Mapping],
+        dependencies: Mapping[str, Set],
+        layers_key_deps=None,
+    ):
         self.layers = layers
         self.dependencies = dependencies
+        if layers_key_deps is None:
+            self.layers_key_deps = {k: None for k in self.layers}
+        else:
+            self.layers_key_deps = layers_key_deps
+
+    def get_layer_key_dependencies(self, layer_name):
+        layer = self.layers[layer_name]
+        ret = self.layers_key_deps[layer_name]
+        if ret is None:
+            ret = layer.get_dependencies(set(self.keys()))
+            self.layers_key_deps[layer_name] = ret
+        return ret
+
+    def get_layer_external_dependencies(self, layer_name, keys):
+        layer = self.layers[layer_name]
+        deps = self.get_layer_key_dependencies(layer_name)
+        ret = set()
+        for k in keys:
+            ret.update(deps[k])
+        return ret.difference(layer.keys())
 
     @property
     def dependents(self):
@@ -366,10 +367,9 @@ class HighLevelGraph(Mapping):
             A map that maps each key to its dependencies
         """
 
-        keys = set(self.keys())
         ret = {}
-        for layer in self.layers.values():
-            ret.update(layer.get_dependencies(keys))
+        for layer_name in self.layers:
+            ret.update(self.get_layer_key_dependencies(layer_name))
         return ret
 
     def _fix_hlg_layers_inplace(self):
@@ -422,14 +422,19 @@ class HighLevelGraph(Mapping):
 
         layers = self._toposort_layers()
         ret_layers = {}
-        known_keys = set(self.keys())
 
         for layer_name in reversed(layers):
             layer = self.layers[layer_name]
             key_deps = keys.intersection(layer)
             if len(key_deps) > 0:
-                culled_layer = layer.cull(key_deps)
-                keys.update(culled_layer.get_external_dependencies(known_keys))
+                culled_layer = layer.cull(
+                    key_deps, self.get_layer_key_dependencies(layer_name)
+                )
+                keys.update(
+                    self.get_layer_external_dependencies(
+                        layer_name, culled_layer.keys()
+                    )
+                )
                 ret_layers[layer_name] = culled_layer
 
         ret_dependencies = {}
