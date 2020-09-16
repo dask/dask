@@ -80,11 +80,9 @@ def test_bag_groupby_normal_hash(bagsequence):
     ### THE ISSUE AND KEEP TRACK OF IT.
     assert isinstance(bagsequence, Bag)
     # Probably a cleaner way to do this (maybe make them sets instead of lists??)
-    result = bagsequence.groupby(lambda x: 'even' if (x % 2) == 0 else 'odd').compute()
+    result = bagsequence.groupby(lambda x: "even" if (x % 2) == 0 else "odd").compute()
     ordered_result = [(elem[0], sorted(elem[1])) for elem in sorted(result)]
-    assert (ordered_result == 
-        [('even', [0, 2, 4, 6, 8]), ('odd', [1, 3, 5, 7, 9])]
-            )
+    assert ordered_result == [("even", [0, 2, 4, 6, 8]), ("odd", [1, 3, 5, 7, 9])]
 
 
 def test_bag_map():
