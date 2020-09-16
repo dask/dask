@@ -92,7 +92,7 @@ class ParquetSubgraph(Layer):
     def get_dependencies(self, all_hlg_keys):
         return {k: set() for k in self}
 
-    def cull(self, keys):
+    def cull(self, keys, dependencies):
         return ParquetSubgraph(
             name=self.name,
             engine=self.engine,
