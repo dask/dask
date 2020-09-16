@@ -94,18 +94,30 @@ class ShuffleStage(Layer):
     def __len__(self):
         return len(self._dict)
 
-    def cull(self, keys):
-        _parts_out = set()
+    def _keys_to_parts(self, keys):
+        parts = set()
         for key in keys:
             try:
                 _name, _part = key
             except ValueError:
-                # too many / few values to unpack
-                raise KeyError(key) from None
+                continue
             if _name != self.name:
-                # Key name is not an output
-                raise KeyError(key) from None
-            _parts_out.add(_part)
+                continue
+            parts.add(_part)
+        return parts
+
+    def get_external_dependencies(self, keys):
+        deps = set()
+        parts_out = self._keys_to_parts(keys)
+        inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
+        for part in parts_out:
+            out = self.inputs[part]
+            for k in range(self.k):
+                _part = inp_part_map[insert(out, self.stage, k)]
+                deps.add((self._ddf._name, _part))
+        return deps
+
+    def cull(self, keys):
         return ShuffleStage(
             self._ddf,
             self.name,
@@ -116,7 +128,7 @@ class ShuffleStage(Layer):
             self.n,
             self.k,
             ignore_index=self.ignore_index,
-            parts_out=_parts_out,
+            parts_out=self._keys_to_parts(keys),
         )
 
 
