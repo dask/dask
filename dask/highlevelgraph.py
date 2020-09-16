@@ -190,6 +190,7 @@ class HighLevelGraph(Mapping):
         dependencies: Mapping[str, Set],
         layers_key_deps=None,
     ):
+        self.__keys = None
         self.layers = layers
         self.dependencies = dependencies
         if layers_key_deps is None:
@@ -203,14 +204,14 @@ class HighLevelGraph(Mapping):
                     self.layers_key_deps[layer_name] = {}
                     for k in layer:
                         self.layers_key_deps[layer_name][k] = {
-                            d for d in layer_deps[k] if d in self
+                            d for d in layer_deps[k] if d in self.keyset()
                         }
 
     def get_layer_key_dependencies(self, layer_name):
         layer = self.layers[layer_name]
         ret = self.layers_key_deps[layer_name]
         if ret is None:
-            ret = layer.get_dependencies(set(self.keys()))
+            ret = layer.get_dependencies(self.keyset())
             self.layers_key_deps[layer_name] = ret
         return ret
 
@@ -221,6 +222,13 @@ class HighLevelGraph(Mapping):
         for k in keys:
             ret.update(deps[k])
         return ret.difference(layer.keys())
+
+    def keyset(self):
+        if self.__keys is None:
+            self.__keys = set()
+            for layer in self.layers.values():
+                self.__keys.update(layer.keys())
+        return self.__keys
 
     @property
     def dependents(self):
@@ -322,7 +330,7 @@ class HighLevelGraph(Mapping):
         raise KeyError(key)
 
     def __len__(self):
-        return sum(1 for _ in self)
+        return len(self.keyset())
 
     def items(self):
         items = []
