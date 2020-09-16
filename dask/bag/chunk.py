@@ -9,6 +9,8 @@ def getitem(x, key):
     return x[key]
 
 
+# TODO: dask/bad/tests/test_bag.py is not testing this `foldby_combine2`.
+# (Confirmed with coverage run -m pytest)
 def foldby_combine2(combine, acc, x):
     return combine(acc, x[1])
 

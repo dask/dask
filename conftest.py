@@ -1,5 +1,7 @@
 import pytest
 
+from dask.bag import from_sequence
+
 # The doctests in these files fail due to either:
 # - Non-required dependencies not being installed
 # - Imported doctests due to pulling the docstrings from other packages
@@ -14,6 +16,14 @@ collect_ignore = [
     "dask/dataframe/io/parquet/arrow.py",
     "dask/dot.py",
 ]
+
+
+@pytest.fixture()
+def bagsequence():
+    """Create a small bag object from a sequence for Dask Bag testing."""
+    toybag = from_sequence(list(range(10)))
+    return toybag
+
 
 
 def pytest_addoption(parser):

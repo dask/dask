@@ -151,6 +151,7 @@ def _to_textfiles_chunk(data, lazy_file, last_endline):
             endline = "\n"
             ensure = ensure_unicode
         else:
+            # TODO: This path is not being tested on bag/tests/test_bag.py yet
             endline = b"\n"
             ensure = ensure_bytes
         started = False
@@ -161,6 +162,7 @@ def _to_textfiles_chunk(data, lazy_file, last_endline):
                 started = True
             f.write(ensure(d))
         if last_endline:
+            # TODO: This path is not being tested on bag/tests/test_bag.py yet
             f.write(endline)
 
 
@@ -259,8 +261,10 @@ def to_textfiles(
 
 def finalize(results):
     if not results:
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         return results
     if isinstance(results, Iterator):
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         results = list(results)
     if isinstance(results[0], Iterable) and not isinstance(results[0], str):
         results = toolz.concat(results)
@@ -362,6 +366,7 @@ class Item(DaskMethodsMixin):
         return finalize_item, ()
 
     def __dask_postpersist__(self):
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         return Item, (self.key,)
 
     @staticmethod
@@ -373,6 +378,7 @@ class Item(DaskMethodsMixin):
         from dask.delayed import Delayed, delayed
 
         if not isinstance(value, Delayed) and hasattr(value, "key"):
+            # TODO: This path is not being tested on bag/tests/test_bag.py yet
             value = delayed(value)
         assert isinstance(value, Delayed)
         return Item(ensure_dict(value.dask), value.key)
@@ -468,6 +474,7 @@ class Bag(DaskMethodsMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         return type(self), (self.name, self.npartitions)
 
     def __str__(self):
@@ -804,6 +811,7 @@ class Bag(DaskMethodsMixin):
         compute=True,
         **kwargs
     ):
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         return to_avro(
             self,
             filename,
@@ -1114,6 +1122,7 @@ class Bag(DaskMethodsMixin):
                 other = other.__dask_keys__()[0]
                 dsk["join-%s-other" % name] = (list, other)
             else:
+                # TODO: This path is not being tested on bag/tests/test_bag.py yet
                 msg = (
                     "Multi-bag joins are not implemented. "
                     "We recommend Dask dataframe if appropriate"
@@ -1125,6 +1134,7 @@ class Bag(DaskMethodsMixin):
         elif isinstance(other, Iterable):
             other = other
         else:
+            # TODO: This path is not being tested on bag/tests/test_bag.py yet
             msg = (
                 "Joined argument must be single-partition Bag, "
                 " delayed object, or Iterable, got %s" % type(other).__name
@@ -1457,11 +1467,13 @@ class Bag(DaskMethodsMixin):
         Bag.foldby
         """
         if method is not None:
+            # TODO: This path is not being tested on bag/tests/test_bag.py yet
             raise Exception("The method= keyword has been moved to shuffle=")
         if shuffle is None:
             shuffle = config.get("shuffle", None)
         if shuffle is None:
             if "distributed" in config.get("scheduler", ""):
+                # TODO: This path is not being tested on bag/tests/test_bag.py yet
                 shuffle = "tasks"
             else:
                 shuffle = "disk"
@@ -1472,6 +1484,7 @@ class Bag(DaskMethodsMixin):
         elif shuffle == "tasks":
             return groupby_tasks(self, grouper, max_branch=max_branch)
         else:
+            # TODO: This path is not being tested on bag/tests/test_bag.py yet
             msg = "Shuffle must be 'disk' or 'tasks'"
             raise NotImplementedError(msg)
 
@@ -1641,6 +1654,7 @@ class Bag(DaskMethodsMixin):
 
 
 def accumulate_part(binop, seq, initial, is_first=False):
+    # TODO: This entire function is not being tested on bag/tests/test_bag.py yet
     if initial == no_default:
         res = list(accumulate(binop, seq))
     else:
@@ -1736,6 +1750,7 @@ def from_url(urls):
     >>> b.npartitions  # doctest: +SKIP
     2
     """
+    # TODO: This entire function is not being tested on bag/tests/test_bag.py yet
     if isinstance(urls, str):
         urls = [urls]
     name = "from_url-" + uuid.uuid4().hex
@@ -1776,6 +1791,7 @@ def reify(seq):
     if isinstance(seq, Iterator):
         seq = list(seq)
     if len(seq) and isinstance(seq[0], Iterator):
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         seq = list(map(list, seq))
     return seq
 
@@ -1838,6 +1854,7 @@ def merge_frequencies(seqs):
         seqs = list(seqs)
     if not seqs:
         return {}
+    # TODO: Remainder of this function isn't being tested on bag/tests/test_bag.py yet
     first, rest = seqs[0], seqs[1:]
     if not rest:
         return first
@@ -1973,6 +1990,7 @@ class _MapChunk(Iterator):
                 except StopIteration:
                     pass
                 else:
+                    # TODO: This part is not being tested on bag/tests/test_bag.py yet
                     msg = (
                         "map called with multiple bags that aren't identically "
                         "partitioned. Please ensure that all bag arguments "
@@ -1982,6 +2000,7 @@ class _MapChunk(Iterator):
 
 
 def starmap_chunk(f, x, kwargs):
+    # TODO: This entire function is not being tested on bag/tests/test_bag.py yet
     if kwargs:
         f = partial(f, **kwargs)
     return itertools.starmap(f, x)
@@ -2192,10 +2211,12 @@ def map_partitions(func, *args, **kwargs):
     dependencies.extend(collections)
 
     if not bags:
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         raise ValueError("At least one argument must be a Bag.")
 
     npartitions = {b.npartitions for b in bags}
     if len(npartitions) > 1:
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         raise ValueError("All bags must have the same number of partitions.")
     npartitions = npartitions.pop()
 
@@ -2425,6 +2446,7 @@ def random_sample(x, state_data, prob):
         A float between 0 and 1, representing the probability that each
         element will be yielded.
     """
+    # TODO: This entire function is not being tested on bag/tests/test_bag.py yet
     random_state = Random()
     random_state.setstate(state_data)
     for i in x:
@@ -2444,6 +2466,7 @@ def random_state_data_python(n, random_state=None):
         If an int, is used to seed a new ``random.Random``.
     """
     if not isinstance(random_state, Random):
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         random_state = Random(random_state)
 
     maxuint32 = 1 << 32
@@ -2508,6 +2531,7 @@ def repartition_npartitions(bag, npartitions):
 
 
 def total_mem_usage(partition):
+    # TODO: This entire function is not being tested on bag/tests/test_bag.py yet
     from copy import deepcopy
     from itertools import chain
 
@@ -2523,6 +2547,7 @@ def repartition_size(bag, size):
     Repartition bag so that new partitions have approximately `size` memory usage each
     """
     if isinstance(size, str):
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         size = parse_bytes(size)
     size = int(size)
     mem_usages = bag.map_partitions(total_mem_usage).compute()
@@ -2563,6 +2588,7 @@ def _split_partitions(bag, nsplits, new_name):
     repartition_size
     """
     if len(nsplits) != bag.npartitions:
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         raise ValueError("nsplits should have len={}".format(bag.npartitions))
     dsk = {}
     split_name = "split-{}".format(tokenize(bag, nsplits))
@@ -2587,6 +2613,7 @@ def _repartition_from_boundaries(bag, new_partitions_boundaries, new_name):
     if new_partitions_boundaries[0] > 0:
         new_partitions_boundaries.insert(0, 0)
     if new_partitions_boundaries[-1] < bag.npartitions:
+        # TODO: This path is not being tested on bag/tests/test_bag.py yet
         new_partitions_boundaries.append(bag.npartitions)
     num_new_partitions = len(new_partitions_boundaries) - 1
     dsk = {}

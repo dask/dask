@@ -61,6 +61,32 @@ def test_keys():
     assert b.__dask_keys__() == sorted(dsk.keys())
 
 
+def test_bag_groupby_pure_hash(bagsequence):
+    """Test to ensure that `groupby` is grouping properly, when using 'pure' hashes
+    like integers. Eg., hash(False) == False, but hash('test') != 'test'. This is
+    testing the hash(False) == False case."""
+    assert isinstance(bagsequence, Bag)
+    # Probably a cleaner way to do this (maybe make them sets instead of lists??)
+    result = sorted(bagsequence.groupby(iseven).compute())
+    ordered_result = [(elem[0], sorted(elem[1])) for elem in result]
+    assert ordered_result == [(False, [1, 3, 5, 7, 9]), (True, [0, 2, 4, 6, 8])]
+
+
+def test_bag_groupby_normal_hash(bagsequence):
+    """Test to ensure that `groupby` is grouping properly, when using 'normal' hashes
+    like strings. Eg., hash(False) == False, but hash('test') != 'test'. This is
+    testing the hash('test') != 'test' case."""
+    ### THIS TEST CURRENTLY FAILS... THIS IS WHY IT IS BEING ADDED, TO HELP FIND
+    ### THE ISSUE AND KEEP TRACK OF IT.
+    assert isinstance(bagsequence, Bag)
+    # Probably a cleaner way to do this (maybe make them sets instead of lists??)
+    result = bagsequence.groupby(lambda x: 'even' if (x % 2) == 0 else 'odd').compute()
+    ordered_result = [(elem[0], sorted(elem[1])) for elem in sorted(result)]
+    assert (ordered_result == 
+        [('even', [0, 2, 4, 6, 8]), ('odd', [1, 3, 5, 7, 9])]
+            )
+
+
 def test_bag_map():
     b = db.from_sequence(range(100), npartitions=10)
     b2 = db.from_sequence(range(100, 200), npartitions=10)
