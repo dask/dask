@@ -251,17 +251,13 @@ class Blockwise(Layer):
 
         return out_d
 
-    def get_external_dependencies(self, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].get_external_dependencies(all_hlg_keys)
-
     def get_dependencies(self, all_hlg_keys):
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].get_dependencies(all_hlg_keys)
 
-    def cull(self, keys):
+    def cull(self, keys, dependencies):
         _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].cull(keys)
+        return self._cached_dict["basic_layer"].cull(keys, dependencies)
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):

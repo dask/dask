@@ -89,9 +89,6 @@ class ParquetSubgraph(Layer):
         for i in self.part_ids:
             yield (self.name, i)
 
-    def get_external_dependencies(self, all_hlg_keys):
-        return set()
-
     def get_dependencies(self, all_hlg_keys):
         return {k: set() for k in self}
 
