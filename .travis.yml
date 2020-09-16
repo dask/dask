@@ -13,10 +13,6 @@ env:
 matrix:
   fast_finish: true
   include:
-  - os: linux
-    language: python
-    python: 3.6
-    env: LINT=true
   - os: osx
     env: PYTHON=3.7 TESTS=true PACKAGES="python-snappy python-blosc" TORNADO=6
     if: type != pull_request OR commit_message =~ test-osx  # Skip on PRs unless the commit message contains "test-osx"
@@ -30,8 +26,6 @@ install:
 
 script:
   - if [[ $TESTS == true ]]; then source continuous_integration/travis/run_tests.sh ; fi
-  - if [[ $LINT == true ]]; then python -m pip install flake8 ; flake8 distributed ; fi
-  - if [[ $LINT == true ]]; then python -m pip install black ; black distributed --check; fi
 
 after_success:
   - if [[ $COVERAGE == true ]]; then coverage report; python -m pip install -q coveralls ; coveralls ; fi
