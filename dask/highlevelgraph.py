@@ -115,6 +115,9 @@ class BasicLayer(Layer):
         self.dependencies = dependencies
         self.global_dependencies = global_dependencies
 
+    def __contains__(self, k):
+        return k in self.mapping
+
     def __getitem__(self, k):
         return self.mapping[k]
 
