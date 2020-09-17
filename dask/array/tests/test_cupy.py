@@ -905,3 +905,55 @@ def test_compress():
     # rely on np.compress -- move originial data back to host and
     # compare da.compress with np.compress
     assert_eq(np.compress(c.tolist(), carr.tolist(), axis=0), res)
+
+
+@pytest.mark.skipif(
+    np.__version__ < "1.20", reason="NEP35 is not available"
+)
+@pytest.mark.parametrize(
+    "shape, chunks, pad_width, mode, kwargs",
+    [
+        ((10,), (3,), 1, "constant", {}),
+        ((10,), (3,), 2, "constant", {"constant_values": -1}),
+        ((10,), (3,), ((2, 3)), "constant", {"constant_values": (-1, -2)}),
+        (
+            (10, 11),
+            (4, 5),
+            ((1, 4), (2, 3)),
+            "constant",
+            {"constant_values": ((-1, -2), (2, 1))},
+        ),
+        ((10,), (3,), 3, "edge", {}),
+        #((10,), (3,), 3, "linear_ramp", {}),
+        #((10,), (3,), 3, "linear_ramp", {"end_values": 0}),
+        #(
+        #    (10, 11),
+        #    (4, 5),
+        #    ((1, 4), (2, 3)),
+        #    "linear_ramp",
+        #    {"end_values": ((-1, -2), (4, 3))},
+        #),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "wrap", {}),
+        #((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
+        #((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
+        #((10,), (3,), 1, "empty", {}),
+    ],
+)
+def test_pad(shape, chunks, pad_width, mode, kwargs):
+    np_a = np.random.random(shape)
+    da_a = da.from_array(cupy.array(np_a), chunks=chunks)
+
+    np_r = np.pad(np_a, pad_width, mode, **kwargs)
+    da_r = da.pad(da_a, pad_width, mode, **kwargs)
+
+    assert isinstance(da_r._meta, cupy.ndarray)
+    assert isinstance(da_r.compute(), cupy.ndarray)
+
+    if mode == "empty":
+        # empty pads lead to undefined values which may be different
+        assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
+    else:
+        assert_eq(np_r, da_r)
