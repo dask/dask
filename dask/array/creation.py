@@ -975,7 +975,7 @@ def pad_edge(array, pad_width, mode, **kwargs):
 
         if mode == "constant":
             constant_values = kwargs["constant_values"][d]
-            constant_values = [asarray(c).astype(result.dtype) for c in constant_values]
+            constant_values = [np.asarray(c, like=meta_from_array(array), dtype=result.dtype) for c in constant_values]
 
             pad_arrays = [
                 broadcast_to(v, s, c)
