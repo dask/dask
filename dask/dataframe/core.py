@@ -2929,11 +2929,11 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def count(self, split_every=False):
-        return super(Series, self).count(split_every=split_every)
+        return super().count(split_every=split_every)
 
     @derived_from(pd.Series)
     def mode(self, dropna=True, split_every=False):
-        return super(Series, self).mode(dropna=dropna, split_every=split_every)
+        return super().mode(dropna=dropna, split_every=split_every)
 
     @derived_from(pd.Series, version="0.25.0")
     def explode(self):
@@ -3020,7 +3020,7 @@ Dask Name: {name}, {task} tasks""".format(
     @derived_from(pd.Series)
     def isin(self, values):
         # Added just to get the different docstring for Series
-        return super(Series, self).isin(values)
+        return super().isin(values)
 
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Series)
@@ -3083,9 +3083,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def align(self, other, join="outer", axis=None, fill_value=None):
-        return super(Series, self).align(
-            other, join=join, axis=axis, fill_value=fill_value
-        )
+        return super().align(other, join=join, axis=axis, fill_value=fill_value)
 
     @derived_from(pd.Series)
     def combine(self, other, func, fill_value=None):
@@ -3314,7 +3312,7 @@ class Index(Series):
         raise AttributeError("'Index' object has no attribute %r" % key)
 
     def __dir__(self):
-        out = super(Index, self).__dir__()
+        out = super().__dir__()
         out.extend(self._dt_attributes)
         if is_categorical_dtype(self.dtype):
             out.extend(self._cat_attributes)
@@ -3427,7 +3425,7 @@ class Index(Series):
         divisions to the output.
 
         """
-        applied = super(Index, self).map(arg, na_action=na_action, meta=meta)
+        applied = super().map(arg, na_action=na_action, meta=meta)
         if is_monotonic and self.known_divisions:
             applied.divisions = tuple(
                 pd.Series(self.divisions).map(arg, na_action=na_action)
@@ -4146,9 +4144,7 @@ class DataFrame(_Frame):
             raise ValueError(msg)
         elif is_series_like(other):
             other = other.to_frame().T
-        return super(DataFrame, self).append(
-            other, interleave_partitions=interleave_partitions
-        )
+        return super().append(other, interleave_partitions=interleave_partitions)
 
     @derived_from(pd.DataFrame)
     def iterrows(self):
