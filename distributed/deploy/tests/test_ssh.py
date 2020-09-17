@@ -2,6 +2,7 @@ import pytest
 
 pytest.importorskip("asyncssh")
 
+import sys
 import dask
 from dask.distributed import Client
 from distributed.deploy.ssh import SSHCluster
@@ -154,5 +155,45 @@ async def test_list_of_connect_options_raises():
             asynchronous=True,
             scheduler_options={"port": 0, "idle_timeout": "5s"},
             worker_options={"death_timeout": "5s"},
+        ) as _:
+            pass
+
+
+@pytest.mark.asyncio
+async def test_remote_python():
+    async with SSHCluster(
+        ["127.0.0.1"] * 3,
+        connect_options=[dict(known_hosts=None)] * 3,
+        asynchronous=True,
+        scheduler_options={"port": 0, "idle_timeout": "5s"},
+        worker_options={"death_timeout": "5s"},
+        remote_python=sys.executable,
+    ) as cluster:
+        assert cluster.workers[0].remote_python == sys.executable
+
+
+@pytest.mark.asyncio
+async def test_remote_python_as_dict():
+    async with SSHCluster(
+        ["127.0.0.1"] * 3,
+        connect_options=[dict(known_hosts=None)] * 3,
+        asynchronous=True,
+        scheduler_options={"port": 0, "idle_timeout": "5s"},
+        worker_options={"death_timeout": "5s"},
+        remote_python=[sys.executable] * 3,
+    ) as cluster:
+        assert cluster.workers[0].remote_python == sys.executable
+
+
+@pytest.mark.asyncio
+async def test_list_of_remote_python_raises():
+    with pytest.raises(RuntimeError):
+        async with SSHCluster(
+            ["127.0.0.1"] * 3,
+            connect_options=[dict(known_hosts=None)] * 3,
+            asynchronous=True,
+            scheduler_options={"port": 0, "idle_timeout": "5s"},
+            worker_options={"death_timeout": "5s"},
+            remote_python=[sys.executable] * 4,  # Mismatch in length 4 != 3
         ) as _:
             pass

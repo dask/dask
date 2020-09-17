@@ -108,10 +108,13 @@ class Worker(Process):
                     "Worker failed to set DASK_INTERNAL_INHERIT_CONFIG variable "
                 )
 
+        if not self.remote_python:
+            self.remote_python = sys.executable
+
         cmd = " ".join(
             [
                 set_env,
-                self.remote_python or sys.executable,
+                self.remote_python,
                 "-m",
                 self.worker_module,
                 self.scheduler,
@@ -186,10 +189,13 @@ class Scheduler(Process):
                     "Scheduler failed to set DASK_INTERNAL_INHERIT_CONFIG variable "
                 )
 
+        if not self.remote_python:
+            self.remote_python = sys.executable
+
         cmd = " ".join(
             [
                 set_env,
-                self.remote_python or sys.executable,
+                self.remote_python,
                 "-m",
                 "distributed.cli.dask_scheduler",
             ]
@@ -235,7 +241,7 @@ def SSHCluster(
     worker_options: dict = {},
     scheduler_options: dict = {},
     worker_module: str = "distributed.cli.dask_worker",
-    remote_python: str = None,
+    remote_python: Union[str, List[str]] = None,
     **kwargs,
 ):
     """Deploy a Dask cluster using SSH
@@ -274,7 +280,7 @@ def SSHCluster(
         Keywords to pass on to scheduler.
     worker_module: str, optional
         Python module to call to start the worker.
-    remote_python: str, optional
+    remote_python: str or list of str, optional
         Path to Python on remote nodes.
 
     Examples
@@ -326,6 +332,12 @@ def SSHCluster(
             "dictionary for each address."
         )
 
+    if isinstance(remote_python, list) and len(remote_python) != len(hosts):
+        raise RuntimeError(
+            "When specifying a list of remote_python you must provide a "
+            "path for each address."
+        )
+
     scheduler = {
         "cls": Scheduler,
         "options": {
@@ -334,7 +346,9 @@ def SSHCluster(
             if isinstance(connect_options, dict)
             else connect_options[0],
             "kwargs": scheduler_options,
-            "remote_python": remote_python,
+            "remote_python": remote_python[0]
+            if isinstance(remote_python, list)
+            else remote_python,
         },
     }
     workers = {
@@ -347,7 +361,9 @@ def SSHCluster(
                 else connect_options[i + 1],
                 "kwargs": worker_options,
                 "worker_module": worker_module,
-                "remote_python": remote_python,
+                "remote_python": remote_python[i + 1]
+                if isinstance(remote_python, list)
+                else remote_python,
             },
         }
         for i, host in enumerate(hosts[1:])
