@@ -3844,7 +3844,7 @@ class Scheduler(ServerNode):
 
     async def register_worker_plugin(self, comm, plugin, name=None):
         """ Registers a setup function, and call it on every worker """
-        self.worker_plugins.append(plugin)
+        self.worker_plugins.append({"plugin": plugin, "name": name})
 
         responses = await self.broadcast(
             msg=dict(op="plugin-add", plugin=plugin, name=name)

@@ -137,6 +137,23 @@ async def test_release_dep_called(c, s, w):
 
 
 @gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
+async def test_registering_with_name_arg(c, s, w):
+    class FooWorkerPlugin:
+        def setup(self, worker):
+            if hasattr(worker, "foo"):
+                raise RuntimeError(f"Worker {worker.address} already has foo!")
+
+            worker.foo = True
+
+    responses = await c.register_worker_plugin(FooWorkerPlugin(), name="foo")
+    assert list(responses.values()) == [{"status": "OK"}]
+
+    async with Worker(s.address, loop=s.loop):
+        responses = await c.register_worker_plugin(FooWorkerPlugin(), name="foo")
+        assert list(responses.values()) == [{"status": "repeat"}] * 2
+
+
+@gen_cluster(nthreads=[("127.0.0.1", 1)], client=True)
 async def test_empty_plugin(c, s, w):
     class EmptyPlugin:
         pass
