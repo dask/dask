@@ -480,6 +480,14 @@ def test_svd_compressed():
     assert_eq(s, s_exact)  # s must contain the singular values
 
 
+@pytest.mark.parametrize("chunks", [(10, 50), (50, 10), (-1, -1)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_svd_dtype_preservation(chunks, dtype):
+    x = da.random.random((50, 50), chunks=chunks).astype(dtype)
+    u, s, v = svd(x)
+    assert u.dtype == s.dtype == v.dtype == dtype
+
+
 def test_svd_compressed_deterministic():
     m, n = 30, 25
     x = da.random.RandomState(1234).random_sample(size=(m, n), chunks=(5, 5))

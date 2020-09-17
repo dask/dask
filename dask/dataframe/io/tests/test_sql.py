@@ -59,6 +59,20 @@ def test_empty(db):
         assert pd_dataframe.empty is True
 
 
+def test_passing_engine_as_uri_raises_helpful_error(db):
+    # https://github.com/dask/dask/issues/6473
+    from sqlalchemy import create_engine
+
+    df = pd.DataFrame([{"i": i, "s": str(i) * 2} for i in range(4)])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpfile() as f:
+        db = "sqlite:///%s" % f
+        engine = create_engine(db)
+        with pytest.raises(ValueError, match="Expected URI to be a string"):
+            ddf.to_sql("test", engine, if_exists="replace")
+
+
 @pytest.mark.skip(
     reason="Requires a postgres server. Sqlite does not support multiple schemas."
 )
