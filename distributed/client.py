@@ -4817,8 +4817,8 @@ def _close_global_client():
     c = _get_global_client()
     if c is not None:
         c._should_close_loop = False
-        with suppress(TimeoutError):
-            c.close(timeout=2)
+        with suppress(TimeoutError, RuntimeError):
+            c.close(timeout=3)
 
 
 atexit.register(_close_global_client)
