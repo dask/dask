@@ -279,8 +279,7 @@ class HighLevelGraph(Mapping):
         if len(dependencies) == 1:
             return cls._from_collection(name, layer, dependencies[0])
         layers = {name: layer}
-        deps = {}
-        deps[name] = set()
+        deps = {name: set()}
         for collection in toolz.unique(dependencies, key=id):
             if is_dask_collection(collection):
                 graph = collection.__dask_graph__()
@@ -311,6 +310,9 @@ class HighLevelGraph(Mapping):
     def __len__(self):
         return len(self.keyset())
 
+    def __iter__(self):
+        return toolz.unique(toolz.concat(self.layers.values()))
+
     def items(self):
         items = []
         seen = set()
@@ -320,9 +322,6 @@ class HighLevelGraph(Mapping):
                     seen.add(key)
                     items.append((key, d[key]))
         return items
-
-    def __iter__(self):
-        return toolz.unique(toolz.concat(self.layers.values()))
 
     def keys(self):
         return [key for key, _ in self.items()]
