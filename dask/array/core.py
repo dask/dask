@@ -4112,7 +4112,7 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
-def broadcast_to(x, shape, chunks=None):
+def broadcast_to(x, shape, chunks=None, meta=None):
     """Broadcast an array to a new shape.
 
     Parameters
@@ -4127,6 +4127,9 @@ def broadcast_to(x, shape, chunks=None):
         broadcast_to is more efficient than rechunking afterwards. Chunks are
         only allowed to differ from the original shape along dimensions that
         are new on the result or have size 1 the input array.
+    meta : empty ndarray
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
 
     Returns
     -------
@@ -4138,6 +4141,9 @@ def broadcast_to(x, shape, chunks=None):
     """
     x = asarray(x)
     shape = tuple(shape)
+
+    if meta is None:
+        meta = meta_from_array(x)
 
     if x.shape == shape and (chunks is None or chunks == x.chunks):
         return x
@@ -4178,7 +4184,7 @@ def broadcast_to(x, shape, chunks=None):
         dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    return Array(graph, name, chunks, dtype=x.dtype)
+    return Array(graph, name, chunks, dtype=x.dtype, meta=meta)
 
 
 @derived_from(np)
