@@ -1,4 +1,5 @@
 import contextlib
+from collections import defaultdict
 import logging
 import math
 import shutil
@@ -25,7 +26,7 @@ logger = logging.getLogger(__name__)
 
 
 class ShuffleStage(Layer):
-    """ Shuffle HLG Layer
+    """Shuffle HLG Layer
 
     High-level graph layer corresponding to a single stage of
     an inter-partition shuffle operation.
@@ -61,12 +62,13 @@ class ShuffleStage(Layer):
         self.parts_out = parts_out or range(len(inputs))
 
     def __repr__(self):
-        return "ShuffleStage<name='{}', stage={}, k={}, npartitions={}, ignore_index={}>".format(
-            self.name, self.stage, self.k, self.npartitions, self.ignore_index
+        return "ShuffleStage<name='{}', stage={}, k={}, npartitions={}>".format(
+            self.name, self.stage, self.k, self.npartitions
         )
 
     @property
     def _dict(self):
+        """Materialize full dict representation"""
         if hasattr(self, "_cached_dict"):
             return self._cached_dict["dsk"]
         else:
@@ -106,19 +108,28 @@ class ShuffleStage(Layer):
             parts.add(_part)
         return parts
 
-    def get_external_dependencies(self, keys):
-        deps = set()
+    def _cull_dependencies(self, keys):
+        """Determine the necessary dependencies to produce `keys`.
+        Does not require graph materialization.
+        """
+        deps = defaultdict(set)
         parts_out = self._keys_to_parts(keys)
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
         for part in parts_out:
             out = self.inputs[part]
             for k in range(self.k):
                 _part = inp_part_map[insert(out, self.stage, k)]
-                deps.add((self._ddf._name, _part))
+                deps[(self.name, part)].add((self._ddf._name, _part))
         return deps
 
-    def cull(self, keys):
-        return ShuffleStage(
+    def cull(self, keys, all_keys):
+        """Cull the ShuffleStage layer.
+        The underlying graph will only include the necessary
+        tasks to produce the keys (indicies) included in `parts_out`.
+        Therefore, "culling" the layer only required us to reset this
+        parameter.
+        """
+        culled_layer = ShuffleStage(
             self._ddf,
             self.name,
             self.column,
@@ -130,6 +141,8 @@ class ShuffleStage(Layer):
             ignore_index=self.ignore_index,
             parts_out=self._keys_to_parts(keys),
         )
+        culled_deps = self._cull_dependencies(keys)
+        return culled_layer, culled_deps
 
 
 def set_index(

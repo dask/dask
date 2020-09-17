@@ -426,7 +426,6 @@ class HighLevelGraph(Mapping):
             key_deps = keys.intersection(layer)
             if len(key_deps) > 0:
                 culled_layer, culled_deps = layer.cull(key_deps, all_keys)
-
                 external_deps = set()
                 for k in culled_layer.keys():
                     external_deps |= culled_deps[k]
