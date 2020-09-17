@@ -92,8 +92,8 @@ class ParquetSubgraph(Layer):
     def get_dependencies(self, all_hlg_keys):
         return {k: set() for k in self}
 
-    def cull(self, keys, dependencies):
-        return ParquetSubgraph(
+    def cull(self, keys, all_hlg_keys):
+        ret = ParquetSubgraph(
             name=self.name,
             engine=self.engine,
             fs=self.fs,
@@ -104,6 +104,7 @@ class ParquetSubgraph(Layer):
             kwargs=self.kwargs,
             part_ids=[i for i in self.part_ids if (self.name, i) in keys],
         )
+        return ret, ret.get_dependencies(all_hlg_keys)
 
 
 def read_parquet(

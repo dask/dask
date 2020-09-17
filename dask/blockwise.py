@@ -255,9 +255,9 @@ class Blockwise(Layer):
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].get_dependencies(all_hlg_keys)
 
-    def cull(self, keys, dependencies):
+    def cull(self, keys, all_hlg_keys):
         _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].cull(keys, dependencies)
+        return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
