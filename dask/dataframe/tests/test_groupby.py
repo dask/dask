@@ -427,8 +427,8 @@ def test_dataframe_groupby_nlargest(n, indices, keep):
     data["total"] = [45, 34, 66, 26, 72, 9, 52, 70, 60, 11, 9]
     df = pd.DataFrame.from_dict(data)
     dask_df = dd.from_pandas(df, npartitions=3)
-    expected = dask_df.groupby(indices)["percent"].nlargest(n, keep).compute()
-    dask_val = df.groupby(indices)["percent"].nlargest(n, keep)
+    expected = dask_df.groupby(indices)["percent"].nlargest(n=n, keep=keep).compute()
+    dask_val = df.groupby(indices)["percent"].nlargest(n=n, keep=keep)
     assert dict(dask_val) == dict(expected)
 
 

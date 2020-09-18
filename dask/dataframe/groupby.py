@@ -1910,7 +1910,7 @@ def _nlargest_chunk(df, *index, **kwargs):
     keep = kwargs.pop("keep")
     name = kwargs.pop("name")
     indices = list(index)
-    series_grouped = df.groupby(indices)[name].nlargest(n, keep)
+    series_grouped = df.groupby(indices)[name].nlargest(n=n, keep=keep)
     if isinstance(series_grouped.index, pd.RangeIndex):
         return _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name)
     else:
@@ -1929,7 +1929,7 @@ def _nlargest_aggregate(df, **kwargs):
     df = df.reset_index()
     level_num = list(df.columns).index(name) - 1
     df.index = df["level_{0}".format(level_num)].rename(None)
-    ret = df.groupby(indices)[name].nlargest(n, keep)
+    ret = df.groupby(indices)[name].nlargest(n=n, keep=keep)
     if (
         type(ret.index) in [pd.RangeIndex, pd.Int64Index, pd.UInt64Index]
         and len(ret) == len(df) != num_records
