@@ -1931,7 +1931,10 @@ def _nlargest_aggregate(df, **kwargs):
     df.index = df["level_{0}".format(level_num)].rename(None)
     df = df.sort_index()
     ret = df.groupby(indices)[name].nlargest(n=n, keep=keep)
-    if len(ret) == len(df) != num_records:
+    if (
+        type(ret.index) in [pd.RangeIndex, pd.Int64Index, pd.UInt64Index]
+        and len(ret) == len(df) != num_records
+    ):
         ret = _convert_RangeIndex_to_MultiIndex(ret, df, indices, name)
         if name in indices:
             indices[indices.index(name)] = df[name]
