@@ -407,7 +407,7 @@ def test_groupby_get_group():
 
 
 params = [
-    [1, 2],
+    [1, 2, 3],
     [
         ["location"],
         ["location", "category"],
@@ -428,8 +428,8 @@ def test_dataframe_groupby_nlargest(n, indices, keep):
     df = pd.DataFrame.from_dict(data)
     dask_df = dd.from_pandas(df, npartitions=3)
     expected = dask_df.groupby(indices)["percent"].nlargest(n=n, keep=keep).compute()
-    dask_val = df.groupby(indices)["percent"].nlargest(n=n, keep=keep)
-    assert dict(dask_val) == dict(expected)
+    pd_val = df.groupby(indices)["percent"].nlargest(n=n, keep=keep)
+    assert dict(pd_val) == dict(expected)
 
 
 def test_dataframe_groupby_nunique():
