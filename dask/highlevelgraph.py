@@ -52,6 +52,10 @@ class Layer(collections.abc.Mapping):
             Culled layer
         """
         deps = self.get_dependencies(all_hlg_keys)
+
+        if len(keys) == len(self):
+            return self, deps  # Nothing to cull if preserving all existing keys
+
         ret_deps = {}
         seen = set()
         out = {}
