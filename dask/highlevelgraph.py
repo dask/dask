@@ -59,13 +59,12 @@ class Layer(collections.abc.Mapping):
         while work:
             k = work.pop()
             out[k] = self[k]
-            ret_deps[k] = set()
+            ret_deps[k] = deps[k]
             for d in deps[k]:
                 if d not in seen:
                     if d in self:
                         seen.add(d)
                         work.add(d)
-                ret_deps[k].add(d)
 
         return BasicLayer(out), ret_deps
 
