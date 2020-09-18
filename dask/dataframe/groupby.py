@@ -1891,27 +1891,28 @@ class SeriesGroupBy(_GroupBy):
         )
 
 
+def _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name):
+    num_indices = len(indices)
+    df_grouped = series_grouped.to_frame().reset_index()
+
+    all_missing_columns = []
+    for i in range(num_indices):
+        if indices[i] != name:
+            temp = df[indices].iloc[:, i]
+            all_missing_columns.append(temp)
+    all_missing_columns.append(df.index)
+
+    return df_grouped.set_index(all_missing_columns)[name]
+
+
 def _nlargest_chunk(df, *index, **kwargs):
     n = kwargs.pop("n")
     keep = kwargs.pop("keep")
     name = kwargs.pop("name")
     indices = list(index)
     series_grouped = df.groupby(indices)[name].nlargest(n, keep)
-    if len(series_grouped) == len(df):
-        df_grouped = series_grouped.to_frame()
-        num_indices = len(indices)
-
-        all_missing_columns = []
-        for i in range(num_indices):
-            if indices[i] == name:
-                pass
-            else:
-                temp = df[indices].iloc[:, i]
-                all_missing_columns.append(temp)
-
-        all_missing_columns.append(df.index)
-
-        return df_grouped.set_index(all_missing_columns)[name]
+    if isinstance(series_grouped.index, pd.RangeIndex):
+        return _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name)
     else:
         if name in indices:
             return series_grouped.reset_index(name, drop=True)
@@ -1927,17 +1928,19 @@ def _nlargest_aggregate(df, **kwargs):
     indices = list(index)
     df = df.reset_index()
     level_num = list(df.columns).index(name) - 1
-    if name in indices:
-        original_indices = df[df.columns[level_num]].rename(None)
-        indices[indices.index(name)] = df[name]
-        indices.append(original_indices)
-        ret = df.set_index(indices)[name]
-        if len(ret) == num_records:
-            return ret.reset_index(drop=True)
-        else:
-            return ret
     df.index = df["level_{0}".format(level_num)].rename(None)
-    return df.groupby(indices)[name].nlargest(n, keep)
+    df = df.sort_values(by=indices)
+    ret = df.groupby(indices)[name].nlargest(n, keep)
+    if (
+        type(ret.index) in [pd.RangeIndex, pd.Int64Index, pd.UInt64Index]
+        and len(ret) == len(df) != num_records
+    ):
+        ret = _convert_RangeIndex_to_MultiIndex(ret, df, indices, name)
+        if name in indices:
+            indices[indices.index(name)] = df[name]
+            indices.append(df.index)
+            return ret.to_frame().reset_index().set_index(indices)[name]
+    return ret
 
 
 def _unique_aggregate(series_gb, name=None):

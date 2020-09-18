@@ -5,6 +5,8 @@ from packaging import version
 import numpy as np
 import pandas as pd
 
+import itertools
+
 import pytest
 
 import dask
@@ -404,16 +406,30 @@ def test_groupby_get_group():
         assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
 
 
-def test_dataframe_groupby_nlargest():
+params = [
+    [1, 2],
+    [
+        ["location"],
+        ["location", "category"],
+        ["location", "percent"],
+        ["location", "category", "percent"],
+    ],
+    ["first", "last", "all"],
+]
+
+
+@pytest.mark.parametrize("n, indices, keep", list(itertools.product(*params)))
+def test_dataframe_groupby_nlargest(n, indices, keep):
     data = {}
-    data["location"] = ["A", "B", "C", "C", "D", "D", "D", "D"]
-    data["category"] = [5, 3, 2, 4, 2, 3, 2, 5]
-    data["percent"] = [100, 100, 50, 13, 75, 59, 13, 4]
-    data["total"] = [45, 26, 72, 9, 52, 70, 60, 11]
+    data["location"] = ["A", "A", "A", "B", "C", "C", "D", "D", "D", "D", "D"]
+    data["category"] = [5, 5, 5, 3, 2, 4, 2, 3, 2, 5, 2]
+    data["percent"] = [100, 100, 100, 100, 50, 13, 75, 59, 13, 4, 75]
+    data["total"] = [45, 34, 66, 26, 72, 9, 52, 70, 60, 11, 9]
     df = pd.DataFrame.from_dict(data)
     dask_df = dd.from_pandas(df, npartitions=3)
-    expected = dask_df.groupby(["location", "category"])["percent"].nlargest(2)
-    assert_eq(df.groupby(["location", "category"])["percent"].nlargest(2), expected)
+    expected = dask_df.groupby(indices)["percent"].nlargest(n, keep).compute()
+    dask_val = df.groupby(indices)["percent"].nlargest(n, keep)
+    assert dict(dask_val) == dict(expected)
 
 
 def test_dataframe_groupby_nunique():
