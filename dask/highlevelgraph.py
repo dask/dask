@@ -361,8 +361,8 @@ class HighLevelGraph(Mapping):
         map: Mapping
             A map that maps each key to its dependencies
         """
-        all_keys = self.keyset()
         if self.key_dependencies is None:
+            all_keys = self.keyset()
             self.key_dependencies = {}
             for layer in self.layers.values():
                 self.key_dependencies.update(layer.get_dependencies(all_keys))
