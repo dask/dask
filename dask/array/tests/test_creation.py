@@ -826,7 +826,12 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         "minimum",
         "reflect",
         "symmetric",
-        "wrap",
+        pytest.param(
+            "wrap",
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="numpy changed wrap behaviour"
+            ),
+        ),
         pytest.param("median", marks=pytest.mark.xfail(raises=NotImplementedError)),
         pytest.param(
             "empty",
