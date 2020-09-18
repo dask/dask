@@ -1929,7 +1929,7 @@ def _nlargest_aggregate(df, **kwargs):
     df = df.reset_index()
     level_num = list(df.columns).index(name) - 1
     df.index = df["level_{0}".format(level_num)].rename(None)
-    df = df.sort_values(indices).sort_index()
+    df = df.sort_index()
     ret = df.groupby(indices)[name].nlargest(n=n, keep=keep)
     if (
         type(ret.index) in [pd.RangeIndex, pd.Int64Index, pd.UInt64Index]
