@@ -1896,10 +1896,16 @@ def _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name):
     df_grouped = series_grouped.to_frame().reset_index()
 
     all_missing_columns = []
-    for i in range(num_indices):
-        if indices[i] != name:
-            temp = df[indices].iloc[:, i]
-            all_missing_columns.append(temp)
+
+    if num_indices == 1 and name in indices:
+        temp = df[indices].iloc[:, 0]
+        all_missing_columns.append(temp)
+    else:
+        for i in range(num_indices):
+            if indices[i] != name:
+                temp = df[indices].iloc[:, i]
+                all_missing_columns.append(temp)
+
     all_missing_columns.append(df.index)
 
     return df_grouped.set_index(all_missing_columns)[name]
@@ -1914,7 +1920,7 @@ def _nlargest_chunk(df, *index, **kwargs):
     if isinstance(series_grouped.index, pd.RangeIndex):
         return _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name)
     else:
-        if name in indices:
+        if name in indices and len(indices) != 1:
             return series_grouped.reset_index(name, drop=True)
         return series_grouped
 
@@ -1926,6 +1932,10 @@ def _nlargest_aggregate(df, **kwargs):
     index = kwargs.pop("index")
     num_records = kwargs.pop("len")
     indices = list(index)
+    if len(indices) == 1 and name in indices:
+        name = "temp"
+        df = df.to_frame()
+        df.columns = [name]
     df = df.reset_index()
     level_num = list(df.columns).index(name) - 1
     df.index = df["level_{0}".format(level_num)].rename(None)
