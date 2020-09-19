@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2.27.0 - 2020-09-18
+-------------------
+
+- Fix registering a worker plugin with ``name`` arg (:pr:`4105`) `Nick Evans`_
+- Support different ``remote_python`` paths on cluster nodes (:pr:`4085`) `Abdulelah Bin Mahfoodh`_
+- Allow ``RuntimeError`` s when closing global clients (:pr:`4115`) `Matthew Rocklin`_
+- Match ``pre-commit`` in dask (:pr:`4049`) `Julia Signell`_
+- Update ``super`` usage (:pr:`4110`) `Poruri Sai Rahul`_
+
+
 2.26.0 - 2020-09-11
 -------------------
 
@@ -1954,3 +1964,4 @@ significantly without many new features.
 .. _`Willi Rath`: https://github.com/willirath
 .. _`Roberto Panai`: https://github.com/rpanai
 .. _`Dror Speiser`: https://github.com/drorspei
+.. _`Poruri Sai Rahul`: https://github.com/rahulporuri
