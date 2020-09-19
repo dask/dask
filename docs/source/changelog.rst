@@ -1,6 +1,37 @@
 Changelog
 =========
 
+2.27.0 / 2020-09-18
+-------------------
+
+Array
++++++
+
+- Preserve ``dtype`` in ``svd`` (:pr:`6643`) `Eric Czech`_
+
+Core
+++++
+
+- ``store()``: create a single HLG layer (:pr:`6601`) `Mads R. B. Kristensen`_
+- Add pre-commit CI build (:pr:`6645`) `James Bourbeau`_
+- Update ``.pre-commit-config`` to latest black. (:pr:`6641`) `Julia Signell`_
+- Update super usage to remove Python 2 compatibility (:pr:`6630`) `Poruri Sai Rahul`_
+- Remove u string prefixes (:pr:`6633`) `Poruri Sai Rahul`_
+
+DataFrame
++++++++++
+
+- Improve error message for ``to_sql`` (:pr:`6638`) `Julia Signell`_
+- Use empty list as categories (:pr:`6626`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Add ``autofunction`` to array api docs for more ufuncs (:pr:`6644`) `James Bourbeau`_
+- Add a number of missing ufuncs to ``dask.array`` docs (:pr:`6642`) `Ralf Gommers`_
+- Add ``HelmCluster`` docs (:pr:`6290`) `Jacob Tomlinson`_
+
+
 2.26.0 / 2020-09-11
 -------------------
 
@@ -3603,3 +3634,4 @@ Other
 .. _`Kilian Lieret`: https://github.com/klieret
 .. _`Noah D Brenowitz`: https://github.com/nbren12
 .. _`Jon Thielen`: https://github.com/jthielen
+.. _`Poruri Sai Rahul`: https://github.com/rahulporuri
