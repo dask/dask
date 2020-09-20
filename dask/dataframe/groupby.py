@@ -737,6 +737,9 @@ def _build_agg_args_single(result_column, func, input_column):
     elif func == "mean":
         return _build_agg_args_mean(result_column, func, input_column)
 
+    elif func == "list":
+        return _build_agg_args_list(result_column, func, input_column)
+
     elif isinstance(func, Aggregation):
         return _build_agg_args_custom(result_column, func, input_column)
 
@@ -817,6 +820,33 @@ def _build_agg_args_mean(result_column, func, input_column):
             _finalize_mean,
             dict(sum_column=int_sum, count_column=int_count),
         ),
+    )
+
+
+def _build_agg_args_list(result_column, func, input_column):
+    intermediate = _make_agg_id("list", input_column)
+
+    return dict(
+        chunk_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(column=input_column, func=lambda s: s.apply(list)),
+            )
+        ],
+        aggregate_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(
+                    column=intermediate,
+                    func=lambda s0: s0.apply(
+                        lambda chunks: list(it.chain.from_iterable(chunks))
+                    ),
+                ),
+            )
+        ],
+        finalizer=(result_column, itemgetter(intermediate), dict()),
     )
 
 
