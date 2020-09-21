@@ -2254,6 +2254,13 @@ class Array(DaskMethodsMixin):
 
     @derived_from(np.ndarray)
     def item(self, *args):
+        """
+        .. note::
+
+           The Dask version returns a :class:`dask.delayed.Delayed` object.
+           Calling ``.compute()`` on the result will return the Python
+           scalar.
+        """
         if len(args) == 0:
             if self.size != 1:
                 raise ValueError(
