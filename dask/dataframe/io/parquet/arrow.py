@@ -424,7 +424,7 @@ def _process_metadata(
     gather_statistics,
     stat_col_indices,
     no_filters,
-    int_row_groups,
+    fragment_row_groups,
 ):
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
@@ -531,7 +531,7 @@ def _construct_parts(
     categories,
     split_row_groups,
     gather_statistics,
-    int_row_groups,
+    fragment_row_groups,
 ):
     """Construct ``parts`` for ddf construction
 
@@ -595,7 +595,7 @@ def _construct_parts(
         gather_statistics,
         stat_col_indices,
         flat_filters == [],
-        int_row_groups,
+        fragment_row_groups,
     )
 
     if split_row_groups:
@@ -832,7 +832,7 @@ def _process_metadata_pyarrow_dataset(
     gather_statistics,
     stat_col_indices,
     no_filters,
-    int_row_groups,
+    fragment_row_groups,
 ):
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
@@ -843,10 +843,10 @@ def _process_metadata_pyarrow_dataset(
         for row_group in frag.row_groups:
             statistics = row_group.statistics
             fpath = frag.path
-            if int_row_groups:
-                file_row_groups[fpath].append(frag.row_groups[0].id)
-            else:
+            if fragment_row_groups:
                 file_row_groups[fpath].append(frag)
+            else:
+                file_row_groups[fpath].append(frag.row_groups[0].id)
             if gather_statistics:
                 if single_rg_parts:
                     s = {
@@ -927,7 +927,7 @@ class ArrowEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        int_row_groups=False,
+        fragment_row_groups=True,
         **kwargs,
     ):
 
@@ -1000,7 +1000,7 @@ class ArrowEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
-            int_row_groups,
+            fragment_row_groups,
         )
 
         return (meta, stats, parts, index)
