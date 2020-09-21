@@ -22,7 +22,7 @@ def read_sql_table(
     schema=None,
     meta=None,
     engine_kwargs=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Create dataframe from an SQL table.
@@ -105,6 +105,7 @@ def read_sql_table(
 
     if index_col is None:
         raise ValueError("Must specify index column to partition on")
+
     engine_kwargs = {} if engine_kwargs is None else engine_kwargs
     engine = sa.create_engine(uri, **engine_kwargs)
     m = sa.MetaData()
@@ -135,7 +136,7 @@ def read_sql_table(
         # function names get pandas auto-named
         kwargs["index_col"] = index_col.name
 
-    if meta is None:
+    if head_rows > 0:
         # derive metadata from first few rows
         q = sql.select(columns).limit(head_rows).select_from(table)
         head = pd.read_sql(q, engine, **kwargs)
@@ -148,7 +149,10 @@ def read_sql_table(
             return from_pandas(head, npartitions=1)
 
         bytes_per_row = (head.memory_usage(deep=True, index=True)).sum() / head_rows
-        meta = head.iloc[:0]
+        if meta is None:
+            meta = head.iloc[:0]
+    elif meta is None:
+        raise ValueError("Must provide meta if head_rows is 0")
     else:
         if divisions is None and npartitions is None:
             raise ValueError(
@@ -347,6 +351,8 @@ def to_sql(
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
+    if not isinstance(uri, str):
+        raise ValueError(f"Expected URI to be a string, got {type(uri)}.")
 
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
@@ -384,7 +390,7 @@ def to_sql(
                 d.to_sql,
                 extras=meta_task,
                 **worker_kwargs,
-                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
             )
             for d in df.to_delayed()
         ]
@@ -398,7 +404,7 @@ def to_sql(
                     d.to_sql,
                     extras=last,
                     **worker_kwargs,
-                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
                 )
             )
             last = result[-1]

@@ -59,6 +59,20 @@ def test_empty(db):
         assert pd_dataframe.empty is True
 
 
+def test_passing_engine_as_uri_raises_helpful_error(db):
+    # https://github.com/dask/dask/issues/6473
+    from sqlalchemy import create_engine
+
+    df = pd.DataFrame([{"i": i, "s": str(i) * 2} for i in range(4)])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpfile() as f:
+        db = "sqlite:///%s" % f
+        engine = create_engine(db)
+        with pytest.raises(ValueError, match="Expected URI to be a string"):
+            ddf.to_sql("test", engine, if_exists="replace")
+
+
 @pytest.mark.skip(
     reason="Requires a postgres server. Sqlite does not support multiple schemas."
 )
@@ -230,6 +244,50 @@ def test_division_or_partition(db):
     ).compute()
     assert (50 < m).all() and (m < 200).all()
     assert_eq(out, df)
+
+
+def test_meta(db):
+    data = read_sql_table(
+        "test", db, index_col="number", meta=dd.from_pandas(df, npartitions=1)
+    ).compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_meta_no_head_rows(db):
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        npartitions=2,
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        divisions=[0, 3, 6],
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_no_meta_no_head_rows(db):
+    with pytest.raises(ValueError):
+        read_sql_table("test", db, index_col="number", head_rows=0, npartitions=1)
 
 
 def test_range(db):
