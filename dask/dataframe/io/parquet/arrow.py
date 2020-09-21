@@ -419,7 +419,12 @@ def _aggregate_stats(
 
 
 def _process_metadata(
-    metadata, single_rg_parts, gather_statistics, stat_col_indices, no_filters
+    metadata,
+    single_rg_parts,
+    gather_statistics,
+    stat_col_indices,
+    no_filters,
+    int_row_groups,
 ):
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
@@ -526,6 +531,7 @@ def _construct_parts(
     categories,
     split_row_groups,
     gather_statistics,
+    int_row_groups,
 ):
     """Construct ``parts`` for ddf construction
 
@@ -589,6 +595,7 @@ def _construct_parts(
         gather_statistics,
         stat_col_indices,
         flat_filters == [],
+        int_row_groups,
     )
 
     if split_row_groups:
@@ -659,13 +666,15 @@ def _construct_parts(
 
 
 def _get_all_partition_keys(ds):
+    categories = defaultdict(list)
     pkeys = defaultdict(list)
     for file_frag in ds.get_fragments():
         keys = pa_ds._get_partition_keys(file_frag.partition_expression)
+        pkeys[file_frag.path] = keys
         for k, v in keys.items():
-            if v not in pkeys[k]:
-                pkeys[k].append(v)
-    return pkeys
+            if v not in categories[k]:
+                categories[k].append(v)
+    return categories, pkeys
 
 
 def _collect_pyarrow_dataset_frags(
@@ -679,10 +688,10 @@ def _collect_pyarrow_dataset_frags(
 
     # Get all partition keys (without filters) to populate partition_obj
     partition_obj = []  # See `partition_info` description below
-    pkeys = _get_all_partition_keys(ds)
-    partition_names = list(pkeys)
+    categories, pkeys = _get_all_partition_keys(ds)
+    partition_names = list(categories)
     for name in partition_names:
-        partition_obj.append(PartitionObj(name, pkeys[name]))
+        partition_obj.append(PartitionObj(name, categories[name]))
 
     # Split by row-groups and apply filters
     partition_keys = {}  # See `partition_info` description below
@@ -697,7 +706,10 @@ def _collect_pyarrow_dataset_frags(
             continue
         # Store (filtered) partition keys
         if pkeys:
-            partition_keys[file_frag.path] = pkeys[file_frag.path]
+            partition_keys[file_frag.path] = [
+                (name, pkeys[file_frag.path].get(name, None))
+                for name in partition_names
+            ]
 
         if split_row_groups is False and ds_filters is None:
             # Avoid row-group splitting.
@@ -815,7 +827,12 @@ def _gather_metadata_pyarrow_dataset(
 
 
 def _process_metadata_pyarrow_dataset(
-    metadata, single_rg_parts, gather_statistics, stat_col_indices, no_filters
+    metadata,
+    single_rg_parts,
+    gather_statistics,
+    stat_col_indices,
+    no_filters,
+    int_row_groups,
 ):
     # Get the number of row groups per file
     file_row_groups = defaultdict(list)
@@ -826,7 +843,10 @@ def _process_metadata_pyarrow_dataset(
         for row_group in frag.row_groups:
             statistics = row_group.statistics
             fpath = frag.path
-            file_row_groups[fpath].append(frag)
+            if int_row_groups:
+                file_row_groups[fpath].append(frag.row_groups[0].id)
+            else:
+                file_row_groups[fpath].append(frag)
             if gather_statistics:
                 if single_rg_parts:
                     s = {
@@ -907,6 +927,7 @@ class ArrowEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
+        int_row_groups=False,
         **kwargs,
     ):
 
@@ -979,6 +1000,7 @@ class ArrowEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
+            int_row_groups,
         )
 
         return (meta, stats, parts, index)
@@ -1043,7 +1065,6 @@ class ArrowEngine(Engine):
                     use_threads=False,
                     schema=schema,
                     columns=cols,
-                    # TODO: Modify tests to allow full filtering
                     filter=pq._filters_to_expression(filters) if filters else None,
                 )
             else:
