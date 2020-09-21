@@ -1044,7 +1044,7 @@ class ArrowEngine(Engine):
                     schema=schema,
                     columns=cols,
                     # TODO: Modify tests to allow full filtering
-                    # filter=pq._filters_to_expression(filters) if filters else None,
+                    filter=pq._filters_to_expression(filters) if filters else None,
                 )
             else:
                 piece = pq.ParquetDatasetPiece(

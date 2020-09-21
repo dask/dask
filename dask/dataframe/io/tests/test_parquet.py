@@ -1272,6 +1272,9 @@ def test_filters(tmpdir, write_engine, read_engine):
 def test_filters_v0(tmpdir, write_engine, read_engine):
     if write_engine == "fastparquet" or read_engine == "fastparquet":
         pytest.importorskip("fastparquet", minversion="0.3.1")
+
+    if read_engine == "pyarrow" and pa.__version__ >= LooseVersion("1.0.0"):
+        pytest.skip("Filtering is more thorough (row-wise) in PyArrow>=1.0.0")
     fn = str(tmpdir)
 
     df = pd.DataFrame({"at": ["ab", "aa", "ba", "da", "bb"]})
@@ -1301,6 +1304,32 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
     dd.read_parquet(fn, engine=read_engine, filters=[("at", "==", "aa")]).compute()
     assert len(ddf2) > 0
+
+
+def test_filtering_pyarrow_dataset(tmpdir, engine):
+    pytest.importorskip("pyarrow", minversion="1.0.0")
+
+    fn = str(tmpdir)
+    df = pd.DataFrame({"aa": range(100), "bb": ["cat", "dog"] * 50})
+    ddf = dd.from_pandas(df, npartitions=10)
+    ddf.to_parquet(fn, write_index=False, engine=engine)
+
+    # Filtered read
+    aa_lim = 40
+    bb_val = "dog"
+    filters = [[("aa", "<", aa_lim), ("bb", "==", bb_val)]]
+    ddf2 = dd.read_parquet(fn, index=False, engine="pyarrow", filters=filters)
+
+    # Check that partitions are filetered for "aa" filter
+    nonempty = 0
+    for part in ddf[ddf["aa"] < aa_lim].partitions:
+        nonempty += int(len(part.compute()) > 0)
+    assert ddf2.npartitions == nonempty
+
+    # Check that rows are filtered for "aa" and "bb" filters
+    df = df[df["aa"] < aa_lim]
+    df = df[df["bb"] == bb_val]
+    assert_eq(df, ddf2.compute(), check_index=False)
 
 
 def test_fiters_file_list(tmpdir, engine):
