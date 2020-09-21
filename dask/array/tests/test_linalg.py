@@ -866,9 +866,7 @@ def test_svd_flip_correction(shape, chunks, dtype):
     np.testing.assert_almost_equal(np.asarray(np.dot(uc * s, vc)), x, decimal=decimal)
 
 
-@pytest.mark.parametrize(
-    "dtype", ["i1", "i2", "i4", "i8", "f2", "f4", "f8", "f16", "c8", "c16", "c32"]
-)
+@pytest.mark.parametrize("dtype", ["f2", "f4", "f8", "f16", "c8", "c16", "c32"])
 @pytest.mark.parametrize("u_based", [True, False])
 def test_svd_flip_sign(dtype, u_based):
     if sys.platform == "win32" and dtype in ["f16", "c32"]:

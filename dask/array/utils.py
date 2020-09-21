@@ -386,7 +386,7 @@ def svd_flip(u, v, u_based_decision=True):
     else:
         dtype = v.dtype
         signs = np.sum(v, axis=1, keepdims=True).T
-    signs = np.where(signs >= 0, dtype.type(1), dtype.type(-1))
+    signs = dtype.type(2) * ((signs >= 0) - dtype.type(0.5))
     # Force all singular vectors into same half-space
     u, v = u * signs, v * signs.T
     return u, v
