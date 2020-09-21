@@ -871,14 +871,9 @@ def test_svd_flip_correction(shape, chunks, dtype):
 def test_svd_flip_sign(dtype, u_based):
     if sys.platform == "win32" and dtype in ["f16", "c32"]:
         pytest.skip("128-bit floats not supported on windows")
-    # fmt: off
     x = np.array(
-        [[1, -1, 1, -1],
-         [1, -1, 1, -1],
-         [-1, 1, 1, -1],
-         [-1, 1, 1, -1]], dtype=dtype
+        [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]], dtype=dtype
     )
-    # fmt: on
     u, v = svd_flip(x, x.T, u_based_decision=u_based)
     assert u.dtype == x.dtype
     assert v.dtype == x.dtype
