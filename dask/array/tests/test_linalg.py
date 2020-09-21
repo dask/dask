@@ -4,6 +4,7 @@ pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 
 import numpy as np
+import sys
 import scipy.linalg
 
 import dask.array as da
@@ -870,6 +871,8 @@ def test_svd_flip_correction(shape, chunks, dtype):
 )
 @pytest.mark.parametrize("u_based", [True, False])
 def test_svd_flip_sign(dtype, u_based):
+    if sys.platform == "win32" and dtype in ["f16", "c32"]:
+        pytest.skip("128-bit floats not supported on windows")
     # fmt: off
     x = np.array(
         [[1, -1, 1, -1],
