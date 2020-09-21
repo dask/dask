@@ -659,7 +659,7 @@ def _build_agg_args(spec):
     Parameters
     ----------
     spec: a list of (result-column, aggregation-function, input-column) triples.
-        To work with all arugment forms understood by pandas use
+        To work with all argument forms understood by pandas use
         ``_normalize_spec`` to normalize the argment before passing it on to
         ``_build_agg_args``.
 
