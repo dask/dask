@@ -22,13 +22,16 @@ def optimize(dsk, keys, **kwargs):
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
+    if not config.get("optimization.fuse.active"):
+        return dsk
+
     dependencies = dsk.get_dependencies()
     dsk = ensure_dict(dsk)
 
     fuse_subgraphs = config.get("optimization.fuse.subgraphs")
     if fuse_subgraphs is None:
         fuse_subgraphs = True
-    dsk, dependencies = fuse(
+    dsk, _ = fuse(
         dsk,
         keys,
         dependencies=dependencies,
