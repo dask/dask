@@ -2257,7 +2257,7 @@ class Array(DaskMethodsMixin):
         if len(args) == 0:
             if self.size != 1:
                 raise ValueError(
-                    "Only size 1 arrays can be converted to scalars."
+                    "can only convert an array of size 1 to a Python scalar"
                 )
             args = self.ndim * (0,)
         elif len(args) == 1:
@@ -2269,7 +2269,7 @@ class Array(DaskMethodsMixin):
         if len(args) != self.ndim:
             raise ValueError("Indices mismatch with array rank.")
 
-        return self[args].to_delayed()
+        return self[args].to_delayed().item().item()
 
     @derived_from(np.ndarray)
     def squeeze(self, axis=None):
