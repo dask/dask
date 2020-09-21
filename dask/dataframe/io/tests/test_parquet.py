@@ -2283,7 +2283,7 @@ def test_graph_size_pyarrow(tmpdir, engine):
 
     # pyarrow.dataset requires fragments to be passed in dict.
     # This requires slightly more space than "legacy"
-    assert len(pickle.dumps(ddf2.__dask_graph__())) < 30000
+    assert len(pickle.dumps(ddf2.__dask_graph__())) < 32000
 
 
 @pytest.mark.parametrize("preserve_index", [True, False])
