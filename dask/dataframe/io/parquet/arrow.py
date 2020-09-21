@@ -37,8 +37,9 @@ def _append_row_groups(metadata, md):
             raise RuntimeError(
                 "Schemas are inconsistent, try using "
                 '`to_parquet(..., schema="infer")`, or pass an explicit '
-                "pyarrow schema."
-            )
+                "pyarrow schema. Such as "
+                '`to_parquet(..., schema={"column1": pa.string()})`'
+            ) from err
         else:
             raise err
 
