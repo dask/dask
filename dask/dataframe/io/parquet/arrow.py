@@ -744,10 +744,10 @@ def _collect_pyarrow_dataset_frags(
 def _gather_metadata_pyarrow_dataset(
     paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
 ):
-    """ pyarrow.dataset version of _gather_metadata
-        Use pyarrow.dataset API to collect list of row-group fragments.
-        Also, collect other information necessary for parquet-to-ddf
-        mapping (e.g. schema, partition_info).
+    """pyarrow.dataset version of _gather_metadata
+    Use pyarrow.dataset API to collect list of row-group fragments.
+    Also, collect other information necessary for parquet-to-ddf
+    mapping (e.g. schema, partition_info).
     """
     # Use pyarrow.dataset API
     ds = None
