@@ -350,7 +350,7 @@ def validate_axis(axis, ndim):
     return axis
 
 
-def svd_flip(u, v, u_based_decision=True):
+def svd_flip(u, v, u_based_decision=False):
     """Sign correction to ensure deterministic output from SVD.
 
     This function is useful for orienting eigenvectors such that
@@ -367,7 +367,7 @@ def svd_flip(u, v, u_based_decision=True):
         Right singular vectors (in rows)
     u_based_decision: bool
         Whether or not to choose signs based
-        on `u`, by default True
+        on `u` rather than `v`, by default False
 
     Returns
     -------
