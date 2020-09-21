@@ -1,8 +1,5 @@
-from __future__ import absolute_import, division, print_function
-
 import binascii
 import hashlib
-import sys
 
 
 hashers = []  # In decreasing performance order
@@ -15,31 +12,30 @@ hashers = []  # In decreasing performance order
 # - SHA1 is significantly faster than all other hashlib algorithms
 
 try:
-    import cityhash  # `pip install cityhash`
+    import cityhash  # `python -m pip install cityhash`
 except ImportError:
     pass
 else:
     # CityHash disabled unless the reference leak in
     # https://github.com/escherba/python-cityhash/pull/16
     # is fixed.
-    if cityhash.__version__ >= '0.2.2':
+    if cityhash.__version__ >= "0.2.2":
+
         def _hash_cityhash(buf):
             """
             Produce a 16-bytes hash of *buf* using CityHash.
             """
             h = cityhash.CityHash128(buf)
-            if sys.version_info >= (3,):
-                return h.to_bytes(16, 'little')
-            else:
-                return binascii.a2b_hex('%032x' % h)
+            return h.to_bytes(16, "little")
 
         hashers.append(_hash_cityhash)
 
 try:
-    import xxhash  # `pip install xxhash`
+    import xxhash  # `python -m pip install xxhash`
 except ImportError:
     pass
 else:
+
     def _hash_xxhash(buf):
         """
         Produce a 8-bytes hash of *buf* using xxHash.
@@ -49,10 +45,11 @@ else:
     hashers.append(_hash_xxhash)
 
 try:
-    import mmh3  # `pip install mmh3`
+    import mmh3  # `python -m pip install mmh3`
 except ImportError:
     pass
 else:
+
     def _hash_murmurhash(buf):
         """
         Produce a 16-bytes hash of *buf* using MurmurHash.
@@ -99,4 +96,4 @@ def hash_buffer_hex(buf, hasher=None):
     """
     h = hash_buffer(buf, hasher)
     s = binascii.b2a_hex(h)
-    return s.decode() if sys.version_info >= (3,) else s
+    return s.decode()

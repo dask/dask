@@ -34,27 +34,40 @@ the ``config`` dictionary or the ``get`` function:
    >>> import dask.distributed  # populate config with distributed defaults
    >>> dask.config.config
    {
-     'logging': {
-       'distributed': 'info',
-       'bokeh': 'critical',
-       'tornado': 'critical',
-     }
-     'admin': {
-       'log-format': '%(name)s - %(levelname)s - %(message)s'
-     }
+       "array": {
+           "chunk-size": "128 MiB",
+       }
+       "distributed": {
+           "logging": {
+               "distributed": "info",
+               "bokeh": "critical",
+               "tornado": "critical"
+            },
+            "admin": {
+                "log-format": "%(name)s - %(levelname)s - %(message)s"
+            }
+       }
    }
 
-   >>> dask.config.get('logging')
-   {'distributed': 'info',
-    'bokeh': 'critical',
-    'tornado': 'critical'}
+   >>> dask.config.get("distributed.logging")
+   {
+       'distributed': 'info',
+       'bokeh': 'critical',
+       'tornado': 'critical'
+   }
 
-   >>> dask.config.get('logging.bokeh')  # use `.` for nested access
+   >>> dask.config.get('distributed.logging.bokeh')  # use `.` for nested access
    'critical'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
 
+Note that the ``get`` function treats underscores and hyphens identically.
+For example, ``dask.config.get('num_workers')`` is equivalent to
+``dask.config.get('num-workers')``.
+
+Values like ``"128 MiB"`` and ``"10s"`` are parsed using the functions in
+:ref:`api.utilities`.
 
 Specify Configuration
 ---------------------
@@ -66,32 +79,37 @@ You can specify configuration values in YAML files like the following:
 
 .. code-block:: yaml
 
-   logging:
-     distributed: info
-     bokeh: critical
-     tornado: critical
+   array:
+      chunk-size: 128 MiB
 
-   scheduler:
-     work-stealing: True
-     allowed-failures: 5
+   distributed:
+     logging:
+       distributed: info
+       bokeh: critical
+       tornado: critical
 
-    admin:
-      log-format: '%(name)s - %(levelname)s - %(message)s'
+     scheduler:
+       work-stealing: True
+       allowed-failures: 5
+
+       admin:
+         log-format: '%(name)s - %(levelname)s - %(message)s'
 
 These files can live in any of the following locations:
 
 1.  The ``~/.config/dask`` directory in the user's home directory
 2.  The ``{sys.prefix}/etc/dask`` directory local to Python
-3.  The root ``/etc/dask/`` directory
+3.  The root directory (specified by the ``DASK_ROOT_CONFIG`` environment
+    variable or ``/etc/dask/`` by default)
 
 Dask searches for *all* YAML files within each of these directories and merges
 them together, preferring configuration files closer to the user over system
 configuration files (preference follows the order in the list above).
-Additionally users can specify a path with the ``DASK_CONFIG`` environment
-variable, that takes precedence at the top of the list above.
+Additionally, users can specify a path with the ``DASK_CONFIG`` environment
+variable, which takes precedence at the top of the list above.
 
 The contents of these YAML files are merged together, allowing different
-dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
+Dask subprojects like ``dask-kubernetes`` or ``dask-ml`` to manage configuration
 files separately, but have them merge into the same global configuration.
 
 *Note: for historical reasons we also look in the ``~/.dask`` directory for
@@ -113,16 +131,18 @@ resulting in configuration values like the following:
 
 .. code-block:: python
 
-   {'distributed':
-     {'scheduler':
-       {'work-stealing': True,
-        'allowed-failures': 5}
-     }
+   {
+       'distributed': {
+           'scheduler': {
+               'work-stealing': True,
+               'allowed-failures': 5
+           }
+       }
    }
 
 Dask searches for all environment variables that start with ``DASK_``, then
-transforms keys by converting to lower case, changing double-underscores to
-nested structures, and changing single underscores to hyphens.
+transforms keys by converting to lower case and changing double-underscores to
+nested structures.
 
 Dask tries to parse all values with `ast.literal_eval
 <https://docs.python.org/3/library/ast.html#ast.literal_eval>`_, letting users
@@ -132,13 +152,12 @@ as lists, dictionaries, and so on with normal Python syntax.
 Environment variables take precedence over configuration values found in YAML
 files.
 
-
 Defaults
 ~~~~~~~~
 
 Additionally, individual subprojects may add their own default values when they
 are imported.  These are always added with lower priority than the YAML files
-or environment variables mentioned above
+or environment variables mentioned above:
 
 .. code-block:: python
 
@@ -148,9 +167,11 @@ or environment variables mentioned above
 
    >>> import dask.distributed
    >>> dask.config.config  # New values have been added
-   {'scheduler': ...,
-    'worker': ...,
-    'tls': ...}
+   {
+       'scheduler': ...,
+       'worker': ...,
+       'tls': ...
+   }
 
 
 Directly within Python
@@ -164,19 +185,64 @@ Configuration is stored within a normal Python dictionary in
 
 Additionally, you can temporarily set a configuration value using the
 ``dask.config.set`` function.  This function accepts a dictionary as an input
-and interprets ``"."`` as nested access
+and interprets ``"."`` as nested access:
 
 .. code-block:: python
 
    >>> dask.config.set({'scheduler.work-stealing': True})
 
-This function can also be used as a context manager for consistent cleanup.
+This function can also be used as a context manager for consistent cleanup:
 
 .. code-block:: python
 
    with dask.config.set({'scheduler.work-stealing': True}):
        ...
 
+Note that the ``set`` function treats underscores and hyphens identically.
+For example, ``dask.config.set({'scheduler.work-stealing': True})`` is
+equivalent to ``dask.config.set({'scheduler.work_stealing': True})``.
+
+Conversion Utility
+~~~~~~~~~~~~~~~~~~
+
+It is possible to configure Dask inline with dot notation, with YAML or via environment variables. You can enter
+your own configuration items below to convert back and forth.
+
+.. warning::
+   This utility is designed to improve understanding of converting between different notations
+   and does not claim to be a perfect implementation. Please use for reference only.
+
+**YAML**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilYAML" name="configConvertUtilYAML" rows="10" cols="50" class="configTextArea" wrap="off">
+   distributed:
+     logging:
+       distributed: info
+       bokeh: critical
+       tornado: critical
+   </textarea>
+
+**Environment variable**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilEnv" name="configConvertUtilEnv" rows="10" cols="50" class="configTextArea" wrap="off">
+   export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"
+   export DASK_DISTRIBUTED__LOGGING__BOKEH="critical"
+   export DASK_DISTRIBUTED__LOGGING__TORNADO="critical"
+   </textarea>
+
+**Inline with dot notation**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilCode" name="configConvertUtilCode" rows="10" cols="50" class="configTextArea" wrap="off">
+   >>> dask.config.set({"distributed.logging.distributed": "info"})
+   >>> dask.config.set({"distributed.logging.bokeh": "critical"})
+   >>> dask.config.set({"distributed.logging.tornado": "critical"})
+   </textarea>
 
 Updating Configuration
 ----------------------
@@ -187,6 +253,7 @@ Manipulating configuration dictionaries
 .. autosummary::
    dask.config.merge
    dask.config.update
+   dask.config.expand_environment_variables
 
 As described above, configuration can come from many places, including several
 YAML files, environment variables, and project defaults.  Each of these
@@ -198,7 +265,7 @@ provides a configuration that is possibly nested like the following:
    y = {'a': 1, 'b': 2, 'c': {'e': 5}}
 
 Dask will merge these configurations respecting nested data structures, and
-respecting order.
+respecting order:
 
 .. code-block:: python
 
@@ -208,12 +275,20 @@ respecting order.
 You can also use the ``update`` function to update the existing configuration
 in place with a new configuration.  This can be done with priority being given
 to either config.  This is often used to update the global configuration in
-``dask.config.config``
+``dask.config.config``:
 
 .. code-block:: python
 
    dask.config.update(dask.config, new, priority='new')  # Give priority to new values
    dask.config.update(dask.config, new, priority='old')  # Give priority to old values
+
+Sometimes it is useful to expand environment variables stored within a
+configuration.  This can be done with the ``expand_environment_variables``
+function:
+
+.. code-block:: python
+
+    dask.config.config = dask.config.expand_environment_variables(dask.config.config)
 
 Refreshing Configuration
 ~~~~~~~~~~~~~~~~~~~~~~~~
@@ -222,9 +297,9 @@ Refreshing Configuration
    dask.config.collect
    dask.config.refresh
 
-If you change your environment variables or YAML files Dask will not
+If you change your environment variables or YAML files, Dask will not
 immediately see the changes.  Instead, you can call ``refresh`` to go through
-the configuration collection process and update the default configuration.
+the configuration collection process and update the default configuration:
 
 .. code-block:: python
 
@@ -239,7 +314,7 @@ the configuration collection process and update the default configuration.
 
 This function uses ``dask.config.collect``, which returns the configuration
 without modifying the global configuration.  You might use this to determine
-the configuration of particular paths not yet on the config path.
+the configuration of particular paths not yet on the config path:
 
 .. code-block:: python
 
@@ -255,7 +330,7 @@ Downstream Libraries
    dask.config.update_defaults
 
 Downstream Dask libraries often follow a standard convention to use the central
-Dask configuration.  This section provides recommendations for integration,
+Dask configuration.  This section provides recommendations for integration
 using a fictional project, ``dask-foo``, as an example.
 
 Downstream projects typically follow the following convention:
@@ -269,7 +344,7 @@ Downstream projects typically follow the following convention:
        dask_foo/core.py
        dask_foo/foo.yaml  # <---
 
-2.  Place configuration in that file within a namespace for the project
+2.  Place configuration in that file within a namespace for the project:
 
     .. code-block:: yaml
 
@@ -282,7 +357,7 @@ Downstream projects typically follow the following convention:
            b: 2
 
 3.  Within a config.py file (or anywhere) load that default config file and
-    update it into the global configuration
+    update it into the global configuration:
 
     .. code-block:: python
 
@@ -314,7 +389,7 @@ Downstream projects typically follow the following convention:
     The user can investigate ``~/.config/dask/*.yaml`` to see all of the
     commented out configuration files to which they have access.
 
-5.  Ensure that this file is run on import by including it in ``__init__.py``
+5.  Ensure that this file is run on import by including it in ``__init__.py``:
 
     .. code-block:: python
 
@@ -323,7 +398,7 @@ Downstream projects typically follow the following convention:
        from . import config
 
 6.  Within ``dask_foo`` code, use the ``dask.config.get`` function to access
-    configuration values
+    configuration values:
 
     .. code-block:: python
 
@@ -338,7 +413,7 @@ Downstream projects typically follow the following convention:
 
        recursive-include <PACKAGE_NAME> *.yaml
 
-    and the following in your setup.py ``setup`` call
+    and the following in your setup.py ``setup`` call:
 
     .. code-block:: python
 
@@ -350,7 +425,7 @@ Downstream projects typically follow the following convention:
 
 This process keeps configuration in a central place, but also keeps it safe
 within namespaces.  It places config files in an easy to access location
-,``~/.config/dask/\*.yaml`` by default so that users can easily discover what
+by default (``~/.config/dask/\*.yaml``), so that users can easily discover what
 they can change, but maintains the actual defaults within the source code, so
 that they more closely track changes in the library.
 
@@ -370,3 +445,4 @@ API
 .. autofunction:: dask.config.collect
 .. autofunction:: dask.config.refresh
 .. autofunction:: dask.config.ensure_file
+.. autofunction:: dask.config.expand_environment_variables

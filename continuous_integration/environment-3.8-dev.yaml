@@ -1,0 +1,55 @@
+# This job tests against upstream dev
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.8.*
+  # For the dependencies. These will be re-installed later.
+  - numpy
+  - pandas
+  # test dependencies
+  - pytest
+  - pytest-xdist
+  - moto>=1.3.14
+  - flask
+  - fastparquet
+  - h5py
+  - pytables
+  - zarr
+  - tiledb-py
+  - sqlalchemy
+  - pyarrow>=0.14.0
+  - jsonschema
+  # other -- IO
+  - bcolz
+  - blosc
+  - s3fs
+  - fsspec>=0.6.0
+  - boto3
+  - botocore
+  - aiohttp
+  - bokeh
+  - httpretty
+  - chest
+  - cloudpickle
+  - crick
+  - cytoolz
+  - distributed
+  - graphviz
+  - ipython
+  - lz4
+  - numba>=0.49
+  - partd
+  - psutil
+  - requests
+  - scikit-image
+  - scikit-learn
+  - scipy
+  - toolz
+  - python-snappy
+  - cachey
+  - python-graphviz
+  - python-xxhash
+  - mmh3
+  - pip

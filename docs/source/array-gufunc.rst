@@ -1,24 +1,23 @@
 Generalized Ufuncs
 ==================
 
-EXPERIMENTAL FEATURE added to Version 0.18.0 and above - see :ref:`disclaimer<disclaimer>`.
-
-
-`numpy <http://www.numpy.org>`_ provides the concept of `generalized ufuncs <http://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html>`_. Generalized ufuncs are functions
+`NumPy <https://www.numpy.org>`_ provides the concept of `generalized ufuncs <https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html>`_. Generalized ufuncs are functions
 that distinguish the various dimensions of passed arrays in the two classes loop dimensions
-and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html#details-of-signature>`_ is specified for numpy generalized ufuncs.
+and core dimensions. To accomplish this, a `signature <https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html#details-of-signature>`_ is specified for NumPy generalized ufuncs.
 
-`dask <https://dask.pydata.org/>`_ integrates interoperability with numpy's generalized ufuncs
-by adhering to respective `ufunc protocol <https://docs.scipy.org/doc/numpy/reference/arrays.classes.html#numpy.class.__array_ufunc__>`_, as well as provides a wrapper to make a Python function a generalized ufunc.
+`Dask <https://dask.org/>`_ integrates interoperability with NumPy's generalized ufuncs
+by adhering to respective `ufunc protocol <https://docs.scipy.org/doc/numpy/reference/arrays.classes.html#numpy.class.__array_ufunc__>`_, and provides a wrapper to make a Python function a generalized ufunc.
 
 
 Usage
 -----
 
-NumPy generalized ufunc
-~~~~~~~~~~~~~~~~~~~~~~~
-Note: `numpy <http://www.numpy.org>`_ generalized ufuncs are currently (v1.14.3 and below) stored in
-inside ``np.linalg._umath_linalg`` and might change in the future.
+NumPy Generalized UFuncs
+~~~~~~~~~~~~~~~~~~~~~~~~
+.. note::
+
+    `NumPy <https://www.numpy.org>`_ generalized ufuncs are currently (v1.14.3 and below) stored in
+    inside ``np.linalg._umath_linalg`` and might change in the future.
 
 
 .. code-block:: python
@@ -31,8 +30,18 @@ inside ``np.linalg._umath_linalg`` and might change in the future.
     w, v = np.linalg._umath_linalg.eig(x, output_dtypes=(float, float))
 
 
-Wrap own Python function
-~~~~~~~~~~~~~~~~~~~~~~~~
+Create Generalized UFuncs
+~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It can be difficult to create your own GUFuncs without going into the CPython API.
+However, the `Numba <https://numba.pydata.org>`_ project does provide a
+nice implementation with their ``numba.guvectorize`` decorator.  See `Numba's
+documentation
+<https://numba.pydata.org/numba-doc/dev/user/vectorize.html#the-guvectorize-decorator>`_
+for more information.
+
+Wrap your own Python function
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ``gufunc`` can be used to make a Python function behave like a generalized ufunc:
 
 
@@ -66,10 +75,10 @@ Disclaimer
 ----------
 This experimental generalized ufunc integration is not complete:
 
-* ``gufunc`` does not create a true generalized ufunc to be used with other input arrays, but dask.
-  I.e. at the moment ``gufunc`` casts all input arguments to ``dask.array.Array``.
+* ``gufunc`` does not create a true generalized ufunc to be used with other input arrays besides Dask.
+  I.e., at the moment, ``gufunc`` casts all input arguments to ``dask.array.Array``
 
-* Inferring ``output_dtypes`` automatically is not implemented yet.
+* Inferring ``output_dtypes`` automatically is not implemented yet
 
 
 API

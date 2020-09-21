@@ -9,7 +9,7 @@ Visualize task graphs
 Before executing your computation you might consider visualizing the underlying task graph.
 By looking at the inter-connectedness of tasks
 you can learn more about potential bottlenecks
-where parallelism may not be possile,
+where parallelism may not be possible,
 or areas where many tasks depend on each other,
 which may cause a great deal of communication.
 
@@ -17,6 +17,10 @@ The ``.visualize`` method and ``dask.visualize`` function work exactly like
 the ``.compute`` method and ``dask.compute`` function,
 except that rather than computing the result,
 they produce an image of the task graph.
+
+By default the task graph is rendered from top to bottom.
+In the case that you prefer to visualize it from left to right, pass
+``rankdir="LR"`` as a keyword argument to ``.visualize``.
 
 .. code-block:: python
 

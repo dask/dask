@@ -37,6 +37,7 @@ Top level user functions:
     Bag.to_dataframe
     Bag.to_delayed
     Bag.to_textfiles
+    Bag.to_avro
     Bag.topk
     Bag.var
     Bag.visualize
@@ -49,6 +50,7 @@ Create Bags
    from_delayed
    read_text
    from_url
+   read_avro
    range
 
 Top-level functions
@@ -59,6 +61,8 @@ Top-level functions
    map
    map_partitions
    zip
+   random.choices
+   random.sample
 
 Turn Bags into other things
 ---------------------------
@@ -67,6 +71,7 @@ Turn Bags into other things
    Bag.to_textfiles
    Bag.to_dataframe
    Bag.to_delayed
+   Bag.to_avro
 
 Bag methods
 -----------
@@ -81,8 +86,17 @@ Other functions
 .. autofunction:: from_delayed
 .. autofunction:: read_text
 .. autofunction:: from_url
+.. autofunction:: read_avro
 .. autofunction:: range
 .. autofunction:: concat
 .. autofunction:: map_partitions
 .. autofunction:: map
 .. autofunction:: zip
+
+
+Random Sampling
+---------------
+
+.. automodule:: dask.bag.random
+   :members:
+

@@ -9,32 +9,50 @@ Kubernetes
    Native <kubernetes-native.rst>
 
 Kubernetes_ is a popular system for deploying distributed applications on clusters,
-particularly in the cloud.
-You can use Kubernetes to launch Dask workers in the following two ways:
+particularly in the cloud.  You can use Kubernetes to launch Dask workers in the
+following two ways:
 
 1.  **Helm**:
-    You can launch a Dask scheduler, several workers, and an optional Jupyter Notebook server
-    on a Kubernetes easily using Helm_.
+
+    You can deploy Dask and (optionally) Jupyter or JupyterHub on Kubernetes
+    easily using Helm_
 
     .. code-block:: bash
 
-       helm repo update          # get latest helm charts
-       helm install stable/dask  # deploy standard dask chart
+       helm repo add dask https://helm.dask.org/    # add the Dask Helm chart repository
+       helm repo update                             # get latest Helm charts
+       # For single-user deployments, use dask/dask
+       helm install dask/dask                       # deploy standard Dask chart
+       # For multi-user deployments, use dask/daskhub
+       helm install dask/daskhub                    # deploy JupyterHub & Dask
 
     This is a good choice if you want to do the following:
 
     1.  Run a managed Dask cluster for a long period of time
-    2.  Also deploy a Jupyter server from which to run code,
+    2.  Also deploy a Jupyter / JupyterHub server from which to run code
     3.  Share the same Dask cluster between many automated services
     4.  Try out Dask for the first time on a cloud-based system
-        like Amazon, Google, or Microsoft Azure
-        (see also our :doc:`Cloud documentation <cloud>`)
+        like Amazon, Google, or Microsoft Azure where you already have
+        a Kubernetes cluster. If you don't already have Kubernetes deployed,
+        see our :doc:`Cloud documentation <cloud>`.
 
-    See :doc:`Dask and Helm documentation <kubernetes-helm>` for more information.
+    You can also use the ``HelmCluster`` cluster manager from dask-kubernetes to manage your
+    Helm Dask cluster from within your Python session.
+
+    .. code-block:: python
+
+       from dask_kubernetes import HelmCluster
+
+       cluster = HelmCluster(release_name="myrelease")
+       cluster.scale(10)
+
+    .. note::
+
+      For more information, see :doc:`Dask and Helm documentation <kubernetes-helm>`.
 
 2.  **Native**:
     You can quickly deploy Dask workers on Kubernetes
-    from within a Python script or interactive session using Dask-Kubernetes_.
+    from within a Python script or interactive session using Dask-Kubernetes_
 
     .. code-block:: python
 
@@ -53,12 +71,14 @@ You can use Kubernetes to launch Dask workers in the following two ways:
         rather than depend on a centralized system
     3.  Quickly adapt Dask cluster size to the current workload
 
-    See Dask-Kubernetes_ documentation for more information.
+    .. note::
+
+      For more information, see Dask-Kubernetes_ documentation.
 
 You may also want to see the documentation on using
 :doc:`Dask with Docker containers <docker>`
 to help you manage your software environments on Kubernetes.
 
 .. _Kubernetes: https://kubernetes.io/
-.. _Dask-Kubernetes: https://dask-kubernetes.readthedocs.io/
+.. _Dask-Kubernetes: https://kubernetes.dask.org/
 .. _Helm: https://helm.sh/

@@ -1,11 +1,8 @@
 """
 Control global computation context
 """
-from __future__ import absolute_import, division, print_function
-
 import threading
 from functools import partial
-import warnings
 from . import config
 
 _globals = config.config
@@ -14,20 +11,8 @@ _globals = config.config
 thread_state = threading.local()
 
 
-_warned_set_options = [False]
-
-
-def set_options(*args, **kwargs):
-    """ Deprecated: see dask.config.set instead """
-    if not _warned_set_options[0]:
-        warnings.warn("The dask.set_options function has been deprecated. "
-                      "Please use dask.config.set instead")
-        _warned_set_options[0] = True
-    return config.set(*args, **kwargs)
-
-
 def globalmethod(default=None, key=None, falsey=None):
-    """ Allow function to be taken over by globals
+    """Allow function to be taken over by globals
 
     This modifies a method so that occurrences of it may be taken over by
     functions registered in the global options. Can be used as a decorator or a
@@ -53,10 +38,10 @@ def globalmethod(default=None, key=None, falsey=None):
     >>> f = Foo()
     >>> f.bar()
     1
-    >>> with dask.set_options(bar=lambda: 2):
+    >>> with dask.config.set(bar=lambda: 2):
     ...     print(f.bar())
     2
-    >>> with dask.set_options(bar=False):
+    >>> with dask.config.set(bar=False):
     ...     print(f.bar())
     3
     """
