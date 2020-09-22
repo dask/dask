@@ -1846,7 +1846,8 @@ def test_groupby_agg_custom__mode():
     assert_eq(actual, expected)
 
 
-def test_groupby_select_column_agg():
+@pytest.mark.parametrize("func", ["var", list])
+def test_groupby_select_column_agg(func):
     pdf = pd.DataFrame(
         {
             "A": [1, 2, 3, 1, 2, 3, 1, 2, 4],
@@ -1854,8 +1855,8 @@ def test_groupby_select_column_agg():
         }
     )
     ddf = dd.from_pandas(pdf, npartitions=4)
-    actual = ddf.groupby("A")["B"].agg("var")
-    expected = pdf.groupby("A")["B"].agg("var")
+    actual = ddf.groupby("A")["B"].agg(func)
+    expected = pdf.groupby("A")["B"].agg(func)
     assert_eq(actual, expected)
 
 
