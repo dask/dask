@@ -668,7 +668,7 @@ def _build_agg_args(spec):
     chunk_funcs: a list of (intermediate-column, function, keyword) triples
         that are applied on grouped chunks of the initial dataframe.
 
-    agg_funcs: a list of (intermediate-column, functions, keword) triples that
+    agg_funcs: a list of (intermediate-column, functions, keyword) triples that
         are applied on the grouped concatination of the preprocessed chunks.
 
     finalizers: a list of (result-column, function, keyword) triples that are
