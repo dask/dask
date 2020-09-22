@@ -689,3 +689,10 @@ def test_median(axis, keepdims, func):
         getattr(da, func)(d, axis=axis, keepdims=keepdims),
         getattr(np, func)(x, axis=axis, keepdims=keepdims),
     )
+
+
+@pytest.mark.parametrize("method", ["sum", "mean", "prod"])
+def test_object_reduction(method):
+    arr = da.ones(1).astype(object)
+    result = getattr(arr, method)().compute()
+    assert result == 1
