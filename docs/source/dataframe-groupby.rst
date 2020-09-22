@@ -129,12 +129,12 @@ Aggregate
 =========
 
 Dask supports Pandas' ``aggregate`` syntax to run multiple reductions on the
-same groups.  Common reductions such as ``max``, ``sum``, and ``mean`` are 
+same groups.  Common reductions such as ``max``, ``sum``, ``list`` and ``mean`` are 
 directly supported:
 
 .. code-block:: python
 
-    >>> df.groupby(columns).aggregate(['sum', 'mean', 'max', 'min'])
+    >>> df.groupby(columns).aggregate(['sum', 'mean', 'max', 'min', list])
 
 Dask also supports user defined reductions.  To ensure proper performance, the
 reduction has to be formulated in terms of three independent steps. The
@@ -207,19 +207,6 @@ Finally, we create and use the aggregation
    a
    a  2
    b  4
-
-Another example of a custom aggregation is the Dask DataFrame version of 
-Pandas' ``df.groupby('a').agg(list)``:
-
-.. code-block:: python
-
-   >>> import itertools as it
-   >>> collect_list = dd.Aggregation(
-   ...     name="collect_list",
-   ...     chunk=lambda s: s.apply(list),
-   ...     agg=lambda s0: s0.apply(lambda chunks: list(it.chain.from_iterable(chunks))),
-   ... )
-   >>> ddf.groupby('a').agg(collect_list)
 
 To apply :py:class:`dask.dataframe.groupby.SeriesGroupBy.nunique` to more than one
 column you can use:
