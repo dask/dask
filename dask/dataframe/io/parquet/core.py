@@ -556,9 +556,9 @@ def get_engine(engine):
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
         else:
-            from .arrow import ArrowEngine
+            from .arrow_legacy import ArrowLegacyEngine
 
-            _ENGINES[engine] = eng = ArrowEngine
+            _ENGINES[engine] = eng = ArrowLegacyEngine
         return eng
 
     else:
