@@ -61,15 +61,10 @@ def test_keys():
     assert b.__dask_keys__() == sorted(dsk.keys())
 
 
-def test_bag_groupby_pure_hash(bagsequence):
-    """Test to ensure that `groupby` is grouping properly, when using 'pure' hashes
-    like integers. Eg., hash(False) == False, but hash('test') != 'test'. This is
-    testing the hash(False) == False case."""
-    assert isinstance(bagsequence, Bag)
-    # Probably a cleaner way to do this (maybe make them sets instead of lists??)
-    result = sorted(bagsequence.groupby(iseven).compute())
-    ordered_result = [(elem[0], sorted(elem[1])) for elem in result]
-    assert ordered_result == [(False, [1, 3, 5, 7, 9]), (True, [0, 2, 4, 6, 8])]
+def test_bag_groupby_pure_hash():
+    # https://github.com/dask/dask/issues/6640
+    result = b.groupby(iseven).compute()
+    assert result == [(False, [1, 3] * 3), (True, [0, 2, 4] * 3)]
 
 
 @pytest.mark.xfail(reason="https://github.com/dask/dask/issues/6640")
