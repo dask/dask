@@ -224,7 +224,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        fragment_row_groups=True,
+        fragment_row_groups=None,
         **kwargs,
     ):
 
@@ -279,6 +279,13 @@ class ArrowDatasetEngine(Engine):
                 raise ValueError("Cannot apply filters with gather_statistics=False")
             elif not gather_statistics:
                 gather_statistics = True
+
+        # Only pass fragments to workers if necessary
+        if fragment_row_groups is None:
+            if filters or partition_info["partition_names"]:
+                fragment_row_groups = True
+            else:
+                fragment_row_groups = False
 
         # Finally, construct our list of `parts`
         # (and a corresponing list of statistics)
@@ -830,7 +837,7 @@ class ArrowDatasetEngine(Engine):
             tables.append(arrow_table)
 
         if len(row_group) > 1:
-            arrow_table = pa.concat_table(tables)
+            arrow_table = pa.concat_tables(tables)
         else:
             arrow_table = tables[0]
 
