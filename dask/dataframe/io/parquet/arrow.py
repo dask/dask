@@ -224,7 +224,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        fragment_row_groups=None,
+        fragment_row_groups=True,  # None,
         **kwargs,
     ):
 
@@ -379,6 +379,14 @@ class ArrowDatasetEngine(Engine):
         )
         schema = ds.schema
         base = ""
+
+        if not (
+            split_row_groups or gather_statistics or partition_info["partition_names"]
+        ):
+            # Don't need to process real metadata if
+            # we are not gathering statistics, splitting
+            # by row-group, or dealing with partitioned data
+            metadata = [frag.path for frag in metadata]
 
         return (
             schema,
@@ -837,6 +845,7 @@ class ArrowDatasetEngine(Engine):
             tables.append(arrow_table)
 
         if len(row_group) > 1:
+            # NOTE: Not covered by pytest
             arrow_table = pa.concat_tables(tables)
         else:
             arrow_table = tables[0]
