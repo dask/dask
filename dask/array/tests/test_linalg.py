@@ -4,6 +4,7 @@ pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 
 import numpy as np
+import sys
 import scipy.linalg
 
 import dask.array as da
@@ -842,19 +843,46 @@ def test_no_chunks_svd():
 
 @pytest.mark.parametrize("shape", [(10, 20), (10, 10), (20, 10)])
 @pytest.mark.parametrize("chunks", [(-1, -1), (10, -1), (-1, 10)])
-def test_svd_flip(shape, chunks):
+@pytest.mark.parametrize("dtype", ["f4", "f8"])
+def test_svd_flip_correction(shape, chunks, dtype):
     # Verify that sign-corrected SVD results can still
     # be used to reconstruct inputs
-    x = da.random.random(size=shape, chunks=chunks)
+    x = da.random.random(size=shape, chunks=chunks).astype(dtype)
     u, s, v = da.linalg.svd(x)
+
+    # Choose precision in evaluation based on float precision
+    decimal = 9 if np.dtype(dtype).itemsize > 4 else 6
 
     # Validate w/ dask inputs
     uf, vf = svd_flip(u, v)
-    np.testing.assert_almost_equal(np.asarray(np.dot(uf * s, vf)), x, decimal=9)
+    assert uf.dtype == u.dtype
+    assert vf.dtype == v.dtype
+    np.testing.assert_almost_equal(np.asarray(np.dot(uf * s, vf)), x, decimal=decimal)
 
     # Validate w/ numpy inputs
     uc, vc = svd_flip(*da.compute(u, v))
-    np.testing.assert_almost_equal(np.asarray(np.dot(uc * s, vc)), x, decimal=9)
+    assert uc.dtype == u.dtype
+    assert vc.dtype == v.dtype
+    np.testing.assert_almost_equal(np.asarray(np.dot(uc * s, vc)), x, decimal=decimal)
+
+
+@pytest.mark.parametrize("dtype", ["f2", "f4", "f8", "f16", "c8", "c16", "c32"])
+@pytest.mark.parametrize("u_based", [True, False])
+def test_svd_flip_sign(dtype, u_based):
+    if sys.platform == "win32" and dtype in ["f16", "c32"]:
+        pytest.skip("128-bit floats not supported on windows")
+    x = np.array(
+        [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]], dtype=dtype
+    )
+    u, v = svd_flip(x, x.T, u_based_decision=u_based)
+    assert u.dtype == x.dtype
+    assert v.dtype == x.dtype
+    # Verify that all singular vectors have same
+    # sign except for the last one (i.e. last column)
+    y = x.copy()
+    y[:, -1] *= y.dtype.type(-1)
+    assert_eq(u, y)
+    assert_eq(v, y.T)
 
 
 @pytest.mark.parametrize("chunks", [(10, -1), (-1, 10), (9, -1), (-1, 9)])
