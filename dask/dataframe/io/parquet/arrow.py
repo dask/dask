@@ -224,7 +224,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        fragment_row_groups=True,  # None,
+        fragment_row_groups=None,
         **kwargs,
     ):
 
