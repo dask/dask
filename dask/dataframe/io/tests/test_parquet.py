@@ -972,9 +972,8 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     # (shouldn't raise error with legacy dataset)
     dd.read_parquet(
         str(tmpdir),
-        engine="pyarrow",
+        engine="pyarrow-legacy",
         gather_statistics=False,
-        dataset={"use_legacy_dataset": True},
     ).compute()
 
     # Test that read fails when validate_schema=True
@@ -982,9 +981,9 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     with pytest.raises(ValueError) as e_info:
         dd.read_parquet(
             str(tmpdir),
-            engine="pyarrow",
+            engine="pyarrow-legacy",
             gather_statistics=False,
-            dataset={"validate_schema": True, "use_legacy_dataset": True},
+            dataset={"validate_schema": True},
         ).compute()
         assert e_info.message.contains("ValueError: Schema in partition")
         assert e_info.message.contains("was different")
@@ -2174,22 +2173,26 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
 
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
     dataset = {"validate_schema": False}
-    if schema != "infer":
-        dataset["use_legacy_dataset"] = True
-    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
-    ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset=dataset)
+    engine_use = engine
+    if schema != "infer" and engine == "pyarrow":
+        engine_use = "pyarrow-legacy"
+    ddf2.to_parquet(
+        tmp_path, engine=engine_use, write_metadata_file=False, schema=schema
+    )
+    ddf_read = dd.read_parquet(tmp_path, engine=engine_use, dataset=dataset)
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
     # Can force schema validation on each partition in pyarrow
     if engine == "pyarrow" and schema is None:
         dataset = {"validate_schema": True}
+        engine_use = engine
         if schema != "infer":
-            dataset["use_legacy_dataset"] = True
+            engine_use = "pyarrow-legacy"
         # The schema mismatch should raise an error if the
         # dataset was written with `schema=None` (no inference)
         with pytest.raises(ValueError):
-            ddf_read = dd.read_parquet(tmp_path, dataset=dataset, engine=engine)
+            ddf_read = dd.read_parquet(tmp_path, dataset=dataset, engine=engine_use)
 
 
 @pytest.mark.parametrize("numerical", [True, False])
@@ -2671,9 +2674,8 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     )
 
     # This will raise by default due to overflow
-    dataset = {"use_legacy_dataset": True}
     with pytest.raises(pa.lib.ArrowInvalid) as e:
-        dd.read_parquet(str(tmpdir), engine="pyarrow", dataset=dataset).compute()
+        dd.read_parquet(str(tmpdir), engine="pyarrow-legacy").compute()
     assert "out of bounds" in str(e.value)
 
     from dask.dataframe.io.parquet.arrow import ArrowEngine
@@ -2725,10 +2727,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
             )
 
     # this should not fail, but instead produce timestamps that are in the valid range
-    dataset = {"use_legacy_dataset": True}
-    dd.read_parquet(
-        str(tmpdir), engine=ArrowEngineWithTimestampClamp, dataset=dataset
-    ).compute()
+    dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
 
 
 @write_read_engines_xfail
@@ -2821,9 +2820,7 @@ def test_pyarrow_dataset_simple(tmpdir, engine):
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine)
-    read_df = dd.read_parquet(
-        fn, engine="pyarrow", dataset={"use_legacy_dataset": False}
-    )
+    read_df = dd.read_parquet(fn, engine="pyarrow-legacy")
     read_df.compute(scheduler="synchronous")
     assert_eq(ddf, read_df)
 
@@ -2845,7 +2842,6 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
     read_df = dd.read_parquet(
         fn,
         engine="pyarrow",
-        dataset={"use_legacy_dataset": False},
         filters=[("b", "==", "a")] if test_filter else None,
     )
 

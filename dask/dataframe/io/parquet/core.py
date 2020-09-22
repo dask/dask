@@ -517,9 +517,10 @@ def get_engine(engine):
 
     Parameters
     ----------
-    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
+    engine : {'auto', 'fastparquet', 'pyarrow', 'pyarrow-legacy'}, default 'auto'
         Parquet reader library to use. Defaults to fastparquet if both are
-        installed
+        installed.  The pyarrow.dataset API will be used for newer PyArrow
+        versions (>=1.0.0).  Use 'pyarrow-legacy' for the legacy pyarrow engine.
 
     Returns
     -------
@@ -544,14 +545,20 @@ def get_engine(engine):
         _ENGINES["fastparquet"] = eng = FastParquetEngine
         return eng
 
-    elif engine == "pyarrow" or engine == "arrow":
+    elif engine == "pyarrow" or engine == "arrow" or engine == "pyarrow-legacy":
         pa = import_required("pyarrow", "`pyarrow` not installed")
-        from .arrow import ArrowEngine
 
         if LooseVersion(pa.__version__) < "0.13.1":
             raise RuntimeError("PyArrow version >= 0.13.1 required")
 
-        _ENGINES["pyarrow"] = eng = ArrowEngine
+        if LooseVersion(pa.__version__) >= "1.0.0" and engine != "pyarrow-legacy":
+            from .arrow import ArrowDatasetEngine
+
+            _ENGINES[engine] = eng = ArrowDatasetEngine
+        else:
+            from .arrow import ArrowEngine
+
+            _ENGINES[engine] = eng = ArrowEngine
         return eng
 
     else:
