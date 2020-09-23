@@ -1915,7 +1915,10 @@ def _nlargest_chunk(df, *index, **kwargs):
     n = kwargs.pop("n")
     keep = kwargs.pop("keep")
     name = kwargs.pop("name")
-    indices = list(index)
+    if isinstance(index, str):
+        indices = [index]
+    else:
+        indices = list(index)
     series_grouped = df.groupby(indices)[name].nlargest(n=n, keep=keep)
     if isinstance(series_grouped.index, pd.RangeIndex):
         return _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name)
@@ -1931,8 +1934,12 @@ def _nlargest_aggregate(df, **kwargs):
     name = kwargs.pop("name")
     index = kwargs.pop("index")
     num_records = kwargs.pop("len")
-    indices = list(index)
+    if isinstance(index, str):
+        indices = [index]
+    else:
+        indices = list(index)
     if len(indices) == 1 and name in indices:
+        name_backup = name
         name = "temp"
         df = df.to_frame()
         df.columns = [name]
@@ -1942,7 +1949,7 @@ def _nlargest_aggregate(df, **kwargs):
     df = df.sort_index()
     ret = df.groupby(indices)[name].nlargest(n=n, keep=keep)
     if (
-        type(ret.index) in [pd.RangeIndex, pd.Int64Index, pd.UInt64Index]
+        type(ret.index) in [pd.RangeIndex, pd.Int64Index]
         and len(ret) == len(df) != num_records
     ):
         ret = _convert_RangeIndex_to_MultiIndex(ret, df, indices, name)
@@ -1950,7 +1957,9 @@ def _nlargest_aggregate(df, **kwargs):
             indices[indices.index(name)] = df[name]
             indices.append(df.index)
             return ret.to_frame().reset_index().set_index(indices)[name]
-    return ret
+    if ret.name == "temp":
+        ret.name = name_backup
+    return ret.sort_index()
 
 
 def _unique_aggregate(series_gb, name=None):

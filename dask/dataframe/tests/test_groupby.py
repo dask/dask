@@ -5,7 +5,7 @@ from packaging import version
 import numpy as np
 import pandas as pd
 
-import itertools
+import itertools as it
 
 import pytest
 
@@ -409,10 +409,10 @@ def test_groupby_get_group():
 params = [
     [1, 2, 3, 4],
     [
-        ["location"],
-        ["category"],
-        ["percent"],
-        ["total"],
+        "location",
+        "category",
+        "percent",
+        "total",
         ["location", "category"],
         ["category", "location"],
         ["location", "percent"],
@@ -431,7 +431,7 @@ params = [
 ]
 
 
-@pytest.mark.parametrize("n, indices, name, keep", list(itertools.product(*params)))
+@pytest.mark.parametrize("n, indices, name, keep", list(it.product(*params)))
 def test_dataframe_groupby_nlargest(n, indices, name, keep):
     data = {}
     data["location"] = ["A", "A", "A", "B", "C", "C", "D", "D", "D", "D", "D"]
@@ -442,7 +442,7 @@ def test_dataframe_groupby_nlargest(n, indices, name, keep):
     dask_df = dd.from_pandas(df, npartitions=3)
     expected = dask_df.groupby(indices)[name].nlargest(n=n, keep=keep).compute()
     pd_val = df.groupby(indices)[name].nlargest(n=n, keep=keep)
-    assert dict(pd_val) == dict(expected)
+    assert_eq(pd_val, expected)
 
 
 def test_dataframe_groupby_nunique():
