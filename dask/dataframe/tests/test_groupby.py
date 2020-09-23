@@ -433,8 +433,10 @@ params = [
 
 
 @pytest.mark.xfail(
-    sys.version_info[0] == 3 and sys.version_info[1] == 6,
-    reason="nlargest() behaves differently with an older version of pandas on Python 3.6 "
+    sys.version_info[0] == 3
+    and sys.version_info[1] == 6
+    and PANDAS_VERSION == "0.23.4",
+    reason="nlargest() behaves differently with an older version of pandas (0.23.4) on Python 3.6 "
     "with an unexpected keyword argument 'axis'",
     strict=False,
 )
