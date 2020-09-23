@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Hashable, Optional, Set, Mapping, Container, Tuple
+from typing import Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -34,7 +34,7 @@ class Layer(collections.abc.Mapping):
     """
 
     def cull(
-        self, keys: Set, all_hlg_keys: Container
+        self, keys: Set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, Set]]:
         """Return a new Layer with only the tasks required to calculate `keys`.
 
@@ -72,12 +72,12 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer(out), ret_deps
 
-    def get_dependencies(self, all_hlg_keys: Container) -> Mapping[Hashable, Set]:
+    def get_dependencies(self, all_hlg_keys: Iterable) -> Mapping[Hashable, Set]:
         """Get dependencies of all keys in the layer
 
         Parameters
         ----------
-        all_hlg_keys : Container
+        all_hlg_keys : Iterable
             All keys in the high level graph.
 
         Returns
