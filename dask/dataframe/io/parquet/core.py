@@ -102,7 +102,7 @@ class ParquetSubgraph(Layer):
             index=self.index,
             parts=self.parts,
             kwargs=self.kwargs,
-            part_ids=[i for i in self.part_ids if (self.name, i) in keys],
+            part_ids={i for i in self.part_ids if (self.name, i) in keys},
         )
         return ret, ret.get_dependencies(all_hlg_keys)
 
