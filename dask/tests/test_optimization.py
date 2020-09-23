@@ -1116,9 +1116,19 @@ def test_SubgraphCallable():
     }
 
     f = SubgraphCallable(dsk, "h", ["in1", "in2"], name="test")
+
     assert f.name == "test"
     assert repr(f) == "test"
 
+    f2 = SubgraphCallable(dsk, "h", ["in1", "in2"], name="test")
+    assert f == f2
+
+    f3 = SubgraphCallable(dsk, "g", ["in1", "in2"], name="test")
+    assert f != f3
+
+    assert dict(f=None)
+    assert hash(SubgraphCallable(None, None, [None]))
+    assert hash(f3) != hash(f2)
     dsk2 = dsk.copy()
     dsk2.update({"in1": 1, "in2": 2})
     assert f(1, 2) == get_sync(cull(dsk2, ["h"])[0], ["h"])[0]
