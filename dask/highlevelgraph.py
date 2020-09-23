@@ -4,11 +4,28 @@ import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
-from .core import reverse_dict
+from .core import reverse_dict, keys_in_tasks
+
+
+def compute_layer_dependencies(layers):
+    """Returns the dependencies between layers"""
+
+    def _find_layer_containing_key(key):
+        for k, v in layers.items():
+            if key in v:
+                return k
+        raise RuntimeError(f"{repr(key)} not found")
+
+    all_keys = set(key for layer in layers.values() for key in layer)
+    ret = {k: set() for k in layers.keys()}
+    for k, v in layers.items():
+        for key in keys_in_tasks(all_keys.difference(v.keys()), v.values()):
+            ret[k].add(_find_layer_containing_key(key))
+    return ret
 
 
 class HighLevelGraph(Mapping):
-    """ Task graph composed of layers of dependent subgraphs
+    """Task graph composed of layers of dependent subgraphs
 
     This object encodes a Dask task graph that is composed of layers of
     dependent subgraphs, such as commonly occurs when building task graphs
@@ -109,7 +126,7 @@ class HighLevelGraph(Mapping):
 
     @classmethod
     def from_collections(cls, name, layer, dependencies=()):
-        """ Construct a HighLevelGraph from a new layer and a set of collections
+        """Construct a HighLevelGraph from a new layer and a set of collections
 
         This constructs a HighLevelGraph in the common case where we have a single
         new layer and a set of old collections on which we want to depend.
@@ -217,6 +234,37 @@ class HighLevelGraph(Mapping):
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
 
+    def validate(self):
+        # Check dependencies
+        for layer_name, deps in self.dependencies.items():
+            if layer_name not in self.layers:
+                raise ValueError(
+                    f"dependencies[{repr(layer_name)}] not found in layers"
+                )
+            for dep in deps:
+                if dep not in self.dependencies:
+                    raise ValueError(f"{repr(dep)} not found in dependencies")
+
+        # Re-calculate all layer dependencies
+        dependencies = compute_layer_dependencies(self.layers)
+
+        # Check keys
+        dep_key1 = set(self.dependencies.keys())
+        dep_key2 = set(dependencies.keys())
+        if dep_key1 != dep_key2:
+            raise ValueError(
+                f"incorrect dependencies keys {repr(dep_key1)} "
+                f"expected {repr(dep_key2)}"
+            )
+
+        # Check values
+        for k in dep_key1:
+            if self.dependencies[k] != dependencies[k]:
+                raise ValueError(
+                    f"incorrect dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
+                    f"expected {repr(dependencies[k])}"
+                )
+
 
 def to_graphviz(
     hg,
@@ -226,7 +274,7 @@ def to_graphviz(
     graph_attr={},
     node_attr=None,
     edge_attr=None,
-    **kwargs
+    **kwargs,
 ):
     from .dot import graphviz, name, label
 

@@ -240,6 +240,9 @@ def apply_gufunc(func, signature, *args, **kwargs):
         dimensions are to consist only of one chunk.
         Warning: enabling this can increase memory usage significantly.
         Defaults to ``False``.
+    meta: Optional, tuple, keyword only
+        tuple of empty ndarrays describing the shape and dtype of the output of the gufunc.
+        Defaults to ``None``.
     **kwargs : dict
         Extra keyword arguments to pass to `func`
 
@@ -279,6 +282,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_sizes = kwargs.pop("output_sizes", None)
     vectorize = kwargs.pop("vectorize", None)
     allow_rechunk = kwargs.pop("allow_rechunk", False)
+    meta = kwargs.pop("meta", None)
 
     # Input processing:
     ## Signature
@@ -417,27 +421,32 @@ significantly.".format(
     ### Use existing `blockwise` but only with loopdims to enforce
     ### concatenation for coredims that appear also at the output
     ### Modifying `blockwise` could improve things here.
-    try:
-        tmp = blockwise(  # First try to compute meta
-            func, loop_output_dims, *arginds, concatenate=True, **kwargs
-        )
-    except ValueError:
-        # If computing meta doesn't work, provide it explicitly based on
-        # provided dtypes
-        sample = arginds[0]._meta
-        if isinstance(output_dtypes, tuple):
-            meta = tuple(
-                meta_from_array(sample, dtype=odt)
-                for ocd, odt in zip(output_coredimss, output_dtypes)
-            )
-        else:
-            meta = tuple(
-                meta_from_array(sample, dtype=odt)
-                for ocd, odt in zip((output_coredimss,), (output_dtypes,))
-            )
+    if meta is not None:
         tmp = blockwise(
             func, loop_output_dims, *arginds, concatenate=True, meta=meta, **kwargs
         )
+    else:
+        try:
+            tmp = blockwise(  # First try to compute meta
+                func, loop_output_dims, *arginds, concatenate=True, **kwargs
+            )
+        except ValueError:
+            # If computing meta doesn't work, provide it explicitly based on
+            # provided dtypes
+            sample = arginds[0]._meta
+            if isinstance(output_dtypes, tuple):
+                meta = tuple(
+                    meta_from_array(sample, dtype=odt)
+                    for ocd, odt in zip(output_coredimss, output_dtypes)
+                )
+            else:
+                meta = tuple(
+                    meta_from_array(sample, dtype=odt)
+                    for ocd, odt in zip((output_coredimss,), (output_dtypes,))
+                )
+            tmp = blockwise(
+                func, loop_output_dims, *arginds, concatenate=True, meta=meta, **kwargs
+            )
 
     if isinstance(tmp._meta, tuple):
         metas = tmp._meta
@@ -628,7 +637,7 @@ class gufunc(object):
             output_sizes=self.output_sizes,
             output_dtypes=self.output_dtypes,
             allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
-            **kwargs
+            **kwargs,
         )
 
 
@@ -681,6 +690,9 @@ def as_gufunc(signature=None, **kwargs):
         dimensions are to consist only of one chunk.
         Warning: enabling this can increase memory usage significantly.
         Defaults to ``False``.
+    meta: Optional, tuple, keyword only
+        tuple of empty ndarrays describing the shape and dtype of the output of the gufunc.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -720,6 +732,7 @@ def as_gufunc(signature=None, **kwargs):
         "output_sizes",
         "output_dtypes",
         "allow_rechunk",
+        "meta",
     }
     if set(_allowedkeys).issubset(kwargs.keys()):
         raise TypeError("Unsupported keyword argument(s) provided")

@@ -21,7 +21,7 @@ import dask.array as da
 import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
 from dask.delayed import Delayed, delayed
-from dask.utils import ignoring, tmpfile, tmpdir, key_split
+from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
 from dask.utils_test import inc, dec
 
 from dask.array.core import (
@@ -94,6 +94,13 @@ def test_top():
 
     assert top(identity, "z", "", "x", "ij", numblocks={"x": (2, 2)}) == {
         ("z",): (identity, [[("x", 0, 0), ("x", 0, 1)], [("x", 1, 0), ("x", 1, 1)]])
+    }
+
+
+def test_top_with_kwargs():
+    assert top(add, "z", "i", "x", "i", numblocks={"x": (2, 0)}, b=100) == {
+        ("z", 0): (apply, add, [("x", 0)], {"b": 100}),
+        ("z", 1): (apply, add, [("x", 1)], {"b": 100}),
     }
 
 
@@ -2380,7 +2387,7 @@ def test_from_array_ndarray_getitem():
     x = np.array([[1, 2], [3, 4]])
     dx = da.from_array(x, chunks=(1, 2))
     assert_eq(x, dx)
-    assert dx.dask[dx.name, 0, 0][0] == operator.getitem
+    assert (dx.dask[dx.name, 0, 0] == np.array([[1, 2]])).all()
 
 
 @pytest.mark.parametrize("x", [[1, 2], (1, 2), memoryview(b"abc")])
@@ -2392,8 +2399,7 @@ def test_from_array_list(x):
 
     dx = da.from_array(x, chunks=1)
     assert_eq(np.array(x), dx)
-    assert dx.dask[dx.name, 0][0] == operator.getitem
-    assert isinstance(dx.dask[dx.name.replace("array", "array-original")], np.ndarray)
+    assert dx.dask[dx.name, 0][0] == x[0]
 
 
 @pytest.mark.parametrize("type_", [t for t in np.ScalarType if t is not memoryview])
@@ -2406,7 +2412,12 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(dx.dask[dx.name,], np.ndarray)
+    assert isinstance(
+        dx.dask[
+            dx.name,
+        ],
+        np.ndarray,
+    )
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
@@ -2477,36 +2488,42 @@ def test_from_array_dask_collection_warns():
         da.array(x)
 
 
-def test_asarray():
-    assert_eq(da.asarray([1, 2, 3]), np.asarray([1, 2, 3]))
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray(asarray):
+    assert_eq(asarray([1, 2, 3]), np.asarray([1, 2, 3]))
 
-    x = da.asarray([1, 2, 3])
-    assert da.asarray(x) is x
+    x = asarray([1, 2, 3])
+    assert asarray(x) is x
+
+    y = [x[0], 2, x[2]]
+    assert_eq(asarray(y), x)
 
 
-def test_asarray_dask_dataframe():
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray_dask_dataframe(asarray):
     # https://github.com/dask/dask/issues/3885
     dd = pytest.importorskip("dask.dataframe")
     import pandas as pd
 
     s = dd.from_pandas(pd.Series([1, 2, 3, 4]), 2)
-    result = da.asarray(s)
+    result = asarray(s)
     expected = s.values
     assert_eq(result, expected)
 
     df = s.to_frame(name="s")
-    result = da.asarray(df)
+    result = asarray(df)
     expected = df.values
     assert_eq(result, expected)
 
 
-def test_asarray_h5py():
+@pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
+def test_asarray_h5py(asarray):
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
         with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
-            x = da.asarray(d)
+            x = asarray(d)
             assert d in x.dask.values()
             assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
 
@@ -3283,15 +3300,21 @@ def test_from_array_names():
     d = da.from_array(x, chunks=2)
 
     names = countby(key_split, d.dask)
-    assert set(names.values()) == set([1, 5])
+    assert set(names.values()) == set([5])
 
 
-def test_array_picklable():
+@pytest.mark.parametrize(
+    "array",
+    [
+        da.arange(100, chunks=25),
+        da.ones((10, 10), chunks=25),
+    ],
+)
+def test_array_picklable(array):
     from pickle import loads, dumps
 
-    a = da.arange(100, chunks=25)
-    a2 = loads(dumps(a))
-    assert_eq(a, a2)
+    a2 = loads(dumps(array))
+    assert_eq(array, a2)
 
 
 def test_from_array_raises_on_bad_chunks():
@@ -4126,7 +4149,7 @@ def test_dask_array_holds_scipy_sparse_containers():
 
     z = x.T.map_blocks(scipy.sparse.csr_matrix)
     zz = z.compute(scheduler="single-threaded")
-    assert isinstance(yy, scipy.sparse.spmatrix)
+    assert isinstance(zz, scipy.sparse.spmatrix)
     assert (zz == xx.T).all()
 
 

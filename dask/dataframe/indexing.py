@@ -164,10 +164,11 @@ class _LocIndexer(_IndexerBase):
                 divisions.append(sorted(indexer)[0])
             # append maximum value of the last division
             divisions.append(sorted(items[-1][1])[-1])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
         else:
             divisions = [None, None]
             dsk = {(name, 0): meta.head(0)}
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+            graph = HighLevelGraph.from_collections(name, dsk)
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
     def _loc_element(self, iindexer, cindexer):
@@ -283,7 +284,7 @@ class _LocIndexer(_IndexerBase):
 
 
 def _partition_of_index_value(divisions, val):
-    """ In which partition does this value lie?
+    """In which partition does this value lie?
 
     >>> _partition_of_index_value([0, 5, 10], 3)
     0
@@ -303,7 +304,7 @@ def _partition_of_index_value(divisions, val):
 
 
 def _partitions_of_index_values(divisions, values):
-    """ Return defaultdict of division and values pairs
+    """Return defaultdict of division and values pairs
     Each key corresponds to the division which values are index values belong
     to the division.
 
@@ -326,7 +327,7 @@ def _partitions_of_index_values(divisions, values):
 
 
 def _coerce_loc_index(divisions, o):
-    """ Transform values to be comparable against divisions
+    """Transform values to be comparable against divisions
 
     This is particularly valuable to use with pandas datetimes
     """

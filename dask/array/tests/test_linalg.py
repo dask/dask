@@ -4,11 +4,12 @@ pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 
 import numpy as np
+import sys
 import scipy.linalg
 
 import dask.array as da
 from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
-from dask.array.utils import assert_eq, same_keys
+from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
 @pytest.mark.parametrize(
@@ -480,6 +481,14 @@ def test_svd_compressed():
     assert_eq(s, s_exact)  # s must contain the singular values
 
 
+@pytest.mark.parametrize("chunks", [(10, 50), (50, 10), (-1, -1)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_svd_dtype_preservation(chunks, dtype):
+    x = da.random.random((50, 50), chunks=chunks).astype(dtype)
+    u, s, v = svd(x)
+    assert u.dtype == s.dtype == v.dtype == dtype
+
+
 def test_svd_compressed_deterministic():
     m, n = 30, 25
     x = da.random.RandomState(1234).random_sample(size=(m, n), chunks=(5, 5))
@@ -487,6 +496,30 @@ def test_svd_compressed_deterministic():
     u2, s2, vt2 = svd_compressed(x, 3, seed=1234)
 
     assert all(da.compute((u == u2).all(), (s == s2).all(), (vt == vt2).all()))
+
+
+@pytest.mark.parametrize("m", [5, 10, 15, 20])
+@pytest.mark.parametrize("n", [5, 10, 15, 20])
+@pytest.mark.parametrize("k", [5])
+@pytest.mark.parametrize("chunks", [(5, 10), (10, 5)])
+def test_svd_compressed_shapes(m, n, k, chunks):
+    x = da.random.random(size=(m, n), chunks=chunks)
+    u, s, v = svd_compressed(x, k=k, n_power_iter=1, compute=True, seed=1)
+    u, s, v = da.compute(u, s, v)
+    r = min(m, n, k)
+    assert u.shape == (m, r)
+    assert s.shape == (r,)
+    assert v.shape == (r, n)
+
+
+def test_svd_compressed_compute():
+    x = da.ones((100, 100), chunks=(10, 10))
+    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
+    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
+
+    assert len(v.dask) < len(vv.dask)
+
+    assert_eq(v, vv)
 
 
 def _check_lu_result(p, l, u, A):
@@ -789,7 +822,7 @@ def test_lstsq(nrow, ncol, chunk):
 
 def test_no_chunks_svd():
     x = np.random.random((100, 10))
-    u, s, v = np.linalg.svd(x, full_matrices=0)
+    u, s, v = np.linalg.svd(x, full_matrices=False)
 
     for chunks in [((np.nan,) * 10, (10,)), ((np.nan,) * 10, (np.nan,))]:
         dx = da.from_array(x, chunks=(10, 10))
@@ -806,6 +839,89 @@ def test_no_chunks_svd():
         dx._chunks = ((np.nan,) * 10, (np.nan,))
         assert_eq(abs(v), abs(dv))
         assert_eq(abs(u), abs(du))
+
+
+@pytest.mark.parametrize("shape", [(10, 20), (10, 10), (20, 10)])
+@pytest.mark.parametrize("chunks", [(-1, -1), (10, -1), (-1, 10)])
+@pytest.mark.parametrize("dtype", ["f4", "f8"])
+def test_svd_flip_correction(shape, chunks, dtype):
+    # Verify that sign-corrected SVD results can still
+    # be used to reconstruct inputs
+    x = da.random.random(size=shape, chunks=chunks).astype(dtype)
+    u, s, v = da.linalg.svd(x)
+
+    # Choose precision in evaluation based on float precision
+    decimal = 9 if np.dtype(dtype).itemsize > 4 else 6
+
+    # Validate w/ dask inputs
+    uf, vf = svd_flip(u, v)
+    assert uf.dtype == u.dtype
+    assert vf.dtype == v.dtype
+    np.testing.assert_almost_equal(np.asarray(np.dot(uf * s, vf)), x, decimal=decimal)
+
+    # Validate w/ numpy inputs
+    uc, vc = svd_flip(*da.compute(u, v))
+    assert uc.dtype == u.dtype
+    assert vc.dtype == v.dtype
+    np.testing.assert_almost_equal(np.asarray(np.dot(uc * s, vc)), x, decimal=decimal)
+
+
+@pytest.mark.parametrize("dtype", ["f2", "f4", "f8", "f16", "c8", "c16", "c32"])
+@pytest.mark.parametrize("u_based", [True, False])
+def test_svd_flip_sign(dtype, u_based):
+    if sys.platform == "win32" and dtype in ["f16", "c32"]:
+        pytest.skip("128-bit floats not supported on windows")
+    x = np.array(
+        [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]], dtype=dtype
+    )
+    u, v = svd_flip(x, x.T, u_based_decision=u_based)
+    assert u.dtype == x.dtype
+    assert v.dtype == x.dtype
+    # Verify that all singular vectors have same
+    # sign except for the last one (i.e. last column)
+    y = x.copy()
+    y[:, -1] *= y.dtype.type(-1)
+    assert_eq(u, y)
+    assert_eq(v, y.T)
+
+
+@pytest.mark.parametrize("chunks", [(10, -1), (-1, 10), (9, -1), (-1, 9)])
+@pytest.mark.parametrize("shape", [(10, 100), (100, 10), (10, 10)])
+def test_svd_supported_array_shapes(chunks, shape):
+    # Test the following cases for tall-skinny, short-fat and square arrays:
+    # - no chunking
+    # - chunking that contradicts shape (e.g. a 10x100 array with 9x100 chunks)
+    # - chunking that aligns with shape (e.g. a 10x100 array with 10x9 chunks)
+    x = np.random.random(shape)
+    dx = da.from_array(x, chunks=chunks)
+
+    du, ds, dv = da.linalg.svd(dx)
+    du, dv = da.compute(du, dv)
+
+    nu, ns, nv = np.linalg.svd(x, full_matrices=False)
+
+    # Correct signs before comparison
+    du, dv = svd_flip(du, dv)
+    nu, nv = svd_flip(nu, nv)
+
+    assert_eq(du, nu)
+    assert_eq(ds, ns)
+    assert_eq(dv, nv)
+
+
+def test_svd_incompatible_chunking():
+    with pytest.raises(
+        NotImplementedError, match="Array must be chunked in one dimension only"
+    ):
+        x = da.random.random((10, 10), chunks=(5, 5))
+        da.linalg.svd(x)
+
+
+@pytest.mark.parametrize("ndim", [0, 1, 3])
+def test_svd_incompatible_dimensions(ndim):
+    with pytest.raises(ValueError, match="Array must be 2D"):
+        x = da.random.random((10,) * ndim, chunks=(-1,) * ndim)
+        da.linalg.svd(x)
 
 
 @pytest.mark.parametrize(
@@ -898,13 +1014,3 @@ def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
     if len(shape) > 2 and len(axis) == 2:
         with pytest.raises(NotImplementedError):
             da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
-
-
-def test_svd_compressed_compute():
-    x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
-    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
-
-    assert len(v.dask) < len(vv.dask)
-
-    assert_eq(v, vv)

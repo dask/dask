@@ -11,6 +11,7 @@ import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_118, _numpy_120
 import dask.dataframe as dd
+from dask.blockwise import fuse_roots
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
@@ -1144,6 +1145,14 @@ def test_isin():
             d.isin(obj)
 
 
+def test_contains_frame():
+    df = dd.from_pandas(pd.DataFrame({"A": [1, 2], 0: [3, 4]}), 1)
+    assert "A" in df
+    assert 0 in df
+    assert "B" not in df
+    assert 1 not in df
+
+
 def test_len():
     assert len(d) == len(full)
     assert len(d.a) == len(full.a)
@@ -1181,7 +1190,7 @@ def test_nbytes():
 
 @pytest.mark.parametrize(
     "method,expected",
-    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 5.4, 1.2, 7.8, 5.0))],
+    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 4.0, 1.2, 6.2, 2.0))],
 )
 def test_quantile(method, expected):
     if method == "tdigest":
@@ -1269,9 +1278,9 @@ def test_empty_quantile(method):
         (
             "dask",
             (
-                pd.Series([16.5, 36.5, 26.5], index=["A", "X", "B"]),
+                pd.Series([7.0, 27.0, 17.0], index=["A", "X", "B"]),
                 pd.DataFrame(
-                    [[1.50, 21.50, 11.50], [17.75, 37.75, 27.75]],
+                    [[1.50, 21.50, 11.50], [14.0, 34.0, 24.0]],
                     index=[0.25, 0.75],
                     columns=["A", "X", "B"],
                 ),
@@ -1344,6 +1353,14 @@ def test_quantile_for_possibly_unsorted_q():
 
     r = ds.quantile(0.25).compute()
     assert_eq(r, 25.0)
+
+
+def test_quantile_tiny_partitions():
+    """ See https://github.com/dask/dask/issues/6551 """
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    r = ddf["a"].quantile(0.5).compute()
+    assert r == 2
 
 
 def test_index():
@@ -1911,7 +1928,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
 
 
 def test_repartition_partition_size_arg():
-    df = pd.DataFrame({"x": range(10)},)
+    df = pd.DataFrame({"x": range(10)})
     a = dd.from_pandas(df, npartitions=2)
     b = a.repartition("1 MiB")
     assert b.npartitions == 1
@@ -2600,7 +2617,7 @@ def test_to_dask_array_raises(as_frame):
         a.to_dask_array(5)
 
 
-@pytest.mark.parametrize("as_frame", [False, False])
+@pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_unknown(as_frame):
     s = pd.Series([1, 2, 3, 4, 5], name="foo")
     a = dd.from_pandas(s, chunksize=2)
@@ -2613,11 +2630,12 @@ def test_to_dask_array_unknown(as_frame):
     result = result.chunks
 
     if as_frame:
+        assert len(result) == 2
         assert result[1] == (1,)
+    else:
+        assert len(result) == 1
 
-    assert len(result) == 1
     result = result[0]
-
     assert len(result) == 2
     assert all(np.isnan(x) for x in result)
 
@@ -4368,3 +4386,16 @@ def test_dataframe_groupby_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum())
+
+
+def test_fuse_roots():
+    pdf1 = pd.DataFrame(
+        {"a": [1, 2, 3, 4, 5, 6, 7, 8, 9], "b": [3, 5, 2, 5, 7, 2, 4, 2, 4]}
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame({"a": [True, False, True] * 3, "b": [False, False, True] * 3})
+    ddf2 = dd.from_pandas(pdf2, 2)
+
+    res = ddf1.where(ddf2)
+    hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
+    hlg.validate()

@@ -53,7 +53,7 @@ def reduction(
     output_size=1,
     meta=None,
 ):
-    """ General version of reductions
+    """General version of reductions
 
     Parameters
     ----------
@@ -77,8 +77,9 @@ def reduction(
     keepdims: boolean, optional
         Whether the reduction function should preserve the reduced axes,
         leaving them at size ``output_size``, or remove them.
-    dtype: np.dtype, optional
-        Force output dtype. Defaults to x.dtype if omitted.
+    dtype: np.dtype
+        data type of output. This argument was previously optional, but
+        leaving as ``None`` will now raise an exception.
     split_every: int >= 2 or dict(axis: int), optional
         Determines the depth of the recursive aggregation. If set to or more
         than the number of input chunks, the aggregation will be performed in
@@ -206,7 +207,7 @@ def _tree_reduce(
     concatenate=True,
     reduced_meta=None,
 ):
-    """ Perform the tree reduction step of a reduction.
+    """Perform the tree reduction step of a reduction.
 
     Lower level, users should use ``reduction`` or ``arg_reduction`` directly.
     """
@@ -255,7 +256,7 @@ def _tree_reduce(
 def partial_reduce(
     func, x, split_every, keepdims=False, dtype=None, name=None, reduced_meta=None
 ):
-    """ Partial reduction across multiple axes.
+    """Partial reduction across multiple axes.
 
     Parameters
     ----------
@@ -582,8 +583,10 @@ def mean_agg(pairs, dtype="f8", axis=None, computing_meta=False, **kwargs):
 def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
+    elif a.dtype == object:
+        dt = object
     else:
-        dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.mean(np.zeros(shape=(1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         mean_chunk,
@@ -945,7 +948,7 @@ def nanarg_agg(func, argfunc, data, axis=None, **kwargs):
 
 
 def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None):
-    """ Generic function for argreduction.
+    """Generic function for argreduction.
 
     Parameters
     ----------
@@ -1004,7 +1007,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
 
 
 def make_arg_reduction(func, argfunc, is_nan_func=False):
-    """ Create an argreduction callable
+    """Create an argreduction callable
 
     Parameters
     ----------
@@ -1051,7 +1054,7 @@ nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
 
 
 def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
-    """ Generic function for cumulative reduction
+    """Generic function for cumulative reduction
 
     Parameters
     ----------
@@ -1144,7 +1147,7 @@ def cumprod(x, axis=None, dtype=None, out=None):
 
 
 def topk(a, k, axis=-1, split_every=None):
-    """ Extract the k largest elements from a on the given axis,
+    """Extract the k largest elements from a on the given axis,
     and return them sorted from largest to smallest.
     If k is negative, extract the -k smallest elements instead,
     and return them sorted from smallest to largest.
@@ -1203,7 +1206,7 @@ def topk(a, k, axis=-1, split_every=None):
 
 
 def argtopk(a, k, axis=-1, split_every=None):
-    """ Extract the indices of the k largest elements from a on the given axis,
+    """Extract the indices of the k largest elements from a on the given axis,
     and return them sorted from largest to smallest. If k is negative, extract
     the indices of the -k smallest elements instead, and return them sorted
     from smallest to largest.

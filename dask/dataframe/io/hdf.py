@@ -47,7 +47,7 @@ def to_hdf(
     dask_kwargs={},
     **kwargs
 ):
-    """ Store Dask Dataframe to Hierarchical Data Format (HDF) files
+    """Store Dask Dataframe to Hierarchical Data Format (HDF) files
 
     This is a parallel version of the Pandas function of the same name.  Please
     see the Pandas docstring for more detailed information about shared keyword
@@ -310,7 +310,7 @@ def _read_single_hdf(
                         n._v_pathname
                         for n in hdf._handle.walk_nodes("/", classname="Table")
                         if fnmatch(n._v_pathname, key)
-                        and n._v_name != u"table"
+                        and n._v_name != "table"
                         and n._v_pathname not in keys
                     )
             else:

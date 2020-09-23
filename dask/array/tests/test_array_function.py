@@ -5,6 +5,9 @@ import dask.array as da
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 from dask.array.numpy_compat import _numpy_120
 
+from .test_dispatch import EncapsulateNDArray, WrappedArray
+
+
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
@@ -140,72 +143,6 @@ def test_array_function_cupy_svd():
     ],
 )
 def test_unregistered_func(func):
-    def wrap(func_name):
-        """
-        Wrap a function.
-        """
-
-        def wrapped(self, *a, **kw):
-            a = getattr(self.arr, func_name)(*a, **kw)
-            return a if not isinstance(a, np.ndarray) else type(self)(a)
-
-        return wrapped
-
-    def dispatch_property(prop_name):
-        """
-        Wrap a simple property.
-        """
-
-        @property
-        def wrapped(self, *a, **kw):
-            return getattr(self.arr, prop_name)
-
-        return wrapped
-
-    class EncapsulateNDArray(np.lib.mixins.NDArrayOperatorsMixin):
-        """
-        A class that "mocks" ndarray by encapsulating an ndarray and using
-        protocols to "look like" an ndarray. Basically tests whether Dask
-        works fine with something that is essentially an array but uses
-        protocols instead of being an actual array.
-        """
-
-        __array_priority__ = 20
-
-        def __init__(self, arr):
-            self.arr = arr
-
-        def __array__(self, *args, **kwargs):
-            return np.asarray(self.arr, *args, **kwargs)
-
-        def __array_function__(self, f, t, arrs, kw):
-            arrs = tuple(
-                arr if not isinstance(arr, type(self)) else arr.arr for arr in arrs
-            )
-            t = tuple(ti for ti in t if not issubclass(ti, type(self)))
-            print(t)
-            a = self.arr.__array_function__(f, t, arrs, kw)
-            return a if not isinstance(a, np.ndarray) else type(self)(a)
-
-        __getitem__ = wrap("__getitem__")
-
-        __setitem__ = wrap("__setitem__")
-
-        def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
-            inputs = tuple(
-                i if not isinstance(i, type(self)) else i.arr for i in inputs
-            )
-            a = getattr(ufunc, method)(*inputs, **kwargs)
-            return a if not isinstance(a, np.ndarray) else type(self)(a)
-
-        shape = dispatch_property("shape")
-        ndim = dispatch_property("ndim")
-        dtype = dispatch_property("dtype")
-
-        astype = wrap("astype")
-        sum = wrap("sum")
-        prod = wrap("prod")
-
     # Wrap a procol-based encapsulated ndarray
     x = EncapsulateNDArray(np.random.random((100, 100)))
 
@@ -238,3 +175,39 @@ def test_non_existent_func():
             assert list(np.sort(x)) == [1, 2, 3, 4]
     else:
         assert list(np.sort(x)) == [1, 2, 3, 4]
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.parametrize(
+    "func",
+    [
+        np.equal,
+        np.matmul,
+        np.dot,
+        lambda x, y: np.stack([x, y]),
+    ],
+)
+@pytest.mark.parametrize(
+    "arr_upcast, arr_downcast",
+    [
+        (
+            WrappedArray(np.random.random((10, 10))),
+            da.random.random((10, 10), chunks=(5, 5)),
+        ),
+        (
+            da.random.random((10, 10), chunks=(5, 5)),
+            EncapsulateNDArray(np.random.random((10, 10))),
+        ),
+        (
+            WrappedArray(np.random.random((10, 10))),
+            EncapsulateNDArray(np.random.random((10, 10))),
+        ),
+    ],
+)
+def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
+    """ Test proper dispatch on binary NumPy functions"""
+    assert (
+        type(func(arr_upcast, arr_downcast))
+        == type(func(arr_downcast, arr_upcast))
+        == type(arr_upcast)
+    )
