@@ -7,6 +7,7 @@ import pandas as pd
 
 import itertools as it
 
+import sys
 import pytest
 
 import dask
@@ -431,6 +432,11 @@ params = [
 ]
 
 
+@pytest.mark.xfail(
+    sys.version_info[0] == 3 and sys.version_info[1] == 6,
+    reason="nlargest() behaves differently with an older version of pandas on Python 3.6 "
+    "with an unexpected keyword argument 'axis'",
+)
 @pytest.mark.parametrize("n, indices, name, keep", list(it.product(*params)))
 def test_dataframe_groupby_nlargest(n, indices, name, keep):
     data = {}
