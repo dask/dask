@@ -1272,10 +1272,13 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     if write_engine == "fastparquet" or read_engine == "fastparquet":
         pytest.importorskip("fastparquet", minversion="0.3.1")
 
-    if read_engine == "pyarrow" and pa.__version__ >= LooseVersion("1.0.0"):
-        pytest.skip("Filtering is more thorough (row-wise) in PyArrow>=1.0.0")
-    fn = str(tmpdir)
+    # Recent versions of pyarrow support full row-wise filtering
+    # (fastparquet and older pyarrow versions do not)
+    pyarrow_row_filtering = read_engine == "pyarrow" and pa.__version__ >= LooseVersion(
+        "1.0.0"
+    )
 
+    fn = str(tmpdir)
     df = pd.DataFrame({"at": ["ab", "aa", "ba", "da", "bb"]})
     ddf = dd.from_pandas(df, npartitions=1)
 
@@ -1286,11 +1289,14 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(
         fn, index=False, engine=read_engine, filters=[("at", "==", "aa")]
     ).compute()
-    assert_eq(ddf2, ddf)
+    if pyarrow_row_filtering:
+        assert_eq(ddf2, ddf[ddf["at"] == "aa"], check_index=False)
+    else:
+        assert_eq(ddf2, ddf)
 
     # with >1 partition and no filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
-    dd.read_parquet(fn, engine=read_engine).compute()
+    ddf2 = dd.read_parquet(fn, engine=read_engine).compute()
     assert_eq(ddf2, ddf)
 
     # with >1 partition and filters using base fastparquet
@@ -1301,7 +1307,9 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
 
     # with >1 partition and filters
     ddf.repartition(npartitions=2, force=True).to_parquet(fn, engine=write_engine)
-    dd.read_parquet(fn, engine=read_engine, filters=[("at", "==", "aa")]).compute()
+    ddf2 = dd.read_parquet(
+        fn, engine=read_engine, filters=[("at", "==", "aa")]
+    ).compute()
     assert len(ddf2) > 0
 
 
