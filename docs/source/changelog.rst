@@ -1,6 +1,19 @@
 Changelog
 =========
 
+2.28.0 / 2020-09-25
+-------------------
+
+Array
++++++
+
+- Partially reverted changes to Array indexing that produces large changes.
+  This restores the behavior from Dask 2.25.0 and earlier, with a warning
+  when large chunks are produced. A configuration option is provided
+  to avoid creating the large chunks, see :ref:`array.slicing.efficiency`.
+
+
+
 2.27.0 / 2020-09-18
 -------------------
 

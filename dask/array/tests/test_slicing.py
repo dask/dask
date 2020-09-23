@@ -7,7 +7,7 @@ from tlz import merge
 np = pytest.importorskip("numpy")
 
 import dask
-from dask import config, utils
+from dask import config
 import dask.array as da
 from dask.array.slicing import (
     _sanitize_index_element,
@@ -882,15 +882,34 @@ def test_slicing_plan(chunks, index, expected):
 
 
 def test_getitem_avoids_large_chunks():
-    a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
-    arr = da.from_array(a, chunks=(1, 500, 500))
-    indexer = [0, 1] + [2] * 100 + [3]
-    result = arr[indexer]
-    chunk_size = utils.parse_bytes(config.get("array.chunk-size"))
-    assert all(x.nbytes < chunk_size for x in result.blocks)
-    expected = a[indexer]
+    with dask.config.set(**{"array.chunk-size": "0.1Mb"}):
+        a = np.arange(2 * 128 * 128).reshape(2, 128, 128)
+        arr = da.from_array(a, chunks=(1, 128, 128))
+        indexer = [0] + [1] * 11
+        expected = a[indexer]
 
-    assert_eq(result, expected)
+        # By default, we warn
+        with pytest.warns(da.PerformanceWarning):
+            result = arr[indexer]
+
+        assert_eq(result, expected)
+        assert result.chunks == ((1, 11), (128,), (128,))
+
+        # Users can silence the warning
+        with dask.config.set(**{"array.slicing.split-large-chunks": False}):
+            with pytest.warns(None) as e:
+                result = arr[indexer]
+            assert len(e) == 0
+            assert_eq(result, expected)
+
+        # Users can silence the warning
+        with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+            with pytest.warns(None) as e:
+                result = arr[indexer]
+            assert len(e) == 0  # no
+            assert_eq(result, expected)
+
+            assert result.chunks == ((1,) * 12, (128,), (128,))
 
 
 @pytest.mark.parametrize(
@@ -906,13 +925,14 @@ def test_getitem_avoids_large_chunks():
 def test_getitem_avoids_large_chunks_missing(chunks):
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
-    a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
-    arr = da.from_array(a, chunks=(1, 500, 500))
-    arr._chunks = chunks
-    indexer = [0, 1] + [2] * 100 + [3]
-    expected = a[indexer]
-    result = arr[indexer]
-    assert_eq(result, expected)
+    with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+        a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
+        arr = da.from_array(a, chunks=(1, 500, 500))
+        arr._chunks = chunks
+        indexer = [0, 1] + [2] * 100 + [3]
+        expected = a[indexer]
+        result = arr[indexer]
+        assert_eq(result, expected)
 
 
 def test_take_avoids_large_chunks():
