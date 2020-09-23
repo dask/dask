@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Hashable, Optional, Set, Mapping, Container, Tuple
+from typing import Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -34,7 +34,7 @@ class Layer(collections.abc.Mapping):
     """
 
     def cull(
-        self, keys: Set, all_hlg_keys: Container
+        self, keys: Set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, Set]]:
         """Return a new Layer with only the tasks required to calculate `keys`.
 
@@ -52,6 +52,10 @@ class Layer(collections.abc.Mapping):
             Culled layer
         """
         deps = self.get_dependencies(all_hlg_keys)
+
+        if len(keys) == len(self):
+            return self, deps  # Nothing to cull if preserving all existing keys
+
         ret_deps = {}
         seen = set()
         out = {}
@@ -59,22 +63,21 @@ class Layer(collections.abc.Mapping):
         while work:
             k = work.pop()
             out[k] = self[k]
-            ret_deps[k] = set()
+            ret_deps[k] = deps[k]
             for d in deps[k]:
                 if d not in seen:
                     if d in self:
                         seen.add(d)
                         work.add(d)
-                ret_deps[k].add(d)
 
         return BasicLayer(out), ret_deps
 
-    def get_dependencies(self, all_hlg_keys: Container) -> Mapping[Hashable, Set]:
+    def get_dependencies(self, all_hlg_keys: Iterable) -> Mapping[Hashable, Set]:
         """Get dependencies of all keys in the layer
 
         Parameters
         ----------
-        all_hlg_keys : Container
+        all_hlg_keys : Iterable
             All keys in the high level graph.
 
         Returns
@@ -361,8 +364,8 @@ class HighLevelGraph(Mapping):
         map: Mapping
             A map that maps each key to its dependencies
         """
-        all_keys = self.keyset()
         if self.key_dependencies is None:
+            all_keys = self.keyset()
             self.key_dependencies = {}
             for layer in self.layers.values():
                 self.key_dependencies.update(layer.get_dependencies(all_keys))
