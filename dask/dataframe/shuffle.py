@@ -654,7 +654,6 @@ def _simple_rearrange_by_column_tasks(df, column, npartitions, ignore_index=Fals
 def _rbc_tasks_stage(
     df, name, column, inputs, parts_out, stage, npartitions, n, k, ignore_index
 ):
-    shuffle_join_name = "join-" + name
     shuffle_group_name = "group-" + name
     shuffle_split_name = "split-" + name
 
@@ -683,10 +682,19 @@ def _rbc_tasks_stage(
 
             if (shuffle_group_name, _inp) not in dsk:
 
+                # Initial partitions (output of previous stage)
+                _part = inp_part_map[_inp]
+                if stage == 0:
+                    input_key = (
+                        (df._name, _part) if _part < df.npartitions else df._meta
+                    )
+                else:
+                    input_key = (df._name, _part)
+
                 # Convert partition into dict of dataframe pieces
                 dsk[(shuffle_group_name, _inp)] = (
                     shuffle_group,
-                    (shuffle_join_name, 0, _inp),
+                    input_key,
                     column,
                     stage,
                     k,
@@ -694,15 +702,6 @@ def _rbc_tasks_stage(
                     ignore_index,
                     npartitions,
                 )
-
-                # Initial partitions (output of previous stage)
-                _part = inp_part_map[_inp]
-                if stage == 0:
-                    dsk[(shuffle_join_name, 0, _inp)] = (
-                        (df._name, _part) if _part < df.npartitions else df._meta
-                    )
-                else:
-                    dsk[(shuffle_join_name, 0, _inp)] = (df._name, _part)
 
     return dsk
 
