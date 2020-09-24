@@ -1390,7 +1390,13 @@ def test_pyarrow_filter_divisions(tmpdir):
         )
         assert ddf.divisions == (0, 2, 3)
 
-    ddf = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=[("a", "<=", 3)])
+    ddf = dd.read_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+        split_row_groups=True,
+        gather_statistics=True,
+        filters=[("a", "<=", 3)],
+    )
     assert ddf.divisions == (0, 2, 3)
 
 

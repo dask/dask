@@ -843,6 +843,56 @@ class ArrowDatasetEngine(Engine):
             return s
 
     @classmethod
+    def _read_table(
+        cls,
+        path,
+        fs,
+        row_groups,
+        columns,
+        schema,
+        filters,
+        partitions,
+        partition_keys,
+        **kwargs,
+    ):
+
+        tables = []
+        for rg in row_groups:
+            if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
+                # `rg` is already a `ParquetFileFragment`, pyarrow
+                # knows how to convert this to a `table`
+                cols = []
+                for name in columns:
+                    if name is None:
+                        if "__index_level_0__" in schema.names:
+                            columns.append("__index_level_0__")
+                    else:
+                        cols.append(name)
+                arrow_table = rg.to_table(
+                    use_threads=False,
+                    schema=schema,
+                    columns=cols,
+                    filter=pq._filters_to_expression(filters) if filters else None,
+                )
+            else:
+                piece = pq.ParquetDatasetPiece(
+                    path,
+                    row_group=rg,
+                    partition_keys=partition_keys,
+                    open_file_func=partial(fs.open, mode="rb"),
+                )
+                arrow_table = cls._parquet_piece_as_arrow(
+                    piece, columns, partitions, **kwargs
+                )
+            tables.append(arrow_table)
+
+        if len(row_groups) > 1:
+            # NOTE: Not covered by pytest
+            return pa.concat_tables(tables)
+        else:
+            return tables[0]
+
+    @classmethod
     def read_partition(
         cls,
         fs,
@@ -855,6 +905,10 @@ class ArrowDatasetEngine(Engine):
         schema=None,
         **kwargs,
     ):
+        """Read in a single output partition.
+
+        This method is also used by `ArrowLegacyEngine`.
+        """
         if isinstance(index, list):
             for level in index:
                 # unclear if we can use set ops here. I think the order matters.
@@ -886,47 +940,23 @@ class ArrowDatasetEngine(Engine):
         if not isinstance(row_group, list):
             row_group = [row_group]
 
-        tables = []
-        for rg in row_group:
-            if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
-                # `rg` is already a `ParquetFileFragment`, pyarrow
-                # knows how to convert this to a `table`
-                cols = []
-                for name in columns:
-                    if name is None:
-                        if "__index_level_0__" in schema.names:
-                            columns.append("__index_level_0__")
-                    else:
-                        cols.append(name)
-                arrow_table = rg.to_table(
-                    use_threads=False,
-                    schema=schema,
-                    columns=cols,
-                    filter=pq._filters_to_expression(filters) if filters else None,
-                )
-            else:
-                piece = pq.ParquetDatasetPiece(
-                    path,
-                    row_group=rg,
-                    partition_keys=partition_keys,
-                    open_file_func=partial(fs.open, mode="rb"),
-                )
-                arrow_table = cls._parquet_piece_as_arrow(
-                    piece, columns, partitions, **kwargs
-                )
-            tables.append(arrow_table)
-
-        if len(row_group) > 1:
-            # NOTE: Not covered by pytest
-            arrow_table = pa.concat_tables(tables)
-        else:
-            arrow_table = tables[0]
-
+        # Read in arrow table and convert to pandas
+        arrow_table = cls._read_table(
+            path,
+            fs,
+            row_group,
+            columns,
+            schema,
+            filters,
+            partitions,
+            partition_keys,
+            **kwargs,
+        )
         df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
 
         # For pyarrow.dataset api, need to convert partition columns
         # to categorigal manually for integer types...
-        if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
+        if pa_ds is not None and isinstance(row_group[0], pa_ds.ParquetFileFragment):
             for partition in partitions:
                 if partition.name in df.columns:
                     if df[partition.name].dtype != pd.Categorical:
