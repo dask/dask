@@ -58,7 +58,8 @@ axis, Dask will typically "match" the chunking on the output.
    >>> a = da.ones((4, 10000, 10000), chunks=(1, -1, -1))
 
 If we slice that with a *sorted* sequence of integers, Dask will return one chunk
-per intput chunk
+per intput chunk (notince the output `chunksize` is 1, since the indices ``0``
+and ``1`` are in separate chunks in the input).
 
    >>> a[[0, 1], :, :]
    dask.array<getitem, shape=(2, 10000, 10000), dtype=float64, chunksize=(1, 10000, 10000), chunktype=numpy.ndarray>
@@ -72,24 +73,25 @@ be much larger.
    >>> a[[0] * 15, :, :]
    PerformanceWarning: Slicing is producing a large chunk. To accept the large
    chunk and silence this warning, set the option
-       >>> with dask.config.set(**{'array.slicing.split_large_chunks': False}):
+       >>> with dask.config.set({'array.slicing.split_large_chunks': False}):
        ...     array[indexer]
    
    To avoid creating the large chunks, set the option
-       >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):
+       >>> with dask.config.set({'array.slicing.split_large_chunks': True}):
        ...     array[indexer]
    dask.array<getitem, shape=(15, 10000, 10000), dtype=float64, chunksize=(15, 10000, 10000), chunktype=numpy.ndarray>
 
-Previously we had a chunksize of ``1`` along the first dimension. But we've
-selected 15 elements from that first chunk, producing a large output chunk.
+Previously we had a chunksize of ``1`` along the first dimension since we selected
+just one element from each input chunk. But now we've selected 15 elements
+from the first chunk, producing a large output chunk.
 
 Dask warns when indexing like this produces a chunk that's 10x larger
 than the ``array.chunk-size`` config option. You have two options to deal with
 that warning:
 
-1. Set ``dask.config.set(**{"array.slicing.split_large_chunks": False})`` to
+1. Set ``dask.config.set({"array.slicing.split_large_chunks": False})`` to
    allow the large chunk and silence the warning.
-2. Set ``dask.config.set(**{"array.slicing.split_large_chunks": True})`` to
+2. Set ``dask.config.set({"array.slicing.split_large_chunks": True})`` to
    avoid creating the large chunk in the first place.
 
 The right choice will depend on your downstream operations. See :ref:`array.chunks`

@@ -883,7 +883,7 @@ def test_slicing_plan(chunks, index, expected):
 
 def test_getitem_avoids_large_chunks():
     with dask.config.set(**{"array.chunk-size": "0.1Mb"}):
-        a = np.arange(2 * 128 * 128).reshape(2, 128, 128)
+        a = np.arange(2 * 128 * 128, dtype="int64").reshape(2, 128, 128)
         arr = da.from_array(a, chunks=(1, 128, 128))
         indexer = [0] + [1] * 11
         expected = a[indexer]
@@ -937,38 +937,40 @@ def test_getitem_avoids_large_chunks_missing(chunks):
 
 def test_take_avoids_large_chunks():
     # unit test for https://github.com/dask/dask/issues/6270
-    chunks = ((1, 1, 1, 1), (500,), (500,))
-    itemsize = 8
-    index = np.array([0, 1] + [2] * 101 + [3])
-    chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((1, 1, 51, 50, 1), (500,), (500,))
-    assert len(dsk) == 5
+    with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+        chunks = ((1, 1, 1, 1), (500,), (500,))
+        itemsize = 8
+        index = np.array([0, 1] + [2] * 101 + [3])
+        chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((1, 1, 51, 50, 1), (500,), (500,))
+        assert len(dsk) == 5
 
-    index = np.array([0] * 101 + [1, 2, 3])
-    chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((51, 50, 1, 1, 1), (500,), (500,))
-    assert len(dsk) == 5
+        index = np.array([0] * 101 + [1, 2, 3])
+        chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((51, 50, 1, 1, 1), (500,), (500,))
+        assert len(dsk) == 5
 
-    index = np.array([0, 1, 2] + [3] * 101)
-    chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((1, 1, 1, 51, 50), (500,), (500,))
-    assert len(dsk) == 5
+        index = np.array([0, 1, 2] + [3] * 101)
+        chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((1, 1, 1, 51, 50), (500,), (500,))
+        assert len(dsk) == 5
 
-    chunks = ((500,), (1, 1, 1, 1), (500,))
-    index = np.array([0, 1, 2] + [3] * 101)
-    chunks2, dsk = take("a", "b", chunks, index, itemsize, axis=1)
-    assert chunks2 == ((500,), (1, 1, 1, 51, 50), (500,))
-    assert len(dsk) == 5
+        chunks = ((500,), (1, 1, 1, 1), (500,))
+        index = np.array([0, 1, 2] + [3] * 101)
+        chunks2, dsk = take("a", "b", chunks, index, itemsize, axis=1)
+        assert chunks2 == ((500,), (1, 1, 1, 51, 50), (500,))
+        assert len(dsk) == 5
 
 
 def test_take_uses_config():
-    chunks = ((1, 1, 1, 1), (500,), (500,))
-    index = np.array([0, 1] + [2] * 101 + [3])
-    itemsize = 8
-    with config.set(**{"array.chunk-size": "10GB"}):
-        chunks2, dsk = take("a", "b", chunks, index, itemsize)
-    assert chunks2 == ((1, 1, 101, 1), (500,), (500,))
-    assert len(dsk) == 4
+    with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+        chunks = ((1, 1, 1, 1), (500,), (500,))
+        index = np.array([0, 1] + [2] * 101 + [3])
+        itemsize = 8
+        with config.set(**{"array.chunk-size": "10GB"}):
+            chunks2, dsk = take("a", "b", chunks, index, itemsize)
+        assert chunks2 == ((1, 1, 101, 1), (500,), (500,))
+        assert len(dsk) == 4
 
 
 def test_pathological_unsorted_slicing():

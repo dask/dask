@@ -618,7 +618,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
         warnsize = maxsize = math.inf
     else:
         maxsize = math.ceil(nbytes / (other_numel * itemsize))
-        warnsize = maxsize * 10
+        warnsize = maxsize * 5
 
     split = config.get("array.slicing.split-large-chunks", None)
 
