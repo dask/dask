@@ -719,7 +719,9 @@ def moment_agg(
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
     mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)
-    inner_term = divide(totals, ns, dtype=dtype) - mu
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        inner_term = divide(totals, ns, dtype=dtype) - mu
 
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
 

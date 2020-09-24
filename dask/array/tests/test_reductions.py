@@ -696,3 +696,14 @@ def test_object_reduction(method):
     arr = da.ones(1).astype(object)
     result = getattr(arr, method)().compute()
     assert result == 1
+
+
+@pytest.mark.parametrize("func", ["nanvar", "nanstd"])
+def test_nan_func_does_not_warn(func):
+    # regression test for #6105
+    x = np.arange(10, dtype="f8")
+    x[:6] = np.nan
+    d = da.from_array(x, chunks=5)
+    with pytest.warns(None) as rec:
+        getattr(da, func)(d).compute()
+    assert not rec  # did not warn
