@@ -24,6 +24,7 @@ from .utils import (
 
 # Check PyArrow version for feature support
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
+read_row_groups_supported = preserve_ind_supported
 if pa.__version__ >= LooseVersion("1.0.0"):
     from pyarrow import dataset as pa_ds
 else:
@@ -279,7 +280,7 @@ def _read_table_from_path(
     not partitioned and no filters are specified (otherwise
     fragments are converted directly into tables).
     """
-    if partition_keys:
+    if partition_keys or (not read_row_groups_supported and row_groups != [None]):
         tables = []
         for rg in row_groups:
             piece = pq.ParquetDatasetPiece(
