@@ -1362,6 +1362,38 @@ def test_fiters_file_list(tmpdir, engine):
     assert len(ddf2) == 0
 
 
+def test_pyarrow_filter_divisions(tmpdir):
+    pytest.importorskip("pyarrow")
+
+    # Write simple dataset with an index that will only
+    # have a sorted index if certain row-groups are filtered out.
+    # In this case, we filter "a" <= 3 to get a sorted
+    # index. Otherwise, "a" is NOT monotonically increasing.
+    df = pd.DataFrame({"a": [0, 1, 10, 12, 2, 3, 8, 9], "b": range(8)}).set_index("a")
+    df.iloc[:4].to_parquet(
+        str(tmpdir.join("file.0.parquet")), engine="pyarrow", row_group_size=2
+    )
+    df.iloc[4:].to_parquet(
+        str(tmpdir.join("file.1.parquet")), engine="pyarrow", row_group_size=2
+    )
+
+    if pa.__version__ >= LooseVersion("1.0.0"):
+        # Only works for ArrowDatasetEngine.
+        # Legacy code will not apply filters on individual row-groups
+        # when `split_row_groups=False`.
+        ddf = dd.read_parquet(
+            str(tmpdir),
+            engine="pyarrow",
+            split_row_groups=False,
+            gather_statistics=True,
+            filters=[("a", "<=", 3)],
+        )
+        assert ddf.divisions == (0, 2, 3)
+
+    ddf = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=[("a", "<=", 3)])
+    assert ddf.divisions == (0, 2, 3)
+
+
 def test_divisions_read_with_filters(tmpdir):
     pytest.importorskip("fastparquet", minversion="0.3.1")
     tmpdir = str(tmpdir)

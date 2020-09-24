@@ -37,6 +37,11 @@ schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
 
 def _append_row_groups(metadata, md):
+    """Append row-group metadata and include a helpful
+    error message if an inconsistent schema is detected.
+
+    Used by `ArrowDatasetEngine` and `ArrowLegacyEngine`.
+    """
     try:
         metadata.append_row_groups(md)
     except RuntimeError as err:
@@ -57,6 +62,9 @@ def _write_partitioned(
 
     Logic copied from pyarrow.parquet.
     (arrow/python/pyarrow/parquet.py::write_to_dataset)
+
+    Used by `ArrowDatasetEngine` (and by `ArrowLegacyEngine`,
+    through inherited `write_partition` method).
 
     TODO: Remove this in favor of pyarrow's `write_to_dataset`
           once ARROW-8244 is addressed.
@@ -105,6 +113,12 @@ def _write_partitioned(
 
 
 def _index_in_schema(index, schema):
+    """Simple utility to check if all `index` columns are included
+    in the known `schema`.
+
+    Used by `ArrowDatasetEngine` (and by `ArrowLegacyEngine`,
+    through inherited `write_partition` method).
+    """
     if index and schema is not None:
         # Make sure all index columns are in user-defined schema
         return len(set(index).intersection(schema.names)) == len(index)
@@ -115,12 +129,29 @@ def _index_in_schema(index, schema):
 
 
 class PartitionObj:
+    """Simple object to provide a `name` and `keys` attribute
+    for a single partition column. `ArrowDatasetEngine` will use
+    a list of these objects to "duck type" a `ParquetPartitions`
+    object (used in `ArrowLegacyEngine`). The larger purpose of this
+    class is to allow the same `read_partition` definition to handle
+    both Engine instances.
+
+    Used by `ArrowDatasetEngine` only.
+    """
+
     def __init__(self, name, keys):
         self.name = name
         self.keys = sorted(keys)
 
 
 def _get_all_partition_keys(ds):
+    """Collect all partition categories (without applying filters).
+    This is needed for proper categorical encoding in `read_partition`.
+    We also need to know the mapping between paths and partition
+    values (`pkeys`).
+
+    Used by `ArrowDatasetEngine` only.
+    """
     categories = defaultdict(list)
     pkeys = defaultdict(list)
     for file_frag in ds.get_fragments():
@@ -133,9 +164,12 @@ def _get_all_partition_keys(ds):
 
 
 def _collect_pyarrow_dataset_frags(
-    ds, filters, valid_paths, fs, split_row_groups, gather_statistics
+    ds, filters, valid_paths, fs, split_row_groups, gather_statistics, handle_divisions
 ):
+    """Collect all dataset fragments while applying filters.
 
+    Used by `ArrowDatasetEngine` only.
+    """
     # Get/transate filters
     ds_filters = None
     if filters is not None:
@@ -166,13 +200,18 @@ def _collect_pyarrow_dataset_frags(
                 for name in partition_names
             ]
 
-        if split_row_groups is False and ds_filters is None:
+        if split_row_groups is False and (ds_filters is None or not handle_divisions):
             # Avoid row-group splitting.
-            # NOTE: We may NOT want to do this if we are filtering.
-            # The resulting divisions (if there is an index) will be
-            # calculated with UNFILTERED row-groups.  This is probably
-            # fine in practice, but could also be an issue if the
-            # divisions change dramatically.
+            # NOTE: We don't do this if we are both filtering and handling
+            # divisions, because the resulting divisions will be calculated
+            # with UNFILTERED row-groups.  This is probably fine in most cases,
+            # but could be an issue if the to-be index is not monotonically
+            # increasing before the filters are applied.
+            # TODO (maybe): Even if we filter out row-groups before aggregating statistics,
+            # we are not capturing the intra-row-group filtering that will be
+            # performed at read time.  Therefore, it may be best to use this code
+            # path for all `split_row_groups==False` cases (assuming it is generally
+            # more performant to avoid splitting).
             if gather_statistics:
                 file_frag.ensure_complete_metadata()
             metadata.append(file_frag)
@@ -206,6 +245,19 @@ def _collect_pyarrow_dataset_frags(
         "partition_names": partition_names,
     }
     return metadata, partition_info
+
+
+def _get_pandas_metadata(schema):
+    """Get pandas-specific metadata from schema.
+
+    Used by `ArrowDatasetEngine` and `ArrowLegacyEngine`.
+    """
+
+    has_pandas_metadata = schema.metadata is not None and b"pandas" in schema.metadata
+    if has_pandas_metadata:
+        return json.loads(schema.metadata[b"pandas"].decode("utf8"))
+    else:
+        return {}
 
 
 #
@@ -245,6 +297,7 @@ class ArrowDatasetEngine(Engine):
             split_row_groups,
             gather_statistics,
             filters,
+            index,
             kwargs.get("dataset", {}),
         )
 
@@ -307,7 +360,14 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _gather_metadata(
-        cls, paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
+        cls,
+        paths,
+        fs,
+        split_row_groups,
+        gather_statistics,
+        filters,
+        index,
+        dataset_kwargs,
     ):
         """pyarrow.dataset version of _gather_metadata
         Use pyarrow.dataset API to collect list of row-group fragments.
@@ -373,12 +433,28 @@ class ArrowDatasetEngine(Engine):
         if split_row_groups is None and gather_statistics is not False:
             split_row_groups = True
 
-        # Generate list of row-group fragments and call it `metadata`
-        metadata, partition_info = _collect_pyarrow_dataset_frags(
-            ds, filters, valid_paths, fs, split_row_groups, gather_statistics
-        )
         schema = ds.schema
         base = ""
+
+        # Check if we will need to handle divisions later.
+        handle_divisions = (
+            (gather_statistics is not False)
+            and (index is not False)
+            and (
+                index or bool(_get_pandas_metadata(schema).get("index_columns", False))
+            )
+        )
+
+        # Generate list of row-group fragments and call it `metadata`
+        metadata, partition_info = _collect_pyarrow_dataset_frags(
+            ds,
+            filters,
+            valid_paths,
+            fs,
+            split_row_groups,
+            gather_statistics,
+            handle_divisions,
+        )
 
         if not (
             split_row_groups or gather_statistics or partition_info["partition_names"]
@@ -403,12 +479,8 @@ class ArrowDatasetEngine(Engine):
         partitions = partition_info["partition_names"]
         columns = None
 
-        has_pandas_metadata = (
-            schema.metadata is not None and b"pandas" in schema.metadata
-        )
-
-        if has_pandas_metadata:
-            pandas_metadata = json.loads(schema.metadata[b"pandas"].decode("utf8"))
+        pandas_metadata = _get_pandas_metadata(schema)
+        if pandas_metadata:
             (
                 index_names,
                 column_names,
@@ -1191,7 +1263,14 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
 class ArrowLegacyEngine(ArrowDatasetEngine):
     @classmethod
     def _gather_metadata(
-        cls, paths, fs, split_row_groups, gather_statistics, filters, dataset_kwargs
+        cls,
+        paths,
+        fs,
+        split_row_groups,
+        gather_statistics,
+        filters,
+        index,
+        dataset_kwargs,
     ):
         """Gather parquet metadata into a single data structure.
 
