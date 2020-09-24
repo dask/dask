@@ -167,6 +167,22 @@ def implements(*numpy_functions):
     return decorator
 
 
+def _should_delegate(other) -> bool:
+    """Check whether Dask should delegate to the other.
+    This implementation follows NEP-13:
+    https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
+    """
+    if hasattr(other, "__array_ufunc__") and other.__array_ufunc__ is None:
+        return True
+    elif (
+        hasattr(other, "__array_ufunc__")
+        and not is_valid_array_chunk(other)
+        and type(other).__array_ufunc__ is not Array.__array_ufunc__
+    ):
+        return True
+    return False
+
+
 def check_if_handled_given_other(f):
     """Check if method is handled by Dask given type of other
 
@@ -176,14 +192,10 @@ def check_if_handled_given_other(f):
 
     @wraps(f)
     def wrapper(self, other):
-        if (
-            is_valid_array_chunk(other)
-            or isinstance(other, (self.__class__, list, tuple, np.generic))
-            or "dask.dataframe.core.Scalar" in str(other.__class__)
-        ):
-            return f(self, other)
-        else:
+        if _should_delegate(other):
             return NotImplemented
+        else:
+            return f(self, other)
 
     return wrapper
 
@@ -1218,8 +1230,7 @@ class Array(DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
-            # Verify all arrays are properly handled by Dask
-            if not isinstance(x, Array) and not is_valid_array_chunk(x):
+            if _should_delegate(x):
                 return NotImplemented
 
         if method == "__call__":

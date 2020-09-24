@@ -4,6 +4,7 @@ import pytest
 import numpy as np
 
 import dask.array as da
+from dask.array import Array
 from dask.array.chunk_types import is_valid_array_chunk, is_valid_chunk_type
 from dask.array.utils import assert_eq
 
@@ -120,6 +121,11 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
         args = tuple(self._downcast_args(args))
         return type(self)(func(*args, **kwargs), **self.attrs)
 
+    def __dask_graph__(self):
+        # Note: make sure that dask dusk arrays do not interfere with the
+        #       dispatch mechanism. The return value here, doesn't matter.
+        return ...
+
     shape = dispatch_property("shape")
     ndim = dispatch_property("ndim")
     dtype = dispatch_property("dtype")
@@ -185,9 +191,13 @@ def test_binary_operation_type_precedence(op, arr_upcast, arr_downcast):
         (EncapsulateNDArray(np.arange(4)), True),
         (np.ma.masked_array(np.arange(4), [True, False, True, False]), True),
         (np.arange(4), True),
-        (0.0, True),
-        (0, True),
         (None, True),
+        # float/int/str scalars are not valid array chunks,
+        # but ops on float/int/str etc scalars do get handled
+        # by Dask
+        (0.0, False),
+        (0, False),
+        ("", False),
     ],
 )
 def test_is_valid_array_chunk(arr, result):
@@ -217,6 +227,59 @@ def test_direct_deferral_wrapping_override():
     a = da.from_array(np.arange(4))
     b = WrappedArray(np.arange(4))
     assert a.__add__(b) is NotImplemented
+    # Note: remove dask_graph to be able to wrap b in a dask array
+    setattr(b, "__dask_graph__", None)
     res = a + da.from_array(b)
     assert isinstance(res, da.Array)
     assert_eq(res, 2 * np.arange(4))
+
+
+class UnknownScalarThatUnderstandsArrayOps(np.lib.mixins.NDArrayOperatorsMixin):
+    def __array_ufunc__(self, ufunc, method, *inputs, **kwargs):
+        outputs = kwargs.get("out", ())
+        for item in inputs + outputs:
+            if hasattr(item, "__array_ufunc__") and not isinstance(
+                item, (np.ndarray, Array, UnknownScalarThatUnderstandsArrayOps)
+            ):
+                return NotImplemented
+        # This is a dummy scalar that just returns a new object for every op
+        return UnknownScalarThatUnderstandsArrayOps()
+
+
+@pytest.mark.parametrize("arr", [da.from_array([1, 2]), np.asarray([1, 2])])
+def test_delegation_unknown_scalar_that_understands_arr_ops(arr):
+    s = UnknownScalarThatUnderstandsArrayOps()
+    assert type(arr * s) == UnknownScalarThatUnderstandsArrayOps
+    assert type(s * arr) == UnknownScalarThatUnderstandsArrayOps
+    # Explicit tests of numpy NEP-13 dispatching
+    assert type(np.multiply(s, arr)) == UnknownScalarThatUnderstandsArrayOps
+    assert type(np.multiply(arr, s)) == UnknownScalarThatUnderstandsArrayOps
+
+
+class UnknownScalar:
+    __array_ufunc__ = None
+
+    def __mul__(self, other):
+        return 42
+
+    __rmul__ = __mul__
+
+
+@pytest.mark.parametrize("arr", [da.from_array([1, 2]), np.asarray([1, 2])])
+def test_delegation_unknown_scalar(arr):
+    s = UnknownScalar()
+    assert arr * s == 42
+    assert s * arr == 42
+    with pytest.raises(
+        TypeError, match="operand 'UnknownScalar' does not support ufuncs"
+    ):
+        np.multiply(s, arr)
+
+
+def test_delegation_specific_cases():
+    a = da.from_array(["a", "b", ".", "d"])
+    # Fixes GH6631
+    assert_eq(a == ".", [False, False, True, False])
+    assert_eq("." == a, [False, False, True, False])
+    # Fixes GH6611
+    assert "b" in a

@@ -1,5 +1,3 @@
-from numbers import Number
-
 import numpy as np
 
 
@@ -148,8 +146,4 @@ def is_valid_chunk_type(type):
 
 def is_valid_array_chunk(array):
     """ Check if given array is of a valid type to operate with"""
-    return (
-        array is None
-        or isinstance(array, Number)
-        or isinstance(array, tuple(_HANDLED_CHUNK_TYPES))
-    )
+    return array is None or isinstance(array, tuple(_HANDLED_CHUNK_TYPES))
