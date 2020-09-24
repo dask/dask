@@ -260,6 +260,59 @@ def _get_pandas_metadata(schema):
         return {}
 
 
+def _read_table_from_path(
+    path,
+    fs,
+    row_groups,
+    columns,
+    schema,
+    filters,
+    partitions,
+    partition_keys,
+    piece_to_arrow_func,
+    **kwargs,
+):
+    """Read arrow table from file path.
+
+    Used in all cases by `ArrowLegacyEngine._read_table`.
+    Used by `ArrowDatasetEngine._read_table` when dataset is
+    not partitioned and no filters are specified (otherwise
+    fragments are converted directly into tables).
+    """
+    if partition_keys:
+        tables = []
+        for rg in row_groups:
+            piece = pq.ParquetDatasetPiece(
+                path,
+                row_group=rg,
+                partition_keys=partition_keys,
+                open_file_func=partial(fs.open, mode="rb"),
+            )
+            arrow_table = piece_to_arrow_func(piece, columns, partitions, **kwargs)
+            tables.append(arrow_table)
+
+        if len(row_groups) > 1:
+            # NOTE: Not covered by pytest
+            return pa.concat_tables(tables)
+        else:
+            return tables[0]
+    else:
+        with fs.open(path, mode="rb") as fil:
+            if row_groups == [None]:
+                return pq.ParquetFile(fil).read(
+                    columns=columns,
+                    use_threads=False,
+                    use_pandas_metadata=True,
+                )
+            else:
+                return pq.ParquetFile(fil).read_row_groups(
+                    row_groups,
+                    columns=columns,
+                    use_threads=False,
+                    use_pandas_metadata=True,
+                )
+
+
 #
 #  ArrowDatasetEngine
 #
@@ -373,6 +426,8 @@ class ArrowDatasetEngine(Engine):
         Use pyarrow.dataset API to collect list of row-group fragments.
         Also, collect other information necessary for parquet-to-ddf
         mapping (e.g. schema, partition_info).
+
+        This method is overridden in `ArrowLegacyEngine`.
         """
         # Use pyarrow.dataset API
         ds = None
@@ -698,6 +753,11 @@ class ArrowDatasetEngine(Engine):
         no_filters,
         fragment_row_groups,
     ):
+        """Process row-groups and statistics.
+
+        This method is overridden in `ArrowLegacyEngine`.
+        """
+
         # Get the number of row groups per file
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
@@ -855,12 +915,14 @@ class ArrowDatasetEngine(Engine):
         partition_keys,
         **kwargs,
     ):
+        """Read in a pyarrow table.
 
-        tables = []
-        for rg in row_groups:
-            if pa_ds is not None and isinstance(rg, pa_ds.ParquetFileFragment):
-                # `rg` is already a `ParquetFileFragment`, pyarrow
-                # knows how to convert this to a `table`
+        This method is overridden in `ArrowLegacyEngine`.
+        """
+
+        if isinstance(row_groups[0], pa_ds.ParquetFileFragment):
+            tables = []
+            for rg in row_groups:
                 cols = []
                 for name in columns:
                     if name is None:
@@ -874,23 +936,21 @@ class ArrowDatasetEngine(Engine):
                     columns=cols,
                     filter=pq._filters_to_expression(filters) if filters else None,
                 )
-            else:
-                piece = pq.ParquetDatasetPiece(
-                    path,
-                    row_group=rg,
-                    partition_keys=partition_keys,
-                    open_file_func=partial(fs.open, mode="rb"),
-                )
-                arrow_table = cls._parquet_piece_as_arrow(
-                    piece, columns, partitions, **kwargs
-                )
-            tables.append(arrow_table)
-
-        if len(row_groups) > 1:
-            # NOTE: Not covered by pytest
-            return pa.concat_tables(tables)
+                tables.append(arrow_table)
+            return pa.concat_tables(tables) if len(row_groups) > 1 else tables[0]
         else:
-            return tables[0]
+            return _read_table_from_path(
+                path,
+                fs,
+                row_groups,
+                columns,
+                schema,
+                filters,
+                partitions,
+                partition_keys,
+                cls._parquet_piece_as_arrow,
+                **kwargs,
+            )
 
     @classmethod
     def read_partition(
@@ -1460,6 +1520,11 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         no_filters,
         fragment_row_groups,
     ):
+        """Process row-groups and statistics.
+
+        This method is overrides the `ArrowLegacyEngine` implementation.
+        """
+
         # Get the number of row groups per file
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
@@ -1551,6 +1616,37 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
+        )
+
+    @classmethod
+    def _read_table(
+        cls,
+        path,
+        fs,
+        row_groups,
+        columns,
+        schema,
+        filters,
+        partitions,
+        partition_keys,
+        **kwargs,
+    ):
+        """Read in a pyarrow table.
+
+        This method is overrides the `ArrowLegacyEngine` implementation.
+        """
+
+        return _read_table_from_path(
+            path,
+            fs,
+            row_groups,
+            columns,
+            schema,
+            filters,
+            partitions,
+            partition_keys,
+            cls._parquet_piece_as_arrow,
+            **kwargs,
         )
 
 
