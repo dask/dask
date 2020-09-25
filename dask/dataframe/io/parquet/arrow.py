@@ -370,6 +370,9 @@ class ArrowDatasetEngine(Engine):
             and isinstance(metadata[0], str)
         ) or len(index_cols) > 1:
             gather_statistics = False
+            # `fragment_row_groups` won't be used when metadata
+            # is a list of paths - Just set to False
+            fragment_row_groups = False
         elif filters is None and len(index_cols) == 0:
             gather_statistics = False
 
@@ -387,7 +390,19 @@ class ArrowDatasetEngine(Engine):
             elif not gather_statistics:
                 gather_statistics = True
 
-        # Only pass fragments to workers if necessary
+        # Only pass fragments to `read_partition` tasks if necessary.
+        #
+        # Since our metadata is based on `FileFragment` objects, we
+        # need to use `FileFragment.to_table` to apply filters and/or
+        # to account for a lack of `ParquetPartitions` data (if
+        # the dataset is partitioned).  In these cases, we need to send
+        # the actual fragments to the `read_partition` task in place of
+        # row-group IDs (`fragment_row_groups`).
+        #
+        # If we dont need to pass `FileFragment` objects in the graph,
+        # we shouldn't.  Doing this (1) increases the size of the graph,
+        # and (2) does not perform better than creating/reading from a
+        # `ParquetFile` object on the worker.
         if fragment_row_groups is None:
             if filters or partition_info["partition_names"]:
                 fragment_row_groups = True
@@ -485,12 +500,17 @@ class ArrowDatasetEngine(Engine):
                     "partitioning", default_partitioning
                 ),  # Assume "hive" by default
             )
-
-        if split_row_groups is None and gather_statistics is not False:
-            split_row_groups = True
-
         schema = ds.schema
         base = ""
+
+        # By default, we will create an output partition for each
+        # row group in the dataset (`split_row_groups=True`).
+        # However, we will NOT split by row-group if the user has
+        # specified `gather_statistics=False`, because this can be
+        # interpreted as an indication that metadata overhead should
+        # be avoided at all costs.
+        if split_row_groups is None and gather_statistics is not False:
+            split_row_groups = True
 
         # Check if we will need to handle divisions later.
         handle_divisions = (
