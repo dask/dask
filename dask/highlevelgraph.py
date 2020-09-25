@@ -147,14 +147,15 @@ class HighLevelGraph(Mapping):
 
     Parameters
     ----------
-    layers : Dict[str, Mapping]
+    layers : Mapping[str, Mapping]
         The subgraph layers, keyed by a unique name
-    dependencies : Dict[str, Set[str]]
+    dependencies : Mapping[str, Set[str]]
         The set of layers on which each layer depends
+    key_dependencies : Mapping[Hashable, Set], optional
+        Mapping all keys in the high level graph to their dependencies
 
     Examples
     --------
-
     Here is an idealized example that shows the internal state of a
     HighLevelGraph
 
