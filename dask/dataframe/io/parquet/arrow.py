@@ -363,7 +363,9 @@ class ArrowDatasetEngine(Engine):
         # Cannot gather_statistics if our `metadata` is a list
         # of paths, or if we are building a multiindex (for now).
         # We also don't "need" to gather statistics if we don't
-        # want to apply any filters or calculate divisions
+        # want to apply any filters or calculate divisions. Note
+        # that the `ArrowDatasetEngine` doesn't even require
+        # `gather_statistics=True` for filtering.
         if (
             isinstance(metadata, list)
             and len(metadata)
@@ -375,20 +377,6 @@ class ArrowDatasetEngine(Engine):
             fragment_row_groups = False
         elif filters is None and len(index_cols) == 0:
             gather_statistics = False
-
-        # Make sure gather_statistics allows filtering
-        # (if filters are desired)
-        if filters:
-            # Filters may require us to gather statistics
-            if gather_statistics is False and partition_info["partition_names"]:
-                warnings.warn(
-                    "Filtering with gather_statistics=False. "
-                    "Only partition columns will be filtered correctly."
-                )
-            elif gather_statistics is False:
-                raise ValueError("Cannot apply filters with gather_statistics=False")
-            elif not gather_statistics:
-                gather_statistics = True
 
         # Only pass fragments to `read_partition` tasks if necessary.
         #
@@ -533,7 +521,10 @@ class ArrowDatasetEngine(Engine):
         )
 
         if not (
-            split_row_groups or gather_statistics or partition_info["partition_names"]
+            split_row_groups
+            or gather_statistics
+            or partition_info["partition_names"]
+            or filters
         ):
             # Don't need to process real metadata if
             # we are not gathering statistics, splitting
@@ -694,7 +685,7 @@ class ArrowDatasetEngine(Engine):
                     continue
                 stat_col_indices[name] = i
         stat_cols = list(stat_col_indices.keys())
-        gather_statistics = gather_statistics and len(stat_cols) > 0
+        gather_statistics = (gather_statistics is not False) and len(stat_cols) > 0
         if split_row_groups is None:
             split_row_groups = False
 
@@ -1442,6 +1433,20 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             partition_info["partitions"] = dataset.partitions
             for piece in dataset.pieces:
                 partition_info["partition_keys"][piece.path] = piece.partition_keys
+
+        # Make sure gather_statistics allows filtering
+        # (if filters are desired)
+        if filters:
+            # Filters may require us to gather statistics
+            if gather_statistics is False and partition_info["partition_names"]:
+                warnings.warn(
+                    "Filtering with gather_statistics=False. "
+                    "Only partition columns will be filtered correctly."
+                )
+            elif gather_statistics is False:
+                raise ValueError("Cannot apply filters with gather_statistics=False")
+            elif not gather_statistics:
+                gather_statistics = True
 
         # Step 3: Construct a single `metadata` object. We can
         #         directly use dataset.metadata if it is available.
