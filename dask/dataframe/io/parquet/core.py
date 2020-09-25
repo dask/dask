@@ -233,7 +233,7 @@ def read_parquet(
         paths,
         categories=categories,
         index=index,
-        gather_statistics=gather_statistics,
+        gather_statistics=True if chunksize else gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
         **kwargs,
