@@ -85,7 +85,7 @@ Previously we had a chunksize of ``1`` along the first dimension since we select
 just one element from each input chunk. But now we've selected 15 elements
 from the first chunk, producing a large output chunk.
 
-Dask warns when indexing like this produces a chunk that's 10x larger
+Dask warns when indexing like this produces a chunk that's 5x larger
 than the ``array.chunk-size`` config option. You have two options to deal with
 that warning:
 
