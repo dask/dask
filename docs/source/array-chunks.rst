@@ -1,3 +1,5 @@
+.. _array.chunks:
+
 Chunks
 ======
 
