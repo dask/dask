@@ -588,7 +588,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     depending on the value of ``dask.config.slicing.split-large-chunks``.
 
     >>> import dask
-    >>> with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+    >>> with dask.config.set({"array.slicing.split-large-chunks": True}):
     ...      chunks, dsk = take('y', 'x', [(1, 1, 1), (1000, 1000), (1000, 1000)],
     ...                        [0] + [1] * 6 + [2], axis=0, itemsize=8)
     >>> chunks

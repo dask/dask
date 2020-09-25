@@ -882,7 +882,7 @@ def test_slicing_plan(chunks, index, expected):
 
 
 def test_getitem_avoids_large_chunks():
-    with dask.config.set(**{"array.chunk-size": "0.1Mb"}):
+    with dask.config.set({"array.chunk-size": "0.1Mb"}):
         a = np.arange(2 * 128 * 128, dtype="int64").reshape(2, 128, 128)
         arr = da.from_array(a, chunks=(1, 128, 128))
         indexer = [0] + [1] * 11
@@ -896,14 +896,14 @@ def test_getitem_avoids_large_chunks():
         assert result.chunks == ((1, 11), (128,), (128,))
 
         # Users can silence the warning
-        with dask.config.set(**{"array.slicing.split-large-chunks": False}):
+        with dask.config.set({"array.slicing.split-large-chunks": False}):
             with pytest.warns(None) as e:
                 result = arr[indexer]
             assert len(e) == 0
             assert_eq(result, expected)
 
         # Users can silence the warning
-        with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+        with dask.config.set({"array.slicing.split-large-chunks": True}):
             with pytest.warns(None) as e:
                 result = arr[indexer]
             assert len(e) == 0  # no
@@ -925,7 +925,7 @@ def test_getitem_avoids_large_chunks():
 def test_getitem_avoids_large_chunks_missing(chunks):
     # We cannot apply the "avoid large chunks" optimization when
     # the chunks have unknown sizes.
-    with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+    with dask.config.set({"array.slicing.split-large-chunks": True}):
         a = np.arange(4 * 500 * 500).reshape(4, 500, 500)
         arr = da.from_array(a, chunks=(1, 500, 500))
         arr._chunks = chunks
@@ -937,7 +937,7 @@ def test_getitem_avoids_large_chunks_missing(chunks):
 
 def test_take_avoids_large_chunks():
     # unit test for https://github.com/dask/dask/issues/6270
-    with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+    with dask.config.set({"array.slicing.split-large-chunks": True}):
         chunks = ((1, 1, 1, 1), (500,), (500,))
         itemsize = 8
         index = np.array([0, 1] + [2] * 101 + [3])
@@ -963,11 +963,11 @@ def test_take_avoids_large_chunks():
 
 
 def test_take_uses_config():
-    with dask.config.set(**{"array.slicing.split-large-chunks": True}):
+    with dask.config.set({"array.slicing.split-large-chunks": True}):
         chunks = ((1, 1, 1, 1), (500,), (500,))
         index = np.array([0, 1] + [2] * 101 + [3])
         itemsize = 8
-        with config.set(**{"array.chunk-size": "10GB"}):
+        with config.set({"array.chunk-size": "10GB"}):
             chunks2, dsk = take("a", "b", chunks, index, itemsize)
         assert chunks2 == ((1, 1, 101, 1), (500,), (500,))
         assert len(dsk) == 4
