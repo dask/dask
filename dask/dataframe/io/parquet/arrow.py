@@ -551,6 +551,11 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _generate_dd_meta(cls, schema, index, categories, partition_info):
+        """Use parquet metadata to construct DataFrame metadata.
+
+        This method is used by both `ArrowDatasetEngine`
+        and `ArrowLegacyEngine`.
+        """
         partition_obj = partition_info["partitions"]
         partitions = partition_info["partition_names"]
         columns = None
@@ -648,6 +653,9 @@ class ArrowDatasetEngine(Engine):
         Use metadata (along with other data) to define a tuple
         for each ddf partition.  Also gather statistics if
         ``gather_statistics=True``, and other criteria is met.
+
+        This method is used by both `ArrowDatasetEngine`
+        and `ArrowLegacyEngine`.
         """
 
         parts = []
@@ -655,6 +663,7 @@ class ArrowDatasetEngine(Engine):
 
         partition_keys = partition_info["partition_keys"]
         partition_obj = partition_info["partitions"]
+        partition_names = partition_info["partition_names"]
 
         # Check if `metadata` is just a list of paths
         # (not splitting by row-group or collecting statistics)
@@ -680,6 +689,9 @@ class ArrowDatasetEngine(Engine):
         stat_col_indices = {}
         for i, name in enumerate(schema.names):
             if name in index_cols or name in flat_filters:
+                if name in partition_names:
+                    # Partition columns wont have statistics
+                    continue
                 stat_col_indices[name] = i
         stat_cols = list(stat_col_indices.keys())
         gather_statistics = gather_statistics and len(stat_cols) > 0
@@ -791,7 +803,7 @@ class ArrowDatasetEngine(Engine):
                 if fragment_row_groups:
                     file_row_groups[fpath].append(frag)
                 else:
-                    file_row_groups[fpath].append(frag.row_groups[0].id)
+                    file_row_groups[fpath].append(row_group.id)
                 if gather_statistics:
                     if single_rg_parts:
                         s = {
@@ -870,6 +882,8 @@ class ArrowDatasetEngine(Engine):
     ):
         """Utility to aggregate the statistics for N row-groups
         into a single dictionary.
+
+        Used by `_construct_parts`
         """
         if len(file_row_group_stats) < 1:
             # Empty statistics
@@ -1388,6 +1402,8 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         Use _metadata or aggregate footer metadata into a single
         object.  Also, collect other information necessary for
         parquet-to-ddf mapping (e.g. schema, partition_info).
+
+        This method overrides `ArrowDatasetEngine._gather_metadata`.
         """
 
         # Step 1: Create a ParquetDataset object
