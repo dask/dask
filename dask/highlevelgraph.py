@@ -405,7 +405,7 @@ class HighLevelGraph(Mapping):
                     ready.add(k)
         return ret
 
-    def cull(self, keys: Set):
+    def cull(self, keys: Set) -> "HighLevelGraph":
         """Return new high level graph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
