@@ -2640,16 +2640,22 @@ def test_to_dask_array_unknown(as_frame):
     assert all(np.isnan(x) for x in result)
 
 
-@pytest.mark.parametrize("lengths", [[2, 3], True])
-@pytest.mark.parametrize("as_frame", [False, False])
-def test_to_dask_array(as_frame, lengths):
-    s = pd.Series([1, 2, 3, 4, 5], name="foo")
+@pytest.mark.parametrize(
+    "lengths,as_frame,meta",
+    [
+        ([2, 3], False, None),
+        (True, False, None),
+        (True, False, np.array([], dtype="f4")),
+    ],
+)
+def test_to_dask_array(meta, as_frame, lengths):
+    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
     a = dd.from_pandas(s, chunksize=2)
 
     if as_frame:
         a = a.to_frame()
 
-    result = a.to_dask_array(lengths=lengths)
+    result = a.to_dask_array(lengths=lengths, meta=meta)
     assert isinstance(result, da.Array)
 
     expected_chunks = ((2, 3),)
