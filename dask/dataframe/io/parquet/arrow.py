@@ -1117,12 +1117,14 @@ class ArrowDatasetEngine(Engine):
         for frag in metadata:
             fpath = frag.path
             frag_map[fpath] = frag
-            # If we are gathering statistics or splitting
-            # by row-group, we need to ensure our fragment
-            # metadata is complete.  Otherwise, frag.row_groups
-            # may be `None`.
             if gather_statistics or split_row_groups:
-                frag.ensure_complete_metadata()
+                # If we are gathering statistics or splitting
+                # by row-group, we need to ensure our fragment
+                # metadata is complete.
+                if frag.row_groups is None:
+                    frag.ensure_complete_metadata()
+                elif gather_statistics and frag.row_groups[0].statistics is None:
+                    frag.ensure_complete_metadata()
             else:
                 file_row_groups[fpath] = [None]
                 continue
