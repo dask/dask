@@ -1093,7 +1093,14 @@ def _compute_prefixscan0(func, x, axis, dtype):
 
 
 def prefixscan(
-    func, batchop, binop, x, axis=None, dtype=None, out=None, method="blelloch",
+    func,
+    batchop,
+    binop,
+    x,
+    axis=None,
+    dtype=None,
+    out=None,
+    method="blelloch",
 ):
     if method not in {"blelloch", "blelloch-split"}:
         raise ValueError(f"Invalid method: {method}")
@@ -1295,7 +1302,14 @@ def cumsum(x, axis=None, dtype=None, out=None, method="sequential"):
         return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
     else:
         return prefixscan(
-            np.cumsum, np.sum, _cumsum_merge, x, axis, dtype, out=out, method=method,
+            np.cumsum,
+            np.sum,
+            _cumsum_merge,
+            x,
+            axis,
+            dtype,
+            out=out,
+            method=method,
         )
 
 
@@ -1305,7 +1319,14 @@ def cumprod(x, axis=None, dtype=None, out=None, method="sequential"):
         return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
     else:
         return prefixscan(
-            np.cumprod, np.prod, _cumprod_merge, x, axis, dtype, out=out, method=method,
+            np.cumprod,
+            np.prod,
+            _cumprod_merge,
+            x,
+            axis,
+            dtype,
+            out=out,
+            method=method,
         )
 
 
