@@ -201,23 +201,30 @@ def _collect_pyarrow_dataset_frags(
                 for name in partition_names
             ]
 
-        if split_row_groups is False and (ds_filters is None or not handle_divisions):
-            # Avoid row-group splitting.
-            # NOTE: We don't do this if we are both filtering and handling
-            # divisions, because the resulting divisions will be calculated
-            # with UNFILTERED row-groups.  This is probably fine in most cases,
-            # but could be an issue if the to-be index is not monotonically
-            # increasing before the filters are applied.
-            # TODO (maybe): Even if we filter out row-groups before aggregating stats,
-            # we are not capturing the intra-row-group filtering that will be
-            # performed at read time.  Therefore, it may be best to use this code
-            # path for all `split_row_groups==False` cases (assuming it is generally
-            # more performant to avoid splitting).
-            metadata.append(file_frag)
+        # Append fragements to our "metadata" list
+        if ds_filters:
+            # If we have filters, we need to split the row groups to apply them.
+            # If any row-groups are filtered out, we convert the remaining row-groups
+            # to a NEW (filtered) fragment, and append the filtered fragment to our
+            # metadata.
+            filtered_row_groups = [
+                rg_frag.row_groups[0].id
+                for rg_frag in file_frag.split_by_row_group(
+                    ds_filters, schema=ds.schema
+                )
+            ]
+            if len(file_frag.row_groups) > len(filtered_row_groups):
+                filtered_frag = file_frag.format.make_fragment(
+                    file_frag.path,
+                    file_frag.filesystem,
+                    file_frag.partition_expression,
+                    row_groups=filtered_row_groups,
+                )
+                metadata.append(filtered_frag)
+            else:
+                metadata.append(file_frag)
         else:
-            # Loop over row-group fragments
-            for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
-                metadata.append(rg_frag)
+            metadata.append(file_frag)
 
     # The `metadata` object is a sorted list of row-group fragments.
     # This is different from a `FileMetadata` object (used by the legacy
@@ -426,19 +433,19 @@ class ArrowDatasetEngine(Engine):
 
         if isinstance(piece, str):
             # `piece` is a file-path string
-            path = piece
+            path_or_frag = piece
             row_group = None
             partition_keys = None
         else:
             # `piece` contains (path, row_group, partition_keys)
-            (path, row_group, partition_keys) = piece
+            (path_or_frag, row_group, partition_keys) = piece
 
         if not isinstance(row_group, list):
             row_group = [row_group]
 
         # Read in arrow table and convert to pandas
         arrow_table = cls._read_table(
-            path,
+            path_or_frag,
             fs,
             row_group,
             columns,
@@ -452,7 +459,7 @@ class ArrowDatasetEngine(Engine):
 
         # For pyarrow.dataset api, need to convert partition columns
         # to categorigal manually for integer types...
-        if pa_ds is not None and isinstance(row_group[0], pa_ds.ParquetFileFragment):
+        if pa_ds is not None and isinstance(path_or_frag, pa_ds.ParquetFileFragment):
             for partition in partitions:
                 if partition.name in df.columns:
                     if df[partition.name].dtype != pd.Categorical:
@@ -1089,37 +1096,40 @@ class ArrowDatasetEngine(Engine):
         # to account for a lack of `ParquetPartitions` data (if
         # the dataset is partitioned).  In these cases, we need to send
         # the actual fragments to the `read_partition` task in place of
-        # row-group IDs (`fragment_row_groups`).
+        # the file path.
         #
         # If we dont need to pass `FileFragment` objects in the graph,
         # we shouldn't.  Doing this (1) increases the size of the graph,
         # and (2) does not perform better than creating/reading from a
         # `ParquetFile` object on the worker.
         if filters or partition_names:
-            fragment_row_groups = True
+            preserve_frag = True
         else:
-            fragment_row_groups = False
+            preserve_frag = False
 
         # Get the number of row groups per file
+        frag_map = {}
         single_rg_parts = int(split_row_groups) == 1
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
         for frag in metadata:
+            fpath = frag.path
+            frag_map[fpath] = frag
+            # If we are gathering statistics or splitting
+            # by row-group, we need to ensure our fragment
+            # metadata is complete.  Otherwise, frag.row_groups
+            # may be `None`.
+            if gather_statistics or split_row_groups:
+                frag.ensure_complete_metadata()
+            else:
+                file_row_groups[fpath] = [None]
+                continue
             for row_group in frag.row_groups:
-                fpath = frag.path
-                if fragment_row_groups:
-                    if len(frag.row_groups) > 1:
-                        raise ValueError("PROBLEM - TODO.")
-                    file_row_groups[fpath].append(frag)
-                else:
-                    file_row_groups[fpath].append(row_group.id)
+                file_row_groups[fpath].append(row_group.id)
                 if gather_statistics:
                     statistics = row_group.statistics
-                    if statistics is None:
-                        frag.ensure_complete_metadata()
-                        statistics = row_group.statistics
                     if single_rg_parts:
                         s = {
                             "file_path_0": fpath,
@@ -1200,7 +1210,11 @@ class ArrowDatasetEngine(Engine):
                     if partition_obj and pkeys is None:
                         continue  # This partition was filtered
                     part = {
-                        "piece": (full_path, rg_list, pkeys),
+                        "piece": (
+                            frag_map[full_path] if preserve_frag else full_path,
+                            rg_list,
+                            pkeys,
+                        ),
                         "kwargs": {
                             "partitions": partition_obj,
                             "categories": categories,
@@ -1224,9 +1238,12 @@ class ArrowDatasetEngine(Engine):
                 pkeys = partition_keys.get(full_path, None)
                 if partition_obj and pkeys is None:
                     continue  # This partition was filtered
-                rgs = row_groups
                 part = {
-                    "piece": (full_path, rgs, pkeys),
+                    "piece": (
+                        frag_map[full_path] if preserve_frag else full_path,
+                        row_groups,
+                        pkeys,
+                    ),
                     "kwargs": {
                         "partitions": partition_obj,
                         "categories": categories,
@@ -1314,7 +1331,7 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _read_table(
         cls,
-        path,
+        path_or_frag,
         fs,
         row_groups,
         columns,
@@ -1328,28 +1345,36 @@ class ArrowDatasetEngine(Engine):
 
         This method is overridden in `ArrowLegacyEngine`.
         """
+        if isinstance(path_or_frag, pa_ds.ParquetFileFragment):
+            cols = []
+            for name in columns:
+                if name is None:
+                    if "__index_level_0__" in schema.names:
+                        columns.append("__index_level_0__")
+                else:
+                    cols.append(name)
 
-        if isinstance(row_groups[0], pa_ds.ParquetFileFragment):
-            tables = []
-            for rg in row_groups:
-                cols = []
-                for name in columns:
-                    if name is None:
-                        if "__index_level_0__" in schema.names:
-                            columns.append("__index_level_0__")
-                    else:
-                        cols.append(name)
-                arrow_table = rg.to_table(
-                    use_threads=False,
-                    schema=schema,
-                    columns=cols,
-                    filter=pq._filters_to_expression(filters) if filters else None,
+            if (row_groups != [None]) and (
+                len(row_groups) < len(path_or_frag.row_groups)
+            ):
+                frag = path_or_frag.format.make_fragment(
+                    path_or_frag.path,
+                    path_or_frag.filesystem,
+                    path_or_frag.partition_expression,
+                    row_groups=row_groups,
                 )
-                tables.append(arrow_table)
-            return pa.concat_tables(tables) if len(row_groups) > 1 else tables[0]
+            else:
+                frag = path_or_frag
+
+            return frag.to_table(
+                use_threads=False,
+                schema=schema,
+                columns=cols,
+                filter=pq._filters_to_expression(filters) if filters else None,
+            )
         else:
             return _read_table_from_path(
-                path,
+                path_or_frag,
                 fs,
                 row_groups,
                 columns,
