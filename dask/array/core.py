@@ -2252,16 +2252,16 @@ class Array(DaskMethodsMixin):
         )
 
     @derived_from(np.ndarray)
-    def cumsum(self, axis, dtype=None, out=None):
+    def cumsum(self, axis, dtype=None, out=None, method="sequential"):
         from .reductions import cumsum
 
-        return cumsum(self, axis, dtype, out=out)
+        return cumsum(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
-    def cumprod(self, axis, dtype=None, out=None):
+    def cumprod(self, axis, dtype=None, out=None, method="sequential"):
         from .reductions import cumprod
 
-        return cumprod(self, axis, dtype, out=out)
+        return cumprod(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
     def squeeze(self, axis=None):

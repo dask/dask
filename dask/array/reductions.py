@@ -456,18 +456,40 @@ with ignoring(AttributeError):
         )
 
     @derived_from(np)
-    def nancumsum(x, axis, dtype=None, out=None):
-        return prefixscan(
-            chunk.nancumsum, np.nansum, operator.add, x, axis, dtype, out=out
-        )
-        # return cumreduction(chunk.nancumsum, operator.add, 0, x, axis, dtype, out=out)
+    def nancumsum(x, axis, dtype=None, out=None, method="sequential"):
+        if method == "sequential":
+            return cumreduction(
+                chunk.nancumsum, operator.add, 0, x, axis, dtype, out=out
+            )
+        else:
+            return prefixscan(
+                chunk.nancumsum,
+                np.nansum,
+                operator.add,
+                x,
+                axis,
+                dtype,
+                out=out,
+                method=method,
+            )
 
     @derived_from(np)
-    def nancumprod(x, axis, dtype=None, out=None):
-        return prefixscan(
-            chunk.nancumprod, np.nanprod, operator.mul, x, axis, dtype, out=out
-        )
-        # return cumreduction(chunk.nancumprod, operator.mul, 1, x, axis, dtype, out=out)
+    def nancumprod(x, axis, dtype=None, out=None, method="sequential"):
+        if method == "sequential":
+            return cumreduction(
+                chunk.nancumprod, operator.mul, 1, x, axis, dtype, out=out
+            )
+        else:
+            return prefixscan(
+                chunk.nancumprod,
+                np.nanprod,
+                operator.mul,
+                x,
+                axis,
+                dtype,
+                out=out,
+                method=method,
+            )
 
 
 @derived_from(np)
@@ -554,7 +576,7 @@ def mean_combine(
     dtype="f8",
     axis=None,
     computing_meta=False,
-    **kwargs
+    **kwargs,
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -665,7 +687,7 @@ def moment_combine(
     sum=np.sum,
     axis=None,
     computing_meta=False,
-    **kwargs
+    **kwargs,
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -703,7 +725,7 @@ def moment_agg(
     sum=np.sum,
     axis=None,
     computing_meta=False,
-    **kwargs
+    **kwargs,
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -1059,22 +1081,25 @@ nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
 nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
 
 
-def _compute_prefixscan(func, binop, pre, x, axis):
+def _compute_prefixscan(func, binop, pre, x, axis, dtype):
     # We could compute this in two tasks.
     # This would allow us to do useful work (i.e., func), while waiting on `pre`.
     # Using one task may guide the scheduler to do better and reduce scheduling overhead.
-    return binop(pre, func(x, axis=axis))
+    return binop(pre, func(x, axis=axis, dtype=dtype))
 
 
-def _compute_prefixscan0(func, x, axis):
-    return func(x, axis=axis)
+def _compute_prefixscan0(func, x, axis, dtype):
+    return func(x, axis=axis, dtype=dtype)
 
 
-def prefixscan(func, batchop, binop, x, axis=None, dtype=None, out=None):
+def prefixscan(
+    func, batchop, binop, x, axis=None, dtype=None, out=None, method="blelloch",
+):
+    if method not in {"blelloch", "blelloch-split"}:
+        raise ValueError(f"Invalid method: {method}")
     if axis is None:
         x = x.flatten()
         axis = 0
-    # TODO: figure out how/where to use `dtype`
     if dtype is None:
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
@@ -1085,8 +1110,8 @@ def prefixscan(func, batchop, binop, x, axis=None, dtype=None, out=None):
     base_key = (name,)
 
     # should we update `chunks=`?  Right now, the metadata for batches is incorrect
-    batches = x.map_blocks(batchop, axis=axis, keepdims=True)
-    # we don't need the final batch until the end
+    batches = x.map_blocks(batchop, axis=axis, keepdims=True, dtype=dtype)
+    # we don't need the last index until the end
     *indices, last_index = full_indices = [
         list(
             product(
@@ -1136,25 +1161,47 @@ def prefixscan(func, batchop, binop, x, axis=None, dtype=None, out=None):
             stride //= 2
             level += 1
 
-    if indices:
-        for index in indices[0]:
+    if full_indices:
+        for index in full_indices[0]:
             dsk[base_key + index] = (
                 _compute_prefixscan0,
                 func,
                 (x.name,) + index,
                 axis,
+                dtype,
             )
-    for indexes, vals in zip(drop(1, full_indices), prefix_vals):
-        for index, val in zip(indexes, vals):
-            dsk[base_key + index] = (
-                _compute_prefixscan,
-                func,
-                binop,
-                val,
-                (x.name,) + index,
-                axis,
-            )
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x, batches])
+        if method == "blelloch":
+            for indexes, vals in zip(drop(1, full_indices), prefix_vals):
+                for index, val in zip(indexes, vals):
+                    dsk[base_key + index] = (
+                        _compute_prefixscan,
+                        func,
+                        binop,
+                        val,
+                        (x.name,) + index,
+                        axis,
+                        dtype,
+                    )
+        else:  # method == "blelloch-split"
+            # e.g., compute `cumsum` before adding it to the sum of previous values
+            level_key = (level,)
+            for indexes, vals in zip(drop(1, full_indices), prefix_vals):
+                for index, val in zip(indexes, vals):
+                    final_key = base_key + index
+                    func_key = final_key + level_key
+                    dsk[func_key] = (
+                        _compute_prefixscan0,
+                        func,
+                        (x.name,) + index,
+                        axis,
+                        dtype,
+                    )
+                    dsk[final_key] = (binop, val, func_key)
+    if len(full_indices) < 2:
+        deps = [x]
+    else:
+        deps = [x, batches]
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
     result = Array(graph, name, x.chunks, batches.dtype)
     return handle_out(out, result)
 
@@ -1243,15 +1290,23 @@ def _cumprod_merge(a, b):
 
 
 @derived_from(np)
-def cumsum(x, axis=None, dtype=None, out=None):
-    return prefixscan(np.cumsum, np.sum, _cumsum_merge, x, axis, dtype, out=out)
-    # return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
+def cumsum(x, axis=None, dtype=None, out=None, method="sequential"):
+    if method == "sequential":
+        return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
+    else:
+        return prefixscan(
+            np.cumsum, np.sum, _cumsum_merge, x, axis, dtype, out=out, method=method,
+        )
 
 
 @derived_from(np)
-def cumprod(x, axis=None, dtype=None, out=None):
-    return prefixscan(np.cumprod, np.prod, _cumprod_merge, x, axis, dtype, out=out)
-    # return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
+def cumprod(x, axis=None, dtype=None, out=None, method="sequential"):
+    if method == "sequential":
+        return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
+    else:
+        return prefixscan(
+            np.cumprod, np.prod, _cumprod_merge, x, axis, dtype, out=out, method=method,
+        )
 
 
 def topk(a, k, axis=-1, split_every=None):
