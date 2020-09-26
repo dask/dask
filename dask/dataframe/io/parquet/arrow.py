@@ -259,6 +259,15 @@ def _get_pandas_metadata(schema):
         return {}
 
 
+def _flatten_filters(filters):
+    """Flatten DNF-formatted filters (list of tuples)"""
+    return (
+        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
+        if filters
+        else []
+    )
+
+
 def _read_table_from_path(
     path,
     fs,
@@ -930,7 +939,6 @@ class ArrowDatasetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
-        use_legacy_dataset=False,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -942,12 +950,8 @@ class ArrowDatasetEngine(Engine):
         and `ArrowLegacyEngine`.
         """
 
-        parts = []
-        stats = []
-
         partition_keys = partition_info["partition_keys"]
         partition_obj = partition_info["partitions"]
-        partition_names = partition_info["partition_names"]
 
         # Check if `metadata` is just a list of paths
         # (not splitting by row-group or collecting statistics)
@@ -956,6 +960,8 @@ class ArrowDatasetEngine(Engine):
             and len(metadata)
             and isinstance(metadata[0], str)
         ):
+            parts = []
+            stats = []
             for full_path in metadata:
                 part = {
                     "piece": (full_path, None, partition_keys.get(full_path, None)),
@@ -970,7 +976,6 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             split_row_groups,
             stat_col_indices,
-            flat_filters,
         ) = cls._update_metadata_options(
             gather_statistics,
             split_row_groups,
@@ -981,22 +986,203 @@ class ArrowDatasetEngine(Engine):
             partition_info,
         )
 
-        # Convert metadata into simple dictionary structures
-        (
-            file_row_groups,
-            file_row_group_stats,
-            file_row_group_column_stats,
-            gather_statistics,
-        ) = cls._process_metadata(
+        # Convert metadata into `parts` and `stats`
+        return cls._process_metadata(
             metadata,
-            int(split_row_groups) == 1,
+            schema,
+            split_row_groups,
             gather_statistics,
             stat_col_indices,
-            flat_filters == [],
-            partition_names,
+            filters,
+            categories,
+            partition_info,
+            data_path,
+            fs,
         )
 
-        # Finally, construct `parts` and `stats`
+    @classmethod
+    def _update_metadata_options(
+        cls,
+        gather_statistics,
+        split_row_groups,
+        metadata,
+        schema,
+        index_cols,
+        filters,
+        partition_info,
+    ):
+        """Update read_parquet options given up-to-data metadata.
+
+        The primary focus here is `gather_statistics`. We want to
+        avoid setting this option to `True` if it is unnecessary.
+
+        This method is used by both `ArrowDatasetEngine`
+        and `ArrowLegacyEngine`.
+        """
+
+        # Cannot gather_statistics if our `metadata` is a list
+        # of paths, or if we are building a multiindex (for now).
+        # We also don't "need" to gather statistics if we don't
+        # want to apply any filters or calculate divisions. Note
+        # that the `ArrowDatasetEngine` doesn't even require
+        # `gather_statistics=True` for filtering.
+        if (
+            isinstance(metadata, list)
+            and len(metadata)
+            and isinstance(metadata[0], str)
+        ) or len(index_cols) > 1:
+            gather_statistics = False
+        elif filters is None and len(index_cols) == 0:
+            gather_statistics = False
+
+        # Determine which columns need statistics.
+        flat_filters = _flatten_filters(filters)
+        stat_col_indices = {}
+        for i, name in enumerate(schema.names):
+            if name in index_cols or name in flat_filters:
+                if name in partition_info["partition_names"]:
+                    # Partition columns wont have statistics
+                    continue
+                stat_col_indices[name] = i
+
+        # If the user has not specified `gather_statistics`,
+        # we will only do so if there are specific columns in
+        # need of statistics.
+        if gather_statistics is None:
+            gather_statistics = len(stat_col_indices.keys()) > 0
+        if split_row_groups is None:
+            split_row_groups = False
+
+        return (
+            gather_statistics,
+            split_row_groups,
+            stat_col_indices,
+        )
+
+    @classmethod
+    def _process_metadata(
+        cls,
+        metadata,
+        schema,
+        split_row_groups,
+        gather_statistics,
+        stat_col_indices,
+        filters,
+        categories,
+        partition_info,
+        data_path,
+        fs,
+    ):
+        """Process row-groups and statistics.
+
+        This method is overridden in `ArrowLegacyEngine`.
+        """
+
+        partition_keys = partition_info["partition_keys"]
+        partition_obj = partition_info["partitions"]
+        partition_names = partition_info["partition_names"]
+
+        # Only pass fragments to `read_partition` tasks if necessary.
+        #
+        # Since our metadata is based on `FileFragment` objects, we
+        # need to use `FileFragment.to_table` to apply filters and/or
+        # to account for a lack of `ParquetPartitions` data (if
+        # the dataset is partitioned).  In these cases, we need to send
+        # the actual fragments to the `read_partition` task in place of
+        # row-group IDs (`fragment_row_groups`).
+        #
+        # If we dont need to pass `FileFragment` objects in the graph,
+        # we shouldn't.  Doing this (1) increases the size of the graph,
+        # and (2) does not perform better than creating/reading from a
+        # `ParquetFile` object on the worker.
+        if filters or partition_names:
+            fragment_row_groups = True
+        else:
+            fragment_row_groups = False
+
+        # Get the number of row groups per file
+        single_rg_parts = int(split_row_groups) == 1
+        file_row_groups = defaultdict(list)
+        file_row_group_stats = defaultdict(list)
+        file_row_group_column_stats = defaultdict(list)
+        cmax_last = {}
+        for frag in metadata:
+            for row_group in frag.row_groups:
+                fpath = frag.path
+                if fragment_row_groups:
+                    if len(frag.row_groups) > 1:
+                        raise ValueError("PROBLEM - TODO.")
+                    file_row_groups[fpath].append(frag)
+                else:
+                    file_row_groups[fpath].append(row_group.id)
+                if gather_statistics:
+                    statistics = row_group.statistics
+                    if statistics is None:
+                        frag.ensure_complete_metadata()
+                        statistics = row_group.statistics
+                    if single_rg_parts:
+                        s = {
+                            "file_path_0": fpath,
+                            "num-rows": row_group.num_rows,
+                            "total_byte_size": row_group.total_byte_size,
+                            "columns": [],
+                        }
+                    else:
+                        s = {
+                            "num-rows": row_group.num_rows,
+                            "total_byte_size": row_group.total_byte_size,
+                        }
+                    cstats = []
+                    for name, i in stat_col_indices.items():
+                        if name in statistics:
+                            cmin = statistics[name]["min"]
+                            cmax = statistics[name]["max"]
+                            cnull = 0  # Not yet available/needed
+                            last = cmax_last.get(name, None)
+                            if not filters:
+                                # Only think about bailing if we don't need
+                                # stats for filtering
+                                if cmin is None or (last and cmin < last):
+                                    # We are collecting statistics for divisions
+                                    # only (no filters) - Column isn't sorted, or
+                                    # we have an all-null partition, so lets bail.
+                                    #
+                                    # Note: This assumes ascending order.
+                                    #
+                                    gather_statistics = False
+                                    file_row_group_stats = {}
+                                    file_row_group_column_stats = {}
+                                    break
+
+                            if single_rg_parts:
+                                s["columns"].append(
+                                    {
+                                        "name": name,
+                                        "min": pd.Timestamp(cmin)
+                                        if isinstance(cmin, datetime)
+                                        else cmin,
+                                        "max": pd.Timestamp(cmax)
+                                        if isinstance(cmax, datetime)
+                                        else cmax,
+                                        "null_count": cnull,
+                                    }
+                                )
+                            else:
+                                cstats += [cmin, cmax, cnull]
+                            cmax_last[name] = cmax
+                        else:
+                            if single_rg_parts:
+                                s["columns"].append({"name": name})
+                            else:
+                                cstats += [None, None, None]
+                    if gather_statistics:
+                        file_row_group_stats[fpath].append(s)
+                        if not single_rg_parts:
+                            file_row_group_column_stats[fpath].append(tuple(cstats))
+
+        # Construct `parts` and `stats`
+        parts = []
+        stats = []
         if split_row_groups:
             # Create parts from each file,
             # limiting the number of row_groups in each piece
@@ -1038,7 +1224,7 @@ class ArrowDatasetEngine(Engine):
                 pkeys = partition_keys.get(full_path, None)
                 if partition_obj and pkeys is None:
                     continue  # This partition was filtered
-                rgs = None if use_legacy_dataset else row_groups
+                rgs = row_groups
                 part = {
                     "piece": (full_path, rgs, pkeys),
                     "kwargs": {
@@ -1059,187 +1245,6 @@ class ArrowDatasetEngine(Engine):
                     stats.append(stat)
 
         return parts, stats
-
-    @classmethod
-    def _update_metadata_options(
-        cls,
-        gather_statistics,
-        split_row_groups,
-        metadata,
-        schema,
-        index_cols,
-        filters,
-        partition_info,
-    ):
-        """Update read_parquet options given up-to-data metadata.
-
-        The primary focus here is `gather_statistics`. We want to
-        avoid setting this option to `True` if it is unnecessary.
-
-        This method is used by both `ArrowDatasetEngine`
-        and `ArrowLegacyEngine`.
-        """
-
-        # Cannot gather_statistics if our `metadata` is a list
-        # of paths, or if we are building a multiindex (for now).
-        # We also don't "need" to gather statistics if we don't
-        # want to apply any filters or calculate divisions. Note
-        # that the `ArrowDatasetEngine` doesn't even require
-        # `gather_statistics=True` for filtering.
-        if (
-            isinstance(metadata, list)
-            and len(metadata)
-            and isinstance(metadata[0], str)
-        ) or len(index_cols) > 1:
-            gather_statistics = False
-        elif filters is None and len(index_cols) == 0:
-            gather_statistics = False
-
-        # Determine which columns need statistics.
-        flat_filters = (
-            set(flatten(tuple(flatten(filters, container=list)), container=tuple))
-            if filters
-            else []
-        )
-        stat_col_indices = {}
-        for i, name in enumerate(schema.names):
-            if name in index_cols or name in flat_filters:
-                if name in partition_info["partition_names"]:
-                    # Partition columns wont have statistics
-                    continue
-                stat_col_indices[name] = i
-
-        # If the user has not specified `gather_statistics`,
-        # we will only do so if there are specific columns in
-        # need of statistics.
-        if gather_statistics is None:
-            gather_statistics = len(stat_col_indices.keys()) > 0
-        if split_row_groups is None:
-            split_row_groups = False
-
-        return (
-            gather_statistics,
-            split_row_groups,
-            stat_col_indices,
-            flat_filters,
-        )
-
-    @classmethod
-    def _process_metadata(
-        cls,
-        metadata,
-        single_rg_parts,
-        gather_statistics,
-        stat_col_indices,
-        no_filters,
-        partition_names,
-    ):
-        """Process row-groups and statistics.
-
-        This method is overridden in `ArrowLegacyEngine`.
-        """
-
-        # Only pass fragments to `read_partition` tasks if necessary.
-        #
-        # Since our metadata is based on `FileFragment` objects, we
-        # need to use `FileFragment.to_table` to apply filters and/or
-        # to account for a lack of `ParquetPartitions` data (if
-        # the dataset is partitioned).  In these cases, we need to send
-        # the actual fragments to the `read_partition` task in place of
-        # row-group IDs (`fragment_row_groups`).
-        #
-        # If we dont need to pass `FileFragment` objects in the graph,
-        # we shouldn't.  Doing this (1) increases the size of the graph,
-        # and (2) does not perform better than creating/reading from a
-        # `ParquetFile` object on the worker.
-        if not no_filters or partition_names:
-            fragment_row_groups = True
-        else:
-            fragment_row_groups = False
-
-        # Get the number of row groups per file
-        file_row_groups = defaultdict(list)
-        file_row_group_stats = defaultdict(list)
-        file_row_group_column_stats = defaultdict(list)
-        cmax_last = {}
-        for frag in metadata:
-            for row_group in frag.row_groups:
-                fpath = frag.path
-                if fragment_row_groups:
-                    file_row_groups[fpath].append(frag)
-                else:
-                    file_row_groups[fpath].append(row_group.id)
-                if gather_statistics:
-                    statistics = row_group.statistics
-                    if statistics is None:
-                        frag.ensure_complete_metadata()
-                        statistics = row_group.statistics
-                    if single_rg_parts:
-                        s = {
-                            "file_path_0": fpath,
-                            "num-rows": row_group.num_rows,
-                            "total_byte_size": row_group.total_byte_size,
-                            "columns": [],
-                        }
-                    else:
-                        s = {
-                            "num-rows": row_group.num_rows,
-                            "total_byte_size": row_group.total_byte_size,
-                        }
-                    cstats = []
-                    for name, i in stat_col_indices.items():
-                        if name in statistics:
-                            cmin = statistics[name]["min"]
-                            cmax = statistics[name]["max"]
-                            cnull = 0  # Not yet available/needed
-                            last = cmax_last.get(name, None)
-                            if no_filters:
-                                # Only think about bailing if we don't need
-                                # stats for filtering
-                                if cmin is None or (last and cmin < last):
-                                    # We are collecting statistics for divisions
-                                    # only (no filters) - Column isn't sorted, or
-                                    # we have an all-null partition, so lets bail.
-                                    #
-                                    # Note: This assumes ascending order.
-                                    #
-                                    gather_statistics = False
-                                    file_row_group_stats = {}
-                                    file_row_group_column_stats = {}
-                                    break
-
-                            if single_rg_parts:
-                                s["columns"].append(
-                                    {
-                                        "name": name,
-                                        "min": pd.Timestamp(cmin)
-                                        if isinstance(cmin, datetime)
-                                        else cmin,
-                                        "max": pd.Timestamp(cmax)
-                                        if isinstance(cmax, datetime)
-                                        else cmax,
-                                        "null_count": cnull,
-                                    }
-                                )
-                            else:
-                                cstats += [cmin, cmax, cnull]
-                            cmax_last[name] = cmax
-                        else:
-                            if single_rg_parts:
-                                s["columns"].append({"name": name})
-                            else:
-                                cstats += [None, None, None]
-                    if gather_statistics:
-                        file_row_group_stats[fpath].append(s)
-                        if not single_rg_parts:
-                            file_row_group_column_stats[fpath].append(tuple(cstats))
-
-        return (
-            file_row_groups,
-            file_row_group_stats,
-            file_row_group_column_stats,
-            gather_statistics,
-        )
 
     @classmethod
     def _aggregate_stats(
@@ -1579,50 +1584,29 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             )
 
     @classmethod
-    def _construct_parts(
-        cls,
-        fs,
-        metadata,
-        schema,
-        filters,
-        index_cols,
-        data_path,
-        partition_info,
-        categories,
-        split_row_groups,
-        gather_statistics,
-        use_legacy_dataset=True,
-    ):
-        return super()._construct_parts(
-            fs,
-            metadata,
-            schema,
-            filters,
-            index_cols,
-            data_path,
-            partition_info,
-            categories,
-            split_row_groups,
-            gather_statistics,
-            use_legacy_dataset=True,
-        )
-
-    @classmethod
     def _process_metadata(
         cls,
         metadata,
-        single_rg_parts,
+        schema,
+        split_row_groups,
         gather_statistics,
         stat_col_indices,
-        no_filters,
-        partition_names,
+        filters,
+        categories,
+        partition_info,
+        data_path,
+        fs,
     ):
         """Process row-groups and statistics.
 
-        This method is overrides the `ArrowLegacyEngine` implementation.
+        This method is overrides the `ArrowDatasetEngine` implementation.
         """
 
+        partition_keys = partition_info["partition_keys"]
+        partition_obj = partition_info["partitions"]
+
         # Get the number of row groups per file
+        single_rg_parts = int(split_row_groups) == 1
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
@@ -1661,7 +1645,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmax = column.statistics.max
                         cnull = column.statistics.null_count
                         last = cmax_last.get(name, None)
-                        if no_filters:
+                        if not filters:
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -1691,7 +1675,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmax_last[name] = cmax
                     else:
 
-                        if no_filters and column.num_values > 0:
+                        if not filters and column.num_values > 0:
                             # We are collecting statistics for divisions
                             # only (no filters) - Lets bail.
                             gather_statistics = False
@@ -1708,12 +1692,70 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     if not single_rg_parts:
                         file_row_group_column_stats[fpath].append(tuple(cstats))
 
-        return (
-            file_row_groups,
-            file_row_group_stats,
-            file_row_group_column_stats,
-            gather_statistics,
-        )
+        # Construct `parts` and `stats`
+        parts = []
+        stats = []
+        if split_row_groups:
+            # Create parts from each file,
+            # limiting the number of row_groups in each piece
+            split_row_groups = int(split_row_groups)
+            for filename, row_groups in file_row_groups.items():
+                row_group_count = len(row_groups)
+                for i in range(0, row_group_count, split_row_groups):
+                    i_end = i + split_row_groups
+                    rg_list = row_groups[i:i_end]
+                    # Get full path (empty strings should be ignored)
+                    full_path = fs.sep.join(
+                        [p for p in [data_path, filename] if p != ""]
+                    )
+                    pkeys = partition_keys.get(full_path, None)
+                    if partition_obj and pkeys is None:
+                        continue  # This partition was filtered
+                    part = {
+                        "piece": (full_path, rg_list, pkeys),
+                        "kwargs": {
+                            "partitions": partition_obj,
+                            "categories": categories,
+                            "filters": filters,
+                            "schema": schema,
+                        },
+                    }
+                    parts.append(part)
+                    if gather_statistics:
+                        stat = cls._aggregate_stats(
+                            filename,
+                            file_row_group_stats[filename][i:i_end],
+                            file_row_group_column_stats[filename][i:i_end],
+                            stat_col_indices,
+                        )
+                        stats.append(stat)
+        else:
+            for filename, row_groups in file_row_groups.items():
+                # Get full path (empty strings should be ignored)
+                full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
+                pkeys = partition_keys.get(full_path, None)
+                if partition_obj and pkeys is None:
+                    continue  # This partition was filtered
+                part = {
+                    "piece": (full_path, None, pkeys),
+                    "kwargs": {
+                        "partitions": partition_obj,
+                        "categories": categories,
+                        "filters": filters,
+                        "schema": schema,
+                    },
+                }
+                parts.append(part)
+                if gather_statistics:
+                    stat = cls._aggregate_stats(
+                        filename,
+                        file_row_group_stats[filename],
+                        file_row_group_column_stats[filename],
+                        stat_col_indices,
+                    )
+                    stats.append(stat)
+
+        return parts, stats
 
     @classmethod
     def _read_table(
