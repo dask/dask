@@ -1376,7 +1376,7 @@ Dask Name: {name}, {task} tasks"""
             enforce_metadata=False,
         )
 
-    def to_dask_array(self, lengths=None):
+    def to_dask_array(self, lengths=None, meta=None):
         """Convert a dask DataFrame to a dask array.
 
         Parameters
@@ -1392,6 +1392,9 @@ Dask Name: {name}, {task} tasks"""
               on the first axis. These values are *not* validated for
               correctness, beyond ensuring that the number of items
               matches the number of partitions.
+        meta : object, optional
+            An optional `meta` parameter can be passed for dask to override the
+            default metadata on the underlying dask array.
 
         Returns
         -------
@@ -1403,6 +1406,9 @@ Dask Name: {name}, {task} tasks"""
 
         chunks = self._validate_chunks(arr, lengths)
         arr._chunks = chunks
+
+        if meta is not None:
+            arr._meta = meta
 
         return arr
 
