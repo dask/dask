@@ -1,6 +1,12 @@
 Changelog
 =========
 
+2.28.0 - 2020-09-25
+-------------------
+
+- Fix SSL ``connection_args`` for ``progressbar`` connect (:pr:`4122`) `jennalc`_
+
+
 2.27.0 - 2020-09-18
 -------------------
 
@@ -1965,3 +1971,4 @@ significantly without many new features.
 .. _`Roberto Panai`: https://github.com/rpanai
 .. _`Dror Speiser`: https://github.com/drorspei
 .. _`Poruri Sai Rahul`: https://github.com/rahulporuri
+.. _`jennalc`: https://github.com/jennalc
