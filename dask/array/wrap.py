@@ -137,7 +137,9 @@ w = wrap(wrap_func_shape_as_first_arg)
 
 @curry
 def _broadcast_trick_inner(func, shape, *args, **kwargs):
-    return np.broadcast_to(func((), *args, **kwargs), shape)
+    meta = kwargs.pop("meta", ())
+    kwargs["shape"] = 1
+    return np.broadcast_to(func(meta, *args, **kwargs), shape)
 
 
 def broadcast_trick(func):
@@ -169,9 +171,9 @@ def broadcast_trick(func):
     return inner
 
 
-ones = w(broadcast_trick(np.ones), dtype="f8")
-zeros = w(broadcast_trick(np.zeros), dtype="f8")
-empty = w(broadcast_trick(np.empty), dtype="f8")
+ones = w(broadcast_trick(np.ones_like), dtype="f8")
+zeros = w(broadcast_trick(np.zeros_like), dtype="f8")
+empty = w(broadcast_trick(np.empty_like), dtype="f8")
 
 
 w_like = wrap(wrap_func_like_safe)
@@ -182,7 +184,7 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(np.full))
+_full = w(broadcast_trick(np.full_like))
 _full_like = w_like(np.full, func_like=np.full_like)
 
 
