@@ -33,4 +33,4 @@ jobs:
 
       - name: Run tests
         shell: bash -l {0}
-        run: pytest dask
+        run: pytest dask --doctest-modules
