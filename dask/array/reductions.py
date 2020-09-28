@@ -583,6 +583,8 @@ def mean_agg(pairs, dtype="f8", axis=None, computing_meta=False, **kwargs):
 def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
+    elif a.dtype == object:
+        dt = object
     else:
         dt = getattr(np.mean(np.zeros(shape=(1,), dtype=a.dtype)), "dtype", object)
     return reduction(

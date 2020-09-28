@@ -577,7 +577,6 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
 
 def _initialize():
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
-    ensure_file(source=fn)
 
     with open(fn) as f:
         _defaults = yaml.safe_load(f)

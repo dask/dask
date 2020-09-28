@@ -1,6 +1,38 @@
 Changelog
 =========
 
+2.28.0 / 2020-09-25
+-------------------
+
+Array
++++++
+
+- Partially reverted changes to ``Array`` indexing that produces large changes.
+  This restores the behavior from Dask 2.25.0 and earlier, with a warning
+  when large chunks are produced. A configuration option is provided
+  to avoid creating the large chunks, see :ref:`array.slicing.efficiency`.
+  (:pr:`6665`) `Tom Augspurger`_
+- Add ``meta`` to ``to_dask_array`` (:pr:`6651`) `Kyle Nicholson`_
+- Fix :pr:`6631` and :pr:`6611` (:pr:`6632`) `Rafal Wojdyla`_
+- Infer object in array reductions (:pr:`6629`) `Daniel Saxton`_
+- Adding ``v_based`` flag for ``svd_flip`` (:pr:`6658`) `Eric Czech`_
+- Fix flakey array ``mean`` (:pr:`6656`) `Sam Grayson`_
+
+Core
+++++
+
+- Removed ``dsk`` equality check from ``SubgraphCallable.__eq__`` (:pr:`6666`) `Mads R. B. Kristensen`_
+- Use ``HighLevelGraph`` layers everywhere in collections (:pr:`6510`) `Mads R. B. Kristensen`_
+- Adds hash dunder method to ``SubgraphCallable`` for caching purposes (:pr:`6424`) `Andrew Fulton`_
+- Stop writing commented out config files by default (:pr:`6647`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+- Add support for collect list aggregation via ``agg`` API (:pr:`6655`) `Madhur Tandon`_
+- Slightly better error message (:pr:`6657`) `Julia Signell`_
+
+
 2.27.0 / 2020-09-18
 -------------------
 
@@ -3635,3 +3667,7 @@ Other
 .. _`Noah D Brenowitz`: https://github.com/nbren12
 .. _`Jon Thielen`: https://github.com/jthielen
 .. _`Poruri Sai Rahul`: https://github.com/rahulporuri
+.. _`Kyle Nicholson`: https://github.com/kylejn27
+.. _`Rafal Wojdyla`: https://github.com/ravwojdyla
+.. _`Sam Grayson`: https://github.com/charmoniumQ
+.. _`Madhur Tandon`: https://github.com/madhur-tandon
