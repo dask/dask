@@ -1234,9 +1234,9 @@ def argtopk(a, k, axis=-1, split_every=None):
     >>> x = np.array([5, 1, 3, 6])
     >>> d = da.from_array(x, chunks=2)
     >>> d.argtopk(2).compute()
-    array([3, 0])
+    array([3, 0], dtype=int64)
     >>> d.argtopk(-2).compute()
-    array([1, 2])
+    array([1, 2], dtype=int64)
     """
     axis = validate_axis(axis, a.ndim)
 

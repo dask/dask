@@ -722,7 +722,8 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     array([    0.,  1000.,  2000.,  3000.,  4000.,  5000.,  6000.,  7000.,
             8000.,  9000., 10000.])
     >>> h.compute()
-    array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000])
+    array([1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000, 1000],
+          dtype=int64)
 
     Explicitly specifying the bins:
 
@@ -730,7 +731,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     >>> bins
     array([    0,  5000, 10000])
     >>> h.compute()
-    array([5000, 5000])
+    array([5000, 5000], dtype=int64)
     """
     if isinstance(bins, Array):
         scalar_bins = bins.ndim == 0

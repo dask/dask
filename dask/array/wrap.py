@@ -150,7 +150,7 @@ def broadcast_trick(func):
 
     >>> x = np.broadcast_to(1, (100,100,100))
     >>> x.base.nbytes
-    8
+    4
 
     Those array are not only more efficient locally, but dask serialisation is
     aware of the _real_ size of those array and thus can send them around

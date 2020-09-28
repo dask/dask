@@ -1167,7 +1167,7 @@ class Array(DaskMethodsMixin):
         >>> y.chunks
         ((nan, nan, nan),)
         >>> y.compute_chunk_sizes()  # in-place computation
-        dask.array<getitem, shape=(3,), dtype=int64, chunksize=(2,), chunktype=numpy.ndarray>
+        dask.array<getitem, shape=(3,), dtype=int32, chunksize=(2,), chunktype=numpy.ndarray>
         >>> y.chunks
         ((2, 1, 0),)
 
@@ -3837,11 +3837,11 @@ def asarray(a, **kwargs):
     >>> import numpy as np
     >>> x = np.arange(3)
     >>> da.asarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
+    dask.array<array, shape=(3,), dtype=int32, chunksize=(3,), chunktype=numpy.ndarray>
 
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+    dask.array<array, shape=(2, 3), dtype=int32, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
     if isinstance(a, Array):
         return a
@@ -3877,11 +3877,11 @@ def asanyarray(a):
     >>> import numpy as np
     >>> x = np.arange(3)
     >>> da.asanyarray(x)
-    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
+    dask.array<array, shape=(3,), dtype=int32, chunksize=(3,), chunktype=numpy.ndarray>
 
     >>> y = [[1, 2, 3], [4, 5, 6]]
     >>> da.asanyarray(y)
-    dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
+    dask.array<array, shape=(2, 3), dtype=int32, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
     if isinstance(a, Array):
         return a

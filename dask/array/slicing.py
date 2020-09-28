@@ -38,11 +38,11 @@ def sanitize_index(ind):
     >>> sanitize_index([2, 3, 5])
     array([2, 3, 5])
     >>> sanitize_index([True, False, True, False])
-    array([0, 2])
+    array([0, 2], dtype=int64)
     >>> sanitize_index(np.array([1, 2, 3]))
     array([1, 2, 3])
     >>> sanitize_index(np.array([False, True, True]))
-    array([1, 2])
+    array([1, 2], dtype=int64)
     >>> type(sanitize_index(np.int32(0)))
     <class 'int'>
     >>> sanitize_index(1.0)
