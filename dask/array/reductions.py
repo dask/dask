@@ -678,8 +678,10 @@ def moment_combine(
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
     total = totals.sum(axis=axis, **kwargs)
-    mu = divide(total, n, dtype=dtype)
-    inner_term = divide(totals, ns, dtype=dtype) - mu
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mu = divide(total, n, dtype=dtype)
+        inner_term = divide(totals, ns, dtype=dtype) - mu
 
     xs = [
         _moment_helper(Ms, ns, inner_term, o, sum, axis, kwargs)

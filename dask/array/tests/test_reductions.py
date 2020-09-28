@@ -701,9 +701,10 @@ def test_object_reduction(method):
 @pytest.mark.parametrize("func", ["nanvar", "nanstd"])
 def test_nan_func_does_not_warn(func):
     # non-regression test for #6105
-    x = np.arange(10, dtype="f8")
-    x[:6] = np.nan
-    d = da.from_array(x, chunks=5)
+    x = np.ones((10,)) * np.nan
+    x[0] = 1
+    x[1] = 2
+    d = da.from_array(x, chunks=2)
     with pytest.warns(None) as rec:
         getattr(da, func)(d).compute()
     assert not rec  # did not warn
