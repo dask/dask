@@ -2569,6 +2569,13 @@ class Client:
             if actors is not None and actors is not True and actors is not False:
                 actors = list(self._expand_key(actors))
 
+            if restrictions:
+                restrictions = keymap(tokey, restrictions)
+                restrictions = valmap(list, restrictions)
+
+            if loose_restrictions is not None:
+                loose_restrictions = list(map(tokey, loose_restrictions))
+
             keyset = set(keys)
 
             values = {
@@ -2579,55 +2586,60 @@ class Client:
             if values:
                 dsk = subs_multiple(dsk, values)
 
-            d = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
-            extra_futures = set.union(*[v[1] for v in d.values()]) if d else set()
-            extra_keys = {tokey(future.key) for future in extra_futures}
-            dsk2 = str_graph({k: v[0] for k, v in d.items()}, extra_keys)
-            dsk3 = {k: v for k, v in dsk2.items() if k is not v}
-            for future in extra_futures:
+            # Unpack remote data in `dsk`, which are "WrappedKeys" that are
+            # unknown to `dsk` but known to the scheduler.
+            dsk = {k: unpack_remotedata(v) for k, v in dsk.items()}
+            unpacked_futures = (
+                set.union(*[v[1] for v in dsk.values()]) if dsk else set()
+            )
+            for future in unpacked_futures:
                 if future.client is not self:
                     msg = "Inputs contain futures that were created by another client."
                     raise ValueError(msg)
+                if tokey(future.key) not in self.futures:
+                    raise CancelledError(tokey(future.key))
+            unpacked_futures_deps = {}
+            for k, v in dsk.items():
+                if len(v[1]):
+                    unpacked_futures_deps[k] = {f.key for f in v[1]}
+            dsk = {k: v[0] for k, v in dsk.items()}
 
-            if restrictions:
-                restrictions = keymap(tokey, restrictions)
-                restrictions = valmap(list, restrictions)
-
-            if loose_restrictions is not None:
-                loose_restrictions = list(map(tokey, loose_restrictions))
-
-            future_dependencies = {
-                tokey(k): {tokey(f.key) for f in v[1]} for k, v in d.items()
-            }
-
-            for s in future_dependencies.values():
-                for v in s:
-                    if v not in self.futures:
-                        raise CancelledError(v)
-
+            # Find dependencies for the scheduler,
             dependencies = {k: get_dependencies(dsk, k) for k in dsk}
 
             if priority is None:
-                priority = dask.order.order(dsk, dependencies=dependencies)
+                # Removing all unpacked futures before calling order()
+                unpacked_keys = {future.key for future in unpacked_futures}
+                stripped_dsk = {k: v for k, v in dsk.items() if k not in unpacked_keys}
+                stripped_deps = {
+                    k: v - unpacked_keys
+                    for k, v in dependencies.items()
+                    if k not in unpacked_keys
+                }
+                priority = dask.order.order(stripped_dsk, dependencies=stripped_deps)
                 priority = keymap(tokey, priority)
 
+            # Append the dependencies of unpacked futures.
+            for k, v in unpacked_futures_deps.items():
+                dependencies[k] = set(dependencies.get(k, ())) | v
+
+            # The scheduler expect all keys to be strings
             dependencies = {
                 tokey(k): [tokey(dep) for dep in deps]
                 for k, deps in dependencies.items()
                 if deps
             }
-            for k, deps in future_dependencies.items():
-                if deps:
-                    dependencies[k] = list(set(dependencies.get(k, ())) | deps)
+            dsk = str_graph(dsk, extra_values={f.key for f in unpacked_futures})
 
             if isinstance(retries, Number) and retries > 0:
-                retries = {k: retries for k in dsk3}
+                retries = {k: retries for k in dsk}
 
+            # Create futures before sending graph (helps avoid contention)
             futures = {key: Future(key, self, inform=False) for key in keyset}
             self._send_to_scheduler(
                 {
                     "op": "update-graph",
-                    "tasks": valmap(dumps_task, dsk3),
+                    "tasks": valmap(dumps_task, dsk),
                     "dependencies": dependencies,
                     "keys": list(map(tokey, keys)),
                     "restrictions": restrictions or {},
