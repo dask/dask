@@ -4399,3 +4399,19 @@ def test_fuse_roots():
     res = ddf1.where(ddf2)
     hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
     hlg.validate()
+
+
+def test_enforce_alignment():
+    df1 = pd.DataFrame({"A": [1, 2, 3, 3, 2, 3], "B": [1, 2, 3, 4, 5, 6]})
+    df2 = pd.DataFrame({"A": [3, 1, 2], "C": [1, 2, 3]})
+
+    def merge(a, b):
+        res = pd.merge(a, b, left_on="A", right_on="A", how="left")
+        return res
+
+    expected = merge(df1, df2)
+
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    actual = ddf1.map_partitions(merge, df2, enforce_alignment=False)
+
+    assert_eq(actual, expected, check_index=False, check_divisions=False)
