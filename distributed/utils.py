@@ -371,10 +371,8 @@ class LoopRunner:
                 # We're expecting the loop to run in another thread,
                 # avoid re-using this thread's assigned loop
                 self._loop = IOLoop()
-            self._should_close_loop = True
         else:
             self._loop = loop
-            self._should_close_loop = False
         self._asynchronous = asynchronous
         self._loop_thread = None
         self._started = False
