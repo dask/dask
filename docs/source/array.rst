@@ -109,4 +109,4 @@ transfer costs, and because NumPy releases the GIL well.  It is also quite
 effective on a cluster using the `dask.distributed`_ scheduler.
 
 .. _`dask.distributed`: https://distributed.dask.org/en/latest/
-.. _`NEP-13's type-casting heirarchy`: https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy
+.. _`NEP-13's type-casting hierarchy`: https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy

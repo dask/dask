@@ -400,7 +400,7 @@ def test_plan_rechunk_5d():
     _assert_steps(steps, [(c, c, c, f, c), (c, c, c, f, f)])
 
 
-def test_plan_rechunk_heterogenous():
+def test_plan_rechunk_heterogeneous():
     c = (10,) * 1  # coarse
     f = (1,) * 10  # fine
     cf = c + f

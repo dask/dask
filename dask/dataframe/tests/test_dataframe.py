@@ -4054,7 +4054,7 @@ def test_map_partition_array(func):
 @pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
-    # Aviod searchsorted failure.
+    # Avoid searchsorted failure.
     pytest.importorskip("numba", minversion="0.40.0")
 
     df = pd.DataFrame(
