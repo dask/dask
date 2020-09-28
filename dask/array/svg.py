@@ -45,7 +45,9 @@ def svg_2d(chunks, offset=(0, 0), skew=(0, 0), size=200, sizes=None):
     sizes = sizes or draw_sizes(shape, size=size)
     y, x = grid_points(chunks, sizes)
 
-    lines, (min_x, max_x, min_y, max_y) = svg_grid(x, y, offset=offset, skew=skew)
+    lines, (min_x, max_x, min_y, max_y) = svg_grid(
+        x, y, offset=offset, skew=skew, size=size
+    )
 
     header = (
         '<svg width="%d" height="%d" style="stroke:rgb(0,0,0);stroke-width:1" >\n'
@@ -77,12 +79,14 @@ def svg_3d(chunks, size=200, sizes=None, offset=(0, 0)):
     ox, oy = offset
 
     xy, (mnx, mxx, mny, mxy) = svg_grid(
-        x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0)
+        x / 1.7, y, offset=(ox + 10, oy + 0), skew=(1, 0), size=size
     )
 
-    zx, (_, _, _, max_x) = svg_grid(z, x / 1.7, offset=(ox + 10, oy + 0), skew=(0, 1))
+    zx, (_, _, _, max_x) = svg_grid(
+        z, x / 1.7, offset=(ox + 10, oy + 0), skew=(0, 1), size=size
+    )
     zy, (min_z, max_z, min_y, max_y) = svg_grid(
-        z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0)
+        z, y, offset=(ox + max_x + 10, oy + max_x), skew=(0, 0), size=size
     )
 
     header = (
@@ -180,7 +184,7 @@ def svg_lines(x1, y1, x2, y2):
     return lines
 
 
-def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
+def svg_grid(x, y, offset=(0, 0), skew=(0, 0), size=200):
     """Create lines of SVG text that show a grid
 
     Parameters
@@ -208,7 +212,9 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
     max_x = max(x1.max(), x2.max())
     max_y = max(y1.max(), y2.max())
 
-    h_lines = ["", "  <!-- Horizontal lines -->"] + svg_lines(x1, y1, x2, y2)
+    h_lines = []
+    if len(y) < size:
+        h_lines = ["", "  <!-- Horizontal lines -->"] + svg_lines(x1, y1, x2, y2)
 
     # Vertical lines
     x1 = x + offset[0]
@@ -222,13 +228,16 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0)):
     if skew[1]:
         x2 += skew[1] * y.max()
 
-    v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
+    v_lines = []
+    if len(x) < size:
+        v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
 
+    color = "ECB172" if len(x) < size and len(y) < size else "8B4903"
+    corners = f"{x1[0]},{y1[0]} {x1[-1]},{y1[-1]} {x2[-1]},{y2[-1]} {x2[0]},{y2[0]}"
     rect = [
         "",
         "  <!-- Colored Rectangle -->",
-        '  <polygon points="%f,%f %f,%f %f,%f %f,%f" style="fill:#ECB172A0;stroke-width:0"/>'
-        % (x1[0], y1[0], x1[-1], y1[-1], x2[-1], y2[-1], x2[0], y2[0]),
+        f'  <polygon points="{corners}" style="fill:#{color}A0;stroke-width:0"/>',
     ]
 
     return h_lines + v_lines + rect, (min_x, max_x, min_y, max_y)

@@ -79,6 +79,14 @@ def test_draw_sizes():
     assert b < c * 5
 
 
+def test_too_many_lines_fills_sides_darker():
+    data = da.ones((16000, 2400, 3600), chunks=(1, 2400, 3600))
+    text = data.to_svg()
+    assert "8B4903" in text
+    assert text.count("Horizontal lines") == 2
+    assert text.count("\n") < 100
+
+
 def test_3d():
     text = da.ones((10, 10, 10, 10, 10)).to_svg()
     assert text.count("<svg") == 1
