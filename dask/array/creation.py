@@ -73,7 +73,16 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return empty(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
+    result = empty(
+        shape,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
+    result._meta = a._meta
+    return result
 
 
 def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -115,7 +124,7 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return ones(
+    result = ones(
         shape,
         dtype=(dtype or a.dtype),
         order=order,
@@ -123,6 +132,8 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
         name=name,
         meta=a._meta,
     )
+    result._meta = a._meta
+    return result
 
 
 def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -164,7 +175,7 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return zeros(
+    result = zeros(
         shape,
         dtype=(dtype or a.dtype),
         order=order,
@@ -172,6 +183,8 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
         name=name,
         meta=a._meta,
     )
+    result._meta = a._meta
+    return result
 
 
 def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shape=None):
@@ -217,7 +230,7 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return full(
+    result = full(
         shape,
         fill_value,
         dtype=(dtype or a.dtype),
@@ -226,6 +239,8 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
         name=name,
         meta=a._meta,
     )
+    result._meta = a._meta
+    return result
 
 
 def _get_like_function_shapes_chunks(a, chunks, shape):
