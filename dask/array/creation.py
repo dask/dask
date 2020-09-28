@@ -81,7 +81,9 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
         name=name,
         meta=a._meta,
     )
-    result._meta = a._meta
+    shape_meta = result._meta.shape
+    result._meta = a._meta  # preserves arraytype in repr_html
+    result._meta.shape = shape_meta  # preserves ndim if array reshaped
     return result
 
 
@@ -132,7 +134,9 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
         name=name,
         meta=a._meta,
     )
-    result._meta = a._meta
+    shape_meta = result._meta.shape
+    result._meta = a._meta  # preserves arraytype in repr_html
+    result._meta.shape = shape_meta  # preserves ndim if array reshaped
     return result
 
 
@@ -183,7 +187,9 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
         name=name,
         meta=a._meta,
     )
-    result._meta = a._meta
+    shape_meta = result._meta.shape
+    result._meta = a._meta  # preserves arraytype in repr_html
+    result._meta.shape = shape_meta  # preserves ndim if array reshaped
     return result
 
 
@@ -239,7 +245,9 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
         name=name,
         meta=a._meta,
     )
-    result._meta = a._meta
+    shape_meta = result._meta.shape
+    result._meta = a._meta  # preserves arraytype in repr_html
+    result._meta.shape = shape_meta  # preserves ndim if array reshaped
     return result
 
 
