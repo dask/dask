@@ -216,7 +216,7 @@ def test_diagonal():
     assert_eq(da.diagonal(v, axis1=-1), np.diagonal(v, axis1=-1))
     assert_eq(da.diagonal(v, offset=1, axis1=-1), np.diagonal(v, offset=1, axis1=-1))
 
-    # Heterogenous chunks.
+    # Heterogeneous chunks.
     v = cupy.arange(2 * 3 * 4 * 5 * 6).reshape((2, 3, 4, 5, 6))
     v = da.from_array(
         v, chunks=(1, (1, 2), (1, 2, 1), (2, 1, 2), (5, 1)), asarray=False

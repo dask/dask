@@ -242,7 +242,7 @@ def test_full_groupby_multilevel(grouper, reverse):
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
-    # last one causes a DeprcationWarning from pandas.
+    # last one causes a DeprecationWarning from pandas.
     # See https://github.com/pandas-dev/pandas/issues/16481
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -1964,7 +1964,7 @@ def test_groupby_cov(columns):
     # MultiIndex
     if isinstance(columns, np.ndarray):
         result = result.compute()
-        # don't bother checking index -- MulitIndex levels are in a frozenlist
+        # don't bother checking index -- MultiIndex levels are in a frozenlist
         result.columns = result.columns.astype(np.dtype("O"))
         assert_eq(expected, result, check_index=False)
     else:
@@ -2404,7 +2404,7 @@ def test_groupby_sort_argument_agg(agg, sort):
     assert_eq(result, result_pd)
     if sort:
         # Check order of index if sort==True
-        # (no guarentee that order will match otherwise)
+        # (no guarantee that order will match otherwise)
         assert_eq(result.index, result_pd.index)
 
 
