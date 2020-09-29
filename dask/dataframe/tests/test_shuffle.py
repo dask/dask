@@ -17,7 +17,6 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm, assert_categorical_equal
 from dask import delayed
 from dask.base import compute_as_if_collection
-from dask.utils import ensure_dict
 from dask.optimization import cull
 from dask.dataframe.shuffle import (
     shuffle,
