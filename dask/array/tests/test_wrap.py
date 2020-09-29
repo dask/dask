@@ -12,7 +12,7 @@ def test_ones():
     x = np.array(a)
     assert (x == np.ones((10, 10), "i4")).all()
 
-    assert a.name.startswith("ones_like-")
+    assert a.name.startswith("ones-")
 
 
 def test_size_as_list():
@@ -39,7 +39,7 @@ def test_full():
     assert (a.compute() == 100).all()
     assert a.dtype == a.compute(scheduler="sync").dtype == "i8"
 
-    assert a.name.startswith("full_like-")
+    assert a.name.startswith("full-")
 
 
 def test_full_error_nonscalar_fill_value():

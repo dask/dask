@@ -165,7 +165,8 @@ def broadcast_trick(func):
     if func.__doc__ is not None:
         inner.__doc__ = func.__doc__
         inner.__name__ = func.__name__
-
+        if inner.__name__.endswith('_like'):  # strip _like from ones_like, etc
+            inner.__name__ = inner.__name__[:-5]
     return inner
 
 
