@@ -69,7 +69,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype, meta=kwargs.get('meta', None))
 
 
 def wrap_func_like(func, *args, **kwargs):
