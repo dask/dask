@@ -64,6 +64,18 @@ function to run the asynchronous function:
    client.sync(f)
 
 
+.. note: Blocking operations like the .compute() method aren’t ok to use in
+         asynchronous mode. Instead you’ll have to use the Client.compute
+         method
+
+
+.. code-block:: python
+
+    async with Client(asynchronous=True) as client:
+        arr = da.random.random((1000, 1000), chunks=(1000, 100))
+        await client.compute(arr.mean())
+
+
 Example
 -------
 
