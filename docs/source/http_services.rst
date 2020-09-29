@@ -2,7 +2,7 @@ HTTP endpoints
 ==============
 
 A subset of the following pages will be available from the scheduler or
-workers of a running cluster. The list of currently available endpoins can
+workers of a running cluster. The list of currently available endpoints can
 be found by examining ``/sitemap.json``.
 
 

@@ -149,7 +149,7 @@ async def test_dont_steal_fast_tasks_compute_time(c, s, *workers):
     def do_nothing(x, y=None):
         pass
 
-    # execute and meassure runtime once
+    # execute and measure runtime once
     await wait(c.submit(do_nothing, 1))
 
     futures = c.map(do_nothing, range(1000), y=x)
@@ -166,7 +166,7 @@ async def test_dont_steal_fast_tasks_blacklist(c, s, a, b):
     x = c.submit(slowinc, 1, workers=[b.address])
 
     # If the blacklist of fast tasks is tracked somewhere else, this needs to be
-    # changed. This test requies *any* key which is blacklisted.
+    # changed. This test requires *any* key which is blacklisted.
     from distributed.stealing import fast_tasks
 
     blacklisted_key = next(iter(fast_tasks))
@@ -174,7 +174,7 @@ async def test_dont_steal_fast_tasks_blacklist(c, s, a, b):
     def fast_blacklisted(x, y=None):
         # The task should observe a certain computation time such that we can
         # ensure that it is not stolen due to the blacklisting. If it is too
-        # fast, the standard mechansim shouldn't allow stealing
+        # fast, the standard mechanism shouldn't allow stealing
         import time
 
         time.sleep(0.01)

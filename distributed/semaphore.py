@@ -386,7 +386,7 @@ class Semaphore:
         self.client._periodic_callbacks[self._periodic_callback_name] = pc
 
         # Need to start the callback using IOLoop.add_callback to ensure that the
-        # PC uses the correct event lopp.
+        # PC uses the correct event loop.
         self.client.io_loop.add_callback(pc.start)
 
     def register(self):

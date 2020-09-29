@@ -6130,7 +6130,7 @@ async def test_performance_report(c, s, a, b):
 
 
 @pytest.mark.asyncio
-async def test_client_gather_semaphor_loop(cleanup):
+async def test_client_gather_semaphore_loop(cleanup):
     async with Scheduler(port=0) as s:
         async with Client(s.address, asynchronous=True) as c:
             assert c._gather_semaphore._loop is c.loop.asyncio_loop
