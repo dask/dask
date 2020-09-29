@@ -69,7 +69,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype, meta=kwargs.get('meta', None))
+    return Array(dsk, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
 def wrap_func_like(func, *args, **kwargs):
@@ -165,7 +165,7 @@ def broadcast_trick(func):
     if func.__doc__ is not None:
         inner.__doc__ = func.__doc__
         inner.__name__ = func.__name__
-        if inner.__name__.endswith('_like'):  # strip _like from ones_like, etc
+        if inner.__name__.endswith("_like"):  # strip _like from ones_like, etc
             inner.__name__ = inner.__name__[:-5]
     return inner
 
