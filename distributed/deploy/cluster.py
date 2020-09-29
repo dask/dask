@@ -91,6 +91,15 @@ class Cluster:
         self.status = Status.closed
 
     def close(self, timeout=None):
+        # If the cluster is already closed, we're already done
+        if self.status == Status.closed:
+            if self.asynchronous:
+                future = asyncio.Future()
+                future.set_result(None)
+                return future
+            else:
+                return
+
         with suppress(RuntimeError):  # loop closed during process shutdown
             return self.sync(self._close, callback_timeout=timeout)
 
