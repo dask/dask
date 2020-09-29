@@ -441,6 +441,21 @@ def test_map_overlap_multiarray_variadic():
     assert all(x.compute() == size_per_slice)
 
 
+def test_map_overlap_assumes_shape_matches_first_array_if_trim_is_false():
+    # https://github.com/dask/dask/issues/6681
+    x1 = da.ones((10,), chunks=(5, 5))
+    x2 = x1.rechunk(10)
+
+    def oversum(x):
+        return x[2:-2]
+
+    z1 = da.map_overlap(oversum, x1, depth=2, trim=False)
+    assert z1.shape == (10,)
+
+    z2 = da.map_overlap(oversum, x2, depth=2, trim=False)
+    assert z2.shape == (10,)
+
+
 def test_map_overlap_deprecated_signature():
     def func(x):
         return np.array(x.sum())
@@ -461,7 +476,7 @@ def test_map_overlap_deprecated_signature():
     with pytest.warns(FutureWarning):
         y = da.map_overlap(x, func, 1, "reflect", False)
         assert y.compute() == 5
-        assert y.shape == (5,)
+        assert y.shape == (3,)
 
 
 def test_nearest_overlap():
