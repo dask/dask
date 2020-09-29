@@ -869,7 +869,10 @@ def test_svd_flip_correction(shape, chunks, dtype):
 @pytest.mark.parametrize("u_based", [True, False])
 def test_svd_flip_sign(dtype, u_based):
     try:
-        x = np.array([[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]], dtype=dtype)
+        x = np.array(
+            [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]],
+            dtype=dtype,
+        )
     except TypeError:
         pytest.skip("128-bit floats not supported by NumPy")
     u, v = svd_flip(x, x.T, u_based_decision=u_based)
