@@ -713,6 +713,8 @@ def map_overlap(
         assert all(type(c) is int for x in xs for cc in x.chunks for c in cc)
 
     assert_int_chunksize(args)
+    if not trim and "chunks" not in kwargs:
+        kwargs["chunks"] = args[0].chunks
     args = [overlap(x, depth=d, boundary=b) for x, d, b in zip(args, depth, boundary)]
     assert_int_chunksize(args)
     x = map_blocks(func, *args, **kwargs)
