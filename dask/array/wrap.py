@@ -137,7 +137,10 @@ w = wrap(wrap_func_shape_as_first_arg)
 
 @curry
 def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
-    return np.broadcast_to(func(meta, shape=1, *args, **kwargs), shape)
+    if shape == ():
+        return np.broadcast_to(func(meta, shape=(), *args, **kwargs), shape)
+    else:
+        return np.broadcast_to(func(meta, shape=1, *args, **kwargs), shape)
 
 
 def broadcast_trick(func):
