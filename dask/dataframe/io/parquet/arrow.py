@@ -166,12 +166,31 @@ def _get_all_partition_keys(ds):
 
 
 def _collect_pyarrow_dataset_frags(
-    ds, filters, valid_paths, fs, split_row_groups, handle_divisions
+    ds, filters, valid_paths, fs, split_row_groups, gather_statistics
 ):
     """Collect all dataset fragments while applying filters.
 
     Used by `ArrowDatasetEngine` only.
     """
+
+    if not (split_row_groups or filters or gather_statistics):
+        # Don't need to process real metadata if
+        # we are not gathering statistics, splitting
+        # by row-group, filtering, or dealing with partitions.
+        metadata = []
+        for i, frag in enumerate(ds.get_fragments()):
+            if i == 0:
+                if pa_ds._get_partition_keys(frag.partition_expression):
+                    break
+            metadata.append(frag.path)
+        if len(metadata):
+            partition_info = {
+                "partitions": [],
+                "partition_keys": {},
+                "partition_names": [],
+            }
+            return metadata, partition_info
+
     # Get/transate filters
     ds_filters = None
     if filters is not None:
@@ -802,23 +821,28 @@ class ArrowDatasetEngine(Engine):
         schema = ds.schema
         base = ""
 
+        # At this point, we know if `split_row_groups` should be
+        # set to `True` by default.  If the user has not specified
+        # this option, we will only collect statistics if there is
+        # a global "_metadata" file available, otherwise we will
+        # opt for `gather_statistics=False`. For `ArrowDatasetEngine`,
+        # statistics are only required to calculate divisions
+        # and/or aggregate row-groups using `chunksize` (not for
+        # filtering).
+        #
         # By default, we will create an output partition for each
         # row group in the dataset (`split_row_groups=True`).
-        # However, we will NOT split by row-group if the user has
-        # specified `gather_statistics=False`, because this can be
+        # However, we will NOT split by row-group if
+        # `gather_statistics=False`, because this can be
         # interpreted as an indication that metadata overhead should
         # be avoided at all costs.
-        if split_row_groups is None and gather_statistics is not False:
-            split_row_groups = True
-
-        # Check if we will need to handle divisions later.
-        handle_divisions = (
-            (gather_statistics is not False)
-            and (index is not False)
-            and (
-                index or bool(_get_pandas_metadata(schema).get("index_columns", False))
-            )
-        )
+        if gather_statistics is None:
+            gather_statistics = False
+        if split_row_groups is None:
+            if gather_statistics:
+                split_row_groups = True
+            else:
+                split_row_groups = False
 
         # Generate list of row-group fragments and call it `metadata`
         metadata, partition_info = _collect_pyarrow_dataset_frags(
@@ -827,20 +851,8 @@ class ArrowDatasetEngine(Engine):
             valid_paths,
             fs,
             split_row_groups,
-            handle_divisions,
+            gather_statistics,
         )
-
-        if not (
-            split_row_groups
-            or gather_statistics
-            or handle_divisions
-            or partition_info["partition_names"]
-            or filters
-        ):
-            # Don't need to process real metadata if
-            # we are not calculating divisions, splitting
-            # by row-group, or dealing with partitioned data
-            metadata = [frag.path for frag in metadata]
 
         return (
             schema,
