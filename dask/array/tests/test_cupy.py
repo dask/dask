@@ -24,6 +24,7 @@ functions = [
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
+    lambda x: da.ones_like(x),
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.xfail(
