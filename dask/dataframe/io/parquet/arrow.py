@@ -165,8 +165,21 @@ def _get_all_partition_keys(ds):
     return categories, pkeys
 
 
+def _frag_subset(old_frag, row_groups):
+    """Create new fragment with row-group subset.
+
+    Used by `ArrowDatasetEngine` only.
+    """
+    return old_frag.format.make_fragment(
+        old_frag.path,
+        old_frag.filesystem,
+        old_frag.partition_expression,
+        row_groups=row_groups,
+    )
+
+
 def _collect_pyarrow_dataset_frags(
-    ds, filters, valid_paths, fs, split_row_groups, gather_statistics
+    ds, filters, valid_paths, fs, split_row_groups, gather_statistics, read_from_path
 ):
     """Collect all dataset fragments while applying filters.
 
@@ -189,7 +202,8 @@ def _collect_pyarrow_dataset_frags(
                 "partition_keys": {},
                 "partition_names": [],
             }
-            return metadata, partition_info
+            read_from_path = True
+            return metadata, partition_info, read_from_path
 
     # Get/transate filters
     ds_filters = None
@@ -202,6 +216,25 @@ def _collect_pyarrow_dataset_frags(
     partition_names = list(categories)
     for name in partition_names:
         partition_obj.append(PartitionObj(name, categories[name]))
+
+    # Only pass fragments to `read_partition` tasks if necessary.
+    #
+    # Since our metadata is based on `FileFragment` objects, we
+    # need to use `FileFragment.to_table` to apply filters and/or
+    # to account for a lack of `ParquetPartitions` data (if
+    # the dataset is partitioned).  In these cases, we need to send
+    # the actual fragments to the `read_partition` task in place of
+    # the file path.
+    #
+    # If we dont need to pass `FileFragment` objects in the graph,
+    # we shouldn't.  Doing this (1) increases the size of the graph,
+    # and (2) does not perform better than creating/reading from a
+    # `ParquetFile` object on the worker.
+    if read_from_path is None:
+        if filters or partition_names:
+            read_from_path = False
+        else:
+            read_from_path = True
 
     # Split by row-groups and apply filters
     partition_keys = {}  # See `partition_info` description below
@@ -222,28 +255,52 @@ def _collect_pyarrow_dataset_frags(
             ]
 
         # Append fragements to our "metadata" list
-        if ds_filters:
+        if ds_filters or (split_row_groups and not read_from_path):
             # If we have filters, we need to split the row groups to apply them.
             # If any row-groups are filtered out, we convert the remaining row-groups
             # to a NEW (filtered) fragment, and append the filtered fragment to our
             # metadata.
+
+            # Collect list of filtered row-group fragments
             filtered_row_groups = [
                 rg_frag.row_groups[0].id
                 for rg_frag in file_frag.split_by_row_group(
                     ds_filters, schema=ds.schema
                 )
             ]
-            if len(file_frag.row_groups) > len(filtered_row_groups):
-                filtered_frag = file_frag.format.make_fragment(
-                    file_frag.path,
-                    file_frag.filesystem,
-                    file_frag.partition_expression,
-                    row_groups=filtered_row_groups,
-                )
-                metadata.append(filtered_frag)
+
+            # Row group count before (`num_row_groups_i`) and
+            # after (`num_row_groups`) filtering
+            num_row_groups_f = len(filtered_row_groups)
+            num_row_groups_i = len(file_frag.row_groups)
+
+            if split_row_groups:
+                # Splitting by row-group.
+                k = int(split_row_groups)
+                if k >= num_row_groups_f:
+                    # Split is larger than the number of row-groups in the file.
+                    if num_row_groups_f < num_row_groups_i:
+                        # 1+ row-groups are filtered - Need new fragment.
+                        metadata.append(_frag_subset(file_frag, filtered_row_groups))
+                    else:
+                        # Nothing was filtered - Use original fragment.
+                        metadata.append(file_frag)
+                else:
+                    # Splits are smaller than the number of row-groups in the file.
+                    # We will need to create multiple new fragments.
+                    for rg in range(0, num_row_groups_f, k):
+                        new_row_groups = [
+                            i for i in range(rg, rg + k) if i < num_row_groups_f
+                        ]
+                        metadata.append(_frag_subset(file_frag, new_row_groups))
+            elif num_row_groups_f < num_row_groups_i:
+                # 1+ row-groups are filtered - Need new fragment.
+                metadata.append(_frag_subset(file_frag, filtered_row_groups))
             else:
+                # Use original fragment
                 metadata.append(file_frag)
         else:
+            # No filtering or splitting by row-group - Use original fragment.
             metadata.append(file_frag)
 
     # The `metadata` object is a sorted list of row-group fragments.
@@ -270,7 +327,7 @@ def _collect_pyarrow_dataset_frags(
         "partition_keys": partition_keys,
         "partition_names": partition_names,
     }
-    return metadata, partition_info
+    return metadata, partition_info, read_from_path
 
 
 def _get_pandas_metadata(schema):
@@ -369,6 +426,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
+        read_from_path=None,
         **kwargs,
     ):
 
@@ -383,6 +441,7 @@ class ArrowDatasetEngine(Engine):
             partition_info,
             split_row_groups,
             gather_statistics,
+            read_from_path,
         ) = cls._gather_metadata(
             paths,
             fs,
@@ -390,6 +449,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             index,
+            read_from_path,
             kwargs.get("dataset", {}),
         )
 
@@ -411,6 +471,7 @@ class ArrowDatasetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
+            read_from_path,
         )
 
         return (meta, stats, parts, index)
@@ -754,6 +815,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         filters,
         index,
+        read_from_path,
         dataset_kwargs,
     ):
         """pyarrow.dataset version of _gather_metadata
@@ -845,13 +907,14 @@ class ArrowDatasetEngine(Engine):
                 split_row_groups = False
 
         # Generate list of row-group fragments and call it `metadata`
-        metadata, partition_info = _collect_pyarrow_dataset_frags(
+        metadata, partition_info, read_from_path = _collect_pyarrow_dataset_frags(
             ds,
             filters,
             valid_paths,
             fs,
             split_row_groups,
             gather_statistics,
+            read_from_path,
         )
 
         return (
@@ -861,6 +924,7 @@ class ArrowDatasetEngine(Engine):
             partition_info,
             split_row_groups,
             gather_statistics,
+            read_from_path,
         )
 
     @classmethod
@@ -959,6 +1023,7 @@ class ArrowDatasetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
+        read_from_path,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1018,6 +1083,7 @@ class ArrowDatasetEngine(Engine):
             partition_info,
             data_path,
             fs,
+            read_from_path,
         )
 
     @classmethod
@@ -1092,6 +1158,7 @@ class ArrowDatasetEngine(Engine):
         partition_info,
         data_path,
         fs,
+        read_from_path,
     ):
         """Process row-groups and statistics.
 
@@ -1100,25 +1167,6 @@ class ArrowDatasetEngine(Engine):
 
         partition_keys = partition_info["partition_keys"]
         partition_obj = partition_info["partitions"]
-        partition_names = partition_info["partition_names"]
-
-        # Only pass fragments to `read_partition` tasks if necessary.
-        #
-        # Since our metadata is based on `FileFragment` objects, we
-        # need to use `FileFragment.to_table` to apply filters and/or
-        # to account for a lack of `ParquetPartitions` data (if
-        # the dataset is partitioned).  In these cases, we need to send
-        # the actual fragments to the `read_partition` task in place of
-        # the file path.
-        #
-        # If we dont need to pass `FileFragment` objects in the graph,
-        # we shouldn't.  Doing this (1) increases the size of the graph,
-        # and (2) does not perform better than creating/reading from a
-        # `ParquetFile` object on the worker.
-        if filters or partition_names:
-            preserve_frag = True
-        else:
-            preserve_frag = False
 
         # Get the number of row groups per file
         frag_map = {}
@@ -1226,7 +1274,7 @@ class ArrowDatasetEngine(Engine):
                         continue  # This partition was filtered
                     part = {
                         "piece": (
-                            frag_map[full_path] if preserve_frag else full_path,
+                            full_path if read_from_path else frag_map[full_path],
                             rg_list,
                             pkeys,
                         ),
@@ -1255,7 +1303,7 @@ class ArrowDatasetEngine(Engine):
                     continue  # This partition was filtered
                 part = {
                     "piece": (
-                        frag_map[full_path] if preserve_frag else full_path,
+                        full_path if read_from_path else frag_map[full_path],
                         row_groups,
                         pkeys,
                     ),
@@ -1369,19 +1417,7 @@ class ArrowDatasetEngine(Engine):
                 else:
                     cols.append(name)
 
-            if (row_groups != [None]) and (
-                len(row_groups) < len(path_or_frag.row_groups)
-            ):
-                frag = path_or_frag.format.make_fragment(
-                    path_or_frag.path,
-                    path_or_frag.filesystem,
-                    path_or_frag.partition_expression,
-                    row_groups=row_groups,
-                )
-            else:
-                frag = path_or_frag
-
-            return frag.to_table(
+            return path_or_frag.to_table(
                 use_threads=False,
                 schema=schema,
                 columns=cols,
@@ -1488,6 +1524,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         gather_statistics,
         filters,
         index,
+        read_from_path,
         dataset_kwargs,
     ):
         """Gather parquet metadata into a single data structure.
@@ -1570,6 +1607,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                 partition_info,
                 split_row_groups,
                 gather_statistics,
+                read_from_path,
             )
         else:
             # No _metadata file.
@@ -1597,6 +1635,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     partition_info,
                     split_row_groups,
                     gather_statistics,
+                    read_from_path,
                 )
             # We have not detected a _metadata file, and the user has specified
             # that they want to split by row-group and/or gather statistics.
@@ -1621,6 +1660,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                 partition_info,
                 split_row_groups,
                 gather_statistics,
+                read_from_path,
             )
 
     @classmethod
@@ -1636,6 +1676,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         partition_info,
         data_path,
         fs,
+        read_from_path,
     ):
         """Process row-groups and statistics.
 
