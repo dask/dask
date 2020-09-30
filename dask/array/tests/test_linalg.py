@@ -4,7 +4,6 @@ pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 
 import numpy as np
-import sys
 import scipy.linalg
 
 import dask.array as da
@@ -869,11 +868,13 @@ def test_svd_flip_correction(shape, chunks, dtype):
 @pytest.mark.parametrize("dtype", ["f2", "f4", "f8", "f16", "c8", "c16", "c32"])
 @pytest.mark.parametrize("u_based", [True, False])
 def test_svd_flip_sign(dtype, u_based):
-    if sys.platform == "win32" and dtype in ["f16", "c32"]:
-        pytest.skip("128-bit floats not supported on windows")
-    x = np.array(
-        [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]], dtype=dtype
-    )
+    try:
+        x = np.array(
+            [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]],
+            dtype=dtype,
+        )
+    except TypeError:
+        pytest.skip("128-bit floats not supported by NumPy")
     u, v = svd_flip(x, x.T, u_based_decision=u_based)
     assert u.dtype == x.dtype
     assert v.dtype == x.dtype
