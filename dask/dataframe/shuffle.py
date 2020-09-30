@@ -122,12 +122,12 @@ class ShuffleStage(Layer):
             parts.add(_part)
         return parts
 
-    def _cull_dependencies(self, keys):
+    def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
         Does not require graph materialization.
         """
         deps = defaultdict(set)
-        parts_out = self._keys_to_parts(keys)
+        parts_out = parts_out or self._keys_to_parts(keys)
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
         for part in parts_out:
             out = self.inputs[part]
@@ -144,6 +144,7 @@ class ShuffleStage(Layer):
         Therefore, "culling" the layer only required us to reset this
         parameter.
         """
+        parts_out = self._keys_to_parts(keys)
         culled_layer = ShuffleStage(
             self.name,
             self.column,
@@ -155,9 +156,9 @@ class ShuffleStage(Layer):
             self.ignore_index,
             self.dep_name,
             self.dep_meta,
-            parts_out=self._keys_to_parts(keys),
+            parts_out=parts_out,
         )
-        culled_deps = self._cull_dependencies(keys)
+        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
         return culled_layer, culled_deps
 
     def _rbc_tasks_stage(self):
