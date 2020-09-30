@@ -96,7 +96,7 @@ class Layer(collections.abc.Mapping):
         Warning
         -------
         A layer is allowed to ignore the map on tasks that are part of its internals.
-        For instance, Blockwise will only evoke `func` on the input literals.
+        For instance, Blockwise will only invoke `func` on the input literals.
 
         Parameters
         ----------
@@ -511,7 +511,7 @@ class HighLevelGraph(Mapping):
         Warning
         -------
         A layer is allowed to ignore the map on tasks that are part of its internals.
-        For instance, Blockwise will only evoke `func` on the input literals.
+        For instance, Blockwise will only invoke `func` on the input literals.
 
         Parameters
         ----------
