@@ -201,7 +201,7 @@ class HighLevelGraph(Mapping):
         dependencies: Mapping[str, Set],
         key_dependencies: Optional[Mapping[Hashable, Set]] = None,
     ):
-        self.__keys = None
+        self._keys = None
         self.layers = layers
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies
@@ -213,11 +213,11 @@ class HighLevelGraph(Mapping):
         }
 
     def keyset(self):
-        if self.__keys is None:
-            self.__keys = set()
+        if self._keys is None:
+            self._keys = set()
             for layer in self.layers.values():
-                self.__keys.update(layer.keys())
-        return self.__keys
+                self._keys.update(layer.keys())
+        return self._keys
 
     @property
     def dependents(self):
