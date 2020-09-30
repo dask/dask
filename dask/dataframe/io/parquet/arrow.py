@@ -262,8 +262,9 @@ def _collect_pyarrow_dataset_frags(
             # metadata.
 
             # Collect list of filtered row-group fragments
-            filtered_row_groups = [
-                rg_frag.row_groups[0].id
+            filtered_row_group_frags = [
+                # rg_frag.row_groups[0].id
+                rg_frag
                 for rg_frag in file_frag.split_by_row_group(
                     ds_filters, schema=ds.schema
                 )
@@ -271,17 +272,24 @@ def _collect_pyarrow_dataset_frags(
 
             # Row group count before (`num_row_groups_i`) and
             # after (`num_row_groups`) filtering
-            num_row_groups_f = len(filtered_row_groups)
+            num_row_groups_f = len(filtered_row_group_frags)
             num_row_groups_i = len(file_frag.row_groups)
 
             if split_row_groups:
                 # Splitting by row-group.
                 k = int(split_row_groups)
-                if k >= num_row_groups_f:
+                if k == 1:
+                    # Each output partition corresponds to a single
+                    # row-group - The work is already done.
+                    metadata.extend(filtered_row_group_frags)
+                elif k >= num_row_groups_f:
                     # Split is larger than the number of row-groups in the file.
                     if num_row_groups_f < num_row_groups_i:
                         # 1+ row-groups are filtered - Need new fragment.
-                        metadata.append(_frag_subset(file_frag, filtered_row_groups))
+                        rg_ids = [
+                            rg.row_groups[0].id for rg in filtered_row_group_frags
+                        ]
+                        metadata.append(_frag_subset(file_frag, rg_ids))
                     else:
                         # Nothing was filtered - Use original fragment.
                         metadata.append(file_frag)
@@ -292,10 +300,16 @@ def _collect_pyarrow_dataset_frags(
                         new_row_groups = [
                             i for i in range(rg, rg + k) if i < num_row_groups_f
                         ]
-                        metadata.append(_frag_subset(file_frag, new_row_groups))
+                        if len(new_row_groups) == 1:
+                            # Avoid creating new fragment if we don't need to,
+                            # because it will requir us to parse statistics twice.
+                            metadata.extend(new_row_groups)
+                        else:
+                            metadata.append(_frag_subset(file_frag, new_row_groups))
             elif num_row_groups_f < num_row_groups_i:
                 # 1+ row-groups are filtered - Need new fragment.
-                metadata.append(_frag_subset(file_frag, filtered_row_groups))
+                rg_ids = [rg.row_groups[0].id for rg in filtered_row_group_frags]
+                metadata.append(_frag_subset(file_frag, rg_ids))
             else:
                 # Use original fragment
                 metadata.append(file_frag)
