@@ -164,7 +164,7 @@ def svg_nd(chunks, size=200):
     return header + "\n\n".join(out) + footer
 
 
-def svg_lines(x1, y1, x2, y2):
+def svg_lines(x1, y1, x2, y2, max_n=20):
     """Convert points into lines of text for an SVG plot
 
     Examples
@@ -174,9 +174,15 @@ def svg_lines(x1, y1, x2, y2):
      '  <line x1="1" y1="0" x2="11" y2="1" style="stroke-width:2" />']
     """
     n = len(x1)
+
+    if n > max_n:
+        indices = np.linspace(0, n - 1, max_n, dtype="int")
+    else:
+        indices = range(n)
+
     lines = [
         '  <line x1="%d" y1="%d" x2="%d" y2="%d" />' % (x1[i], y1[i], x2[i], y2[i])
-        for i in range(n)
+        for i in indices
     ]
 
     lines[0] = lines[0].replace(" /", ' style="stroke-width:2" /')
@@ -211,10 +217,9 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0), size=200):
     min_y = min(y1.min(), y2.min())
     max_x = max(x1.max(), x2.max())
     max_y = max(y1.max(), y2.max())
+    max_n = size // 6
 
-    h_lines = []
-    if len(y) < size:
-        h_lines = ["", "  <!-- Horizontal lines -->"] + svg_lines(x1, y1, x2, y2)
+    h_lines = ["", "  <!-- Horizontal lines -->"] + svg_lines(x1, y1, x2, y2, max_n)
 
     # Vertical lines
     x1 = x + offset[0]
@@ -228,11 +233,9 @@ def svg_grid(x, y, offset=(0, 0), skew=(0, 0), size=200):
     if skew[1]:
         x2 += skew[1] * y.max()
 
-    v_lines = []
-    if len(x) < size:
-        v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2)
+    v_lines = ["", "  <!-- Vertical lines -->"] + svg_lines(x1, y1, x2, y2, max_n)
 
-    color = "ECB172" if len(x) < size and len(y) < size else "8B4903"
+    color = "ECB172" if len(x) < max_n and len(y) < max_n else "8B4903"
     corners = f"{x1[0]},{y1[0]} {x1[-1]},{y1[-1]} {x2[-1]},{y2[-1]} {x2[0]},{y2[0]}"
     rect = [
         "",
