@@ -45,7 +45,7 @@ class ShuffleStage(Layer):
         Index of the current shuffle stage.
     npartitions : int
         Number of output partitions for the full (multi-stage) shuffle.
-    n : int
+    npartitions_input : int
         Number of partitions in the original (un-shuffled) DataFrame.
     k : int
         A partition is split into this many groups during each stage.
@@ -67,8 +67,8 @@ class ShuffleStage(Layer):
         inputs,
         stage,
         npartitions,
-        n,
-        k,
+        npartitions_input,
+        nsplits,
         ignore_index,
         dep_name,
         dep_meta,
@@ -79,27 +79,27 @@ class ShuffleStage(Layer):
         self.inputs = inputs
         self.stage = stage
         self.npartitions = npartitions
-        self.n = n
-        self.k = k
+        self.npartitions_input = npartitions_input
+        self.nsplits = nsplits
         self.ignore_index = ignore_index
-        self._name = dep_name
-        self._meta = dep_meta
+        self.dep_name = dep_name
+        self.dep_meta = dep_meta
         self.parts_out = parts_out or range(len(inputs))
 
     def __repr__(self):
-        return "ShuffleStage<name='{}', stage={}, k={}, npartitions={}>".format(
-            self.name, self.stage, self.k, self.npartitions
+        return "ShuffleStage<name='{}', stage={}, nsplits={}, npartitions={}>".format(
+            self.name, self.stage, self.nsplits, self.npartitions
         )
 
     @property
     def _dict(self):
         """Materialize full dict representation"""
         if hasattr(self, "_cached_dict"):
-            return self._cached_dict["dsk"]
+            return self._cached_dict
         else:
             dsk = self._rbc_tasks_stage()
-            self._cached_dict = {"dsk": dsk}
-        return self._cached_dict["dsk"]
+            self._cached_dict = dsk
+        return self._cached_dict
 
     def __getitem__(self, key):
         return self._dict[key]
@@ -131,9 +131,9 @@ class ShuffleStage(Layer):
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
         for part in parts_out:
             out = self.inputs[part]
-            for k in range(self.k):
+            for k in range(self.nsplits):
                 _part = inp_part_map[insert(out, self.stage, k)]
-                deps[(self.name, part)].add((self._name, _part))
+                deps[(self.name, part)].add((self.dep_name, _part))
         return deps
 
     def cull(self, keys, all_keys):
@@ -150,11 +150,11 @@ class ShuffleStage(Layer):
             self.inputs,
             self.stage,
             self.npartitions,
-            self.n,
-            self.k,
+            self.npartitions_input,
+            self.nsplits,
             self.ignore_index,
-            self._name,
-            self._meta,
+            self.dep_name,
+            self.dep_meta,
             parts_out=self._keys_to_parts(keys),
         )
         culled_deps = self._cull_dependencies(keys)
@@ -173,7 +173,7 @@ class ShuffleStage(Layer):
             out = self.inputs[part]
 
             _concat_list = []  # get_item tasks to concat for this output partition
-            for i in range(self.k):
+            for i in range(self.nsplits):
                 # Get out each individual dataframe piece from the dicts
                 _inp = insert(out, self.stage, i)
                 _idx = out[self.stage]
@@ -195,10 +195,12 @@ class ShuffleStage(Layer):
                     _part = inp_part_map[_inp]
                     if self.stage == 0:
                         input_key = (
-                            (self._name, _part) if _part < self.n else self._meta
+                            (self.dep_name, _part)
+                            if _part < self.npartitions_input
+                            else self.dep_meta
                         )
                     else:
-                        input_key = (self._name, _part)
+                        input_key = (self.dep_name, _part)
 
                     # Convert partition into dict of dataframe pieces
                     dsk[(shuffle_group_name, _inp)] = (
@@ -206,8 +208,8 @@ class ShuffleStage(Layer):
                         input_key,
                         self.column,
                         self.stage,
-                        self.k,
-                        self.n,
+                        self.nsplits,
+                        self.npartitions_input,
                         self.ignore_index,
                         self.npartitions,
                     )
@@ -724,6 +726,62 @@ def _simple_rearrange_by_column_tasks(df, column, npartitions, ignore_index=Fals
 def rearrange_by_column_tasks(
     df, column, max_branch=32, npartitions=None, ignore_index=False
 ):
+    """Order divisions of DataFrame so that all values within column(s) align
+
+    This enacts a task-based shuffle.  It contains most of the tricky logic
+    around the complex network of tasks.  Typically before this function is
+    called a new column, ``"_partitions"`` has been added to the dataframe,
+    containing the output partition number of every row.  This function
+    produces a new dataframe where every row is in the proper partition.  It
+    accomplishes this by splitting each input partition into several pieces,
+    and then concatenating pieces from different input partitions into output
+    partitions.  If there are enough partitions then it does this work in
+    stages to avoid scheduling overhead.
+
+    Lets explain the motivation for this further.  Imagine that we have 1000
+    input partitions and 1000 output partitions. In theory we could split each
+    input into 1000 pieces, and then move the 1 000 000 resulting pieces
+    around, and then concatenate them all into 1000 output groups.  This would
+    be fine, but the central scheduling overhead of 1 000 000 tasks would
+    become a bottleneck.  Instead we do this in stages so that we split each of
+    the 1000 inputs into 30 pieces (we now have 30 000 pieces) move those
+    around, concatenate back down to 1000, and then do the same process again.
+    This has the same result as the full transfer, but now we've moved data
+    twice (expensive) but done so with only 60 000 tasks (cheap).
+
+    Note that the `column` input may correspond to a list of columns (rather
+    than just a single column name).  In this case, the `shuffle_group` and
+    `shuffle_group_2` functions will use hashing to map each row to an output
+    partition. This approach may require the same rows to be hased multiple
+    times, but avoids the need to assign a new "_partitions" column.
+
+    Parameters
+    ----------
+    df: dask.dataframe.DataFrame
+    column: str or list
+        A column name on which we want to split, commonly ``"_partitions"``
+        which is assigned by functions upstream.  This could also be a list of
+        columns (in which case shuffle_group will create a hash array/column).
+    max_branch: int
+        The maximum number of splits per input partition.  Defaults to 32.
+        If there are more partitions than this then the shuffling will occur in
+        stages in order to avoid creating npartitions**2 tasks
+        Increasing this number increases scheduling overhead but decreases the
+        number of full-dataset transfers that we have to make.
+    npartitions: Optional[int]
+        The desired number of output partitions
+
+    Returns
+    -------
+    df3: dask.dataframe.DataFrame
+
+    See also
+    --------
+    rearrange_by_column_disk: same operation, but uses partd
+    rearrange_by_column: parent function that calls this or rearrange_by_column_disk
+    shuffle_group: does the actual splitting per-partition
+    """
+
     max_branch = max_branch or 32
     n = df.npartitions
 
@@ -791,193 +849,6 @@ def rearrange_by_column_tasks(
         df2.divisions = (None,) * (npartitions_orig + 1)
 
     return df2
-
-
-def rearrange_by_column_tasks_original(
-    df, column, max_branch=32, npartitions=None, ignore_index=False
-):
-    """Order divisions of DataFrame so that all values within column(s) align
-
-    This enacts a task-based shuffle.  It contains most of the tricky logic
-    around the complex network of tasks.  Typically before this function is
-    called a new column, ``"_partitions"`` has been added to the dataframe,
-    containing the output partition number of every row.  This function
-    produces a new dataframe where every row is in the proper partition.  It
-    accomplishes this by splitting each input partition into several pieces,
-    and then concatenating pieces from different input partitions into output
-    partitions.  If there are enough partitions then it does this work in
-    stages to avoid scheduling overhead.
-
-    Lets explain the motivation for this further.  Imagine that we have 1000
-    input partitions and 1000 output partitions. In theory we could split each
-    input into 1000 pieces, and then move the 1 000 000 resulting pieces
-    around, and then concatenate them all into 1000 output groups.  This would
-    be fine, but the central scheduling overhead of 1 000 000 tasks would
-    become a bottleneck.  Instead we do this in stages so that we split each of
-    the 1000 inputs into 30 pieces (we now have 30 000 pieces) move those
-    around, concatenate back down to 1000, and then do the same process again.
-    This has the same result as the full transfer, but now we've moved data
-    twice (expensive) but done so with only 60 000 tasks (cheap).
-
-    Note that the `column` input may correspond to a list of columns (rather
-    than just a single column name).  In this case, the `shuffle_group` and
-    `shuffle_group_2` functions will use hashing to map each row to an output
-    partition. This approach may require the same rows to be hased multiple
-    times, but avoids the need to assign a new "_partitions" column.
-
-    Parameters
-    ----------
-    df: dask.dataframe.DataFrame
-    column: str or list
-        A column name on which we want to split, commonly ``"_partitions"``
-        which is assigned by functions upstream.  This could also be a list of
-        columns (in which case shuffle_group will create a hash array/column).
-    max_branch: int
-        The maximum number of splits per input partition.  Defaults to 32.
-        If there are more partitions than this then the shuffling will occur in
-        stages in order to avoid creating npartitions**2 tasks
-        Increasing this number increases scheduling overhead but decreases the
-        number of full-dataset transfers that we have to make.
-    npartitions: Optional[int]
-        The desired number of output partitions
-
-    Returns
-    -------
-    df3: dask.dataframe.DataFrame
-
-    See also
-    --------
-    rearrange_by_column_disk: same operation, but uses partd
-    rearrange_by_column: parent function that calls this or rearrange_by_column_disk
-    shuffle_group: does the actual splitting per-partition
-    """
-    max_branch = max_branch or 32
-    n = df.npartitions
-
-    stages = int(math.ceil(math.log(n) / math.log(max_branch)))
-    if stages > 1:
-        k = int(math.ceil(n ** (1 / stages)))
-    else:
-        k = n
-
-    if (npartitions or n) <= max_branch:
-        # We are creating a small number of output partitions.
-        # No need for staged shuffling. Staged shuffling will
-        # sometimes require extra work/communication in this case.
-        return _simple_rearrange_by_column_tasks(
-            df, column, (npartitions or n), ignore_index=ignore_index
-        )
-
-    groups = []
-    splits = []
-    joins = []
-
-    inputs = [tuple(digit(i, j, k) for j in range(stages)) for i in range(k ** stages)]
-
-    token = tokenize(df, column, max_branch)
-    shuffle_join_name = "shuffle-join-" + token
-    shuffle_group_name = "shuffle-group-" + token
-    shuffle_split_name = "shuffle-split-" + token
-    shuffle_token = "shuffle-" + token
-
-    start = {}
-    end = {}
-
-    for idx, inp in enumerate(inputs):
-        group = {}
-        split = {}
-        join = {}
-        start[(shuffle_join_name, 0, inp)] = (
-            (df._name, idx) if idx < df.npartitions else df._meta
-        )
-
-        for stage in range(1, stages + 1):
-            # Convert partition into dict of dataframe pieces
-            group[(shuffle_group_name, stage, inp)] = (
-                shuffle_group,
-                (shuffle_join_name, stage - 1, inp),
-                column,
-                stage - 1,
-                k,
-                n,
-                ignore_index,
-                npartitions,
-            )
-
-            _concat_list = []
-            for i in range(k):
-                # Get out each individual dataframe piece from the dicts
-                split[(shuffle_split_name, stage, i, inp)] = (
-                    getitem,
-                    (shuffle_group_name, stage, inp),
-                    i,
-                )
-
-                _concat_list.append(
-                    (
-                        shuffle_split_name,
-                        stage,
-                        inp[stage - 1],
-                        insert(inp, stage - 1, i),
-                    )
-                )
-
-            # concatenate those pieces together, with their friends
-            join[(shuffle_join_name, stage, inp)] = (
-                _concat,
-                _concat_list,
-                ignore_index,
-            )
-
-        groups.append(group)
-        splits.append(split)
-        joins.append(join)
-
-        end[(shuffle_token, idx)] = (shuffle_join_name, stages, inp)
-
-    groups.extend(splits)
-    groups.extend(joins)
-
-    dsk = toolz.merge(start, end, *(groups))
-    graph = HighLevelGraph.from_collections(shuffle_token, dsk, dependencies=[df])
-
-    df2 = new_dd_object(graph, shuffle_token, df._meta, df.divisions)
-
-    if npartitions is not None and npartitions != df.npartitions:
-        token = tokenize(df2, npartitions)
-        repartition_group_token = "repartition-group-" + token
-
-        dsk = {
-            (repartition_group_token, i): (
-                shuffle_group_2,
-                k,
-                column,
-                ignore_index,
-                npartitions,
-            )
-            for i, k in enumerate(df2.__dask_keys__())
-        }
-
-        repartition_get_name = "repartition-get-" + token
-
-        for p in range(npartitions):
-            dsk[(repartition_get_name, p)] = (
-                shuffle_group_get,
-                (repartition_group_token, p % df.npartitions),
-                p,
-            )
-
-        graph2 = HighLevelGraph.from_collections(
-            repartition_get_name, dsk, dependencies=[df2]
-        )
-        df3 = new_dd_object(
-            graph2, repartition_get_name, df2._meta, [None] * (npartitions + 1)
-        )
-    else:
-        df3 = df2
-        df3.divisions = (None,) * (df.npartitions + 1)
-
-    return df3
 
 
 ########################################################
