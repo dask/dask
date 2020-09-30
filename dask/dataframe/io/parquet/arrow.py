@@ -219,8 +219,15 @@ def _collect_pyarrow_dataset_frags(
     # Split by row-groups and apply filters
     partition_keys = {}  # See `partition_info` description below
     metadata = []  # List of row-group fragments
+
+    # Start with sorted (by path) list of file-based fragments
+    file_frags = sorted(
+        [frag for frag in ds.get_fragments(ds_filters)],
+        key=lambda x: natural_sort_key(x.path),
+    )
+
     # Loop over file fragments
-    for file_frag in ds.get_fragments(ds_filters):
+    for file_frag in file_frags:
         # If valid_paths is not None, the user passed in a list
         # of files containing a _metadata file.  Since we used
         # the _metadata file to generate our dataset object , we need
@@ -234,7 +241,7 @@ def _collect_pyarrow_dataset_frags(
                 for name in partition_names
             ]
 
-        # Append fragements to our "metadata" listc
+        # Append fragements to our "metadata" list
         if ds_filters or (split_row_groups and not read_from_paths):
             # If we have filters, we need to split the row groups to apply them.
             # If any row-groups are filtered out, we convert the remaining row-groups
@@ -296,11 +303,10 @@ def _collect_pyarrow_dataset_frags(
             # No filtering or splitting by row-group - Use original fragment.
             metadata.append(file_frag)
 
-    # The `metadata` object is a sorted list of row-group fragments.
+    # The final `metadata` object is a sorted list of row-group fragments.
     # This is different from a `FileMetadata` object (used by the legacy
     # code path), but it does contain much of the same information.
-    metadata = sorted(metadata, key=lambda x: natural_sort_key(x.path))
-
+    #
     # The `partition_info` dict summarizes information needed to handle
     # nested-directory (hive) partitioning.
     #
@@ -422,6 +428,8 @@ class ArrowDatasetEngine(Engine):
         read_from_paths=None,
         **kwargs,
     ):
+
+        read_from_paths = read_from_paths or False
 
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
@@ -1187,7 +1195,6 @@ class ArrowDatasetEngine(Engine):
         cmax_last = {}
         for frag in metadata:
             fpath = frag.path
-            frag_map[fpath] = frag
             if gather_statistics or split_row_groups:
                 # If we are gathering statistics or splitting
                 # by row-group, we need to ensure our fragment
@@ -1196,8 +1203,10 @@ class ArrowDatasetEngine(Engine):
                     frag.ensure_complete_metadata()
                 elif gather_statistics and frag.row_groups[0].statistics is None:
                     frag.ensure_complete_metadata()
+                frag_map[(fpath, frag.row_groups[0].id)] = frag
             else:
                 file_row_groups[fpath] = [None]
+                frag_map[(fpath, None)] = frag
                 continue
             for row_group in frag.row_groups:
                 file_row_groups[fpath].append(row_group.id)
@@ -1284,7 +1293,9 @@ class ArrowDatasetEngine(Engine):
                         continue  # This partition was filtered
                     part = {
                         "piece": (
-                            full_path if read_from_paths else frag_map[full_path],
+                            full_path
+                            if read_from_paths
+                            else frag_map[(full_path, rg_list[0])],
                             rg_list,
                             pkeys,
                         ),
@@ -1313,7 +1324,9 @@ class ArrowDatasetEngine(Engine):
                     continue  # This partition was filtered
                 part = {
                     "piece": (
-                        full_path if read_from_paths else frag_map[full_path],
+                        full_path
+                        if read_from_paths
+                        else frag_map[(full_path, row_groups[0])],
                         row_groups,
                         pkeys,
                     ),

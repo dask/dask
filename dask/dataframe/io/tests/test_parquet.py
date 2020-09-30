@@ -2502,6 +2502,8 @@ def test_split_row_groups_filter_pyarrow(tmpdir):
         filters=filters,
     )
 
+    ddf2.compute(scheduler="sync")
+
     assert search_val in ddf3["i32"]
     assert_eq(
         ddf2[ddf2["i32"] == search_val].compute(),
