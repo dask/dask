@@ -87,6 +87,30 @@ class Layer(collections.abc.Mapping):
         """
         return {k: keys_in_tasks(all_hlg_keys, [v]) for k, v in self.items()}
 
+    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "Layer":
+        """Map `func` on tasks in the layer and returns a new layer.
+
+        `func` should take an iterable of the tasks as input and return a new
+        iterable as output and **cannot** change the dependencies between Layers.
+
+        Warning
+        -------
+        A layer is allowed to ignore the map on tasks that are part of its internals.
+        For instance, Blockwise will only evoke `func` on the input literals.
+
+        Parameters
+        ----------
+        func : callable
+            The function to call on tasks
+
+        Returns
+        -------
+        layer : Layer
+            A new layer containing the transformed tasks
+        """
+
+        return BasicLayer({k: func(v) for k, v in self.items()})
+
 
 class BasicLayer(Layer):
     """Basic implementation of `Layer`
@@ -477,6 +501,33 @@ class HighLevelGraph(Mapping):
             else:
                 layers[k] = v
         return HighLevelGraph(layers, self.dependencies)
+
+    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "HighLevelGraph":
+        """Map `func` on all tasks and returns a new high level graph.
+
+        `func` should take an iterable of the tasks as input and return a new
+        iterable as output and **cannot** change the dependencies between Layers.
+
+        Warning
+        -------
+        A layer is allowed to ignore the map on tasks that are part of its internals.
+        For instance, Blockwise will only evoke `func` on the input literals.
+
+        Parameters
+        ----------
+        func : callable
+            The function to call on tasks
+
+        Returns
+        -------
+        hlg : HighLevelGraph
+            A high level graph containing the transformed tasks
+        """
+
+        return HighLevelGraph(
+            {k: v.map_tasks(func) for k, v in self.layers.items()},
+            self.dependencies,
+        )
 
     def validate(self):
         # Check dependencies

@@ -1,10 +1,11 @@
+from functools import partial
 import os
 
 import pytest
 
 import dask.array as da
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph, BasicLayer
+from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
 from dask.blockwise import Blockwise
 
 
@@ -81,4 +82,28 @@ def test_map_basic_layers(inject_dict):
     layers = list(y.dask.layers.values())
     assert type(layers[0]) == BasicLayer
     assert type(layers[1]) == Blockwise
+    assert list(y.compute()) == [42] * 3
+
+
+@pytest.mark.parametrize("use_layer_map_task", [True, False])
+def test_map_tasks(use_layer_map_task):
+    """Check map_tasks() by injecting an +1 to the `40` literal"""
+    y = da.ones(3, chunks=(3,), dtype="int") + 40
+
+    def plus_one(tasks):
+        ret = []
+        for t in tasks:
+            if t == 40:
+                t += 1
+            ret.append(t)
+        return tuple(ret)
+
+    dsk = y.__dask_graph__()
+
+    if use_layer_map_task:
+        # Overwrite Blockwise.map_tasks with Layer.map_tasks
+        blockwise_layer = list(dsk.layers.values())[1]
+        blockwise_layer.map_tasks = partial(Layer.map_tasks, blockwise_layer)
+
+    y.dask = dsk.map_tasks(plus_one)
     assert list(y.compute()) == [42] * 3
