@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Hashable, Optional, Set, Mapping, Iterable, Tuple
+from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -444,6 +444,39 @@ class HighLevelGraph(Mapping):
             }
 
         return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
+
+    def map_basic_layers(
+        self, func: Callable[[BasicLayer], Mapping]
+    ) -> "HighLevelGraph":
+        """Map `func` on each basic layer and returns a new high level graph.
+
+        `func` should take a BasicLayer as input and return a new Mapping as output
+        and **cannot** change the dependencies between Layers.
+
+        If `func` returns a non-BasicLayer type, it will be wrapped in a `BasicLayer`
+        object automatically.
+
+        Parameters
+        ----------
+        func : callable
+            The function to call on each BasicLayer
+
+        Returns
+        -------
+        hlg : HighLevelGraph
+            A high level graph containing the transformed BasicLayers and the other
+            Layers untouched
+        """
+        layers = {}
+        for k, v in self.layers.items():
+            if isinstance(v, BasicLayer):
+                layer = func(v)
+                if not isinstance(layer, BasicLayer):
+                    layer = BasicLayer(layer)
+                layers[k] = layer
+            else:
+                layers[k] = v
+        return HighLevelGraph(layers, self.dependencies)
 
     def validate(self):
         # Check dependencies
