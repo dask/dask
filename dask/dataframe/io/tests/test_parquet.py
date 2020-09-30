@@ -2897,3 +2897,37 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
     else:
         assert_eq(ddf, read_df)
+
+
+@pytest.mark.parametrize("read_from_paths", [True, False])
+@pytest.mark.parametrize("test_filter_partitioned", [True, False])
+def test_pyarrow_dataset_read_from_paths(
+    tmpdir, read_from_paths, test_filter_partitioned
+):
+    check_pyarrow()
+
+    if pa.__version__ <= LooseVersion("0.17.1"):
+        # Using pyarrow.dataset API does not produce
+        # Categorical type for partitioned columns.
+        pytest.skip("PyArrow>0.17.1 Required.")
+
+    fn = str(tmpdir)
+    df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
+    df["b"] = df["b"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    if test_filter_partitioned:
+        ddf.to_parquet(fn, engine="pyarrow", partition_on="b")
+    else:
+        ddf.to_parquet(fn, engine="pyarrow")
+    read_df = dd.read_parquet(
+        fn,
+        engine="pyarrow",
+        filters=[("b", "==", "a")] if test_filter_partitioned else None,
+        read_from_paths=read_from_paths,
+    )
+
+    if test_filter_partitioned:
+        assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
+    else:
+        assert_eq(ddf, read_df)

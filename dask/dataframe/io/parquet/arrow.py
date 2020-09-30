@@ -428,7 +428,8 @@ class ArrowDatasetEngine(Engine):
         read_from_paths=None,
         **kwargs,
     ):
-
+        # Reading from fragments by default.
+        # (This does not affect `ArrowLegacyEngine` behavior)
         read_from_paths = read_from_paths or False
 
         # Gather necessary metadata information. This includes
