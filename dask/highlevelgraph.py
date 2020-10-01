@@ -87,6 +87,18 @@ class Layer(collections.abc.Mapping):
         """
         return {k: keys_in_tasks(all_hlg_keys, [v]) for k, v in self.items()}
 
+    def __reduce__(self):
+        """Default serialization implementation, which materialize the Layer
+
+        This should follow the standard pickle protocol[1] but must always return
+        a tuple and the arguments for the callable object must be compatibly with
+        msgpack. This is because Distributed uses msgpack to send Layers to the
+        scheduler.
+
+        [1] <https://docs.python.org/3/library/pickle.html#object.__reduce__>
+        """
+        return (BasicLayer, (dict(self),))
+
 
 class BasicLayer(Layer):
     """Basic implementation of `Layer`
