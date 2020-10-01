@@ -3585,7 +3585,7 @@ class DataFrame(_Frame):
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
             key = list(key)
             df = self.assign(**{k: value for k in key})
-        elif isinstance(key, (pd.DataFrame, DataFrame)):
+        elif is_dataframe_like(key) or isinstance(key, DataFrame)
             df = self.where(~key, value)
         elif not isinstance(key, str):
             raise NotImplementedError(f"Item assignment with {type(key)} not supported")
