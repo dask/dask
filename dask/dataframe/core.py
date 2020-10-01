@@ -5092,7 +5092,7 @@ def apply_concat_apply(
     if sort is not None:
         if sort and split_out > 1:
             raise NotImplementedError(
-                "Cannot guarentee sorted keys for `split_out>1`."
+                "Cannot guarantee sorted keys for `split_out>1`."
                 " Try using split_out=1, or grouping with sort=False."
             )
         aggregate_kwargs = aggregate_kwargs or {}
