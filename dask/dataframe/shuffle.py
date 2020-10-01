@@ -25,8 +25,8 @@ from . import methods
 logger = logging.getLogger(__name__)
 
 
-class ShuffleStage(Layer):
-    """Shuffle HighLevelGraph Layer
+class ShuffleLayer(Layer):
+    """Shuffle-stage HighLevelGraph layer
 
     High-level graph layer corresponding to a single stage of
     an inter-partition shuffle operation.
@@ -87,7 +87,7 @@ class ShuffleStage(Layer):
         self.parts_out = parts_out or range(len(inputs))
 
     def __repr__(self):
-        return "ShuffleStage<name='{}', stage={}, nsplits={}, npartitions={}>".format(
+        return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
             self.name, self.stage, self.nsplits, self.npartitions
         )
 
@@ -137,7 +137,7 @@ class ShuffleStage(Layer):
         return deps
 
     def cull(self, keys, all_keys):
-        """Cull the ShuffleStage layer.
+        """Cull a ShuffleLayer HighLevelGraph layer.
 
         The underlying graph will only include the necessary
         tasks to produce the keys (indicies) included in `parts_out`.
@@ -145,7 +145,7 @@ class ShuffleStage(Layer):
         parameter.
         """
         parts_out = self._keys_to_parts(keys)
-        culled_layer = ShuffleStage(
+        culled_layer = ShuffleLayer(
             self.name,
             self.column,
             self.inputs,
@@ -798,7 +798,7 @@ def rearrange_by_column_tasks(
     token = tokenize(df, stages, column, n, k)
     for stage in range(stages):
         stage_name = f"shuffle-{stage}-{token}"
-        stage_layer = ShuffleStage(
+        stage_layer = ShuffleLayer(
             stage_name,
             column,
             inputs,

@@ -1010,8 +1010,8 @@ def test_set_index_overlap():
     assert_eq(a, b)
 
 
-def test_shufflestage_hlg_layer():
-    # This test checks that the `ShuffleStage` HLG Layer
+def test_shuffle_hlg_layer():
+    # This test checks that the `ShuffleLayer` HLG Layer
     # is used (as expected) for a multi-stage shuffle.
     ddf = dd.from_pandas(
         pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=10
@@ -1028,7 +1028,7 @@ def test_shufflestage_hlg_layer():
     # Check HLG layers beginning with "shuffle-"
     for name, layer in dsk.layers.items():
         if name.startswith("shuffle-"):
-            assert isinstance(layer, dd.shuffle.ShuffleStage)
+            assert isinstance(layer, dd.shuffle.ShuffleLayer)
 
     # Since we already culled the HLG,
     # culling the dictionary should not change the graph
