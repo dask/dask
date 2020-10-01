@@ -218,7 +218,7 @@ def _collect_pyarrow_dataset_frags(
 
     # Split by row-groups and apply filters
     partition_keys = {}  # See `partition_info` description below
-    metadata = []  # List of row-group fragments
+    metadata = []  # List of (fragment, row_group_info) tuples
 
     # Start with sorted (by path) list of file-based fragments
     file_frags = sorted(
@@ -249,12 +249,13 @@ def _collect_pyarrow_dataset_frags(
             # metadata.
 
             # Collect list of filtered row-group fragments
-            filtered_row_group_frags = [
-                rg_frag
-                for rg_frag in file_frag.split_by_row_group(
-                    ds_filters, schema=ds.schema
-                )
-            ]
+            filtered_row_group_frags = []
+            row_group_info = []
+            row_group_ids = []
+            for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
+                filtered_row_group_frags.append(rg_frag)
+                row_group_info.append(rg_frag.row_groups[0])
+                row_group_ids.append(rg_frag.row_groups[0].id)
 
             # Row group count before (`num_row_groups_i`) and
             # after (`num_row_groups`) filtering
@@ -267,18 +268,17 @@ def _collect_pyarrow_dataset_frags(
                 if k == 1:
                     # Each output partition corresponds to a single
                     # row-group - The work is already done.
-                    metadata.extend(filtered_row_group_frags)
+                    metadata.extend([(f, None) for f in filtered_row_group_frags])
                 elif k >= num_row_groups_f:
                     # Split is larger than the number of row-groups in the file.
                     if num_row_groups_f < num_row_groups_i:
                         # 1+ row-groups are filtered - Need new fragment.
-                        rg_ids = [
-                            rg.row_groups[0].id for rg in filtered_row_group_frags
-                        ]
-                        metadata.append(_frag_subset(file_frag, rg_ids))
+                        metadata.append(
+                            (_frag_subset(file_frag, row_group_ids), row_group_info)
+                        )
                     else:
                         # Nothing was filtered - Use original fragment.
-                        metadata.append(file_frag)
+                        metadata.append((file_frag, row_group_info))
                 else:
                     # Splits are smaller than the number of row-groups in the file.
                     # We will need to create multiple new fragments.
@@ -288,24 +288,32 @@ def _collect_pyarrow_dataset_frags(
                         ]
                         if len(new_row_groups) == 1:
                             # Avoid creating new fragment if we don't need to,
-                            # because it will requir us to parse statistics twice.
-                            metadata.extend(new_row_groups)
+                            # because it will require us to parse statistics twice.
+                            metadata.append(
+                                (filtered_row_group_frags[new_row_groups[0]], None)
+                            )
                         else:
-                            metadata.append(_frag_subset(file_frag, new_row_groups))
+                            metadata.append(
+                                (
+                                    _frag_subset(file_frag, new_row_groups),
+                                    [row_group_info[i] for i in new_row_groups],
+                                )
+                            )
             elif num_row_groups_f < num_row_groups_i:
                 # 1+ row-groups are filtered - Need new fragment.
-                rg_ids = [rg.row_groups[0].id for rg in filtered_row_group_frags]
-                metadata.append(_frag_subset(file_frag, rg_ids))
+                metadata.append(
+                    (_frag_subset(file_frag, row_group_ids), row_group_info)
+                )
             else:
                 # Use original fragment
-                metadata.append(file_frag)
+                metadata.append((file_frag, row_group_info))
         else:
             # No filtering or splitting by row-group - Use original fragment.
-            metadata.append(file_frag)
+            metadata.append((file_frag, None))
 
-    # The final `metadata` object is a sorted list of row-group fragments.
-    # This is different from a `FileMetadata` object (used by the legacy
-    # code path), but it does contain much of the same information.
+    # The final `metadata` object is a list of (fragment, row_group_info)
+    # tuples.  This is different from a `FileMetadata` object (used by the
+    # legacy code path), but it does contain much of the same information.
     #
     # The `partition_info` dict summarizes information needed to handle
     # nested-directory (hive) partitioning.
@@ -926,7 +934,8 @@ class ArrowDatasetEngine(Engine):
             else:
                 split_row_groups = False
 
-        # Generate list of row-group fragments and call it `metadata`
+        # Generate list of (fragment, row_group_info) tuples
+        # and call it `metadata`
         metadata, partition_info = _collect_pyarrow_dataset_frags(
             ds,
             filters,
@@ -1194,22 +1203,29 @@ class ArrowDatasetEngine(Engine):
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
-        for frag in metadata:
+        for (frag, row_group_info) in metadata:
             fpath = frag.path
+            # Note that we include an optional `row_group_info` list
+            # in each element of `metadata` to avoid the need to
+            # re-read row-group statistics here. Once pyarrow allows
+            # row-group statistics to be preserved after a `make_fragment`
+            # call, we can always rely on `frag.row_groups`.
+            row_group_info = row_group_info or frag.row_groups
             if gather_statistics or split_row_groups:
-                # If we are gathering statistics or splitting
-                # by row-group, we need to ensure our fragment
+                # If we are gathering statistics or splitting by
+                # row-group, we may need to ensure our fragment
                 # metadata is complete.
-                if frag.row_groups is None:
+                if row_group_info is None:
                     frag.ensure_complete_metadata()
-                elif gather_statistics and frag.row_groups[0].statistics is None:
+                elif gather_statistics and row_group_info[0].statistics is None:
                     frag.ensure_complete_metadata()
-                frag_map[(fpath, frag.row_groups[0].id)] = frag
+                    row_group_info = frag.row_groups
+                frag_map[(fpath, row_group_info[0].id)] = frag
             else:
                 file_row_groups[fpath] = [None]
                 frag_map[(fpath, None)] = frag
                 continue
-            for row_group in frag.row_groups:
+            for row_group in row_group_info:
                 file_row_groups[fpath].append(row_group.id)
                 if gather_statistics:
                     statistics = row_group.statistics
