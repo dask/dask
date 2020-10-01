@@ -29,17 +29,17 @@ logger = logging.getLogger(__name__)
 class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
-    High-level graph layer corresponding to a simple shuffle operation
-    in which each output partition depends on all input partitio
+    High-level graph layer for a simple shuffle operation in which
+    each output partition depends on all input partitions.
 
     Parameters
     ----------
     name : str
-        Name of new shuffled collection.
+        Name of new shuffled output collection.
     column : str or list of str
         Column(s) to be used to map rows to output partitions (by hashing).
     npartitions : int
-        Number of output partitions for the shuffle.
+        Number of output partitions.
     npartitions_input : int
         Number of partitions in the original (un-shuffled) DataFrame.
     ignore_index: bool, default False
