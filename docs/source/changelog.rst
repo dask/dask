@@ -1697,7 +1697,7 @@ DataFrame
 -  meta_nonempty works with categorical index (:pr:`4505`) `Jim Crist`_
 -  Add module name to expected meta error message (:pr:`4499`) `Matthew Rocklin`_
 -  groupby-nunique works on empty chunk (:pr:`4504`) `Jim Crist`_
--  Propogate index metadata if not specified (:pr:`4509`) `Jim Crist`_
+-  Propagate index metadata if not specified (:pr:`4509`) `Jim Crist`_
 
 Documentation
 +++++++++++++
@@ -2521,7 +2521,7 @@ Array
 - Fix handling of negative indexes in ``vindex`` and raise errors for out of bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
 - Add ``float_power`` ufunc (:pr:`2962`) (:pr:`2969`) `John A Kirkham`_
-- Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
+- Compatibility for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
 - Add ``block`` (:pr:`2650`) `John A Kirkham`_
 - Add ``frompyfunc`` (:pr:`3030`) `Jim Crist`_
 - Add the ``return_stored`` option to ``store`` for chaining stored results (:pr:`2980`) `John A Kirkham`_
@@ -2534,7 +2534,7 @@ DataFrame
 - Fixed ``dd.read_csv`` so that passing instances of ``CategoricalDtype`` in ``dtype`` will result in known categoricals (:pr:`2997`) `Tom Augspurger`_
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
-- Compatability for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
+- Compatibility for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
 - Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:`2973`) `Tom Augspurger`_
 - Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - Add ``dd.Series.rename`` (:pr:`3027`) `Jim Crist`_
@@ -2599,7 +2599,7 @@ Core
 -  Calling compute within a dask.distributed task defaults to distributed scheduler (:pr:`2762`) `Matthew Rocklin`_
 -  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`) `Matthew Rocklin`_
 -  Fully remove dask.async module, use dask.local instead (:pr:`2828`) `Thomas Caswell`_
--  Compatability with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
+-  Compatibility with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
 -  Reduce test memory usage (:pr:`2782`) `Jim Crist`_
 -  Add Dask collection interface (:pr:`2748`) `Jim Crist`_
 -  Update Dask collection interface during XArray integration (:pr:`2847`) `Matthew Rocklin`_

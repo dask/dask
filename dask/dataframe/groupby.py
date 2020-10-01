@@ -400,7 +400,7 @@ def _cov_chunk(df, *index):
     Returns
     -------
     tuple
-        Processed X, Multipled Cols,
+        Processed X, Multiplied Cols,
     """
     if is_series_like(df):
         df = df.to_frame()
