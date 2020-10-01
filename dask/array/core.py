@@ -1404,7 +1404,9 @@ class Array(DaskMethodsMixin):
             return _HANDLED_FUNCTIONS[func](*args, **kwargs)
 
         # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
-        if not all(type is Array or is_valid_chunk_type(type) for type in types):
+        if not all(
+            issubclass(type, Array) or is_valid_chunk_type(type) for type in types
+        ):
             return NotImplemented
 
         # Now try to find a matching function name.  If that doesn't work, we may
