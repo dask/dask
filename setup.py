@@ -55,6 +55,7 @@ setup(
     cmdclass=versioneer.get_cmdclass(),
     description="Parallel PyData with Task Scheduling",
     url="https://github.com/dask/dask/",
+    author="Matthew Rocklin",
     maintainer="Matthew Rocklin",
     maintainer_email="mrocklin@gmail.com",
     license="BSD",
