@@ -9,8 +9,8 @@ from fsspec.utils import stringify_path
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....utils import import_required, natural_sort_key, parse_bytes
+from collections.abc import Mapping
 from ...methods import concat
-from ....highlevelgraph import Layer
 
 
 try:
@@ -29,16 +29,14 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ParquetSubgraph(Layer):
+class ParquetSubgraph(Mapping):
     """
     Subgraph for reading Parquet files.
 
     Enables optimizations (see optimize_read_parquet_getitem).
     """
 
-    def __init__(
-        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
-    ):
+    def __init__(self, name, engine, fs, meta, columns, index, parts, kwargs):
         self.name = name
         self.engine = engine
         self.fs = fs
@@ -47,11 +45,10 @@ class ParquetSubgraph(Layer):
         self.index = index
         self.parts = parts
         self.kwargs = kwargs
-        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
 
     def __repr__(self):
         return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
+            self.name, len(self.parts), list(self.columns)
         )
 
     def __getitem__(self, key):
@@ -64,7 +61,7 @@ class ParquetSubgraph(Layer):
         if name != self.name:
             raise KeyError(key)
 
-        if i not in self.part_ids:
+        if i < 0 or i >= len(self.parts):
             raise KeyError(key)
 
         part = self.parts[i]
@@ -83,28 +80,11 @@ class ParquetSubgraph(Layer):
         )
 
     def __len__(self):
-        return len(self.part_ids)
+        return len(self.parts)
 
     def __iter__(self):
-        for i in self.part_ids:
+        for i in range(len(self)):
             yield (self.name, i)
-
-    def get_dependencies(self, all_hlg_keys):
-        return {k: set() for k in self}
-
-    def cull(self, keys, all_hlg_keys):
-        ret = ParquetSubgraph(
-            name=self.name,
-            engine=self.engine,
-            fs=self.fs,
-            meta=self.meta,
-            columns=self.columns,
-            index=self.index,
-            parts=self.parts,
-            kwargs=self.kwargs,
-            part_ids={i for i in self.part_ids if (self.name, i) in keys},
-        )
-        return ret, ret.get_dependencies(all_hlg_keys)
 
 
 def read_parquet(

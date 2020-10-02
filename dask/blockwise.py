@@ -1,13 +1,14 @@
 import itertools
 import warnings
+from collections.abc import Mapping
 
 import numpy as np
 
 import tlz as toolz
 
-from .core import reverse_dict, flatten, keys_in_tasks, find_all_possible_keys
+from .core import reverse_dict, keys_in_tasks
 from .delayed import unpack_collections
-from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
+from .highlevelgraph import HighLevelGraph
 from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
@@ -131,7 +132,7 @@ def blockwise(
     return subgraph
 
 
-class Blockwise(Layer):
+class Blockwise(Mapping):
     """Tensor Operation
 
     This is a lazily constructed mapping for tensor operation graphs.
@@ -205,30 +206,21 @@ class Blockwise(Layer):
     @property
     def _dict(self):
         if hasattr(self, "_cached_dict"):
-            return self._cached_dict["dsk"]
+            return self._cached_dict
         else:
             keys = tuple(map(blockwise_token, range(len(self.indices))))
             dsk, _ = fuse(self.dsk, [self.output])
             func = SubgraphCallable(dsk, self.output, keys)
-
-            key_deps = {}
-            non_blockwise_keys = set()
-            dsk = make_blockwise_graph(
+            self._cached_dict = make_blockwise_graph(
                 func,
                 self.output,
                 self.output_indices,
                 *list(toolz.concat(self.indices)),
                 new_axes=self.new_axes,
                 numblocks=self.numblocks,
-                concatenate=self.concatenate,
-                key_deps=key_deps,
-                non_blockwise_keys=non_blockwise_keys,
+                concatenate=self.concatenate
             )
-            self._cached_dict = {
-                "dsk": dsk,
-                "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_keys),
-            }
-        return self._cached_dict["dsk"]
+        return self._cached_dict
 
     def __getitem__(self, key):
         return self._dict[key]
@@ -250,14 +242,6 @@ class Blockwise(Layer):
                     out_d[a] = d[a]
 
         return out_d
-
-    def get_dependencies(self, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].get_dependencies(all_hlg_keys)
-
-    def cull(self, keys, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
@@ -369,8 +353,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     numblocks = kwargs.pop("numblocks")
     concatenate = kwargs.pop("concatenate", None)
     new_axes = kwargs.pop("new_axes", {})
-    key_deps = kwargs.pop("key_deps", None)
-    non_blockwise_keys = kwargs.pop("non_blockwise_keys", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
@@ -435,7 +417,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
         else:
             coord_maps.append(None)
             concat_axes.append(None)
-
     # Unpack delayed objects in kwargs
     dsk2 = {}
     if kwargs:
@@ -444,47 +425,33 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             kwargs2 = task
         else:
             kwargs2 = kwargs
-        if non_blockwise_keys is not None:
-            non_blockwise_keys |= find_all_possible_keys([kwargs2])
-
-    # Find all non-blockwise keys in the input arguments
-    if non_blockwise_keys is not None:
-        for arg, ind in argpairs:
-            if ind is None:
-                non_blockwise_keys |= find_all_possible_keys([arg])
 
     dsk = {}
     # Create argument lists
     for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
-        deps = set()
         coords = out_coords + dummies
         args = []
-        for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
+        for cmap, axes, arg_ind in zip(coord_maps, concat_axes, argpairs):
+            arg, ind = arg_ind
             if ind is None:
                 args.append(arg)
             else:
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
                     tups = lol_product((arg,), arg_coords)
-                    deps.update(flatten(tups))
 
                     if concatenate:
                         tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
-                    deps.add(tups)
                 args.append(tups)
-        out_key = (output,) + out_coords
-
         if kwargs:
             val = (apply, func, args, kwargs2)
         else:
             args.insert(0, func)
             val = tuple(args)
-        dsk[out_key] = val
+        dsk[(output,) + out_coords] = val
 
-        if key_deps is not None:
-            key_deps[out_key] = deps
     if dsk2:
         dsk.update(ensure_dict(dsk2))
 
