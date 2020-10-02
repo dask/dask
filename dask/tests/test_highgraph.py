@@ -4,7 +4,7 @@ import pytest
 
 import dask.array as da
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph, BasicLayer
+from dask.highlevelgraph import HighLevelGraph
 
 
 def test_visualize(tmpdir):
@@ -40,20 +40,3 @@ def test_keys_values_items_methods():
     assert keys == [i for i in hg]
     assert values == [hg[i] for i in hg]
     assert items == [(k, v) for k, v in zip(keys, values)]
-
-
-def test_cull():
-    a = {"x": 1, "y": (inc, "x")}
-    layers = {
-        "a": BasicLayer(
-            a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
-        )
-    }
-    dependencies = {"a": set()}
-    hg = HighLevelGraph(layers, dependencies)
-
-    culled_by_x = hg.cull({"x"})
-    assert dict(culled_by_x) == {"x": 1}
-
-    culled_by_y = hg.cull({"y"})
-    assert dict(culled_by_y) == a
