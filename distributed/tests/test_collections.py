@@ -1,3 +1,5 @@
+from distutils.version import LooseVersion
+
 import pytest
 
 pytest.importorskip("numpy")
@@ -11,7 +13,14 @@ from distributed.utils_test import gen_cluster
 from distributed.utils_test import client, cluster_fixture, loop  # noqa F401
 import numpy as np
 import pandas as pd
-import pandas.testing as tm
+
+PANDAS_VERSION = LooseVersion(pd.__version__)
+PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
+
+if PANDAS_GT_100:
+    import pandas.testing as tm  # noqa: F401
+else:
+    import pandas.util.testing as tm  # noqa: F401
 
 
 dfs = [
