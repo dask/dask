@@ -379,9 +379,7 @@ class HighLevelGraph(Mapping):
         if missing_keys:
             for layer in self.layers.values():
                 for k in missing_keys.intersection(layer.keys()):
-                    assert k not in self.key_dependencies
                     self.key_dependencies[k] = layer.get_dependencies(k, all_keys)
-
         return self.key_dependencies
 
     def _fix_hlg_layers_inplace(self):
