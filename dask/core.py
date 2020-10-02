@@ -191,34 +191,6 @@ def keys_in_tasks(keys, tasks, as_list=False):
     return ret if as_list else set(ret)
 
 
-def find_all_possible_keys(tasks) -> set:
-    """Returns all possible keys in `tasks` including hashable literals.
-
-    The definition of a key in a Dask graph is any hashable object
-    that is not a task. This function returns all such objects in
-    `tasks` even if the object is in fact a literal.
-
-    """
-    ret = set()
-    while tasks:
-        work = []
-        for w in tasks:
-            typ = type(w)
-            if typ is tuple and w and callable(w[0]):  # istask(w)
-                work.extend(w[1:])
-            elif typ is list:
-                work.extend(w)
-            elif typ is dict:
-                work.extend(w.values())
-            else:
-                try:
-                    ret.add(w)
-                except TypeError:  # not hashable
-                    pass
-        tasks = work
-    return ret
-
-
 def get_dependencies(dsk, key=None, task=no_default, as_list=False):
     """Get the immediate tasks on which this task depends
 
