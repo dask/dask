@@ -1,6 +1,41 @@
 Changelog
 =========
 
+2.29.0 / 2020-10-02
+-------------------
+
+Array
++++++
+
+- ``_repr_html_``: color sides darker instead of drawing all the lines (:pr:`6683`) `Julia Signell`_
+- Removes warning from ``nanstd`` and ``nanvar`` (:pr:`6667`) `Thomas J Fan`_
+- Get shape of output from original array - ``map_overlap`` (:pr:`6682`) `Julia Signell`_
+- Replace ``np.searchsorted`` with ``bisect`` in indexing (:pr:`6669`) `Joachim B Haga`_
+
+Bag
++++
+
+- Make sure subprocesses have a consistent hash for bag ``groupby`` (:pr:`6660`) `Itamar Turner-Trauring`_
+
+Core
+++++
+
+- Revert "Use ``HighLevelGraph`` layers everywhere in collections (:pr:`6510`)" (:pr:`6697`) `Tom Augspurger`_
+- Use ``pandas.testing`` (:pr:`6687`) `John A Kirkham`_
+- Improve 128-bit floating-point skip in tests (:pr:`6676`) `Elliott Sales de Andrade`_
+
+DataFrame
++++++++++
+
+- Allow setting dataframe items using a bool dataframe (:pr:`6608`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Fix typo (:pr:`6692`) `garanews`_
+- Fix a few typos (:pr:`6678`) `Pav A`_
+
+
 2.28.0 / 2020-09-25
 -------------------
 
@@ -3671,3 +3706,5 @@ Other
 .. _`Rafal Wojdyla`: https://github.com/ravwojdyla
 .. _`Sam Grayson`: https://github.com/charmoniumQ
 .. _`Madhur Tandon`: https://github.com/madhur-tandon
+.. _`Joachim B Haga`: https://github.com/jobh
+.. _`Pav A`: https://github.com/rs2
