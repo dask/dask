@@ -1,6 +1,19 @@
 Changelog
 =========
 
+2.29.0 - 2020-10-02
+-------------------
+
+- Use ``pandas.testing`` (:pr:`4138`) `jakirkham`_
+- Fix a few typos (:pr:`4131`) `Pav A`_
+- Return right away in ``Cluster.close`` if cluster is already closed (:pr:`4116`) `Tom Rochette`_
+- Update async doc with example on ``.compute()`` vs ``client.compute()`` (:pr:`4137`) `Benjamin Zaitlen`_
+- Correctly tear down ``LoopRunner`` in ``Client`` (:pr:`4112`) `Sergey Kozlov`_
+- Simplify ``Client._graph_to_futures()`` (:pr:`4127`) `Mads R. B. Kristensen`_
+- Cleanup new exception traceback (:pr:`4125`) `Krishan Bhasin`_
+- Stop writing config files by default (:pr:`4123`) `Matthew Rocklin`_
+
+
 2.28.0 - 2020-09-25
 -------------------
 
@@ -1972,3 +1985,4 @@ significantly without many new features.
 .. _`Dror Speiser`: https://github.com/drorspei
 .. _`Poruri Sai Rahul`: https://github.com/rahulporuri
 .. _`jennalc`: https://github.com/jennalc
+.. _`Sergey Kozlov`: https://github.com/skozlovf
