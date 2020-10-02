@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Hashable, Optional, Set, Mapping, Iterable, Tuple
+from typing import Hashable, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -152,7 +152,8 @@ class HighLevelGraph(Mapping):
     dependencies : Mapping[str, Set[str]]
         The set of layers on which each layer depends
     key_dependencies : Mapping[Hashable, Set], optional
-        Mapping all keys in the high level graph to their dependencies
+        Mapping (some) keys in the high level graph to their dependencies. If
+        a key is missing, its dependencies will be calculated automatically.
 
     Examples
     --------
@@ -199,7 +200,7 @@ class HighLevelGraph(Mapping):
         self,
         layers: Mapping[str, Mapping],
         dependencies: Mapping[str, Set],
-        key_dependencies: Optional[Mapping[Hashable, Set]] = None,
+        key_dependencies: Mapping[Hashable, Set] = {},
     ):
         self.__keys = None
         self.layers = layers
@@ -357,7 +358,7 @@ class HighLevelGraph(Mapping):
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
 
-    def get_dependencies(self) -> Mapping[Hashable, Set]:
+    def get_all_dependencies(self) -> Mapping[Hashable, Set]:
         """Get dependencies of all keys in the HLG
 
         Returns
@@ -365,9 +366,9 @@ class HighLevelGraph(Mapping):
         map: Mapping
             A map that maps each key to its dependencies
         """
-        if self.key_dependencies is None:
-            all_keys = self.keyset()
-            self.key_dependencies = {}
+        all_keys = self.keyset()
+        missing_keys = all_keys.difference(self.key_dependencies.keys())
+        if missing_keys:
             for layer in self.layers.values():
                 self.key_dependencies.update(layer.get_dependencies(all_keys))
 
