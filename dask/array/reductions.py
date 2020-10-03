@@ -456,40 +456,54 @@ with ignoring(AttributeError):
         )
 
     @derived_from(np)
-    def nancumsum(x, axis, dtype=None, out=None, method="sequential"):
-        if method == "sequential":
-            return cumreduction(
-                chunk.nancumsum, operator.add, 0, x, axis, dtype, out=out
-            )
-        else:
-            return prefixscan(
-                chunk.nancumsum,
-                np.nansum,
-                operator.add,
-                x,
-                axis,
-                dtype,
-                out=out,
-                method=method,
-            )
+    def nancumsum(x, axis, dtype=None, out=None, *, method="sequential"):
+        """Dask added an additional keyword-only argument ``method``.
+
+        method : {'sequential', 'blelloch'}, optional
+            Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+            * 'sequential' performs the cumsum of each prior block before the current block.
+            * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
+              first taking the sum of each block and combines the sums via a binary tree.
+              This method may be faster or more memory efficient depending on workload,
+              scheduler, and hardware.  More benchmarking is necessary.
+        """
+        return cumreduction(
+            chunk.nancumsum,
+            operator.add,
+            0,
+            x,
+            axis,
+            dtype,
+            out=out,
+            method=method,
+            preop=np.nansum,
+        )
 
     @derived_from(np)
-    def nancumprod(x, axis, dtype=None, out=None, method="sequential"):
-        if method == "sequential":
-            return cumreduction(
-                chunk.nancumprod, operator.mul, 1, x, axis, dtype, out=out
-            )
-        else:
-            return prefixscan(
-                chunk.nancumprod,
-                np.nanprod,
-                operator.mul,
-                x,
-                axis,
-                dtype,
-                out=out,
-                method=method,
-            )
+    def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
+        """Dask added an additional keyword-only argument ``method``.
+
+        method : {'sequential', 'blelloch'}, optional
+            Choose which method to use to perform the cumprod.  Default is 'sequential'.
+
+            * 'sequential' performs the cumprod of each prior block before the current block.
+            * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
+              taking the product of each block and combines the products via a binary tree.
+              This method may be faster or more memory efficient depending on workload,
+              scheduler, and hardware.  More benchmarking is necessary.
+        """
+        return cumreduction(
+            chunk.nancumprod,
+            operator.mul,
+            1,
+            x,
+            axis,
+            dtype,
+            out=out,
+            method=method,
+            preop=np.nanprod,
+        )
 
 
 @derived_from(np)
@@ -1081,29 +1095,81 @@ nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
 nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
 
 
-def _compute_prefixscan(func, binop, pre, x, axis, dtype):
+def _prefixscan_combine(func, binop, pre, x, axis, dtype):
+    """Combine results of a parallel prefix scan such as cumsum
+
+    Parameters
+    ----------
+    func : callable
+        Cumulative function (e.g. ``np.cumsum``)
+    binop : callable
+        Associative function (e.g. ``add``)
+    pre : np.array
+        The value calculated in parallel from ``preop``.
+        For example, the sum of all the previous blocks.
+    x : np.array
+        Current block
+    axis : int
+    dtype : dtype
+
+    Returns
+    -------
+    np.array
+    """
     # We could compute this in two tasks.
     # This would allow us to do useful work (i.e., func), while waiting on `pre`.
     # Using one task may guide the scheduler to do better and reduce scheduling overhead.
     return binop(pre, func(x, axis=axis, dtype=dtype))
 
 
-def _compute_prefixscan0(func, x, axis, dtype):
+def _prefixscan_first(func, x, axis, dtype):
+    """Compute the prefix scan (e.g., cumsum) on the first block
+
+    Parameters
+    ----------
+    func : callable
+        Cumulative function (e.g. ``np.cumsum``)
+    x : np.array
+        Current block
+    axis : int
+    dtype : dtype
+
+    Returns
+    -------
+    np.array
+    """
     return func(x, axis=axis, dtype=dtype)
 
 
-def prefixscan(
-    func,
-    batchop,
-    binop,
-    x,
-    axis=None,
-    dtype=None,
-    out=None,
-    method="blelloch",
-):
-    if method not in {"blelloch", "blelloch-split"}:
-        raise ValueError(f"Invalid method: {method}")
+def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
+    """Generic function to perform parallel cumulative scan (a.k.a prefix scan)
+
+    The Blelloch prefix scan is work-efficient and exposes parallelism.
+    A parallel cumsum works by first taking the sum of each block, then do a binary tree
+    merge followed by a fan-out (i.e., the Brent-Kung pattern).  We then take the cumsum
+    of each block and add the sum of the previous blocks.
+
+    When performing a cumsum across N chunks, this method has 2 * lg(N) levels of dependencies.
+    In contrast, the sequential method has N levels of dependencies.
+
+    Floating point operations should be more accurate with this method compared to sequential.
+
+    Parameters
+    ----------
+    func : callable
+        Cumulative function (e.g. ``np.cumsum``)
+    preop : callable
+        Function to get the final value of a cumulative function (e.g., ``np.sum``)
+    binop : callable
+        Associative function (e.g. ``add``)
+    x : dask array
+    axis : int
+    dtype : dtype
+
+    Returns
+    -------
+    dask array
+    """
     if axis is None:
         x = x.flatten()
         axis = 0
@@ -1111,14 +1177,12 @@ def prefixscan(
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
-    name = "{0}-{1}".format(
-        func.__name__, tokenize(func, axis, batchop, binop, x, dtype)
-    )
+    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, preop, binop, x, dtype))
     base_key = (name,)
 
-    # should we update `chunks=`?  Right now, the metadata for batches is incorrect
-    batches = x.map_blocks(batchop, axis=axis, keepdims=True, dtype=dtype)
-    # we don't need the last index until the end
+    # Right now, the metadata for batches is incorrect, but this should be okay
+    batches = x.map_blocks(preop, axis=axis, keepdims=True, dtype=dtype)
+    # We don't need the last index until the end
     *indices, last_index = full_indices = [
         list(
             product(
@@ -1132,7 +1196,7 @@ def prefixscan(
     n_vals = len(prefix_vals)
     level = 0
     if n_vals >= 2:
-        # upsweep
+        # Upsweep
         stride = 1
         stride2 = 2
         while stride2 <= n_vals:
@@ -1149,7 +1213,7 @@ def prefixscan(
             stride2 *= 2
             level += 1
 
-        # downsweep
+        # Downsweep
         # With `n_vals == 3`, we would have `stride = 1` and `stride = 0`, but we need
         # to do a downsweep iteration, so make sure stride2 is at least 2.
         stride2 = builtins.max(2, 2 ** ceil(log2(n_vals // 2)))
@@ -1171,39 +1235,23 @@ def prefixscan(
     if full_indices:
         for index in full_indices[0]:
             dsk[base_key + index] = (
-                _compute_prefixscan0,
+                _prefixscan_first,
                 func,
                 (x.name,) + index,
                 axis,
                 dtype,
             )
-        if method == "blelloch":
-            for indexes, vals in zip(drop(1, full_indices), prefix_vals):
-                for index, val in zip(indexes, vals):
-                    dsk[base_key + index] = (
-                        _compute_prefixscan,
-                        func,
-                        binop,
-                        val,
-                        (x.name,) + index,
-                        axis,
-                        dtype,
-                    )
-        else:  # method == "blelloch-split"
-            # e.g., compute `cumsum` before adding it to the sum of previous values
-            level_key = (level,)
-            for indexes, vals in zip(drop(1, full_indices), prefix_vals):
-                for index, val in zip(indexes, vals):
-                    final_key = base_key + index
-                    func_key = final_key + level_key
-                    dsk[func_key] = (
-                        _compute_prefixscan0,
-                        func,
-                        (x.name,) + index,
-                        axis,
-                        dtype,
-                    )
-                    dsk[final_key] = (binop, val, func_key)
+        for indexes, vals in zip(drop(1, full_indices), prefix_vals):
+            for index, val in zip(indexes, vals):
+                dsk[base_key + index] = (
+                    _prefixscan_combine,
+                    func,
+                    binop,
+                    val,
+                    (x.name,) + index,
+                    axis,
+                    dtype,
+                )
     if len(full_indices) < 2:
         deps = [x]
     else:
@@ -1213,7 +1261,17 @@ def prefixscan(
     return handle_out(out, result)
 
 
-def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
+def cumreduction(
+    func,
+    binop,
+    ident,
+    x,
+    axis=None,
+    dtype=None,
+    out=None,
+    method="sequential",
+    preop=None,
+):
     """Generic function for cumulative reduction
 
     Parameters
@@ -1227,6 +1285,16 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
     x: dask Array
     axis: int
     dtype: dtype
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+        * 'sequential' performs the scan of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel scan.  It exposes parallelism by first
+          calling ``preop`` on each block and combines the values via a binary tree.
+          This method may be faster or more memory efficient depending on workload,
+          scheduler, and hardware.  More benchmarking is necessary.
+    preop: callable, optional
+        Function used by 'blelloch' method like `np.cumsum->np.sum`` or ``np.cumprod->np.prod``
 
     Returns
     -------
@@ -1237,6 +1305,17 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
     cumsum
     cumprod
     """
+    if method == "blelloch":
+        if preop is None:
+            raise TypeError(
+                'cumreduction with "blelloch" method required `preop=` argument'
+            )
+        return prefixscan_blelloch(func, preop, binop, x, axis, dtype, out=out)
+    elif method != "sequential":
+        raise ValueError(
+            f'Invalid method for cumreduction.  Expected "sequential" or "blelloch".  Got: {method!r}'
+        )
+
     if axis is None:
         x = x.flatten()
         axis = 0
@@ -1298,36 +1377,54 @@ def _cumprod_merge(a, b):
 
 @derived_from(np)
 def cumsum(x, axis=None, dtype=None, out=None, method="sequential"):
-    if method == "sequential":
-        return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
-    else:
-        return prefixscan(
-            np.cumsum,
-            np.sum,
-            _cumsum_merge,
-            x,
-            axis,
-            dtype,
-            out=out,
-            method=method,
-        )
+    """Dask added an additional keyword-only argument ``method``.
+
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+        * 'sequential' performs the cumsum of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
+          first taking the sum of each block and combines the sums via a binary tree.
+          This method may be faster or more memory efficient depending on workload,
+          scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        np.cumsum,
+        _cumsum_merge,
+        0,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.sum,
+    )
 
 
 @derived_from(np)
 def cumprod(x, axis=None, dtype=None, out=None, method="sequential"):
-    if method == "sequential":
-        return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
-    else:
-        return prefixscan(
-            np.cumprod,
-            np.prod,
-            _cumprod_merge,
-            x,
-            axis,
-            dtype,
-            out=out,
-            method=method,
-        )
+    """Dask added an additional keyword-only argument ``method``.
+
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumprod.  Default is 'sequential'.
+
+        * 'sequential' performs the cumprod of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
+          taking the product of each block and combines the products via a binary tree.
+          This method may be faster or more memory efficient depending on workload,
+          scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        np.cumprod,
+        _cumprod_merge,
+        1,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.prod,
+    )
 
 
 def topk(a, k, axis=-1, split_every=None):

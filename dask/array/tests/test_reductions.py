@@ -536,7 +536,7 @@ def test_array_reduction_out(func):
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
-@pytest.mark.parametrize("method", ["sequential", "blelloch", "blelloch-split"])
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
 def test_array_cumreduction_axis(func, use_nan, axis, method):
     np_func = getattr(np, func)
     da_func = getattr(da, func)
@@ -645,7 +645,7 @@ def test_topk_argtopk3():
     "func",
     [da.cumsum, da.cumprod, da.argmin, da.argmax, da.min, da.max, da.nansum, da.nanmax],
 )
-@pytest.mark.parametrize("method", ["sequential", "blelloch", "blelloch-split"])
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
 def test_regres_3940(func, method):
     if func in {da.cumsum, da.cumprod}:
         kwargs = {"method": method}

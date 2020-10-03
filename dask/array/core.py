@@ -2252,13 +2252,35 @@ class Array(DaskMethodsMixin):
         )
 
     @derived_from(np.ndarray)
-    def cumsum(self, axis, dtype=None, out=None, method="sequential"):
+    def cumsum(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Dask added an additional keyword-only argument ``method``.
+
+        method : {'sequential', 'blelloch'}, optional
+            Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+            * 'sequential' performs the cumsum of each prior block before the current block.
+            * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
+              first taking the sum of each block and combines the sums via a binary tree.
+              This method may be faster or more memory efficient depending on workload,
+              scheduler, and hardware.  More benchmarking is necessary.
+        """
         from .reductions import cumsum
 
         return cumsum(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
-    def cumprod(self, axis, dtype=None, out=None, method="sequential"):
+    def cumprod(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Dask added an additional keyword-only argument ``method``.
+
+        method : {'sequential', 'blelloch'}, optional
+            Choose which method to use to perform the cumprod.  Default is 'sequential'.
+
+            * 'sequential' performs the cumprod of each prior block before the current block.
+            * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
+              taking the product of each block and combines the products via a binary tree.
+              This method may be faster or more memory efficient depending on workload,
+              scheduler, and hardware.  More benchmarking is necessary.
+        """
         from .reductions import cumprod
 
         return cumprod(self, axis, dtype, out=out, method=method)
