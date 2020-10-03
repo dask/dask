@@ -1,6 +1,38 @@
 Changelog
 =========
 
+2.28.0 / 2020-09-25
+-------------------
+
+Array
++++++
+
+- Partially reverted changes to ``Array`` indexing that produces large changes.
+  This restores the behavior from Dask 2.25.0 and earlier, with a warning
+  when large chunks are produced. A configuration option is provided
+  to avoid creating the large chunks, see :ref:`array.slicing.efficiency`.
+  (:pr:`6665`) `Tom Augspurger`_
+- Add ``meta`` to ``to_dask_array`` (:pr:`6651`) `Kyle Nicholson`_
+- Fix :pr:`6631` and :pr:`6611` (:pr:`6632`) `Rafal Wojdyla`_
+- Infer object in array reductions (:pr:`6629`) `Daniel Saxton`_
+- Adding ``v_based`` flag for ``svd_flip`` (:pr:`6658`) `Eric Czech`_
+- Fix flakey array ``mean`` (:pr:`6656`) `Sam Grayson`_
+
+Core
+++++
+
+- Removed ``dsk`` equality check from ``SubgraphCallable.__eq__`` (:pr:`6666`) `Mads R. B. Kristensen`_
+- Use ``HighLevelGraph`` layers everywhere in collections (:pr:`6510`) `Mads R. B. Kristensen`_
+- Adds hash dunder method to ``SubgraphCallable`` for caching purposes (:pr:`6424`) `Andrew Fulton`_
+- Stop writing commented out config files by default (:pr:`6647`) `Matthew Rocklin`_
+
+DataFrame
++++++++++
+
+- Add support for collect list aggregation via ``agg`` API (:pr:`6655`) `Madhur Tandon`_
+- Slightly better error message (:pr:`6657`) `Julia Signell`_
+
+
 2.27.0 / 2020-09-18
 -------------------
 
@@ -1665,7 +1697,7 @@ DataFrame
 -  meta_nonempty works with categorical index (:pr:`4505`) `Jim Crist`_
 -  Add module name to expected meta error message (:pr:`4499`) `Matthew Rocklin`_
 -  groupby-nunique works on empty chunk (:pr:`4504`) `Jim Crist`_
--  Propogate index metadata if not specified (:pr:`4509`) `Jim Crist`_
+-  Propagate index metadata if not specified (:pr:`4509`) `Jim Crist`_
 
 Documentation
 +++++++++++++
@@ -2489,7 +2521,7 @@ Array
 - Fix handling of negative indexes in ``vindex`` and raise errors for out of bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
 - Add ``float_power`` ufunc (:pr:`2962`) (:pr:`2969`) `John A Kirkham`_
-- Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
+- Compatibility for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
 - Add ``block`` (:pr:`2650`) `John A Kirkham`_
 - Add ``frompyfunc`` (:pr:`3030`) `Jim Crist`_
 - Add the ``return_stored`` option to ``store`` for chaining stored results (:pr:`2980`) `John A Kirkham`_
@@ -2502,7 +2534,7 @@ DataFrame
 - Fixed ``dd.read_csv`` so that passing instances of ``CategoricalDtype`` in ``dtype`` will result in known categoricals (:pr:`2997`) `Tom Augspurger`_
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
-- Compatability for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
+- Compatibility for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
 - Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:`2973`) `Tom Augspurger`_
 - Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - Add ``dd.Series.rename`` (:pr:`3027`) `Jim Crist`_
@@ -2567,7 +2599,7 @@ Core
 -  Calling compute within a dask.distributed task defaults to distributed scheduler (:pr:`2762`) `Matthew Rocklin`_
 -  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`) `Matthew Rocklin`_
 -  Fully remove dask.async module, use dask.local instead (:pr:`2828`) `Thomas Caswell`_
--  Compatability with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
+-  Compatibility with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
 -  Reduce test memory usage (:pr:`2782`) `Jim Crist`_
 -  Add Dask collection interface (:pr:`2748`) `Jim Crist`_
 -  Update Dask collection interface during XArray integration (:pr:`2847`) `Matthew Rocklin`_
@@ -3635,3 +3667,7 @@ Other
 .. _`Noah D Brenowitz`: https://github.com/nbren12
 .. _`Jon Thielen`: https://github.com/jthielen
 .. _`Poruri Sai Rahul`: https://github.com/rahulporuri
+.. _`Kyle Nicholson`: https://github.com/kylejn27
+.. _`Rafal Wojdyla`: https://github.com/ravwojdyla
+.. _`Sam Grayson`: https://github.com/charmoniumQ
+.. _`Madhur Tandon`: https://github.com/madhur-tandon

@@ -687,7 +687,7 @@ class ArrowEngine(Engine):
                 gather_statistics = True
 
         # Finally, construct our list of `parts`
-        # (and a corresponing list of statistics)
+        # (and a corresponding list of statistics)
         parts, stats = _construct_parts(
             fs,
             metadata,
