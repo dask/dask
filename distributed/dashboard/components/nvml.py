@@ -131,29 +131,23 @@ class GPUCurrentLoad(DashboardComponent):
             memory_total = 0
             memory_max = 0
             worker = []
-            i = 0
 
-            for ws in workers:
+            for idx, ws in enumerate(workers):
                 try:
                     info = ws.extra["gpu"]
                 except KeyError:
                     continue
                 metrics = ws.metrics["gpu"]
-                for j, (u, mem_used, mem_total) in enumerate(
-                    zip(
-                        metrics["utilization"],
-                        metrics["memory-used"],
-                        info["memory-total"],
-                    )
-                ):
-                    memory_max = max(memory_max, mem_total)
-                    memory_total += mem_total
-                    utilization.append(int(u))
-                    memory.append(mem_used)
-                    worker.append(ws.address)
-                    gpu_index.append(j)
-                    y.append(i)
-                    i += 1
+                u = metrics["utilization"]
+                mem_used = metrics["memory-used"]
+                mem_total = info["memory-total"]
+                memory_max = max(memory_max, mem_total)
+                memory_total += mem_total
+                utilization.append(int(u))
+                memory.append(mem_used)
+                worker.append(ws.address)
+                gpu_index.append(idx)
+                y.append(idx)
 
             memory_text = [format_bytes(m) for m in memory]
 
