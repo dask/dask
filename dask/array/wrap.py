@@ -189,6 +189,12 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 _full = w(broadcast_trick(np.full_like))
 _full_like = w_like(np.full, func_like=np.full_like)
 
+# workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
+_full.__doc__ = _full.__doc__.replace(
+    "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
+    "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
+)
+
 
 def full(shape, fill_value, *args, **kwargs):
     # np.isscalar has somewhat strange behavior:
