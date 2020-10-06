@@ -1405,7 +1405,7 @@ class Array(DaskMethodsMixin):
 
         # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
         if not all(
-            issubclass(type, Array) or is_valid_chunk_type(type) for type in types
+            type_ is type(self) or is_valid_chunk_type(type_) for type_ in types
         ):
             return NotImplemented
 
