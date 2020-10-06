@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2.30.0 / 2020-10-06
+-------------------
+
+Array
++++++
+
+- Allow ``rechunk`` to evenly split into N chunks (:pr:`6420`) `Scott Sievert`_
+
+
 2.29.0 / 2020-10-02
 -------------------
 
