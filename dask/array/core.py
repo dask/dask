@@ -2269,11 +2269,13 @@ class Array(DaskMethodsMixin):
 
         return squeeze(self, axis)
 
-    def rechunk(self, chunks="auto", threshold=None, block_size_limit=None):
+    def rechunk(
+        self, chunks="auto", threshold=None, block_size_limit=None, balance=False
+    ):
         """ See da.rechunk for docstring """
         from . import rechunk  # avoid circular import
 
-        return rechunk(self, chunks, threshold, block_size_limit)
+        return rechunk(self, chunks, threshold, block_size_limit, balance)
 
     @property
     def real(self):
