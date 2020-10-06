@@ -631,8 +631,9 @@ def bincount(x, weights=None, minlength=0):
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    bins = np.asarray(bins)
-    dtype = np.digitize([0], bins, right=False).dtype
+    from .utils import asarray_safe
+    bins = asarray_safe(bins, like=meta_from_array(a))
+    dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
