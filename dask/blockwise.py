@@ -758,22 +758,20 @@ def rewrite_blockwise(inputs):
                 continue
 
             changed = True
+
+            # Update IO-subgraph information
             if not io_info and inputs[dep].io_name:
                 io_info["io_name"] = inputs[dep].io_name
                 io_info["io_subgraph"] = inputs[dep].io_subgraph
-                io_info["io_key_deps"] = inputs[dep].io_key_deps
-                for d in dependents[dep]:
-                    p = 0
-                    while True:
-                        ref_key = (dep, p)
-                        if ref_key not in io_info["io_key_deps"]:
-                            break
-                        dkey = (d, p)
-                        if dkey in io_info["io_key_deps"]:
-                            io_info["io_key_deps"][dkey].add(ref_key)
-                        else:
-                            io_info["io_key_deps"][dkey] = {ref_key}
-                        p += 1
+                io_key_deps = inputs[dep].io_key_deps.copy()
+                p = 0
+                while True:
+                    if (dep, p) not in io_key_deps:
+                        break
+                    io_key_deps[(root, p)] = io_key_deps[(dep, p)]
+                    del io_key_deps[(dep, p)]
+                    p += 1
+                io_info["io_key_deps"] = io_key_deps
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -857,7 +855,6 @@ def rewrite_blockwise(inputs):
         io_subgraph=io_info.get("io_subgraph", None),
         io_key_deps=io_info.get("io_key_deps", None),
     )
-    # import pdb; pdb.set_trace()
 
     return out
 
