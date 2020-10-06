@@ -335,6 +335,32 @@ def zeros_like_safe(a, shape, **kwargs):
         return np.zeros(shape, **kwargs)
 
 
+def _array_like_safe(np_func, da_func, a, like, **kwargs):
+    if like is a and hasattr(a, "__array_function__"):
+        return a
+
+    if isinstance(like, Array):
+        return da_func(a, **kwargs)
+    elif isinstance(a, Array):
+        a = a.compute(scheduler="sync")
+
+    return np_func(a, like=meta_from_array(like), **kwargs)
+
+
+def asarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asarray(a, **kwargs),
+    otherwise return np.asarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asarray
+
+    return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
+
+
 def asanyarray_safe(a, like, **kwargs):
     """
     If a is dask.array, return dask.array.asanyarray(a, **kwargs),
@@ -346,12 +372,7 @@ def asanyarray_safe(a, like, **kwargs):
     """
     from .core import asanyarray
 
-    if isinstance(like, Array):
-        return asanyarray(a, **kwargs)
-    elif isinstance(a, Array):
-        a = a.compute(scheduler="sync")
-
-    return np.asanyarray(a, like=meta_from_array(like), **kwargs)
+    return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
 
 
 def validate_axis(axis, ndim):
