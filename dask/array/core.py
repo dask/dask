@@ -167,7 +167,7 @@ def implements(*numpy_functions):
     return decorator
 
 
-def _should_delegate(other) -> bool:
+def _should_delegate(self, other) -> bool:
     """Check whether Dask should delegate to the other.
     This implementation follows NEP-13:
     https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
@@ -177,7 +177,9 @@ def _should_delegate(other) -> bool:
     elif (
         hasattr(other, "__array_ufunc__")
         and not is_valid_array_chunk(other)
-        and type(other).__array_ufunc__ is not Array.__array_ufunc__
+        # don't delegate to our own parent classes
+        and not isinstance(self, type(other))
+        and type(self) is not type(other)
     ):
         return True
     return False
@@ -192,7 +194,7 @@ def check_if_handled_given_other(f):
 
     @wraps(f)
     def wrapper(self, other):
-        if _should_delegate(other):
+        if _should_delegate(self, other):
             return NotImplemented
         else:
             return f(self, other)
@@ -1230,7 +1232,7 @@ class Array(DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
-            if _should_delegate(x):
+            if _should_delegate(self, x):
                 return NotImplemented
 
         if method == "__call__":
@@ -1405,7 +1407,10 @@ class Array(DaskMethodsMixin):
 
         # First, verify that all types are handled by Dask. Otherwise, return NotImplemented.
         if not all(
-            type_ is type(self) or is_valid_chunk_type(type_) for type_ in types
+            # Accept our own superclasses as recommended by NEP-13
+            # (https://numpy.org/neps/nep-0013-ufunc-overrides.html#subclass-hierarchies)
+            issubclass(type(self), type_) or is_valid_chunk_type(type_)
+            for type_ in types
         ):
             return NotImplemented
 
