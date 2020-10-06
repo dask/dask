@@ -8,6 +8,8 @@ The rechunk module defines:
 import math
 import heapq
 from functools import reduce
+from typing import Tuple
+from warnings import warn
 
 from itertools import product, chain, count
 from operator import getitem, add, mul, itemgetter
@@ -182,7 +184,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
+def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=False):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -200,6 +202,12 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
+    balance : bool, default False
+        If True, try to make each chunk to be the same size.
+
+        This means ``balance=True`` will remove any small leftover chunks, so
+        using ``x.rechunk(chunks=len(x) // N, balance=True)``
+        will almost certainly result in ``N`` chunks.
 
     Examples
     --------
@@ -219,10 +227,23 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     dimension to attain blocks of a uniform block size
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
+
+    If a chunk size does not divide the dimension then rechunk will leave any
+    unevenness to the last chunk.
+
+    >>> x.rechunk(chunks=(400, -1)).chunks
+    ((400, 400, 200), (1000,))
+
+    However if you want more balanced chunks, and don't mind Dask choosing a
+    different chunksize for you then you can use the ``balance=True`` option.
+
+    >>> x.rechunk(chunks=(400, -1), balance=True).chunks
+    ((500, 500), (1000,))
     """
     # don't rechunk if array is empty
     if x.ndim > 0 and all(s == 0 for s in x.shape):
         return x
+
     if isinstance(chunks, dict):
         chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
@@ -234,11 +255,16 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
         chunks, x.shape, limit=block_size_limit, dtype=x.dtype, previous_chunks=x.chunks
     )
 
+    # Now chunks are tuple of tuples
     if chunks == x.chunks:
         return x
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+
+    if balance:
+        chunks = tuple([_balance_chunksizes(chunk) for chunk in chunks])
+
     new_shapes = tuple(map(sum, chunks))
 
     for new, old in zip(new_shapes, x.shape):
@@ -660,3 +686,50 @@ def format_plan(plan):
     [(3*[10], 2*[15]), ([30], 3*[10])]
     """
     return [format_chunks(c) for c in plan]
+
+
+def _get_chunks(n, chunksize):
+    leftover = n % chunksize
+    n_chunks = n // chunksize
+
+    chunks = [chunksize] * n_chunks
+    if leftover:
+        chunks.append(leftover)
+    return tuple(chunks)
+
+
+def _balance_chunksizes(chunks: Tuple[int, ...]) -> Tuple[int, ...]:
+    """
+    Balance the chunk sizes
+
+    Parameters
+    ----------
+    chunks : Tuple[int, ...]
+        Chunk sizes for Dask array.
+
+    Returns
+    -------
+    new_chunks : Tuple[int, ...]
+        New chunks for Dask array with balanced sizes.
+    """
+    median_len = np.median(chunks).astype(int)
+    n_chunks = len(chunks)
+    eps = median_len // 2
+    if min(chunks) <= 0.5 * max(chunks):
+        n_chunks -= 1
+
+    new_chunks = [
+        _get_chunks(sum(chunks), chunk_len)
+        for chunk_len in range(median_len - eps, median_len + eps + 1)
+    ]
+    possible_chunks = [c for c in new_chunks if len(c) == n_chunks]
+    if not len(possible_chunks):
+        warn(
+            "chunk size balancing not possible with given chunks. "
+            "Try increasing the chunk size."
+        )
+        return chunks
+
+    diffs = [max(c) - min(c) for c in possible_chunks]
+    best_chunk_size = np.argmin(diffs)
+    return possible_chunks[best_chunk_size]
