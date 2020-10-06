@@ -940,6 +940,8 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     Helper function to find the linear ramp for a chunk.
     """
 
+    from .utils import empty_like_safe
+
     num1 = num + 1
 
     shape = list(start.shape)
@@ -948,7 +950,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = np.empty(shape, dtype=dtype)
+    result = empty_like_safe(start, shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)
