@@ -54,6 +54,7 @@ class BatchedSend:
             maxlen=dask.config.get("distributed.comm.recent-messages-log-length")
         )
         self.serializers = serializers
+        self._consecutive_failures = 0
 
     def start(self, comm):
         self.comm = comm
@@ -98,15 +99,43 @@ class BatchedSend:
                     self.recent_message_log.append("large-message")
                 self.byte_count += nbytes
             except CommClosedError as e:
+                # If the comm is known to be closed, we'll immediately
+                # give up.
                 logger.info("Batched Comm Closed: %s", e)
                 break
             except Exception:
-                logger.exception("Error in batched write")
-                break
+                # In other cases we'll retry a few times.
+                # https://github.com/pangeo-data/pangeo/issues/788
+                if self._consecutive_failures <= 5:
+                    logger.warning("Error in batched write, retrying")
+                    yield gen.sleep(0.100 * 1.5 ** self._consecutive_failures)
+                    self._consecutive_failures += 1
+                    # Exponential backoff for retries.
+                    # Ensure we don't drop any messages.
+                    if self.buffer:
+                        # Someone could call send while we yielded above?
+                        self.buffer = payload + self.buffer
+                    else:
+                        self.buffer = payload
+                    continue
+                else:
+                    logger.exception("Error in batched write")
+                    break
             finally:
                 payload = None  # lose ref
+        else:
+            # nobreak. We've been gracefully closed.
+            self.stopped.set()
+            return
 
+        # If we've reached here, it means our comm is known to be closed or
+        # we've repeatedly failed to send a message. We can't close gracefully
+        # via `.close()` since we can't send messages. So we just abort.
+        # This means that any messages in our buffer our lost.
+        # To propagate exceptions, we rely on subsequent `BatchedSend.send`
+        # calls to raise CommClosedErrors.
         self.stopped.set()
+        self.abort()
 
     def send(self, msg):
         """Schedule a message for sending to the other side
