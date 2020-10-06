@@ -1,6 +1,15 @@
 Changelog
 =========
 
+2.30.0 - 2020-10-06
+-------------------
+
+- Support ``SubgraphCallable`` in ``str_graph()`` (:pr:`4148`) `Mads R. B. Kristensen`_
+- Handle exceptions in ``BatchedSend`` (:pr:`4135`) `Tom Augspurger`_
+- Fix for missing ``:`` in autosummary docs (:pr:`4143`) `Gil Forsyth`_
+- Limit GPU metrics to visible devices only (:pr:`3810`) `Jacob Tomlinson`_
+
+
 2.29.0 - 2020-10-02
 -------------------
 
