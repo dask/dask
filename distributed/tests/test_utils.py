@@ -49,6 +49,7 @@ from distributed.utils import (
 )
 from distributed.utils_test import loop, loop_in_thread  # noqa: F401
 from distributed.utils_test import div, has_ipv6, inc, throws, gen_test, captured_logger
+from dask.optimization import SubgraphCallable
 
 
 def test_All(loop):
@@ -216,6 +217,11 @@ def test_str_graph():
         skeys = [str(k) for k in keys]
         assert all(isinstance(k, str) for k in sdsk)
         assert dask.get(dsk, keys) == dask.get(sdsk, skeys)
+
+    dsk = {("y", 1): (SubgraphCallable({"x": ("y", 1)}, "x", (("y", 1),)), (("z", 1),))}
+    dsk = str_graph(dsk, extra_values=(("z", 1),))
+    assert dsk["('y', 1)"][0].dsk["x"] == "('y', 1)"
+    assert dsk["('y', 1)"][1][0] == "('z', 1)"
 
 
 def test_maybe_complex():

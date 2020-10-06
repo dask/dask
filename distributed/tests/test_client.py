@@ -6165,3 +6165,28 @@ async def test_mixed_compression(cleanup):
                     x = da.ones((10000, 10000))
                     y = x + x.T
                     await c.compute(y.sum())
+
+
+@gen_cluster(client=True)
+async def test_futures_in_subgraphs(c, s, a, b):
+    """Regression test of <https://github.com/dask/distributed/issues/4145>"""
+
+    dd = pytest.importorskip("dask.dataframe")
+    import pandas as pd
+
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            dict(
+                uid=range(50),
+                enter_time=pd.date_range(
+                    start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
+                ),
+            )
+        ),
+        npartitions=5,
+    )
+
+    ddf = ddf[ddf.uid.isin(range(29))].persist()
+    ddf["local_time"] = ddf.enter_time.dt.tz_convert("US/Central")
+    ddf["day"] = ddf.enter_time.dt.day_name()
+    ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
