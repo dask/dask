@@ -574,7 +574,6 @@ def test_depth_equals_boundary_length():
     assert_array_equal(result, expected)
 
 
-@pytest.mark.xfail
 def test_depth_greater_than_boundary_length():
     expected = np.arange(100).reshape(10, 10)
     darr = da.from_array(expected, chunks=(5, 5))
@@ -599,13 +598,34 @@ def test_depth_greater_than_boundary_length():
     assert_array_equal(result, expected)
 
 
-def test_bad_depth_raises():
-    expected = np.arange(144).reshape(12, 12)
-    darr = da.from_array(expected, chunks=(5, 5))
+def test_depth_greater_than_smallest_chunk_combines_chunks():
+    a = np.arange(144).reshape(12, 12)
+    darr = da.from_array(a, chunks=(5, 5))
+    assert darr.chunks == ((5, 5, 2), (5, 5, 2))
 
     depth = {0: 4, 1: 2}
+    output = overlap(darr, depth=depth, boundary=1)
+    assert output.chunks == ((2 * 4 + 5, 2 * 4 + 7), (2 * 2 + 5, 2 * 2 + 5, 2 * 2 + 2))
 
-    pytest.raises(ValueError, overlap, darr, depth=depth, boundary=1)
+
+def test_depth_greater_than_several_chunks_rechunks():
+    a = np.arange(144).reshape(12, 12)
+    darr = da.from_array(a, chunks=(3, 11))
+    assert darr.chunks == ((3, 3, 3, 3), (11, 1))
+
+    depth = {0: 4, 1: 2}
+    output = overlap(darr, depth=depth, boundary=1)
+    assert output.chunks == ((2 * 4 + 4, 2 * 4 + 4, 2 * 4 + 4), (2 * 2 + 12,))
+
+
+def test_depth_greater_than_dim():
+    a = np.arange(144).reshape(12, 12)
+    darr = da.from_array(a, chunks=(3, 5))
+    assert darr.chunks == ((3, 3, 3, 3), (5, 5, 2))
+
+    depth = {0: 13, 1: 4}
+    with pytest.raises(ValueError, match="The overlapping depth"):
+        overlap(darr, depth=depth, boundary=1)
 
 
 def test_none_boundaries():
@@ -702,3 +722,23 @@ def test_trim_boundry(boundary):
     x_overlaped = da.overlap.overlap(x, 2, boundary=boundary)
     x_trimmed = da.overlap.trim_overlap(x_overlaped, 2, boundary=boundary)
     assert np.all(x == x_trimmed)
+
+
+def test_map_overlap_rechunks_array_if_needed():
+    # https://github.com/dask/dask/issues/6597
+    expected = np.arange(11)
+    x = da.from_array(expected, chunks=5)
+    y = x.map_overlap(lambda x: x, depth=2, boundary=0)
+    assert y.chunks == ((5, 6),)
+    assert_array_equal(y, expected)
+
+
+def test_map_overlap_rechunks_array_along_multiple_dims_if_needed():
+    # https://github.com/dask/dask/issues/6688
+    rand = da.random.random((860, 1024, 1024), chunks=(1, 1024, 1024))
+    filtered = rand.map_overlap(
+        lambda arr: arr,
+        depth=(2, 2, 2),
+        boundary="reflect",
+    )
+    assert filtered.chunks == ((2,) * 430, (1024,), (1024,))

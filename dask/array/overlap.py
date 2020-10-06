@@ -441,6 +441,9 @@ def overlap(x, depth, boundary):
     blocks ``{0: 2, 2: 5}`` means share two cells in 0 axis, 5 cells in 2 axis.
     Axes missing from this input will not be overlapped.
 
+    Any axis containing chunks smaller than depth will be rechunked if
+    possible.
+
     Examples
     --------
     >>> import numpy as np
@@ -474,21 +477,48 @@ def overlap(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
+    from .routines import aligned_coarsen_chunks
+
+    def coerce_depth_in_chunk(depth_values, chunks, tries=None):
+        """Ensure that chunk size is larger than depth"""
+        new_chunks = [c for c in chunks]
+        i = 0
+        if tries is None:
+            tries = {i: 0 for i in range(len(chunks))}
+        for d, c in zip(depth_values, chunks):
+            maxd = max(d) if isinstance(d, tuple) else d
+            if maxd > min(c):
+                if maxd > c[-1] and len(c) >= 2:
+                    # if the last chunk is the culprit, add it to prior
+                    new_chunks[i] = (*c[:-2], c[-2] + c[-1])
+                else:
+                    # otherwise coarsen all chunks
+                    new_chunks[i] = aligned_coarsen_chunks(chunks=c, multiple=maxd)
+                tries[i] += 1
+                if tries[i] > 3:
+                    raise ValueError(
+                        "The overlapping depth %d is larger than your\n"
+                        "smallest chunk size %d. Rechunk your array\n"
+                        "with a larger chunk size or a chunk size that\n"
+                        "more evenly divides the shape of your array." % (d, min(c))
+                    )
+                # try this again as long as we haven't tried too many times for this axis
+                new_chunks = [
+                    c for c in coerce_depth_in_chunk(depth_values, new_chunks, tries)
+                ]
+            i += 1
+        return tuple(new_chunks)
+
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
-    # is depth larger than chunk size?
     depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
-    for d, c in zip(depth_values, x.chunks):
-        maxd = max(d) if isinstance(d, tuple) else d
-        if maxd > min(c):
-            raise ValueError(
-                "The overlapping depth %d is larger than your\n"
-                "smallest chunk size %d. Rechunk your array\n"
-                "with a larger chunk size or a chunk size that\n"
-                "more evenly divides the shape of your array." % (d, min(c))
-            )
-    x2 = boundaries(x, depth2, boundary2)
+    chunks2 = coerce_depth_in_chunk(depth_values, x.chunks)
+
+    # rechunk if new chunks are needed to fit depth in every chunk
+    x1 = x if chunks2 == x.chunks else x.rechunk(chunks2)
+
+    x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
     trim = dict(
         (k, v * 2 if boundary2.get(k, "none") != "none" else 0)
@@ -544,7 +574,9 @@ def map_overlap(
     """Map a function over blocks of arrays with some overlap
 
     We share neighboring zones between blocks of the array, map a
-    function, and then trim away the neighboring strips.
+    function, and then trim away the neighboring strips. If depth is
+    larger than any chunk along a particular axis, then the array is
+    rechunked.
 
     Parameters
     ----------
