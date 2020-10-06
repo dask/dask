@@ -957,3 +957,27 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
     else:
         assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("bins_type", [np, cupy])
+def test_digitize(bins_type):
+    x = cupy.array([2, 4, 5, 6, 1])
+    bins = bins_type.array([1, 2, 3, 4, 5])
+    for chunks in [2, 4]:
+        for right in [False, True]:
+            d = da.from_array(x, chunks=chunks)
+            bins_cupy = cupy.array(bins)
+            assert_eq(
+                da.digitize(d, bins, right=right), np.digitize(x, bins_cupy, right=right)
+            )
+
+    x = cupy.random.random(size=(100, 100))
+    bins = bins_type.random.random(size=13)
+    bins.sort()
+    for chunks in [(10, 10), (10, 20), (13, 17), (87, 54)]:
+        for right in [False, True]:
+            d = da.from_array(x, chunks=chunks)
+            bins_cupy = cupy.array(bins)
+            assert_eq(
+                da.digitize(d, bins, right=right), np.digitize(x, bins_cupy, right=right)
+            )
