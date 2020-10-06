@@ -184,9 +184,9 @@ class Blockwise(Layer):
         numblocks,
         concatenate=None,
         new_axes=None,
+        io_name=None,
         io_subgraph=None,
         io_key_deps=None,
-        io_name=None,
     ):
         self.output = output
         self.output_indices = tuple(output_indices)
@@ -206,6 +206,7 @@ class Blockwise(Layer):
         else:
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
+        self.io_name = io_name
         self.io_subgraph = io_subgraph or {}
         self.io_key_deps = io_key_deps or {}
 
@@ -631,6 +632,7 @@ def _optimize_blockwise(full_graph, keys=()):
     out = {}
     dependencies = {}
     seen = set()
+    io_names = set()
 
     while stack:
         layer = stack.pop()
@@ -642,6 +644,7 @@ def _optimize_blockwise(full_graph, keys=()):
         if isinstance(layers[layer], Blockwise):
             blockwise_layers = {layer}
             deps = set(blockwise_layers)
+            io_names.add(layers[layer].io_name)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
                 if dep not in layers:
@@ -689,7 +692,7 @@ def _optimize_blockwise(full_graph, keys=()):
             for k, v in new_layer.indices:
                 if v is None:
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
-                elif k != "__blockwise_io__":
+                elif k not in io_names:
                     new_deps.add(k)
             dependencies[layer] = new_deps
         else:
@@ -744,6 +747,7 @@ def rewrite_blockwise(inputs):
     concatenate = inputs[root].concatenate
     dsk = dict(inputs[root].dsk)
 
+    io_info = {}
     changed = True
     while changed:
         changed = False
@@ -754,6 +758,22 @@ def rewrite_blockwise(inputs):
                 continue
 
             changed = True
+            if not io_info and inputs[dep].io_name:
+                io_info["io_name"] = inputs[dep].io_name
+                io_info["io_subgraph"] = inputs[dep].io_subgraph
+                io_info["io_key_deps"] = inputs[dep].io_key_deps
+                for d in dependents[dep]:
+                    p = 0
+                    while True:
+                        ref_key = (dep, p)
+                        if ref_key not in io_info["io_key_deps"]:
+                            break
+                        dkey = (d, p)
+                        if dkey in io_info["io_key_deps"]:
+                            io_info["io_key_deps"][dkey].add(ref_key)
+                        else:
+                            io_info["io_key_deps"][dkey] = {ref_key}
+                        p += 1
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -833,7 +853,11 @@ def rewrite_blockwise(inputs):
         numblocks=numblocks,
         new_axes=new_axes,
         concatenate=concatenate,
+        io_name=io_info.get("io_name", None),
+        io_subgraph=io_info.get("io_subgraph", None),
+        io_key_deps=io_info.get("io_key_deps", None),
     )
+    # import pdb; pdb.set_trace()
 
     return out
 
