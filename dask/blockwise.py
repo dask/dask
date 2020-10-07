@@ -167,6 +167,12 @@ class Blockwise(Layer):
         collection (i.e. `indices` includes keys for a collection that has
         yet to be constructed), this subgraph must include the required
         keys/tasks for IO and/or in-memory data generation.
+    io_name: str
+        Special name to use for data-creation keys in `indices`.  Note that
+        the corresponding subgraph for these keys should be specified by the
+        `io_subgraph` argument.
+    io_key_deps: dict
+        Dependencies between IO and transformation-based tasks.
 
 
     See Also
@@ -184,8 +190,8 @@ class Blockwise(Layer):
         numblocks,
         concatenate=None,
         new_axes=None,
-        io_name=None,
         io_subgraph=None,
+        io_name=None,
         io_key_deps=None,
     ):
         self.output = output
