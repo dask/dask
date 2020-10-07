@@ -605,6 +605,8 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     >>> chunks
     ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
+    from .utils import asarray_safe
+
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
         factor = math.ceil(len(plan) / len(chunks[axis]))
@@ -616,7 +618,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             PerformanceWarning,
             stacklevel=6,
         )
-    index = np.asarray(index)
+    index = asarray_safe(index, like=index)
 
     # Check for chunks from the plan that would violate the user's
     # configured chunk size.
