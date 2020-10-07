@@ -6,7 +6,7 @@ from .io import (
     from_pandas,
     from_dask_array,
     from_delayed,
-    from_function,
+    from_callable,
     dataframe_from_ctable,
     to_bag,
     to_records,

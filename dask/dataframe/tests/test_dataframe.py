@@ -11,7 +11,7 @@ import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_118, _numpy_120
 import dask.dataframe as dd
-from dask.blockwise import fuse_roots, Blockwise, optimize_blockwise
+from dask.blockwise import fuse_roots
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
 from dask.base import compute_as_if_collection
@@ -4405,53 +4405,3 @@ def test_fuse_roots():
     res = ddf1.where(ddf2)
     hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
     hlg.validate()
-
-
-def test_blockwise_generate_data():
-
-    # Function used to generate data for each partition
-    def _create(part, size):
-        return pd.DataFrame({"a": np.arange(part * size, (part + 1) * size)})
-
-    npartitions = 4  # Output partition count
-    size = 10  # Argument to `_create`
-
-    # Use `from_function` to generate a DataFrame
-    # comprised of a single `Blockwise` layer
-    ddf = dd.from_function(_create, npartitions, size)
-    expect = _create(0, size * npartitions)
-
-    # `ddf` should now have ONE Blockwise layer
-    layers = ddf.__dask_graph__().layers
-    assert len(layers) == 1
-    assert isinstance(list(layers.values())[0], Blockwise)
-
-    # Check single-layer result
-    got = ddf.copy().compute().reset_index(drop=True)
-    assert_eq(got, expect.reset_index(drop=True))
-
-    # Increment by 1
-    ddf += 1
-    expect += 1
-
-    # Increment by 10
-    ddf += 10
-    expect += 10
-
-    # `ddf` should now have THREE Blockwise layers
-    layers = ddf.__dask_graph__().layers
-    assert len(layers) == 3
-    assert all([isinstance(layer, Blockwise) for (_, layer) in layers.items()])
-
-    # Check that `optimize_blockwise` fuses all three
-    # `Blockwise` layers together
-    keys = [(ddf._name, i) for i in range(npartitions)]
-    graph = optimize_blockwise(ddf.__dask_graph__(), keys)
-    layers = graph.layers
-    name = list(layers.keys())[0]
-    assert len(layers) == 1
-    assert isinstance(layers[name], Blockwise)
-
-    # Check final result
-    got = ddf.compute().reset_index(drop=True)
-    assert_eq(got, expect.reset_index(drop=True))

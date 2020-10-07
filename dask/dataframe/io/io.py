@@ -9,7 +9,10 @@ from tlz import merge
 
 from ...base import tokenize
 from ... import array as da
+from ...blockwise import Blockwise
+from ...dataframe.core import new_dd_object
 from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
 
 from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
 from ..shuffle import set_partition
@@ -614,7 +617,7 @@ def from_delayed(
 
 
 @insert_meta_param_description
-def from_function(
+def from_callable(
     func,
     npartitions,
     *args,
@@ -647,10 +650,6 @@ def from_function(
     io_prefix : str, optional
         Prefix to prepend to blockwise "IO" tasks.
     """
-    from ...blockwise import Blockwise
-    from ...dataframe.core import new_dd_object
-    from ...highlevelgraph import HighLevelGraph
-
     if not callable(func):
         raise TypeError("Expected callable object, got %s" % type(func).__name__)
 
