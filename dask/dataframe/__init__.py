@@ -18,6 +18,7 @@ try:
         read_hdf,
         read_sql_table,
         from_delayed,
+        from_function,
         read_csv,
         to_csv,
         read_table,
