@@ -4739,7 +4739,7 @@ def _vindex_array(x, dict_indexes):
             HighLevelGraph.from_collections(out_name, dsk, dependencies=[x]),
             out_name,
             chunks,
-            x.dtype,
+            meta=x._meta,
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
@@ -4806,9 +4806,7 @@ def _vindex_merge(locations, values):
     shape[0] = n
     shape = tuple(shape)
 
-    dtype = values[0].dtype
-
-    x = np.empty(shape, dtype=dtype)
+    x = np.empty_like(values[0], shape=shape)
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):
