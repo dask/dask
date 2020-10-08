@@ -8,7 +8,13 @@ from tlz import curry
 from ..base import tokenize
 from ..utils import funcname
 from .core import Array, normalize_chunks
-from .utils import meta_from_array
+from .utils import (
+    meta_from_array,
+    empty_like_safe,
+    full_like_safe,
+    ones_like_safe,
+    zeros_like_safe,
+)
 
 
 def _parse_wrap_args(func, args, kwargs, shape):
@@ -69,7 +75,7 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     vals = ((func,) + (s,) + args for s in shapes)
 
     dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
 def wrap_func_like(func, *args, **kwargs):
@@ -136,8 +142,11 @@ w = wrap(wrap_func_shape_as_first_arg)
 
 
 @curry
-def _broadcast_trick_inner(func, shape, *args, **kwargs):
-    return np.broadcast_to(func((), *args, **kwargs), shape)
+def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
+    if shape == ():
+        return np.broadcast_to(func(meta, shape=(), *args, **kwargs), shape)
+    else:
+        return np.broadcast_to(func(meta, shape=1, *args, **kwargs), shape)
 
 
 def broadcast_trick(func):
@@ -165,13 +174,14 @@ def broadcast_trick(func):
     if func.__doc__ is not None:
         inner.__doc__ = func.__doc__
         inner.__name__ = func.__name__
-
+        if inner.__name__.endswith("_like_safe"):
+            inner.__name__ = inner.__name__[:-10]
     return inner
 
 
-ones = w(broadcast_trick(np.ones), dtype="f8")
-zeros = w(broadcast_trick(np.zeros), dtype="f8")
-empty = w(broadcast_trick(np.empty), dtype="f8")
+ones = w(broadcast_trick(ones_like_safe), dtype="f8")
+zeros = w(broadcast_trick(zeros_like_safe), dtype="f8")
+empty = w(broadcast_trick(empty_like_safe), dtype="f8")
 
 
 w_like = wrap(wrap_func_like_safe)
@@ -182,8 +192,14 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(np.full))
+_full = w(broadcast_trick(full_like_safe))
 _full_like = w_like(np.full, func_like=np.full_like)
+
+# workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
+_full.__doc__ = _full.__doc__.replace(
+    "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
+    "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
+)
 
 
 def full(shape, fill_value, *args, **kwargs):
