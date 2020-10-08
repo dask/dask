@@ -81,16 +81,19 @@ def percentile(a, q, interpolation="linear", method="default"):
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
+    from .utils import array_safe, meta_from_array
+
     if not a.ndim == 1:
         raise NotImplementedError("Percentiles only implemented for 1-d arrays")
     if isinstance(q, Number):
         q = [q]
-    q = np.array(q)
+    q = array_safe(q, like=meta_from_array(a))
     token = tokenize(a, q, interpolation)
 
     dtype = a.dtype
     if np.issubdtype(dtype, np.integer):
-        dtype = (np.array([], dtype=dtype) / 0.5).dtype
+        dtype = (array_safe([], dtype=dtype, like=meta_from_array(a)) / 0.5).dtype
+    meta = meta_from_array(a, dtype=dtype)
 
     allowed_methods = ["default", "dask", "tdigest"]
     if method not in allowed_methods:
@@ -148,7 +151,7 @@ def percentile(a, q, interpolation="linear", method="default"):
 
     dsk = merge(dsk, dsk2)
     graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[a])
-    return Array(graph, name2, chunks=((len(q),),), dtype=dtype)
+    return Array(graph, name2, chunks=((len(q),),), meta=meta)
 
 
 def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
@@ -180,9 +183,11 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
+    from .utils import array_safe, empty_like_safe
+
     if isinstance(finalq, Iterator):
         finalq = list(finalq)
-    finalq = np.array(finalq)
+    finalq = array_safe(finalq, like=finalq)
     qs = list(map(list, qs))
     vals = list(vals)
     if Ns is None:
@@ -212,8 +217,8 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     # transform qs and Ns into number of observations between percentiles
     counts = []
     for q, N in zip(qs, Ns):
-        count = np.empty(len(q))
-        count[1:] = np.diff(q)
+        count = empty_like_safe(finalq, shape=len(q))
+        count[1:] = np.diff(array_safe(q, like=q[0]))
         count[0] = q[0]
         count *= N
         counts.append(count)
@@ -229,8 +234,8 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     combined_vals_counts = merge_sorted(*map(zip, vals, counts))
     combined_vals, combined_counts = zip(*combined_vals_counts)
 
-    combined_vals = np.array(combined_vals)
-    combined_counts = np.array(combined_counts)
+    combined_vals = array_safe(combined_vals, like=combined_vals[0])
+    combined_counts = array_safe(combined_counts, like=combined_counts[0])
 
     # percentile-like, but scaled by total number of observations
     combined_q = np.cumsum(combined_counts)
