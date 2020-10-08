@@ -347,6 +347,20 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     return np_func(a, like=meta_from_array(like), **kwargs)
 
 
+def array_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asarray(a, **kwargs),
+    otherwise return np.asarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .routines import array
+
+    return _array_like_safe(np.array, array, a, like, **kwargs)
+
+
 def asarray_safe(a, like, **kwargs):
     """
     If a is dask.array, return dask.array.asarray(a, **kwargs),
