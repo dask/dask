@@ -211,16 +211,9 @@ class HighLevelGraph(Mapping):
         key_dependencies: Mapping[Hashable, Set] = {},
     ):
         self.__keys = None
+        self.layers = layers
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies
-
-        # Ensure all layers in the HighLevelGraph are Layer instances
-        new_layers = {}
-        for k, v in layers.items():
-            if not isinstance(v, Layer):
-                new_layers[k] = BasicLayer(v)
-        layers.update(new_layers)
-        self.layers = layers
 
     def keyset(self):
         if self.__keys is None:
