@@ -749,9 +749,13 @@ def moment(
         reduced = a.sum(axis=axis)  # get reduced shape and chunks
         if order == 0:
             # When order equals 0, the result is 1, by definition.
-            return ones(reduced.shape, chunks=reduced.chunks, dtype="f8")
+            return ones(
+                reduced.shape, chunks=reduced.chunks, dtype="f8", meta=reduced._meta
+            )
         # By definition the first order about the mean is 0.
-        return zeros(reduced.shape, chunks=reduced.chunks, dtype="f8")
+        return zeros(
+            reduced.shape, chunks=reduced.chunks, dtype="f8", meta=reduced._meta
+        )
 
     if dtype is not None:
         dt = dtype
