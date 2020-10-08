@@ -689,3 +689,22 @@ def test_median(axis, keepdims, func):
         getattr(da, func)(d, axis=axis, keepdims=keepdims),
         getattr(np, func)(x, axis=axis, keepdims=keepdims),
     )
+
+
+@pytest.mark.parametrize("method", ["sum", "mean", "prod"])
+def test_object_reduction(method):
+    arr = da.ones(1).astype(object)
+    result = getattr(arr, method)().compute()
+    assert result == 1
+
+
+@pytest.mark.parametrize("func", ["nanvar", "nanstd"])
+def test_nan_func_does_not_warn(func):
+    # non-regression test for #6105
+    x = np.ones((10,)) * np.nan
+    x[0] = 1
+    x[1] = 2
+    d = da.from_array(x, chunks=2)
+    with pytest.warns(None) as rec:
+        getattr(da, func)(d).compute()
+    assert not rec  # did not warn

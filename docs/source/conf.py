@@ -26,7 +26,7 @@ import sys
 # If extensions (or modules to document with autodoc) are in another directory,
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
-sys.path.insert(0, os.path.abspath('../../'))
+sys.path.insert(0, os.path.abspath("../../"))
 
 source_dir = os.path.dirname(__file__)
 sys.path.insert(0, os.path.join(source_dir, "ext"))
@@ -310,7 +310,7 @@ intersphinx_mapping = {
     "asyncssh": (
         "https://asyncssh.readthedocs.io/en/latest/",
         "https://asyncssh.readthedocs.io/en/latest/objects.inv",
-    )
+    ),
 }
 
 # Redirects
@@ -365,6 +365,7 @@ linkcheck_ignore = [
     r"^https?:\/\/(?:www\.)?github.com\/",
     r"^https?:\/\/localhost(?:[:\/].+)?$",
 ]
+
 
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":

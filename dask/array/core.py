@@ -167,6 +167,22 @@ def implements(*numpy_functions):
     return decorator
 
 
+def _should_delegate(other) -> bool:
+    """Check whether Dask should delegate to the other.
+    This implementation follows NEP-13:
+    https://numpy.org/neps/nep-0013-ufunc-overrides.html#behavior-in-combination-with-python-s-binary-operations
+    """
+    if hasattr(other, "__array_ufunc__") and other.__array_ufunc__ is None:
+        return True
+    elif (
+        hasattr(other, "__array_ufunc__")
+        and not is_valid_array_chunk(other)
+        and type(other).__array_ufunc__ is not Array.__array_ufunc__
+    ):
+        return True
+    return False
+
+
 def check_if_handled_given_other(f):
     """Check if method is handled by Dask given type of other
 
@@ -176,14 +192,10 @@ def check_if_handled_given_other(f):
 
     @wraps(f)
     def wrapper(self, other):
-        if (
-            is_valid_array_chunk(other)
-            or isinstance(other, (self.__class__, list, tuple, np.generic))
-            or "dask.dataframe.core.Scalar" in str(other.__class__)
-        ):
-            return f(self, other)
-        else:
+        if _should_delegate(other):
             return NotImplemented
+        else:
+            return f(self, other)
 
     return wrapper
 
@@ -943,6 +955,7 @@ def store(
     store_keys = list(store_dsk.keys())
 
     store_dsk = HighLevelGraph.merge(store_dsk, targets_dsk, sources_dsk)
+    store_dsk = HighLevelGraph.from_collections(id(store_dsk), dict(store_dsk))
 
     if return_stored:
         load_store_dsk = store_dsk
@@ -1217,8 +1230,7 @@ class Array(DaskMethodsMixin):
     def __array_ufunc__(self, numpy_ufunc, method, *inputs, **kwargs):
         out = kwargs.get("out", ())
         for x in inputs + out:
-            # Verify all arrays are properly handled by Dask
-            if not isinstance(x, Array) and not is_valid_array_chunk(x):
+            if _should_delegate(x):
                 return NotImplemented
 
         if method == "__call__":
@@ -2257,11 +2269,13 @@ class Array(DaskMethodsMixin):
 
         return squeeze(self, axis)
 
-    def rechunk(self, chunks="auto", threshold=None, block_size_limit=None):
+    def rechunk(
+        self, chunks="auto", threshold=None, block_size_limit=None, balance=False
+    ):
         """ See da.rechunk for docstring """
         from . import rechunk  # avoid circular import
 
-        return rechunk(self, chunks, threshold, block_size_limit)
+        return rechunk(self, chunks, threshold, block_size_limit, balance)
 
     @property
     def real(self):
@@ -4686,9 +4700,7 @@ def _vindex_array(x, dict_indexes):
 
     points = list()
     for i, idx in enumerate(zip(*[i for i in flat_indexes if i is not None])):
-        block_idx = [
-            np.searchsorted(b, ind, "right") - 1 for b, ind in zip(bounds2, idx)
-        ]
+        block_idx = [bisect(b, ind) - 1 for b, ind in zip(bounds2, idx)]
         inblock_idx = [
             ind - bounds2[k][j] for k, (ind, j) in enumerate(zip(idx, block_idx))
         ]

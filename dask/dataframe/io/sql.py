@@ -22,7 +22,7 @@ def read_sql_table(
     schema=None,
     meta=None,
     engine_kwargs=None,
-    **kwargs
+    **kwargs,
 ):
     """
     Create dataframe from an SQL table.
@@ -49,7 +49,7 @@ def read_sql_table(
         ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert
         the textfield ``id`` to ``BigInteger``.
 
-        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+        Note ``sql``, ``cast``, ``types`` methods comes from ``sqlalchemy`` module.
 
         Labeling columns created by functions or arithmetic operations is
         required.
@@ -351,6 +351,8 @@ def to_sql(
     >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
+    if not isinstance(uri, str):
+        raise ValueError(f"Expected URI to be a string, got {type(uri)}.")
 
     # This is the only argument we add on top of what Pandas supports
     kwargs = dict(
@@ -388,7 +390,7 @@ def to_sql(
                 d.to_sql,
                 extras=meta_task,
                 **worker_kwargs,
-                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+                dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
             )
             for d in df.to_delayed()
         ]
@@ -402,7 +404,7 @@ def to_sql(
                     d.to_sql,
                     extras=last,
                     **worker_kwargs,
-                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs)
+                    dask_key_name="to_sql-%s" % tokenize(d, **worker_kwargs),
                 )
             )
             last = result[-1]

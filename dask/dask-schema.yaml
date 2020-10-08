@@ -36,6 +36,17 @@ properties:
               The size of pixels used when displaying a dask array as an SVG image.
               This is used, for example, for nice rendering in a Jupyter notebook
 
+      slicing:
+        type: object
+        properties:
+          split-large-chunks:
+            type: [boolean, 'null']
+            description: |
+              How to handle large chunks created when slicing Arrays. By default a
+              warning is produced. Set to ``False`` to silence the warning
+              and allow large output chunks. Set to ``True`` to silence the
+              warning and avoid large output chunks.
+
   optimization:
     type: object
     properties:

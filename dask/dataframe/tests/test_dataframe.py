@@ -2640,16 +2640,22 @@ def test_to_dask_array_unknown(as_frame):
     assert all(np.isnan(x) for x in result)
 
 
-@pytest.mark.parametrize("lengths", [[2, 3], True])
-@pytest.mark.parametrize("as_frame", [False, False])
-def test_to_dask_array(as_frame, lengths):
-    s = pd.Series([1, 2, 3, 4, 5], name="foo")
+@pytest.mark.parametrize(
+    "lengths,as_frame,meta",
+    [
+        ([2, 3], False, None),
+        (True, False, None),
+        (True, False, np.array([], dtype="f4")),
+    ],
+)
+def test_to_dask_array(meta, as_frame, lengths):
+    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
     a = dd.from_pandas(s, chunksize=2)
 
     if as_frame:
         a = a.to_frame()
 
-    result = a.to_dask_array(lengths=lengths)
+    result = a.to_dask_array(lengths=lengths, meta=meta)
     assert isinstance(result, da.Array)
 
     expected_chunks = ((2, 3),)
@@ -3511,6 +3517,12 @@ def test_getitem_column_types(col_type):
     assert_eq(df[cols], ddf[cols])
 
 
+def test_getitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    assert_eq(df[df > 3], ddf[ddf > 3])
+
+
 def test_ipython_completion():
     df = pd.DataFrame({"a": [1], "b": [2]})
     ddf = dd.from_pandas(df, npartitions=1)
@@ -4048,7 +4060,7 @@ def test_map_partition_array(func):
 @pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
-    # Aviod searchsorted failure.
+    # Avoid searchsorted failure.
     pytest.importorskip("numba", minversion="0.40.0")
 
     df = pd.DataFrame(
@@ -4189,6 +4201,24 @@ def test_setitem():
     df[df.columns] = 1
     ddf[ddf.columns] = 1
     assert_eq(df, ddf)
+
+
+def test_setitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 4], "B": [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df > 2] = 5
+    ddf[ddf > 2] = 5
+    assert_eq(df, ddf)
+
+
+def test_setitem_with_numeric_column_name_raises_not_implemented():
+    df = pd.DataFrame({0: [1, 4], 1: [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    # works for pandas
+    df[0] = 5
+    # raises error for dask
+    with pytest.raises(NotImplementedError, match="not supported"):
+        ddf[0] = 5
 
 
 def test_broadcast():

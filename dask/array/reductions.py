@@ -583,8 +583,10 @@ def mean_agg(pairs, dtype="f8", axis=None, computing_meta=False, **kwargs):
 def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
+    elif a.dtype == object:
+        dt = object
     else:
-        dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.mean(np.zeros(shape=(1,), dtype=a.dtype)), "dtype", object)
     return reduction(
         a,
         mean_chunk,
@@ -676,8 +678,10 @@ def moment_combine(
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
     total = totals.sum(axis=axis, **kwargs)
-    mu = divide(total, n, dtype=dtype)
-    inner_term = divide(totals, ns, dtype=dtype) - mu
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        mu = divide(total, n, dtype=dtype)
+        inner_term = divide(totals, ns, dtype=dtype) - mu
 
     xs = [
         _moment_helper(Ms, ns, inner_term, o, sum, axis, kwargs)
@@ -717,7 +721,9 @@ def moment_agg(
     Ms = _concatenate2(deepmap(lambda pair: pair["M"], pairs), axes=axis)
 
     mu = divide(totals.sum(axis=axis, **keepdim_kw), n, dtype=dtype)
-    inner_term = divide(totals, ns, dtype=dtype) - mu
+
+    with np.errstate(divide="ignore", invalid="ignore"):
+        inner_term = divide(totals, ns, dtype=dtype) - mu
 
     M = _moment_helper(Ms, ns, inner_term, order, sum, axis, kwargs)
 
@@ -743,9 +749,13 @@ def moment(
         reduced = a.sum(axis=axis)  # get reduced shape and chunks
         if order == 0:
             # When order equals 0, the result is 1, by definition.
-            return ones(reduced.shape, chunks=reduced.chunks, dtype="f8")
+            return ones(
+                reduced.shape, chunks=reduced.chunks, dtype="f8", meta=reduced._meta
+            )
         # By definition the first order about the mean is 0.
-        return zeros(reduced.shape, chunks=reduced.chunks, dtype="f8")
+        return zeros(
+            reduced.shape, chunks=reduced.chunks, dtype="f8", meta=reduced._meta
+        )
 
     if dtype is not None:
         dt = dtype

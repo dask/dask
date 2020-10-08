@@ -37,8 +37,9 @@ def _append_row_groups(metadata, md):
             raise RuntimeError(
                 "Schemas are inconsistent, try using "
                 '`to_parquet(..., schema="infer")`, or pass an explicit '
-                "pyarrow schema."
-            )
+                "pyarrow schema. Such as "
+                '`to_parquet(..., schema={"column1": pa.string()})`'
+            ) from err
         else:
             raise err
 
@@ -686,7 +687,7 @@ class ArrowEngine(Engine):
                 gather_statistics = True
 
         # Finally, construct our list of `parts`
-        # (and a corresponing list of statistics)
+        # (and a corresponding list of statistics)
         parts, stats = _construct_parts(
             fs,
             metadata,

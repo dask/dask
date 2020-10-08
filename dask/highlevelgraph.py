@@ -1,10 +1,13 @@
-from collections.abc import Mapping
+import collections.abc
+from typing import Hashable, Set, Mapping, Iterable, Tuple
+import copy
 
 import tlz as toolz
 
 from .utils import ignoring
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
+from .utils_test import add, inc  # noqa: F401
 
 
 def compute_layer_dependencies(layers):
@@ -24,6 +27,117 @@ def compute_layer_dependencies(layers):
     return ret
 
 
+class Layer(collections.abc.Mapping):
+    """High level graph layer
+
+    This abstract class establish a protocol for high level graph layers.
+    """
+
+    def cull(
+        self, keys: Set, all_hlg_keys: Iterable
+    ) -> Tuple["Layer", Mapping[Hashable, Set]]:
+        """Return a new Layer with only the tasks required to calculate `keys` and
+        a map of external key dependencies.
+
+        In other words, remove unnecessary tasks from the layer.
+
+        Examples
+        --------
+        >>> d = Layer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})  # doctest: +SKIP
+        >>> d.cull({'out'})  # doctest: +SKIP
+        {'x': 1, 'out': (add, 'x', 10)}
+
+        Returns
+        -------
+        layer: Layer
+            Culled layer
+        deps: Map
+            Map of external key dependencies
+        """
+
+        if len(keys) == len(self):
+            # Nothing to cull if preserving all existing keys
+            return self, {
+                k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()
+            }
+
+        ret_deps = {}
+        seen = set()
+        out = {}
+        work = keys.copy()
+        while work:
+            k = work.pop()
+            out[k] = self[k]
+            ret_deps[k] = self.get_dependencies(k, all_hlg_keys)
+            for d in ret_deps[k]:
+                if d not in seen:
+                    if d in self:
+                        seen.add(d)
+                        work.add(d)
+
+        return BasicLayer(out), ret_deps
+
+    def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> Set:
+        """Get dependencies of `key` in the layer
+
+        Parameters
+        ----------
+        key: Hashable
+            The key to find dependencies of
+        all_hlg_keys : Iterable
+            All keys in the high level graph.
+
+        Returns
+        -------
+        deps: set
+            A set of dependencies
+        """
+        return keys_in_tasks(all_hlg_keys, [self[key]])
+
+
+class BasicLayer(Layer):
+    """Basic implementation of `Layer`
+
+    Parameters
+    ----------
+    mapping : Mapping
+        The mapping between keys and tasks, typically a dask graph.
+    dependencies : Mapping[Hashable, Set], optional
+        Mapping between keys and their dependencies
+    global_dependencies: Set, optional
+        Set of dependencies that all keys in the layer depend on. Notice,
+        the set might also contain literals that will be ignored.
+    """
+
+    def __init__(self, mapping, dependencies=None, global_dependencies=None):
+        self.mapping = mapping
+        self.dependencies = dependencies
+        self.global_dependencies = global_dependencies
+        self.global_dependencies_has_been_trimmed = False
+
+    def __contains__(self, k):
+        return k in self.mapping
+
+    def __getitem__(self, k):
+        return self.mapping[k]
+
+    def __iter__(self):
+        return iter(self.mapping)
+
+    def __len__(self):
+        return len(self.mapping)
+
+    def get_dependencies(self, key, all_hlg_keys):
+        if self.dependencies is None or self.global_dependencies is None:
+            return super().get_dependencies(key, all_hlg_keys)
+
+        if not self.global_dependencies_has_been_trimmed:
+            self.global_dependencies = self.global_dependencies & all_hlg_keys
+            self.global_dependencies_has_been_trimmed = True
+
+        return self.dependencies[key] | self.global_dependencies
+
+
 class HighLevelGraph(Mapping):
     """Task graph composed of layers of dependent subgraphs
 
@@ -41,14 +155,16 @@ class HighLevelGraph(Mapping):
 
     Parameters
     ----------
-    layers : Dict[str, Mapping]
+    layers : Mapping[str, Mapping]
         The subgraph layers, keyed by a unique name
-    dependencies : Dict[str, Set[str]]
+    dependencies : Mapping[str, Set[str]]
         The set of layers on which each layer depends
+    key_dependencies : Mapping[Hashable, Set], optional
+        Mapping (some) keys in the high level graph to their dependencies. If
+        a key is missing, its dependencies will be calculated automatically.
 
     Examples
     --------
-
     Here is an idealized example that shows the internal state of a
     HighLevelGraph
 
@@ -88,9 +204,23 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
 
-    def __init__(self, layers, dependencies):
+    def __init__(
+        self,
+        layers: Mapping[str, Mapping],
+        dependencies: Mapping[str, Set],
+        key_dependencies: Mapping[Hashable, Set] = {},
+    ):
+        self.__keys = None
         self.layers = layers
         self.dependencies = dependencies
+        self.key_dependencies = key_dependencies
+
+    def keyset(self):
+        if self.__keys is None:
+            self.__keys = set()
+            for layer in self.layers.values():
+                self.__keys.update(layer.keys())
+        return self.__keys
 
     @property
     def dependents(self):
@@ -162,8 +292,7 @@ class HighLevelGraph(Mapping):
         if len(dependencies) == 1:
             return cls._from_collection(name, layer, dependencies[0])
         layers = {name: layer}
-        deps = {}
-        deps[name] = set()
+        deps = {name: set()}
         for collection in toolz.unique(dependencies, key=id):
             if is_dask_collection(collection):
                 graph = collection.__dask_graph__()
@@ -192,7 +321,10 @@ class HighLevelGraph(Mapping):
         raise KeyError(key)
 
     def __len__(self):
-        return sum(1 for _ in self)
+        return len(self.keyset())
+
+    def __iter__(self):
+        return toolz.unique(toolz.concat(self.layers.values()))
 
     def items(self):
         items = []
@@ -204,14 +336,14 @@ class HighLevelGraph(Mapping):
                     items.append((key, d[key]))
         return items
 
-    def __iter__(self):
-        return toolz.unique(toolz.concat(self.layers.values()))
-
     def keys(self):
         return [key for key, _ in self.items()]
 
     def values(self):
         return [value for _, value in self.items()]
+
+    def copy(self):
+        return HighLevelGraph(self.layers.copy(), self.dependencies.copy())
 
     @classmethod
     def merge(cls, *graphs):
@@ -233,6 +365,97 @@ class HighLevelGraph(Mapping):
 
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
+
+    def get_all_dependencies(self) -> Mapping[Hashable, Set]:
+        """Get dependencies of all keys in the HLG
+
+        Returns
+        -------
+        map: Mapping
+            A map that maps each key to its dependencies
+        """
+        all_keys = self.keyset()
+        missing_keys = all_keys.difference(self.key_dependencies.keys())
+        if missing_keys:
+            for layer in self.layers.values():
+                for k in missing_keys.intersection(layer.keys()):
+                    self.key_dependencies[k] = layer.get_dependencies(k, all_keys)
+        return self.key_dependencies
+
+    def _fix_hlg_layers_inplace(self):
+        """Makes sure that all layers in hlg are `Layer`"""
+        new_layers = {}
+        for k, v in self.layers.items():
+            if not isinstance(v, Layer):
+                new_layers[k] = BasicLayer(v)
+        self.layers.update(new_layers)
+
+    def _toposort_layers(self):
+        """Sort the layers in a high level graph topologically
+
+        Parameters
+        ----------
+        hlg : HighLevelGraph
+            The high level graph's layers to sort
+
+        Returns
+        -------
+        sorted: list
+            List of layer names sorted topologically
+        """
+        dependencies = copy.deepcopy(self.dependencies)
+        ready = {k for k, v in dependencies.items() if len(v) == 0}
+        ret = []
+        while len(ready) > 0:
+            layer = ready.pop()
+            ret.append(layer)
+            del dependencies[layer]
+            for k, v in dependencies.items():
+                v.discard(layer)
+                if len(v) == 0:
+                    ready.add(k)
+        return ret
+
+    def cull(self, keys: Set):
+        """Return new high level graph with only the tasks required to calculate keys.
+
+        In other words, remove unnecessary tasks from dask.
+        ``keys`` may be a single key or list of keys.
+
+        Returns
+        -------
+        hlg: HighLevelGraph
+            Culled high level graph
+        """
+
+        self._fix_hlg_layers_inplace()
+        layers = self._toposort_layers()
+        all_keys = self.keyset()
+
+        ret_layers = {}
+        ret_key_deps = {}
+        for layer_name in reversed(layers):
+            layer = self.layers[layer_name]
+            key_deps = keys.intersection(layer)
+            if len(key_deps) > 0:
+                culled_layer, culled_deps = layer.cull(key_deps, all_keys)
+
+                external_deps = set()
+                for d in culled_deps.values():
+                    external_deps |= d
+                external_deps.difference_update(culled_layer.keys())
+
+                keys.update(external_deps)
+                ret_layers[layer_name] = culled_layer
+                ret_key_deps.update(culled_deps)
+
+        ret_dependencies = {}
+        for layer_name in ret_layers:
+            ret_dependencies[layer_name] = {
+                d for d in self.dependencies[layer_name] if d in ret_layers
+            }
+
+        return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
 
     def validate(self):
         # Check dependencies

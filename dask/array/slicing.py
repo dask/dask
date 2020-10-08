@@ -598,19 +598,22 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
      ('y', 2): (getitem, ('x', 2), ([7],))}
 
     When any indexed blocks would otherwise grow larger than
-    dask.config.array.chunk-size, we split them.
+    dask.config.array.chunk-size, we might split them,
+    depending on the value of ``dask.config.slicing.split-large-chunks``.
 
-    >>> chunks, dsk = take('y', 'x', [(1, 1, 1), (1000, 1000), (1000, 1000)],
-    ...                    [0] + [1] * 6 + [2], axis=0, itemsize=8)
+    >>> import dask
+    >>> with dask.config.set({"array.slicing.split-large-chunks": True}):
+    ...      chunks, dsk = take('y', 'x', [(1, 1, 1), (1000, 1000), (1000, 1000)],
+    ...                        [0] + [1] * 6 + [2], axis=0, itemsize=8)
     >>> chunks
     ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
+    from .core import PerformanceWarning
     from .utils import asarray_safe
 
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
         factor = math.ceil(len(plan) / len(chunks[axis]))
-        from .core import PerformanceWarning
 
         warnings.warn(
             "Slicing with an out-of-order index is generating %d "
@@ -626,13 +629,36 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     other_chunks = [chunks[i] for i in range(len(chunks)) if i != axis]
     other_numel = np.prod([sum(x) for x in other_chunks])
 
-    maxsize = nbytes / (other_numel * itemsize)
+    if math.isnan(other_numel):
+        warnsize = maxsize = math.inf
+    else:
+        maxsize = math.ceil(nbytes / (other_numel * itemsize))
+        warnsize = maxsize * 5
+
+    split = config.get("array.slicing.split-large-chunks", None)
+
+    # Warn only when the default is not specified.
+    warned = split is not None
+
+    for _, index_list in plan:
+        if not warned and len(index_list) > warnsize:
+            msg = (
+                "Slicing is producing a large chunk. To accept the large\n"
+                "chunk and silence this warning, set the option\n"
+                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': False}):\n"
+                "    ...     array[indexer]\n\n"
+                "To avoid creating the large chunks, set the option\n"
+                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):\n"
+                "    ...     array[indexer]"
+            )
+            warnings.warn(msg, PerformanceWarning, stacklevel=6)
+            warned = True
 
     where_index = []
     index_lists = []
     for where_idx, index_list in plan:
         index_length = len(index_list)
-        if index_length > maxsize:
+        if split and index_length > maxsize:
             index_sublist = np.array_split(
                 index_list, math.ceil(index_length / maxsize)
             )

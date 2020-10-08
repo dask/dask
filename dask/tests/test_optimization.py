@@ -1116,9 +1116,18 @@ def test_SubgraphCallable():
     }
 
     f = SubgraphCallable(dsk, "h", ["in1", "in2"], name="test")
+
     assert f.name == "test"
     assert repr(f) == "test"
 
+    f2 = SubgraphCallable(dsk, "h", ["in1", "in2"], name="test")
+    assert f == f2
+
+    f3 = SubgraphCallable(dsk, "g", ["in1", "in2"], name="test")
+    assert f != f3
+
+    assert hash(SubgraphCallable(None, None, [None]))
+    assert hash(f3) != hash(f2)
     dsk2 = dsk.copy()
     dsk2.update({"in1": 1, "in2": 2})
     assert f(1, 2) == get_sync(cull(dsk2, ["h"])[0], ["h"])[0]
@@ -1126,6 +1135,25 @@ def test_SubgraphCallable():
 
     f2 = pickle.loads(pickle.dumps(f))
     assert f2(1, 2) == f(1, 2)
+
+
+def test_SubgraphCallable_with_numpy():
+    np = pytest.importorskip("numpy")
+
+    # Testing support of numpy arrays in `dsk`, which uses elementwise equalities.
+    dsk1 = {"a": np.arange(10)}
+    f1 = SubgraphCallable(dsk1, "a", [None], name="test")
+    f2 = SubgraphCallable(dsk1, "a", [None], name="test")
+    assert f1 == f2
+
+    # Notice, even though `dsk1` and `dsk2` are not equal they compare equal because
+    # SubgraphCallable.__eq__() only checks name, outkeys, and inkeys.
+    dsk2 = {"a": np.arange(10) + 1}
+    f3 = SubgraphCallable(dsk2, "a", [None], name="test")
+    assert f1 == f3
+
+    f4 = SubgraphCallable(dsk1, "a", [None], name="test2")
+    assert f1 != f4
 
 
 def test_fuse_subgraphs():

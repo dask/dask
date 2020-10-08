@@ -1374,7 +1374,7 @@ Dask Name: {name}, {task} tasks"""
             enforce_metadata=False,
         )
 
-    def to_dask_array(self, lengths=None):
+    def to_dask_array(self, lengths=None, meta=None):
         """Convert a dask DataFrame to a dask array.
 
         Parameters
@@ -1390,6 +1390,9 @@ Dask Name: {name}, {task} tasks"""
               on the first axis. These values are *not* validated for
               correctness, beyond ensuring that the number of items
               matches the number of partitions.
+        meta : object, optional
+            An optional `meta` parameter can be passed for dask to override the
+            default metadata on the underlying dask array.
 
         Returns
         -------
@@ -1401,6 +1404,9 @@ Dask Name: {name}, {task} tasks"""
 
         chunks = self._validate_chunks(arr, lengths)
         arr._chunks = chunks
+
+        if meta is not None:
+            arr._meta = meta
 
         return arr
 
@@ -3567,6 +3573,9 @@ class DataFrame(_Frame):
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
+        if isinstance(key, DataFrame):
+            return self.where(key, np.nan)
+
         raise NotImplementedError(key)
 
     def __setitem__(self, key, value):
@@ -3576,6 +3585,10 @@ class DataFrame(_Frame):
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
             key = list(key)
             df = self.assign(**{k: value for k in key})
+        elif is_dataframe_like(key) or isinstance(key, DataFrame):
+            df = self.where(~key, value)
+        elif not isinstance(key, str):
+            raise NotImplementedError(f"Item assignment with {type(key)} not supported")
         else:
             df = self.assign(**{key: value})
 
@@ -5086,7 +5099,7 @@ def apply_concat_apply(
     if sort is not None:
         if sort and split_out > 1:
             raise NotImplementedError(
-                "Cannot guarentee sorted keys for `split_out>1`."
+                "Cannot guarantee sorted keys for `split_out>1`."
                 " Try using split_out=1, or grouping with sort=False."
             )
         aggregate_kwargs = aggregate_kwargs or {}

@@ -390,7 +390,7 @@ def validate_axis(axis, ndim):
     return axis
 
 
-def svd_flip(u, v):
+def svd_flip(u, v, u_based_decision=False):
     """Sign correction to ensure deterministic output from SVD.
 
     This function is useful for orienting eigenvectors such that
@@ -402,9 +402,12 @@ def svd_flip(u, v):
     ----------
 
     u : (M, K) array_like
-        Left singular vectors
+        Left singular vectors (in columns)
     v : (K, N) array_like
-        Right singular vectors
+        Right singular vectors (in rows)
+    u_based_decision: bool
+        Whether or not to choose signs based
+        on `u` rather than `v`, by default False
 
     Returns
     -------
@@ -414,11 +417,16 @@ def svd_flip(u, v):
     v:  (K, N) array_like
         Right singular vectors with corrected sign
     """
-    # Determine half-space in which all left singular vectors
-    # lie relative to an arbitrary vector; this is equivalent
-    # to dot product with a row vector of ones
-    signs = np.sum(u, axis=0, keepdims=True)
-    signs = 2 * ((signs >= 0) - 0.5)
+    # Determine half-space in which all singular vectors
+    # lie relative to an arbitrary vector; summation
+    # equivalent to dot product with row vector of ones
+    if u_based_decision:
+        dtype = u.dtype
+        signs = np.sum(u, axis=0, keepdims=True)
+    else:
+        dtype = v.dtype
+        signs = np.sum(v, axis=1, keepdims=True).T
+    signs = dtype.type(2) * ((signs >= 0) - dtype.type(0.5))
     # Force all singular vectors into same half-space
     u, v = u * signs, v * signs.T
     return u, v
