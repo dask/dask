@@ -206,7 +206,7 @@ class HighLevelGraph(Mapping):
 
     def __init__(
         self,
-        layers: Mapping[str, Mapping],
+        layers: Mapping[str, Layer],
         dependencies: Mapping[str, Set],
         key_dependencies: Mapping[Hashable, Set] = {},
     ):
