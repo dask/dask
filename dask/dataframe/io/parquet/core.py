@@ -8,7 +8,7 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....utils import import_required, natural_sort_key, parse_bytes
+from ....utils import import_required, natural_sort_key, parse_bytes, _noop
 from ...methods import concat
 from ....highlevelgraph import Layer
 from ....blockwise import Blockwise
@@ -106,10 +106,6 @@ class ParquetSubgraph(Layer):
             part_ids={i for i in self.part_ids if (self.name, i) in keys},
         )
         return ret, ret.get_dependencies(all_hlg_keys)
-
-
-def _noop(x):
-    return x
 
 
 class BlockwiseParquet(Blockwise):
