@@ -4,7 +4,7 @@ import pytest
 
 import dask.array as da
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph, BasicLayer
+from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
 
 
 def test_visualize(tmpdir):
@@ -26,6 +26,7 @@ def test_basic():
     hg = HighLevelGraph(layers, dependencies)
 
     assert dict(hg) == {"x": 1, "y": (inc, "x")}
+    assert all(isinstance(layer, Layer) for layer in hg.layers.values())
 
 
 def test_keys_values_items_methods():

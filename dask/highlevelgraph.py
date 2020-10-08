@@ -211,9 +211,16 @@ class HighLevelGraph(Mapping):
         key_dependencies: Mapping[Hashable, Set] = {},
     ):
         self.__keys = None
-        self.layers = layers
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies
+
+        # Ensure all layers in the HighLevelGraph are Layer instances
+        new_layers = {}
+        for k, v in layers.items():
+            if not isinstance(v, Layer):
+                new_layers[k] = BasicLayer(v)
+        layers.update(new_layers)
+        self.layers = layers
 
     def keyset(self):
         if self.__keys is None:
@@ -382,14 +389,6 @@ class HighLevelGraph(Mapping):
                     self.key_dependencies[k] = layer.get_dependencies(k, all_keys)
         return self.key_dependencies
 
-    def _fix_hlg_layers_inplace(self):
-        """Makes sure that all layers in hlg are `Layer`"""
-        new_layers = {}
-        for k, v in self.layers.items():
-            if not isinstance(v, Layer):
-                new_layers[k] = BasicLayer(v)
-        self.layers.update(new_layers)
-
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
 
@@ -428,7 +427,6 @@ class HighLevelGraph(Mapping):
             Culled high level graph
         """
 
-        self._fix_hlg_layers_inplace()
         layers = self._toposort_layers()
         all_keys = self.keyset()
 
