@@ -981,3 +981,19 @@ def test_digitize(bins_type):
             assert_eq(
                 da.digitize(d, bins, right=right), np.digitize(x, bins_cupy, right=right)
             )
+
+
+def test_vindex():
+    x_np = np.arange(56).reshape((7, 8))
+    x_cp = cupy.arange(56).reshape((7, 8))
+
+    d_np = da.from_array(x_np, chunks=(3, 4))
+    d_cp = da.from_array(x_cp, chunks=(3, 4))
+
+    res_np = da.core._vindex(d_np, [0, 1, 6, 0], [0, 1, 0, 7])
+    res_cp = da.core._vindex(d_cp, [0, 1, 6, 0], [0, 1, 0, 7])
+
+    assert type(res_cp._meta) == cupy.core.core.ndarray
+    assert_eq(res_cp, res_cp)  # Check that _meta and computed arrays match types
+
+    assert_eq(res_np, res_cp)
