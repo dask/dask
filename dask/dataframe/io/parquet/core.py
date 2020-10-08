@@ -11,6 +11,7 @@ from ....base import tokenize
 from ....utils import import_required, natural_sort_key, parse_bytes
 from ...methods import concat
 from ....highlevelgraph import Layer
+from ....blockwise import Blockwise
 
 
 try:
@@ -105,6 +106,60 @@ class ParquetSubgraph(Layer):
             part_ids={i for i in self.part_ids if (self.name, i) in keys},
         )
         return ret, ret.get_dependencies(all_hlg_keys)
+
+
+def _noop(x):
+    return x
+
+
+class BlockwiseParquet(Blockwise):
+    """"""
+
+    def __init__(
+        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
+    ):
+        self.name = name
+        self.engine = engine
+        self.fs = fs
+        self.meta = meta
+        self.columns = columns
+        self.index = index
+        self.parts = parts
+        self.kwargs = kwargs
+        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
+
+        self.io_name = "blockwise-io-" + name
+        dsk_io = ParquetSubgraph(
+            self.io_name,
+            self.engine,
+            self.fs,
+            self.meta,
+            self.columns,
+            self.index,
+            self.parts,
+            self.kwargs,
+            part_ids=self.part_ids,
+        )
+        io_key_deps = {}
+        for i in self.part_ids:
+            io_key_deps[(self.name, i)] = {(self.io_name, i)}
+            io_key_deps[(self.io_name, i)] = set()
+
+        super().__init__(
+            self.name,
+            "i",
+            {self.name: (_noop, "_0")},
+            [(self.io_name, "i")],
+            {self.io_name: (len(self.part_ids),)},
+            io_name=self.io_name,
+            io_subgraph=dsk_io,
+            io_key_deps=io_key_deps,
+        )
+
+    def __repr__(self):
+        return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.part_ids), list(self.columns)
+        )
 
 
 def read_parquet(
@@ -272,7 +327,8 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    # subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = BlockwiseParquet(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
