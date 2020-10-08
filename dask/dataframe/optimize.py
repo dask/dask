@@ -25,7 +25,7 @@ def optimize(dsk, keys, **kwargs):
     if not config.get("optimization.fuse.active"):
         return dsk
 
-    dependencies = dsk.get_dependencies()
+    dependencies = dsk.get_all_dependencies()
     dsk = ensure_dict(dsk)
 
     fuse_subgraphs = config.get("optimization.fuse.subgraphs")
