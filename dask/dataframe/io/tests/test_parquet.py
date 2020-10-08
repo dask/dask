@@ -14,7 +14,7 @@ import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
-from dask.dataframe.io.parquet.core import ParquetSubgraph
+from dask.dataframe.io.parquet.core import BlockwiseParquet, ParquetSubgraph
 from dask.utils import natural_sort_key, parse_bytes
 
 
@@ -2268,7 +2268,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     dsk = optimize_read_parquet_getitem(ddf.dask, keys=[ddf._name])
     get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
@@ -2284,7 +2284,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
 
     subgraph = list(dsk.layers.values())[0]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == []
 
 
