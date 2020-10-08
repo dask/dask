@@ -24,7 +24,10 @@ functions = [
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
+    lambda x: da.empty_like(x),
     lambda x: da.ones_like(x),
+    lambda x: da.zeros_like(x),
+    lambda x: da.full_like(x, 5),
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.xfail(
