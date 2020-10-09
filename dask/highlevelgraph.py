@@ -486,7 +486,7 @@ class HighLevelGraph(Mapping):
         `func` should take a BasicLayer as input and return a new Mapping as output
         and **cannot** change the dependencies between Layers.
 
-        If `func` returns a non-BasicLayer type, it will be wrapped in a `BasicLayer`
+        If `func` returns a non-Layer type, it will be wrapped in a `BasicLayer`
         object automatically.
 
         Parameters
@@ -504,7 +504,7 @@ class HighLevelGraph(Mapping):
         for k, v in self.layers.items():
             if isinstance(v, BasicLayer):
                 layer = func(v)
-                if not isinstance(layer, BasicLayer):
+                if not isinstance(layer, Layer):
                     layer = BasicLayer(layer)
                 layers[k] = layer
             else:
