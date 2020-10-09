@@ -1,6 +1,7 @@
 import numpy as np
 import pytest
 
+import dask
 import dask.array as da
 from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.gufunc import apply_gufunc
@@ -946,7 +947,7 @@ def test_compress():
         #((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         #((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
-        ((10,), (3,), 1, "empty", {}),
+        #((10,), (3,), 1, "empty", {}),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
@@ -1126,3 +1127,38 @@ def test_view_fortran():
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, x.T.view("i2").T)
+
+
+def test_getter():
+    result = da.core.getter(cupy.arange(5), (None, slice(None, None)))
+
+    assert type(result) == cupy.core.core.ndarray
+    assert_eq(result, np.arange(5)[None, :])
+
+
+def test_store_kwargs():
+    d = da.from_array(cupy.ones((10, 10)), chunks=(2, 2))
+    a = d + 1
+
+    called = [False]
+
+    def get_func(*args, **kwargs):
+        assert kwargs.pop("foo") == "test kwarg"
+        r = dask.get(*args, **kwargs)
+        called[0] = True
+        return r
+
+    called[0] = False
+    at = cupy.zeros(shape=(10, 10))
+    da.core.store([a], [at], scheduler=get_func, foo="test kwarg")
+    assert called[0]
+
+    called[0] = False
+    at = cupy.zeros(shape=(10, 10))
+    a.store(at, scheduler=get_func, foo="test kwarg")
+    assert called[0]
+
+    called[0] = False
+    at = cupy.zeros(shape=(10, 10))
+    da.core.store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
+    assert called[0]
