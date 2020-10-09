@@ -48,6 +48,9 @@ from ..utils import (
     ndimlist,
     format_bytes,
     typename,
+    is_dataframe_like,
+    is_series_like,
+    is_index_like,
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
@@ -627,7 +630,12 @@ def map_blocks(
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
-        dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
+        try:
+            meta = compute_meta(func, dtype, *args, **kwargs)
+        except Exception:
+            dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
+        finally:
+            dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
@@ -4906,4 +4914,19 @@ def from_npy_stack(dirname, mmap_mode="r"):
     return Array(dsk, name, chunks, dtype)
 
 
-from .utils import meta_from_array
+def new_da_object(dsk, name, chunks, meta=None, dtype=None):
+    """Generic constructor for dask.array or dask.dataframe objects.
+
+    Decides the appropriate output class based on the type of `meta` provided.
+    """
+    if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
+        from ..dataframe.core import new_dd_object
+
+        assert all(len(c) == 1 for c in chunks[1:])
+        divisions = [None] * (len(chunks[0]) + 1)
+        return new_dd_object(dsk, name, meta, divisions)
+    else:
+        return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
+
+
+from .utils import meta_from_array, compute_meta
