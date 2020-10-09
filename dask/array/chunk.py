@@ -270,10 +270,10 @@ def astype(x, astype_dtype=None, **kwargs):
 
 def view(x, dtype, order="C"):
     if order == "C":
-        x = np.ascontiguousarray(x)
+        x = np.ascontiguousarray(x, like=x)
         return x.view(dtype)
     else:
-        x = np.asfortranarray(x)
+        x = np.asfortranarray(x, like=x)
         return x.T.view(dtype).T
 
 
