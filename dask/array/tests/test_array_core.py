@@ -1508,9 +1508,7 @@ def test_map_blocks_dtype_inference():
     with pytest.raises(ValueError) as e:
         dx.map_blocks(foo)
     msg = str(e.value)
-    assert msg.startswith("`dtype` inference failed")
-    assert "Please specify the dtype explicitly" in msg
-    assert "RuntimeError" in msg
+    assert "dtype" in msg
 
 
 def test_map_blocks_infer_newaxis():
@@ -4442,3 +4440,29 @@ def test_rechunk_auto():
     y = x.rechunk()
 
     assert y.npartitions == 1
+
+
+def test_map_blocks_series():
+    pd = pytest.importorskip("pandas")
+    import dask.dataframe as dd
+    from dask.dataframe.utils import assert_eq as dd_assert_eq
+
+    x = da.ones(10, chunks=(5,))
+    s = x.map_blocks(pd.Series)
+    assert isinstance(s, dd.Series)
+    assert s.npartitions == x.npartitions
+
+    dd_assert_eq(s, s)
+
+
+@pytest.mark.xfail(reason="need to remove singleton index dimension")
+def test_map_blocks_dataframe():
+    pd = pytest.importorskip("pandas")
+    import dask.dataframe as dd
+    from dask.dataframe.utils import assert_eq as dd_assert_eq
+
+    x = da.ones((10, 2), chunks=(5, 2))
+    s = x.map_blocks(pd.DataFrame)
+    assert isinstance(s, dd.DataFrame)
+    assert s.npartitions == x.npartitions
+    dd_assert_eq(s, s)
