@@ -35,7 +35,7 @@ class Callback(object):
 
     Alternatively subclass the ``Callback`` class with your own methods.
 
-    >>> class PrintKeys(Callback):
+    >>> class PrintKeys(Callback):      # doctest: +SKIP
     ...     def _pretask(self, key, dask, state):
     ...         print("Computing: {0}!".format(repr(key)))
 

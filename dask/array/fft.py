@@ -11,7 +11,7 @@ except ImportError:
 
 from .core import concatenate as _concatenate
 from .creation import arange as _arange
-from ..utils import derived_from
+from ..utils import derived_from, skip_doctest
 
 
 chunk_error = (
@@ -211,6 +211,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     if fft_func.__doc__ is not None:
         func.__doc__ = fft_preamble % (2 * (func_fullname,))
         func.__doc__ += fft_func.__doc__
+        func.__doc__ = skip_doctest(func.__doc__)
     func.__name__ = func_name
     return func
 

@@ -4120,7 +4120,7 @@ class DataFrame(_Frame):
             shuffle=shuffle,
         )
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame)  # doctest: +SKIP
     def join(
         self,
         other,

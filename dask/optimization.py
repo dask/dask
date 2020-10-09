@@ -235,17 +235,14 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     Examples
     --------
 
-.. doctest:
-    :options: +SKIP
-
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    >>> inline(d)
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')} # doctest: +SKIP
+    >>> inline(d)       # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
 
-    >>> inline(d, keys='y')
+    >>> inline(d, keys='y') # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
 
-    >>> inline(d, keys='y', inline_constants=False)
+    >>> inline(d, keys='y', inline_constants=False) # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
     if dependencies and isinstance(next(iter(dependencies.values())), list):

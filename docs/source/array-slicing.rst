@@ -61,7 +61,7 @@ If we slice that with a *sorted* sequence of integers, Dask will return one chun
 per intput chunk (notince the output `chunksize` is 1, since the indices ``0``
 and ``1`` are in separate chunks in the input).
 
-   >>> a[[0, 1], :, :]
+   >>> a[[0, 1], :, :]          #doctest: +SKIP
    dask.array<getitem, shape=(2, 10000, 10000), dtype=float64, chunksize=(1, 10000, 10000), chunktype=numpy.ndarray>
 
 But what about repeated indices? Dask continues to return one chunk per input chunk,

@@ -213,13 +213,13 @@ class RuleSet(object):
     >>> def h(*args): pass
     >>> from operator import add
 
-    >>> rs = dr.RuleSet(            # doctest: +SKIP 
+    >>> rs = dr.RuleSet(                # doctest: +SKIP
     ...         dr.RewriteRule((add, 'x', 0), 'x', ('x',)),
     ...         dr.RewriteRule((f, (g, 'x'), 'y'),
     ...                        (h, 'x', 'y'),
     ...                        ('x', 'y')))
 
-    >>> rs.rewrite((add, 2, 0))     # doctest: +SKIP  
+    >>> rs.rewrite((add, 2, 0))         # doctest: +SKIP
     2
 
     >>> rs.rewrite((f, (g, 'a', 3)))    # doctest: +SKIP

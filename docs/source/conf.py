@@ -367,6 +367,10 @@ linkcheck_ignore = [
     r"^https?:\/\/localhost(?:[:\/].+)?$",
 ]
 
+doctest_global_setup = """
+import numpy as np
+"""
+
 
 def copy_legacy_redirects(app, docname):
     if app.builder.name == "html":
