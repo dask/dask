@@ -81,8 +81,8 @@ def test_map_basic_layers(inject_dict):
     dsk = y.__dask_graph__()
     y.dask = dsk.map_basic_layers(inject_inc)
     layers = list(y.dask.layers.values())
-    assert type(layers[0]) == BasicLayer
-    assert type(layers[1]) == Blockwise
+    assert isinstance(layers[0], BasicLayer)
+    assert isinstance(layers[1], Blockwise)
     assert_eq(y, [42] * 3)
 
 
