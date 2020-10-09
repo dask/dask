@@ -102,7 +102,8 @@ def test_map_tasks(use_layer_map_task):
     dsk = y.__dask_graph__()
 
     if use_layer_map_task:
-        # Overwrite Blockwise.map_tasks with Layer.map_tasks
+        # In order to test the default map_tasks() implementation on a Blockwise Layer,
+        # we overwrite Blockwise.map_tasks with Layer.map_tasks
         blockwise_layer = list(dsk.layers.values())[1]
         blockwise_layer.map_tasks = partial(Layer.map_tasks, blockwise_layer)
 
