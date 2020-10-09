@@ -545,7 +545,6 @@ def slicing_plan(chunks, index):
     """
     from .utils import asanyarray_safe
 
-    index = index.tolist()
     index = asanyarray_safe(index, like=index)
     cum_chunks = cached_cumsum(chunks)
 
@@ -609,7 +608,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
     from .core import PerformanceWarning
-    from .utils import asarray_safe
+    from .utils import array_safe, asarray_safe
 
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
@@ -665,7 +664,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             index_lists.extend(index_sublist)
             where_index.extend([where_idx] * len(index_sublist))
         else:
-            index_lists.append(np.array(index_list))
+            index_lists.append(array_safe(index_list, like=index_list))
             where_index.append(where_idx)
 
     dims = [range(len(bd)) for bd in chunks]
@@ -864,7 +863,7 @@ def normalize_index(idx, shape):
     >>> normalize_index(np.array([[True, False], [False, True], [True, True]]), (3, 2))
     (dask.array<array, shape=(3, 2), dtype=bool, chunksize=(3, 2), chunktype=numpy.ndarray>,)
     """
-    from .core import from_array
+    from .core import Array, from_array
 
     if not isinstance(idx, tuple):
         idx = (idx,)
@@ -872,7 +871,7 @@ def normalize_index(idx, shape):
     # if a > 1D numpy.array is provided, cast it to a dask array
     if len(idx) > 0 and len(shape) > 1:
         i = idx[0]
-        if is_arraylike(i) and i.shape == shape:
+        if is_arraylike(i) and not isinstance(i, Array) and i.shape == shape:
             idx = (from_array(i), *idx[1:])
 
     idx = replace_ellipsis(len(shape), idx)
@@ -950,11 +949,12 @@ def check_index(ind, dimension):
     # unknown dimension, assumed to be in bounds
     if np.isnan(dimension):
         return
+    elif is_dask_collection(ind):
+        return
     elif isinstance(ind, (list, np.ndarray)) or is_arraylike(ind):
         from .utils import asanyarray_safe
 
-        i = ind[0]
-        x = asanyarray_safe(ind, i)
+        x = asanyarray_safe(ind, like=ind)
         if x.dtype == bool:
             if x.size != dimension:
                 raise IndexError(
@@ -964,8 +964,6 @@ def check_index(ind, dimension):
         elif (x >= dimension).any() or (x < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
-        return
-    elif is_dask_collection(ind):
         return
     elif ind is None:
         return
