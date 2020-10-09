@@ -4356,7 +4356,6 @@ def test_map_blocks_dataframe():
     import dask.dataframe as dd
     from dask.dataframe.utils import assert_eq as dd_assert_eq
 
-
     x = da.ones((10, 2), chunks=(5, 2))
     s = x.map_blocks(pd.DataFrame)
     assert isinstance(s, dd.DataFrame)
