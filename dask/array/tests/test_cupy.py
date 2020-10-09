@@ -1075,3 +1075,54 @@ def test_percentiles_with_unknown_chunk_sizes():
     assert 0.1 < a < 0.9
     assert 0.1 < b < 0.9
     assert a < b
+
+
+def test_view():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(cupy.array(x), chunks=(2, 3))
+
+    result = d.view()
+    assert type(result._meta) == cupy.core.core.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.view())
+
+    result = d.view("i4")
+    assert type(result._meta) == cupy.core.core.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.view("i4"))
+
+    result = d.view("i2")
+    assert type(result._meta) == cupy.core.core.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.view("i2"))
+    assert all(isinstance(s, int) for s in d.shape)
+
+    x = np.arange(8, dtype="i1")
+    d = da.from_array(cupy.array(x), chunks=(4,))
+    result = d.view("i4")
+    assert type(result._meta) == cupy.core.core.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(x.view("i4"), d.view("i4"))
+
+    with pytest.raises(ValueError):
+        x = np.arange(8, dtype="i1")
+        d = da.from_array(cupy.array(x), chunks=(3,))
+        d.view("i4")
+
+    with pytest.raises(ValueError):
+        d.view("i4", order="asdf")
+
+
+def test_view_fortran():
+    x = np.asfortranarray(np.arange(64).reshape((8, 8)))
+    d = da.from_array(cupy.asfortranarray(cupy.array(x)), chunks=(2, 3))
+
+    result = d.view("i4", order="F")
+    assert type(result._meta) == cupy.core.core.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.T.view("i4").T)
+
+    result = d.view("i2", order="F")
+    assert type(result._meta) == cupy.core.core.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.T.view("i2").T)
