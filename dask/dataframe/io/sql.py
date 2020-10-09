@@ -49,7 +49,7 @@ def read_sql_table(
         ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert
         the textfield ``id`` to ``BigInteger``.
 
-        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+        Note ``sql``, ``cast``, ``types`` methods comes from ``sqlalchemy`` module.
 
         Labeling columns created by functions or arithmetic operations is
         required.

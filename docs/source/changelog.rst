@@ -1,6 +1,50 @@
 Changelog
 =========
 
+2.30.0 / 2020-10-06
+-------------------
+
+Array
++++++
+
+- Allow ``rechunk`` to evenly split into N chunks (:pr:`6420`) `Scott Sievert`_
+
+
+2.29.0 / 2020-10-02
+-------------------
+
+Array
++++++
+
+- ``_repr_html_``: color sides darker instead of drawing all the lines (:pr:`6683`) `Julia Signell`_
+- Removes warning from ``nanstd`` and ``nanvar`` (:pr:`6667`) `Thomas J Fan`_
+- Get shape of output from original array - ``map_overlap`` (:pr:`6682`) `Julia Signell`_
+- Replace ``np.searchsorted`` with ``bisect`` in indexing (:pr:`6669`) `Joachim B Haga`_
+
+Bag
++++
+
+- Make sure subprocesses have a consistent hash for bag ``groupby`` (:pr:`6660`) `Itamar Turner-Trauring`_
+
+Core
+++++
+
+- Revert "Use ``HighLevelGraph`` layers everywhere in collections (:pr:`6510`)" (:pr:`6697`) `Tom Augspurger`_
+- Use ``pandas.testing`` (:pr:`6687`) `John A Kirkham`_
+- Improve 128-bit floating-point skip in tests (:pr:`6676`) `Elliott Sales de Andrade`_
+
+DataFrame
++++++++++
+
+- Allow setting dataframe items using a bool dataframe (:pr:`6608`) `Julia Signell`_
+
+Documentation
++++++++++++++
+
+- Fix typo (:pr:`6692`) `garanews`_
+- Fix a few typos (:pr:`6678`) `Pav A`_
+
+
 2.28.0 / 2020-09-25
 -------------------
 
@@ -1697,7 +1741,7 @@ DataFrame
 -  meta_nonempty works with categorical index (:pr:`4505`) `Jim Crist`_
 -  Add module name to expected meta error message (:pr:`4499`) `Matthew Rocklin`_
 -  groupby-nunique works on empty chunk (:pr:`4504`) `Jim Crist`_
--  Propogate index metadata if not specified (:pr:`4509`) `Jim Crist`_
+-  Propagate index metadata if not specified (:pr:`4509`) `Jim Crist`_
 
 Documentation
 +++++++++++++
@@ -2521,7 +2565,7 @@ Array
 - Fix handling of negative indexes in ``vindex`` and raise errors for out of bounds indexes (:pr:`2967`) `Stephan Hoyer`_
 - Add ``flip``, ``flipud``, ``fliplr`` (:pr:`2954`) `John A Kirkham`_
 - Add ``float_power`` ufunc (:pr:`2962`) (:pr:`2969`) `John A Kirkham`_
-- Compatability for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
+- Compatibility for changes to structured arrays in the upcoming NumPy 1.14 release (:pr:`2964`) `Tom Augspurger`_
 - Add ``block`` (:pr:`2650`) `John A Kirkham`_
 - Add ``frompyfunc`` (:pr:`3030`) `Jim Crist`_
 - Add the ``return_stored`` option to ``store`` for chaining stored results (:pr:`2980`) `John A Kirkham`_
@@ -2534,7 +2578,7 @@ DataFrame
 - Fixed ``dd.read_csv`` so that passing instances of ``CategoricalDtype`` in ``dtype`` will result in known categoricals (:pr:`2997`) `Tom Augspurger`_
 - Prevent ``bool()`` coercion from calling compute (:pr:`2958`) `Albert DeFusco`_
 - ``DataFrame.read_sql()`` (:pr:`2928`) to an empty database tables returns an empty dask dataframe `Apostolos Vlachopoulos`_
-- Compatability for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
+- Compatibility for reading Parquet files written by PyArrow 0.8.0 (:pr:`2973`) `Tom Augspurger`_
 - Correctly handle the column name (`df.columns.name`) when reading in ``dd.read_parquet`` (:pr:`2973`) `Tom Augspurger`_
 - Fixed ``dd.concat`` losing the index dtype when the data contained a categorical (:issue:`2932`) `Tom Augspurger`_
 - Add ``dd.Series.rename`` (:pr:`3027`) `Jim Crist`_
@@ -2599,7 +2643,7 @@ Core
 -  Calling compute within a dask.distributed task defaults to distributed scheduler (:pr:`2762`) `Matthew Rocklin`_
 -  Auto-import gcsfs when gcs:// protocol is used (:pr:`2776`) `Matthew Rocklin`_
 -  Fully remove dask.async module, use dask.local instead (:pr:`2828`) `Thomas Caswell`_
--  Compatability with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
+-  Compatibility with bokeh 0.12.10 (:pr:`2844`) `Tom Augspurger`_
 -  Reduce test memory usage (:pr:`2782`) `Jim Crist`_
 -  Add Dask collection interface (:pr:`2748`) `Jim Crist`_
 -  Update Dask collection interface during XArray integration (:pr:`2847`) `Matthew Rocklin`_
@@ -3671,3 +3715,5 @@ Other
 .. _`Rafal Wojdyla`: https://github.com/ravwojdyla
 .. _`Sam Grayson`: https://github.com/charmoniumQ
 .. _`Madhur Tandon`: https://github.com/madhur-tandon
+.. _`Joachim B Haga`: https://github.com/jobh
+.. _`Pav A`: https://github.com/rs2
