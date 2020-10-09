@@ -97,9 +97,11 @@ def getter(a, b, asarray=True, lock=None):
     if lock:
         lock.acquire()
     try:
+        from .utils import asarray_safe
+
         c = a[b]
         if asarray:
-            c = np.asarray(c)
+            c = asarray_safe(c, like=c)
     finally:
         if lock:
             lock.release()
@@ -3709,8 +3711,10 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
     if lock:
         lock.acquire()
     try:
+        from .utils import asanyarray_safe
+
         if x is not None:
-            out[index] = np.asanyarray(x)
+            out[index] = asanyarray_safe(x, like=x)
         if return_stored and load_stored:
             result = out[index]
     finally:
