@@ -536,6 +536,7 @@ class HighLevelGraph(Mapping):
         return HighLevelGraph(
             {k: v.map_tasks(func) for k, v in self.layers.items()},
             self.dependencies,
+            self.key_dependencies,
         )
 
     def validate(self):
