@@ -125,7 +125,7 @@ class SimpleShuffleLayer(Layer):
         return deps
 
     def _cull(self, parts_out):
-        return ShuffleLayer(
+        return SimpleShuffleLayer(
             self.name,
             self.column,
             self.npartitions,
