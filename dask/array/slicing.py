@@ -504,7 +504,8 @@ def partition_by_size(sizes, seq):
     >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
     [array([1, 5, 9]), array([ 2, 19]), array([5])]
     """
-    seq = np.asanyarray(seq)
+    from .utils import asanyarray_safe
+    seq = asanyarray_safe(seq, like=seq)
     left = np.empty(len(sizes) + 1, dtype=int)
     left[0] = 0
 
@@ -543,12 +544,12 @@ def slicing_plan(chunks, index):
     out : List[Tuple[int, np.ndarray]]
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
-    from .utils import asanyarray_safe
+    from .utils import asarray_safe, asanyarray_safe
 
     index = asanyarray_safe(index, like=index)
     cum_chunks = cached_cumsum(chunks)
 
-    cum_chunks = np.asarray(cum_chunks, like=index)
+    cum_chunks = asarray_safe(cum_chunks, like=index)
     # this dispactches to the array library
     chunk_locations = np.searchsorted(cum_chunks, index, side="right")
 
@@ -556,8 +557,8 @@ def slicing_plan(chunks, index):
     chunk_locations = chunk_locations.tolist()
     where = np.where(np.diff(chunk_locations))[0] + 1
 
-    extra = np.asarray([0], like=where)
-    c_loc = np.asarray([len(chunk_locations)], like=where)
+    extra = asarray_safe([0], like=where)
+    c_loc = asarray_safe([len(chunk_locations)], like=where)
     where = np.concatenate([extra, where, c_loc])
 
     out = []
