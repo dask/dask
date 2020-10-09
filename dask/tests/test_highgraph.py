@@ -7,6 +7,7 @@ import dask.array as da
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
 from dask.blockwise import Blockwise
+from dask.array.utils import assert_eq
 
 
 def test_visualize(tmpdir):
@@ -82,7 +83,7 @@ def test_map_basic_layers(inject_dict):
     layers = list(y.dask.layers.values())
     assert type(layers[0]) == BasicLayer
     assert type(layers[1]) == Blockwise
-    assert list(y.compute()) == [42] * 3
+    assert_eq(y, [42] * 3)
 
 
 @pytest.mark.parametrize("use_layer_map_task", [True, False])
@@ -106,4 +107,4 @@ def test_map_tasks(use_layer_map_task):
         blockwise_layer.map_tasks = partial(Layer.map_tasks, blockwise_layer)
 
     y.dask = dsk.map_tasks(plus_one)
-    assert list(y.compute()) == [42] * 3
+    assert_eq(y, [42] * 3)
