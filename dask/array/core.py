@@ -633,9 +633,9 @@ def map_blocks(
         try:
             meta = compute_meta(func, dtype, *args, **kwargs)
         except Exception:
-            dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
-        finally:
-            dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
+            pass
+
+        dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
         out_ind = tuple(x for i, x in enumerate(out_ind) if i not in drop_axis)
