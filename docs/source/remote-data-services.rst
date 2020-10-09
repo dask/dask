@@ -29,10 +29,10 @@ codebase:
 - **Amazon S3**: ``s3://`` - Amazon S3 remote binary store, often used with Amazon EC2,
   using the library s3fs_.
 
-- **Google Cloud Storage**: ``gcs://`` or ``gs:`` - Google Cloud Storage, typically used with Google Compute
+- **Google Cloud Storage**: ``gcs://`` or ``gs://`` - Google Cloud Storage, typically used with Google Compute
   resource using gcsfs_.
 
-- **Microsoft Azure Storage**: ``adl://`` or ``abfs://`` - Microsoft Azure Storage using adlfs_.
+- **Microsoft Azure Storage**: ``adl://``, ``abfs://`` or ``az://`` - Microsoft Azure Storage using adlfs_.
 
 - **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers.
 
