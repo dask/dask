@@ -890,8 +890,9 @@ def test_bincount():
 @pytest.mark.parametrize("arr", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))])
 @pytest.mark.parametrize("like", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))])
 def test_asanyarray(arr, like):
+    #if isinstance(like, np.ndarray) and isinstance(da.utils.meta_from_array(arr), cupy.ndarray):
     if isinstance(like, np.ndarray) and isinstance(da.utils.meta_from_array(arr), cupy.ndarray):
-        with pytest.raises(ValueError):
+        with pytest.raises(TypeError):
             a = da.utils.asanyarray_safe(arr, like=like)
     else:
         a = da.utils.asanyarray_safe(arr, like=like)
