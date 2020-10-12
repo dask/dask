@@ -48,6 +48,11 @@ def test_meta_from_array(asarray):
     assert meta_from_array("foo") == "foo"
     assert meta_from_array(np.dtype("float32")) == np.dtype("float32")
 
+    assert meta_from_array("").dtype == np.array("").dtype
+    assert meta_from_array("", dtype="bool").dtype == np.array([], dtype="bool").dtype
+    assert meta_from_array("", dtype="int").dtype == np.array([], dtype="int").dtype
+    assert meta_from_array("", dtype="float").dtype == np.array([], dtype="float").dtype
+
 
 def test_meta_from_array_type_inputs():
     x = meta_from_array(np.ndarray, ndim=2, dtype=np.float32)

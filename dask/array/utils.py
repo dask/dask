@@ -101,7 +101,17 @@ def meta_from_array(x, ndim=None, dtype=None):
         meta = np.array(meta)
 
     if dtype and meta.dtype != dtype:
-        meta = meta.astype(dtype)
+        try:
+            meta = meta.astype(dtype)
+        except ValueError as e:
+            if (
+                "invalid literal" in str(e)
+                or "could not convert string to float" in str(e)
+            ):
+                if meta == np.array(""):
+                    meta = np.array([]).astype(dtype)
+            else:
+                raise e
 
     return meta
 
