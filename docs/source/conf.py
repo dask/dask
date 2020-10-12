@@ -33,6 +33,7 @@ sys.path.insert(0, os.path.join(source_dir, "ext"))
 
 extensions = [
     "sphinx.ext.autodoc",
+    "sphinx.ext.doctest",
     "sphinx.ext.mathjax",
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
@@ -365,6 +366,10 @@ linkcheck_ignore = [
     r"^https?:\/\/(?:www\.)?github.com\/",
     r"^https?:\/\/localhost(?:[:\/].+)?$",
 ]
+
+doctest_global_setup = """
+import numpy as np
+"""
 
 
 def copy_legacy_redirects(app, docname):
