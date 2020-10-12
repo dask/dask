@@ -1183,6 +1183,7 @@ def factors(n):
 def parse_bytes(s):
     """Parse byte string to numbers
 
+    >>> from dask.utils import parse_bytes
     >>> parse_bytes('100')
     100
     >>> parse_bytes('100 MB')
@@ -1256,6 +1257,7 @@ byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 def format_time(n):
     """format integers as time
 
+    >>> from dask.utils import format_time
     >>> format_time(1)
     '1.00 s'
     >>> format_time(0.001234)
@@ -1275,6 +1277,7 @@ def format_time(n):
 def format_bytes(n):
     """Format bytes as text
 
+    >>> from dask.utils import format_bytes
     >>> format_bytes(1)
     '1 B'
     >>> format_bytes(1234)
@@ -1330,6 +1333,8 @@ def parse_timedelta(s, default="seconds"):
 
     Examples
     --------
+    >>> from datetime import timedelta
+    >>> from dask.utils import parse_timedelta
     >>> parse_timedelta('3s')
     3
     >>> parse_timedelta('3.5 seconds')

@@ -314,13 +314,14 @@ def make_meta_object(x, index=None):
 
     Examples
     --------
-    >>> make_meta([('a', 'i8'), ('b', 'O')])
+
+    >>> make_meta([('a', 'i8'), ('b', 'O')])    # doctest: +SKIP
     Empty DataFrame
     Columns: [a, b]
     Index: []
-    >>> make_meta(('a', 'f8'))
+    >>> make_meta(('a', 'f8'))                  # doctest: +SKIP
     Series([], Name: a, dtype: float64)
-    >>> make_meta('i8')
+    >>> make_meta('i8')                         # doctest: +SKIP
     1
     """
     if hasattr(x, "_meta"):
