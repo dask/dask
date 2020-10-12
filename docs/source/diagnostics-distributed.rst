@@ -39,7 +39,7 @@ There are numerous pages with information about task runtimes, communication,
 statistical profiling, load balancing, memory use, and much more.
 For more information we recommend the video guide above.
 
-.. currentmodule:: dask.distributed
+.. currentmodule:: dask.distributed     #doctest: +SKIP
 
 .. autosummary::
    Client
@@ -95,7 +95,7 @@ detail:
 Progress bar
 ------------
 
-.. currentmodule:: dask.distributed
+.. currentmodule:: dask.distributed     #doctest: +SKIP
 
 .. autosummary::
    progress

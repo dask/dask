@@ -101,9 +101,9 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     Examples
     --------
     >>> x = np.array([1, 2, 3, 4, 5, 6])
-    >>> coarsen(np.sum, x, {0: 2})
+    >>> coarsen(np.sum, x, {0: 2})          #doctest: +SKIP
     array([ 3,  7, 11])
-    >>> coarsen(np.max, x, {0: 3})
+    >>> coarsen(np.max, x, {0: 3})          #doctest: +SKIP
     array([3, 6])
 
     Provide dictionary of scale per dimension
@@ -115,14 +115,14 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
            [12, 13, 14, 15, 16, 17],
            [18, 19, 20, 21, 22, 23]])
 
-    >>> coarsen(np.min, x, {0: 2, 1: 3})
+    >>> coarsen(np.min, x, {0: 2, 1: 3})    #doctest: +SKIP
     array([[ 0,  3],
            [12, 15]])
 
     You must avoid excess elements explicitly
 
     >>> x = np.array([1, 2, 3, 4, 5, 6, 7, 8])
-    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)
+    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)    #doctest: +SKIP
     array([1, 4])
     """
     # Insert singleton dimensions if they don't exist already

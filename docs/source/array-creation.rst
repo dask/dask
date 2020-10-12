@@ -169,6 +169,8 @@ This enables downstream computations that rely on having known chunk sizes
 The Dask DataFrame ``to_records`` method also returns a Dask Array, but does not compute the shape
 information:
 
+.. code-block:: python
+
    >>> df.to_records()
    dask.array<to_records, shape=(nan,), dtype=(numpy.record, [('index', '<i8'), ('x', '<f8'), ('y', '<f8'), ('z', '<f8')]), chunksize=(nan,), chunktype=numpy.ndarray>
 
@@ -342,6 +344,8 @@ To save data to a local TileDB array:
   >>> arr.to_tiledb('output.tdb')
 
 or to save to a bucket on S3:
+
+.. code-block:: python
 
   >>> arr.to_tiledb('s3://mybucket/output.tdb',
                     storage_options={'vfs.s3.aws_access_key_id': 'mykey',

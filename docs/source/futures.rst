@@ -22,7 +22,7 @@ despite its name, runs very well on a single machine).
            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
            allowfullscreen></iframe>
 
-.. currentmodule:: distributed
+.. currentmodule:: distributed #doctest: +SKIP
 
 Examples
 --------

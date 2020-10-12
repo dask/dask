@@ -29,23 +29,24 @@ class Profiler(Callback):
 
     >>> from operator import add, mul
     >>> from dask.threaded import get
+    >>> from dask.diagnostics import Profiler
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     >>> with Profiler() as prof:
     ...     get(dsk, 'z')
     22
 
-    >>> prof.results  # doctest: +SKIP
+    >>> prof.results        # doctest: +SKIP
     [('y', (add, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
      ('z', (mul, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
 
     These results can be visualized in a bokeh plot using the ``visualize``
     method. Note that this requires bokeh to be installed.
 
-    >>> prof.visualize() # doctest: +SKIP
+    >>> prof.visualize()    # doctest: +SKIP
 
     You can activate the profiler globally
 
-    >>> prof.register()  # doctest: +SKIP
+    >>> prof.register()     # doctest: +SKIP
 
     If you use the profiler globally you will need to clear out old results
     manually.
@@ -289,6 +290,7 @@ class CacheProfiler(Callback):
 
     >>> from operator import add, mul
     >>> from dask.threaded import get
+    >>> from dask.diagnostics import CacheProfiler
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     >>> with CacheProfiler() as prof:
     ...     get(dsk, 'z')
