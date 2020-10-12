@@ -5,7 +5,7 @@ from numbers import Integral
 from tlz import merge, pipe, concat, partial, get
 from tlz.curried import map
 
-from . import chunk, wrap
+from . import chunk
 from .core import (
     Array,
     map_blocks,
