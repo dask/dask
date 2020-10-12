@@ -72,7 +72,7 @@ Arrays
 .. note:: Dask's integration with CuPy relies on features recently added to
    NumPy and CuPy, particularly in version ``numpy>=1.17`` and ``cupy>=6``
 
-`Chainer's CuPy <https://cupy.chainer.org/>`_ library provides a GPU
+`Chainer's CuPy <https://docs.cupy.dev>`_ library provides a GPU
 accelerated NumPy-like library that interoperates nicely with Dask Array.
 
 If you have CuPy installed then you should be able to convert a NumPy-backed
@@ -87,7 +87,7 @@ Dask Array into a CuPy backed Dask Array as follows:
 CuPy is fairly mature and adheres closely to the NumPy API.  However, small
 differences do exist and these can cause Dask Array operations to function
 improperly. Check the
-`CuPy Reference Manual <https://docs-cupy.chainer.org/en/stable/reference/index.html>`_
+`CuPy Reference Manual <https://docs.cupy.dev/en/stable/reference/index.html>`_
 for API compatibility.
 
 

@@ -3698,7 +3698,7 @@ Other
 .. _`Roberto Panai`: https://github.com/rpanai
 .. _`Clark Zinzow`: https://github.com/clarkzinzow
 .. _`Tom McTiernan`: https://github.com/tmct
-.. _`Zhengnan`: https://github.com/ZhengnanZhao
+.. _`Zhengnan`: https://github.com/zzhengnan
 .. _`joshreback`: https://github.com/joshreback
 .. _`Jun Han (Johnson) Ooi`: https://github.com/tebesfinwo
 .. _`Jim Circadian`: https://github.com/JimCircadian
