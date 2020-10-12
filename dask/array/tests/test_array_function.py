@@ -109,11 +109,12 @@ def test_array_function_sparse_tensordot():
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
-def test_array_function_cupy_svd():
+@pytest.mark.parametrize("chunks", [(100, 100), (500, 100)])
+def test_array_function_cupy_svd(chunks):
     cupy = pytest.importorskip("cupy")
     x = cupy.random.random((500, 100))
 
-    y = da.from_array(x, chunks=(100, 100), asarray=False)
+    y = da.from_array(x, chunks=chunks, asarray=False)
 
     u_base, s_base, v_base = da.linalg.svd(y)
     u, s, v = np.linalg.svd(y)
