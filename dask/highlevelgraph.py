@@ -500,15 +500,10 @@ class HighLevelGraph(Mapping):
             A high level graph containing the transformed BasicLayers and the other
             Layers untouched
         """
-        layers = {}
-        for k, v in self.layers.items():
-            if isinstance(v, BasicLayer):
-                layer = func(v)
-                if not isinstance(layer, Layer):
-                    layer = BasicLayer(layer)
-                layers[k] = layer
-            else:
-                layers[k] = v
+        layers = {
+            k: func(v) if isinstance(v, BasicLayer) else v
+            for k, v in self.layers.items()
+        }
         return HighLevelGraph(layers, self.dependencies)
 
     def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "HighLevelGraph":
