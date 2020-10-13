@@ -1,5 +1,6 @@
 import itertools
 import warnings
+import copy
 
 import numpy as np
 
@@ -258,6 +259,23 @@ class Blockwise(Layer):
     def cull(self, keys, all_hlg_keys):
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
+
+    def map_tasks(self, func):
+        new_indices = []
+        for key, input_indices in self.indices:
+            if input_indices is None:  # A literal
+                new_indices.append((func([key]), None))
+            else:
+                new_indices.append((key, input_indices))
+        ret = copy.copy(self)
+        ret.indices = new_indices
+
+        # This operation invalidate the cache
+        try:
+            del self._cached_dict
+        except AttributeError:
+            pass
+        return ret
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
