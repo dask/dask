@@ -106,6 +106,10 @@ class ParquetSubgraph(Layer):
         )
         return ret, ret.get_dependencies(all_hlg_keys)
 
+    def map_tasks(self, func):
+        # ParquetSubgraph has no input tasks
+        return self
+
 
 def read_parquet(
     path,
