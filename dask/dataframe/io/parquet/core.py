@@ -167,9 +167,10 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
-    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
+    engine : {'auto', 'fastparquet', 'pyarrow', 'pyarrow-dataset'}, default 'auto'
         Parquet reader library to use. If only one library is installed, it
-        will use that one; if both, it will use 'fastparquet'
+        will use that one; if both, it will use 'fastparquet'.  Note that
+        'pyarrow-dataset' enables row-wise filtering, but requires pyarrow>=1.0.
     gather_statistics : bool or None (default).
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -553,10 +554,10 @@ def get_engine(engine):
 
     Parameters
     ----------
-    engine : {'auto', 'fastparquet', 'pyarrow', 'pyarrow-legacy'}, default 'auto'
+    engine : {'auto', 'fastparquet', 'pyarrow', 'pyarrow-dataset'}, default 'auto'
         Parquet reader library to use. Defaults to fastparquet if both are
         installed.  The pyarrow.dataset API will be used for newer PyArrow
-        versions (>=1.0.0).  Use 'pyarrow-legacy' for the legacy pyarrow engine.
+        versions (>=1.0.0) if 'pyarrow-dataset' is specified.
 
     Returns
     -------
