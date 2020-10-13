@@ -581,13 +581,13 @@ def get_engine(engine):
         _ENGINES["fastparquet"] = eng = FastParquetEngine
         return eng
 
-    elif engine == "pyarrow" or engine == "arrow" or engine == "pyarrow-legacy":
+    elif engine in ("pyarrow", "arrow", "pyarrow-legacy", "pyarrow-dataset"):
         pa = import_required("pyarrow", "`pyarrow` not installed")
 
         if LooseVersion(pa.__version__) < "0.13.1":
             raise RuntimeError("PyArrow version >= 0.13.1 required")
 
-        if LooseVersion(pa.__version__) >= "1.0.0" and engine != "pyarrow-legacy":
+        if engine == "pyarrow-dataset" and LooseVersion(pa.__version__) >= "1.0.0":
             from .arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine

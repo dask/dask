@@ -93,7 +93,7 @@ ddf = dd.from_pandas(df, npartitions=npartitions)
     params=[
         pytest.param("fastparquet", marks=FASTPARQUET_MARK),
         pytest.param("pyarrow-legacy", marks=PYARROW_MARK),
-        pytest.param("pyarrow", marks=PYARROW_DS_MARK),
+        pytest.param("pyarrow-dataset", marks=PYARROW_DS_MARK),
     ]
 )
 def engine(request):
@@ -105,14 +105,14 @@ def write_read_engines(**kwargs):
 
     To add custom marks, pass keyword of the form: `mark_writer_reader=reason`,
     or `mark_engine=reason` to apply to all parameters with that engine."""
-    backends = {"pyarrow", "pyarrow-legacy", "fastparquet"}
+    backends = {"pyarrow-dataset", "pyarrow-legacy", "fastparquet"}
     marks = {(w, r): [] for w in backends for r in backends}
 
     # Skip if uninstalled
     for name, skip, reason in [
         ("fastparquet", SKIP_FASTPARQUET, SKIP_FASTPARQUET_REASON),
         ("pyarrow-legacy", SKIP_PYARROW_DS, SKIP_PYARROW_DS_REASON),
-        ("pyarrow", SKIP_PYARROW, SKIP_PYARROW_REASON),
+        ("pyarrow-dataset", SKIP_PYARROW, SKIP_PYARROW_REASON),
     ]:
         if skip:
             val = pytest.mark.skip(reason=reason)
@@ -147,7 +147,7 @@ def write_read_engines(**kwargs):
 pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
 write_read_engines_xfail = write_read_engines(
     **{
-        "xfail_pyarrow_fastparquet": pyarrow_fastparquet_msg,
+        "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
         "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
     }
 )
@@ -155,7 +155,7 @@ write_read_engines_xfail = write_read_engines(
 fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
 fp_pandas_xfail = write_read_engines(
     **{
-        "xfail_fastparquet_pyarrow": fp_pandas_msg,
+        "xfail_fastparquet_pyarrow-dataset": fp_pandas_msg,
         "xfail_fastparquet_pyarrow-legacy": fp_pandas_msg,
     }
 )
@@ -567,7 +567,7 @@ def test_categorical(tmpdir, write_engine, read_engine):
     assert ddf2.compute().x.cat.categories.tolist() == ["a", "b", "c"]
 
     # autocat
-    if read_engine != "pyarrow":
+    if read_engine == "fastparquet":
         ddf2 = dd.read_parquet(tmp, engine=read_engine)
         assert ddf2.compute().x.cat.categories.tolist() == ["a", "b", "c"]
 
@@ -1294,9 +1294,7 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
 
     # Recent versions of pyarrow support full row-wise filtering
     # (fastparquet and older pyarrow versions do not)
-    pyarrow_row_filtering = read_engine == "pyarrow" and pa.__version__ >= LooseVersion(
-        "1.0.0"
-    )
+    pyarrow_row_filtering = read_engine == "pyarrow-dataset"
 
     fn = str(tmpdir)
     df = pd.DataFrame({"at": ["ab", "aa", "ba", "da", "bb"]})
@@ -1345,7 +1343,7 @@ def test_filtering_pyarrow_dataset(tmpdir, engine):
     aa_lim = 40
     bb_val = "dog"
     filters = [[("aa", "<", aa_lim), ("bb", "==", bb_val)]]
-    ddf2 = dd.read_parquet(fn, index=False, engine="pyarrow", filters=filters)
+    ddf2 = dd.read_parquet(fn, index=False, engine="pyarrow-dataset", filters=filters)
 
     # Check that partitions are filetered for "aa" filter
     nonempty = 0
@@ -1403,7 +1401,7 @@ def test_pyarrow_filter_divisions(tmpdir):
         # when `split_row_groups=False`.
         ddf = dd.read_parquet(
             str(tmpdir),
-            engine="pyarrow",
+            engine="pyarrow-dataset",
             split_row_groups=False,
             gather_statistics=True,
             filters=[("a", "<=", 3)],
@@ -1412,7 +1410,7 @@ def test_pyarrow_filter_divisions(tmpdir):
 
     ddf = dd.read_parquet(
         str(tmpdir),
-        engine="pyarrow",
+        engine="pyarrow-dataset",
         split_row_groups=True,
         gather_statistics=True,
         filters=[("a", "<=", 3)],
@@ -1921,14 +1919,14 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
     ddf = dd.from_pandas(df, npartitions=3)
 
     engine_kwargs = {
-        "pyarrow": {
+        "pyarrow-dataset": {
             "compression": "snappy",
             "coerce_timestamps": None,
             "use_dictionary": True,
         },
         "fastparquet": {"compression": "snappy", "times": "int64", "fixed_text": None},
     }
-    engine_kwargs["pyarrow-legacy"] = engine_kwargs["pyarrow"]
+    engine_kwargs["pyarrow-legacy"] = engine_kwargs["pyarrow-dataset"]
 
     ddf.to_parquet(path1, engine=engine, **engine_kwargs[engine])
     out = dd.read_parquet(path1, engine=engine)
