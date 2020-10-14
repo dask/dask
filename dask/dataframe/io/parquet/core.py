@@ -141,8 +141,10 @@ def read_parquet(
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
-        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
-        implements partition-level (hive) filtering only, i.e., to prevent the
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
+        argument will NOT result in row-wise filtering of the final partitions
+        unless `engine="pyarrow-dataset"` is also specified.  For other engines,
+        filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
         Predicates can be expressed in disjunctive normal form (DNF). This means
