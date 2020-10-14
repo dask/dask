@@ -1,6 +1,6 @@
 numpydoc
 sphinx
-dask-sphinx-theme>=1.1.0
+dask-sphinx-theme>=1.3.5
 sphinx-click
 toolz
 cloudpickle

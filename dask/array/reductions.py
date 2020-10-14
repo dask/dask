@@ -20,7 +20,15 @@ from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec, derived_from
+from ..utils import (
+    ignoring,
+    funcname,
+    Dispatch,
+    deepmap,
+    getargspec,
+    derived_from,
+    is_series_like,
+)
 from .. import config
 
 # Generic functions to support chunks of different types
@@ -149,6 +157,8 @@ def reduction(
         chunk = partial(chunk, dtype=dtype)
     if "dtype" in getargspec(aggregate).args:
         aggregate = partial(aggregate, dtype=dtype)
+    if is_series_like(x):
+        x = x.values
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))
@@ -749,9 +759,13 @@ def moment(
         reduced = a.sum(axis=axis)  # get reduced shape and chunks
         if order == 0:
             # When order equals 0, the result is 1, by definition.
-            return ones(reduced.shape, chunks=reduced.chunks, dtype="f8")
+            return ones(
+                reduced.shape, chunks=reduced.chunks, dtype="f8", meta=reduced._meta
+            )
         # By definition the first order about the mean is 0.
-        return zeros(reduced.shape, chunks=reduced.chunks, dtype="f8")
+        return zeros(
+            reduced.shape, chunks=reduced.chunks, dtype="f8", meta=reduced._meta
+        )
 
     if dtype is not None:
         dt = dtype

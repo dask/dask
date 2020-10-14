@@ -139,7 +139,7 @@ def blockwise(
     if new:
         raise ValueError("Unknown dimension", new)
 
-    from .core import Array, unify_chunks, normalize_arg
+    from .core import unify_chunks, normalize_arg
 
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
@@ -248,12 +248,12 @@ def blockwise(
         from .utils import compute_meta
 
         meta = compute_meta(func, dtype, *args[::2], **kwargs)
-    if meta is not None:
-        return Array(graph, out, chunks, meta=meta)
-    else:
-        return Array(graph, out, chunks, dtype=dtype)
+    return new_da_object(graph, out, chunks, meta=meta, dtype=dtype)
 
 
 def atop(*args, **kwargs):
     warnings.warn("The da.atop function has moved to da.blockwise")
     return blockwise(*args, **kwargs)
+
+
+from .core import new_da_object

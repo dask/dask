@@ -50,7 +50,7 @@ offer an ``.adapt()`` method.  Here is an example with
 
 For more keyword options, see the Adaptive class below:
 
-.. currentmodule:: distributed.deploy
+.. currentmodule:: distributed.deploy   #doctest: +SKIP
 
 .. autosummary::
    Adaptive

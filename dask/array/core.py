@@ -48,6 +48,9 @@ from ..utils import (
     ndimlist,
     format_bytes,
     typename,
+    is_dataframe_like,
+    is_series_like,
+    is_index_like,
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
@@ -496,7 +499,7 @@ def map_blocks(
     >>> d = da.arange(5, chunks=2)
     >>> e = da.arange(5, chunks=2)
 
-    >>> f = map_blocks(lambda a, b: a + b**2, d, e)
+    >>> f = da.map_blocks(lambda a, b: a + b**2, d, e)
     >>> f.compute()
     array([ 0,  2,  6, 12, 20])
 
@@ -627,6 +630,11 @@ def map_blocks(
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
+        try:
+            meta = compute_meta(func, dtype, *args, **kwargs)
+        except Exception:
+            pass
+
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
@@ -1630,8 +1638,9 @@ class Array(DaskMethodsMixin):
         This is equivalent to numpy's advanced indexing, using arrays that are
         broadcast against each other. This allows for pointwise indexing:
 
+        >>> import dask.array as da
         >>> x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-        >>> x = from_array(x, chunks=2)
+        >>> x = da.from_array(x, chunks=2)
         >>> x.vindex[[0, 1, 2], [0, 1, 2]].compute()
         array([1, 5, 9])
 
@@ -2218,8 +2227,9 @@ class Array(DaskMethodsMixin):
 
         Examples
         --------
+        >>> import dask.array as da
         >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
-        >>> x = from_array(x, chunks=5)
+        >>> x = da.from_array(x, chunks=5)
         >>> def derivative(x):
         ...     return x - np.roll(x, 1)
 
@@ -2269,11 +2279,13 @@ class Array(DaskMethodsMixin):
 
         return squeeze(self, axis)
 
-    def rechunk(self, chunks="auto", threshold=None, block_size_limit=None):
+    def rechunk(
+        self, chunks="auto", threshold=None, block_size_limit=None, balance=False
+    ):
         """ See da.rechunk for docstring """
         from . import rechunk  # avoid circular import
 
-        return rechunk(self, chunks, threshold, block_size_limit)
+        return rechunk(self, chunks, threshold, block_size_limit, balance)
 
     @property
     def real(self):
@@ -2455,6 +2467,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     --------
     Specify uniform chunk sizes
 
+    >>> from dask.array.core import normalize_chunks
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
@@ -3130,6 +3143,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     --------
     >>> import dask
     >>> import dask.array as da
+    >>> import numpy as np
     >>> value = dask.delayed(np.ones)(5)
     >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
@@ -3559,7 +3573,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
+    >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.concatenate(data, axis=0)
@@ -4358,8 +4372,8 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
-    ...          for i in range(3)]
+    >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
+    ...         for i in range(3)]
 
     >>> x = da.stack(data, axis=0)
     >>> x.shape
@@ -4904,4 +4918,19 @@ def from_npy_stack(dirname, mmap_mode="r"):
     return Array(dsk, name, chunks, dtype)
 
 
-from .utils import meta_from_array
+def new_da_object(dsk, name, chunks, meta=None, dtype=None):
+    """Generic constructor for dask.array or dask.dataframe objects.
+
+    Decides the appropriate output class based on the type of `meta` provided.
+    """
+    if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
+        from ..dataframe.core import new_dd_object
+
+        assert all(len(c) == 1 for c in chunks[1:])
+        divisions = [None] * (len(chunks[0]) + 1)
+        return new_dd_object(dsk, name, meta, divisions)
+    else:
+        return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
+
+
+from .utils import meta_from_array, compute_meta
