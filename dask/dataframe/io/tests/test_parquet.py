@@ -1294,7 +1294,9 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
 
     # Recent versions of pyarrow support full row-wise filtering
     # (fastparquet and older pyarrow versions do not)
-    pyarrow_row_filtering = read_engine == "pyarrow-dataset"
+    pyarrow_row_filtering = (
+        read_engine == "pyarrow-dataset" and pa.__version__ >= LooseVersion("1.0.0")
+    )
 
     fn = str(tmpdir)
     df = pd.DataFrame({"at": ["ab", "aa", "ba", "da", "bb"]})
