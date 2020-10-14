@@ -130,6 +130,12 @@ class Layer(collections.abc.Mapping):
         """
         return (BasicLayer, (dict(self),))
 
+    def __copy__(self):
+        """Default shallow copy implementation"""
+        obj = type(self).__new__(self.__class__)
+        obj.__dict__.update(self.__dict__)
+        return obj
+
 
 class BasicLayer(Layer):
     """Basic implementation of `Layer`
