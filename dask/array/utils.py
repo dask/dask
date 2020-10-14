@@ -106,12 +106,10 @@ def meta_from_array(x, ndim=None, dtype=None):
         except ValueError as e:
             if (
                 any(
-                    [
-                        s in str(e)
-                        for s in [
-                            "invalid literal",
-                            "could not convert string to float",
-                        ]
+                    s in str(e)
+                    for s in [
+                        "invalid literal",
+                        "could not convert string to float",
                     ]
                 )
                 and meta.dtype.kind == "U"
@@ -144,13 +142,11 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 meta = func(*args_meta, **kwargs_meta)
             except TypeError as e:
                 if any(
-                    [
-                        s in str(e)
-                        for s in [
-                            "unexpected keyword argument",
-                            "is an invalid keyword for",
-                            "Did not understand the following kwargs",
-                        ]
+                    s in str(e)
+                    for s in [
+                        "unexpected keyword argument",
+                        "is an invalid keyword for",
+                        "Did not understand the following kwargs",
                     ]
                 ):
                     raise
