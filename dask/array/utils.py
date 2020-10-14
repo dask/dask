@@ -104,14 +104,19 @@ def meta_from_array(x, ndim=None, dtype=None):
         try:
             meta = meta.astype(dtype)
         except ValueError as e:
-            if any(
-                [
-                    s in str(e)
-                    for s in ["invalid literal", "could not convert string to float"]
-                ]
+            if (
+                any(
+                    [
+                        s in str(e)
+                        for s in [
+                            "invalid literal",
+                            "could not convert string to float",
+                        ]
+                    ]
+                )
+                and meta.dtype.kind == "U"
             ):
-                if meta == np.array(""):
-                    meta = np.array([]).astype(dtype)
+                meta = np.array([]).astype(dtype)
             else:
                 raise e
 
