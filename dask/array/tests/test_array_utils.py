@@ -48,10 +48,16 @@ def test_meta_from_array(asarray):
     assert meta_from_array("foo") == "foo"
     assert meta_from_array(np.dtype("float32")) == np.dtype("float32")
 
-    assert meta_from_array("").dtype == np.array("").dtype
-    assert meta_from_array("", dtype="bool").dtype == np.array([], dtype="bool").dtype
-    assert meta_from_array("", dtype="int").dtype == np.array([], dtype="int").dtype
-    assert meta_from_array("", dtype="float").dtype == np.array([], dtype="float").dtype
+
+@pytest.mark.parametrize("meta", ["", "str", u"", u"str"])
+@pytest.mark.parametrize("dtype", [None, "bool", "int", "float"])
+def test_meta_from_array_literal(meta, dtype):
+    if dtype is None:
+        assert meta_from_array(meta, dtype=dtype).dtype.kind == np.array("").dtype.kind
+    else:
+        assert (
+            meta_from_array(meta, dtype=dtype).dtype == np.array([], dtype=dtype).dtype
+        )
 
 
 def test_meta_from_array_type_inputs():
