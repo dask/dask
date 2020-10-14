@@ -112,7 +112,7 @@ def meta_from_array(x, ndim=None, dtype=None):
                         "could not convert string to float",
                     ]
                 )
-                and meta.dtype.kind == "U"
+                and meta.dtype.kind in "SU"
             ):
                 meta = np.array([]).astype(dtype)
             else:
