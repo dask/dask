@@ -436,9 +436,12 @@ class ArrowDatasetEngine(Engine):
         read_from_paths=None,
         **kwargs,
     ):
-        # Reading from fragments by default.
+        # Reading from fragments by default if we are filtering.
+        # Otherwise, we will read from (path, row-group) info
+        # to avoid passing large object in the task graph.
         # (This does not affect `ArrowLegacyEngine` behavior)
-        read_from_paths = read_from_paths or False
+        if read_from_paths is None:
+            read_from_paths = filters is None
 
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
@@ -1217,6 +1220,7 @@ class ArrowDatasetEngine(Engine):
                 # metadata is complete.
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
+                    row_group_info = frag.row_groups
                 elif gather_statistics and row_group_info[0].statistics is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
