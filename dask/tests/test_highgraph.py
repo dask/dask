@@ -29,6 +29,7 @@ def test_basic():
     hg = HighLevelGraph(layers, dependencies)
 
     assert dict(hg) == {"x": 1, "y": (inc, "x")}
+    assert all(isinstance(layer, Layer) for layer in hg.layers.values())
 
 
 def test_keys_values_items_methods():
