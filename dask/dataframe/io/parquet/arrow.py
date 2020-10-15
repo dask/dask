@@ -1015,6 +1015,7 @@ class ArrowEngine(Engine):
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        parts = [p for p in parts if p[0]["meta"] is not None]
         if parts:
             if not append:
                 # Get only arguments specified in the function

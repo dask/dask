@@ -2774,3 +2774,52 @@ def test_divisions_with_null_partition(tmpdir, engine):
 
     ddf_read = dd.read_parquet(str(tmpdir), engine=engine, index="a")
     assert ddf_read.divisions == (None, None, None)
+
+
+def test_parquet_pyarrow_write_empty_metadata(tmpdir):
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    df_a = dask.delayed(pd.DataFrame.from_dict)({"x": [], "y": []}, dtype=("int", "int"))
+    df_b = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]})
+    df_c = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 2, 1, 2], "y": [1, 0, 1, 0]})
+
+    df = dd.from_delayed([df_a, df_b, df_c])
+
+    df.to_parquet(
+        tmpdir,
+        engine="pyarrow",
+        partition_on=["x"],
+        append=False,
+        compute_kwargs={"scheduler": "synchronous"},
+    )
+
+
+def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    df_a = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]})
+    df_b = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 2, 1, 2], "y": [2, 0, 2, 0]})
+
+    df1 = dd.from_delayed([df_a, df_b])
+    df1.to_parquet(
+        tmpdir,
+        engine="pyarrow",
+        partition_on=["x"],
+        append=False,
+        compute_kwargs={"scheduler": "synchronous"},
+    )
+
+    df_c = dask.delayed(pd.DataFrame.from_dict)({"x": [], "y": []}, dtype=("int", "int"))
+    df_d = dask.delayed(pd.DataFrame.from_dict)({"x": [3, 3, 4, 4], "y": [1, 0, 1, 0]})
+
+    df2 = dd.from_delayed([df_c, df_d])
+    df2.to_parquet(
+        tmpdir,
+        engine="pyarrow",
+        partition_on=["x"],
+        append=True,
+        ignore_divisions=True,
+        compute_kwargs={"scheduler": "synchronous"},
+    )
