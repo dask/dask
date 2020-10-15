@@ -17,7 +17,7 @@ except ImportError:
 
 @pytest.mark.parametrize("chunksize", [None, "1KB"])
 @pytest.mark.parametrize("split_blocks", [True, False])
-@pytest.mark.parametrize("size", [100, 10_000])
+@pytest.mark.parametrize("size", [100, 1000])
 def test_read_avro_basic(tmpdir, chunksize, size, split_blocks):
     # Require fastavro library
     pytest.importorskip("fastavro")

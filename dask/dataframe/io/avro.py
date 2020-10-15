@@ -25,7 +25,6 @@ def read_avro(
     index=None,
     columns=None,
     divisions=None,
-    **kwargs,
 ):
     """Create a dataframe from a set of Avro files
 
@@ -80,7 +79,6 @@ def read_avro(
         columns=columns,
         split_blocks=split_blocks,
         chunksize=chunksize,
-        **kwargs,
     )
     npartitions = len(pieces)
 
@@ -125,7 +123,13 @@ class AvroEngine:
 
     @classmethod
     def process_metadata(
-        cls, fs, paths, index, columns, blocksize, blocksize_bytes, **kwargs
+        cls,
+        fs,
+        paths,
+        index=None,
+        columns=None,
+        split_blocks=True,
+        chunksize=None,
     ):
         raise NotImplementedError()
 
@@ -142,9 +146,8 @@ class FastAvroEngine(AvroEngine):
         paths,
         index=None,
         columns=None,
-        split_blocks=True,  # Whether to split by avro blocks
-        chunksize=None,  # Target partition size (in bytes)
-        **kwargs,
+        split_blocks=True,
+        chunksize=None,
     ):
         chunksize = parse_bytes(chunksize or "100MB")
         if split_blocks:
