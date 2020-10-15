@@ -101,7 +101,22 @@ def meta_from_array(x, ndim=None, dtype=None):
         meta = np.array(meta)
 
     if dtype and meta.dtype != dtype:
-        meta = meta.astype(dtype)
+        try:
+            meta = meta.astype(dtype)
+        except ValueError as e:
+            if (
+                any(
+                    s in str(e)
+                    for s in [
+                        "invalid literal",
+                        "could not convert string to float",
+                    ]
+                )
+                and meta.dtype.kind in "SU"
+            ):
+                meta = np.array([]).astype(dtype)
+            else:
+                raise e
 
     return meta
 
@@ -126,10 +141,13 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     kwargs_meta["computing_meta"] = True
                 meta = func(*args_meta, **kwargs_meta)
             except TypeError as e:
-                if (
-                    "unexpected keyword argument" in str(e)
-                    or "is an invalid keyword for" in str(e)
-                    or "Did not understand the following kwargs" in str(e)
+                if any(
+                    s in str(e)
+                    for s in [
+                        "unexpected keyword argument",
+                        "is an invalid keyword for",
+                        "Did not understand the following kwargs",
+                    ]
                 ):
                     raise
                 else:
