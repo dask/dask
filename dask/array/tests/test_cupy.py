@@ -30,25 +30,30 @@ functions = [
     lambda x: da.full_like(x, 5),
     pytest.param(
         lambda x: x.mean(),
-        marks=pytest.mark.xfail(
-            reason="requires NumPy>=1.17 and CuPy support for shape argument in *_like functions."
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+            reason="NEP-18 support is not available in NumPy or CuPy older than "
+            "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
     ),
     pytest.param(
         lambda x: x.moment(order=0),
-        marks=pytest.mark.xfail(reason="see https://github.com/dask/dask/issues/4875"),
     ),
     lambda x: x.moment(order=2),
     pytest.param(
         lambda x: x.std(),
-        marks=pytest.mark.xfail(
-            reason="requires NumPy>=1.17 and CuPy support for shape argument in *_like functions."
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+            reason="NEP-18 support is not available in NumPy or CuPy older than "
+            "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
     ),
     pytest.param(
         lambda x: x.var(),
-        marks=pytest.mark.xfail(
-            reason="requires NumPy>=1.17 and CuPy support for shape argument in *_like functions."
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+            reason="NEP-18 support is not available in NumPy or CuPy older than "
+            "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
     ),
     pytest.param(
@@ -70,7 +75,6 @@ functions = [
     lambda x: x.map_blocks(lambda x: x * 2),
     pytest.param(
         lambda x: x.round(1),
-        marks=pytest.mark.xfail(reason="cupy doesn't support round"),
     ),
     lambda x: x.reshape((x.shape[0] * x.shape[1], x.shape[2])),
     # Rechunking here is required, see https://github.com/dask/dask/issues/2561
@@ -82,9 +86,6 @@ functions = [
     lambda x: x.rechunk((2, 2, 1)),
     pytest.param(
         lambda x: da.einsum("ijk,ijk", x, x),
-        marks=pytest.mark.xfail(
-            reason="depends on resolution of https://github.com/numpy/numpy/issues/12974"
-        ),
     ),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
@@ -204,9 +205,13 @@ def test_basic(func):
     ddn = func(dn)
 
     assert type(ddc._meta) == cupy.core.core.ndarray
-    assert_eq(ddc, ddc)  # Check that _meta and computed arrays match types
 
-    assert_eq(ddc, ddn)
+    if ddc.dask.keys()[0][0].startswith("empty"):
+        # We can't verify for data correctness when testing empty_like
+        assert type(ddc._meta) == type(ddc.compute())
+    else:
+        assert_eq(ddc, ddc)  # Check that _meta and computed arrays match types
+        assert_eq(ddc, ddn)
 
 
 @pytest.mark.parametrize("dtype", ["f4", "f8"])
@@ -302,12 +307,10 @@ def test_diagonal():
     assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
 
 
-@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(
-    np.__version__ < "1.17", reason="no shape argument for *_like functions"
-)
-@pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    reason="NEP-18 support is not available in NumPy or CuPy older than "
+    "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
 def test_tril_triu():
     A = cupy.random.randn(20, 20)
@@ -322,12 +325,10 @@ def test_tril_triu():
             assert_eq(da.tril(dA, k), np.tril(A, k))
 
 
-@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(
-    np.__version__ < "1.17", reason="no shape argument for *_like functions"
-)
-@pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    reason="NEP-18 support is not available in NumPy or CuPy older than "
+    "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
 def test_tril_triu_non_square_arrays():
     A = cupy.random.randint(0, 11, (30, 35))
@@ -436,12 +437,10 @@ def test_nearest():
     assert_eq(e, expected)
 
 
-@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(
-    np.__version__ < "1.17", reason="no shape argument for *_like functions"
-)
-@pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    reason="NEP-18 support is not available in NumPy or CuPy older than "
+    "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
 def test_constant():
     x = cupy.arange(64).reshape((8, 8))
@@ -455,12 +454,10 @@ def test_constant():
     assert_eq(e[-1, :], np.ones(8, dtype=x.dtype) * 10)
 
 
-@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(
-    np.__version__ < "1.17", reason="no shape argument for *_like functions"
-)
-@pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    reason="NEP-18 support is not available in NumPy or CuPy older than "
+    "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
 def test_boundaries():
     x = cupy.arange(64).reshape((8, 8))
@@ -548,11 +545,10 @@ def test_random_shapes(shape):
     assert x.shape == shape
 
 
-@pytest.mark.xfail(
-    reason="CuPy division by zero on tensordot(), https://github.com/cupy/cupy/pull/2209"
-)
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+    not IS_NEP18_ACTIVE or cupy.__version__ < "6.1.0",
+    reason="NEP-18 support is not available in NumPy or CuPy older than "
+    "6.1.0 (requires https://github.com/cupy/cupy/pull/2209)",
 )
 @pytest.mark.parametrize(
     "m,n,chunks,error_type",
@@ -916,12 +912,10 @@ def test_cupy_sparse_concatenate(axis):
     assert (z.toarray() == z_expected.toarray()).all()
 
 
-@pytest.mark.xfail(reason="no shape argument support *_like functions on CuPy yet")
 @pytest.mark.skipif(
-    np.__version__ < "1.17", reason="no shape argument for *_like functions"
-)
-@pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    reason="NEP-18 support is not available in NumPy or CuPy older than "
+    "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
 def test_bincount():
     x = cupy.array([2, 1, 5, 2, 1])

@@ -367,10 +367,11 @@ def optimize(*args, **kwargs):
 
     Examples
     --------
+    >>> import dask as d
     >>> import dask.array as da
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
-    >>> a2, b2 = optimize(a, b)
+    >>> a2, b2 = d.optimize(a, b)
 
     >>> a2.compute() == a.compute()
     True
@@ -419,15 +420,16 @@ def compute(*args, **kwargs):
 
     Examples
     --------
+    >>> import dask as d
     >>> import dask.array as da
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
-    >>> compute(a, b)
+    >>> d.compute(a, b)
     (45, 4.5)
 
     By default, dask objects inside python collections will also be computed:
 
-    >>> compute({'a': a, 'b': b, 'c': 1})  # doctest: +SKIP
+    >>> d.compute({'a': a, 'b': b, 'c': 1})
     ({'a': 45, 'b': 4.5, 'c': 1},)
     """
     traverse = kwargs.pop("traverse", True)
