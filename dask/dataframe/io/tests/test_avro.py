@@ -18,7 +18,8 @@ except ImportError:
 @pytest.mark.parametrize("chunksize", [None, "1KB"])
 @pytest.mark.parametrize("split_blocks", [True, False])
 @pytest.mark.parametrize("size", [100, 1000])
-def test_read_avro_basic(tmpdir, chunksize, size, split_blocks):
+@pytest.mark.parametrize("nfiles", [1, 2])
+def test_read_avro_basic(tmpdir, chunksize, size, split_blocks, nfiles):
     # Require fastavro library
     pytest.importorskip("fastavro")
 
@@ -38,10 +39,7 @@ def test_read_avro_basic(tmpdir, chunksize, size, split_blocks):
     # Collect block and record (row) count while writing.
     nblocks = 0
     nrecords = 0
-    paths = [
-        os.path.join(str(tmpdir), "test.0.avro"),
-        os.path.join(str(tmpdir), "test.1.avro"),
-    ]
+    paths = [os.path.join(str(tmpdir), f"test.{i}.avro") for i in range(nfiles)]
     records = []
     for path in paths:
         names = np.random.choice(name_list, size)
@@ -55,6 +53,8 @@ def test_read_avro_basic(tmpdir, chunksize, size, split_blocks):
                 nrecords += block.num_records
                 nblocks += 1
                 records += list(block)
+    if nfiles == 1:
+        paths = paths[0]
 
     # Read back with dask.dataframe
     df = dd.io.avro.read_avro(paths, chunksize=chunksize, split_blocks=split_blocks)
