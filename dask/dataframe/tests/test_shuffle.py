@@ -1032,6 +1032,6 @@ def test_shuffle_hlg_layer():
 
     # Since we already culled the HLG,
     # culling the dictionary should not change the graph
-    dsk_dict = dict(dsk)
+    dsk_dict = dict(dsk_culled)
     dsk_dict_culled, _ = cull(dsk_dict, keys)
-    assert len(dsk_dict_culled) < len(dsk_dict)
+    assert dsk_dict_culled == dsk_dict
