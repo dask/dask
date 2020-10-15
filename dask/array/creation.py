@@ -1037,7 +1037,7 @@ def pad_edge(array, pad_width, mode, **kwargs):
                 ]
         elif mode == "empty":
             pad_arrays = [
-                empty(s, dtype=array.dtype, chunks=c)
+                empty_like(array, shape=s, dtype=array.dtype, chunks=c)
                 for s, c in zip(pad_shapes, pad_chunks)
             ]
 

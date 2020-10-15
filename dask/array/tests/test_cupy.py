@@ -939,7 +939,7 @@ def test_compress():
         #((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         #((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
-        #((10,), (3,), 1, "empty", {}),
+        ((10,), (3,), 1, "empty", {}),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
