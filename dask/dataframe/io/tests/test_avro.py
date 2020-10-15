@@ -16,7 +16,7 @@ except ImportError:
 
 
 @pytest.mark.parametrize("chunksize", [None, "1KB"])
-@pytest.mark.parametrize("split_blocks", [None, True, False])
+@pytest.mark.parametrize("split_blocks", [True, False])
 @pytest.mark.parametrize("size", [100, 10_000])
 def test_read_avro_basic(tmpdir, chunksize, size, split_blocks):
     # Require fastavro library
@@ -60,7 +60,7 @@ def test_read_avro_basic(tmpdir, chunksize, size, split_blocks):
     df = dd.io.avro.read_avro(paths, chunksize=chunksize, split_blocks=split_blocks)
 
     # Check basic length and partition count
-    if split_blocks is True:
+    if split_blocks is True and chunksize == "1KB":
         assert df.npartitions == nblocks
     assert len(df) == nrecords
 
