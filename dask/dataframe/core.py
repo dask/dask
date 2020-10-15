@@ -3743,6 +3743,7 @@ class DataFrame(_Frame):
         partition_size: int, optional
             Desired size of each partitions in bytes.
             Only used when ``npartition='auto'``
+
         Examples
         --------
         >>> df2 = df.set_index('x')  # doctest: +SKIP
