@@ -44,9 +44,9 @@ class SimpleShuffleLayer(Layer):
     ignore_index: bool, default False
         Ignore index during shuffle.  If ``True``, performance may improve,
         but index values will not be preserved.
-    dep_name : str
+    name_input : str
         Name of input collection.
-    dep_meta : pd.DataFrame-like object
+    meta_input : pd.DataFrame-like object
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
@@ -59,8 +59,8 @@ class SimpleShuffleLayer(Layer):
         npartitions,
         npartitions_input,
         ignore_index,
-        dep_name,
-        dep_meta,
+        name_input,
+        meta_input,
         parts_out=None,
     ):
         self.name = name
@@ -68,8 +68,8 @@ class SimpleShuffleLayer(Layer):
         self.npartitions = npartitions
         self.npartitions_input = npartitions_input
         self.ignore_index = ignore_index
-        self.dep_name = dep_name
-        self.dep_meta = dep_meta
+        self.name_input = name_input
+        self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
 
     def __repr__(self):
@@ -120,7 +120,7 @@ class SimpleShuffleLayer(Layer):
         parts_out = self._keys_to_parts(keys)
         for part in parts_out:
             deps[(self.name, part)] |= {
-                (self.dep_name, i) for i in range(self.npartitions_input)
+                (self.name_input, i) for i in range(self.npartitions_input)
             }
         return deps
 
@@ -131,8 +131,8 @@ class SimpleShuffleLayer(Layer):
             self.npartitions,
             self.npartitions_input,
             self.ignore_index,
-            self.dep_name,
-            self.dep_meta,
+            self.name_input,
+            self.meta_input,
             parts_out=parts_out,
         )
 
@@ -174,7 +174,7 @@ class SimpleShuffleLayer(Layer):
                 if (shuffle_group_name, _part_in) not in dsk:
                     dsk[(shuffle_group_name, _part_in)] = (
                         shuffle_group,
-                        (self.dep_name, _part_in),
+                        (self.name_input, _part_in),
                         self.column,
                         0,
                         self.npartitions,
@@ -213,9 +213,9 @@ class ShuffleLayer(SimpleShuffleLayer):
     ignore_index: bool, default False
         Ignore index during shuffle.  If ``True``, performance may improve,
         but index values will not be preserved.
-    dep_name : str
+    name_input : str
         Name of input collection.
-    dep_meta : pd.DataFrame-like object
+    meta_input : pd.DataFrame-like object
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
@@ -231,8 +231,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         npartitions_input,
         nsplits,
         ignore_index,
-        dep_name,
-        dep_meta,
+        name_input,
+        meta_input,
         parts_out=None,
     ):
         self.column = column
@@ -243,8 +243,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         self.npartitions_input = npartitions_input
         self.nsplits = nsplits
         self.ignore_index = ignore_index
-        self.dep_name = dep_name
-        self.dep_meta = dep_meta
+        self.name_input = name_input
+        self.meta_input = meta_input
         self.parts_out = parts_out or range(len(inputs))
 
     def __repr__(self):
@@ -264,7 +264,7 @@ class ShuffleLayer(SimpleShuffleLayer):
             out = self.inputs[part]
             for k in range(self.nsplits):
                 _part = inp_part_map[insert(out, self.stage, k)]
-                deps[(self.name, part)].add((self.dep_name, _part))
+                deps[(self.name, part)].add((self.name_input, _part))
         return deps
 
     def _cull(self, parts_out):
@@ -277,8 +277,8 @@ class ShuffleLayer(SimpleShuffleLayer):
             self.npartitions_input,
             self.nsplits,
             self.ignore_index,
-            self.dep_name,
-            self.dep_meta,
+            self.name_input,
+            self.meta_input,
             parts_out=parts_out,
         )
 
@@ -317,12 +317,12 @@ class ShuffleLayer(SimpleShuffleLayer):
                     _part = inp_part_map[_inp]
                     if self.stage == 0:
                         input_key = (
-                            (self.dep_name, _part)
+                            (self.name_input, _part)
                             if _part < self.npartitions_input
-                            else self.dep_meta
+                            else self.meta_input
                         )
                     else:
-                        input_key = (self.dep_name, _part)
+                        input_key = (self.name_input, _part)
 
                     # Convert partition into dict of dataframe pieces
                     dsk[(shuffle_group_name, _inp)] = (
