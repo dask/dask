@@ -20,3 +20,8 @@ try:
     from .parquet import read_parquet, to_parquet
 except ImportError:
     pass
+
+try:
+    from .avro import read_avro
+except ImportError:
+    pass
