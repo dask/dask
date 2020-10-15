@@ -782,6 +782,16 @@ def test_rechunk_bad_keys():
 def test_balance_basics():
     arr_len = 220
 
+    x = da.from_array(np.arange(arr_len), chunks=100)
+    balanced = x.rechunk(chunks=100, balance=True)
+    unbalanced = x.rechunk(chunks=100, balance=False)
+    assert unbalanced.chunks[0] == (100, 100, 20)
+    assert balanced.chunks[0] == (110, 110)
+
+
+def test_balance_chunks_unchanged():
+    arr_len = 220
+
     x = da.from_array(np.arange(arr_len))
     balanced = x.rechunk(chunks=100, balance=True)
     unbalanced = x.rechunk(chunks=100, balance=False)

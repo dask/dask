@@ -256,7 +256,7 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=Fal
     )
 
     # Now chunks are tuple of tuples
-    if chunks == x.chunks:
+    if not balance and (chunks == x.chunks):
         return x
     ndim = x.ndim
     if not len(chunks) == ndim:
