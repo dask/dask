@@ -17,6 +17,7 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm, assert_categorical_equal
 from dask import delayed
 from dask.base import compute_as_if_collection
+from dask.optimization import cull
 from dask.dataframe.shuffle import (
     shuffle,
     partitioning_index,
@@ -1007,3 +1008,34 @@ def test_set_index_overlap():
     a = a.set_index("key", sorted=True)
     b = a.repartition(divisions=a.divisions)
     assert_eq(a, b)
+
+
+def test_shuffle_hlg_layer():
+    # This test checks that the `ShuffleLayer` HLG Layer
+    # is used (as expected) for a multi-stage shuffle.
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=10
+    )
+    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
+    keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
+
+    # Make sure HLG culling reduces the graph size
+    dsk = ddf_shuffled.__dask_graph__()
+    dsk_culled = dsk.cull(set(keys))
+    assert len(dsk_culled) < len(dsk)
+    assert isinstance(dsk_culled, dask.highlevelgraph.HighLevelGraph)
+
+    # Ensure we have ShuffleLayers
+    assert any(
+        isinstance(layer, dd.shuffle.ShuffleLayer) for layer in dsk.layers.values()
+    )
+    # Check ShuffleLayer names
+    for name, layer in dsk.layers.items():
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert name.startswith("shuffle-")
+
+    # Since we already culled the HLG,
+    # culling the dictionary should not change the graph
+    dsk_dict = dict(dsk_culled)
+    dsk_dict_culled, _ = cull(dsk_dict, keys)
+    assert dsk_dict_culled == dsk_dict
