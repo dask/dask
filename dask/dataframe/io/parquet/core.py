@@ -140,10 +140,6 @@ class BlockwiseParquet(Blockwise):
             self.kwargs,
             part_ids=self.part_ids,
         )
-        io_key_deps = {}
-        for i in self.part_ids:
-            io_key_deps[(self.name, i)] = {(self.io_name, i)}
-            io_key_deps[(self.io_name, i)] = set()
 
         super().__init__(
             self.name,
@@ -153,7 +149,6 @@ class BlockwiseParquet(Blockwise):
             {self.io_name: (len(self.part_ids),)},
             io_name=self.io_name,
             io_subgraph=dsk_io,
-            io_key_deps=io_key_deps,
         )
 
     def __repr__(self):

@@ -176,8 +176,6 @@ class Blockwise(Layer):
         Special name to use for data-creation keys in `indices`.  Note that
         the corresponding subgraph for these keys should be specified by the
         `io_subgraph` argument.
-    io_key_deps: dict
-        Dependencies between IO and transformation-based tasks.
 
 
     See Also
@@ -197,7 +195,6 @@ class Blockwise(Layer):
         new_axes=None,
         io_subgraph=None,
         io_name=None,
-        io_key_deps=None,
     ):
         self.output = output
         self.output_indices = tuple(output_indices)
@@ -227,7 +224,6 @@ class Blockwise(Layer):
         self.new_axes = new_axes or {}
         self.io_name = io_name
         self.io_subgraph = io_subgraph or {}
-        self.io_key_deps = io_key_deps or {}
 
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
@@ -812,15 +808,6 @@ def rewrite_blockwise(inputs):
             if not io_info and inputs[dep].io_name:
                 io_info["io_name"] = inputs[dep].io_name
                 io_info["io_subgraph"] = inputs[dep].io_subgraph
-                io_key_deps = inputs[dep].io_key_deps.copy()
-                p = 0
-                while True:
-                    if (dep, p) not in io_key_deps:
-                        break
-                    io_key_deps[(root, p)] = io_key_deps[(dep, p)]
-                    del io_key_deps[(dep, p)]
-                    p += 1
-                io_info["io_key_deps"] = io_key_deps
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -902,7 +889,6 @@ def rewrite_blockwise(inputs):
         concatenate=concatenate,
         io_name=io_info.get("io_name", None),
         io_subgraph=io_info.get("io_subgraph", None),
-        io_key_deps=io_info.get("io_key_deps", None),
     )
 
     return out

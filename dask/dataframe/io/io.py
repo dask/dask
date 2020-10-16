@@ -671,12 +671,7 @@ def from_callable(
     dsk_tf = None
 
     # Blockwise-IO graph is a simple mapping
-    dsk_io = {}
-    io_key_deps = {}
-    for i in range(npartitions):
-        dsk_io[(io_name, i)] = (func, i, *args)
-        io_key_deps[(output_name, i)] = {(io_name, i)}
-        io_key_deps[(io_name, i)] = set()
+    dsk_io = {(io_name, i): (func, i, *args) for i in range(npartitions)}
 
     # Create blockwise layer
     layer = Blockwise(
@@ -687,7 +682,6 @@ def from_callable(
         {io_name: (npartitions,)},
         io_name=io_name,
         io_subgraph=dsk_io,
-        io_key_deps=io_key_deps,
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
