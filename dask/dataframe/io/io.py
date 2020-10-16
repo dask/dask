@@ -13,7 +13,6 @@ from ...blockwise import Blockwise
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
-from ...utils import _noop
 
 from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
 from ..shuffle import set_partition
@@ -668,7 +667,7 @@ def from_callable(
     io_name = io_prefix + "-" + arg_token
 
     # Blockwise-transform graph is a "no-op"
-    dsk_tf = {output_name: (_noop, "_0")}
+    dsk_tf = None
 
     # Blockwise-IO graph is a simple mapping
     dsk_io = {}

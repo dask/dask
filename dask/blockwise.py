@@ -40,6 +40,10 @@ def blockwise_token(i, prefix="_"):
     return prefix + "%d" % i
 
 
+def io_placeholder(x):
+    return x
+
+
 def blockwise(
     func,
     output,
@@ -196,6 +200,13 @@ class Blockwise(Layer):
     ):
         self.output = output
         self.output_indices = tuple(output_indices)
+        if not dsk:
+            # If there is no `dsk` input, we must be
+            # performing IO.  The SubgraphCallable function
+            # will be constructed with `io_paceholder` (a no-op),
+            # which will be replaced with the actual IO task
+            # during graph materialization.
+            dsk = {output: (io_placeholder, "_0")}
         self.dsk = dsk
         self.indices = tuple(
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
@@ -241,6 +252,8 @@ class Blockwise(Layer):
                 key_deps=key_deps,
                 non_blockwise_keys=non_blockwise_keys,
             )
+
+            # import pdb; pdb.set_trace()
 
             if self.io_subgraph:
                 key_deps.update(dict(self.io_key_deps))

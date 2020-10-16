@@ -1467,7 +1467,3 @@ def key_split(s):
             return result
     except Exception:
         return "Other"
-
-
-def _noop(x):
-    return x

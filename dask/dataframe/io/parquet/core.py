@@ -8,7 +8,7 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....utils import import_required, natural_sort_key, parse_bytes, _noop
+from ....utils import import_required, natural_sort_key, parse_bytes
 from ...methods import concat
 from ....highlevelgraph import Layer
 from ....blockwise import Blockwise
@@ -144,7 +144,7 @@ class BlockwiseParquet(Blockwise):
         super().__init__(
             self.name,
             "i",
-            {self.name: (_noop, "_0")},
+            None,
             [(self.io_name, "i")],
             {self.io_name: (len(self.part_ids),)},
             io_name=self.io_name,
