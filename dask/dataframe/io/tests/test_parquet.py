@@ -2783,8 +2783,12 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     df_a = dask.delayed(pd.DataFrame.from_dict)(
         {"x": [], "y": []}, dtype=("int", "int")
     )
-    df_b = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64"))
-    df_c = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 2, 1, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64"))
+    df_b = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
+    df_c = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 2, 1, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
 
     df = dd.from_delayed([df_a, df_b, df_c])
 
@@ -2805,8 +2809,12 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     # https://github.com/dask/dask/issues/6600
     tmpdir = str(tmpdir)
 
-    df_a = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64"))
-    df_b = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 2, 1, 2], "y": [2, 0, 2, 0]}, dtype=("int64", "int64"))
+    df_a = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
+    df_b = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 2, 1, 2], "y": [2, 0, 2, 0]}, dtype=("int64", "int64")
+    )
 
     df1 = dd.from_delayed([df_a, df_b])
     df1.to_parquet(
@@ -2820,7 +2828,9 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     df_c = dask.delayed(pd.DataFrame.from_dict)(
         {"x": [], "y": []}, dtype=("int64", "int64")
     )
-    df_d = dask.delayed(pd.DataFrame.from_dict)({"x": [3, 3, 4, 4], "y": [1, 0, 1, 0]}, dtype=("int64", "int64"))
+    df_d = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [3, 3, 4, 4], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
 
     df2 = dd.from_delayed([df_c, df_d])
     df2.to_parquet(
