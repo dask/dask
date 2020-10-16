@@ -680,8 +680,7 @@ def from_callable(
         dsk_tf,
         [(io_name, "i")],
         {io_name: (npartitions,)},
-        io_name=io_name,
-        io_subgraph=dsk_io,
+        io_subgraph=(io_name, dsk_io),
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 

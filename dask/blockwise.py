@@ -167,15 +167,13 @@ class Blockwise(Layer):
         single input to the block function
     new_axes: Dict
         New index dimensions that may have been created, and their extent
-    io_subgraph: Dict or Mapping
+    io_subgraph: Tuple[str, Dict or Mapping]
         If the blockwise operation corresponds to the generation of a new
         collection (i.e. `indices` includes keys for a collection that has
-        yet to be constructed), this subgraph must include the required
-        keys/tasks for IO and/or in-memory data generation.
-    io_name: str
-        Special name to use for data-creation keys in `indices`.  Note that
-        the corresponding subgraph for these keys should be specified by the
-        `io_subgraph` argument.
+        yet to be constructed), this argument must be used to specify the
+        `(key-name, subgraph)` pair for the to-be-created collection. Note
+        that `key-name` must match the name used in both `indices` and in
+        the keys of `subgraph`.
 
 
     See Also
@@ -194,7 +192,6 @@ class Blockwise(Layer):
         concatenate=None,
         new_axes=None,
         io_subgraph=None,
-        io_name=None,
     ):
         self.output = output
         self.output_indices = tuple(output_indices)
@@ -222,8 +219,8 @@ class Blockwise(Layer):
         else:
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
-        self.io_name = io_name
-        self.io_subgraph = io_subgraph or {}
+        self.io_subgraph = io_subgraph[1] if io_subgraph else None
+        self.io_name = io_subgraph[0] if io_subgraph else None
 
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
@@ -792,7 +789,7 @@ def rewrite_blockwise(inputs):
     concatenate = inputs[root].concatenate
     dsk = dict(inputs[root].dsk)
 
-    io_info = {}
+    io_info = None
     changed = True
     while changed:
         changed = False
@@ -806,8 +803,7 @@ def rewrite_blockwise(inputs):
 
             # Update IO-subgraph information
             if not io_info and inputs[dep].io_name:
-                io_info["io_name"] = inputs[dep].io_name
-                io_info["io_subgraph"] = inputs[dep].io_subgraph
+                io_info = (inputs[dep].io_name, inputs[dep].io_subgraph)
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -887,8 +883,7 @@ def rewrite_blockwise(inputs):
         numblocks=numblocks,
         new_axes=new_axes,
         concatenate=concatenate,
-        io_name=io_info.get("io_name", None),
-        io_subgraph=io_info.get("io_subgraph", None),
+        io_subgraph=io_info,
     )
 
     return out

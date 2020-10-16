@@ -147,8 +147,7 @@ class BlockwiseParquet(Blockwise):
             None,
             [(self.io_name, "i")],
             {self.io_name: (len(self.part_ids),)},
-            io_name=self.io_name,
-            io_subgraph=dsk_io,
+            io_subgraph=(self.io_name, dsk_io),
         )
 
     def __repr__(self):
