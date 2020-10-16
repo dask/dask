@@ -321,7 +321,6 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    # subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
     subgraph = BlockwiseParquet(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
