@@ -201,12 +201,13 @@ class Blockwise(Layer):
         self.output = output
         self.output_indices = tuple(output_indices)
         if not dsk:
-            # If there is no `dsk` input, we must be
-            # performing IO.  The SubgraphCallable function
-            # will be constructed with `io_paceholder` (a no-op),
-            # which will be replaced with the actual IO task
-            # during graph materialization.
-            dsk = {output: (io_placeholder, "_0")}
+            # If there is no `dsk` input, there must be an IO subgraph.
+            # The SubgraphCallable function will be constructed with
+            # `io_paceholder` (a no-op) to interface with the actual IO task.
+            ninds = 1 if isinstance(output_indices, str) else len(output_indices)
+            dsk = {
+                output: (io_placeholder, *[blockwise_token(i) for i in range(ninds)])
+            }
         self.dsk = dsk
         self.indices = tuple(
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
@@ -253,11 +254,22 @@ class Blockwise(Layer):
                 non_blockwise_keys=non_blockwise_keys,
             )
 
-            # import pdb; pdb.set_trace()
-
             if self.io_subgraph:
-                key_deps.update(dict(self.io_key_deps))
-                dsk.update(dict(self.io_subgraph))
+                # This is an IO layer.
+                # Inject IO tasks into the blockwise graph
+                for k in dsk:
+                    io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
+                    if io_key in dsk[k]:
+                        new_task = [
+                            self.io_subgraph[io_key] if v == io_key else v
+                            for v in dsk[k]
+                        ]
+                        dsk[k] = tuple(new_task)
+
+                # Clear "placeholder" dependencies
+                for k in key_deps:
+                    if k[0] == self.output:
+                        key_deps[k] = set()
 
             self._cached_dict = {
                 "dsk": dsk,
