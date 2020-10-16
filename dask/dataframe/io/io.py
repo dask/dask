@@ -168,6 +168,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     Examples
     --------
+    >>> from dask.dataframe import from_pandas
     >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
     ...                   index=pd.date_range(start='20100101', periods=6))
     >>> ddf = from_pandas(df, npartitions=3)

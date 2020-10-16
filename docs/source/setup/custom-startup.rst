@@ -112,7 +112,7 @@ You can also create a class with ``setup``, ``teardown``, and ``transition`` met
 and register that class with the scheduler to give to every worker using the
 ``Client.register_worker_plugin`` method.
 
-.. currentmodule:: distributed
+.. currentmodule:: distributed  #doctest: +SKIP
 
 .. autosummary::
    Client.register_worker_plugin

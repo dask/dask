@@ -20,7 +20,15 @@ from .wrap import zeros, ones
 from .numpy_compat import ma_divide, divide as np_divide
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, funcname, Dispatch, deepmap, getargspec, derived_from
+from ..utils import (
+    ignoring,
+    funcname,
+    Dispatch,
+    deepmap,
+    getargspec,
+    derived_from,
+    is_series_like,
+)
 from .. import config
 
 # Generic functions to support chunks of different types
@@ -149,6 +157,8 @@ def reduction(
         chunk = partial(chunk, dtype=dtype)
     if "dtype" in getargspec(aggregate).args:
         aggregate = partial(aggregate, dtype=dtype)
+    if is_series_like(x):
+        x = x.values
 
     # Map chunk across all blocks
     inds = tuple(range(x.ndim))

@@ -1025,13 +1025,17 @@ def test_shuffle_hlg_layer():
     assert len(dsk_culled) < len(dsk)
     assert isinstance(dsk_culled, dask.highlevelgraph.HighLevelGraph)
 
-    # Check HLG layers beginning with "shuffle-"
+    # Ensure we have ShuffleLayers
+    assert any(
+        isinstance(layer, dd.shuffle.ShuffleLayer) for layer in dsk.layers.values()
+    )
+    # Check ShuffleLayer names
     for name, layer in dsk.layers.items():
-        if name.startswith("shuffle-"):
-            assert isinstance(layer, dd.shuffle.ShuffleLayer)
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert name.startswith("shuffle-")
 
     # Since we already culled the HLG,
     # culling the dictionary should not change the graph
-    dsk_dict = dict(dsk)
+    dsk_dict = dict(dsk_culled)
     dsk_dict_culled, _ = cull(dsk_dict, keys)
-    assert len(dsk_dict_culled) < len(dsk_dict)
+    assert dsk_dict_culled == dsk_dict

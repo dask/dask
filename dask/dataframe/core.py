@@ -583,6 +583,7 @@ Dask Name: {name}, {task} tasks"""
         --------
         Given a DataFrame, Series, or Index, such as:
 
+        >>> import pandas as pd
         >>> import dask.dataframe as dd
         >>> df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
         ...                    'y': [1., 2., 3., 4., 5.]})
@@ -689,6 +690,7 @@ Dask Name: {name}, {task} tasks"""
         --------
         Given a DataFrame, Series, or Index, such as:
 
+        >>> import pandas as pd
         >>> import dask.dataframe as dd
         >>> df = pd.DataFrame({'x': [1, 2, 4, 7, 11],
         ...                    'y': [1., 2., 3., 4., 5.]})
@@ -3739,6 +3741,7 @@ class DataFrame(_Frame):
         partition_size: int, optional
             Desired size of each partitions in bytes.
             Only used when ``npartition='auto'``
+
         Examples
         --------
         >>> df2 = df.set_index('x')  # doctest: +SKIP
@@ -4118,7 +4121,7 @@ class DataFrame(_Frame):
             shuffle=shuffle,
         )
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame)  # doctest: +SKIP
     def join(
         self,
         other,
@@ -4278,6 +4281,7 @@ class DataFrame(_Frame):
 
         Examples
         --------
+        >>> import pandas as pd
         >>> import dask.dataframe as dd
         >>> df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
         ...                    'y': [1., 2., 3., 4., 5.]})
