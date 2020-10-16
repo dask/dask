@@ -2783,7 +2783,9 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
 
     tmpdir = str(tmpdir)
 
-    df_a = dask.delayed(pd.DataFrame.from_dict)({"x": [], "y": []}, dtype=("int", "int"))
+    df_a = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [], "y": []}, dtype=("int", "int")
+    )
     df_b = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]})
     df_c = dask.delayed(pd.DataFrame.from_dict)({"x": [1, 2, 1, 2], "y": [1, 0, 1, 0]})
 
@@ -2821,7 +2823,9 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         compute_kwargs={"scheduler": "synchronous"},
     )
 
-    df_c = dask.delayed(pd.DataFrame.from_dict)({"x": [], "y": []}, dtype=("int", "int"))
+    df_c = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [], "y": []}, dtype=("int", "int")
+    )
     df_d = dask.delayed(pd.DataFrame.from_dict)({"x": [3, 3, 4, 4], "y": [1, 0, 1, 0]})
 
     df2 = dd.from_delayed([df_c, df_d])
@@ -2833,4 +2837,3 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         ignore_divisions=True,
         compute_kwargs={"scheduler": "synchronous"},
     )
-
