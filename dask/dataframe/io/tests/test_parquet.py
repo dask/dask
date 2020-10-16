@@ -2249,7 +2249,7 @@ def test_graph_size_pyarrow(tmpdir, engine):
     ddf1.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, engine=engine)
 
-    assert len(pickle.dumps(ddf2.__dask_graph__())) < 10000
+    assert len(pickle.dumps(ddf2.__dask_graph__())) < 11000
 
 
 @pytest.mark.parametrize("preserve_index", [True, False])
