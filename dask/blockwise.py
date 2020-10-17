@@ -254,10 +254,15 @@ class Blockwise(Layer):
                 for k in dsk:
                     io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
                     if io_key in dsk[k]:
-                        new_task = [
-                            self.io_subgraph[io_key] if v == io_key else v
-                            for v in dsk[k]
-                        ]
+                        if dsk[k] == (func, io_key):
+                            # We can drop the subgraph_callable if this is only IO
+                            new_task = self.io_subgraph[io_key]
+                        else:
+                            # Replace io "placeholder" with actual IO
+                            new_task = [
+                                self.io_subgraph[io_key] if v == io_key else v
+                                for v in dsk[k]
+                            ]
                         dsk[k] = tuple(new_task)
 
                 # Clear "placeholder" dependencies
