@@ -199,7 +199,10 @@ class Blockwise(Layer):
             # IO function used in `io_subgraph`.
             if io_subgraph is None:
                 raise ValueError("io_subgraph required if dsk is not supplied.")
-            io_func = list(self.io_subgraph.values())[0][0]
+
+            # TODO: This doesn't work for empty DataFrame...
+            io_func = list(dict(self.io_subgraph).values())[0][0]
+
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
             dsk = {output: (io_func, *[blockwise_token(i) for i in range(ninds)])}
         self.dsk = dsk
@@ -254,7 +257,7 @@ class Blockwise(Layer):
                         # Replace "placeholder" with tuple of arguments to
                         # actual IO function
                         new_task = [
-                            self.io_subgraph[io_key][1] if v == io_key else v
+                            dict(self.io_subgraph)[io_key][1] if v == io_key else v
                             for v in dsk[k]
                         ]
                         dsk[k] = tuple(new_task)
