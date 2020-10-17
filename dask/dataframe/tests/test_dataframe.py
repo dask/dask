@@ -4429,3 +4429,16 @@ def test_fuse_roots():
     res = ddf1.where(ddf2)
     hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
     hlg.validate()
+    
+def test_attrs():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    df.attrs = {'date': '2020-10-16'}
+    df.A.attrs['unit'] = 'kg'
+    ddf = dd.from_pandas(df, 2)
+
+    # Dataframe:
+    assert df.attrs == ddf.attrs
+    assert df.abs().attrs == ddf.abs().attrs
+
+    # Series:
+    assert df.A.attrs == ddf.A.attrs
