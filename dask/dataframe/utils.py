@@ -398,6 +398,7 @@ def meta_nonempty_dataframe(x):
         data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
+    res.attrs = x.attrs
     return res
 
 
