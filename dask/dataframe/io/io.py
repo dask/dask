@@ -634,9 +634,9 @@ def from_callable(
 
     Parameters
     ----------
-    dfs : Callable
-        A function that accepts a partition index (and any other args and/or kwargs),
-        and returns a DataFrame object.
+    func : Callable
+        A function that accepts a single tuple as an argument and returns a
+        DataFrame object. The first element of the tuple must be the partition index.
     npartitions : int
         The number of partitions in the resulting DataFrame collection.
     $META
@@ -659,7 +659,7 @@ def from_callable(
 
     # Create metadata
     if meta is None:
-        meta = func(0, *args)
+        meta = func((0, *args))
     meta = make_meta(meta)
 
     # Define key names
@@ -671,7 +671,7 @@ def from_callable(
     dsk_tf = None
 
     # Blockwise-IO graph is a simple mapping
-    dsk_io = {(io_name, i): (func, i, *args) for i in range(npartitions)}
+    dsk_io = {(io_name, i): (func, (i, *args)) for i in range(npartitions)}
 
     # Create blockwise layer
     layer = Blockwise(

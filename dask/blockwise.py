@@ -41,10 +41,6 @@ def blockwise_token(i, prefix="_"):
     return prefix + "%d" % i
 
 
-def io_placeholder(x):
-    return x
-
-
 def blockwise(
     func,
     output,
@@ -195,14 +191,17 @@ class Blockwise(Layer):
     ):
         self.output = output
         self.output_indices = tuple(output_indices)
+        self.io_subgraph = io_subgraph[1] if io_subgraph else None
+        self.io_name = io_subgraph[0] if io_subgraph else None
         if not dsk:
             # If there is no `dsk` input, there must be an IO subgraph.
-            # The SubgraphCallable function will be constructed with
-            # `io_paceholder` (a no-op) to interface with the actual IO task.
+            # The SubgraphCallable function will be constructed with actual
+            # IO function used in `io_subgraph`.
+            if io_subgraph is None:
+                raise ValueError("io_subgraph required if dsk is not supplied.")
+            io_func = list(self.io_subgraph.values())[0][0]
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
-            dsk = {
-                output: (io_placeholder, *[blockwise_token(i) for i in range(ninds)])
-            }
+            dsk = {output: (io_func, *[blockwise_token(i) for i in range(ninds)])}
         self.dsk = dsk
         self.indices = tuple(
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
@@ -219,8 +218,6 @@ class Blockwise(Layer):
         else:
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
-        self.io_subgraph = io_subgraph[1] if io_subgraph else None
-        self.io_name = io_subgraph[0] if io_subgraph else None
 
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
@@ -254,15 +251,12 @@ class Blockwise(Layer):
                 for k in dsk:
                     io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
                     if io_key in dsk[k]:
-                        if dsk[k] == (func, io_key):
-                            # We can drop the subgraph_callable if this is only IO
-                            new_task = self.io_subgraph[io_key]
-                        else:
-                            # Replace io "placeholder" with actual IO
-                            new_task = [
-                                self.io_subgraph[io_key] if v == io_key else v
-                                for v in dsk[k]
-                            ]
+                        # Replace "placeholder" with tuple of arguments to
+                        # actual IO function
+                        new_task = [
+                            self.io_subgraph[io_key][1] if v == io_key else v
+                            for v in dsk[k]
+                        ]
                         dsk[k] = tuple(new_task)
 
                 # Clear "placeholder" dependencies
