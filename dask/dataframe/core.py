@@ -332,8 +332,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return len(self.divisions) - 1
 
     @property
+    @derived_from(pd.DataFrame)
     def attrs(self):
-        """Return a dictionary storing arbitrary metadata."""
         return self._meta.attrs
 
     @attrs.setter
