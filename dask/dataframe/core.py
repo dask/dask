@@ -339,7 +339,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @attrs.setter
     def attrs(self, value):
         self._meta.attrs = dict(value)
-        
+
     @property
     def size(self):
         """Size of the Series or DataFrame as a Delayed object.
