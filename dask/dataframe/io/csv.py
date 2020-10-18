@@ -633,8 +633,10 @@ you can specify ``blocksize=None`` to not split files into multiple partitions,
 at the cost of reduced parallelism.
 """
 
+UNSUPPORTED_KWARGS = ["chunksize", "index", "index_col", "iterator", "nrows"]
 
-def make_reader(reader, reader_name, file_type, but):
+
+def make_reader(reader, reader_name, file_type):
     def read(
         urlpath,
         blocksize="default",
@@ -663,17 +665,17 @@ def make_reader(reader, reader_name, file_type, but):
 
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name, file_type=file_type)
     read.__name__ = reader_name
-    if delegates is not None:
-        read = delegates(to=reader, keep=True, but=but)(read)
+    if delegates is not None and reader is not None:
+        try:
+            read = delegates(to=reader, keep=True, but=UNSUPPORTED_KWARGS)(read)
+        except Exception:
+            pass
     return read
 
 
-UNSUPPORTED_KWARGS = ["chunksize", "index", "index_col", "iterator", "nrows"]
-read_csv = make_reader(pd.read_csv, "read_csv", "CSV", UNSUPPORTED_KWARGS)
-read_table = make_reader(pd.read_table, "read_table", "delimited",
-                         UNSUPPORTED_KWARGS)
-read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width",
-                       UNSUPPORTED_KWARGS)
+read_csv = make_reader(pd.read_csv, "read_csv", "CSV")
+read_table = make_reader(pd.read_table, "read_table", "delimited")
+read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):

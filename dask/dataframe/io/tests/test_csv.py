@@ -1,6 +1,7 @@
 from io import BytesIO
 import os
 import gzip
+from inspect import signature
 from time import sleep
 from unittest import mock
 
@@ -17,10 +18,12 @@ from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
 from dask.core import flatten
 from dask.dataframe.io.csv import (
-    text_blocks_to_pandas,
-    pandas_read_text,
     auto_blocksize,
     block_mask,
+    make_reader,
+    pandas_read_text,
+    text_blocks_to_pandas,
+    UNSUPPORTED_KWARGS,
 )
 from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
@@ -1587,3 +1590,15 @@ def test_reading_empty_csv_files_with_path():
         )
         df["path"] = df["path"].astype("category")
         assert_eq(result, df, check_index=False)
+
+
+def test_reader_signature():
+    pytest.importorskip("fastcore")
+    default_params = signature(make_reader(None, "", "")).parameters.keys()
+    funcs = [dd.read_csv, dd.read_table, dd.read_fwf]
+    for func in funcs:
+        params = signature(func).parameters.keys()
+        # signature includes default dask parameters
+        assert params > default_params
+        # signature does not include unsupported kwargs
+        assert params.isdisjoint(UNSUPPORTED_KWARGS)
