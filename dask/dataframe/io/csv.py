@@ -8,6 +8,11 @@ try:
 except ImportError:
     psutil = None
 
+try:
+    from fastcore.meta import delegates
+except ImportError:
+    delegates = None
+
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -629,7 +634,7 @@ at the cost of reduced parallelism.
 """
 
 
-def make_reader(reader, reader_name, file_type):
+def make_reader(reader, reader_name, file_type, but):
     def read(
         urlpath,
         blocksize="default",
@@ -658,12 +663,17 @@ def make_reader(reader, reader_name, file_type):
 
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name, file_type=file_type)
     read.__name__ = reader_name
+    if delegates is not None:
+        read = delegates(to=reader, keep=True, but=but)(read)
     return read
 
 
-read_csv = make_reader(pd.read_csv, "read_csv", "CSV")
-read_table = make_reader(pd.read_table, "read_table", "delimited")
-read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width")
+UNSUPPORTED_KWARGS = ["chunksize", "index", "index_col", "iterator", "nrows"]
+read_csv = make_reader(pd.read_csv, "read_csv", "CSV", UNSUPPORTED_KWARGS)
+read_table = make_reader(pd.read_table, "read_table", "delimited",
+                         UNSUPPORTED_KWARGS)
+read_fwf = make_reader(pd.read_fwf, "read_fwf", "fixed-width",
+                       UNSUPPORTED_KWARGS)
 
 
 def _write_csv(df, fil, *, depend_on=None, **kwargs):
