@@ -79,3 +79,46 @@ def test_reshape_unknown_sizes():
         a.reshape((60, -1, -1))
     with pytest.raises(ValueError):
         A.reshape((60, -1, -1))
+
+
+@pytest.mark.parametrize(
+    "inshape, inchunks, outshape, outchunks",
+    [
+        # (2, 3, 4) -> (6, 4)
+        ((2, 3, 4), ((1, 1), (1, 2), (2, 2)), (6, 4), ((1, 2, 1, 2), (2, 2))),
+        # (1, 2, 3, 4) -> (12, 4)
+        ((1, 2, 3, 4), ((1,), (1, 1), (1, 2), (2, 2)), (6, 4), ((1, 2, 1, 2), (2, 2))),
+        # (2, 2, 3, 4) -> (12, 4)
+        (
+            (2, 2, 3, 4),
+            ((1, 1), (1, 1), (1, 2), (2, 2)),
+            (12, 4),
+            ((1, 2, 1, 2, 1, 2, 1, 2), (2, 2)),
+        ),
+        # (2, 2, 3, 4) -> (4, 3, 4)
+        (
+            (2, 2, 3, 4),
+            ((1, 1), (1, 1), (1, 2), (2, 2)),
+            (4, 3, 4),
+            ((1, 1, 1, 1), (1, 2), (2, 2)),
+        ),
+        # (2, 2, 3, 4) -> (4, 3, 4)
+        ((2, 2, 3, 4), ((1, 1), (2,), (1, 2), (4,)), (4, 3, 4), ((2, 2), (1, 2), (4,))),
+    ],
+)
+def test_reshape_all_chunked_no_merge(inshape, inchunks, outshape, outchunks):
+    # https://github.com/dask/dask/issues/5544#issuecomment-712280433
+    # When the early axes are completely chunked then we are just moving blocks
+    # and can avoid any rechunking. The outchunks will always be ...
+    base = np.arange(np.prod(inshape)).reshape(inshape)
+    a = da.from_array(base, chunks=inchunks)
+
+    # test directly
+    inchunks2, outchunks2 = reshape_rechunk(a.shape, outshape, inchunks)
+    assert inchunks2 == inchunks
+    assert outchunks2 == outchunks
+
+    # and via reshape
+    result = a.reshape(outshape)
+    assert result.chunks == outchunks
+    assert_eq(result, base.reshape(outshape))

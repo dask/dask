@@ -43,16 +43,26 @@ def reshape_rechunk(inshape, outshape, inchunks):
             if reduce(mul, inshape[ileft : ii + 1]) != dout:
                 raise ValueError("Shapes not compatible")
 
-            for i in range(ileft + 1, ii + 1):  # need single-shape dimensions
-                result_inchunks[i] = (inshape[i],)  # chunks[i] = (4,)
+            # Special case to avoid intermediate rechunking:
+            # When all the lower axis are completely chunked (chunksize=1) then
+            # we're simply moving around blocks.
+            if all(len(inchunks[i]) == inshape[i] for i in range(ileft + 1)):
+                for i in range(ii + 1):
+                    result_inchunks[i] = inchunks[i]
+                result_outchunks[oi] = inchunks[i] * np.prod(
+                    list(map(len, inchunks[:i]))
+                )
+            else:
+                for i in range(ileft + 1, ii + 1):  # need single-shape dimensions
+                    result_inchunks[i] = (inshape[i],)  # chunks[i] = (4,)
 
-            chunk_reduction = reduce(mul, map(len, inchunks[ileft + 1 : ii + 1]))
-            result_inchunks[ileft] = expand_tuple(inchunks[ileft], chunk_reduction)
+                chunk_reduction = reduce(mul, map(len, inchunks[ileft + 1 : ii + 1]))
+                result_inchunks[ileft] = expand_tuple(inchunks[ileft], chunk_reduction)
 
-            prod = reduce(mul, inshape[ileft + 1 : ii + 1])  # 16
-            result_outchunks[oi] = tuple(
-                prod * c for c in result_inchunks[ileft]
-            )  # (1, 1, 1, 1) .* 16
+                prod = reduce(mul, inshape[ileft + 1 : ii + 1])  # 16
+                result_outchunks[oi] = tuple(
+                    prod * c for c in result_inchunks[ileft]
+                )  # (1, 1, 1, 1) .* 16
 
             oi -= 1
             ii = ileft - 1
