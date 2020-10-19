@@ -4431,6 +4431,9 @@ def test_fuse_roots():
     hlg.validate()
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < "1.0.0", reason="attrs introduced in 1.0.0"
+)
 def test_attrs_dataframe():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.attrs = {"date": "2020-10-16"}
@@ -4440,6 +4443,9 @@ def test_attrs_dataframe():
     assert df.abs().attrs == ddf.abs().attrs
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < "1.0.0", reason="attrs introduced in 1.0.0"
+)
 def test_attrs_series():
     s = pd.Series([1, 2], name="A")
     s.attrs["unit"] = "kg"
@@ -4449,6 +4455,9 @@ def test_attrs_series():
     assert s.fillna(1).attrs == ds.fillna(1).attrs
 
 
+@pytest.mark.skipif(
+    PANDAS_VERSION < "1.0.0", reason="attrs introduced in 1.0.0"
+)
 @pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
 def test_attrs_series_in_dataframes():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
