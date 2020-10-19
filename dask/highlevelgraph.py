@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Callable, Hashable, Set, Mapping, Iterable, Tuple
+from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -232,12 +232,12 @@ class HighLevelGraph(Mapping):
         self,
         layers: Mapping[str, Layer],
         dependencies: Mapping[str, Set],
-        key_dependencies: Mapping[Hashable, Set] = {},
+        key_dependencies: Optional[Mapping[Hashable, Set]] = None,
     ):
         self._keys = None
         self.layers = layers
         self.dependencies = dependencies
-        self.key_dependencies = key_dependencies
+        self.key_dependencies = key_dependencies if key_dependencies else {}
 
         # Makes sure that all layers are `Layer`
         self.layers = {
