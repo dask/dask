@@ -589,7 +589,8 @@ def _nonempty_series(s, idx=None):
         data = np.array([entry, entry], dtype=dtype)
 
     out = pd.Series(data, name=s.name, index=idx)
-    out.attrs = s.attrs
+    if PANDAS_GT_100:
+        out.attrs = s.attrs
     return out
 
 
