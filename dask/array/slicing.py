@@ -609,10 +609,17 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     index = np.asarray(index)
 
     # Check for chunks from the plan that would violate the user's
-    # configured chunk size.
+    # configured chunk size. There's some ambiguity here with
+    # non-uniform chunk sizes on the non-slicing axis. If I have chunks
+    # like ((1, 1), (1, 9), (9, 1)) then slicing ``a[[0, 0]]`` will give
+    #   - one small chunk (1 * 1)
+    #   - two medium chunks (1 * 9) and (9 * 1)
+    #   - one large chunk (9 * 9)
+    # Given that we're trying to avoid OutOfMemory errors here, we
+    # warn / split when the maximum exceeds our threshold.
     nbytes = utils.parse_bytes(config.get("array.chunk-size"))
     other_chunks = [chunks[i] for i in range(len(chunks)) if i != axis]
-    other_numel = np.prod([sum(x) for x in other_chunks])
+    other_numel = max(map(np.prod, product(*other_chunks)))
 
     if math.isnan(other_numel):
         warnsize = maxsize = math.inf
@@ -630,10 +637,10 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             msg = (
                 "Slicing is producing a large chunk. To accept the large\n"
                 "chunk and silence this warning, set the option\n"
-                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': False}):\n"
+                "    >>> with dask.config.set({'array.slicing.split_large_chunks': False}):\n"
                 "    ...     array[indexer]\n\n"
                 "To avoid creating the large chunks, set the option\n"
-                "    >>> with dask.config.set(**{'array.slicing.split_large_chunks': True}):\n"
+                "    >>> with dask.config.set({'array.slicing.split_large_chunks': True}):\n"
                 "    ...     array[indexer]"
             )
             warnings.warn(msg, PerformanceWarning, stacklevel=6)

@@ -973,6 +973,24 @@ def test_take_uses_config():
         assert len(dsk) == 4
 
 
+def test_take_avoids_large_chunks_non_uniform():
+    a = da.from_array(
+        np.ones(10 * 10 * 10, dtype="int64").reshape(10, 10, 10),
+        chunks=((1,) * 10, (1, 9), (1, 9)),
+    )
+    # this is configured to warn with at least 15 elements. Under the
+    # old buggy code that ignored non-uniform chunking we warned with
+    # at least 10 elements.
+    cfg = {
+        "array.chunk-size": 1600,
+        "array.slicing.split-large-chunks": True,
+    }
+
+    with config.set(cfg):
+        result = a[[0] * 11]
+    assert result.chunks[0] == (3, 3, 3, 2)
+
+
 def test_pathological_unsorted_slicing():
     x = da.ones(100, chunks=10)
 
