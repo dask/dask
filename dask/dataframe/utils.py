@@ -587,7 +587,9 @@ def _nonempty_series(s, idx=None):
         entry = _scalar_from_dtype(dtype)
         data = np.array([entry, entry], dtype=dtype)
 
-    return pd.Series(data, name=s.name, index=idx)
+    out = pd.Series(data, name=s.name, index=idx)
+    out.attrs = s.attrs
+    return out
 
 
 def is_dataframe_like(df):
