@@ -122,3 +122,27 @@ def test_reshape_all_chunked_no_merge(inshape, inchunks, outshape, outchunks):
     result = a.reshape(outshape)
     assert result.chunks == outchunks
     assert_eq(result, base.reshape(outshape))
+
+
+@pytest.mark.parametrize(
+    "inshape, inchunks, expected_inchunks, outshape, outchunks",
+    [
+        # (2, 3, 4) -> (24,). This does merge, since the second dim isn't fully chunked!
+        ((2, 3, 4), ((1, 1), (1, 2), (2, 2)), ((1, 1), (3,), (4,)), (24,), ((12, 12),)),
+    ],
+)
+def test_reshape_all_not_chunked_merge(
+    inshape, inchunks, expected_inchunks, outshape, outchunks
+):
+    base = np.arange(np.prod(inshape)).reshape(inshape)
+    a = da.from_array(base, chunks=inchunks)
+
+    # test directly
+    inchunks2, outchunks2 = reshape_rechunk(a.shape, outshape, inchunks)
+    assert inchunks2 == expected_inchunks
+    assert outchunks2 == outchunks
+
+    # and via reshape
+    result = a.reshape(outshape)
+    assert result.chunks == outchunks
+    assert_eq(result, base.reshape(outshape))

@@ -46,7 +46,8 @@ def reshape_rechunk(inshape, outshape, inchunks):
             # Special case to avoid intermediate rechunking:
             # When all the lower axis are completely chunked (chunksize=1) then
             # we're simply moving around blocks.
-            if all(len(inchunks[i]) == inshape[i] for i in range(ileft + 1)):
+            # breakpoint()
+            if all(len(inchunks[i]) == inshape[i] for i in range(ii)):
                 for i in range(ii + 1):
                     result_inchunks[i] = inchunks[i]
                 result_outchunks[oi] = inchunks[i] * np.prod(
