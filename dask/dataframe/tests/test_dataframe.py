@@ -4431,15 +4431,32 @@ def test_fuse_roots():
     hlg.validate()
 
 
-def test_attrs():
+def test_attrs_dataframe():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.attrs = {"date": "2020-10-16"}
-    df.A.attrs["unit"] = "kg"
     ddf = dd.from_pandas(df, 2)
 
-    # Dataframe:
     assert df.attrs == ddf.attrs
     assert df.abs().attrs == ddf.abs().attrs
 
-    # Series:
-    # assert df.A.attrs == ddf.A.attrs
+
+def test_attrs_series():
+    s = pd.Series([1, 2], name="A")
+    s.attrs["unit"] = "kg"
+    ds = dd.from_pandas(s, 2)
+
+    assert s.attrs == ds.attrs
+    assert s.fillna(1).attrs == ds.fillna(1).attrs
+
+
+@pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
+def test_attrs_series_in_dataframes():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    df.A.attrs["unit"] = "kg"
+    ddf = dd.from_pandas(df, 2)
+
+    # Fails because the pandas iloc method doesn't currently persist
+    # the attrs dict for series in a dataframee. Dask uses df.iloc[:0]
+    # when creating the _meta dataframe in make_meta_pandas(x, index=None).
+    # Should start xpassing when df.iloc works. Remove the xfail then.
+    assert df.A.attrs == ddf.A.attrs
