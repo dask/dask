@@ -5250,7 +5250,6 @@ def map_partitions(
 
     if has_keyword(func, "partition_info"):
         dsk = dict(dsk)
-        partition_info = {}
 
         for k, v in dsk.items():
             vv = v
