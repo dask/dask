@@ -15,13 +15,18 @@ except ImportError:
     fa = None
 
 
-@pytest.mark.parametrize("chunksize", [None, "1KB"])
-@pytest.mark.parametrize("split_blocks", [True, False])
+@pytest.mark.parametrize("blocksize", [None, "1KB", False])
 @pytest.mark.parametrize("size", [100, 1000])
 @pytest.mark.parametrize("nfiles", [1, 2])
-def test_read_avro_basic(tmpdir, chunksize, size, split_blocks, nfiles):
-    # Require fastavro library
+@pytest.mark.parametrize("engine", ["uavro", "fastavro"])
+def test_read_avro_basic(tmpdir, blocksize, size, nfiles, engine):
+    # Require fastavro library.
+    # Used to write for both engines for now.
     pytest.importorskip("fastavro")
+
+    # Set engine
+    if engine == "uavro":
+        pytest.importorskip("uavro")
 
     # Define avro schema
     schema = fa.parse_schema(
@@ -57,13 +62,15 @@ def test_read_avro_basic(tmpdir, chunksize, size, split_blocks, nfiles):
         paths = paths[0]
 
     # Read back with dask.dataframe
-    df = dd.io.avro.read_avro(paths, chunksize=chunksize, split_blocks=split_blocks)
+    df = dd.io.avro.read_avro(paths, blocksize=blocksize, engine=engine)
 
     # Check basic length and partition count
-    if split_blocks is True and chunksize == "1KB":
+    if blocksize == "1KB":
         assert df.npartitions == nblocks
     assert len(df) == nrecords
 
     # Full comparison
     expect = pd.DataFrame.from_records(records)
+    if engine == "uavro":
+        expect["age"] = expect["age"].astype("int32")
     assert_eq(df.compute(scheduler="synchronous").reset_index(drop=True), expect)
