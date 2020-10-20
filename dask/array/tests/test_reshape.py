@@ -109,7 +109,8 @@ def test_reshape_unknown_sizes():
 def test_reshape_all_chunked_no_merge(inshape, inchunks, outshape, outchunks):
     # https://github.com/dask/dask/issues/5544#issuecomment-712280433
     # When the early axes are completely chunked then we are just moving blocks
-    # and can avoid any rechunking. The outchunks will always be ...
+    # and can avoid any rechunking. The result inchunks are the same as the
+    # input chunks.
     base = np.arange(np.prod(inshape)).reshape(inshape)
     a = da.from_array(base, chunks=inchunks)
 
