@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Callable, Hashable, Set, Mapping, Iterable, Tuple
+from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -118,6 +118,24 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer({k: func(v) for k, v in self.items()})
 
+    def __reduce__(self):
+        """Default serialization implementation, which materializes the Layer
+
+        This should follow the standard pickle protocol[1] but must always return
+        a tuple and the arguments for the callable object must be compatible with
+        msgpack. This is because Distributed uses msgpack to send Layers to the
+        scheduler.
+
+        [1] <https://docs.python.org/3/library/pickle.html#object.__reduce__>
+        """
+        return (BasicLayer, (dict(self),))
+
+    def __copy__(self):
+        """Default shallow copy implementation"""
+        obj = type(self).__new__(self.__class__)
+        obj.__dict__.update(self.__dict__)
+        return obj
+
 
 class BasicLayer(Layer):
     """Basic implementation of `Layer`
@@ -232,12 +250,12 @@ class HighLevelGraph(Mapping):
         self,
         layers: Mapping[str, Layer],
         dependencies: Mapping[str, Set],
-        key_dependencies: Mapping[Hashable, Set] = {},
+        key_dependencies: Optional[Mapping[Hashable, Set]] = None,
     ):
         self._keys = None
         self.layers = layers
         self.dependencies = dependencies
-        self.key_dependencies = key_dependencies
+        self.key_dependencies = key_dependencies if key_dependencies else {}
 
         # Makes sure that all layers are `Layer`
         self.layers = {
