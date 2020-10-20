@@ -871,7 +871,6 @@ def test_map_partitions_partition_info():
         assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
         return df
 
-    print("in test")
     result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
     assert type(result) == pd.DataFrame
 
