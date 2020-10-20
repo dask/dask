@@ -818,6 +818,19 @@ def test_lstsq(nrow, ncol, chunk):
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
     assert drank.compute() == rank
 
+    # 2D case
+    A = np.random.randint(1, 20, (nrow, ncol))
+    b2D = np.random.randint(1, 20, (nrow, ncol // 2))
+    dA = da.from_array(A, (chunk, ncol))
+    db2D = da.from_array(b2D, (chunk, ncol // 2))
+    x, r, rank, s = np.linalg.lstsq(A, b2D, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db2D)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
+
 
 def test_no_chunks_svd():
     x = np.random.random((100, 10))
