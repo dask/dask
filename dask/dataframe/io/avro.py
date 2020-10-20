@@ -72,7 +72,7 @@ def read_avro(
     storage_options=None,
     blocksize=None,
     meta=None,
-    engine=None,
+    engine="auto",
     index=None,
     columns=None,
     divisions=None,
