@@ -122,7 +122,7 @@ def read_avro(
     )
     npartitions = len(pieces)
 
-    # `pieces` is a list with the following dict (possible) elements:
+    # `pieces` is a list with the following dict elements:
     # {
     #    "path" : <file-path>,
     #    "rows" : (<file-row-offset>, <row-count>),
