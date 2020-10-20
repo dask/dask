@@ -23,7 +23,7 @@ _ENGINES = {}
 
 
 def get_engine(engine):
-    """Get the parquet engine backend implementation.
+    """Get the avro engine backend implementation.
 
     Parameters
     ----------
