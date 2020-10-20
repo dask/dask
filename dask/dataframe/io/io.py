@@ -659,7 +659,7 @@ def from_callable(
 
     # Create metadata
     if meta is None:
-        meta = func((0, *args))
+        meta = func(0, *args)
     meta = make_meta(meta)
 
     # Define key names
@@ -671,7 +671,7 @@ def from_callable(
     dsk_tf = None
 
     # Blockwise-IO graph is a simple mapping
-    dsk_io = {(io_name, i): (func, (i, *args)) for i in range(npartitions)}
+    dsk_io = {(io_name, i): (func, i, *args) for i in range(npartitions)}
 
     # Create blockwise layer
     layer = Blockwise(

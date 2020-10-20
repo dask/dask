@@ -703,8 +703,7 @@ def test_from_dask_array_index_dtype():
 def test_from_callable():
 
     # Function used to generate data for each partition
-    def _create(args):
-        part, size = args
+    def _create(part, size):
         return pd.DataFrame({"a": np.arange(part * size, (part + 1) * size)})
 
     npartitions = 4  # Output partition count
@@ -713,7 +712,7 @@ def test_from_callable():
     # Use `from_callable` to generate a DataFrame
     # comprised of a single `Blockwise` layer
     ddf = dd.from_callable(_create, npartitions, size)
-    expect = _create((0, size * npartitions))
+    expect = _create(0, size * npartitions)
 
     # `ddf` should now have ONE Blockwise layer
     layers = ddf.__dask_graph__().layers

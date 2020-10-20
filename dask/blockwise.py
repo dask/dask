@@ -14,7 +14,21 @@ from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
 def no_op(x):
+    """No-op utility."""
     return x
+
+
+class PackedFunctionCall(object):
+    """Function-decorator class to expand tuple arguments."""
+
+    def __init__(self, func):
+        self.func = func
+
+    def __call__(self, args):
+        if isinstance(args, tuple):
+            return self.func(*args)
+        else:
+            return self.func(args)
 
 
 def subs(task, substitution):
@@ -202,10 +216,18 @@ class Blockwise(Layer):
             if io_subgraph is None:
                 raise ValueError("io_subgraph required if dsk is not supplied.")
 
-            # Extract actual IO function to construct a SubgraphCallable.
+            # Extract actual IO function for SubgraphCallable construction.
+            # Wrap func in `PackedFunctionCall`, since it will receive
+            # all arguments as a sigle (packed) tuple at run time.
             io_func = self.io_subgraph.get((self.io_name, 0), (no_op,))[0]
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
-            dsk = {output: (io_func, *[blockwise_token(i) for i in range(ninds)])}
+            dsk = {
+                output: (
+                    PackedFunctionCall(io_func),
+                    *[blockwise_token(i) for i in range(ninds)],
+                )
+            }
+
         self.dsk = dsk
         self.indices = tuple(
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
@@ -251,18 +273,17 @@ class Blockwise(Layer):
 
             if self.io_subgraph:
                 # This is an IO layer.
-                # Inject IO-function parameters into the blockwise graph
                 for k in dsk:
                     io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
                     if io_key in dsk[k]:
-                        # Replace "placeholder" with arguments to the IO function.
-                        new_task = [
-                            self.io_subgraph.get(io_key)[1] if v == io_key else v
-                            for v in dsk[k]
-                        ]
+                        # Inject IO-function arguments into the blockwise graph
+                        # as a single (packed) tuple.
+                        io_item = self.io_subgraph.get(io_key)
+                        io_item = io_item[1:] if len(io_item) > 1 else tuple()
+                        new_task = [io_item if v == io_key else v for v in dsk[k]]
                         dsk[k] = tuple(new_task)
 
-                # Clear "placeholder" dependencies
+                # Clear IO "placeholder" dependencies
                 for k in key_deps:
                     if k[0] == self.output:
                         key_deps[k] = set()

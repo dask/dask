@@ -74,15 +74,13 @@ class ParquetSubgraph(Layer):
 
         return (
             read_parquet_part,
-            (
-                self.fs,
-                self.engine.read_partition,
-                self.meta,
-                [p["piece"] for p in part],
-                self.columns,
-                self.index,
-                toolz.merge(part[0]["kwargs"], self.kwargs or {}),
-            ),
+            self.fs,
+            self.engine.read_partition,
+            self.meta,
+            [p["piece"] for p in part],
+            self.columns,
+            self.index,
+            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
         )
 
     def __len__(self):
@@ -339,11 +337,10 @@ def read_parquet(
     return new_dd_object(subgraph, name, meta, divisions)
 
 
-def read_parquet_part(args):
+def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
-    fs, func, meta, part, columns, index, kwargs = args
 
     if isinstance(part, list):
         dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
