@@ -13,11 +13,6 @@ from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
-def no_op(x):
-    """No-op utility."""
-    return x
-
-
 class PackedFunctionCall(object):
     """Function-decorator class to expand tuple arguments."""
 
@@ -25,6 +20,8 @@ class PackedFunctionCall(object):
         self.func = func
 
     def __call__(self, args):
+        if self.func is None:
+            return None
         if isinstance(args, tuple):
             return self.func(*args)
         else:
@@ -219,7 +216,7 @@ class Blockwise(Layer):
             # Extract actual IO function for SubgraphCallable construction.
             # Wrap func in `PackedFunctionCall`, since it will receive
             # all arguments as a sigle (packed) tuple at run time.
-            io_func = self.io_subgraph.get((self.io_name, 0), (no_op,))[0]
+            io_func = self.io_subgraph.get((self.io_name, 0), (None,))[0]
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
             dsk = {
                 output: (
