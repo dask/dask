@@ -13,6 +13,10 @@ from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
+def no_op(x):
+    return x
+
+
 def subs(task, substitution):
     """Create a new task with the values substituted
 
@@ -195,14 +199,11 @@ class Blockwise(Layer):
         self.io_name = io_subgraph[0] if io_subgraph else None
         if not dsk:
             # If there is no `dsk` input, there must be an IO subgraph.
-            # The SubgraphCallable function will be constructed with actual
-            # IO function used in `io_subgraph`.
             if io_subgraph is None:
                 raise ValueError("io_subgraph required if dsk is not supplied.")
 
-            # TODO: This doesn't work for empty DataFrame...
-            io_func = list(dict(self.io_subgraph).values())[0][0]
-
+            # Extract actual IO function to construct a SubgraphCallable.
+            io_func = self.io_subgraph.get((self.io_name, 0), (no_op,))[0]
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
             dsk = {output: (io_func, *[blockwise_token(i) for i in range(ninds)])}
         self.dsk = dsk
@@ -250,14 +251,13 @@ class Blockwise(Layer):
 
             if self.io_subgraph:
                 # This is an IO layer.
-                # Inject IO tasks into the blockwise graph
+                # Inject IO-function parameters into the blockwise graph
                 for k in dsk:
                     io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
                     if io_key in dsk[k]:
-                        # Replace "placeholder" with tuple of arguments to
-                        # actual IO function
+                        # Replace "placeholder" with arguments to the IO function.
                         new_task = [
-                            dict(self.io_subgraph)[io_key][1] if v == io_key else v
+                            self.io_subgraph.get(io_key)[1] if v == io_key else v
                             for v in dsk[k]
                         ]
                         dsk[k] = tuple(new_task)

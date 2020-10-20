@@ -721,7 +721,7 @@ def test_from_callable():
     assert isinstance(list(layers.values())[0], Blockwise)
 
     # Check single-layer result
-    got = ddf.copy().compute().reset_index(drop=True)
+    got = ddf.copy().compute(scheduler="synchronous").reset_index(drop=True)
     assert_eq(got, expect.reset_index(drop=True))
 
     # Increment by 1
@@ -747,5 +747,5 @@ def test_from_callable():
     assert isinstance(layers[name], Blockwise)
 
     # Check final result
-    got = ddf.compute().reset_index(drop=True)
+    got = ddf.compute(scheduler="synchronous").reset_index(drop=True)
     assert_eq(got, expect.reset_index(drop=True))

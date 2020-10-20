@@ -196,6 +196,7 @@ def test_simple(tmpdir, write_engine, read_engine):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
     read_df = dd.read_parquet(fn, index=["a"], engine=read_engine)
+    read_df.compute(scheduler="synchronous")
     assert_eq(ddf, read_df)
 
 
