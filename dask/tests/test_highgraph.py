@@ -8,6 +8,7 @@ from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
 from dask.blockwise import Blockwise
 from dask.array.utils import assert_eq
+from dask import config
 
 
 def test_visualize(tmpdir):
@@ -110,3 +111,19 @@ def test_map_tasks(use_layer_map_task):
 
     y.dask = dsk.map_tasks(plus_one)
     assert_eq(y, [42] * 3)
+
+
+def test_disable_lowlevel_fusion():
+    """Check that by disabling fusion, the HLG survives through optimizations"""
+
+    with config.set({"optimization.fuse.active": False}):
+        y = da.ones(3, chunks=(3,), dtype="int")
+        optimize = y.__dask_optimize__
+        dsk1 = y.__dask_graph__()
+        dsk2 = optimize(dsk1, y.__dask_keys__())
+        assert isinstance(dsk1, HighLevelGraph)
+        assert isinstance(dsk2, HighLevelGraph)
+        assert dsk1 == dsk2
+        y = y.persist()
+        assert isinstance(y.__dask_graph__(), HighLevelGraph)
+        assert_eq(y, [1] * 3)
