@@ -313,7 +313,12 @@ def partial_reduce(
             meta = func(reduced_meta, computing_meta=True)
         # no meta keyword argument exists for func, and it isn't required
         except TypeError:
-            meta = func(reduced_meta)
+            try:
+                meta = func(reduced_meta)
+            except ValueError as e:
+                # min/max functions have no identity, don't apply function to meta
+                if "zero-size array to reduction operation" in str(e):
+                    meta = reduced_meta
         # when no work can be computed on the empty array (e.g., func is a ufunc)
         except ValueError:
             pass

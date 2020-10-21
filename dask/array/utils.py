@@ -152,6 +152,12 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     raise
                 else:
                     return None
+            except ValueError as e:
+                # min/max functions have no identity, attempt to use the first meta
+                if "zero-size array to reduction operation" in str(e):
+                    meta = args_meta[0]
+                else:
+                    return None
             except Exception:
                 return None
 
