@@ -3,7 +3,8 @@ from operator import getitem
 
 import numpy as np
 
-from .core import getter, getter_nofancy, getter_inline, config
+from .core import getter, getter_nofancy, getter_inline
+from .. import config
 from ..blockwise import optimize_blockwise, fuse_roots
 from ..core import flatten, reverse_dict
 from ..optimization import fuse, inline_functions
