@@ -2798,7 +2798,6 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
             engine="pyarrow",
             partition_on=["x"],
             append=False,
-            compute_kwargs={"scheduler": "synchronous"},
         )
 
     except AttributeError:
@@ -2822,7 +2821,6 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         engine="pyarrow",
         partition_on=["x"],
         append=False,
-        compute_kwargs={"scheduler": "synchronous"},
     )
 
     df_c = dask.delayed(pd.DataFrame.from_dict)(
@@ -2839,5 +2837,4 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         partition_on=["x"],
         append=True,
         ignore_divisions=True,
-        compute_kwargs={"scheduler": "synchronous"},
     )
