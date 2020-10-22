@@ -87,17 +87,21 @@ def test_map_basic_layers(inject_dict):
     assert_eq(y, [42] * 3)
 
 
+@pytest.mark.parametrize("pass_key", [True, False])
 @pytest.mark.parametrize("use_layer_map_task", [True, False])
-def test_map_tasks(use_layer_map_task):
+def test_map_tasks(use_layer_map_task, pass_key):
     """Check map_tasks() by injecting an +1 to the `40` literal"""
     y = da.ones(3, chunks=(3,), dtype="int") + 40
+    save_keys = set()
 
-    def plus_one(tasks):
+    def plus_one(tasks, key=None):
         ret = []
         for t in tasks:
             if t == 40:
                 t += 1
             ret.append(t)
+        if key:
+            save_keys.add(key)
         return tuple(ret)
 
     dsk = y.__dask_graph__()
@@ -108,5 +112,12 @@ def test_map_tasks(use_layer_map_task):
         blockwise_layer = list(dsk.layers.values())[1]
         blockwise_layer.map_tasks = partial(Layer.map_tasks, blockwise_layer)
 
-    y.dask = dsk.map_tasks(plus_one)
+    y.dask = dsk.map_tasks(plus_one, pass_key=pass_key)
     assert_eq(y, [42] * 3)
+
+    if pass_key:
+        # Should have saved keys for both "ones" and "add" tasks
+        assert len(save_keys) == 2
+    else:
+        # No keys should be saved
+        assert len(save_keys) == 0

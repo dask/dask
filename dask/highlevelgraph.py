@@ -94,7 +94,9 @@ class Layer(collections.abc.Mapping):
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
-    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "Layer":
+    def map_tasks(
+        self, func: Callable[[Iterable], Iterable], pass_key=False
+    ) -> "Layer":
         """Map `func` on tasks in the layer and returns a new layer.
 
         `func` should take an iterable of the tasks as input and return a new
@@ -109,14 +111,17 @@ class Layer(collections.abc.Mapping):
         ----------
         func : callable
             The function to call on tasks
+        pass_key : bool, optional
+            If True, func must accept both `tasks` and `key` arguments (in that order).
 
         Returns
         -------
         layer : Layer
             A new layer containing the transformed tasks
         """
-
-        return BasicLayer({k: func(v) for k, v in self.items()})
+        return BasicLayer(
+            {k: func(v, k) if pass_key else func(v) for k, v in self.items()}
+        )
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer
@@ -523,7 +528,9 @@ class HighLevelGraph(Mapping):
         }
         return HighLevelGraph(layers, self.dependencies)
 
-    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "HighLevelGraph":
+    def map_tasks(
+        self, func: Callable[[Iterable], Iterable], pass_key=False
+    ) -> "HighLevelGraph":
         """Map `func` on all tasks and returns a new high level graph.
 
         `func` should take an iterable of the tasks as input and return a new
@@ -538,6 +545,8 @@ class HighLevelGraph(Mapping):
         ----------
         func : callable
             The function to call on tasks
+        pass_key : bool, optional
+            If True, func must accept both `tasks` and `key` arguments (in that order).
 
         Returns
         -------
@@ -546,7 +555,7 @@ class HighLevelGraph(Mapping):
         """
 
         return HighLevelGraph(
-            {k: v.map_tasks(func) for k, v in self.layers.items()},
+            {k: v.map_tasks(func, pass_key=pass_key) for k, v in self.layers.items()},
             self.dependencies,
             self.key_dependencies,
         )

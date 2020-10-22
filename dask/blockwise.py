@@ -260,11 +260,14 @@ class Blockwise(Layer):
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
 
-    def map_tasks(self, func):
+    def map_tasks(self, func, pass_key=False):
         new_indices = []
         for key, input_indices in self.indices:
             if input_indices is None:  # A literal
-                new_indices.append((func([key]), None))
+                if pass_key:
+                    new_indices.append((func([key], key), None))
+                else:
+                    new_indices.append((func([key]), None))
             else:
                 new_indices.append((key, input_indices))
         ret = copy.copy(self)
