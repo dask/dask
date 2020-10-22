@@ -99,7 +99,9 @@ class Layer(collections.abc.Mapping):
     ) -> "Layer":
         """Map `func` on tasks in the layer and returns a new layer.
 
-        `func` should take an iterable of the tasks as input and return a new
+        `func` should return a new Layer and take two input arguments:
+          - The key of the task
+          - An iterable of the tasks
         iterable as output and **cannot** change the dependencies between Layers.
 
         Warning
