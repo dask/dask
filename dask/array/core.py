@@ -455,7 +455,7 @@ def map_blocks(
 
     Note that this function will attempt to automatically determine the output
     array type before computing it, please refer to the ``meta`` keyword argument
-    below if you expect that the function will not suceed when operating on 0-d
+    below if you expect that the function will not succeed when operating on 0-d
     arrays.
 
     Parameters
@@ -484,14 +484,14 @@ def map_blocks(
         specifies the output key name, and must be unique. If not provided,
         will be determined by a hash of the arguments.
     meta : array-like, optional
-        The ``meta`` of the output array, when specified it is expected to be an
+        The ``meta`` of the output array, when specified is expected to be an
         array of the same type of that returned when calling ``.compute()`` on
-        the array returned by this function. When not provided, will be inferred
-        by applying the function to a small set of fake data, usually a 0-d array.
-        It's important to ensure that ``func`` can successfully complete
+        the array returned by this function. When not provided, ``meta`` will be
+        inferred by applying the function to a small set of fake data, usually a
+        0-d array. It's important to ensure that ``func`` can successfully complete
         computation without raising exceptions when 0-d is passed to it. If the
         output type is known beforehand (e.g., ``np.ndarray``, ``cupy.ndarray``),
-        an empty array of such type can be passed , for example: ``meta=np.array(())``.
+        an empty array of such type can be passed, for example: ``meta=np.array(())``.
     **kwargs :
         Other keyword arguments to pass to function. Values must be constants
         (not dask.arrays)
@@ -2237,7 +2237,7 @@ class Array(DaskMethodsMixin):
 
         Note that this function will attempt to automatically determine the output
         array type before computing it, please refer to the ``meta`` keyword argument
-        in ``map_blocks`` if you expect that the function will not suceed when
+        in ``map_blocks`` if you expect that the function will not succeed when
         operating on 0-d arrays.
 
         Parameters

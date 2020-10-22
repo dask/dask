@@ -541,7 +541,7 @@ def map_overlap(
 
     Note that this function will attempt to automatically determine the output
     array type before computing it, please refer to the ``meta`` keyword argument
-    in ``map_blocks`` if you expect that the function will not suceed when
+    in ``map_blocks`` if you expect that the function will not succeed when
     operating on 0-d arrays.
 
     Parameters
