@@ -539,6 +539,11 @@ def map_overlap(
     We share neighboring zones between blocks of the array, map a
     function, and then trim away the neighboring strips.
 
+    Note that this function will attempt to automatically determine the output
+    array type before computing it, please refer to the ``meta`` keyword argument
+    in ``map_blocks`` if you expect that the function will not suceed when
+    operating on 0-d arrays.
+
     Parameters
     ----------
     func: function
@@ -646,6 +651,35 @@ def map_overlap(
     10
     >>> da.map_overlap(func, x, **block_args, depth=1).compute()
     12
+
+    For functions that may not handle 0-d arrays, it's also possible to specify
+    ``meta`` with an empty array matching the type of the expected result. In
+    the example below, ``func`` will result in an ``IndexError`` when computing
+    ``meta``:
+
+    >>> x = np.arange(16).reshape((4, 4))
+    >>> d = da.from_array(x, chunks=(2, 2))
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+    >>> y
+    dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
+    >>> y.compute()
+    array([[ 4,  6,  8, 10],
+           [ 8, 10, 12, 14],
+           [20, 22, 24, 26],
+           [24, 26, 28, 30]])
+
+    Similarly, it's possible to specify a non-NumPy array to ``meta``:
+
+    >>> x = cupy.arange(16).reshape((4, 4))
+    >>> d = da.from_array(x, chunks=(2, 2))
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))
+    >>> y
+    dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
+    >>> y.compute()
+    array([[ 4,  6,  8, 10],
+           [ 8, 10, 12, 14],
+           [20, 22, 24, 26],
+           [24, 26, 28, 30]])
     """
     # Look for invocation using deprecated single-array signature
     # map_overlap(x, func, depth, boundary=None, trim=True, **kwargs)

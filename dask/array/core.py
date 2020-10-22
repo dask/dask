@@ -453,6 +453,11 @@ def map_blocks(
 ):
     """Map a function across all blocks of a dask array.
 
+    Note that this function will attempt to automatically determine the output
+    array type before computing it, please refer to the ``meta`` keyword argument
+    below if you expect that the function will not suceed when operating on 0-d
+    arrays.
+
     Parameters
     ----------
     func : callable
@@ -478,6 +483,15 @@ def map_blocks(
         The key name to use for the output array. Note that this fully
         specifies the output key name, and must be unique. If not provided,
         will be determined by a hash of the arguments.
+    meta : array-like, optional
+        The ``meta`` of the output array, when specified it is expected to be an
+        array of the same type of that returned when calling ``.compute()`` on
+        the array returned by this function. When not provided, will be inferred
+        by applying the function to a small set of fake data, usually a 0-d array.
+        It's important to ensure that ``func`` can successfully complete
+        computation without raising exceptions when 0-d is passed to it. If the
+        output type is known beforehand (e.g., ``np.ndarray``, ``cupy.ndarray``),
+        an empty array of such type can be passed , for example: ``meta=np.array(())``.
     **kwargs :
         Other keyword arguments to pass to function. Values must be constants
         (not dask.arrays)
@@ -596,6 +610,20 @@ def map_blocks(
 
     >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
     dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), chunktype=numpy.ndarray>
+
+    For functions that may not handle 0-d arrays, it's also possible to specify
+    ``meta`` with an empty array matching the type of the expected result. In
+    the example below, ``func`` will result in an ``IndexError`` when computing
+    ``meta``:
+
+    >>> da.map_blocks(lambda x: x[2], da.random.random(5), meta=np.array(()))
+    dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
+
+    Similarly, it's possible to specify a non-NumPy array to ``meta``:
+
+    >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    >>> da.map_blocks(lambda x: x[2], rs.random(5), meta=cupy.array(()))
+    dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=cupy.ndarray>
     """
     if not callable(func):
         msg = (
@@ -2207,6 +2235,11 @@ class Array(DaskMethodsMixin):
         We share neighboring zones between blocks of the array, then map a
         function, then trim away the neighboring strips.
 
+        Note that this function will attempt to automatically determine the output
+        array type before computing it, please refer to the ``meta`` keyword argument
+        in ``map_blocks`` if you expect that the function will not suceed when
+        operating on 0-d arrays.
+
         Parameters
         ----------
         func: function
@@ -2254,6 +2287,28 @@ class Array(DaskMethodsMixin):
                [16,  17,  18,  19],
                [20,  21,  22,  23],
                [24,  25,  26,  27]])
+
+        >>> x = np.arange(16).reshape((4, 4))
+        >>> d = da.from_array(x, chunks=(2, 2))
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+        >>> y
+        dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
+        >>> y.compute()
+        array([[ 4,  6,  8, 10],
+               [ 8, 10, 12, 14],
+               [20, 22, 24, 26],
+               [24, 26, 28, 30]])
+
+        >>> x = cupy.arange(16).reshape((4, 4))
+        >>> d = da.from_array(x, chunks=(2, 2))
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))
+        >>> y
+        dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
+        >>> y.compute()
+        array([[ 4,  6,  8, 10],
+               [ 8, 10, 12, 14],
+               [20, 22, 24, 26],
+               [24, 26, 28, 30]])
         """
         from .overlap import map_overlap
 
