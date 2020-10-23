@@ -453,10 +453,10 @@ def map_blocks(
 ):
     """Map a function across all blocks of a dask array.
 
-    Note that this function will attempt to automatically determine the output
-    array type before computing it, please refer to the ``meta`` keyword argument
-    below if you expect that the function will not succeed when operating on 0-d
-    arrays.
+    Note that ``map_blocks`` will attempt to automatically determine the output
+    array type by calling ``func`` on 0-d versions of the inputs. Please refer to
+    the ``meta`` keyword argument below if you expect that the function will not
+    succeed when operating on 0-d arrays.
 
     Parameters
     ----------
@@ -485,13 +485,14 @@ def map_blocks(
         will be determined by a hash of the arguments.
     meta : array-like, optional
         The ``meta`` of the output array, when specified is expected to be an
-        array of the same type of that returned when calling ``.compute()`` on
-        the array returned by this function. When not provided, ``meta`` will be
+        array of the same type and dtype of that returned when calling ``.compute()``
+        on the array returned by this function. When not provided, ``meta`` will be
         inferred by applying the function to a small set of fake data, usually a
         0-d array. It's important to ensure that ``func`` can successfully complete
-        computation without raising exceptions when 0-d is passed to it. If the
-        output type is known beforehand (e.g., ``np.ndarray``, ``cupy.ndarray``),
-        an empty array of such type can be passed, for example: ``meta=np.array(())``.
+        computation without raising exceptions when 0-d is passed to it, providing
+        ``meta`` will be required otherwise. If the output type is known beforehand
+        (e.g., ``np.ndarray``, ``cupy.ndarray``), an empty array of such type dtype
+        can be passed, for example: ``meta=np.array((), dtype=np.int32)``.
     **kwargs :
         Other keyword arguments to pass to function. Values must be constants
         (not dask.arrays)
@@ -619,10 +620,12 @@ def map_blocks(
     >>> da.map_blocks(lambda x: x[2], da.random.random(5), meta=np.array(()))
     dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
 
-    Similarly, it's possible to specify a non-NumPy array to ``meta``:
+    Similarly, it's possible to specify a non-NumPy array to ``meta``, and provide
+    a ``dtype``:
 
     >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)
-    >>> da.map_blocks(lambda x: x[2], rs.random(5), meta=cupy.array(()))
+    >>> dt = np.float32
+    >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))
     dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=cupy.ndarray>
     """
     if not callable(func):
