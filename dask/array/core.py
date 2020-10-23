@@ -3955,8 +3955,7 @@ def broadcast_shapes(*shapes):
         return shapes[0]
     out, hint = [], ""
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
-        any_isnan = np.isnan(sizes).any()
-        if any_isnan:
+        if np.isnan(sizes).any():
             dim = np.nan
             hint = (
                 "\nHint: Valid boolean index assignment in Dask "
@@ -3964,7 +3963,8 @@ def broadcast_shapes(*shapes):
             )
         else:
             dim = 0 if 0 in sizes else np.max(sizes)
-        if any_isnan or any(size not in [-1, 0, 1, dim] for size in sizes):
+        # if any_isnan or any(size not in [-1, 0, 1, dim] for size in sizes):
+        if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
                 "operands could not be broadcast together with shapes "
                 f"{' '.join(map(str, shapes))}"
