@@ -3,12 +3,14 @@ from collections.abc import Mapping, Iterator
 from functools import partial
 from hashlib import md5
 from operator import getitem
+from timeit import default_timer
 import inspect
 import pickle
 import os
 import threading
 import uuid
 from distutils.version import LooseVersion
+import warnings
 
 from tlz import merge, groupby, curry, identity
 from tlz.functoolz import Compose
@@ -31,6 +33,10 @@ __all__ = (
     "tokenize",
     "normalize_token",
 )
+
+
+class SlowHashingWarning(RuntimeWarning):
+    """Warning for inefficient or slow token normalization"""
 
 
 def is_dask_collection(x):
@@ -678,7 +684,23 @@ def tokenize(*args, **kwargs):
     """
     if kwargs:
         args = args + (kwargs,)
-    return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+    start_time = default_timer()
+    result = md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+    time_taken = default_timer() - start_time
+    warn_config_key = "tokenize.warn_duration"
+    warn_duration = config.get(warn_config_key, None)
+    if warn_duration is not None:
+        warn_duration = float(warn_duration)
+        if time_taken > warn_duration:
+            warnings.warn(
+                "tokenize ran for {} seconds."
+                " Configuration key {} controls this threshold"
+                " and was set to {}.".format(
+                    time_taken, warn_config_key, warn_duration
+                ),
+                SlowHashingWarning,
+            )
+    return result
 
 
 normalize_token = Dispatch()

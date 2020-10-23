@@ -11,6 +11,7 @@ import dask.array as da
 from dask.array.core import normalize_chunks
 from dask.array.utils import assert_eq, same_keys, AxisError
 from dask.array.numpy_compat import _numpy_117, _numpy_118
+from dask.base import SlowHashingWarning
 
 
 @pytest.mark.parametrize(
@@ -111,6 +112,22 @@ def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
 
     if "empty" not in funcname:
         assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("x, y, z", [(1000, 25, 25)])
+def test_slow_hashing_warning(x, y, z):
+    # 3d numpy array
+    arr1 = np.random.rand(x, y, z)
+
+    # assign using broadcasting and list to force a 1d array of 2d arrays
+    arr2 = np.full(x, None)
+    arr2[:] = list(np.random.rand(x, y, z))
+
+    with dask.config.set({"tokenize.warn_duration": 1e-6}):
+        with pytest.warns(SlowHashingWarning) as warn_record:
+            da.from_array(arr1, chunks=(x // 100, -1, -1))
+            da.from_array(arr2, chunks=(x // 100,))
+            assert len(warn_record) == 2
 
 
 @pytest.mark.parametrize("endpoint", [True, False])
