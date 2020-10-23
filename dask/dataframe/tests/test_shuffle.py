@@ -1039,3 +1039,29 @@ def test_shuffle_hlg_layer():
     dsk_dict = dict(dsk_culled)
     dsk_dict_culled, _ = cull(dsk_dict, keys)
     assert dsk_dict_culled == dsk_dict
+
+
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        10,  # ShuffleLayer
+        1,  # SimpleShuffleLayer
+    ],
+)
+def test_shuffle_hlg_layer_serialize(npartitions):
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=npartitions
+    )
+    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
+
+    # Ensure shuffle layers can be serialized and don't result in
+    # the underlying low-level graph being materialized
+    dsk = ddf_shuffled.__dask_graph__()
+    for layer in dsk.layers.values():
+        if not isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+            continue
+        assert not hasattr(layer, "_cached_dict")
+        layer_roundtrip = pickle.loads(pickle.dumps(layer))
+        assert type(layer_roundtrip) == type(layer)
+        assert not hasattr(layer_roundtrip, "_cached_dict")
+        assert layer_roundtrip.keys() == layer.keys()
