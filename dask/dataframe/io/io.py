@@ -9,10 +9,8 @@ from tlz import merge
 
 from ...base import tokenize
 from ... import array as da
-from ...blockwise import Blockwise
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
-from ...highlevelgraph import HighLevelGraph
 
 from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
 from ..shuffle import set_partition
@@ -609,91 +607,6 @@ def from_delayed(
 
     df = new_dd_object(dsk, name, meta, divs)
 
-    if divisions == "sorted":
-        from ..shuffle import compute_and_set_divisions
-
-        df = compute_and_set_divisions(df)
-
-    return df
-
-
-@insert_meta_param_description
-def from_callable(
-    func,
-    npartitions,
-    *args,
-    meta=None,
-    divisions=None,
-    prefix="from-function",
-    io_prefix="blockwise-io",
-):
-    """Create Dask DataFrame from a data-creation function.
-
-    A function (specified by the `func` argument) will be used to generate the
-    partitions of a new DataFrame collection.
-
-    Parameters
-    ----------
-    func : Callable
-        A function that accepts a single tuple as an argument and returns a
-        DataFrame object. The first element of the tuple must be the partition index.
-    npartitions : int
-        The number of partitions in the resulting DataFrame collection.
-    $META
-    divisions : tuple, str, optional
-        Partition boundaries along the index.
-        For tuple, see https://docs.dask.org/en/latest/dataframe-design.html#partitions
-        For string 'sorted' will compute the delayed values to find index
-        values.  Assumes that the indexes are mutually sorted.
-        If None, then won't use index information
-    prefix : str, optional
-        Prefix to prepend to the collection key names.
-    io_prefix : str, optional
-        Prefix to prepend to blockwise "IO" tasks.
-    """
-    if not callable(func):
-        raise TypeError("Expected callable object, got %s" % type(func).__name__)
-
-    if not isinstance(npartitions, int):
-        raise TypeError("Expected integer, got %s" % type(npartitions).__name__)
-
-    # Create metadata
-    if meta is None:
-        meta = func(0, *args)
-    meta = make_meta(meta)
-
-    # Define key names
-    arg_token = tokenize(*args)
-    output_name = prefix + "-" + arg_token
-    io_name = io_prefix + "-" + arg_token
-
-    # Blockwise-transform graph is a "no-op"
-    dsk_tf = None
-
-    # Blockwise-IO graph is a simple mapping
-    dsk_io = {(io_name, i): (func, i, *args) for i in range(npartitions)}
-
-    # Create blockwise layer
-    layer = Blockwise(
-        output_name,
-        "i",
-        dsk_tf,
-        [(io_name, "i")],
-        {io_name: (npartitions,)},
-        io_subgraph=(io_name, dsk_io),
-    )
-    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-
-    # Create collection
-    if divisions is None or divisions == "sorted":
-        divs = [None] * (npartitions + 1)
-    else:
-        divs = tuple(divisions)
-        if len(divs) != npartitions + 1:
-            raise ValueError("divisions should be a tuple of npartitions + 1")
-    df = new_dd_object(graph, output_name, meta, divs)
-
-    # Sort divisions if necessary
     if divisions == "sorted":
         from ..shuffle import compute_and_set_divisions
 
