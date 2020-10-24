@@ -1539,7 +1539,15 @@ class Array(DaskMethodsMixin):
         if isinstance(key, Array):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
-            y = where(key, value, self)
+            try:
+                y = where(key, value, self)
+            except ValueError as e:
+                raise ValueError(
+                    "Boolean index assignment in Dask "
+                    "expects equally shaped arrays.\nExample: da1[da2] = da3 "
+                    "where da1.shape == (4,), da2.shape == (4,) "
+                    "and da3.shape == (4,)."
+                ) from e
             self._meta = y._meta
             self.dask = y.dask
             self.name = y.name
@@ -3953,22 +3961,16 @@ def broadcast_shapes(*shapes):
     """
     if len(shapes) == 1:
         return shapes[0]
-    out, hint = [], ""
+    out = []
     for sizes in zip_longest(*map(reversed, shapes), fillvalue=-1):
         if np.isnan(sizes).any():
             dim = np.nan
-            hint = (
-                "\nHint: Valid boolean index assignment in Dask "
-                "for equally shaped arrays is da1[da2] = da3."
-            )
         else:
             dim = 0 if 0 in sizes else np.max(sizes)
-        # if any_isnan or any(size not in [-1, 0, 1, dim] for size in sizes):
         if any(i not in [-1, 0, 1, dim] and not np.isnan(i) for i in sizes):
             raise ValueError(
-                "operands could not be broadcast together with shapes "
-                f"{' '.join(map(str, shapes))}"
-                f"{hint}"
+                "operands could not be broadcast together with "
+                "shapes {0}".format(" ".join(map(str, shapes)))
             )
         out.append(dim)
     return tuple(reversed(out))
