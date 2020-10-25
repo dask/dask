@@ -14,7 +14,7 @@ from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
 class PackedFunctionCall(object):
-    """Function-decorator class to expand tuple arguments."""
+    """Function-decorator class to expand list arguments."""
 
     def __init__(self, func):
         self.func = func
