@@ -113,7 +113,11 @@ class ParquetSubgraph(Layer):
 
 
 class BlockwiseParquet(Blockwise):
-    """"""
+    """
+    Specialized Blockwise Layer for read_parquet.
+
+    Enables HighLevelGraph optimizations.
+    """
 
     def __init__(
         self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None

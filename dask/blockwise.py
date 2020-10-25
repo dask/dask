@@ -22,7 +22,7 @@ class PackedFunctionCall(object):
     def __call__(self, args):
         if self.func is None:
             return None
-        if isinstance(args, tuple):
+        if isinstance(args, (tuple, list)):
             return self.func(*args)
         else:
             return self.func(args)
@@ -276,7 +276,7 @@ class Blockwise(Layer):
                         # Inject IO-function arguments into the blockwise graph
                         # as a single (packed) tuple.
                         io_item = self.io_subgraph.get(io_key)
-                        io_item = io_item[1:] if len(io_item) > 1 else tuple()
+                        io_item = list(io_item[1:]) if len(io_item) > 1 else []
                         new_task = [io_item if v == io_key else v for v in dsk[k]]
                         dsk[k] = tuple(new_task)
 
