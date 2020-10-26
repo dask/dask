@@ -1547,7 +1547,15 @@ class Array(DaskMethodsMixin):
         if isinstance(key, Array):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
-            y = where(key, value, self)
+            try:
+                y = where(key, value, self)
+            except ValueError as e:
+                raise ValueError(
+                    "Boolean index assignment in Dask "
+                    "expects equally shaped arrays.\nExample: da1[da2] = da3 "
+                    "where da1.shape == (4,), da2.shape == (4,) "
+                    "and da3.shape == (4,)."
+                ) from e
             self._meta = y._meta
             self.dask = y.dask
             self.name = y.name
