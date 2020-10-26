@@ -5155,7 +5155,7 @@ def map_partitions(
     name = kwargs.pop("token", None)
 
     if has_keyword(func, "partition_info"):
-        kwargs["partition_info"] = "__dummy__"
+        kwargs["partition_info"] = {"number": -1, "divisions": None}
 
     assert callable(func)
     if name is not None:
@@ -5178,6 +5178,9 @@ def map_partitions(
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
         meta = make_meta(meta, index=meta_index)
+
+    if has_keyword(func, "partition_info"):
+        kwargs["partition_info"] = "__dummy__"
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
