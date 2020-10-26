@@ -422,6 +422,39 @@ def boundaries(x, depth=None, kind=None):
     return x
 
 
+def ensure_minimum_chunksize(size, chunks):
+    """Determine new chunks to ensure that every chunk >= size"""
+    min_chunks = min(chunks)
+
+    if size <= min_chunks:
+        return chunks
+
+    # add too-small chunks to chunks before them
+    output = []
+    new = 0
+    for c in chunks:
+        if c < size:
+            new += c
+        if new >= size:
+            output.append(new)
+            new = 0
+        if c >= size:
+            new += c
+    if new >= size:
+        output.append(new)
+    elif len(output) >= 1:
+        output[-1] += new
+    else:
+        raise ValueError(
+            "The overlapping depth %d is larger than your\n"
+            "smallest chunk size %d. Rechunk your array\n"
+            "with a larger chunk size or a chunk size that\n"
+            "more evenly divides the shape of your array." % (size, min_chunks)
+        )
+
+    return tuple(output)
+
+
 def overlap(x, depth, boundary):
     """Share boundaries between neighboring blocks
 
@@ -477,46 +510,15 @@ def overlap(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    from .routines import aligned_coarsen_chunks
-
-    def coerce_depth_in_chunk(depth_values, chunks, tries=None):
-        """Ensure that chunk size is larger than depth"""
-        new_chunks = [c for c in chunks]
-        i = 0
-        if tries is None:
-            tries = {i: 0 for i in range(len(chunks))}
-        for d, c in zip(depth_values, chunks):
-            maxd = max(d) if isinstance(d, tuple) else d
-            if maxd > min(c):
-                if maxd > c[-1] and len(c) >= 2:
-                    # if the last chunk is the culprit, add it to prior
-                    new_chunks[i] = (*c[:-2], c[-2] + c[-1])
-                else:
-                    # otherwise coarsen all chunks
-                    new_chunks[i] = aligned_coarsen_chunks(chunks=c, multiple=maxd)
-                tries[i] += 1
-                if tries[i] > 3:
-                    raise ValueError(
-                        "The overlapping depth %d is larger than your\n"
-                        "smallest chunk size %d. Rechunk your array\n"
-                        "with a larger chunk size or a chunk size that\n"
-                        "more evenly divides the shape of your array." % (d, min(c))
-                    )
-                # try this again as long as we haven't tried too many times for this axis
-                new_chunks = [
-                    c for c in coerce_depth_in_chunk(depth_values, new_chunks, tries)
-                ]
-            i += 1
-        return tuple(new_chunks)
-
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
-    depth_values = [depth2.get(i, 0) for i in range(x.ndim)]
-    chunks2 = coerce_depth_in_chunk(depth_values, x.chunks)
-
     # rechunk if new chunks are needed to fit depth in every chunk
-    x1 = x if chunks2 == x.chunks else x.rechunk(chunks2)
+    depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
+    new_chunks = tuple(
+        ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
+    )
+    x1 = x.rechunk(new_chunks) if new_chunks != x.chunks else x
 
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
