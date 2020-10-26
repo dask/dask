@@ -114,12 +114,18 @@ def test_map_tasks(use_layer_map_task):
     assert_eq(y, [42] * 3)
 
 
-def test_single_annotation():
+@pytest.mark.parametrize("short_form", [True, False])
+def test_single_annotation(short_form):
     from dask.highlevelgraph import SingleLayerAnnotation
 
     a = {"x": 1, "y": (inc, "x")}
+    annotation = {"worker": "alice"}
 
-    sa = SingleLayerAnnotation({"worker": "alice"}, set(a.keys()))
+    if not short_form:
+        sa = SingleLayerAnnotation(annotation, set(a.keys()))
+    else:
+        sa = annotation
+
     assert pickle.loads(pickle.dumps(sa)) == sa
     with dask.annotate(sa):
         layers = {
@@ -128,14 +134,15 @@ def test_single_annotation():
             )
         }
 
-    assert all(v == sa.annotation for _, v in layers["a"].get_annotations())
+    assert all(v == annotation for _, v in layers["a"].get_annotations())
 
 
 def test_explicit_annotations():
     from dask.highlevelgraph import ExplicitLayerAnnotation
 
     a = {"x": 1, "y": (inc, "x")}
-    ea = ExplicitLayerAnnotation({"y": {"resource": "GPU"}, "x": {"worker": "alice"}})
+    ea = {"y": {"resource": "GPU"}, "x": {"worker": "alice"}}
+    ea = ExplicitLayerAnnotation(ea)
     assert pickle.loads(pickle.dumps(ea)) == ea
 
     with dask.annotate(ea):
@@ -152,11 +159,16 @@ def annot_map_fn(key):
     return key[1:]
 
 
-def test_mapped_annotations():
+@pytest.mark.parametrize("short_form", [True, False])
+def test_mapped_annotations(short_form):
     from dask.highlevelgraph import MapLayerAnnotation
 
     a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
-    ma = MapLayerAnnotation(annot_map_fn, set(a.keys()))
+    ma = annot_map_fn
+
+    if not short_form:
+        ma = MapLayerAnnotation(annot_map_fn, set(a.keys()))
+
     assert pickle.loads(pickle.dumps(ma)) == ma
 
     with dask.annotate(ma):

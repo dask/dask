@@ -37,23 +37,24 @@ class SingleLayerAnnotation(LayerAnnotation):
     """ Applies a single annotation to all keys """
 
     def __init__(self, annotation, keys):
+        assert type(annotation) is dict
         self.annotation = annotation
-        self.keys = set(keys)
+        self.map_keys = set(keys)
 
     def __contains__(self, k):
-        return k in self.keys
+        return k in self.map_keys
 
     def __getitem__(self, k):
         return self.annotation
 
     def __iter__(self):
-        return iter(self.keys)
+        return iter(self.map_keys)
 
     def __len__(self):
-        return len(self.keys)
+        return len(self.map_keys)
 
     def __reduce__(self):
-        return (SingleLayerAnnotation, (self.annotation, self.keys))
+        return (SingleLayerAnnotation, (self.annotation, self.map_keys))
 
 
 class ExplicitLayerAnnotation(LayerAnnotation):
@@ -83,22 +84,22 @@ class MapLayerAnnotation(LayerAnnotation):
 
     def __init__(self, function: Callable, keys: Set):
         self.function = function
-        self.keys = set(keys)
+        self.map_keys = set(keys)
 
     def __contains__(self, k):
-        return k in self.keys
+        return k in self.map_keys
 
     def __getitem__(self, k):
         return self.function(k)
 
     def __iter__(self):
-        return iter(self.keys)
+        return iter(self.map_keys)
 
     def __len__(self):
-        return len(self.keys)
+        return len(self.map_keys)
 
     def __reduce__(self):
-        return (MapLayerAnnotation, (self.function, self.keys))
+        return (MapLayerAnnotation, (self.function, self.map_keys))
 
 
 class Layer(collections.abc.Mapping):
@@ -233,7 +234,20 @@ class BasicLayer(Layer):
         self.dependencies = dependencies
         self.global_dependencies = global_dependencies
         self.global_dependencies_has_been_trimmed = False
-        self.annotations = current_annotations()
+
+        annotations = current_annotations()
+
+        for i, a in enumerate(annotations):
+            if isinstance(a, LayerAnnotation):
+                continue
+            elif callable(a):
+                annotations[i] = MapLayerAnnotation(a, mapping.keys())
+            elif type(a) is dict:
+                annotations[i] = SingleLayerAnnotation(a, mapping.keys())
+            else:
+                raise TypeError(f"{type(a)} must be LayerAnnotation, callable or dict")
+
+        self.annotations = annotations
 
     def __contains__(self, k):
         return k in self.mapping

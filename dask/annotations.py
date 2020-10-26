@@ -3,6 +3,8 @@ import threading
 
 
 class SafeStack:
+    """ Maintains thread safe stack of current annotations """
+
     def __init__(self):
         super().__init__()
         self._lock = threading.Lock()
@@ -30,7 +32,6 @@ def current_annotations():
 
 @contextmanager
 def annotate(annotation):
-
     annotation_stack.push(annotation)
 
     try:
