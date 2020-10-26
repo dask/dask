@@ -1,8 +1,10 @@
+import pickle
 from functools import partial
 import os
 
 import pytest
 
+import dask
 import dask.array as da
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
@@ -110,3 +112,61 @@ def test_map_tasks(use_layer_map_task):
 
     y.dask = dsk.map_tasks(plus_one)
     assert_eq(y, [42] * 3)
+
+
+def test_single_annotation():
+    from dask.highlevelgraph import SingleLayerAnnotation
+
+    a = {"x": 1, "y": (inc, "x")}
+
+    sa = SingleLayerAnnotation({"worker": "alice"}, set(a.keys()))
+    assert pickle.loads(pickle.dumps(sa)) == sa
+    with dask.annotate(sa):
+        layers = {
+            "a": BasicLayer(
+                a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
+            )
+        }
+
+    assert all(v == sa.annotation for _, v in layers["a"].get_annotations())
+
+
+def test_explicit_annotations():
+    from dask.highlevelgraph import ExplicitLayerAnnotation
+
+    a = {"x": 1, "y": (inc, "x")}
+    ea = ExplicitLayerAnnotation({"y": {"resource": "GPU"}, "x": {"worker": "alice"}})
+    assert pickle.loads(pickle.dumps(ea)) == ea
+
+    with dask.annotate(ea):
+        layers = {
+            "a": BasicLayer(
+                a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
+            )
+        }
+
+    assert dict(layers["a"].get_annotations()) == dict(ea)
+
+
+def annot_map_fn(key):
+    return key[1:]
+
+
+def test_mapped_annotations():
+    from dask.highlevelgraph import MapLayerAnnotation
+
+    a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
+    ma = MapLayerAnnotation(annot_map_fn, set(a.keys()))
+    assert pickle.loads(pickle.dumps(ma)) == ma
+
+    with dask.annotate(ma):
+        layers = {
+            "a": BasicLayer(
+                a,
+                dependencies={k: set() for k in a.keys()},
+                global_dependencies=set(),
+            )
+        }
+
+    expected = dict((k, annot_map_fn(k)) for k in a.keys())
+    assert dict(layers["a"].get_annotations()) == expected

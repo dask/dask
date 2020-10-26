@@ -1,9 +1,11 @@
 import collections.abc
+from itertools import chain
 from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
 
+from .annotations import current_annotations
 from .utils import ignoring
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
@@ -27,11 +29,86 @@ def compute_layer_dependencies(layers):
     return ret
 
 
+class LayerAnnotation(collections.abc.Mapping):
+    pass
+
+
+class SingleLayerAnnotation(LayerAnnotation):
+    """ Applies a single annotation to all keys """
+
+    def __init__(self, annotation, keys):
+        self.annotation = annotation
+        self.keys = set(keys)
+
+    def __contains__(self, k):
+        return k in self.keys
+
+    def __getitem__(self, k):
+        return self.annotation
+
+    def __iter__(self):
+        return iter(self.keys)
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __reduce__(self):
+        return (SingleLayerAnnotation, (self.annotation, self.keys))
+
+
+class ExplicitLayerAnnotation(LayerAnnotation):
+    """ Wraps a dictionary of annotations """
+
+    def __init__(self, annotations):
+        self.annotations = annotations
+
+    def __contains__(self, k):
+        return k in self.annotations
+
+    def __getitem__(self, k):
+        return self.annotations[k]
+
+    def __len__(self):
+        return len(self.annotations)
+
+    def __iter__(self):
+        return iter(self.annotations)
+
+    def __reduce__(self):
+        return (ExplicitLayerAnnotation, (self.annotations,))
+
+
+class MapLayerAnnotation(LayerAnnotation):
+    """ Encapsulate a function mapping keys to annotations """
+
+    def __init__(self, function: Callable, keys: Set):
+        self.function = function
+        self.keys = set(keys)
+
+    def __contains__(self, k):
+        return k in self.keys
+
+    def __getitem__(self, k):
+        return self.function(k)
+
+    def __iter__(self):
+        return iter(self.keys)
+
+    def __len__(self):
+        return len(self.keys)
+
+    def __reduce__(self):
+        return (MapLayerAnnotation, (self.function, self.keys))
+
+
 class Layer(collections.abc.Mapping):
     """High level graph layer
 
-    This abstract class establish a protocol for high level graph layers.
+    This abstract class establishes a protocol for high level graph layers.
     """
+
+    def get_annotations(self) -> Mapping[Hashable, Mapping]:
+        return {}
 
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
@@ -156,6 +233,7 @@ class BasicLayer(Layer):
         self.dependencies = dependencies
         self.global_dependencies = global_dependencies
         self.global_dependencies_has_been_trimmed = False
+        self.annotations = current_annotations()
 
     def __contains__(self, k):
         return k in self.mapping
@@ -168,6 +246,9 @@ class BasicLayer(Layer):
 
     def __len__(self):
         return len(self.mapping)
+
+    def get_annotations(self):
+        return chain.from_iterable((a.items() for a in self.annotations))
 
     def get_dependencies(self, key, all_hlg_keys):
         if self.dependencies is None or self.global_dependencies is None:

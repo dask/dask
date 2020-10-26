@@ -1,4 +1,5 @@
 from . import config, datasets
+from .annotations import annotate
 from .core import istask
 from .local import get_sync as get
 
