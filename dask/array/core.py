@@ -623,10 +623,11 @@ def map_blocks(
     Similarly, it's possible to specify a non-NumPy array to ``meta``, and provide
     a ``dtype``:
 
-    >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    >>> import cupy  # doctest: +SKIP
+    >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)  # doctest: +SKIP
     >>> dt = np.float32
-    >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))
-    dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=cupy.ndarray>
+    >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
+    dask.array<lambda, shape=(5,), dtype=float32, chunksize=(5,), chunktype=cupy.ndarray>
     """
     if not callable(func):
         msg = (
@@ -2302,12 +2303,13 @@ class Array(DaskMethodsMixin):
                [20, 22, 24, 26],
                [24, 26, 28, 30]])
 
-        >>> x = cupy.arange(16).reshape((4, 4))
-        >>> d = da.from_array(x, chunks=(2, 2))
-        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))
-        >>> y
+        >>> import cupy  # doctest: +SKIP
+        >>> x = cupy.arange(16).reshape((5, 4))  # doctest: +SKIP
+        >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+        >>> y  # doctest: +SKIP
         dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
-        >>> y.compute()
+        >>> y.compute()  # doctest: +SKIP
         array([[ 4,  6,  8, 10],
                [ 8, 10, 12, 14],
                [20, 22, 24, 26],

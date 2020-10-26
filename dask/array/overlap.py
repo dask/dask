@@ -670,12 +670,13 @@ def map_overlap(
 
     Similarly, it's possible to specify a non-NumPy array to ``meta``:
 
-    >>> x = cupy.arange(16).reshape((4, 4))
-    >>> d = da.from_array(x, chunks=(2, 2))
-    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))
-    >>> y
+    >>> import cupy  # doctest: +SKIP
+    >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
+    >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+    >>> y  # doctest: +SKIP
     dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
-    >>> y.compute()
+    >>> y.compute()  # doctest: +SKIP
     array([[ 4,  6,  8, 10],
            [ 8, 10, 12, 14],
            [20, 22, 24, 26],
