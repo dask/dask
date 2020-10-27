@@ -122,7 +122,7 @@ def test_single_annotation(short_form):
     annotation = {"worker": "alice"}
 
     if not short_form:
-        sa = SingleLayerAnnotation(annotation, set(a.keys()))
+        sa = SingleLayerAnnotation(annotation, a.keys())
     else:
         sa = annotation
 
@@ -156,18 +156,14 @@ def test_explicit_annotations():
 
 
 def annot_map_fn(key):
-    return key[1:]
+    return {"block_id": key[1:]}
 
 
-@pytest.mark.parametrize("short_form", [True, False])
-def test_mapped_annotations(short_form):
-    from dask.highlevelgraph import MapLayerAnnotation
+def test_mapped_annotations_short_form():
+    from dask.highlevelgraph import ExplicitLayerAnnotation
 
     a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
     ma = annot_map_fn
-
-    if not short_form:
-        ma = MapLayerAnnotation(annot_map_fn, set(a.keys()))
 
     assert pickle.loads(pickle.dumps(ma)) == ma
 
@@ -179,6 +175,34 @@ def test_mapped_annotations(short_form):
                 global_dependencies=set(),
             )
         }
+
+    assert isinstance(layers["a"].annotations[0], ExplicitLayerAnnotation)
+
+    expected = dict((k, annot_map_fn(k)) for k in a.keys())
+    assert dict(layers["a"].get_annotations()) == expected
+
+
+def test_mapped_annotations_long_form():
+    from dask.highlevelgraph import MapLayerAnnotation
+
+    a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
+
+    with pytest.warns(UserWarning):
+        ma = MapLayerAnnotation(annot_map_fn, a.keys())
+
+    with pytest.warns(UserWarning):
+        assert pickle.loads(pickle.dumps(ma)) == ma
+
+    with dask.annotate(ma):
+        layers = {
+            "a": BasicLayer(
+                a,
+                dependencies={k: set() for k in a.keys()},
+                global_dependencies=set(),
+            )
+        }
+
+    assert isinstance(layers["a"].annotations[0], MapLayerAnnotation)
 
     expected = dict((k, annot_map_fn(k)) for k in a.keys())
     assert dict(layers["a"].get_annotations()) == expected

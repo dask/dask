@@ -2,6 +2,7 @@ import collections.abc
 from itertools import chain
 from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
+import warnings
 
 import tlz as toolz
 
@@ -39,7 +40,7 @@ class SingleLayerAnnotation(LayerAnnotation):
     def __init__(self, annotation, keys):
         assert type(annotation) is dict
         self.annotation = annotation
-        self.map_keys = set(keys)
+        self.map_keys = keys
 
     def __contains__(self, k):
         return k in self.map_keys
@@ -54,7 +55,7 @@ class SingleLayerAnnotation(LayerAnnotation):
         return len(self.map_keys)
 
     def __reduce__(self):
-        return (SingleLayerAnnotation, (self.annotation, self.map_keys))
+        return (SingleLayerAnnotation, (self.annotation, set(self.map_keys)))
 
 
 class ExplicitLayerAnnotation(LayerAnnotation):
@@ -82,9 +83,15 @@ class ExplicitLayerAnnotation(LayerAnnotation):
 class MapLayerAnnotation(LayerAnnotation):
     """ Encapsulate a function mapping keys to annotations """
 
-    def __init__(self, function: Callable, keys: Set):
+    def __init__(self, function: Callable, keys):
         self.function = function
-        self.map_keys = set(keys)
+        self.map_keys = keys
+        warnings.warn(
+            "Marked for deprecation as we don't want "
+            "to pickle functions for remote execution "
+            "on the distributed scheduler. Reify and "
+            "use ExplicitLayerAnnotation instead"
+        )
 
     def __contains__(self, k):
         return k in self.map_keys
@@ -99,7 +106,7 @@ class MapLayerAnnotation(LayerAnnotation):
         return len(self.map_keys)
 
     def __reduce__(self):
-        return (MapLayerAnnotation, (self.function, self.map_keys))
+        return (MapLayerAnnotation, (self.function, set(self.map_keys)))
 
 
 class Layer(collections.abc.Mapping):
@@ -241,7 +248,7 @@ class BasicLayer(Layer):
             if isinstance(a, LayerAnnotation):
                 continue
             elif callable(a):
-                annotations[i] = MapLayerAnnotation(a, mapping.keys())
+                annotations[i] = ExplicitLayerAnnotation({k: a(k) for k in mapping})
             elif type(a) is dict:
                 annotations[i] = SingleLayerAnnotation(a, mapping.keys())
             else:
