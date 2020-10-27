@@ -332,6 +332,15 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return len(self.divisions) - 1
 
     @property
+    @derived_from(pd.DataFrame)
+    def attrs(self):
+        return self._meta.attrs
+
+    @attrs.setter
+    def attrs(self, value):
+        self._meta.attrs = dict(value)
+
+    @property
     def size(self):
         """Size of the Series or DataFrame as a Delayed object.
 
@@ -3741,6 +3750,7 @@ class DataFrame(_Frame):
         partition_size: int, optional
             Desired size of each partitions in bytes.
             Only used when ``npartition='auto'``
+
         Examples
         --------
         >>> df2 = df.set_index('x')  # doctest: +SKIP
