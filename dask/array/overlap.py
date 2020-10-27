@@ -424,9 +424,7 @@ def boundaries(x, depth=None, kind=None):
 
 def ensure_minimum_chunksize(size, chunks):
     """Determine new chunks to ensure that every chunk >= size"""
-    min_chunks = min(chunks)
-
-    if size <= min_chunks:
+    if size <= min(chunks):
         return chunks
 
     # add too-small chunks to chunks before them
@@ -434,7 +432,11 @@ def ensure_minimum_chunksize(size, chunks):
     new = 0
     for c in chunks:
         if c < size:
-            new += c
+            if new > size + (size - c):
+                output.append(new - (size - c))
+                new = size
+            else:
+                new += c
         if new >= size:
             output.append(new)
             new = 0
@@ -446,10 +448,7 @@ def ensure_minimum_chunksize(size, chunks):
         output[-1] += new
     else:
         raise ValueError(
-            "The overlapping depth %d is larger than your\n"
-            "smallest chunk size %d. Rechunk your array\n"
-            "with a larger chunk size or a chunk size that\n"
-            "more evenly divides the shape of your array." % (size, min_chunks)
+            f"The overlapping depth {size} is larger than your " f"array {sum(chunks)}."
         )
 
     return tuple(output)
