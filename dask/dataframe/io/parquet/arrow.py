@@ -549,43 +549,41 @@ class ArrowDatasetEngine(Engine):
             partition_keys,
             **kwargs,
         )
-        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
 
-        # For pyarrow.dataset api, need to convert partition columns
-        # to categorigal manually for integer types.  Also, if we did
-        # not read directly from fragments, we will need to add the
-        # partitioned columns here.
+        # For pyarrow.dataset api, if we did not read directly from
+        # fragments, we need to add the partitioned columns here.
         if partitions and isinstance(partitions, list):
             if not isinstance(path_or_frag, pa_ds.ParquetFileFragment):
                 keys_dict = {k: v for (k, v) in partition_keys}
             else:
                 keys_dict = {}
             for partition in partitions:
-                if partition.name in df.columns:
+                if partition.name not in arrow_table.schema.names:
+                    # We read from file paths, so the partition
+                    # columns are NOT in our table yet.
+                    cat = keys_dict.get(partition.name, None)
+                    cat_ind = np.full(
+                        len(arrow_table), partition.keys.index(cat), dtype="i4"
+                    )
+                    arr = pa.DictionaryArray.from_arrays(
+                        cat_ind, pa.array(partition.keys)
+                    )
+                    arrow_table = arrow_table.append_column(partition.name, arr)
+
+        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+
+        # For pyarrow.dataset api, need to convert partition columns
+        # to categorigal manually for integer types.
+        if partitions and isinstance(partitions, list):
+            for partition in partitions:
+                if df[partition.name].dtype != pd.Categorical:
                     # We read directly from fragments, so the partition
                     # columns are already in our dataframe.  We just
                     # need to convert non-categorical types.
-                    if df[partition.name].dtype != pd.Categorical:
-                        df[partition.name] = pd.Series(
-                            pd.Categorical(
-                                categories=partition.keys,
-                                values=df[partition.name].values,
-                            ),
-                            index=df.index,
-                        )
-                else:
-                    # We read from file paths, so the partition
-                    # columns are NOT in our dataframe yet.
-                    cat = keys_dict.get(partition.name, None)
-                    cat_ind = partition.keys.index(cat) if cat is not None else None
                     df[partition.name] = pd.Series(
-                        pd.Categorical.from_codes(
-                            np.full(
-                                len(df),
-                                cat_ind,
-                                dtype="i4",
-                            ),
+                        pd.Categorical(
                             categories=partition.keys,
+                            values=df[partition.name].values,
                         ),
                         index=df.index,
                     )
