@@ -134,7 +134,7 @@ def test_single_annotation(short_form):
             )
         }
 
-    assert all(v == annotation for _, v in layers["a"].get_annotations())
+    assert all(v == annotation for v in layers["a"].get_annotations().values())
 
 
 def test_explicit_annotations():
