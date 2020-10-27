@@ -497,5 +497,7 @@ def test_parquet_wstoragepars(s3, s3so):
 
 def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
+    if pa.__version__ >= LooseVersion("2.0.0"):
+        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
     fs = DaskS3FileSystem(anon=True)
     assert isinstance(fs, pa.filesystem.FileSystem)
