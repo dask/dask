@@ -1,6 +1,5 @@
 from collections import defaultdict
 import collections.abc
-from itertools import chain
 from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 import warnings
