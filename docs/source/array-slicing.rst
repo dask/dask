@@ -58,7 +58,7 @@ axis, Dask will typically "match" the chunking on the output.
    >>> a = da.ones((4, 10000, 10000), chunks=(1, -1, -1))
 
 If we slice that with a *sorted* sequence of integers, Dask will return one chunk
-per intput chunk (notince the output `chunksize` is 1, since the indices ``0``
+per input chunk (notice the output `chunksize` is 1, since the indices ``0``
 and ``1`` are in separate chunks in the input).
 
    >>> a[[0, 1], :, :]          #doctest: +SKIP
