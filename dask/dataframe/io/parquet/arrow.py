@@ -5,6 +5,7 @@ import json
 import warnings
 from distutils.version import LooseVersion
 
+import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
@@ -575,10 +576,16 @@ class ArrowDatasetEngine(Engine):
                 else:
                     # We read from file paths, so the partition
                     # columns are NOT in our dataframe yet.
+                    cat = keys_dict.get(partition.name, None)
+                    cat_ind = partition.keys.index(cat) if cat is not None else None
                     df[partition.name] = pd.Series(
-                        pd.Categorical(
+                        pd.Categorical.from_codes(
+                            np.full(
+                                len(df),
+                                cat_ind,
+                                dtype="i4",
+                            ),
                             categories=partition.keys,
-                            values=[keys_dict.get(partition.name, None)] * len(df),
                         ),
                         index=df.index,
                     )
