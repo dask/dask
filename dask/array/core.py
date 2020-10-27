@@ -2867,6 +2867,7 @@ def from_array(
     fancy=True,
     getitem=None,
     meta=None,
+    inline_array=False,
 ):
     """Create dask array from something that looks like an array
 
@@ -2919,6 +2920,41 @@ def from_array(
         The metadata for the resulting dask array.  This is the kind of array
         that will result from slicing the input array.
         Defaults to the input array.
+    inline_array : bool, default False
+        How to include the array in the task graph. By default
+        (``inline_array=False``) the array is included in a task by itself,
+        and each chunk refers to that task by its key.
+
+        .. code-block:: python
+
+           >>> x = h5py.File("data.h5")["/x"]
+           >>> a = da.from_array(x, chunks=500)
+           >>> dict(a.dask)  # doctest: +SKIP
+           {
+              'array-original-<name>': <HDF5 dataset ...>,
+              ('array-<name>', 0): (getitem, "array-original-<name>", ...),
+              ('array-<name>', 1): (getitem, "array-original-<name>", ...)
+           }
+
+        With ``inline_array=True``, Dask can instead inline the array directly
+        in the values of the task graph.
+
+        .. code-block:: python
+
+           >>> a = da.from_array(x, chunks=500, inline_array=True)
+           >>> dict(a.dask)  # doctest: +SKIP
+           {
+              ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
+              ('array-<name>', 1): (getitem, <HDF5 dataset ...>, ...)
+           }
+
+        Note that there's no key in the task graph with just the array `x`
+        anymore. Instead it's placed directly in the values.
+
+        The right choice for ``inline_arary`` depends on several factors,
+        including the size of ``x``, how expensive it is to create, which
+        scheduler you're using, and the pattern of downstream computations.
+        This has no effect when ``x`` is a NumPy array.
 
     Examples
     --------
@@ -2946,7 +2982,7 @@ def from_array(
     >>> token = dask.base.tokenize(x)  # doctest: +SKIP
     >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
 
-    Numpy ndarrays are eagerly sliced and then embedded in the graph.
+    NumPy ndarrays are eagerly sliced and then embedded in the graph.
 
     >>> import dask.array
     >>> a = dask.array.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,1))
@@ -3010,8 +3046,13 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
+        if inline_array:
+            get_from = x
+        else:
+            get_from = original_name
+
         dsk = getem(
-            original_name,
+            get_from,
             chunks,
             getitem=getitem,
             shape=x.shape,
@@ -3020,7 +3061,8 @@ def from_array(
             asarray=asarray,
             dtype=x.dtype,
         )
-        dsk[original_name] = x
+        if not inline_array:
+            dsk[original_name] = x
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
@@ -3034,7 +3076,13 @@ def from_array(
 
 
 def from_zarr(
-    url, component=None, storage_options=None, chunks=None, name=None, **kwargs
+    url,
+    component=None,
+    storage_options=None,
+    chunks=None,
+    name=None,
+    inline_array=False,
+    **kwargs,
 ):
     """Load array from the zarr storage format
 
@@ -3058,7 +3106,16 @@ def from_zarr(
         optimal for the calculations to follow.
     name : str, optional
          An optional keyname for the array.  Defaults to hashing the input
+    getitem : callable, optional
+        The getitem function to slice the arary with. See Notes for more.
     kwargs: passed to ``zarr.Array``.
+    inline_array : bool, default False
+        Whether to inline the zarr Array in the values of the task graph.
+        See :meth:`dask.array.from_array` for an explanation.
+
+    See Also
+    --------
+    from_array
     """
     import zarr
 
@@ -3076,7 +3133,7 @@ def from_zarr(
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
-    return from_array(z, chunks, name=name)
+    return from_array(z, chunks, name=name, inline_array=inline_array)
 
 
 def to_zarr(
