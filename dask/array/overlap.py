@@ -5,7 +5,7 @@ from numbers import Integral
 from tlz import merge, pipe, concat, partial, get
 from tlz.curried import map
 
-from . import chunk, wrap
+from . import chunk
 from .core import (
     Array,
     map_blocks,
@@ -14,6 +14,7 @@ from .core import (
     reshapelist,
     unify_chunks,
 )
+from .creation import empty_like, full_like
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
@@ -362,18 +363,13 @@ def constant(x, axis, depth, value):
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 
-    try:
-        c = wrap.full_like(
-            getattr(x, "_meta", x),
-            value,
-            shape=tuple(map(sum, chunks)),
-            chunks=tuple(chunks),
-            dtype=x.dtype,
-        )
-    except TypeError:
-        c = wrap.full(
-            tuple(map(sum, chunks)), value, chunks=tuple(chunks), dtype=x.dtype
-        )
+    c = full_like(
+        x,
+        value,
+        shape=tuple(map(sum, chunks)),
+        chunks=tuple(chunks),
+        dtype=x.dtype,
+    )
 
     return concatenate([c, x, c], axis=axis)
 
@@ -517,15 +513,12 @@ def add_dummy_padding(x, depth, boundary):
             empty_chunks = list(x.chunks)
             empty_chunks[k] = (d,)
 
-            try:
-                empty = wrap.empty_like(
-                    getattr(x, "_meta", x),
-                    shape=empty_shape,
-                    chunks=empty_chunks,
-                    dtype=x.dtype,
-                )
-            except TypeError:
-                empty = wrap.empty(empty_shape, chunks=empty_chunks, dtype=x.dtype)
+            empty = empty_like(
+                getattr(x, "_meta", x),
+                shape=empty_shape,
+                chunks=empty_chunks,
+                dtype=x.dtype,
+            )
 
             out_chunks = list(x.chunks)
             ax_chunks = list(out_chunks[k])
@@ -545,6 +538,11 @@ def map_overlap(
 
     We share neighboring zones between blocks of the array, map a
     function, and then trim away the neighboring strips.
+
+    Note that this function will attempt to automatically determine the output
+    array type before computing it, please refer to the ``meta`` keyword argument
+    in ``map_blocks`` if you expect that the function will not succeed when
+    operating on 0-d arrays.
 
     Parameters
     ----------
@@ -653,6 +651,36 @@ def map_overlap(
     10
     >>> da.map_overlap(func, x, **block_args, depth=1).compute()
     12
+
+    For functions that may not handle 0-d arrays, it's also possible to specify
+    ``meta`` with an empty array matching the type of the expected result. In
+    the example below, ``func`` will result in an ``IndexError`` when computing
+    ``meta``:
+
+    >>> x = np.arange(16).reshape((4, 4))
+    >>> d = da.from_array(x, chunks=(2, 2))
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+    >>> y
+    dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
+    >>> y.compute()
+    array([[ 4,  6,  8, 10],
+           [ 8, 10, 12, 14],
+           [20, 22, 24, 26],
+           [24, 26, 28, 30]])
+
+    Similarly, it's possible to specify a non-NumPy array to ``meta``:
+
+    >>> import cupy  # doctest: +SKIP
+    >>> x = cupy.arange(16).reshape((4, 4))  # doctest: +SKIP
+    >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
+    >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+    >>> y  # doctest: +SKIP
+    dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
+    >>> y.compute()  # doctest: +SKIP
+    array([[ 4,  6,  8, 10],
+           [ 8, 10, 12, 14],
+           [20, 22, 24, 26],
+           [24, 26, 28, 30]])
     """
     # Look for invocation using deprecated single-array signature
     # map_overlap(x, func, depth, boundary=None, trim=True, **kwargs)
@@ -713,6 +741,8 @@ def map_overlap(
         assert all(type(c) is int for x in xs for cc in x.chunks for c in cc)
 
     assert_int_chunksize(args)
+    if not trim and "chunks" not in kwargs:
+        kwargs["chunks"] = args[0].chunks
     args = [overlap(x, depth=d, boundary=b) for x, d, b in zip(args, depth, boundary)]
     assert_int_chunksize(args)
     x = map_blocks(func, *args, **kwargs)

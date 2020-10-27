@@ -4,7 +4,6 @@ pytest.importorskip("numpy")
 pytest.importorskip("scipy")
 
 import numpy as np
-import sys
 import scipy.linalg
 
 import dask.array as da
@@ -819,6 +818,19 @@ def test_lstsq(nrow, ncol, chunk):
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
     assert drank.compute() == rank
 
+    # 2D case
+    A = np.random.randint(1, 20, (nrow, ncol))
+    b2D = np.random.randint(1, 20, (nrow, ncol // 2))
+    dA = da.from_array(A, (chunk, ncol))
+    db2D = da.from_array(b2D, (chunk, ncol // 2))
+    x, r, rank, s = np.linalg.lstsq(A, b2D, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db2D)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
+
 
 def test_no_chunks_svd():
     x = np.random.random((100, 10))
@@ -869,11 +881,13 @@ def test_svd_flip_correction(shape, chunks, dtype):
 @pytest.mark.parametrize("dtype", ["f2", "f4", "f8", "f16", "c8", "c16", "c32"])
 @pytest.mark.parametrize("u_based", [True, False])
 def test_svd_flip_sign(dtype, u_based):
-    if sys.platform == "win32" and dtype in ["f16", "c32"]:
-        pytest.skip("128-bit floats not supported on windows")
-    x = np.array(
-        [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]], dtype=dtype
-    )
+    try:
+        x = np.array(
+            [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]],
+            dtype=dtype,
+        )
+    except TypeError:
+        pytest.skip("128-bit floats not supported by NumPy")
     u, v = svd_flip(x, x.T, u_based_decision=u_based)
     assert u.dtype == x.dtype
     assert v.dtype == x.dtype

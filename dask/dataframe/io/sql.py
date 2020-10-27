@@ -49,7 +49,7 @@ def read_sql_table(
         ``index_col=cast(sql.column("id"),types.BigInteger).label("id")`` to convert
         the textfield ``id`` to ``BigInteger``.
 
-        Note ``sql``, ``cast``, ``types`` methods comes frome ``sqlalchemy`` module.
+        Note ``sql``, ``cast``, ``types`` methods comes from ``sqlalchemy`` module.
 
         Labeling columns created by functions or arithmetic operations is
         required.
@@ -342,13 +342,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine
-    >>> with tmpfile() as f:
-    ...     db = 'sqlite:///%s' % f
-    ...     ddf.to_sql('test', db)
-    ...     engine = create_engine(db, echo=False)
-    ...     result = engine.execute("SELECT * FROM test").fetchall()
-    >>> result
+    >>> from sqlalchemy import create_engine    # doctest: +SKIP
+    >>> with tmpfile() as f:                    # doctest: +SKIP
+    ...     db = 'sqlite:///%s' %f              # doctest: +SKIP
+    ...     ddf.to_sql('test', db)              # doctest: +SKIP
+    ...     engine = create_engine(db, echo=False) # doctest: +SKIP
+    ...     result = engine.execute("SELECT * FROM test").fetchall() # doctest: +SKIP
+    >>> result                                  # doctest: +SKIP
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):

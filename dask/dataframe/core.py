@@ -332,6 +332,15 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return len(self.divisions) - 1
 
     @property
+    @derived_from(pd.DataFrame)
+    def attrs(self):
+        return self._meta.attrs
+
+    @attrs.setter
+    def attrs(self, value):
+        self._meta.attrs = dict(value)
+
+    @property
     def size(self):
         """Size of the Series or DataFrame as a Delayed object.
 
@@ -583,6 +592,7 @@ Dask Name: {name}, {task} tasks"""
         --------
         Given a DataFrame, Series, or Index, such as:
 
+        >>> import pandas as pd
         >>> import dask.dataframe as dd
         >>> df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
         ...                    'y': [1., 2., 3., 4., 5.]})
@@ -689,6 +699,7 @@ Dask Name: {name}, {task} tasks"""
         --------
         Given a DataFrame, Series, or Index, such as:
 
+        >>> import pandas as pd
         >>> import dask.dataframe as dd
         >>> df = pd.DataFrame({'x': [1, 2, 4, 7, 11],
         ...                    'y': [1., 2., 3., 4., 5.]})
@@ -3573,6 +3584,9 @@ class DataFrame(_Frame):
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
+        if isinstance(key, DataFrame):
+            return self.where(key, np.nan)
+
         raise NotImplementedError(key)
 
     def __setitem__(self, key, value):
@@ -3582,6 +3596,10 @@ class DataFrame(_Frame):
         elif isinstance(key, pd.Index) and not isinstance(value, DataFrame):
             key = list(key)
             df = self.assign(**{k: value for k in key})
+        elif is_dataframe_like(key) or isinstance(key, DataFrame):
+            df = self.where(~key, value)
+        elif not isinstance(key, str):
+            raise NotImplementedError(f"Item assignment with {type(key)} not supported")
         else:
             df = self.assign(**{key: value})
 
@@ -3732,6 +3750,7 @@ class DataFrame(_Frame):
         partition_size: int, optional
             Desired size of each partitions in bytes.
             Only used when ``npartition='auto'``
+
         Examples
         --------
         >>> df2 = df.set_index('x')  # doctest: +SKIP
@@ -4111,7 +4130,7 @@ class DataFrame(_Frame):
             shuffle=shuffle,
         )
 
-    @derived_from(pd.DataFrame)
+    @derived_from(pd.DataFrame)  # doctest: +SKIP
     def join(
         self,
         other,
@@ -4271,6 +4290,7 @@ class DataFrame(_Frame):
 
         Examples
         --------
+        >>> import pandas as pd
         >>> import dask.dataframe as dd
         >>> df = pd.DataFrame({'x': [1, 2, 3, 4, 5],
         ...                    'y': [1., 2., 3., 4., 5.]})
@@ -5092,7 +5112,7 @@ def apply_concat_apply(
     if sort is not None:
         if sort and split_out > 1:
             raise NotImplementedError(
-                "Cannot guarentee sorted keys for `split_out>1`."
+                "Cannot guarantee sorted keys for `split_out>1`."
                 " Try using split_out=1, or grouping with sort=False."
             )
         aggregate_kwargs = aggregate_kwargs or {}

@@ -314,13 +314,14 @@ def make_meta_object(x, index=None):
 
     Examples
     --------
-    >>> make_meta([('a', 'i8'), ('b', 'O')])
+
+    >>> make_meta([('a', 'i8'), ('b', 'O')])    # doctest: +SKIP
     Empty DataFrame
     Columns: [a, b]
     Index: []
-    >>> make_meta(('a', 'f8'))
+    >>> make_meta(('a', 'f8'))                  # doctest: +SKIP
     Series([], Name: a, dtype: float64)
-    >>> make_meta('i8')
+    >>> make_meta('i8')                         # doctest: +SKIP
     1
     """
     if hasattr(x, "_meta"):
@@ -398,6 +399,8 @@ def meta_nonempty_dataframe(x):
         data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
+    if PANDAS_GT_100:
+        res.attrs = x.attrs
     return res
 
 
@@ -586,7 +589,10 @@ def _nonempty_series(s, idx=None):
         entry = _scalar_from_dtype(dtype)
         data = np.array([entry, entry], dtype=dtype)
 
-    return pd.Series(data, name=s.name, index=idx)
+    out = pd.Series(data, name=s.name, index=idx)
+    if PANDAS_GT_100:
+        out.attrs = s.attrs
+    return out
 
 
 def is_dataframe_like(df):

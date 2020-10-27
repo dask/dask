@@ -106,6 +106,10 @@ class ParquetSubgraph(Layer):
         )
         return ret, ret.get_dependencies(all_hlg_keys)
 
+    def map_tasks(self, func):
+        # ParquetSubgraph has no input tasks
+        return self
+
 
 def read_parquet(
     path,
@@ -771,7 +775,7 @@ def process_statistics(parts, statistics, filters, index, chunksize):
                 raise ValueError("Specified index is invalid.\nindex: {}".format(index))
         elif index is not False and len(out) > 1:
             if any(o["name"] == NONE_LABEL for o in out):
-                # Use sorted column maching NONE_LABEL as the index
+                # Use sorted column matching NONE_LABEL as the index
                 [o] = [o for o in out if o["name"] == NONE_LABEL]
                 divisions = o["divisions"]
                 if index is None:

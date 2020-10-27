@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Hashable, Optional, Set, Mapping, Iterable, Tuple
+from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -36,7 +36,8 @@ class Layer(collections.abc.Mapping):
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, Set]]:
-        """Return a new Layer with only the tasks required to calculate `keys`.
+        """Return a new Layer with only the tasks required to calculate `keys` and
+        a map of external key dependencies.
 
         In other words, remove unnecessary tasks from the layer.
 
@@ -50,11 +51,15 @@ class Layer(collections.abc.Mapping):
         -------
         layer: Layer
             Culled layer
+        deps: Map
+            Map of external key dependencies
         """
-        deps = self.get_dependencies(all_hlg_keys)
 
         if len(keys) == len(self):
-            return self, deps  # Nothing to cull if preserving all existing keys
+            # Nothing to cull if preserving all existing keys
+            return self, {
+                k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()
+            }
 
         ret_deps = {}
         seen = set()
@@ -63,8 +68,8 @@ class Layer(collections.abc.Mapping):
         while work:
             k = work.pop()
             out[k] = self[k]
-            ret_deps[k] = deps[k]
-            for d in deps[k]:
+            ret_deps[k] = self.get_dependencies(k, all_hlg_keys)
+            for d in ret_deps[k]:
                 if d not in seen:
                     if d in self:
                         seen.add(d)
@@ -72,20 +77,64 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer(out), ret_deps
 
-    def get_dependencies(self, all_hlg_keys: Iterable) -> Mapping[Hashable, Set]:
-        """Get dependencies of all keys in the layer
+    def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> Set:
+        """Get dependencies of `key` in the layer
 
         Parameters
         ----------
+        key: Hashable
+            The key to find dependencies of
         all_hlg_keys : Iterable
             All keys in the high level graph.
 
         Returns
         -------
-        map: Mapping
-            A map that maps each key in the layer to its dependencies
+        deps: set
+            A set of dependencies
         """
-        return {k: keys_in_tasks(all_hlg_keys, [v]) for k, v in self.items()}
+        return keys_in_tasks(all_hlg_keys, [self[key]])
+
+    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "Layer":
+        """Map `func` on tasks in the layer and returns a new layer.
+
+        `func` should take an iterable of the tasks as input and return a new
+        iterable as output and **cannot** change the dependencies between Layers.
+
+        Warning
+        -------
+        A layer is allowed to ignore the map on tasks that are part of its internals.
+        For instance, Blockwise will only invoke `func` on the input literals.
+
+        Parameters
+        ----------
+        func : callable
+            The function to call on tasks
+
+        Returns
+        -------
+        layer : Layer
+            A new layer containing the transformed tasks
+        """
+
+        return BasicLayer({k: func(v) for k, v in self.items()})
+
+    def __reduce__(self):
+        """Default serialization implementation, which materializes the Layer
+
+        This should follow the standard pickle protocol[1] but must always return
+        a tuple and the arguments for the callable object must be compatible with
+        msgpack. This is because Distributed uses msgpack to send Layers to the
+        scheduler.
+
+        [1] <https://docs.python.org/3/library/pickle.html#object.__reduce__>
+        """
+        return (BasicLayer, (dict(self),))
+
+    def __copy__(self):
+        """Default shallow copy implementation"""
+        obj = type(self).__new__(self.__class__)
+        obj.__dict__.update(self.__dict__)
+        return obj
 
 
 class BasicLayer(Layer):
@@ -106,6 +155,7 @@ class BasicLayer(Layer):
         self.mapping = mapping
         self.dependencies = dependencies
         self.global_dependencies = global_dependencies
+        self.global_dependencies_has_been_trimmed = False
 
     def __contains__(self, k):
         return k in self.mapping
@@ -119,15 +169,15 @@ class BasicLayer(Layer):
     def __len__(self):
         return len(self.mapping)
 
-    def get_dependencies(self, all_hlg_keys):
+    def get_dependencies(self, key, all_hlg_keys):
         if self.dependencies is None or self.global_dependencies is None:
-            return super().get_dependencies(all_hlg_keys)
+            return super().get_dependencies(key, all_hlg_keys)
 
-        global_deps = self.global_dependencies.intersection(all_hlg_keys)
-        ret = self.dependencies.copy()
-        for v in ret.values():
-            v |= global_deps
-        return ret
+        if not self.global_dependencies_has_been_trimmed:
+            self.global_dependencies = self.global_dependencies & all_hlg_keys
+            self.global_dependencies_has_been_trimmed = True
+
+        return self.dependencies[key] | self.global_dependencies
 
 
 class HighLevelGraph(Mapping):
@@ -147,14 +197,16 @@ class HighLevelGraph(Mapping):
 
     Parameters
     ----------
-    layers : Dict[str, Mapping]
+    layers : Mapping[str, Mapping]
         The subgraph layers, keyed by a unique name
-    dependencies : Dict[str, Set[str]]
+    dependencies : Mapping[str, Set[str]]
         The set of layers on which each layer depends
+    key_dependencies : Mapping[Hashable, Set], optional
+        Mapping (some) keys in the high level graph to their dependencies. If
+        a key is missing, its dependencies will be calculated on-the-fly.
 
     Examples
     --------
-
     Here is an idealized example that shows the internal state of a
     HighLevelGraph
 
@@ -196,21 +248,27 @@ class HighLevelGraph(Mapping):
 
     def __init__(
         self,
-        layers: Mapping[str, Mapping],
+        layers: Mapping[str, Layer],
         dependencies: Mapping[str, Set],
         key_dependencies: Optional[Mapping[Hashable, Set]] = None,
     ):
-        self.__keys = None
+        self._keys = None
         self.layers = layers
         self.dependencies = dependencies
-        self.key_dependencies = key_dependencies
+        self.key_dependencies = key_dependencies if key_dependencies else {}
+
+        # Makes sure that all layers are `Layer`
+        self.layers = {
+            k: v if isinstance(v, Layer) else BasicLayer(v)
+            for k, v in self.layers.items()
+        }
 
     def keyset(self):
-        if self.__keys is None:
-            self.__keys = set()
+        if self._keys is None:
+            self._keys = set()
             for layer in self.layers.values():
-                self.__keys.update(layer.keys())
-        return self.__keys
+                self._keys.update(layer.keys())
+        return self._keys
 
     @property
     def dependents(self):
@@ -356,7 +414,7 @@ class HighLevelGraph(Mapping):
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
 
-    def get_dependencies(self) -> Mapping[Hashable, Set]:
+    def get_all_dependencies(self) -> Mapping[Hashable, Set]:
         """Get dependencies of all keys in the HLG
 
         Returns
@@ -364,21 +422,13 @@ class HighLevelGraph(Mapping):
         map: Mapping
             A map that maps each key to its dependencies
         """
-        if self.key_dependencies is None:
-            all_keys = self.keyset()
-            self.key_dependencies = {}
+        all_keys = self.keyset()
+        missing_keys = all_keys.difference(self.key_dependencies.keys())
+        if missing_keys:
             for layer in self.layers.values():
-                self.key_dependencies.update(layer.get_dependencies(all_keys))
-
+                for k in missing_keys.intersection(layer.keys()):
+                    self.key_dependencies[k] = layer.get_dependencies(k, all_keys)
         return self.key_dependencies
-
-    def _fix_hlg_layers_inplace(self):
-        """Makes sure that all layers in hlg are `Layer`"""
-        new_layers = {}
-        for k, v in self.layers.items():
-            if not isinstance(v, Layer):
-                new_layers[k] = BasicLayer(v)
-        self.layers.update(new_layers)
 
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
@@ -406,7 +456,7 @@ class HighLevelGraph(Mapping):
                     ready.add(k)
         return ret
 
-    def cull(self, keys: Set):
+    def cull(self, keys: Set) -> "HighLevelGraph":
         """Return new high level graph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
@@ -418,7 +468,6 @@ class HighLevelGraph(Mapping):
             Culled high level graph
         """
 
-        self._fix_hlg_layers_inplace()
         layers = self._toposort_layers()
         all_keys = self.keyset()
 
@@ -429,10 +478,9 @@ class HighLevelGraph(Mapping):
             key_deps = keys.intersection(layer)
             if len(key_deps) > 0:
                 culled_layer, culled_deps = layer.cull(key_deps, all_keys)
-
                 external_deps = set()
-                for k in culled_layer.keys():
-                    external_deps |= culled_deps[k]
+                for d in culled_deps.values():
+                    external_deps |= d
                 external_deps.difference_update(culled_layer.keys())
 
                 keys.update(external_deps)
@@ -446,6 +494,62 @@ class HighLevelGraph(Mapping):
             }
 
         return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
+
+    def map_basic_layers(
+        self, func: Callable[[BasicLayer], Mapping]
+    ) -> "HighLevelGraph":
+        """Map `func` on each basic layer and returns a new high level graph.
+
+        `func` should take a BasicLayer as input and return a new Mapping as output
+        and **cannot** change the dependencies between Layers.
+
+        If `func` returns a non-Layer type, it will be wrapped in a `BasicLayer`
+        object automatically.
+
+        Parameters
+        ----------
+        func : callable
+            The function to call on each BasicLayer
+
+        Returns
+        -------
+        hlg : HighLevelGraph
+            A high level graph containing the transformed BasicLayers and the other
+            Layers untouched
+        """
+        layers = {
+            k: func(v) if isinstance(v, BasicLayer) else v
+            for k, v in self.layers.items()
+        }
+        return HighLevelGraph(layers, self.dependencies)
+
+    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "HighLevelGraph":
+        """Map `func` on all tasks and returns a new high level graph.
+
+        `func` should take an iterable of the tasks as input and return a new
+        iterable as output and **cannot** change the dependencies between Layers.
+
+        Warning
+        -------
+        A layer is allowed to ignore the map on tasks that are part of its internals.
+        For instance, Blockwise will only invoke `func` on the input literals.
+
+        Parameters
+        ----------
+        func : callable
+            The function to call on tasks
+
+        Returns
+        -------
+        hlg : HighLevelGraph
+            A high level graph containing the transformed tasks
+        """
+
+        return HighLevelGraph(
+            {k: v.map_tasks(func) for k, v in self.layers.items()},
+            self.dependencies,
+            self.key_dependencies,
+        )
 
     def validate(self):
         # Check dependencies

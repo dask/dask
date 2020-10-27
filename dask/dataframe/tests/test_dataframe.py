@@ -3517,6 +3517,12 @@ def test_getitem_column_types(col_type):
     assert_eq(df[cols], ddf[cols])
 
 
+def test_getitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    assert_eq(df[df > 3], ddf[ddf > 3])
+
+
 def test_ipython_completion():
     df = pd.DataFrame({"a": [1], "b": [2]})
     ddf = dd.from_pandas(df, npartitions=1)
@@ -4197,6 +4203,24 @@ def test_setitem():
     assert_eq(df, ddf)
 
 
+def test_setitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 4], "B": [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df > 2] = 5
+    ddf[ddf > 2] = 5
+    assert_eq(df, ddf)
+
+
+def test_setitem_with_numeric_column_name_raises_not_implemented():
+    df = pd.DataFrame({0: [1, 4], 1: [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    # works for pandas
+    df[0] = 5
+    # raises error for dask
+    with pytest.raises(NotImplementedError, match="not supported"):
+        ddf[0] = 5
+
+
 def test_broadcast():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5]})
     ddf = dd.from_pandas(df, npartitions=2)
@@ -4405,3 +4429,37 @@ def test_fuse_roots():
     res = ddf1.where(ddf2)
     hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
     hlg.validate()
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
+def test_attrs_dataframe():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    df.attrs = {"date": "2020-10-16"}
+    ddf = dd.from_pandas(df, 2)
+
+    assert df.attrs == ddf.attrs
+    assert df.abs().attrs == ddf.abs().attrs
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
+def test_attrs_series():
+    s = pd.Series([1, 2], name="A")
+    s.attrs["unit"] = "kg"
+    ds = dd.from_pandas(s, 2)
+
+    assert s.attrs == ds.attrs
+    assert s.fillna(1).attrs == ds.fillna(1).attrs
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
+@pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
+def test_attrs_series_in_dataframes():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    df.A.attrs["unit"] = "kg"
+    ddf = dd.from_pandas(df, 2)
+
+    # Fails because the pandas iloc method doesn't currently persist
+    # the attrs dict for series in a dataframee. Dask uses df.iloc[:0]
+    # when creating the _meta dataframe in make_meta_pandas(x, index=None).
+    # Should start xpassing when df.iloc works. Remove the xfail then.
+    assert df.A.attrs == ddf.A.attrs

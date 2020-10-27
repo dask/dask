@@ -97,8 +97,8 @@ def register_chunk_type(type):
 
     >>> da.register_chunk_type(FlaggedArray)
     >>> x = da.ones(5) - FlaggedArray(np.ones(5), True)
-    >>> x
-    dask.array<sub, shape=(5,), dtype=float64, chunksize=(5,), chunktype=dask.FlaggedArray>
+    >>> x   # doctest: +SKIP
+    dask.array<sub, shape=(5,), dtype=float64, chunksize=(5,), chunktype=builtins.FlaggedArray>
     >>> x.compute()
     Flag: True, Array: array([0., 0., 0., 0., 0.])
     """

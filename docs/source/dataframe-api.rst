@@ -449,8 +449,8 @@ Other functions
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
-.. autofunction:: merge
-.. autofunction:: merge_asof
+.. autofunction:: merge         # doctest: +ELLIPSIS
+.. autofunction:: merge_asof    # doctest: +ELLIPSIS
 
 .. currentmodule:: dask.dataframe.reshape
 

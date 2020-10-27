@@ -865,9 +865,9 @@ def svd(a, coerce_signs=True):
             ones_like_safe(a._meta, shape=(1, 1), dtype=a._meta.dtype)
         )
         u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
-        u = from_delayed(u, shape=(m, k), dtype=mu.dtype)
-        s = from_delayed(s, shape=(k,), dtype=ms.dtype)
-        v = from_delayed(v, shape=(k, n), dtype=mv.dtype)
+        u = from_delayed(u, shape=(m, k), meta=mu)
+        s = from_delayed(s, shape=(k,), meta=ms)
+        v = from_delayed(v, shape=(k, n), meta=mv)
     # Multi-chunk cases
     else:
         # Tall-and-skinny case
@@ -1309,17 +1309,21 @@ def lstsq(a, b):
     ----------
     a : (M, N) array_like
         "Coefficient" matrix.
-    b : (M,) array_like
-        Ordinate or "dependent variable" values.
+    b : {(M,), (M, K)} array_like
+        Ordinate or "dependent variable" values. If `b` is two-dimensional,
+        the least-squares solution is calculated for each of the `K` columns
+        of `b`.
 
     Returns
     -------
-    x : (N,) Array
+    x : {(N,), (N, K)} Array
         Least-squares solution. If `b` is two-dimensional,
         the solutions are in the `K` columns of `x`.
-    residuals : (1,) Array
+    residuals : {(1,), (K,)} Array
         Sums of residuals; squared Euclidean 2-norm for each column in
         ``b - a*x``.
+        If `b` is 1-dimensional, this is a (1,) shape array.
+        Otherwise the shape is (K,).
     rank : Array
         Rank of matrix `a`.
     s : (min(M, N),) Array
@@ -1328,7 +1332,7 @@ def lstsq(a, b):
     q, r = qr(a)
     x = solve_triangular(r, q.T.dot(b))
     residuals = b - a.dot(x)
-    residuals = (residuals ** 2).sum(keepdims=True)
+    residuals = (residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
 
     token = tokenize(a, b)
 

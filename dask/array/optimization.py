@@ -4,6 +4,7 @@ from operator import getitem
 import numpy as np
 
 from .core import getter, getter_nofancy, getter_inline
+from .. import config
 from ..blockwise import optimize_blockwise, fuse_roots
 from ..core import flatten, reverse_dict
 from ..optimization import fuse, inline_functions
@@ -45,7 +46,11 @@ def optimize(
     dsk = optimize_blockwise(dsk, keys=keys)
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
-    dependencies = dsk.get_dependencies()
+    dependencies = dsk.get_all_dependencies()
+
+    if not config.get("optimization.fuse.active"):
+        return dsk
+
     dsk = ensure_dict(dsk)
 
     # Low level task optimizations

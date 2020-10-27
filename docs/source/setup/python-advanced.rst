@@ -1,7 +1,7 @@
 Python API (advanced)
 =====================
 
-.. currentmodule:: distributed
+.. currentmodule:: distributed  #doctest: +SKIP
 
 In some rare cases, experts may want to create ``Scheduler``, ``Worker``, and
 ``Nanny``  objects explicitly in Python.  This is often necessary when making
