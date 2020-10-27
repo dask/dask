@@ -616,7 +616,7 @@ def test_depth_greater_than_several_chunks_rechunks():
 
     depth = {0: 4, 1: 2}
     output = overlap(darr, depth=depth, boundary=1)
-    assert output.chunks == ((2 * 4 + 6, 2 * 4 + 6), (2 * 2 + 12,))
+    assert output.chunks == ((2 * 4 + 6, 2 * 4 + 6), (2 * 2 + 10, 2 * 2 + 2))
 
 
 def test_depth_greater_than_dim():
@@ -730,16 +730,7 @@ def test_map_overlap_rechunks_array_if_needed():
     expected = np.arange(11)
     x = da.from_array(expected, chunks=5)
     y = x.map_overlap(lambda x: x, depth=2, boundary=0)
-    assert y.chunks == ((5, 6),)
-    assert_array_equal(y, expected)
-
-
-def test_map_overlap_rechunks_array_if_needed():
-    # https://github.com/dask/dask/issues/6597
-    expected = np.arange(11)
-    x = da.from_array(expected, chunks=2)
-    y = x.map_overlap(lambda x: x, depth=3, boundary=0)
-    assert y.chunks == ((4, 4, 3),)
+    assert y.chunks == ((5, 4, 2),)
     assert_array_equal(y, expected)
 
 
@@ -759,6 +750,13 @@ def test_map_overlap_rechunks_array_along_multiple_dims_if_needed():
     [
         [(10,), (10,)],
         [(10, 10), (10, 10)],
+        [
+            (10, 10, 1),
+            (
+                10,
+                11,
+            ),
+        ],
         [(20, 20, 20, 1), (20, 20, 11, 10)],
         [(20, 20, 10, 1), (20, 20, 11)],
         [(2, 20, 2, 20), (14, 10, 20)],
