@@ -2496,7 +2496,7 @@ def test_from_array_inline():
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
     assert "my-array" not in dsk
-    assert a in dsk[("my-array", 0)]
+    assert a is dsk[("my-array", 0)][1]
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
