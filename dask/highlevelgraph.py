@@ -1,3 +1,4 @@
+from collections import defaultdict
 import collections.abc
 from itertools import chain
 from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
@@ -269,7 +270,13 @@ class BasicLayer(Layer):
         return len(self.mapping)
 
     def get_annotations(self):
-        return chain.from_iterable((a.items() for a in self.annotations))
+        annotations = defaultdict(dict)
+
+        for a in self.annotations:
+            for k, v in a.items():
+                annotations[k].update(v)
+
+        return annotations
 
     def get_dependencies(self, key, all_hlg_keys):
         if self.dependencies is None or self.global_dependencies is None:

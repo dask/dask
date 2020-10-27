@@ -206,3 +206,20 @@ def test_mapped_annotations_long_form():
 
     expected = dict((k, annot_map_fn(k)) for k in a.keys())
     assert dict(layers["a"].get_annotations()) == expected
+
+
+def test_multiple_annotations():
+    a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
+
+    with dask.annotate(annot_map_fn):
+        with dask.annotate({"resource": "GPU"}):
+            layers = {
+                "a": BasicLayer(
+                    a,
+                    dependencies={k: set() for k in a.keys()},
+                    global_dependencies=set(),
+                )
+            }
+
+    expected = {k: {"block_id": k[1:], "resource": "GPU"} for k in a.keys()}
+    assert dict(layers["a"].get_annotations()) == expected
