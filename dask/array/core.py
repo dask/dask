@@ -48,6 +48,7 @@ from ..utils import (
     ndimlist,
     format_bytes,
     typename,
+    is_arraylike,
     is_dataframe_like,
     is_series_like,
     is_index_like,
@@ -100,11 +101,9 @@ def getter(a, b, asarray=True, lock=None):
     if lock:
         lock.acquire()
     try:
-        from .utils import asarray_safe
-
         c = a[b]
-        if asarray:
-            c = asarray_safe(c, like=c)
+        if asarray and not is_arraylike(c):
+            c = np.asarray(c)
     finally:
         if lock:
             lock.release()
@@ -3813,10 +3812,11 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
     if lock:
         lock.acquire()
     try:
-        from .utils import asanyarray_safe
-
         if x is not None:
-            out[index] = asanyarray_safe(x, like=x)
+            if is_arraylike(x):
+                out[index] = x
+            else:
+                out[index] = np.asanyarray(x)
         if return_stored and load_stored:
             result = out[index]
     finally:

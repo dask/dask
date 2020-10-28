@@ -73,7 +73,10 @@ def sanitize_index(ind):
         if len(nonzero) == 1:
             # If a 1-element tuple, unwrap the element
             nonzero = nonzero[0]
-        return asanyarray_safe(nonzero, like=nonzero)
+        if is_arraylike(nonzero):
+            return nonzero
+        else:
+            return np.asanyarray(nonzero)
     elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
     elif np.issubdtype(index_array.dtype, np.floating):
@@ -504,8 +507,8 @@ def partition_by_size(sizes, seq):
     >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
     [array([1, 5, 9]), array([ 2, 19]), array([5])]
     """
-    from .utils import asanyarray_safe
-    seq = asanyarray_safe(seq, like=seq)
+    if not is_arraylike(seq):
+        seq = np.asanyarray(seq)
     left = np.empty(len(sizes) + 1, dtype=int)
     left[0] = 0
 
@@ -544,9 +547,10 @@ def slicing_plan(chunks, index):
     out : List[Tuple[int, np.ndarray]]
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
-    from .utils import asarray_safe, asanyarray_safe
+    from .utils import asarray_safe
 
-    index = asanyarray_safe(index, like=index)
+    if not is_arraylike(index):
+        index = np.asanyarray(index)
     cum_chunks = cached_cumsum(chunks)
 
     cum_chunks = asarray_safe(cum_chunks, like=index)
@@ -609,7 +613,6 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     ((1, 3, 3, 1), (1000, 1000), (1000, 1000))
     """
     from .core import PerformanceWarning
-    from .utils import array_safe, asarray_safe
 
     plan = slicing_plan(chunks[axis], index)
     if len(plan) >= len(chunks[axis]) * 10:
@@ -621,7 +624,8 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             PerformanceWarning,
             stacklevel=6,
         )
-    index = asarray_safe(index, like=index)
+    if not is_arraylike(index):
+        index = np.asarray(index)
 
     # Check for chunks from the plan that would violate the user's
     # configured chunk size.
@@ -665,7 +669,9 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             index_lists.extend(index_sublist)
             where_index.extend([where_idx] * len(index_sublist))
         else:
-            index_lists.append(array_safe(index_list, like=index_list))
+            if not is_arraylike(index_list):
+                index_list = np.array(index_list)
+            index_lists.append(index_list)
             where_index.append(where_idx)
 
     dims = [range(len(bd)) for bd in chunks]
@@ -947,22 +953,22 @@ def check_index(ind, dimension):
     ...
     IndexError: Boolean array length 3 doesn't equal dimension 1
     """
+    if isinstance(ind, list):
+        ind = np.asanyarray(ind)
+
     # unknown dimension, assumed to be in bounds
     if np.isnan(dimension):
         return
     elif is_dask_collection(ind):
         return
-    elif isinstance(ind, (list, np.ndarray)) or is_arraylike(ind):
-        from .utils import asanyarray_safe
-
-        x = asanyarray_safe(ind, like=ind)
-        if x.dtype == bool:
-            if x.size != dimension:
+    elif is_arraylike(ind):
+        if ind.dtype == bool:
+            if ind.size != dimension:
                 raise IndexError(
                     "Boolean array length %s doesn't equal dimension %s"
-                    % (x.size, dimension)
+                    % (ind.size, dimension)
                 )
-        elif (x >= dimension).any() or (x < -dimension).any():
+        elif (ind >= dimension).any() or (ind < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
         return
