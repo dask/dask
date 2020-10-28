@@ -2954,6 +2954,10 @@ def from_array(
         The right choice for ``inline_arary`` depends on several factors,
         including the size of ``x``, how expensive it is to create, which
         scheduler you're using, and the pattern of downstream computations.
+        As a hueristic, ``inline_array=True`` may be the right choice when
+        the array ``x`` is small (since it's included in the graph many times)
+        and if you're experiencing ordering issues (see :ref:`order` for more).
+
         This has no effect when ``x`` is a NumPy array.
 
     Examples
