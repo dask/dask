@@ -2927,8 +2927,8 @@ def from_array(
 
         .. code-block:: python
 
-           >>> x = h5py.File("data.h5")["/x"]
-           >>> a = da.from_array(x, chunks=500)
+           >>> x = h5py.File("data.h5")["/x"]  # doctest: +SKIP
+           >>> a = da.from_array(x, chunks=500)  # doctest: +SKIP
            >>> dict(a.dask)  # doctest: +SKIP
            {
               'array-original-<name>': <HDF5 dataset ...>,
@@ -2941,7 +2941,7 @@ def from_array(
 
         .. code-block:: python
 
-           >>> a = da.from_array(x, chunks=500, inline_array=True)
+           >>> a = da.from_array(x, chunks=500, inline_array=True)  # doctest: +SKIP
            >>> dict(a.dask)  # doctest: +SKIP
            {
               ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
