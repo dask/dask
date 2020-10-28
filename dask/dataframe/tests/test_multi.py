@@ -2184,8 +2184,8 @@ def test_categorical_merge_with_columns_missing_from_left():
     actual = dd.merge(ddf2, ddf1, left_index=True, right_on="A").compute()
     assert actual.C.dtype == "category"
     assert actual.B.dtype == "category"
-    assert actual.A.dtype == "int"
-    assert actual.index.dtype == "int"
+    assert actual.A.dtype == "int64"
+    assert actual.index.dtype == "int64"
     assert assert_eq(expected, actual)
 
 
@@ -2201,8 +2201,8 @@ def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
     actual = dd.merge(ddf2, ddf1, left_index=True, right_on="A").compute()
     assert actual.C.dtype == "category"
     assert actual.B.dtype == "category"
-    assert actual.A.dtype == "int"
-    assert actual.index.dtype == "int"
+    assert actual.A.dtype == "int64"
+    assert actual.index.dtype == "int64"
     assert assert_eq(expected, actual)
 
 
@@ -2224,4 +2224,4 @@ def test_categorical_merge_retains_category_dtype():
     if dd._compat.PANDAS_GT_100:
         assert actual.A.dtype == "category"
     else:
-        assert actual.A.dtype == "int"
+        assert actual.A.dtype == "int64"
