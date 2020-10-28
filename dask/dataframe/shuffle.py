@@ -72,6 +72,9 @@ class SimpleShuffleLayer(Layer):
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
 
+    def get_output_keys(self):
+        return {(self.name, part) for part in self.parts_out}
+
     def __repr__(self):
         return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
             self.name, self.npartitions
