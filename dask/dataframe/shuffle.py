@@ -133,7 +133,7 @@ class SimpleShuffleLayer(Layer):
         materialization.
         """
         deps = defaultdict(set)
-        parts_out = self._keys_to_parts(keys)
+        parts_out = parts_out or self._keys_to_parts(keys)
         for part in parts_out:
             deps[(self.name, part)] |= {
                 (self.name_input, i) for i in range(self.npartitions_input)
