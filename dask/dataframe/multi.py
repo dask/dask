@@ -257,8 +257,8 @@ def merge_chunk(lhs, *args, **kwargs):
             dtype = "category"
             if left is not None and right is not None:
                 dtype = union_categoricals(
-                    [left.astype("category"), right.astype("category")]
-                )
+                    [left.astype("category").values, right.astype("category").values]
+                ).dtype
 
             if left is not None:
                 if isinstance(left, pd.Index):
