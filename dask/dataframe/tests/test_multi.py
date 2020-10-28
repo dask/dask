@@ -2145,7 +2145,12 @@ def test_groupby_concat_cudf(engine):
 
 def test_categorical_join():
     # https://github.com/dask/dask/issues/6134
-    df = pd.DataFrame({"join_col": ["a", "a", "b", "b"], "a": [0, 0, 10, 10],})
+    df = pd.DataFrame(
+        {
+            "join_col": ["a", "a", "b", "b"],
+            "a": [0, 0, 10, 10],
+        }
+    )
     df2 = pd.DataFrame({"b": [1, 2, 1, 2]}, index=["a", "a", "b", "b"])
 
     ddf = dd.from_pandas(df, npartitions=2)
