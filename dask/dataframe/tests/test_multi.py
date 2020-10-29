@@ -2169,7 +2169,7 @@ def test_categorical_join():
         assert assert_eq(expected, actual)
     else:
         assert actual.join_col.dtype == "object"
-        assert assert_eq(expected, actual, check_dtypes=False)
+        assert (expected.values == actual.values).all()
 
 
 def test_categorical_merge_with_columns_missing_from_left():
