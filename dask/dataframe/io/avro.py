@@ -4,7 +4,7 @@ from ..utils import insert_meta_param_description, make_meta
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
-from ..core import new_dd_object
+from ..core import new_dd_object, _concat
 from ...base import tokenize
 from ...utils import import_required, natural_sort_key, parse_bytes
 
@@ -183,6 +183,14 @@ class AvroEngine:
 
 class FastAvroEngine(AvroEngine):
     @classmethod
+    def _get_blocks(cls, fo, file_size):
+        return fa.block_reader(fo)
+
+    @classmethod
+    def _get_block_size(cls, block):
+        return block.num_records, block.size, block.offset
+
+    @classmethod
     def process_metadata(
         cls,
         fs,
@@ -201,84 +209,29 @@ class FastAvroEngine(AvroEngine):
             }
             meta = cls.read_partition(fs, meta_piece, index, columns)
 
-        pieces = []
-        if blocksize is not False:
-            # Break apart files at the "Avro block" granularity
-            blocksize = parse_bytes(blocksize or "100MB")
-            for path in paths:
-                file_size = fs.du(path)
-                if file_size > blocksize:
-                    part_count = 0
-                    with fs.open(path, "rb") as fo:
+        # Construct list of pieces
+        blocksize = parse_bytes(blocksize or "100MB")
+        pieces = _construct_pieces(
+            cls,
+            fs,
+            paths,
+            blocksize,
+            index=index,
+            columns=columns,
+        )
 
-                        file_row_offset, part_row_count = 0, 0
-                        file_block_offset, part_block_count = 0, 0
-                        file_byte_offset, part_byte_count = 0, 0
-
-                        avro_reader = fa.block_reader(fo)
-                        for i, block in enumerate(avro_reader):
-                            if i == 0:
-                                # Correct the initial offset
-                                file_byte_offset = block.offset
-                            part_row_count += block.num_records
-                            part_block_count += 1
-                            part_byte_count += block.size
-                            if part_byte_count >= blocksize:
-                                pieces.append(
-                                    {
-                                        "path": path,
-                                        "rows": (file_row_offset, part_row_count),
-                                        "blocks": (file_block_offset, part_block_count),
-                                        "bytes": (file_byte_offset, part_byte_count),
-                                    }
-                                )
-                                part_count += 1
-                                file_row_offset += part_row_count
-                                file_block_offset += part_block_count
-                                file_byte_offset += part_byte_count
-                                part_row_count = part_block_count = part_byte_count = 0
-
-                        if part_block_count:
-                            pieces.append(
-                                {
-                                    "path": path,
-                                    "rows": (file_row_offset, part_row_count),
-                                    "blocks": (file_block_offset, part_block_count),
-                                    "bytes": (file_byte_offset, part_byte_count),
-                                }
-                            )
-                            part_count += 1
-                    if part_count == 1:
-                        # No need to specify a byte range since we
-                        # will need to read the entire file anyway.
-                        pieces[-1] = {"path": pieces[-1]["path"]}
-                else:
-                    pieces.append({"path": path})
-        else:
-            # Map entire file to each partition
-            # TODO: Handle many small files.
-            for path in paths:
-                pieces.append({"path": path})
+        pieces = _aggregate_files(pieces, blocksize)
 
         return pieces, meta
 
     @classmethod
     def read_partition(cls, fs, piece, index, columns):
 
-        if "blocks" in piece:
-            # Reading specific block range
-            path = piece["path"]
-            block_offset, part_blocks = piece["blocks"]
-            block_partitions = True
-        else:
-            # Reading entire file at once
-            path = piece["path"]
-            block_partitions = False
-
         # Read data with fastavro
-        if block_partitions:
+        if isinstance(piece, dict):
             records = []
-            with open(path, "rb") as fo:
+            block_offset, part_blocks = piece["blocks"]
+            with open(piece["path"], "rb") as fo:
                 avro_reader = fa.block_reader(fo)
                 for i, block in enumerate(avro_reader):
                     if i == block_offset + part_blocks:
@@ -287,9 +240,12 @@ class FastAvroEngine(AvroEngine):
                         records += list(block)
             df = pd.DataFrame.from_records(records)
         else:
-            with fs.open(path, "rb") as fo:
-                reader = fa.reader(fo)
-                df = pd.DataFrame.from_records(reader)
+            df = []
+            for item in piece:
+                with fs.open(item["path"], "rb") as fo:
+                    reader = fa.reader(fo)
+                    df.append(pd.DataFrame.from_records(reader))
+            df = _concat(df, ignore_index=True)
 
         # Deal with index and column selection
         if index:
@@ -301,13 +257,22 @@ class FastAvroEngine(AvroEngine):
 
 class UAvroEngine(AvroEngine):
     @classmethod
+    def _get_blocks(cls, fo, file_size):
+        header = ua.core.read_header(fo)
+        ua.core.scan_blocks(fo, header, file_size)
+        return header["blocks"]
+
+    @classmethod
+    def _get_block_size(cls, block):
+        return block["nrows"], block["size"], block["offset"]
+
+    @classmethod
     def process_metadata(
         cls,
         fs,
         paths,
         index=None,
         columns=None,
-        split_blocks=True,
         blocksize=None,
         meta=None,
     ):
@@ -320,71 +285,27 @@ class UAvroEngine(AvroEngine):
                 fo.seek(blocks[0]["offset"])
                 meta = ua.core.filelike_to_dataframe(fo, blocks[0]["size"], header)
 
-        pieces = []
-        if blocksize is not False:
-            # Break apart files at the "Avro block" granularity
-            blocksize = parse_bytes(blocksize or "100MB")
-            for path in paths:
-                file_size = fs.du(path)
-                if file_size > blocksize:
-                    part_count = 0
-                    with open(path, "rb") as fo:
-                        header = ua.core.read_header(fo)
-                        ua.core.scan_blocks(fo, header, file_size)
-                        blocks = header["blocks"]
+        # Construct list of pieces
+        blocksize = parse_bytes(blocksize or "100MB")
+        pieces = _construct_pieces(
+            cls,
+            fs,
+            paths,
+            blocksize,
+            index=index,
+            columns=columns,
+        )
 
-                        file_row_offset, part_row_count = 0, 0
-                        file_block_offset, part_block_count = 0, 0
-                        file_byte_offset, part_byte_count = blocks[0]["offset"], 0
-
-                        for i, block in enumerate(blocks):
-                            part_row_count += block["nrows"]
-                            part_block_count += 1
-                            part_byte_count += block["size"]
-                            if part_byte_count >= blocksize:
-                                pieces.append(
-                                    {
-                                        "path": path,
-                                        "rows": (file_row_offset, part_row_count),
-                                        "blocks": (file_block_offset, part_block_count),
-                                        "bytes": (file_byte_offset, part_byte_count),
-                                    }
-                                )
-                                part_count += 1
-                                file_row_offset += part_row_count
-                                file_block_offset += part_block_count
-                                file_byte_offset += part_byte_count
-                                part_row_count = part_block_count = part_byte_count = 0
-
-                        if part_block_count:
-                            pieces.append(
-                                {
-                                    "path": path,
-                                    "rows": (file_row_offset, part_row_count),
-                                    "blocks": (file_block_offset, part_block_count),
-                                    "bytes": (file_byte_offset, part_byte_count),
-                                }
-                            )
-                            part_count += 1
-                    if part_count == 1:
-                        # No need to specify a byte range since we
-                        # will need to read the entire file anyway.
-                        pieces[-1] = {"path": pieces[-1]["path"]}
-                else:
-                    pieces.append({"path": path})
-        else:
-            # Map entire file to each partition
-            # TODO: Handle many small files.
-            for path in paths:
-                pieces.append({"path": path})
+        pieces = _aggregate_files(pieces, blocksize)
 
         return pieces, meta
 
     @classmethod
     def read_partition(cls, fs, piece, index, columns):
-        file_size = fs.du(piece["path"])
-        if "blocks" in piece:
+
+        if isinstance(piece, dict):
             # Read specific block range
+            file_size = fs.du(piece["path"])
             block_offset, part_blocks = piece["blocks"]
             with fs.open(piece["path"], "rb") as fo:
                 header = ua.core.read_header(fo)
@@ -402,9 +323,13 @@ class UAvroEngine(AvroEngine):
                 df = ua.core.filelike_to_dataframe(fo, file_size, header, scan=False)
         else:
             # Read entire file at once
-            with fs.open(piece["path"], "rb") as fo:
-                header = ua.core.read_header(fo)
-                df = ua.core.filelike_to_dataframe(fo, file_size, header)
+            df = []
+            for item in piece:
+                file_size = fs.du(item["path"])
+                with fs.open(item["path"], "rb") as fo:
+                    header = ua.core.read_header(fo)
+                    df.append(ua.core.filelike_to_dataframe(fo, file_size, header))
+            df = _concat(df, ignore_index=True)
 
         # Deal with index and column selection
         if index:
@@ -412,3 +337,113 @@ class UAvroEngine(AvroEngine):
         if columns is None:
             columns = list(df.columns)
         return df[columns]
+
+
+def _aggregate_files(pieces, blocksize):
+    new_pieces = []
+    item = []
+    size = 0
+    for piece in pieces:
+        if "blocks" in piece:
+            # This is not a full file.
+            # Just append the piece and move on.
+            if size:
+                new_pieces.append(item)
+                size = 0
+                item = []
+            new_pieces.append(piece)
+            continue
+
+        if size + piece["file_size"] <= blocksize:
+            # This piece can be added to the item list
+            size += piece["file_size"]
+            item.append(piece)
+        else:
+            # This piece is too big to add to the item list.
+            # We need to flush whatever we already have in
+            # `item` before adding this piece.
+            if size:
+                new_pieces.append(item)
+            size = piece["file_size"]
+            item = [piece]
+
+    if size:
+        new_pieces.append(item)
+
+    return new_pieces
+
+
+def _construct_pieces(
+    engine,
+    fs,
+    paths,
+    blocksize,
+    index=None,
+    columns=None,
+):
+    """Construct list of pieces using either uavro an fastavro"""
+    pieces = []
+    if blocksize is not False:
+        # Break apart files at the "Avro block" granularity
+        for path in paths:
+            file_size = fs.du(path)
+            if file_size > blocksize:
+                part_count = 0
+                with fs.open(path, "rb") as fo:
+
+                    file_row_offset, part_row_count = 0, 0
+                    file_block_offset, part_block_count = 0, 0
+                    file_byte_offset, part_byte_count = 0, 0
+
+                    blocks = engine._get_blocks(fo, file_size)
+                    for i, block in enumerate(blocks):
+
+                        nrows, nbytes, offset = engine._get_block_size(block)
+                        if i == 0:
+                            # Correct the initial offset
+                            file_byte_offset = offset
+                        part_row_count += nrows
+                        part_block_count += 1
+                        part_byte_count += nbytes
+
+                        if part_byte_count >= blocksize:
+                            pieces.append(
+                                {
+                                    "path": path,
+                                    "rows": (file_row_offset, part_row_count),
+                                    "blocks": (file_block_offset, part_block_count),
+                                    "bytes": (file_byte_offset, part_byte_count),
+                                    "file_size": file_size,
+                                }
+                            )
+                            part_count += 1
+                            file_row_offset += part_row_count
+                            file_block_offset += part_block_count
+                            file_byte_offset += part_byte_count
+                            part_row_count = part_block_count = part_byte_count = 0
+
+                    if part_block_count:
+                        pieces.append(
+                            {
+                                "path": path,
+                                "rows": (file_row_offset, part_row_count),
+                                "blocks": (file_block_offset, part_block_count),
+                                "bytes": (file_byte_offset, part_byte_count),
+                                "file_size": file_size,
+                            }
+                        )
+                        part_count += 1
+                if part_count == 1:
+                    # No need to specify a block/byte range since we
+                    # will need to read the entire file anyway.
+                    pieces[-1] = {"path": pieces[-1]["path"], "file_size": file_size}
+            else:
+                pieces.append({"path": path, "file_size": file_size})
+    else:
+        # Map entire file to each partition.
+        # Note that multiple small files will be aggregated into
+        # the same partition in `_aggregate_files`
+        for path in paths:
+            pieces.append({"path": path, "file_size": fs.du(path)})
+
+    return pieces
