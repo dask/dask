@@ -1,3 +1,4 @@
+import copy
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
@@ -29,6 +30,7 @@ from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, appl
 from .. import threaded
 from ..context import globalmethod
 from ..utils import (
+    has_keyword,
     random_state_data,
     pseudorandom,
     derived_from,
@@ -44,7 +46,7 @@ from ..utils import (
 )
 from ..array.core import Array, normalize_arg
 from ..array.utils import zeros_like_safe
-from ..blockwise import blockwise, Blockwise
+from ..blockwise import blockwise, Blockwise, subs
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -5207,6 +5209,9 @@ def map_partitions(
     """
     name = kwargs.pop("token", None)
 
+    if has_keyword(func, "partition_info"):
+        kwargs["partition_info"] = {"number": -1, "divisions": None}
+
     assert callable(func)
     if name is not None:
         token = tokenize(meta, *args, **kwargs)
@@ -5228,6 +5233,9 @@ def map_partitions(
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
         meta = make_meta(meta, index=meta_index)
+
+    if has_keyword(func, "partition_info"):
+        kwargs["partition_info"] = "__dummy__"
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
@@ -5297,6 +5305,22 @@ def map_partitions(
         else:
             if not valid_divisions(divisions):
                 divisions = [None] * (dfs[0].npartitions + 1)
+
+    if has_keyword(func, "partition_info"):
+        dsk = dict(dsk)
+
+        for k, v in dsk.items():
+            vv = v
+            v = v[0]
+            number = k[-1]
+            assert isinstance(number, int)
+            info = {"number": number, "division": divisions[number]}
+            v = copy.copy(v)  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {"__dummy__": info})
+            v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
