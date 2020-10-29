@@ -498,6 +498,9 @@ def order(dsk, dependencies=None):
             init_stack_pop = init_stack.pop
             is_init_sorted = True
 
+        if skip_root_node and item in root_nodes:
+            item = init_stack_pop()
+
         while item in result:
             item = init_stack_pop()
         inner_stacks_append([item])
