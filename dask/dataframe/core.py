@@ -5211,7 +5211,7 @@ def map_partitions(
     name = kwargs.pop("token", None)
 
     if has_keyword(func, "partition_info"):
-        kwargs["partition_info"] = "__dummy__"
+        kwargs["partition_info"] = {"number": -1, "divisions": None}
 
     assert callable(func)
     if name is not None:
