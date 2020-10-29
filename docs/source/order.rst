@@ -34,24 +34,27 @@ At a high level, Dask has a policy that works towards *small goals* with *big st
     the larger portions of a sub-computation before we start on the smaller
     ones.
 
-This is done with :func:`dask.order.order`. 
-
+This is done with :func:`dask.order.order`. A more technical discussion is available
+in :ref:`scheduling-policy`. https://distributed.dask.org/en/latest/scheduling-policies.html
+also discusses scheduling with a focus on the distributed scheduler, which includes
+additional choices beyond the static ordering documented here.
 
 Debugging
 ---------
 
 Most of the time Dask's ordering does well. But this is a genuinely hard problem
 and there might be cases where you observe unexpectedly high memory usage or
-communication. This section describes how you would identify an ordering problem,
-and some steps you can take to mitigate the problem.
+communication, which may be a result of poor ordering. This section describes
+how you would identify an ordering problem, and some steps you can take to
+mitigate the problem.
 
 Consider a computation that loads several chains of data from disk independently,
-stacks pieces of them together, and does some reductoin:
+stacks pieces of them together, and does some reduction:
 
 .. code-block:: python
 
-   >>> import dask.array as da
    >>> # create data on disk
+   >>> import dask.array as da
    >>> x = da.zeros((12500, 10000), chunks=('10MB', -1))
    >>> da.to_zarr(x, 'saved_x1.zarr', overwrite=True)
    >>> da.to_zarr(x, 'saved_y1.zarr', overwrite=True)
@@ -62,11 +65,11 @@ We can load the data
 
 .. code-block:: python
 
-   >>> # load and profile data
-   >>> x1 = da.from_zarr('saved_x1.zarr', inline_array=True)
-   >>> y1 = da.from_zarr('saved_x2.zarr', inline_array=True)
-   >>> x2 = da.from_zarr('saved_y1.zarr', inline_array=True)
-   >>> y2 = da.from_zarr('saved_y2.zarr', inline_array=True)
+   >>> # load the data.
+   >>> x1 = da.from_zarr('saved_x1.zarr')
+   >>> y1 = da.from_zarr('saved_x2.zarr')
+   >>> x2 = da.from_zarr('saved_y1.zarr')
+   >>> y2 = da.from_zarr('saved_y2.zarr')
 
 And do some computation on it
 
@@ -84,7 +87,9 @@ And do some computation on it
 
 You can use :func:`dask.visualize` with ``color="order"`` to visualize a
 task graph with the static ordering included as node labels. As usual with
-``dask.visualize``, you may need to trim down the problem to a smaller size.
+``dask.visualize``, you may need to trim down the problem to a smaller size,
+so we'll slice off a subset of the data. Make sure to include ``optimize_graph=True``
+to get a true representation of what order the tasks will be executed in.
 
 
 .. code-block:: python
@@ -137,7 +142,7 @@ see the effect of ordering:
 
 At a glance, we can see that this ordering is looks much more regular and
 uniform. There's fewer lines crossing, and the color of the ordering moves
-cleanly from bottom to top, left to right, which indicates that Dask is completing
+smoothly from bottom to top, left to right. This shows that Dask is completing
 one chain of computation before moving onto the next.
 
 The lesson here is *not* "always use ``inline_array=True``". While the static
