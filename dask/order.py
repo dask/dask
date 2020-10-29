@@ -129,7 +129,7 @@ def order(dsk, dependencies=None):
     # tree, we skip processing it normally.
     # See https://github.com/dask/dask/issues/6745
     root_nodes = {k for k in metrics if metrics[k][1] == total_dependencies[k]}
-    skip_root_node = len(root_nodes) == 1
+    skip_root_node = len(root_nodes) == 1 and len(dsk) > 1
 
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
     # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
@@ -498,7 +498,6 @@ def order(dsk, dependencies=None):
             init_stack_pop = init_stack.pop
             is_init_sorted = True
 
-        item = init_stack_pop()
         while item in result:
             item = init_stack_pop()
         inner_stacks_append([item])
