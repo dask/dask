@@ -271,7 +271,7 @@ def _scalar_binary(op, self, other, inv=False):
 
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
-    """Superclass for DataFrame and Series
+    """ Superclass for DataFrame and Series
 
     Parameters
     ----------
@@ -371,7 +371,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         self.dask, self._name, self._meta, self.divisions = state
 
     def copy(self):
-        """Make a copy of the dataframe
+        """ Make a copy of the dataframe
 
         This is strictly a shallow copy of the underlying computational graph.
         It does not affect the underlying data
@@ -574,7 +574,7 @@ Dask Name: {name}, {task} tasks"""
 
     @insert_meta_param_description(pad=12)
     def map_partitions(self, func, *args, **kwargs):
-        """Apply Python function on each DataFrame partition.
+        """ Apply Python function on each DataFrame partition.
 
         Note that the index and divisions are assumed to remain unchanged.
 
@@ -767,7 +767,7 @@ Dask Name: {name}, {task} tasks"""
         return map_overlap(func, self, before, after, *args, **kwargs)
 
     def memory_usage_per_partition(self, index=True, deep=False):
-        """Return the memory usage of each partition
+        """ Return the memory usage of each partition
 
         Parameters
         ----------
@@ -950,7 +950,7 @@ Dask Name: {name}, {task} tasks"""
             return func(self, *args, **kwargs)
 
     def random_split(self, frac, random_state=None, shuffle=False):
-        """Pseudorandomly split dataframe into different pieces row-wise
+        """ Pseudorandomly split dataframe into different pieces row-wise
 
         Parameters
         ----------
@@ -1002,7 +1002,7 @@ Dask Name: {name}, {task} tasks"""
         return out
 
     def head(self, n=5, npartitions=1, compute=True):
-        """First n rows of the dataset
+        """ First n rows of the dataset
 
         Parameters
         ----------
@@ -1053,7 +1053,7 @@ Dask Name: {name}, {task} tasks"""
         return result
 
     def tail(self, n=5, compute=True):
-        """Last n rows of the dataset
+        """ Last n rows of the dataset
 
         Caveat, the only checks the last n rows of the last partition.
         """
@@ -1069,7 +1069,7 @@ Dask Name: {name}, {task} tasks"""
 
     @property
     def loc(self):
-        """Purely label-location based indexer for selection by label.
+        """ Purely label-location based indexer for selection by label.
 
         >>> df.loc["b"]  # doctest: +SKIP
         >>> df.loc["b":"d"]  # doctest: +SKIP
@@ -1098,7 +1098,7 @@ Dask Name: {name}, {task} tasks"""
 
     @property
     def partitions(self):
-        """Slice dataframe by partitions
+        """ Slice dataframe by partitions
 
         This allows partitionwise slicing of a Dask Dataframe.  You can perform normal
         Numpy-style slicing but now rather than slice elements of the array you
@@ -1127,7 +1127,7 @@ Dask Name: {name}, {task} tasks"""
         freq=None,
         force=False,
     ):
-        """Repartition dataframe along new divisions
+        """ Repartition dataframe along new divisions
 
         Parameters
         ----------
@@ -1209,7 +1209,7 @@ Dask Name: {name}, {task} tasks"""
         ignore_index=False,
         compute=None,
     ):
-        """Rearrange DataFrame into new partitions
+        """ Rearrange DataFrame into new partitions
 
         Uses hashing of `on` to map rows to output partitions. After this
         operation, rows with the same value of `on` will be in the same
@@ -1329,7 +1329,7 @@ Dask Name: {name}, {task} tasks"""
         return self.fillna(method="bfill", limit=limit, axis=axis)
 
     def sample(self, n=None, frac=None, replace=False, random_state=None):
-        """Random sample of items
+        """ Random sample of items
 
         Parameters
         ----------
@@ -2060,7 +2060,7 @@ Dask Name: {name}, {task} tasks"""
             return result
 
     def quantile(self, q=0.5, axis=0, method="default"):
-        """Approximate row-wise and precise column-wise quantiles of DataFrame
+        """ Approximate row-wise and precise column-wise quantiles of DataFrame
 
         Parameters
         ----------
@@ -2610,7 +2610,7 @@ Dask Name: {name}, {task} tasks"""
 
     @property
     def values(self):
-        """Return a dask.array of the values of this dataframe
+        """ Return a dask.array of the values of this dataframe
 
         Warning: This creates a dask.array without precise shape information.
         Operations that depend on shape information, like slicing or reshaping,
@@ -2677,7 +2677,7 @@ def _raise_if_object_series(x, funcname):
 
 
 class Series(_Frame):
-    """Parallel Pandas Series
+    """ Parallel Pandas Series
 
     Do not use this class directly.  Instead use functions like
     ``dd.read_csv``, ``dd.read_parquet``, or ``dd.from_pandas``.
@@ -2885,7 +2885,7 @@ Dask Name: {name}, {task} tasks""".format(
         return df
 
     def quantile(self, q=0.5, method="default"):
-        """Approximate quantiles of Series
+        """ Approximate quantiles of Series
 
         Parameters
         ----------
@@ -2899,7 +2899,8 @@ Dask Name: {name}, {task} tasks""".format(
         return quantile(self, q, method=method)
 
     def _repartition_quantiles(self, npartitions, upsample=1.0):
-        """Approximate quantiles of Series used for repartitioning"""
+        """ Approximate quantiles of Series used for repartitioning
+        """
         from .partitionquantiles import partition_quantiles
 
         return partition_quantiles(self, npartitions, upsample=upsample)
@@ -3166,7 +3167,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, convert_dtype=True, meta=no_default, args=(), **kwds):
-        """Parallel version of pandas.Series.apply
+        """ Parallel version of pandas.Series.apply
 
         Parameters
         ----------
@@ -3346,7 +3347,7 @@ class Index(Series):
         return pd.Index(array, name=self.name)
 
     def head(self, n=5, compute=True):
-        """First n items of the Index.
+        """ First n items of the Index.
 
         Caveat, this only checks the first partition.
         """
@@ -3886,7 +3887,7 @@ class DataFrame(_Frame):
         return self.map_partitions(M.rename, None, columns=columns)
 
     def query(self, expr, **kwargs):
-        """Filter dataframe with complex expression
+        """ Filter dataframe with complex expression
 
         Blocked version of pd.DataFrame.query
 
@@ -4266,7 +4267,7 @@ class DataFrame(_Frame):
         meta=no_default,
         **kwds,
     ):
-        """Parallel version of pandas.DataFrame.apply
+        """ Parallel version of pandas.DataFrame.apply
 
         This mimics the pandas version except for the following:
 
@@ -4741,7 +4742,7 @@ def is_broadcastable(dfs, s):
 
 
 def elemwise(op, *args, **kwargs):
-    """Elementwise operation for Dask dataframes
+    """ Elementwise operation for Dask dataframes
 
     Parameters
     ----------
@@ -4845,7 +4846,7 @@ def elemwise(op, *args, **kwargs):
 
 
 def handle_out(out, result):
-    """Handle out parameters
+    """ Handle out parameters
 
     If out is a dask.DataFrame, dask.Series or dask.Scalar then
     this overwrites the contents of it with the result
@@ -5189,7 +5190,7 @@ def map_partitions(
     transform_divisions=True,
     **kwargs,
 ):
-    """Apply Python function on each DataFrame partition.
+    """ Apply Python function on each DataFrame partition.
 
     Parameters
     ----------
@@ -5312,7 +5313,6 @@ def map_partitions(
         for k, v in dsk.items():
             vv = v
             v = v[0]
-            [(key, task)] = v.dsk.items()  # unpack subgraph callable
             number = k[-1]
             assert isinstance(number, int)
             info = {"number": number, "division": divisions[number]}
@@ -5613,7 +5613,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
 
 
 def cov_corr_chunk(df, corr=False):
-    """Chunk part of a covariance or correlation computation"""
+    """ Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
     df = df.astype("float64", copy=False)
     sums = zeros_like_safe(df.values, shape=shape)
@@ -5701,7 +5701,7 @@ def cov_corr_agg(data, cols, min_periods=2, corr=False, scalar=False):
 
 
 def pd_split(df, p, random_state=None, shuffle=False):
-    """Split DataFrame into multiple pieces pseudorandomly
+    """ Split DataFrame into multiple pieces pseudorandomly
 
     >>> df = pd.DataFrame({'a': [1, 2, 3, 4, 5, 6],
     ...                    'b': [2, 3, 4, 5, 6, 7]})
@@ -5782,7 +5782,7 @@ def check_divisions(divisions):
 
 
 def repartition_divisions(a, b, name, out1, out2, force=False):
-    """dask graph to repartition dataframe by new divisions
+    """ dask graph to repartition dataframe by new divisions
 
     Parameters
     ----------
@@ -6059,7 +6059,7 @@ def _repartition_from_boundaries(df, new_partitions_boundaries, new_name):
 
 
 def _split_partitions(df, nsplits, new_name):
-    """Split a Dask dataframe into new partitions
+    """ Split a Dask dataframe into new partitions
 
     Parameters
     ----------
@@ -6096,7 +6096,7 @@ def _split_partitions(df, nsplits, new_name):
 
 
 def repartition(df, divisions=None, force=False):
-    """Repartition dataframe along new divisions
+    """ Repartition dataframe along new divisions
 
     Dask.DataFrame objects are partitioned along their index.  Often when
     multiple dataframes interact we need to align these partitionings.  The
@@ -6468,7 +6468,7 @@ def meta_warning(df):
 
 
 def prefix_reduction(f, ddf, identity, **kwargs):
-    """Computes the prefix sums of f on df
+    """ Computes the prefix sums of f on df
 
     If df has partitions [P1, P2, ..., Pn], then returns the DataFrame with
     partitions [f(identity, P1),
@@ -6530,7 +6530,7 @@ def prefix_reduction(f, ddf, identity, **kwargs):
 
 
 def suffix_reduction(f, ddf, identity, **kwargs):
-    """Computes the suffix sums of f on df
+    """ Computes the suffix sums of f on df
 
     If df has partitions [P1, P2, ..., Pn], then returns the DataFrame with
     partitions [f(P1, f(P2, ...f(Pn, identity)...)),
