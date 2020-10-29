@@ -208,11 +208,12 @@ class FastAvroEngine(AvroEngine):
             for path in paths:
                 file_size = fs.du(path)
                 if file_size > blocksize:
+                    part_count = 0
                     with fs.open(path, "rb") as fo:
 
-                        (file_row_offset, part_row_count) = (0, 0)
-                        (file_block_offset, part_block_count) = (0, 0)
-                        (file_byte_offset, part_byte_count) = (0, 0)
+                        file_row_offset, part_row_count = 0, 0
+                        file_block_offset, part_block_count = 0, 0
+                        file_byte_offset, part_byte_count = 0, 0
 
                         avro_reader = fa.block_reader(fo)
                         for i, block in enumerate(avro_reader):
@@ -231,18 +232,11 @@ class FastAvroEngine(AvroEngine):
                                         "bytes": (file_byte_offset, part_byte_count),
                                     }
                                 )
-                                (file_row_offset, part_row_count) = (
-                                    file_row_offset + part_row_count,
-                                    0,
-                                )
-                                (file_block_offset, part_block_count) = (
-                                    file_block_offset + part_block_count,
-                                    0,
-                                )
-                                (file_byte_offset, part_byte_count) = (
-                                    file_byte_offset + part_byte_count,
-                                    0,
-                                )
+                                part_count += 1
+                                file_row_offset += part_row_count
+                                file_block_offset += part_block_count
+                                file_byte_offset += part_byte_count
+                                part_row_count = part_block_count = part_byte_count = 0
 
                         if part_block_count:
                             pieces.append(
@@ -253,6 +247,11 @@ class FastAvroEngine(AvroEngine):
                                     "bytes": (file_byte_offset, part_byte_count),
                                 }
                             )
+                            part_count += 1
+                    if part_count == 1:
+                        # No need to specify a byte range since we
+                        # will need to read the entire file anyway.
+                        pieces[-1] = {"path": pieces[-1]["path"]}
                 else:
                     pieces.append({"path": path})
         else:
@@ -328,14 +327,15 @@ class UAvroEngine(AvroEngine):
             for path in paths:
                 file_size = fs.du(path)
                 if file_size > blocksize:
+                    part_count = 0
                     with open(path, "rb") as fo:
                         header = ua.core.read_header(fo)
                         ua.core.scan_blocks(fo, header, file_size)
                         blocks = header["blocks"]
 
-                        (file_row_offset, part_row_count) = (0, 0)
-                        (file_block_offset, part_block_count) = (0, 0)
-                        (file_byte_offset, part_byte_count) = (blocks[0]["offset"], 0)
+                        file_row_offset, part_row_count = 0, 0
+                        file_block_offset, part_block_count = 0, 0
+                        file_byte_offset, part_byte_count = blocks[0]["offset"], 0
 
                         for i, block in enumerate(blocks):
                             part_row_count += block["nrows"]
@@ -350,18 +350,11 @@ class UAvroEngine(AvroEngine):
                                         "bytes": (file_byte_offset, part_byte_count),
                                     }
                                 )
-                                (file_row_offset, part_row_count) = (
-                                    file_row_offset + part_row_count,
-                                    0,
-                                )
-                                (file_block_offset, part_block_count) = (
-                                    file_block_offset + part_block_count,
-                                    0,
-                                )
-                                (file_byte_offset, part_byte_count) = (
-                                    file_byte_offset + part_byte_count,
-                                    0,
-                                )
+                                part_count += 1
+                                file_row_offset += part_row_count
+                                file_block_offset += part_block_count
+                                file_byte_offset += part_byte_count
+                                part_row_count = part_block_count = part_byte_count = 0
 
                         if part_block_count:
                             pieces.append(
@@ -372,6 +365,11 @@ class UAvroEngine(AvroEngine):
                                     "bytes": (file_byte_offset, part_byte_count),
                                 }
                             )
+                            part_count += 1
+                    if part_count == 1:
+                        # No need to specify a byte range since we
+                        # will need to read the entire file anyway.
+                        pieces[-1] = {"path": pieces[-1]["path"]}
                 else:
                     pieces.append({"path": path})
         else:
@@ -384,19 +382,26 @@ class UAvroEngine(AvroEngine):
 
     @classmethod
     def read_partition(cls, fs, piece, index, columns):
-
-        if "bytes" in piece:
-            # Read specific byte range
-            byte_offset, part_bytes = piece["bytes"]
-            with open(piece["path"], "rb") as fo:
+        file_size = fs.du(piece["path"])
+        if "blocks" in piece:
+            # Read specific block range
+            block_offset, part_blocks = piece["blocks"]
+            with fs.open(piece["path"], "rb") as fo:
                 header = ua.core.read_header(fo)
-                header["blocks"] = []
-                fo.seek(byte_offset)
-                df = ua.core.filelike_to_dataframe(fo, part_bytes, header)
-                pass
+                ua.core.scan_blocks(fo, header, file_size)
+                header["blocks"] = header["blocks"][
+                    block_offset : block_offset + part_blocks
+                ]
+
+                # Adjust the total row count
+                nrows = 0
+                for block in header["blocks"]:
+                    nrows += block["nrows"]
+                header["nrows"] = nrows
+
+                df = ua.core.filelike_to_dataframe(fo, file_size, header, scan=False)
         else:
             # Read entire file at once
-            file_size = fs.du(piece["path"])
             with fs.open(piece["path"], "rb") as fo:
                 header = ua.core.read_header(fo)
                 df = ua.core.filelike_to_dataframe(fo, file_size, header)

@@ -16,7 +16,7 @@ except ImportError:
 
 
 @pytest.mark.parametrize("blocksize", [None, "1KB", False])
-@pytest.mark.parametrize("size", [100, 1000])
+@pytest.mark.parametrize("size", [100, 4000])
 @pytest.mark.parametrize("nfiles", [1, 2])
 @pytest.mark.parametrize("engine", ["uavro", "fastavro"])
 def test_read_avro_basic(tmpdir, blocksize, size, nfiles, engine):
