@@ -104,6 +104,8 @@ def test_reshape_unknown_sizes():
         ),
         # (2, 2, 3, 4) -> (4, 3, 4)
         ((2, 2, 3, 4), ((1, 1), (2,), (1, 2), (4,)), (4, 3, 4), ((2, 2), (1, 2), (4,))),
+        # (2, 3, 4) -> (24,).
+        ((2, 3, 4), ((1, 1), (1, 1, 1), (2, 2)), (24,), ((2,) * 12,)),
     ],
 )
 def test_reshape_all_chunked_no_merge(inshape, inchunks, outshape, outchunks):
