@@ -2936,7 +2936,7 @@ def from_array(
               ('array-<name>', 1): (getitem, "array-original-<name>", ...)
            }
 
-        With ``inline_array=True``, Dask can instead inline the array directly
+        With ``inline_array=True``, Dask will instead inline the array directly
         in the values of the task graph.
 
         .. code-block:: python
@@ -2955,8 +2955,9 @@ def from_array(
         including the size of ``x``, how expensive it is to create, which
         scheduler you're using, and the pattern of downstream computations.
         As a hueristic, ``inline_array=True`` may be the right choice when
-        the array ``x`` is small (since it's included in the graph many times)
-        and if you're experiencing ordering issues (see :ref:`order` for more).
+        the array ``x`` is cheap to serialize and deserialize (since it's
+        included in the graph many times) and if you're experiencing ordering
+        issues (see :ref:`order` for more).
 
         This has no effect when ``x`` is a NumPy array.
 
