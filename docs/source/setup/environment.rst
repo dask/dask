@@ -29,7 +29,7 @@ related to starting up python and importing
 code (such as PATH, PYTHONPATH, ``sys.path``).
 
 If you are using the distributed scheduler on a single machine, this is roughly
-equivalent to using the multiprocessing scgheduler, above, if you are launching
+equivalent to using the multiprocessing scheduler, above, if you are launching
 with ``Client(...)`` or ``LocalCluster(...)``.
 
 However, if you are launching your workers from the command line, then you must
@@ -95,4 +95,3 @@ for larger modules.
 
 __ http://stackoverflow.com/questions/39295200/can-i-use-functions-imported-from-py-files-in-dask-distributed
 .. _API docs: https://distributed.readthedocs.io/en/latest/api.html#distributed.executor.Executor.upload_file
-
