@@ -85,6 +85,7 @@ how to set up Dask on a variety of local and distributed hardware.
 
    setup/single-machine.rst
    setup/single-distributed.rst
+   setup/environment.rst
    setup/cli.rst
    setup/ssh.rst
    setup/hpc.rst
