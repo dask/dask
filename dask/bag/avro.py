@@ -140,7 +140,8 @@ def read_chunk(fobj, off, l, head):
     """Get rows from raw bytes block"""
     import fastavro
     from dask.bytes.core import read_block
-    if hasattr(fastavro, 'iter_avro'):
+
+    if hasattr(fastavro, "iter_avro"):
         reader = fastavro.iter_avro
     else:
         reader = fastavro.reader
@@ -157,7 +158,8 @@ def read_chunk(fobj, off, l, head):
 def read_file(fo):
     """Get rows from file-like"""
     import fastavro
-    if hasattr(fastavro, 'iter_avro'):
+
+    if hasattr(fastavro, "iter_avro"):
         reader = fastavro.iter_avro
     else:
         reader = fastavro.reader
