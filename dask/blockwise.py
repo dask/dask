@@ -291,6 +291,34 @@ class Blockwise(Layer):
             }
         return self._cached_dict["dsk"]
 
+    def get_output_keys(self):
+
+        # TODO: Handle N-D Collections and more-complex
+        # tensor operations.
+
+        # Only deal with 1-D collections (for now).
+        # Otherwise, we allow dict materialization.
+        if len(self.output_indices) > 1:
+            return super().get_output_keys()
+
+        # Check inputs.
+        # Only deal with 1-to-1 input-output collection
+        # mapping (for now).
+        input_cnt = 0
+        in_name = None
+        for _name, _ind in self.indices:
+            if _ind is not None:
+                if input_cnt:
+                    return super().get_output_keys()
+                in_name = _name
+                input_cnt += 1
+
+        # At this point, we can assume:
+        # - Input and output indices are aligned
+        # - Collection is 1-D
+        # - Only one input collection
+        return {(self.output, p) for p in range(self.numblocks[in_name][0])}
+
     def __getitem__(self, key):
         return self._dict[key]
 
