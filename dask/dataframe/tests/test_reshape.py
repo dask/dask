@@ -181,7 +181,7 @@ def test_pivot_table(values, aggfunc):
             "D": np.random.randn(100),
         }
     )
-    ddf = dd.from_pandas(df, 5)
+    ddf = dd.from_pandas(df, 5).repartition((0, 20, 40, 60, 80, 98, 99))
 
     res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
     exp = pd.pivot_table(df, index="A", columns="C", values=values, aggfunc=aggfunc)

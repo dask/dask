@@ -957,8 +957,16 @@ class ArrowEngine(Engine):
 
         return fmd, schema, i_offset
 
-    @staticmethod
+    @classmethod
+    def _pandas_to_arrow_table(
+        cls, df: pd.DataFrame, preserve_index=False, schema=None
+    ) -> pa.Table:
+        table = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
+        return table
+
+    @classmethod
     def write_partition(
+        cls,
         df,
         path,
         fs,
@@ -978,7 +986,9 @@ class ArrowEngine(Engine):
             preserve_index = True
         else:
             index_cols = []
-        t = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
+
+        t = cls._pandas_to_arrow_table(df, preserve_index=preserve_index, schema=schema)
+
         if partition_on:
             md_list = _write_partitioned(
                 t,
@@ -1015,6 +1025,7 @@ class ArrowEngine(Engine):
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        parts = [p for p in parts if p[0]["meta"] is not None]
         if parts:
             if not append:
                 # Get only arguments specified in the function

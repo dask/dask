@@ -72,6 +72,9 @@ class SimpleShuffleLayer(Layer):
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
 
+    def get_output_keys(self):
+        return {(self.name, part) for part in self.parts_out}
+
     def __repr__(self):
         return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
             self.name, self.npartitions
@@ -96,6 +99,19 @@ class SimpleShuffleLayer(Layer):
     def __len__(self):
         return len(self._dict)
 
+    def __reduce__(self):
+        attrs = [
+            "name",
+            "column",
+            "npartitions",
+            "npartitions_input",
+            "ignore_index",
+            "name_input",
+            "meta_input",
+            "parts_out",
+        ]
+        return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
         parts = set()
@@ -117,7 +133,7 @@ class SimpleShuffleLayer(Layer):
         materialization.
         """
         deps = defaultdict(set)
-        parts_out = self._keys_to_parts(keys)
+        parts_out = parts_out or self._keys_to_parts(keys)
         for part in parts_out:
             deps[(self.name, part)] |= {
                 (self.name_input, i) for i in range(self.npartitions_input)
@@ -251,6 +267,22 @@ class ShuffleLayer(SimpleShuffleLayer):
         return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
             self.name, self.stage, self.nsplits, self.npartitions
         )
+
+    def __reduce__(self):
+        attrs = [
+            "name",
+            "column",
+            "inputs",
+            "stage",
+            "npartitions",
+            "npartitions_input",
+            "nsplits",
+            "ignore_index",
+            "name_input",
+            "meta_input",
+            "parts_out",
+        ]
+        return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.

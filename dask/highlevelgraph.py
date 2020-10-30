@@ -1,5 +1,5 @@
 import collections.abc
-from typing import Callable, Hashable, Set, Mapping, Iterable, Tuple
+from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
 
 import tlz as toolz
@@ -32,6 +32,14 @@ class Layer(collections.abc.Mapping):
 
     This abstract class establish a protocol for high level graph layers.
     """
+
+    def get_output_keys(self) -> Set:
+        """Return a set of all output keys
+
+        Output keys are all keys in the layer that might be referenced by
+        other layers.
+        """
+        return self.keys()
 
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
@@ -117,6 +125,24 @@ class Layer(collections.abc.Mapping):
         """
 
         return BasicLayer({k: func(v) for k, v in self.items()})
+
+    def __reduce__(self):
+        """Default serialization implementation, which materializes the Layer
+
+        This should follow the standard pickle protocol[1] but must always return
+        a tuple and the arguments for the callable object must be compatible with
+        msgpack. This is because Distributed uses msgpack to send Layers to the
+        scheduler.
+
+        [1] <https://docs.python.org/3/library/pickle.html#object.__reduce__>
+        """
+        return (BasicLayer, (dict(self),))
+
+    def __copy__(self):
+        """Default shallow copy implementation"""
+        obj = type(self).__new__(self.__class__)
+        obj.__dict__.update(self.__dict__)
+        return obj
 
 
 class BasicLayer(Layer):
@@ -232,12 +258,13 @@ class HighLevelGraph(Mapping):
         self,
         layers: Mapping[str, Layer],
         dependencies: Mapping[str, Set],
-        key_dependencies: Mapping[Hashable, Set] = {},
+        key_dependencies: Optional[Mapping[Hashable, Set]] = None,
     ):
         self._keys = None
+        self._all_external_keys = None
         self.layers = layers
         self.dependencies = dependencies
-        self.key_dependencies = key_dependencies
+        self.key_dependencies = key_dependencies if key_dependencies else {}
 
         # Makes sure that all layers are `Layer`
         self.layers = {
@@ -251,6 +278,14 @@ class HighLevelGraph(Mapping):
             for layer in self.layers.values():
                 self._keys.update(layer.keys())
         return self._keys
+
+    def get_all_external_keys(self) -> Set:
+        """Returns a set of all output keys of all layers"""
+        if self._all_external_keys is None:
+            self._all_external_keys = set()
+            for layer in self.layers.values():
+                self._all_external_keys.update(layer.get_output_keys())
+        return self._all_external_keys
 
     @property
     def dependents(self):
@@ -450,22 +485,25 @@ class HighLevelGraph(Mapping):
             Culled high level graph
         """
 
-        layers = self._toposort_layers()
-        all_keys = self.keyset()
-
+        all_ext_keys = self.get_all_external_keys()
         ret_layers = {}
         ret_key_deps = {}
-        for layer_name in reversed(layers):
+        for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
-            key_deps = keys.intersection(layer)
-            if len(key_deps) > 0:
-                culled_layer, culled_deps = layer.cull(key_deps, all_keys)
+            # Let's cull the layer to produce its part of `keys`
+            output_keys = keys.intersection(layer.get_output_keys())
+            if len(output_keys) > 0:
+                culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
+                # Update `keys` with all layer's external key dependencies, which
+                # are all the layer's dependencies (`culled_deps`) excluding
+                # the layer's output keys.
                 external_deps = set()
                 for d in culled_deps.values():
                     external_deps |= d
-                external_deps.difference_update(culled_layer.keys())
-
+                external_deps.difference_update(culled_layer.get_output_keys())
                 keys.update(external_deps)
+
+                # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
                 ret_key_deps.update(culled_deps)
 
