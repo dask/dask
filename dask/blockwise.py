@@ -307,10 +307,11 @@ class Blockwise(Layer):
         input_cnt = 0
         in_name = None
         for _name, _ind in self.indices:
-            if len(_ind) > 1 or input_cnt:
-                return super().get_output_keys()
-            in_name = _name
-            input_cnt += 1
+            if _ind is not None:
+                if len(_ind) > 1 or input_cnt:
+                    return super().get_output_keys()
+                in_name = _name
+                input_cnt += 1
 
         # At this point, we can assume:
         # - Input and output indices are aligned
