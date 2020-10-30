@@ -1,6 +1,13 @@
 Changelog
 =========
 
+2.30.1 - 2020-10-30
+-------------------
+
+- Replace ``AsyncProcess`` exit handler by ``weakref.finalize`` (:pr:`4184`) `Peter Andreas Entschev`_
+- Remove hard coded connect handshake timeouts (:pr:`4176`) `Florian Jetter`_
+
+
 2.30.0 - 2020-10-06
 -------------------
 
