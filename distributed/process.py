@@ -1,4 +1,3 @@
-import atexit
 import logging
 import os
 from queue import Queue as PyQueue
@@ -81,8 +80,10 @@ class AsyncProcess:
                 dask.config.global_config,
             ),
         )
-        _dangling.add(self._process)
         self._name = self._process.name
+        self._proc_finalizer = weakref.finalize(
+            self, _asyncprocess_finalizer, self._process
+        )
         self._watch_q = PyQueue()
         self._exit_future = Future()
         self._exit_callback = None
@@ -118,8 +119,8 @@ class AsyncProcess:
             # We don't join the thread here as a finalizer can be called
             # asynchronously from anywhere
 
-        self._finalizer = weakref.finalize(self, stop_thread, q=self._watch_q)
-        self._finalizer.atexit = False
+        self._thread_finalizer = weakref.finalize(self, stop_thread, q=self._watch_q)
+        self._thread_finalizer.atexit = False
 
     def _on_exit(self, exitcode):
         # Called from the event loop when the child process exited
@@ -292,7 +293,7 @@ class AsyncProcess:
         immediately and does not ensure the child process has exited.
         """
         if not self._closed:
-            self._finalizer()
+            self._thread_finalizer()
             self._process = None
             self._closed = True
 
@@ -334,15 +335,10 @@ class AsyncProcess:
         self._process.daemon = value
 
 
-_dangling = weakref.WeakSet()
-
-
-@atexit.register
-def _cleanup_dangling():
-    for proc in list(_dangling):
-        if proc.is_alive():
-            try:
-                logger.info("reaping stray process %s" % (proc,))
-                proc.terminate()
-            except OSError:
-                pass
+def _asyncprocess_finalizer(proc):
+    if proc.is_alive():
+        try:
+            logger.info("reaping stray process %s" % (proc,))
+            proc.terminate()
+        except OSError:
+            pass

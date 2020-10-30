@@ -44,7 +44,6 @@ from .config import initialize_logging
 from .core import connect, rpc, CommClosedError, Status
 from .deploy import SpecCluster
 from .metrics import time
-from .process import _cleanup_dangling
 from .proctitle import enable_proctitle_on_children
 from .security import Security
 from .utils import (
@@ -1451,7 +1450,6 @@ def check_process_leak(check=True):
         else:
             assert not mp_context.active_children()
 
-    _cleanup_dangling()
     for proc in mp_context.active_children():
         proc.terminate()
 
