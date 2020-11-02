@@ -50,7 +50,7 @@ conda create -n dask-distributed -c conda-forge -c defaults \
     prometheus_client \
     psutil \
     'pytest>=4' \
-    pytest-asyncio \
+    'pytest-asyncio<0.14.0' \
     pytest-faulthandler \
     pytest-repeat \
     pytest-timeout \

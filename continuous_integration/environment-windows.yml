@@ -17,7 +17,7 @@ dependencies:
   - prometheus_client
   - psutil
   - pytest
-  - pytest-asyncio
+  - pytest-asyncio<0.14.0
   - pytest-repeat
   - pytest-timeout
   - pytest-faulthandler
