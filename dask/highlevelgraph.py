@@ -1,3 +1,4 @@
+import abc
 import collections.abc
 from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
 import copy
@@ -31,13 +32,36 @@ class Layer(collections.abc.Mapping):
     """High level graph layer
 
     This abstract class establish a protocol for high level graph layers.
+
+    The main motivation of a layer is to represent a collection of tasks
+    symbolically in order to speedup a series of operations significantly.
+    Ideally, a layer should stay in this symbolic state until execution
+    but in practice some operations will force the layer to generate all
+    its internal tasks. We say that the layer has been materialized.
+
+    Most of the default implementations in this class will materialize the
+    layer. It is up to derived classes to implement non-materializing
+    implementations.
     """
+
+    @abc.abstractmethod
+    def is_materialized(self) -> bool:
+        """Return whether the layer is materialized or not"""
+        return True
 
     def get_output_keys(self) -> Set:
         """Return a set of all output keys
 
         Output keys are all keys in the layer that might be referenced by
         other layers.
+
+        An layer overriding this implementation, should not materialize the
+        layer.
+
+        Returns
+        -------
+        keys : Set
+            All output keys
         """
         return self.keys()
 
@@ -176,6 +200,9 @@ class BasicLayer(Layer):
 
     def __len__(self):
         return len(self.mapping)
+
+    def is_materialized(self):
+        return True
 
     def get_dependencies(self, key, all_hlg_keys):
         if self.dependencies is None or self.global_dependencies is None:

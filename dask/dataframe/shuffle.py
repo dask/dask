@@ -80,6 +80,9 @@ class SimpleShuffleLayer(Layer):
             self.name, self.npartitions
         )
 
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
     @property
     def _dict(self):
         """Materialize full dict representation"""
