@@ -298,7 +298,7 @@ class Blockwise(Layer):
 
         # Only deal with 1-D collections (for now).
         # Otherwise, we allow dict materialization.
-        if len(self.output_indices) > 1:
+        if len(self.output_indices) != 1:
             return super().get_output_keys()
 
         # Check inputs.
@@ -308,7 +308,7 @@ class Blockwise(Layer):
         in_name = None
         for _name, _ind in self.indices:
             if _ind is not None:
-                if len(_ind) > 1 or input_cnt:
+                if len(_ind) != 1 or input_cnt:
                     return super().get_output_keys()
                 in_name = _name
                 input_cnt += 1
