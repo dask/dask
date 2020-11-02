@@ -272,30 +272,6 @@ class HighLevelGraph(Mapping):
             for k, v in self.layers.items()
         }
 
-    def keyset(self):
-        if self._keys is None:
-            self._keys = set()
-            for layer in self.layers.values():
-                self._keys.update(layer.keys())
-        return self._keys
-
-    def get_all_external_keys(self) -> Set:
-        """Returns a set of all output keys of all layers"""
-        if self._all_external_keys is None:
-            self._all_external_keys = set()
-            for layer in self.layers.values():
-                self._all_external_keys.update(layer.get_output_keys())
-        return self._all_external_keys
-
-    @property
-    def dependents(self):
-        return reverse_dict(self.dependencies)
-
-    @property
-    def dicts(self):
-        # Backwards compatibility for now
-        return self.layers
-
     @classmethod
     def _from_collection(cls, name, layer, collection):
         """ `from_collections` optimized for a single collection """
@@ -391,6 +367,69 @@ class HighLevelGraph(Mapping):
     def __iter__(self):
         return toolz.unique(toolz.concat(self.layers.values()))
 
+    def keyset(self) -> Set:
+        """Get all keys of all the layers
+
+        This will in many cases materialize layers, which makes it
+        a relative cheap operation. See `get_all_external_keys()`
+        for a faster alternative.
+
+        Returns
+        -------
+        keys: Set
+            A set of all keys
+        """
+        if self._keys is None:
+            self._keys = set()
+            for layer in self.layers.values():
+                self._keys.update(layer.keys())
+        return self._keys
+
+    def get_all_external_keys(self) -> Set:
+        """Get all output keys of all layers
+
+        This will in most cases _not_ materialize any layers, which makes
+        it a relative cheap operation.
+
+        Returns
+        -------
+        keys: Set
+            A set of all external keys
+        """
+        if self._all_external_keys is None:
+            self._all_external_keys = set()
+            for layer in self.layers.values():
+                self._all_external_keys.update(layer.get_output_keys())
+        return self._all_external_keys
+
+    def get_all_dependencies(self) -> Mapping[Hashable, Set]:
+        """Get dependencies of all keys
+
+        This will in most cases materialize all layers, which makes
+        it an expensive operation.
+
+        Returns
+        -------
+        map: Mapping
+            A map that maps each key to its dependencies
+        """
+        all_keys = self.keyset()
+        missing_keys = all_keys.difference(self.key_dependencies.keys())
+        if missing_keys:
+            for layer in self.layers.values():
+                for k in missing_keys.intersection(layer.keys()):
+                    self.key_dependencies[k] = layer.get_dependencies(k, all_keys)
+        return self.key_dependencies
+
+    @property
+    def dependents(self):
+        return reverse_dict(self.dependencies)
+
+    @property
+    def dicts(self):
+        # Backwards compatibility for now
+        return self.layers
+
     def items(self):
         items = []
         seen = set()
@@ -430,22 +469,6 @@ class HighLevelGraph(Mapping):
 
         g = to_graphviz(self, **kwargs)
         return graphviz_to_file(g, filename, format)
-
-    def get_all_dependencies(self) -> Mapping[Hashable, Set]:
-        """Get dependencies of all keys in the HLG
-
-        Returns
-        -------
-        map: Mapping
-            A map that maps each key to its dependencies
-        """
-        all_keys = self.keyset()
-        missing_keys = all_keys.difference(self.key_dependencies.keys())
-        if missing_keys:
-            for layer in self.layers.values():
-                for k in missing_keys.intersection(layer.keys()):
-                    self.key_dependencies[k] = layer.get_dependencies(k, all_keys)
-        return self.key_dependencies
 
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
