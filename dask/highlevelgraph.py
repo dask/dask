@@ -1,6 +1,16 @@
 import abc
 import collections.abc
-from typing import Callable, Hashable, Optional, Set, Mapping, Iterable, Tuple
+from typing import (
+    Any,
+    Callable,
+    Dict,
+    Hashable,
+    Optional,
+    Set,
+    Mapping,
+    Iterable,
+    Tuple,
+)
 import copy
 
 import tlz as toolz
@@ -60,7 +70,7 @@ class Layer(collections.abc.Mapping):
 
         Returns
         -------
-        keys : Set
+        keys: Set
             All output keys
         """
         return self.keys()
@@ -116,7 +126,7 @@ class Layer(collections.abc.Mapping):
         ----------
         key: Hashable
             The key to find dependencies of
-        all_hlg_keys : Iterable
+        all_hlg_keys: Iterable
             All keys in the high level graph.
 
         Returns
@@ -139,16 +149,66 @@ class Layer(collections.abc.Mapping):
 
         Parameters
         ----------
-        func : callable
+        func: callable
             The function to call on tasks
 
         Returns
         -------
-        layer : Layer
+        layer: Layer
             A new layer containing the transformed tasks
         """
 
         return BasicLayer({k: func(v) for k, v in self.items()})
+
+    def distributed_pack(self) -> Optional[Any]:
+        """Pack the layer for scheduler communication in Distributed
+
+        This method should pack its current state and is called by the Client when
+        communicating with the Scheduler.
+        The Scheduler will then use .distributed_unpack(data, ...) to unpack the
+        state, materialize the layer, and merge it into the global task graph.
+
+        The returned state must be compatible with Distributed's scheduler, which
+        means it must obey the following:
+          - Serializable by msgpack
+          - All remote data must be unpacked (see unpack_remotedata())
+          - All keys must be converted to strings now or when unpacking
+          - All tasks must be serialized (see dumps_task())
+
+        Alternatively, the method can return None, which will make Distributed
+        materialize the layer and use a default packing method.
+
+        Returns
+        -------
+        state: Object serializable by msgpack
+            Scheduler compatible state of the layer
+        """
+        return None
+
+    @classmethod
+    def distributed_unpack(
+        cls, state: Any, dsk: Dict[str, Any], dependencies: Mapping[Hashable, Set]
+    ) -> None:
+        """Unpack the state of a layer previously packed by .distributed_pack()
+
+        This method is called by the scheduler in Distributed in order to unpack
+        the state of a layer and merge it into its global task graph. The method
+        should update `dsk` and `dependencies`, which are the already materialized
+        state of the preceding layers in the high level graph. The layers of the
+        high level graph are unpacked in topological order.
+
+        See Layer.distributed_pack() for packing detail.
+
+        Parameters
+        ----------
+        state: Any
+            The state returned by Layer.distributed_pack()
+        dsk: dict
+            The materialized low level graph of the already unpacked layers
+        dependencies: Mapping
+            The dependencies of each key in `dsk`
+        """
+        raise NotImplementedError(f"{type(cls)} doesn't implement distributed_unpack()")
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer
@@ -174,9 +234,9 @@ class BasicLayer(Layer):
 
     Parameters
     ----------
-    mapping : Mapping
+    mapping: Mapping
         The mapping between keys and tasks, typically a dask graph.
-    dependencies : Mapping[Hashable, Set], optional
+    dependencies: Mapping[Hashable, Set], optional
         Mapping between keys and their dependencies
     global_dependencies: Set, optional
         Set of dependencies that all keys in the layer depend on. Notice,

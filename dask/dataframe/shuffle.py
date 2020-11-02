@@ -14,6 +14,7 @@ import pandas as pd
 from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
 
 from .. import base, config
+from ..core import keys_in_tasks
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
 from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph, Layer
@@ -114,6 +115,40 @@ class SimpleShuffleLayer(Layer):
             "parts_out",
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
+    def distributed_pack(self):
+        return {
+            "name": self.name,
+            "column": self.column,
+            "npartitions": self.npartitions,
+            "npartitions_input": self.npartitions_input,
+            "ignore_index": self.ignore_index,
+            "name_input": self.name_input,
+            "meta_input": self.meta_input.to_json(),
+            "parts_out": list(self.parts_out),
+        }
+
+    @classmethod
+    def distributed_unpack(cls, state, dsk, dependencies):
+        from distributed.utils import str_graph
+        from distributed.worker import dumps_task
+
+        state["meta_input"] = pd.read_json(state["meta_input"])
+        obj = cls(**state)
+        input_keys = set()
+        for v in obj._cull_dependencies(
+            [(obj.name, i) for i in range(obj.npartitions_input)]
+        ).values():
+            input_keys.update(v)
+
+        raw = dict(obj)
+        raw = str_graph(raw, extra_values=input_keys)
+        dsk.update(toolz.valmap(dumps_task, raw))
+
+        # TODO: use shuffle-knowledge to calculate dependencies more efficiently
+        dependencies.update(
+            {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
+        )
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -286,6 +321,13 @@ class ShuffleLayer(SimpleShuffleLayer):
             "parts_out",
         ]
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
+    def distributed_pack(self):
+        ret = super().distributed_pack()
+        ret["inputs"] = self.inputs
+        ret["stage"] = self.stage
+        ret["nsplits"] = self.nsplits
+        return ret
 
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
