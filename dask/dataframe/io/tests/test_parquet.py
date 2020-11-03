@@ -197,7 +197,6 @@ def test_simple(tmpdir, write_engine, read_engine):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
     read_df = dd.read_parquet(fn, index=["a"], engine=read_engine)
-    read_df.compute(scheduler="synchronous")
     assert_eq(ddf, read_df)
 
 
@@ -2351,7 +2350,7 @@ def test_optimize_blockwise_parquet(tmpdir):
     # `ddf` should now have THREE Blockwise layers
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 3
-    assert all([isinstance(layer, Blockwise) for (_, layer) in layers.items()])
+    assert all(isinstance(layer, Blockwise) for layer in layers.values())
 
     # Check that `optimize_blockwise` fuses all three
     # `Blockwise` layers together

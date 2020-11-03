@@ -13,7 +13,7 @@ from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
-class PackedFunctionCall(object):
+class PackedFunctionCall:
     """Function-decorator class to expand list arguments."""
 
     def __init__(self, func):
@@ -186,6 +186,12 @@ class Blockwise(Layer):
         that `key-name` must match the name used in both `indices` and in
         the keys of `subgraph`.
 
+        NOTE: The `subgraph` must comprise of exactly N keys (where N is the
+        number of chunks/partitions in the new collection), and each value
+        must correspond to a "callable" task. The first element (a callable
+        function) must be the same for all N tasks.  This "uniformity" is
+        required for the abstract `SubgraphCallable` representation used
+        within Blockwise.
 
     See Also
     --------
@@ -216,7 +222,14 @@ class Blockwise(Layer):
             # Extract actual IO function for SubgraphCallable construction.
             # Wrap func in `PackedFunctionCall`, since it will receive
             # all arguments as a sigle (packed) tuple at run time.
-            io_func = self.io_subgraph.get((self.io_name, 0), (None,))[0]
+            if self.io_subgraph:
+                # We assume a 1-to-1 mapping between keys (i.e. tasks) and
+                # chunks/partitions in `io_subgraph`, and assume the first
+                # (callable) element is the same for all tasks.
+                any_key = next(iter(self.io_subgraph))
+                io_func = self.io_subgraph.get(any_key)[0]
+            else:
+                io_func = None
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
             dsk = {
                 output: (
