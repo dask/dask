@@ -516,7 +516,7 @@ def to_parquet(
             schema=schema,
             **kwargs_pass,
         )
-        for d, filename in zip(df.to_delayed(), filenames)
+        for d, filename in zip(df.to_delayed(optimize_graph=False), filenames)
     ]
 
     # single task to complete
