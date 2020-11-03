@@ -3,7 +3,7 @@ name: CI
 on: [push, pull_request]
 
 jobs:
-  build:
+  test:
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: true
@@ -35,11 +35,11 @@ jobs:
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
-      - name: Run import tests
-        shell: bash -l {0}
-        run: source continuous_integration/scripts/test_imports.sh
+      # - name: Run import tests
+      #   shell: bash -l {0}
+      #   run: source continuous_integration/scripts/test_imports.sh
 
       - name: Coverage
         shell: bash -l {0}
         if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
-        run: codecov && source continuous_integration/scripts/after_success.sh
+        run: source continuous_integration/scripts/coverage.sh

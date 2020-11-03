@@ -1,4 +1,4 @@
-name: Docs
+name: Documentation
 
 on:
   push:
@@ -8,7 +8,7 @@ on:
 
 jobs:
   checks:
-    name: Documentation build
+    name: build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
