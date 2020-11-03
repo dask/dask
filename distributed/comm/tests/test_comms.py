@@ -1,45 +1,42 @@
 import asyncio
-import types
-from functools import partial
 import os
 import sys
 import threading
+import types
 import warnings
-
-import pkg_resources
-import pytest
-
-from tornado import ioloop
-from tornado.concurrent import Future
+from functools import partial
 
 import distributed
-from distributed.metrics import time
-from distributed.utils import get_ip, get_ipv6
-from distributed.utils_test import (
-    requires_ipv6,
-    has_ipv6,
-    get_cert,
-    get_server_ssl_context,
-    get_client_ssl_context,
-)
-from distributed.utils_test import loop  # noqa: F401
-
-from distributed.protocol import to_serialize, Serialized, serialize, deserialize
-
-from distributed.comm.registry import backends, get_backend
+import pkg_resources
+import pytest
 from distributed.comm import (
-    tcp,
-    inproc,
-    connect,
-    listen,
     CommClosedError,
-    parse_address,
-    parse_host_port,
-    unparse_host_port,
-    resolve_address,
+    connect,
     get_address_host,
     get_local_address_for,
+    inproc,
+    listen,
+    parse_address,
+    parse_host_port,
+    resolve_address,
+    tcp,
+    unparse_host_port,
 )
+from distributed.comm.registry import backends, get_backend
+from distributed.comm.tcp import TCP, TCPBackend, TCPConnector
+from distributed.metrics import time
+from distributed.protocol import Serialized, deserialize, serialize, to_serialize
+from distributed.utils import get_ip, get_ipv6
+from distributed.utils_test import loop  # noqa: F401
+from distributed.utils_test import (
+    get_cert,
+    get_client_ssl_context,
+    get_server_ssl_context,
+    has_ipv6,
+    requires_ipv6,
+)
+from tornado import ioloop
+from tornado.concurrent import Future
 
 EXTERNAL_IP4 = get_ip()
 if has_ipv6():
@@ -218,7 +215,7 @@ async def test_tcp_specific():
         await comm.write(msg)
         await comm.close()
 
-    listener = await tcp.TCPListener("localhost", handle_comm)
+    listener = await tcp.TCPListener("127.0.0.1", handle_comm)
     host, port = listener.get_host_port()
     assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
@@ -264,7 +261,7 @@ async def test_tls_specific():
     server_ctx = get_server_ssl_context()
     client_ctx = get_client_ssl_context()
 
-    listener = await tcp.TLSListener("localhost", handle_comm, ssl_context=server_ctx)
+    listener = await tcp.TLSListener("127.0.0.1", handle_comm, ssl_context=server_ctx)
     host, port = listener.get_host_port()
     assert host in ("localhost", "127.0.0.1", "::1")
     assert port > 0
@@ -665,7 +662,8 @@ async def test_tls_reject_certificate():
 
     with pytest.raises(EnvironmentError) as excinfo:
         await connect(listener.contact_address, timeout=2, ssl_context=cli_ctx)
-    assert "certificate verify failed" in str(excinfo.value)
+
+    assert "certificate verify failed" in str(excinfo.value.__cause__)
 
 
 #
@@ -795,6 +793,88 @@ async def test_inproc_comm_closed_explicit_2():
 #
 # Various stress tests
 #
+
+
+async def echo(comm):
+    message = await comm.read()
+    await comm.write(message)
+
+
+@pytest.mark.asyncio
+async def test_retry_connect(monkeypatch):
+    async def echo(comm):
+        message = await comm.read()
+        await comm.write(message)
+
+    class UnreliableConnector(TCPConnector):
+        def __init__(self):
+
+            self.num_failures = 2
+            self.failures = 0
+            super().__init__()
+
+        async def connect(self, address, deserialize=True, **connection_args):
+            if self.failures > self.num_failures:
+                return await super().connect(address, deserialize, **connection_args)
+            else:
+                self.failures += 1
+                raise IOError()
+
+    class UnreliableBackend(TCPBackend):
+        _connector_class = UnreliableConnector
+
+    monkeypatch.setitem(backends, "tcp", UnreliableBackend())
+
+    listener = await listen("tcp://127.0.0.1:1234", echo)
+    try:
+        comm = await connect(listener.contact_address)
+        await comm.write(b"test")
+        msg = await comm.read()
+        assert msg == b"test"
+    finally:
+        listener.stop()
+
+
+@pytest.mark.asyncio
+async def test_handshake_slow_comm(monkeypatch):
+    class SlowComm(TCP):
+        def __init__(self, *args, delay_in_comm=0.5, **kwargs):
+            super().__init__(*args, **kwargs)
+            self.delay_in_comm = delay_in_comm
+
+        async def read(self, *args, **kwargs):
+            await asyncio.sleep(self.delay_in_comm)
+            return await super().read(*args, **kwargs)
+
+        async def write(self, *args, **kwargs):
+            await asyncio.sleep(self.delay_in_comm)
+            res = await super(type(self), self).write(*args, **kwargs)
+            return res
+
+    class SlowConnector(TCPConnector):
+        comm_class = SlowComm
+
+    class SlowBackend(TCPBackend):
+        _connector_class = SlowConnector
+
+    monkeypatch.setitem(backends, "tcp", SlowBackend())
+
+    listener = await listen("tcp://127.0.0.1:1234", echo)
+    try:
+        comm = await connect(listener.contact_address)
+        await comm.write(b"test")
+        msg = await comm.read()
+        assert msg == b"test"
+
+        import dask
+
+        with dask.config.set({"distributed.comm.timeouts.connect": "100ms"}):
+            with pytest.raises(
+                IOError, match="Timed out during handshake while connecting to"
+            ):
+                await connect(listener.contact_address)
+    finally:
+        listener.stop()
 
 
 async def check_connect_timeout(addr):

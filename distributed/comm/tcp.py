@@ -1,6 +1,7 @@
 import errno
 import logging
 import socket
+from ssl import SSLError
 import struct
 import sys
 from tornado import gen
@@ -349,7 +350,6 @@ class BaseTCPConnector(Connector, RequireEncryptionMixin):
             stream = await self.client.connect(
                 ip, port, max_buffer_size=MAX_BUFFER_SIZE, **kwargs
             )
-
             # Under certain circumstances tornado will have a closed connnection with an error and not raise
             # a StreamClosedError.
             #
@@ -360,6 +360,8 @@ class BaseTCPConnector(Connector, RequireEncryptionMixin):
         except StreamClosedError as e:
             # The socket connect() call failed
             convert_stream_closed_error(self, e)
+        except SSLError as err:
+            raise FatalCommClosedError() from err
 
         local_address = self.prefix + get_stream_address(stream)
         comm = self.comm_class(
