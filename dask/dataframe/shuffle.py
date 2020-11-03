@@ -116,7 +116,7 @@ class SimpleShuffleLayer(Layer):
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def distributed_pack(self):
+    def __dask_distributed_pack__(self):
         return {
             "name": self.name,
             "column": self.column,
@@ -129,7 +129,7 @@ class SimpleShuffleLayer(Layer):
         }
 
     @classmethod
-    def distributed_unpack(cls, state, dsk, dependencies):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         from distributed.utils import str_graph
         from distributed.worker import dumps_task
 
@@ -322,8 +322,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         ]
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def distributed_pack(self):
-        ret = super().distributed_pack()
+    def __dask_distributed_pack__(self):
+        ret = super().__dask_distributed_pack__()
         ret["inputs"] = self.inputs
         ret["stage"] = self.stage
         ret["nsplits"] = self.nsplits

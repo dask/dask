@@ -160,13 +160,13 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer({k: func(v) for k, v in self.items()})
 
-    def distributed_pack(self) -> Optional[Any]:
+    def __dask_distributed_pack__(self) -> Optional[Any]:
         """Pack the layer for scheduler communication in Distributed
 
         This method should pack its current state and is called by the Client when
         communicating with the Scheduler.
-        The Scheduler will then use .distributed_unpack(data, ...) to unpack the
-        state, materialize the layer, and merge it into the global task graph.
+        The Scheduler will then use .__dask_distributed_unpack__(data, ...) to unpack
+        the state, materialize the layer, and merge it into the global task graph.
 
         The returned state must be compatible with Distributed's scheduler, which
         means it must obey the following:
@@ -186,10 +186,10 @@ class Layer(collections.abc.Mapping):
         return None
 
     @classmethod
-    def distributed_unpack(
+    def __dask_distributed_unpack__(
         cls, state: Any, dsk: Dict[str, Any], dependencies: Mapping[Hashable, Set]
     ) -> None:
-        """Unpack the state of a layer previously packed by .distributed_pack()
+        """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
         This method is called by the scheduler in Distributed in order to unpack
         the state of a layer and merge it into its global task graph. The method
@@ -197,18 +197,20 @@ class Layer(collections.abc.Mapping):
         state of the preceding layers in the high level graph. The layers of the
         high level graph are unpacked in topological order.
 
-        See Layer.distributed_pack() for packing detail.
+        See Layer.__dask_distributed_pack__() for packing detail.
 
         Parameters
         ----------
         state: Any
-            The state returned by Layer.distributed_pack()
+            The state returned by Layer.__dask_distributed_pack__()
         dsk: dict
             The materialized low level graph of the already unpacked layers
         dependencies: Mapping
             The dependencies of each key in `dsk`
         """
-        raise NotImplementedError(f"{type(cls)} doesn't implement distributed_unpack()")
+        raise NotImplementedError(
+            f"{type(cls)} doesn't implement __dask_distributed_unpack__()"
+        )
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer
