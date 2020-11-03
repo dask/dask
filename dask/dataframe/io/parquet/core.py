@@ -500,6 +500,11 @@ def to_parquet(
     # Use i_offset and df.npartitions to define file-name list
     filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
 
+    if compute_kwargs is None:
+        compute_kwargs = dict()
+
+    optimize_graph = compute_kwargs.get("optimize_graph", True)
+
     # write parts
     dwrite = delayed(engine.write_partition)
     parts = [
@@ -516,7 +521,7 @@ def to_parquet(
             schema=schema,
             **kwargs_pass,
         )
-        for d, filename in zip(df.to_delayed(optimize_graph=False), filenames)
+        for d, filename in zip(df.to_delayed(optimize_graph=optimize_graph), filenames)
     ]
 
     # single task to complete
@@ -527,8 +532,6 @@ def to_parquet(
         )
 
     if compute:
-        if compute_kwargs is None:
-            compute_kwargs = dict()
         out = out.compute(**compute_kwargs)
     return out
 
