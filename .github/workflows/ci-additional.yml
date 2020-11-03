@@ -19,7 +19,7 @@ jobs:
         uses: goanpeca/setup-miniconda@v1.7.0
         with:
           miniconda-version: "latest"
-          python-version: "3.6"
+          python-version: "3.7"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
