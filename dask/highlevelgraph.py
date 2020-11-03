@@ -170,7 +170,7 @@ class Layer(collections.abc.Mapping):
 
         The returned state must be compatible with Distributed's scheduler, which
         means it must obey the following:
-          - Serializable by msgpack
+          - Serializable by msgpack (notice, msgpack converts lists to tuples)
           - All remote data must be unpacked (see unpack_remotedata())
           - All keys must be converted to strings now or when unpacking
           - All tasks must be serialized (see dumps_task())
