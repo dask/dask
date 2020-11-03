@@ -7,6 +7,7 @@ test_import () {
     # Create an empty environment
     conda create -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml $1 > /dev/null 2>&1
     source activate test-imports > /dev/null 2>&1
+    pip install -e .
     echo "python -c '$2'"
     python -c "$2"
     source deactivate > /dev/null 2>&1 || conda deactivate > /dev/null 2>&1

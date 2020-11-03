@@ -53,3 +53,19 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/hdfs/run_tests.sh
+
+  imports:
+    runs-on: "ubuntu-latest"
+    strategy:
+      fail-fast: true
+      matrix:
+        python-version: ["3.6", "3.7", "3.8"]
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v2
+
+      - name: Run import tests
+        shell: bash -l {0}
+        env:
+          PYTHON_VERSION: ${{ matrix.python-version }}
+        run: source continuous_integration/scripts/test_imports.sh

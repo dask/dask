@@ -35,10 +35,6 @@ jobs:
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
-      # - name: Run import tests
-      #   shell: bash -l {0}
-      #   run: source continuous_integration/scripts/test_imports.sh
-
       - name: Coverage
         shell: bash -l {0}
         if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
