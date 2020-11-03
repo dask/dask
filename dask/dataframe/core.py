@@ -1570,7 +1570,7 @@ Dask Name: {name}, {task} tasks"""
         axis=0,
     ):
         """Provides ewm transformations.
-            TODO: rest of the docs
+        TODO: rest of the docs
         """
         from dask.dataframe.ewm import EWM
 

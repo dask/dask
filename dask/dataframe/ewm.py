@@ -169,7 +169,12 @@ class EWM:
         ewm_kwargs = self._ewm_kwargs()
         args = (ewm_kwargs, method_name) + args
         return map_ewm_adjust(
-            pandas_ewm_method, adj, self.obj, ewm_kwargs, *args, **kwargs,
+            pandas_ewm_method,
+            adj,
+            self.obj,
+            ewm_kwargs,
+            *args,
+            **kwargs,
         )
 
     @derived_from(pd_EWM)
