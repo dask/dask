@@ -11,6 +11,9 @@ jobs:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         python-version: ["3.6", "3.7", "3.8"]
 
+    env:
+      PYTHON_VERSION: ${{ matrix.python-version }}
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
