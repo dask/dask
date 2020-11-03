@@ -26,6 +26,28 @@ from . import methods
 logger = logging.getLogger(__name__)
 
 
+def key_stringify(task):
+    """Convert all keys in `task` to strings.
+
+    This is a fast version of distributed.utils.str_graph()
+    that only handles keys of the from: `("a string", ...)`
+    """
+    from distributed.utils import tokey
+
+    typ = type(task)
+    if typ is tuple and task and callable(task[0]):
+        return (task[0],) + tuple(key_stringify(x) for x in task[1:])
+    if typ is list:
+        return [key_stringify(v) for v in task]
+    if typ is dict:
+        return {k: key_stringify(v) for k, v in task.items()}
+    if typ is tuple and task and type(task[0]) is str:
+        return tokey(task)
+    elif typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(key_stringify(v) for v in task)
+    return task
+
+
 class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
@@ -117,6 +139,8 @@ class SimpleShuffleLayer(Layer):
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
     def __dask_distributed_pack__(self):
+        from distributed.protocol.serialize import to_serialize
+
         return {
             "name": self.name,
             "column": self.column,
@@ -124,25 +148,27 @@ class SimpleShuffleLayer(Layer):
             "npartitions_input": self.npartitions_input,
             "ignore_index": self.ignore_index,
             "name_input": self.name_input,
-            "meta_input": self.meta_input.to_json(),
+            "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
         }
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.utils import str_graph
         from distributed.worker import dumps_task
+        from distributed.utils import tokey
 
-        state["meta_input"] = pd.read_json(state["meta_input"])
-        obj = cls(**state)
-        input_keys = set()
-        for v in obj._cull_dependencies(
-            [(obj.name, i) for i in range(obj.npartitions_input)]
-        ).values():
-            input_keys.update(v)
+        # msgpack will convert lists into tuples, here
+        # we convert them back to lists
+        if isinstance(state["column"], tuple):
+            state["column"] = list(state["column"])
+        if "inputs" in state:
+            state["inputs"] = list(state["inputs"])
 
-        raw = dict(obj)
-        raw = str_graph(raw, extra_values=input_keys)
+        # Materialize the layer
+        raw = dict(cls(**state))
+
+        # Convert all keys to strings and dump tasks
+        raw = {tokey(k): key_stringify(v) for k, v in raw.items()}
         dsk.update(toolz.valmap(dumps_task, raw))
 
         # TODO: use shuffle-knowledge to calculate dependencies more efficiently
@@ -393,11 +419,13 @@ class ShuffleLayer(SimpleShuffleLayer):
                     # Initial partitions (output of previous stage)
                     _part = inp_part_map[_inp]
                     if self.stage == 0:
-                        input_key = (
-                            (self.name_input, _part)
-                            if _part < self.npartitions_input
-                            else self.meta_input
-                        )
+                        if _part < self.npartitions_input:
+                            input_key = (self.name_input, _part)
+                        else:
+                            # In order to make sure that to_serialize() serialize the
+                            # empty dataframe input, we add it as a key.
+                            input_key = (shuffle_group_name, _inp, "empty")
+                            dsk[(shuffle_group_name, _inp, "empty")] = self.meta_input
                     else:
                         input_key = (self.name_input, _part)
 
