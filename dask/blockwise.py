@@ -252,6 +252,9 @@ class Blockwise(Layer):
 
         return out_d
 
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
     def get_dependencies(self, key, all_hlg_keys):
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].get_dependencies(key, all_hlg_keys)
