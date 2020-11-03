@@ -1,4 +1,7 @@
+#!/bin/bash
 set -xe
+
+export CONTAINER_ID=$(docker run -d -v $(pwd):/working daskdev/dask-hdfs-testing)
 
 # Remove <2 version constraint once we've added pyarrow 2.0 compatibility
 # xref https://github.com/dask/dask/issues/6754
