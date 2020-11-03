@@ -425,7 +425,7 @@ class ShuffleLayer(SimpleShuffleLayer):
                             # In order to make sure that to_serialize() serialize the
                             # empty dataframe input, we add it as a key.
                             input_key = (shuffle_group_name, _inp, "empty")
-                            dsk[(shuffle_group_name, _inp, "empty")] = self.meta_input
+                            dsk[input_key] = self.meta_input
                     else:
                         input_key = (self.name_input, _part)
 
