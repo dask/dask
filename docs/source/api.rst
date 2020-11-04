@@ -46,7 +46,7 @@ real-time or advanced operation.
 This more advanced API is available in the `Dask distributed documentation
 <https://distributed.dask.org/en/latest/api.html>`_
 
-.. autofunciton:: annotate
+.. autofunction:: annotate
 .. autofunction:: compute
 .. autofunction:: is_dask_collection
 .. autofunction:: optimize
