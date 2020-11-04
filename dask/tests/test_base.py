@@ -13,6 +13,8 @@ import dask
 from dask import delayed
 from dask.base import (
     compute,
+    clone,
+    clone_key,
     tokenize,
     normalize_token,
     normalize_function,
@@ -737,6 +739,85 @@ def test_compute_with_literal():
     assert yy == y
 
     assert compute(5) == (5,)
+
+
+def test_clone_key():
+    key = "inc-1234"
+    new_key = clone_key(key)
+    assert isinstance(new_key, str)
+    assert "inc-" in new_key
+
+    key = ("inc-1234", 0, 1)
+    new_key = clone_key(key)
+    assert isinstance(new_key, tuple)
+    assert len(key) == len(new_key)
+    assert "inc-" in new_key[0]
+    assert key[1:] == new_key[1:]
+
+    with pytest.raises(TypeError):
+        clone_key(123)
+
+
+@pytest.mark.skipif("not da")
+def test_clone_array_simple():
+    from dask.array.utils import assert_eq
+
+    x1 = da.random.random(10, chunks=5)
+    x2 = clone(x1)
+
+    # No overlap in keys
+    assert not set(x1.dask.keys()) & set(x2.dask.keys())
+    assert not set(x1.dask.keys()) & set(x2.dask.keys())
+    assert_eq(x1, x2)
+
+
+@pytest.mark.skipif("not da")
+def test_clone_array():
+    from dask.array.utils import assert_eq
+
+    x1 = da.random.random(10, chunks=5)
+    x1 = x1 + 1  # Adds Blockwise layer
+    x2 = clone(x1)
+
+    # No overlap in keys
+    assert not set(x1.dask.keys()) & set(x2.dask.keys())
+    assert_eq(x1, x2)
+
+
+@pytest.mark.skipif("not dd")
+def test_clone_dataframe_simple():
+    from dask.dataframe.utils import assert_eq
+
+    df = pd.DataFrame({"a": np.arange(40, dtype=np.int32)})
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    ddf2 = clone(ddf)
+    # No overlap in keys
+    assert not set(ddf.dask.keys()) & set(ddf2.dask.keys())
+    assert_eq(ddf, ddf2)
+
+
+@pytest.mark.skipif("not dd")
+def test_clone_dataframe(tmpdir):
+    from dask.dataframe.utils import assert_eq
+
+    tmp = str(tmpdir)
+    df = pd.DataFrame({"a": np.arange(40, dtype=np.int32)})
+    expect = dd.from_pandas(df, npartitions=2)
+    expect.to_parquet(tmp)
+    # Create BlockwiseParquet layer
+    ddf = dd.read_parquet(tmp)
+
+    ddf2 = clone(ddf)
+    # No overlap in keys
+    assert not set(ddf.dask.keys()) & set(ddf2.dask.keys())
+    assert_eq(ddf, ddf2)
+
+    # Add Blockwise layer
+    ddf += 1
+    ddf2 = clone(ddf)
+    assert not set(ddf.dask.keys()) & set(ddf2.dask.keys())
+    assert_eq(ddf, ddf2)
 
 
 def test_compute_nested():

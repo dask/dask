@@ -17,7 +17,14 @@ from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict, apply
+from .utils import (
+    Dispatch,
+    ensure_dict,
+    apply,
+    key_split,
+    is_arraylike,
+    is_dataframe_like,
+)
 from . import config, local, threaded
 
 
@@ -95,7 +102,7 @@ class DaskMethodsMixin(object):
             filename=filename,
             format=format,
             optimize_graph=optimize_graph,
-            **kwargs
+            **kwargs,
         )
 
     def persist(self, **kwargs):
@@ -1088,3 +1095,37 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return wait(x, timeout=timeout, return_when=return_when)
     except (ImportError, ValueError):
         return x
+
+
+def clone_key(key):
+    prefix = key_split(key)
+    if isinstance(key, str):
+        return prefix + "-" + tokenize(key)
+    elif isinstance(key, tuple):
+        return (prefix + "-" + tokenize(key[0]), *key[1:])
+    else:
+        raise TypeError(f"Expected a key or tuple key but got {type(key)} instead")
+
+
+def clone(x):
+    """Clone a Dask collection"""
+    from .highlevelgraph import clone_key
+
+    if not is_dask_collection(x):
+        raise TypeError(f"Expected a Dask collection but got {type(x)} instead")
+
+    # Clone the underlying HighLevelGraph
+    dsk = x.__dask_graph__()
+    dsk_new = dsk.clone()
+
+    # Create a new Dask collection from the cloned HighLevelGraph
+    new_name = clone_key(x._name)
+    if is_arraylike(x):
+        from .array.core import new_da_object
+
+        return new_da_object(dsk_new, new_name, x.chunks, x._meta, x.dtype)
+
+    elif is_dataframe_like(x):
+        from .dataframe.core import new_dd_object
+
+        return new_dd_object(dsk_new, new_name, x._meta, x.divisions)

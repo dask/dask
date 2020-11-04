@@ -16,7 +16,7 @@ import copy
 import tlz as toolz
 
 from .utils import ignoring
-from .base import is_dask_collection
+from .base import is_dask_collection, clone_key
 from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
 
@@ -159,6 +159,22 @@ class Layer(collections.abc.Mapping):
         """
 
         return BasicLayer({k: func(v) for k, v in self.items()})
+
+    def clone(self, all_external_keys):
+        from distributed.utils_comm import subs_multiple
+
+        dsk_new = {}
+        old_to_new_keys = {}
+        for key, value in self.items():
+            new_key = clone_key(key)
+            old_to_new_keys[key] = new_key
+            dsk_new[new_key] = value
+        # Include external keys in task substitutions
+        for key in all_external_keys:
+            old_to_new_keys[key] = clone_key(key)
+
+        dsk_new = subs_multiple(dsk_new, old_to_new_keys)
+        return BasicLayer(dsk_new)
 
     def __dask_distributed_pack__(self) -> Optional[Any]:
         """Pack the layer for scheduler communication in Distributed
@@ -537,6 +553,20 @@ class HighLevelGraph(Mapping):
 
     def copy(self):
         return HighLevelGraph(self.layers.copy(), self.dependencies.copy())
+
+    def clone(self):
+        new_layers = {}
+        all_external_keys = self.get_all_external_keys()
+        for name, layer in self.layers.items():
+            new_name = clone_key(name)
+            new_layers[new_name] = layer.clone(all_external_keys)
+
+        new_deps = {}
+        for name, deps in self.dependencies.items():
+            new_name = clone_key(name)
+            new_deps[new_name] = set(clone_key(dep) for dep in deps)
+
+        return HighLevelGraph(new_layers, new_deps)
 
     @classmethod
     def merge(cls, *graphs):
