@@ -133,16 +133,20 @@ def test_single_annotation(annotation):
     assert dask.config.get("annotations", None) is None
 
 
-def test_no_annotation():
-    A = da.ones((10, 10), chunks=(5, 5))
-    assert A.__dask_graph__().layers[A.name].annotations is None
-
-
 def test_multiple_annotations():
     with dask.annotate(block_id=annot_map_fn):
         with dask.annotate(resource="GPU"):
             A = da.ones((10, 10), chunks=(5, 5))
 
-    alayer = A.__dask_graph__().layers[A.name]
-    assert alayer.annotations == {"resource": "GPU", "block_id": annot_map_fn}
+        B = A + 1
+
+    C = B + 1
+
     assert dask.config.get("annotations", None) is None
+
+    alayer = A.__dask_graph__().layers[A.name]
+    blayer = B.__dask_graph__().layers[B.name]
+    clayer = C.__dask_graph__().layers[B.name]
+    assert alayer.annotations == {"resource": "GPU", "block_id": annot_map_fn}
+    assert blayer.annotations == {"block_id": annot_map_fn}
+    assert clayer.annotations is None
