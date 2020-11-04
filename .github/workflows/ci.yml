@@ -13,6 +13,7 @@ jobs:
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
+      PARALLEL: "true"
 
     steps:
       - name: Checkout source
