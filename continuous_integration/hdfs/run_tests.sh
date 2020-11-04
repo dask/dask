@@ -1,4 +1,3 @@
 #!/bin/bash
 
-export CONTAINER_ID=$(docker run -d -v $(pwd):/working daskdev/dask-hdfs-testing)
-docker exec $CONTAINER_ID py.test dask/bytes/tests/test_hdfs.py -vv
+docker exec hdfs py.test dask/bytes/tests/test_hdfs.py -vv
