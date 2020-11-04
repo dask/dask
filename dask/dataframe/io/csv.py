@@ -27,6 +27,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
+from ...blockwise import Blockwise
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -108,6 +109,58 @@ class CSVSubgraph(Mapping):
     def __iter__(self):
         for i in range(len(self)):
             yield (self.name, i)
+
+
+class BlockwiseReadCSV(Blockwise):
+    """
+    Specialized Blockwise Layer for read_csv.
+
+    Enables HighLevelGraph optimizations.
+    """
+
+    def __init__(
+        self,
+        name,
+        reader,
+        blocks,
+        is_first,
+        head,
+        header,
+        kwargs,
+        dtypes,
+        columns,
+        enforce,
+        path,
+    ):
+        self.name = name
+        self.blocks = blocks
+        self.io_name = "blockwise-io-" + name
+        dsk_io = CSVSubgraph(
+            self.io_name,
+            reader,
+            blocks,
+            is_first,
+            head,
+            header,
+            kwargs,
+            dtypes,
+            columns,
+            enforce,
+            path,
+        )
+        super().__init__(
+            self.name,
+            "i",
+            None,
+            [(self.io_name, "i")],
+            {self.io_name: (len(self.blocks),)},
+            io_subgraph=(self.io_name, dsk_io),
+        )
+
+    def __repr__(self):
+        return "BlockwiseReadCSV<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.blocks), list(self.columns)
+        )
 
 
 def pandas_read_text(
@@ -347,7 +400,7 @@ def text_blocks_to_pandas(
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
-    subgraph = CSVSubgraph(
+    subgraph = BlockwiseReadCSV(
         name,
         reader,
         blocks,
