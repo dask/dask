@@ -290,10 +290,11 @@ def order(dsk, dependencies=None):
                 item = inner_stack_pop()
                 if item in result:
                     continue
-                if skip_root_node and item in root_nodes:
-                    continue
 
                 if num_needed[item]:
+                    if skip_root_node and item in root_nodes:
+                        continue
+
                     inner_stack.append(item)
                     deps = set_difference(dependencies[item], result)
                     if 1 < len(deps) < 1000:
