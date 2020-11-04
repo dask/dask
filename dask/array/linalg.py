@@ -675,7 +675,7 @@ def compression_matrix(
     https://arxiv.org/abs/0909.4061
     """
     m, n = data.shape
-    comp_level = compression_level(min(m, n), q, n_oversamples=n_oversamples)
+    comp_level = compression_level(min(m, n), q, n_oversamples)
     if isinstance(seed, RandomState):
         state = seed
     else:
