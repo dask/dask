@@ -11,10 +11,11 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
+from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
-from dask.dataframe.io.parquet.core import ParquetSubgraph
+from dask.dataframe.io.parquet.core import BlockwiseParquet, ParquetSubgraph
 from dask.utils import natural_sort_key, parse_bytes
 
 
@@ -2268,7 +2269,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     dsk = optimize_read_parquet_getitem(ddf.dask, keys=[ddf._name])
     get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
@@ -2284,7 +2285,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
 
     subgraph = list(dsk.layers.values())[0]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == []
 
 
@@ -2318,6 +2319,50 @@ def test_subgraph_getitem():
 
     with pytest.raises(KeyError):
         subgraph[("name", 3)]
+
+
+def test_optimize_blockwise_parquet(tmpdir):
+
+    size = 40
+    npartitions = 2
+    tmp = str(tmpdir)
+    df = pd.DataFrame({"a": np.arange(size, dtype=np.int32)})
+    expect = dd.from_pandas(df, npartitions=npartitions)
+    expect.to_parquet(tmp)
+    ddf = dd.read_parquet(tmp)
+
+    # `ddf` should now have ONE Blockwise layer
+    layers = ddf.__dask_graph__().layers
+    assert len(layers) == 1
+    assert isinstance(list(layers.values())[0], Blockwise)
+
+    # Check single-layer result
+    assert_eq(ddf, expect)
+
+    # Increment by 1
+    ddf += 1
+    expect += 1
+
+    # Increment by 10
+    ddf += 10
+    expect += 10
+
+    # `ddf` should now have THREE Blockwise layers
+    layers = ddf.__dask_graph__().layers
+    assert len(layers) == 3
+    assert all(isinstance(layer, Blockwise) for layer in layers.values())
+
+    # Check that `optimize_blockwise` fuses all three
+    # `Blockwise` layers together
+    keys = [(ddf._name, i) for i in range(npartitions)]
+    graph = optimize_blockwise(ddf.__dask_graph__(), keys)
+    layers = graph.layers
+    name = list(layers.keys())[0]
+    assert len(layers) == 1
+    assert isinstance(layers[name], Blockwise)
+
+    # Check final result
+    assert_eq(ddf, expect)
 
 
 def test_split_row_groups_pyarrow(tmpdir):

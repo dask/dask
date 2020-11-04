@@ -14,6 +14,7 @@ import pandas as pd
 from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
 
 from .. import base, config
+from ..core import keys_in_tasks
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
 from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph, Layer
@@ -23,6 +24,28 @@ from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
 
 logger = logging.getLogger(__name__)
+
+
+def key_stringify(task):
+    """Convert all keys in `task` to strings.
+
+    This is a fast version of distributed.utils.str_graph()
+    that only handles keys of the from: `("a string", ...)`
+    """
+    from distributed.utils import tokey
+
+    typ = type(task)
+    if typ is tuple and task and callable(task[0]):
+        return (task[0],) + tuple(key_stringify(x) for x in task[1:])
+    if typ is list:
+        return [key_stringify(v) for v in task]
+    if typ is dict:
+        return {k: key_stringify(v) for k, v in task.items()}
+    if typ is tuple and task and type(task[0]) is str:
+        return tokey(task)
+    elif typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(key_stringify(v) for v in task)
+    return task
 
 
 class SimpleShuffleLayer(Layer):
@@ -80,6 +103,9 @@ class SimpleShuffleLayer(Layer):
             self.name, self.npartitions
         )
 
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
     @property
     def _dict(self):
         """Materialize full dict representation"""
@@ -111,6 +137,44 @@ class SimpleShuffleLayer(Layer):
             "parts_out",
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
+    def __dask_distributed_pack__(self):
+        from distributed.protocol.serialize import to_serialize
+
+        return {
+            "name": self.name,
+            "column": self.column,
+            "npartitions": self.npartitions,
+            "npartitions_input": self.npartitions_input,
+            "ignore_index": self.ignore_index,
+            "name_input": self.name_input,
+            "meta_input": to_serialize(self.meta_input),
+            "parts_out": list(self.parts_out),
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.worker import dumps_task
+        from distributed.utils import tokey
+
+        # msgpack will convert lists into tuples, here
+        # we convert them back to lists
+        if isinstance(state["column"], tuple):
+            state["column"] = list(state["column"])
+        if "inputs" in state:
+            state["inputs"] = list(state["inputs"])
+
+        # Materialize the layer
+        raw = dict(cls(**state))
+
+        # Convert all keys to strings and dump tasks
+        raw = {tokey(k): key_stringify(v) for k, v in raw.items()}
+        dsk.update(toolz.valmap(dumps_task, raw))
+
+        # TODO: use shuffle-knowledge to calculate dependencies more efficiently
+        dependencies.update(
+            {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
+        )
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -284,6 +348,13 @@ class ShuffleLayer(SimpleShuffleLayer):
         ]
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
+    def __dask_distributed_pack__(self):
+        ret = super().__dask_distributed_pack__()
+        ret["inputs"] = self.inputs
+        ret["stage"] = self.stage
+        ret["nsplits"] = self.nsplits
+        return ret
+
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
 
@@ -348,11 +419,13 @@ class ShuffleLayer(SimpleShuffleLayer):
                     # Initial partitions (output of previous stage)
                     _part = inp_part_map[_inp]
                     if self.stage == 0:
-                        input_key = (
-                            (self.name_input, _part)
-                            if _part < self.npartitions_input
-                            else self.meta_input
-                        )
+                        if _part < self.npartitions_input:
+                            input_key = (self.name_input, _part)
+                        else:
+                            # In order to make sure that to_serialize() serialize the
+                            # empty dataframe input, we add it as a key.
+                            input_key = (shuffle_group_name, _inp, "empty")
+                            dsk[input_key] = self.meta_input
                     else:
                         input_key = (self.name_input, _part)
 

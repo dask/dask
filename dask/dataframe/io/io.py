@@ -9,6 +9,7 @@ from tlz import merge
 
 from ...base import tokenize
 from ... import array as da
+from ...dataframe.core import new_dd_object
 from ...delayed import delayed
 
 from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
