@@ -599,30 +599,27 @@ def test_depth_greater_than_boundary_length():
     assert_array_equal(result, expected)
 
 
-def test_depth_greater_than_smallest_chunk_combines_chunks():
+@pytest.mark.parametrize(
+    "chunks",
+    [
+        ((5, 5, 2), (5, 5, 2)),
+        ((3, 3, 3, 3), (11, 1)),
+    ],
+)
+def test_depth_greater_than_smallest_chunk_combines_chunks(chunks):
     a = np.arange(144).reshape(12, 12)
-    darr = da.from_array(a, chunks=(5, 5))
-    assert darr.chunks == ((5, 5, 2), (5, 5, 2))
+    darr = da.from_array(a, chunks=chunks)
 
     depth = {0: 4, 1: 2}
     output = overlap(darr, depth=depth, boundary=1)
-    assert output.chunks == ((2 * 4 + 5, 2 * 4 + 7), (2 * 2 + 5, 2 * 2 + 5, 2 * 2 + 2))
 
-
-def test_depth_greater_than_several_chunks_rechunks():
-    a = np.arange(144).reshape(12, 12)
-    darr = da.from_array(a, chunks=(3, 11))
-    assert darr.chunks == ((3, 3, 3, 3), (11, 1))
-
-    depth = {0: 4, 1: 2}
-    output = overlap(darr, depth=depth, boundary=1)
-    assert output.chunks == ((2 * 4 + 6, 2 * 4 + 6), (2 * 2 + 10, 2 * 2 + 2))
+    assert all(c >= depth[0] * 2 for c in output.chunks[0])
+    assert all(c >= depth[1] * 2 for c in output.chunks[1])
 
 
 def test_depth_greater_than_dim():
     a = np.arange(144).reshape(12, 12)
     darr = da.from_array(a, chunks=(3, 5))
-    assert darr.chunks == ((3, 3, 3, 3), (5, 5, 2))
 
     depth = {0: 13, 1: 4}
     with pytest.raises(ValueError, match="The overlapping depth"):
@@ -730,8 +727,8 @@ def test_map_overlap_rechunks_array_if_needed():
     expected = np.arange(11)
     x = da.from_array(expected, chunks=5)
     y = x.map_overlap(lambda x: x, depth=2, boundary=0)
-    assert y.chunks == ((5, 4, 2),)
-    assert_array_equal(y, expected)
+    assert all(c >= 2 for c in y.chunks[0])
+    assert_eq(y, expected)
 
 
 def test_map_overlap_rechunks_array_along_multiple_dims_if_needed():
@@ -742,7 +739,7 @@ def test_map_overlap_rechunks_array_along_multiple_dims_if_needed():
         depth=(2, 2, 2),
         boundary="reflect",
     )
-    assert filtered.chunks == ((2,) * 430, (1024,), (1024,))
+    assert all(all(c >= 2 for c in chunks) for chunks in filtered.chunks)
 
 
 @pytest.mark.parametrize(
@@ -752,10 +749,7 @@ def test_map_overlap_rechunks_array_along_multiple_dims_if_needed():
         [(10, 10), (10, 10)],
         [
             (10, 10, 1),
-            (
-                10,
-                11,
-            ),
+            (10, 11),
         ],
         [(20, 20, 20, 1), (20, 20, 11, 10)],
         [(20, 20, 10, 1), (20, 20, 11)],

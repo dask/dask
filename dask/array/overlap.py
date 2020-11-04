@@ -423,7 +423,26 @@ def boundaries(x, depth=None, kind=None):
 
 
 def ensure_minimum_chunksize(size, chunks):
-    """Determine new chunks to ensure that every chunk >= size"""
+    """Determine new chunks to ensure that every chunk >= size
+
+    Parameters
+    ----------
+    size: int
+        The maximum size of any chunk.
+    chunks: tuple
+        Chunks along one axis, e.g. ``(3, 3, 2)``
+
+    Examples
+    --------
+    >>> ensure_minimum_chunksize(10, (20, 20, 1))
+    (20, 11, 10)
+    >>> ensure_minimum_chunksize(3, (1, 1, 3))
+    (5,)
+
+    See Also
+    --------
+    overlap
+    """
     if size <= min(chunks):
         return chunks
 
@@ -517,7 +536,7 @@ def overlap(x, depth, boundary):
     new_chunks = tuple(
         ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
     )
-    x1 = x.rechunk(new_chunks) if new_chunks != x.chunks else x
+    x1 = x.rechunk(new_chunks)
 
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
