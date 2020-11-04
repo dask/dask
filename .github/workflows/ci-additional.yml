@@ -64,6 +64,14 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v2
 
+      - name: Setup Conda
+        uses: goanpeca/setup-miniconda@v1.7.0
+        with:
+          miniconda-version: "latest"
+          python-version: "3.7"
+          activate-environment: test-environment
+          auto-activate-base: false
+
       - name: Run import tests
         shell: bash -l {0}
         env:
