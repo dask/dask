@@ -1,6 +1,7 @@
 from . import config, datasets
-from .annotations import annotate
-from .core import istask
+
+# from .annotations import annotate
+from .core import istask, annotate
 from .local import get_sync as get
 
 try:

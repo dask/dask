@@ -1,4 +1,3 @@
-from collections import defaultdict
 import abc
 import collections.abc
 from typing import (
@@ -13,11 +12,10 @@ from typing import (
     Tuple,
 )
 import copy
-import warnings
 
 import tlz as toolz
 
-from .annotations import current_annotations
+from .config import get as config_get
 from .utils import ignoring
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
@@ -41,98 +39,6 @@ def compute_layer_dependencies(layers):
     return ret
 
 
-class LayerAnnotation(collections.abc.Mapping):
-    pass
-
-
-class SingleLayerAnnotation(LayerAnnotation):
-    """ Applies a single annotation to all keys """
-
-    def __init__(self, annotation, keys):
-        assert type(annotation) is dict
-        self.annotation = annotation
-        self.map_keys = keys
-
-    def __contains__(self, k):
-        return k in self.map_keys
-
-    def __getitem__(self, k):
-        return self.annotation
-
-    def __eq__(self, other):
-        return (
-            type(other) is SingleLayerAnnotation
-            and self.annotation == other.annotation
-            and self.map_keys == other.map_keys
-        )
-
-    def __iter__(self):
-        return iter(self.map_keys)
-
-    def __len__(self):
-        return len(self.map_keys)
-
-    def __reduce__(self):
-        return (SingleLayerAnnotation, (self.annotation, set(self.map_keys)))
-
-
-class ExplicitLayerAnnotation(LayerAnnotation):
-    """ Wraps a dictionary of annotations """
-
-    def __init__(self, annotations):
-        self.annotations = annotations
-
-    def __contains__(self, k):
-        return k in self.annotations
-
-    def __getitem__(self, k):
-        return self.annotations[k]
-
-    def __eq__(self, other):
-        return (
-            type(other) is ExplicitLayerAnnotation
-            and self.annotations == other.annotations
-        )
-
-    def __len__(self):
-        return len(self.annotations)
-
-    def __iter__(self):
-        return iter(self.annotations)
-
-    def __reduce__(self):
-        return (ExplicitLayerAnnotation, (self.annotations,))
-
-
-class MapLayerAnnotation(LayerAnnotation):
-    """ Encapsulate a function mapping keys to annotations """
-
-    def __init__(self, function: Callable, keys):
-        self.function = function
-        self.map_keys = keys
-        warnings.warn(
-            "Marked for deprecation as we don't want "
-            "to pickle functions for remote execution "
-            "on the distributed scheduler. Reify and "
-            "use ExplicitLayerAnnotation instead"
-        )
-
-    def __contains__(self, k):
-        return k in self.map_keys
-
-    def __getitem__(self, k):
-        return self.function(k)
-
-    def __iter__(self):
-        return iter(self.map_keys)
-
-    def __len__(self):
-        return len(self.map_keys)
-
-    def __reduce__(self):
-        return (MapLayerAnnotation, (self.function, set(self.map_keys)))
-
-
 class Layer(collections.abc.Mapping):
     """High level graph layer
 
@@ -153,9 +59,6 @@ class Layer(collections.abc.Mapping):
     def is_materialized(self) -> bool:
         """Return whether the layer is materialized or not"""
         return True
-
-    def get_annotations(self) -> Mapping[Hashable, Mapping]:
-        return {}
 
     def get_output_keys(self) -> Set:
         """Return a set of all output keys
@@ -349,19 +252,8 @@ class BasicLayer(Layer):
         self.global_dependencies = global_dependencies
         self.global_dependencies_has_been_trimmed = False
 
-        annotations = current_annotations()
-
-        for i, a in enumerate(annotations):
-            if isinstance(a, LayerAnnotation):
-                continue
-            elif callable(a):
-                annotations[i] = ExplicitLayerAnnotation({k: a(k) for k in mapping})
-            elif type(a) is dict:
-                annotations[i] = SingleLayerAnnotation(a, mapping.keys())
-            else:
-                raise TypeError(f"{type(a)} must be LayerAnnotation, callable or dict")
-
-        self.annotations = annotations
+        annotations = config_get("annotations", None)
+        self.annotations = None if annotations is None else annotations.copy()
 
     def __contains__(self, k):
         return k in self.mapping
@@ -374,15 +266,6 @@ class BasicLayer(Layer):
 
     def __len__(self):
         return len(self.mapping)
-
-    def get_annotations(self):
-        annotations = defaultdict(dict)
-
-        for a in self.annotations:
-            for k, v in a.items():
-                annotations[k].update(v)
-
-        return annotations
 
     def is_materialized(self):
         return True

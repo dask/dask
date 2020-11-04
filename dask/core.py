@@ -1,8 +1,22 @@
 from collections import defaultdict
+from contextlib import contextmanager
 
+from .config import get as config_get, set as config_set
 from .utils_test import add, inc  # noqa: F401
 
 no_default = "__no_default__"
+
+
+@contextmanager
+def annotate(**kwargs):
+    prev_annotations = config_get("annotations", {})
+    annotations = {
+        **prev_annotations,
+        **{f"annotations.{k}": v for k, v in kwargs.items()},
+    }
+
+    with config_set(annotations):
+        yield
 
 
 def ishashable(x):
