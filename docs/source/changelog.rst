@@ -1,9 +1,10 @@
 Changelog
 =========
 
-2.30.1 - 2020-10-30
+2.30.1 - 2020-11-03
 -------------------
 
+- Pin ``pytest-asyncio`` version (:pr:`4212`) `James Bourbeau`_
 - Replace ``AsyncProcess`` exit handler by ``weakref.finalize`` (:pr:`4184`) `Peter Andreas Entschev`_
 - Remove hard coded connect handshake timeouts (:pr:`4176`) `Florian Jetter`_
 
