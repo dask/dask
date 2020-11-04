@@ -15,7 +15,7 @@ import copy
 
 import tlz as toolz
 
-from .config import get as config_get
+from . import config
 from .utils import ignoring
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
@@ -252,7 +252,7 @@ class BasicLayer(Layer):
         self.global_dependencies = global_dependencies
         self.global_dependencies_has_been_trimmed = False
 
-        annotations = config_get("annotations", None)
+        annotations = config.get("annotations", None)
         self.annotations = None if annotations is None else annotations.copy()
 
     def __contains__(self, k):
