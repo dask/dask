@@ -500,6 +500,7 @@ def to_parquet(
     # Use i_offset and df.npartitions to define file-name list
     filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
 
+    # Construct IO graph
     dsk = {}
     name = "to-parquet-" + tokenize(
         df,
@@ -531,6 +532,7 @@ def to_parquet(
         )
         part_tasks.append((name, d))
 
+    # Collect metadata and write _metadata
     if write_metadata_file:
         dsk[name] = (
             _write_metadata,
