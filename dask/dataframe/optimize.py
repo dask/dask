@@ -43,9 +43,11 @@ def optimize(dsk, keys, **kwargs):
 
 def optimize_read_parquet_getitem(dsk, keys):
     # find the keys to optimize
-    from .io.parquet.core import ParquetSubgraph
+    from .io.parquet.core import BlockwiseParquet
 
-    read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
+    read_parquets = [
+        k for k, v in dsk.layers.items() if isinstance(v, BlockwiseParquet)
+    ]
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
@@ -118,7 +120,7 @@ def optimize_read_parquet_getitem(dsk, keys):
             meta = old.meta
             columns = list(meta.columns)
 
-        new = ParquetSubgraph(
+        new = BlockwiseParquet(
             name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
         )
         layers[name] = new

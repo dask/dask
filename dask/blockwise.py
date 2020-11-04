@@ -13,6 +13,21 @@ from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
 
+class PackedFunctionCall:
+    """Function-decorator class to expand list arguments."""
+
+    def __init__(self, func):
+        self.func = func
+
+    def __call__(self, args):
+        if self.func is None:
+            return None
+        if isinstance(args, (tuple, list)):
+            return self.func(*args)
+        else:
+            return self.func(args)
+
+
 def subs(task, substitution):
     """Create a new task with the values substituted
 
@@ -163,7 +178,20 @@ class Blockwise(Layer):
         single input to the block function
     new_axes: Dict
         New index dimensions that may have been created, and their extent
+    io_subgraph: Tuple[str, Dict or Mapping]
+        If the blockwise operation corresponds to the generation of a new
+        collection (i.e. `indices` includes keys for a collection that has
+        yet to be constructed), this argument must be used to specify the
+        `(key-name, subgraph)` pair for the to-be-created collection. Note
+        that `key-name` must match the name used in both `indices` and in
+        the keys of `subgraph`.
 
+        NOTE: The `subgraph` must comprise of exactly N keys (where N is the
+        number of chunks/partitions in the new collection), and each value
+        must correspond to a "callable" task. The first element (a callable
+        function) must be the same for all N tasks.  This "uniformity" is
+        required for the abstract `SubgraphCallable` representation used
+        within Blockwise.
 
     See Also
     --------
@@ -180,9 +208,36 @@ class Blockwise(Layer):
         numblocks,
         concatenate=None,
         new_axes=None,
+        io_subgraph=None,
     ):
         self.output = output
         self.output_indices = tuple(output_indices)
+        self.io_subgraph = io_subgraph[1] if io_subgraph else None
+        self.io_name = io_subgraph[0] if io_subgraph else None
+        if not dsk:
+            # If there is no `dsk` input, there must be an IO subgraph.
+            if io_subgraph is None:
+                raise ValueError("io_subgraph required if dsk is not supplied.")
+
+            # Extract actual IO function for SubgraphCallable construction.
+            # Wrap func in `PackedFunctionCall`, since it will receive
+            # all arguments as a sigle (packed) tuple at run time.
+            if self.io_subgraph:
+                # We assume a 1-to-1 mapping between keys (i.e. tasks) and
+                # chunks/partitions in `io_subgraph`, and assume the first
+                # (callable) element is the same for all tasks.
+                any_key = next(iter(self.io_subgraph))
+                io_func = self.io_subgraph.get(any_key)[0]
+            else:
+                io_func = None
+            ninds = 1 if isinstance(output_indices, str) else len(output_indices)
+            dsk = {
+                output: (
+                    PackedFunctionCall(io_func),
+                    *[blockwise_token(i) for i in range(ninds)],
+                )
+            }
+
         self.dsk = dsk
         self.indices = tuple(
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
@@ -225,11 +280,57 @@ class Blockwise(Layer):
                 key_deps=key_deps,
                 non_blockwise_keys=non_blockwise_keys,
             )
+
+            if self.io_subgraph:
+                # This is an IO layer.
+                for k in dsk:
+                    io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
+                    if io_key in dsk[k]:
+                        # Inject IO-function arguments into the blockwise graph
+                        # as a single (packed) tuple.
+                        io_item = self.io_subgraph.get(io_key)
+                        io_item = list(io_item[1:]) if len(io_item) > 1 else []
+                        new_task = [io_item if v == io_key else v for v in dsk[k]]
+                        dsk[k] = tuple(new_task)
+
+                # Clear IO "placeholder" dependencies
+                for k in key_deps:
+                    if k[0] == self.output:
+                        key_deps[k] = set()
+
             self._cached_dict = {
                 "dsk": dsk,
                 "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_keys),
             }
         return self._cached_dict["dsk"]
+
+    def get_output_keys(self):
+
+        # TODO: Handle N-D Collections and more-complex
+        # tensor operations.
+
+        # Only deal with 1-D collections (for now).
+        # Otherwise, we allow dict materialization.
+        if len(self.output_indices) != 1:
+            return super().get_output_keys()
+
+        # Check inputs.
+        # Only deal with 1-to-1 input-output collection
+        # mapping (for now).
+        input_cnt = 0
+        in_name = None
+        for _name, _ind in self.indices:
+            if _ind is not None:
+                if len(_ind) != 1 or input_cnt:
+                    return super().get_output_keys()
+                in_name = _name
+                input_cnt += 1
+
+        # At this point, we can assume:
+        # - Input and output indices are aligned
+        # - Collection is 1-D
+        # - Only one input collection
+        return {(self.output, p) for p in range(self.numblocks[in_name][0])}
 
     def __getitem__(self, key):
         return self._dict[key]
@@ -637,6 +738,7 @@ def _optimize_blockwise(full_graph, keys=()):
     out = {}
     dependencies = {}
     seen = set()
+    io_names = set()
 
     while stack:
         layer = stack.pop()
@@ -648,6 +750,7 @@ def _optimize_blockwise(full_graph, keys=()):
         if isinstance(layers[layer], Blockwise):
             blockwise_layers = {layer}
             deps = set(blockwise_layers)
+            io_names.add(layers[layer].io_name)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
                 if dep not in layers:
@@ -695,7 +798,7 @@ def _optimize_blockwise(full_graph, keys=()):
             for k, v in new_layer.indices:
                 if v is None:
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
-                else:
+                elif k not in io_names:
                     new_deps.add(k)
             dependencies[layer] = new_deps
         else:
@@ -750,6 +853,7 @@ def rewrite_blockwise(inputs):
     concatenate = inputs[root].concatenate
     dsk = dict(inputs[root].dsk)
 
+    io_info = None
     changed = True
     while changed:
         changed = False
@@ -760,6 +864,10 @@ def rewrite_blockwise(inputs):
                 continue
 
             changed = True
+
+            # Update IO-subgraph information
+            if not io_info and inputs[dep].io_name:
+                io_info = (inputs[dep].io_name, inputs[dep].io_subgraph)
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -839,6 +947,7 @@ def rewrite_blockwise(inputs):
         numblocks=numblocks,
         new_axes=new_axes,
         concatenate=concatenate,
+        io_subgraph=io_info,
     )
 
     return out

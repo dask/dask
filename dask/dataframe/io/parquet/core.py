@@ -11,6 +11,7 @@ from ....base import tokenize
 from ....utils import import_required, natural_sort_key, parse_bytes
 from ...methods import concat
 from ....highlevelgraph import Layer
+from ....blockwise import Blockwise
 
 
 try:
@@ -73,8 +74,8 @@ class ParquetSubgraph(Layer):
 
         return (
             read_parquet_part,
-            self.engine.read_partition,
             self.fs,
+            self.engine.read_partition,
             self.meta,
             [p["piece"] for p in part],
             self.columns,
@@ -112,6 +113,54 @@ class ParquetSubgraph(Layer):
     def map_tasks(self, func):
         # ParquetSubgraph has no input tasks
         return self
+
+
+class BlockwiseParquet(Blockwise):
+    """
+    Specialized Blockwise Layer for read_parquet.
+
+    Enables HighLevelGraph optimizations.
+    """
+
+    def __init__(
+        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
+    ):
+        self.name = name
+        self.engine = engine
+        self.fs = fs
+        self.meta = meta
+        self.columns = columns
+        self.index = index
+        self.parts = parts
+        self.kwargs = kwargs
+        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
+
+        self.io_name = "blockwise-io-" + name
+        dsk_io = ParquetSubgraph(
+            self.io_name,
+            self.engine,
+            self.fs,
+            self.meta,
+            self.columns,
+            self.index,
+            self.parts,
+            self.kwargs,
+            part_ids=self.part_ids,
+        )
+
+        super().__init__(
+            self.name,
+            "i",
+            None,
+            [(self.io_name, "i")],
+            {self.io_name: (len(self.part_ids),)},
+            io_subgraph=(self.io_name, dsk_io),
+        )
+
+    def __repr__(self):
+        return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.part_ids), list(self.columns)
+        )
 
 
 def read_parquet(
@@ -279,7 +328,7 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = BlockwiseParquet(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
@@ -295,10 +344,11 @@ def read_parquet(
     return new_dd_object(subgraph, name, meta, divisions)
 
 
-def read_parquet_part(func, fs, meta, part, columns, index, kwargs):
+def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
+
     if isinstance(part, list):
         dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
         df = concat(dfs, axis=0)
