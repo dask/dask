@@ -146,7 +146,7 @@ def test_multiple_annotations():
 
     alayer = A.__dask_graph__().layers[A.name]
     blayer = B.__dask_graph__().layers[B.name]
-    clayer = C.__dask_graph__().layers[B.name]
+    clayer = C.__dask_graph__().layers[C.name]
     assert alayer.annotations == {"resource": "GPU", "block_id": annot_map_fn}
     assert blayer.annotations == {"block_id": annot_map_fn}
     assert clayer.annotations is None

@@ -56,8 +56,7 @@ class Layer(collections.abc.Mapping):
     """
 
     def __init__(self):
-        annotations = config.get("annotations", None)
-        self.annotations = None if annotations is None else annotations.copy()
+        self.annotations = copy.copy(config.get("annotations", None))
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
