@@ -618,26 +618,28 @@ def sfqr(data, name=None):
     return Q, R
 
 
-def compression_level(n, q, oversampling=10, min_subspace_size=20):
+def compression_level(n, q, n_oversamples, min_subspace_size=20):
     """Compression level to use in svd_compressed
 
     Given the size ``n`` of a space, compress that that to one of size
-    ``q`` plus oversampling.
+    ``q`` plus n_oversamples.
 
     The oversampling allows for greater flexibility in finding an
     appropriate subspace, a low value is often enough (10 is already a
     very conservative choice, it can be further reduced).
-    ``q + oversampling`` should not be larger than ``n``.  In this
-    specific implementation, ``q + oversampling`` is at least
+    ``q + n_oversamples`` should not be larger than ``n``.  In this
+    specific implementation, ``q + n_oversamples`` is at least
     ``min_subspace_size``.
 
     >>> compression_level(100, 10)
     20
     """
-    return min(max(min_subspace_size, q + oversampling), n)
+    return min(max(min_subspace_size, q + n_oversamples), n)
 
 
-def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
+def compression_matrix(
+    data, q, n_power_iter=0, n_oversamples=10, seed=None, compute=False
+):
     """Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
@@ -653,6 +655,9 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     n_power_iter: int
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
+    n_oversamples: int
+        Number of oversamples, useful for increasing the chance of spanning
+        the required subspace. In practice, set n_oversamples = 10.
     compute : bool
         Whether or not to compute data at each use.
         Recomputing the input while performing several passes reduces memory
@@ -670,7 +675,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     https://arxiv.org/abs/0909.4061
     """
     m, n = data.shape
-    comp_level = compression_level(min(m, n), q)
+    comp_level = compression_level(min(m, n), q, n_oversamples=n_oversamples)
     if isinstance(seed, RandomState):
         state = seed
     else:
@@ -692,7 +697,9 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=True):
+def svd_compressed(
+    a, k, n_power_iter=0, n_oversamples=10, seed=None, compute=False, coerce_signs=True
+):
     """Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -710,6 +717,9 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=
         Number of power iterations, useful when the singular values
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
+    n_oversamples: int
+        Number of oversamples, useful for increasing the chance of spanning
+        the required subspace. In practice, set n_oversamples = 10.
     compute : bool
         Whether or not to compute data at each use.
         Recomputing the input while performing several passes reduces memory
@@ -741,7 +751,12 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=
     https://arxiv.org/abs/0909.4061
     """
     comp = compression_matrix(
-        a, k, n_power_iter=n_power_iter, seed=seed, compute=compute
+        a,
+        k,
+        n_power_iter=n_power_iter,
+        n_oversamples=n_oversamples,
+        seed=seed,
+        compute=compute,
     )
     if compute:
         comp = comp.persist()
