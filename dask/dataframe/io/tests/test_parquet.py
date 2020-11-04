@@ -2256,18 +2256,23 @@ def test_graph_size_pyarrow(tmpdir, engine):
 @pytest.mark.parametrize("preserve_index", [True, False])
 @pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
 def test_getitem_optimization(tmpdir, engine, preserve_index, index):
+    tmp_path_rd = str(tmpdir.mkdir("read"))
+    tmp_path_wt = str(tmpdir.mkdir("write"))
     df = pd.DataFrame(
         {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
     )
     df.index.name = "my_index"
     ddf = dd.from_pandas(df, 2, sort=False)
-    fn = os.path.join(str(tmpdir))
-    ddf.to_parquet(fn, engine=engine, write_index=preserve_index)
 
-    ddf = dd.read_parquet(fn, engine=engine)["B"]
+    ddf.to_parquet(tmp_path_rd, engine=engine, write_index=preserve_index)
+    ddf = dd.read_parquet(tmp_path_rd, engine=engine)["B"]
 
-    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[ddf._name])
-    get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
+    # Write ddf back to disk to check that the round trip
+    # preserves the getitem optimization
+    out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
+    dsk = optimize_read_parquet_getitem(out.dask, keys=[out.key])
+
+    read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == ["B"]
