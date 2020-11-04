@@ -60,14 +60,15 @@ def annotate(**annotations):
 
     All tasks within array A should have priority 100 and be retried 3 times
     on failure.
+
     >>> with dask.annotate(priority=100, retries=3):
-    >>>    A = da.ones((10000, 10000))
+            A = da.ones((10000, 10000))
 
     Prioritise tasks within Array A on flattened block ID.
 
     >>> nblocks = (10, 10)
     >>> with dask.annotate(priority=lambda k: k[1]*nblocks[1] + k[2]):
-    >>>     A = da.ones((1000, 1000), chunks=(100, 100))
+            A = da.ones((1000, 1000), chunks=(100, 100))
     """
 
     prev_annotations = config.get("annotations", {})
