@@ -1,3 +1,4 @@
+from collections import defaultdict
 import pickle
 from functools import partial
 import os
@@ -6,8 +7,10 @@ import pytest
 
 import dask
 import dask.array as da
+from dask.core import flatten
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
+from dask.highlevelgraph import ExplicitLayerAnnotation, SingleLayerAnnotation
 from dask.blockwise import Blockwise
 from dask.array.utils import assert_eq
 
@@ -114,112 +117,52 @@ def test_map_tasks(use_layer_map_task):
     assert_eq(y, [42] * 3)
 
 
-@pytest.mark.parametrize("short_form", [True, False])
-def test_single_annotation(short_form):
-    from dask.highlevelgraph import SingleLayerAnnotation
-
-    a = {"x": 1, "y": (inc, "x")}
+def test_single_annotation():
     annotation = {"worker": "alice"}
 
-    if not short_form:
-        sa = SingleLayerAnnotation(annotation, a.keys())
-    else:
-        sa = annotation
+    with dask.annotate(annotation):
+        A = da.ones((10, 10), chunks=(5, 5))
 
-    assert pickle.loads(pickle.dumps(sa)) == sa
-    with dask.annotate(sa):
-        layers = {
-            "a": BasicLayer(
-                a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
-            )
-        }
-
-    assert all(v == annotation for v in layers["a"].get_annotations().values())
-
-
-def test_explicit_annotations():
-    from dask.highlevelgraph import ExplicitLayerAnnotation
-
-    a = {"x": 1, "y": (inc, "x")}
-    ea = {"y": {"resource": "GPU"}, "x": {"worker": "alice"}}
-    ea = ExplicitLayerAnnotation(ea)
-    assert pickle.loads(pickle.dumps(ea)) == ea
-
-    with dask.annotate(ea):
-        layers = {
-            "a": BasicLayer(
-                a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
-            )
-        }
-
-    assert dict(layers["a"].get_annotations()) == dict(ea)
+    expected = SingleLayerAnnotation(annotation, set(flatten(A.__dask_keys__())))
+    alayer = A.__dask_graph__().layers[A.name]
+    assert expected == pickle.loads(pickle.dumps(expected))
+    assert alayer.annotations == [expected]
 
 
 def annot_map_fn(key):
     return {"block_id": key[1:]}
 
 
-def test_mapped_annotations_short_form():
-    from dask.highlevelgraph import ExplicitLayerAnnotation
+def test_mapped_annotations():
+    with dask.annotate(annot_map_fn):
+        A = da.ones((10, 10), chunks=(5, 5))
 
-    a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
-    ma = annot_map_fn
-
-    assert pickle.loads(pickle.dumps(ma)) == ma
-
-    with dask.annotate(ma):
-        layers = {
-            "a": BasicLayer(
-                a,
-                dependencies={k: set() for k in a.keys()},
-                global_dependencies=set(),
-            )
-        }
-
-    assert isinstance(layers["a"].annotations[0], ExplicitLayerAnnotation)
-
-    expected = dict((k, annot_map_fn(k)) for k in a.keys())
-    assert dict(layers["a"].get_annotations()) == expected
-
-
-def test_mapped_annotations_long_form():
-    from dask.highlevelgraph import MapLayerAnnotation
-
-    a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
-
-    with pytest.warns(UserWarning):
-        ma = MapLayerAnnotation(annot_map_fn, a.keys())
-
-    with pytest.warns(UserWarning):
-        assert pickle.loads(pickle.dumps(ma)) == ma
-
-    with dask.annotate(ma):
-        layers = {
-            "a": BasicLayer(
-                a,
-                dependencies={k: set() for k in a.keys()},
-                global_dependencies=set(),
-            )
-        }
-
-    assert isinstance(layers["a"].annotations[0], MapLayerAnnotation)
-
-    expected = dict((k, annot_map_fn(k)) for k in a.keys())
-    assert dict(layers["a"].get_annotations()) == expected
+    expected = ExplicitLayerAnnotation(
+        {k: annot_map_fn(k) for k in flatten(A.__dask_keys__())}
+    )
+    alayer = A.__dask_graph__().layers[A.name]
+    assert expected == pickle.loads(pickle.dumps(expected))
+    assert alayer.annotations == [expected]
 
 
 def test_multiple_annotations():
-    a = {("x", 0): (inc, 0), ("x", 1): (inc, 1)}
-
     with dask.annotate(annot_map_fn):
         with dask.annotate({"resource": "GPU"}):
-            layers = {
-                "a": BasicLayer(
-                    a,
-                    dependencies={k: set() for k in a.keys()},
-                    global_dependencies=set(),
-                )
-            }
+            A = da.ones((10, 10), chunks=(5, 5))
 
-    expected = {k: {"block_id": k[1:], "resource": "GPU"} for k in a.keys()}
-    assert dict(layers["a"].get_annotations()) == expected
+    # akeys = set(flatten(A.__dask_keys__()))
+    alayer = A.__dask_graph__().layers[A.name]
+    akeys = alayer.keys()
+    explicit = ExplicitLayerAnnotation({k: {"block_id": k[1:]} for k in akeys})
+    single = SingleLayerAnnotation({"resource": "GPU"}, akeys)
+    assert alayer.annotations == [explicit, single]
+
+    expected = defaultdict(dict)
+
+    for k, v in explicit.items():
+        expected[k].update(v)
+
+    for k, v in single.items():
+        expected[k].update(v)
+
+    assert alayer.get_annotations() == expected

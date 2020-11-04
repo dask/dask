@@ -48,6 +48,13 @@ class SingleLayerAnnotation(LayerAnnotation):
     def __getitem__(self, k):
         return self.annotation
 
+    def __eq__(self, other):
+        return (
+            type(other) is SingleLayerAnnotation
+            and self.annotation == other.annotation
+            and self.map_keys == other.map_keys
+        )
+
     def __iter__(self):
         return iter(self.map_keys)
 
@@ -69,6 +76,12 @@ class ExplicitLayerAnnotation(LayerAnnotation):
 
     def __getitem__(self, k):
         return self.annotations[k]
+
+    def __eq__(self, other):
+        return (
+            type(other) is ExplicitLayerAnnotation
+            and self.annotations == other.annotations
+        )
 
     def __len__(self):
         return len(self.annotations)
