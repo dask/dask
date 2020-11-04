@@ -128,7 +128,7 @@ def order(dsk, dependencies=None):
     # So under the special case of a single root node that depends on the entire
     # tree, we skip processing it normally.
     # See https://github.com/dask/dask/issues/6745
-    root_nodes = {k for k in metrics if metrics[k][1] == total_dependencies[k]}
+    root_nodes = {k for k, v in dependents.items() if not v}
     skip_root_node = len(root_nodes) == 1 and len(dsk) > 1
 
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
