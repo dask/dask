@@ -55,6 +55,10 @@ class Layer(collections.abc.Mapping):
     implementations.
     """
 
+    def __init__(self):
+        annotations = config.get("annotations", None)
+        self.annotations = None if annotations is None else annotations.copy()
+
     @abc.abstractmethod
     def is_materialized(self) -> bool:
         """Return whether the layer is materialized or not"""
@@ -247,13 +251,11 @@ class BasicLayer(Layer):
     """
 
     def __init__(self, mapping, dependencies=None, global_dependencies=None):
+        super().__init__()
         self.mapping = mapping
         self.dependencies = dependencies
         self.global_dependencies = global_dependencies
         self.global_dependencies_has_been_trimmed = False
-
-        annotations = config.get("annotations", None)
-        self.annotations = None if annotations is None else annotations.copy()
 
     def __contains__(self, k):
         return k in self.mapping
