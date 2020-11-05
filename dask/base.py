@@ -62,6 +62,7 @@ def annotate(**annotations):
     on failure.
 
     >>> import dask
+    >>> import dask.array as da
     >>> with dask.annotate(priority=100, retries=3):
     ...     A = da.ones((10000, 10000))
 
