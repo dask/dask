@@ -75,6 +75,7 @@ Work towards *small goals* with *big steps*.
     This relies on the regularity of graph constructors like dask.array to be a
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
+import re
 from collections import defaultdict
 from math import log
 from .core import get_dependencies, reverse_dict, get_deps, getcycle  # noqa: F401
@@ -683,12 +684,27 @@ class StrComparable(object):
     """
 
     __slots__ = ("obj",)
+    zfill_pattern = re.compile(r", \d+")
+
+    @staticmethod
+    def zerofill_key(match):
+        """Zero fill integers in keys of the form: `(<str>, <int>, <int>, ...)`
+
+        HACK: we zerofill 9 decimals, which should be enough in all but extreme cases.
+        """
+        value = str(match.group())[2:]
+        return value.zfill(9)
 
     def __init__(self, obj):
+        if type(obj) is str:
+            obj = self.zfill_pattern.sub(self.zerofill_key, obj)
         self.obj = obj
 
     def __lt__(self, other):
+        other = other.obj
+        if type(other) is str:
+            other = self.zfill_pattern.sub(self.zerofill_key, other)
         try:
-            return self.obj < other.obj
+            return self.obj < other
         except Exception:
-            return str(self.obj) < str(other.obj)
+            return str(self.obj) < str(other)
