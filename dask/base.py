@@ -61,6 +61,7 @@ def annotate(**annotations):
     All tasks within array A should have priority 100 and be retried 3 times
     on failure.
 
+    >>> import dask
     >>> with dask.annotate(priority=100, retries=3):
     ...     A = da.ones((10000, 10000))
 
