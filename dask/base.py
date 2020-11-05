@@ -37,7 +37,7 @@ __all__ = (
 
 @contextmanager
 def annotate(**annotations):
-    """Content Manager for setting HighLevelGraph Layer annotations.
+    """Context Manager for setting HighLevelGraph Layer annotations.
 
     Annotations are metadata or soft constraints associated with
     tasks that dask schedulers may choose to respect: They signal intent
@@ -45,7 +45,7 @@ def annotate(**annotations):
     primarily designed for use with the distributed scheduler.
 
     Almost any object can serve as an annotation, but small Python objects
-    are preferred, while large objects such as NumPy arrays should be discouraged.
+    are preferred, while large objects such as NumPy arrays are discouraged.
 
     Callables supplied as an annotation should take a single *key* argument and
     produce the appropriate annotation. Individual task keys in the annotated collection
@@ -61,14 +61,23 @@ def annotate(**annotations):
     All tasks within array A should have priority 100 and be retried 3 times
     on failure.
 
+    >>> import dask
+    >>> import dask.array as da
     >>> with dask.annotate(priority=100, retries=3):
-            A = da.ones((10000, 10000))
+    ...     A = da.ones((10000, 10000))
 
     Prioritise tasks within Array A on flattened block ID.
 
     >>> nblocks = (10, 10)
     >>> with dask.annotate(priority=lambda k: k[1]*nblocks[1] + k[2]):
-            A = da.ones((1000, 1000), chunks=(100, 100))
+    ...     A = da.ones((1000, 1000), chunks=(100, 100))
+
+    Annotations may be nested.
+
+    >>> with dask.annotate(priority=1):
+    ...     with dask.annotate(retries=3):
+    ...         A = da.ones((1000, 1000))
+    ...     B = A + 1
     """
 
     prev_annotations = config.get("annotations", {})
