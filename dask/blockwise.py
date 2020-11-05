@@ -210,6 +210,7 @@ class Blockwise(Layer):
         new_axes=None,
         io_subgraph=None,
     ):
+        super().__init__()
         self.output = output
         self.output_indices = tuple(output_indices)
         self.io_subgraph = io_subgraph[1] if io_subgraph else None

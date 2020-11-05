@@ -15,6 +15,7 @@ import copy
 
 import tlz as toolz
 
+from . import config
 from .utils import ignoring
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
@@ -53,6 +54,9 @@ class Layer(collections.abc.Mapping):
     layer. It is up to derived classes to implement non-materializing
     implementations.
     """
+
+    def __init__(self):
+        self.annotations = copy.copy(config.get("annotations", None))
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
@@ -246,6 +250,7 @@ class BasicLayer(Layer):
     """
 
     def __init__(self, mapping, dependencies=None, global_dependencies=None):
+        super().__init__()
         self.mapping = mapping
         self.dependencies = dependencies
         self.global_dependencies = global_dependencies
