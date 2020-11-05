@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from collections.abc import Mapping, Iterator
+from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
 from operator import getitem
@@ -23,6 +24,7 @@ from . import config, local, threaded
 
 __all__ = (
     "DaskMethodsMixin",
+    "annotate",
     "is_dask_collection",
     "compute",
     "persist",
@@ -31,6 +33,52 @@ __all__ = (
     "tokenize",
     "normalize_token",
 )
+
+
+@contextmanager
+def annotate(**annotations):
+    """Content Manager for setting HighLevelGraph Layer annotations.
+
+    Annotations are metadata or soft constraints associated with
+    tasks that dask schedulers may choose to respect: They signal intent
+    without enforcing hard constraints. As such, they are
+    primarily designed for use with the distributed scheduler.
+
+    Almost any object can serve as an annotation, but small Python objects
+    are preferred, while large objects such as NumPy arrays should be discouraged.
+
+    Callables supplied as an annotation should take a single *key* argument and
+    produce the appropriate annotation. Individual task keys in the annotated collection
+    are supplied to the callable.
+
+    Parameters
+    ----------
+    **annotations : key-value pairs
+
+    Examples
+    --------
+
+    All tasks within array A should have priority 100 and be retried 3 times
+    on failure.
+
+    >>> with dask.annotate(priority=100, retries=3):
+            A = da.ones((10000, 10000))
+
+    Prioritise tasks within Array A on flattened block ID.
+
+    >>> nblocks = (10, 10)
+    >>> with dask.annotate(priority=lambda k: k[1]*nblocks[1] + k[2]):
+            A = da.ones((1000, 1000), chunks=(100, 100))
+    """
+
+    prev_annotations = config.get("annotations", {})
+    new_annotations = {
+        **prev_annotations,
+        **{f"annotations.{k}": v for k, v in annotations.items()},
+    }
+
+    with config.set(new_annotations):
+        yield
 
 
 def is_dask_collection(x):
@@ -95,7 +143,7 @@ class DaskMethodsMixin(object):
             filename=filename,
             format=format,
             optimize_graph=optimize_graph,
-            **kwargs
+            **kwargs,
         )
 
     def persist(self, **kwargs):

@@ -3,6 +3,7 @@ import os
 
 import pytest
 
+import dask
 import dask.array as da
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
@@ -110,3 +111,42 @@ def test_map_tasks(use_layer_map_task):
 
     y.dask = dsk.map_tasks(plus_one)
     assert_eq(y, [42] * 3)
+
+
+def annot_map_fn(key):
+    return key[1:]
+
+
+@pytest.mark.parametrize(
+    "annotation",
+    [
+        {"worker": "alice"},
+        {"block_id": annot_map_fn},
+    ],
+)
+def test_single_annotation(annotation):
+    with dask.annotate(**annotation):
+        A = da.ones((10, 10), chunks=(5, 5))
+
+    alayer = A.__dask_graph__().layers[A.name]
+    assert alayer.annotations == annotation
+    assert dask.config.get("annotations", None) is None
+
+
+def test_multiple_annotations():
+    with dask.annotate(block_id=annot_map_fn):
+        with dask.annotate(resource="GPU"):
+            A = da.ones((10, 10), chunks=(5, 5))
+
+        B = A + 1
+
+    C = B + 1
+
+    assert dask.config.get("annotations", None) is None
+
+    alayer = A.__dask_graph__().layers[A.name]
+    blayer = B.__dask_graph__().layers[B.name]
+    clayer = C.__dask_graph__().layers[C.name]
+    assert alayer.annotations == {"resource": "GPU", "block_id": annot_map_fn}
+    assert blayer.annotations == {"block_id": annot_map_fn}
+    assert clayer.annotations is None
