@@ -567,11 +567,11 @@ def to_parquet(
         schema,
     )
     part_tasks = []
+    kwargs_pass["fmd"] = meta
+    kwargs_pass["compression"] = compression
+    kwargs_pass["index_cols"] = index_cols
+    kwargs_pass["schema"] = schema
     for d, filename in enumerate(filenames):
-        kwargs_pass["fmd"] = meta
-        kwargs_pass["compression"] = compression
-        kwargs_pass["index_cols"] = index_cols
-        kwargs_pass["schema"] = schema
         dsk[(name, d)] = (
             _write_partition,
             engine.write_partition,
