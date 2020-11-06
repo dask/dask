@@ -672,7 +672,9 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Apply Culling.
     # Only need to costruct the specified set of output blocks
-    output_blocks = itertools.product(*[range(dims[i]) for i in out_indices])
+    output_blocks = output_blocks or itertools.product(
+        *[range(dims[i]) for i in out_indices]
+    )
 
     dsk = {}
     # Create argument lists
