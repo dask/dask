@@ -6,6 +6,7 @@ from operator import getitem
 import inspect
 import pickle
 import os
+import random
 import threading
 import uuid
 from distutils.version import LooseVersion
@@ -1097,29 +1098,61 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return x
 
 
-def clone_key(key):
+def clone_key(key, seed=None):
+    """Clone a key from a Dask collection
+
+    Parameters
+    ----------
+    seed : int, float, optional
+        Seed for generating the new key. Defaults to a random number.
+
+    Examples
+    --------
+    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387")     # doctest: +SKIP
+    'inc-1d291de52f5045f8a969743daea271fd'
+    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3))     # doctest: +SKIP
+    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
+
+    """
     prefix = key_split(key)
+
+    r = random.Random(seed)
+    token = uuid.UUID(int=r.getrandbits(128)).hex
+
     if isinstance(key, str):
-        return prefix + "-" + tokenize(key)
+        return prefix + "-" + token
     elif isinstance(key, tuple):
-        return (prefix + "-" + tokenize(key[0]), *key[1:])
+        return (prefix + "-" + token, *key[1:])
     else:
         raise TypeError(f"Expected a key or tuple key but got {type(key)} instead")
 
 
-def clone(x):
-    """Clone a Dask collection"""
+def clone(x, seed=None):
+    """Clone an existing Dask collection
+
+    This returns a new collection which represents the same computation
+    as the input collection, but uses different keys in its task graph.
+
+    Parameters
+    ----------
+    seed : int, float, optional
+        Seed for generating new keys in the cloned collection.
+        Defaults to a random number.
+    """
     from .highlevelgraph import clone_key
+
+    if seed is None:
+        seed = random.random()
 
     if not is_dask_collection(x):
         raise TypeError(f"Expected a Dask collection but got {type(x)} instead")
 
     # Clone the underlying HighLevelGraph
     dsk = x.__dask_graph__()
-    dsk_new = dsk.clone()
+    dsk_new = dsk.clone(seed=seed)
 
     # Create a new Dask collection from the cloned HighLevelGraph
-    new_name = clone_key(x._name)
+    new_name = clone_key(x._name, seed=seed)
     if is_arraylike(x):
         from .array.core import new_da_object
 

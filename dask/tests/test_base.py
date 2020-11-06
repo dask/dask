@@ -746,6 +746,8 @@ def test_clone_key():
     new_key = clone_key(key)
     assert isinstance(new_key, str)
     assert "inc-" in new_key
+    assert clone_key(new_key) != clone_key(new_key)
+    assert clone_key(new_key, seed=2) == clone_key(new_key, seed=2)
 
     key = ("inc-1234", 0, 1)
     new_key = clone_key(key)
@@ -753,6 +755,8 @@ def test_clone_key():
     assert len(key) == len(new_key)
     assert "inc-" in new_key[0]
     assert key[1:] == new_key[1:]
+    assert clone_key(new_key) != clone_key(new_key)
+    assert clone_key(new_key, seed=2) == clone_key(new_key, seed=2)
 
     with pytest.raises(TypeError):
         clone_key(123)
@@ -782,6 +786,21 @@ def test_clone_array():
     # No overlap in keys
     assert not set(x1.dask.keys()) & set(x2.dask.keys())
     assert_eq(x1, x2)
+
+
+@pytest.mark.skipif("not da")
+def test_clone_array_deterministic():
+    from dask.array.utils import assert_eq
+
+    x1 = da.random.random(10, chunks=5)
+    # Check deterministic cloning
+    x2 = clone(x1, seed=2)
+    x3 = clone(x1, seed=2)
+
+    assert not set(x1.dask.keys()) & set(x2.dask.keys())
+    assert set(x2.dask.keys()) == set(x3.dask.keys())
+    assert_eq(x1, x2)
+    assert_eq(x2, x3)
 
 
 @pytest.mark.skipif("not dd")

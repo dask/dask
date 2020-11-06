@@ -1,5 +1,6 @@
 import abc
 import collections.abc
+import random
 from typing import (
     Any,
     Callable,
@@ -160,18 +161,21 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer({k: func(v) for k, v in self.items()})
 
-    def clone(self, all_external_keys):
+    def clone(self, all_external_keys, seed=None):
         from distributed.utils_comm import subs_multiple
+
+        if seed is None:
+            seed = random.random()
 
         dsk_new = {}
         old_to_new_keys = {}
         for key, value in self.items():
-            new_key = clone_key(key)
+            new_key = clone_key(key, seed=seed)
             old_to_new_keys[key] = new_key
             dsk_new[new_key] = value
         # Include external keys in task substitutions
         for key in all_external_keys:
-            old_to_new_keys[key] = clone_key(key)
+            old_to_new_keys[key] = clone_key(key, seed=seed)
 
         dsk_new = subs_multiple(dsk_new, old_to_new_keys)
         return BasicLayer(dsk_new)
@@ -554,17 +558,20 @@ class HighLevelGraph(Mapping):
     def copy(self):
         return HighLevelGraph(self.layers.copy(), self.dependencies.copy())
 
-    def clone(self):
+    def clone(self, seed=None):
+        if seed is None:
+            seed = random.random()
+
         new_layers = {}
         all_external_keys = self.get_all_external_keys()
         for name, layer in self.layers.items():
-            new_name = clone_key(name)
-            new_layers[new_name] = layer.clone(all_external_keys)
+            new_name = clone_key(name, seed=seed)
+            new_layers[new_name] = layer.clone(all_external_keys, seed=seed)
 
         new_deps = {}
         for name, deps in self.dependencies.items():
-            new_name = clone_key(name)
-            new_deps[new_name] = set(clone_key(dep) for dep in deps)
+            new_name = clone_key(name, seed=seed)
+            new_deps[new_name] = set(clone_key(dep, seed=seed) for dep in deps)
 
         return HighLevelGraph(new_layers, new_deps)
 
