@@ -256,6 +256,33 @@ class Blockwise(Layer):
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
+        # Check if this is a "flat" transformation
+        # (input/output indices are aligned)
+        self.flat_size = None
+        if not self.new_axes and self.numblocks:
+            flat = True
+
+            # Check input blocks are all the same size
+            blocks = None
+            for _name, _size in self.numblocks.items():
+                blocks = blocks or _size
+                if blocks != _size:
+                    flat = False
+                    break
+
+            # Check that input and output indices match (no transpose etc.)
+            flat = flat and all(
+                self.output_indices == ind
+                for name, ind in self.indices
+                if ind is not None
+            )
+
+            # Check that input and output sizes match
+            if flat and (len(self.output_indices) == len(_size)):
+                # At this point we can define a single tuple (self.flat_size)
+                # that specifies the dimensions of the "flat" transform
+                self.flat_size = _size
+
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
 
@@ -306,32 +333,14 @@ class Blockwise(Layer):
         return self._cached_dict["dsk"]
 
     def get_output_keys(self):
-
-        # TODO: Handle N-D Collections and more-complex
-        # tensor operations.
-
-        # Only deal with 1-D collections (for now).
-        # Otherwise, we allow dict materialization.
-        if len(self.output_indices) != 1:
+        if self.flat_size:
+            # Avoid materializing the graph for "flat" transformations
+            return {
+                (self.output, *p)
+                for p in itertools.product(*[range(i) for i in self.flat_size])
+            }
+        else:
             return super().get_output_keys()
-
-        # Check inputs.
-        # Only deal with 1-to-1 input-output collection
-        # mapping (for now).
-        input_cnt = 0
-        in_name = None
-        for _name, _ind in self.indices:
-            if _ind is not None:
-                if len(_ind) != 1 or input_cnt:
-                    return super().get_output_keys()
-                in_name = _name
-                input_cnt += 1
-
-        # At this point, we can assume:
-        # - Input and output indices are aligned
-        # - Collection is 1-D
-        # - Only one input collection
-        return {(self.output, p) for p in range(self.numblocks[in_name][0])}
 
     def __getitem__(self, key):
         return self._dict[key]
