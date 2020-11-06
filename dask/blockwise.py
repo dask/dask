@@ -192,6 +192,10 @@ class Blockwise(Layer):
         function) must be the same for all N tasks.  This "uniformity" is
         required for the abstract `SubgraphCallable` representation used
         within Blockwise.
+    output_blocks: Tuple[list[int]]
+        Specify an output block selection (list of block indices) for each
+        dimension of `output_indices`. If a tuple element contains `None`,
+        all blocks will be selected for that dimenstion. E.g. (None, [0,1])
 
     See Also
     --------
@@ -209,12 +213,14 @@ class Blockwise(Layer):
         concatenate=None,
         new_axes=None,
         io_subgraph=None,
+        output_blocks=None,
     ):
         super().__init__()
         self.output = output
         self.output_indices = tuple(output_indices)
         self.io_subgraph = io_subgraph[1] if io_subgraph else None
         self.io_name = io_subgraph[0] if io_subgraph else None
+        self.output_blocks = output_blocks
         if not dsk:
             # If there is no `dsk` input, there must be an IO subgraph.
             if io_subgraph is None:
@@ -307,6 +313,7 @@ class Blockwise(Layer):
                 concatenate=self.concatenate,
                 key_deps=key_deps,
                 non_blockwise_keys=non_blockwise_keys,
+                output_blocks=self.output_blocks,
             )
 
             if self.io_subgraph:
@@ -371,6 +378,12 @@ class Blockwise(Layer):
         return self._cached_dict["basic_layer"].get_dependencies(key, all_hlg_keys)
 
     def cull(self, keys, all_hlg_keys):
+        if self.flat_size:
+            output_blocks = set()
+            for key in keys:
+                if key[0] == self.output:
+                    output_blocks.add(key[1:])
+            self.output_blocks = output_blocks
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
 
@@ -503,6 +516,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     new_axes = kwargs.pop("new_axes", {})
     key_deps = kwargs.pop("key_deps", None)
     non_blockwise_keys = kwargs.pop("non_blockwise_keys", None)
+    output_blocks = kwargs.pop("output_blocks")
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
@@ -588,6 +602,14 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     dsk = {}
     # Create argument lists
     for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
+
+        # CULLING...
+        # right here - we can check if out_cords is in a specific
+        # set out output key coordinates
+        if output_blocks:
+            if out_coords not in output_blocks:
+                continue
+
         deps = set()
         coords = out_coords + dummies
         args = []
