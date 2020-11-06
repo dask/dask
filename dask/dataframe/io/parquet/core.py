@@ -9,7 +9,7 @@ from fsspec.utils import stringify_path
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....delayed import Delayed
-from ....utils import import_required, natural_sort_key, parse_bytes
+from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import Layer, HighLevelGraph
 from ....blockwise import Blockwise
@@ -573,14 +573,16 @@ def to_parquet(
     kwargs_pass["schema"] = schema
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
-            _write_partition,
+            apply,
             engine.write_partition,
-            (df._name, d),
-            path,
-            fs,
-            filename,
-            partition_on,
-            write_metadata_file,
+            [
+                (df._name, d),
+                path,
+                fs,
+                filename,
+                partition_on,
+                write_metadata_file,
+            ],
             kwargs_pass,
         )
         part_tasks.append((name, d))
@@ -588,14 +590,15 @@ def to_parquet(
     # Collect metadata and write _metadata
     if write_metadata_file:
         dsk[name] = (
-            _write_metadata,
+            apply,
             engine.write_metadata,
-            part_tasks,
-            meta,
-            fs,
-            path,
-            append,
-            {"compression": compression},
+            [
+                part_tasks,
+                meta,
+                fs,
+                path,
+            ],
+            {"append": append, "compression": compression},
         )
     else:
         dsk[name] = (lambda x: None, part_tasks)
@@ -946,37 +949,6 @@ def aggregate_row_groups(parts, stats, chunksize):
     stats_agg.append(next_stat)
 
     return parts_agg, stats_agg
-
-
-def _write_partition(
-    write_func,
-    df,
-    path,
-    fs,
-    filename,
-    partition_on,
-    return_metadata,
-    kwargs,
-):
-    """Engine.write_partition wrapper.
-    The only purpose of this wrapper is to unpack kwargs.
-    """
-    return write_func(
-        df,
-        path,
-        fs,
-        filename,
-        partition_on,
-        return_metadata,
-        **kwargs,
-    )
-
-
-def _write_metadata(write_func, parts, fmd, fs, path, append, kwargs):
-    """Engine.write_metadata wrapper.
-    The only purpose of this wrapper is to unpack kwargs.
-    """
-    return write_func(parts, fmd, fs, path, append=append, **kwargs)
 
 
 DataFrame.to_parquet.__doc__ = to_parquet.__doc__
