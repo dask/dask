@@ -832,7 +832,9 @@ def test_where_mask():
 
 
 def test_map_partitions_multi_argument():
-    dd.map_partitions(lambda a, b: a + b, d.a, d.b).compute(scheduler="synchronous")
+    dd.map_partitions(lambda a, b: a + b, d.a, d.b).partitions[1].compute(
+        scheduler="synchronous"
+    )
     assert_eq(dd.map_partitions(lambda a, b: a + b, d.a, d.b), full.a + full.b)
     assert_eq(
         dd.map_partitions(lambda a, b, c: a + b + c, d.a, d.b, 1), full.a + full.b + 1
@@ -4052,6 +4054,7 @@ def test_map_partition_array(func):
         except Exception:
             continue
         x = pre(ddf).map_partitions(func)
+        x.compute(scheduler="synchronous")
         assert_eq(x, expected)
 
         assert isinstance(x, da.Array)

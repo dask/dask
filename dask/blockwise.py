@@ -218,7 +218,8 @@ class Blockwise(Layer):
         super().__init__()
         self.output = output
         self.output_indices = tuple(output_indices)
-        self.io_subgraph = io_subgraph[1] if io_subgraph else None
+        self.io_subgraph = io_subgraph
+        self.io_subgraph_dsk = io_subgraph[1] if io_subgraph else None
         self.io_name = io_subgraph[0] if io_subgraph else None
         self.output_blocks = output_blocks
         if not dsk:
@@ -229,12 +230,12 @@ class Blockwise(Layer):
             # Extract actual IO function for SubgraphCallable construction.
             # Wrap func in `PackedFunctionCall`, since it will receive
             # all arguments as a sigle (packed) tuple at run time.
-            if self.io_subgraph:
+            if self.io_subgraph_dsk:
                 # We assume a 1-to-1 mapping between keys (i.e. tasks) and
                 # chunks/partitions in `io_subgraph`, and assume the first
                 # (callable) element is the same for all tasks.
-                any_key = next(iter(self.io_subgraph))
-                io_func = self.io_subgraph.get(any_key)[0]
+                any_key = next(iter(self.io_subgraph_dsk))
+                io_func = self.io_subgraph_dsk.get(any_key)[0]
             else:
                 io_func = None
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
@@ -262,32 +263,47 @@ class Blockwise(Layer):
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
-        # Check if this is a "flat" transformation
-        # (input/output indices are aligned)
-        self.flat_size = None
-        if not self.new_axes and self.numblocks:
-            flat = True
+    @property
+    def flat_size(self):
+        """Output dimenstions of a flat layer
 
-            # Check input blocks are all the same size
-            blocks = None
-            for _name, _size in self.numblocks.items():
-                blocks = blocks or _size
-                if blocks != _size:
-                    flat = False
-                    break
+        This property will return `None` if the layer is
+        not a "flat" transformation.
+        """
 
-            # Check that input and output indices match (no transpose etc.)
-            flat = flat and all(
-                self.output_indices == ind
-                for name, ind in self.indices
-                if ind is not None
-            )
+        # Always check that input and output indices
+        # match.  It is possible for `output_indices` to
+        # change after initialization.
+        if not all(
+            self.output_indices == ind for name, ind in self.indices if ind is not None
+        ):
+            return None
 
-            # Check that input and output sizes match
-            if flat and (len(self.output_indices) == len(_size)):
-                # At this point we can define a single tuple (self.flat_size)
-                # that specifies the dimensions of the "flat" transform
-                self.flat_size = _size
+        # Check for cached result
+        if not hasattr(self, "_flat_size"):
+
+            # Check if this is a "flat" transformation
+            # (input/output indices are aligned)
+            self._flat_size = None
+            if not self.new_axes and self.numblocks:
+
+                # Check input blocks are all the same size
+                flat = True
+                blocks = None
+                for _name, _size in self.numblocks.items():
+                    blocks = blocks or _size
+                    if blocks != _size:
+                        flat = False
+                        break
+
+                # Check that input and output sizes match
+                if flat and (len(self.output_indices) == len(_size)):
+                    # At this point we can define a single tuple
+                    # (self._flat_size) that specifies the dimensions
+                    # of the "flat" transform
+                    self._flat_size = _size
+
+        return self._flat_size
 
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
@@ -316,14 +332,14 @@ class Blockwise(Layer):
                 output_blocks=self.output_blocks,
             )
 
-            if self.io_subgraph:
+            if self.io_subgraph_dsk:
                 # This is an IO layer.
                 for k in dsk:
                     io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
                     if io_key in dsk[k]:
                         # Inject IO-function arguments into the blockwise graph
                         # as a single (packed) tuple.
-                        io_item = self.io_subgraph.get(io_key)
+                        io_item = self.io_subgraph_dsk.get(io_key)
                         io_item = list(io_item[1:]) if len(io_item) > 1 else []
                         new_task = [io_item if v == io_key else v for v in dsk[k]]
                         dsk[k] = tuple(new_task)
@@ -347,6 +363,7 @@ class Blockwise(Layer):
                 for p in itertools.product(*[range(i) for i in self.flat_size])
             }
         else:
+            # Fall back on default (requires graph materialization)
             return super().get_output_keys()
 
     def __getitem__(self, key):
@@ -373,17 +390,71 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def get_dependencies(self, key, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].get_dependencies(key, all_hlg_keys)
+    def _cull_dependencies(self, all_hlg_keys, output_blocks):
+        """Determine the necessary dependencies to produce `output_blocks`.
+
+        This method does not require graph materialization.
+        """
+        if not self.flat_size:
+            # TODO: Handle non-"flat" layers
+            raise ValueError("Abstract culling is only supported for flat layers")
+
+        # Gather constant dependencies (for all output keys)
+        const_deps = set()
+        for _name, _ind in self.indices:
+            if _ind is None and isinstance(_name, str):
+                if _name in all_hlg_keys:
+                    const_deps.add(_name)
+
+        # Get key-specific dependencies
+        deps = {}
+        for block in output_blocks:
+            deps[(self.output, *block)] = {
+                (k, *block) for k, v in self.indices if v is not None
+            } | const_deps
+
+        return deps
+
+    def _cull(self, output_blocks):
+        return Blockwise(
+            self.output,
+            self.output_indices,
+            self.dsk,
+            self.indices,
+            self.numblocks,
+            concatenate=self.concatenate,
+            new_axes=self.new_axes,
+            io_subgraph=self.io_subgraph,
+            output_blocks=output_blocks,
+        )
 
     def cull(self, keys, all_hlg_keys):
         if self.flat_size:
+            # Culling is simple for Blockwise layers.  We can just
+            # collect a set of required output blocks (tuples), and
+            # only construct graph for these blocks in `make_blockwise_graph`
+            #
+            # Calculating dependencies is a bit more complicated,
+            # but is still simple for "flat" Blockwise layers (which
+            # is why "abstract" culling is only supported for "flat"
+            # layers for now).
+            #
+            # TODO: Handle culling for non-"flat" layers.  Barrier is the
+            # simple logic in `_cull_dependencies`.
             output_blocks = set()
             for key in keys:
                 if key[0] == self.output:
                     output_blocks.add(key[1:])
-            self.output_blocks = output_blocks
+            culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
+            # import pdb; pdb.set_trace()
+            # pass
+            if np.prod(self.flat_size) != len(culled_deps):
+                culled_layer = self._cull(output_blocks)
+                return culled_layer, culled_deps
+            else:
+                return self, culled_deps
+
+        # Require graph materialization for "complex" transformations
         _ = self._dict  # trigger materialization
         return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
 
@@ -599,16 +670,13 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             if ind is None:
                 non_blockwise_keys |= find_all_possible_keys([arg])
 
+    # Apply Culling.
+    # Only need to costruct the specified set of output blocks
+    output_blocks = itertools.product(*[range(dims[i]) for i in out_indices])
+
     dsk = {}
     # Create argument lists
-    for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
-
-        # CULLING...
-        # right here - we can check if out_cords is in a specific
-        # set out output key coordinates
-        if output_blocks:
-            if out_coords not in output_blocks:
-                continue
+    for out_coords in output_blocks:
 
         deps = set()
         coords = out_coords + dummies
