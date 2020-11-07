@@ -357,14 +357,22 @@ class Blockwise(Layer):
 
     def get_output_keys(self):
         if self.flat_size:
-            # Avoid materializing the graph for "flat" transformations
+            # Simple output-key mapping for "flat" transformations
             return {
                 (self.output, *p)
                 for p in itertools.product(*[range(i) for i in self.flat_size])
             }
         else:
-            # Fall back on default (requires graph materialization)
-            return super().get_output_keys()
+            # General output-key mapping
+            dims = broadcast_dimensions(self.indices, self.numblocks)
+            for k, v in self.new_axes.items():
+                dims[k] = len(v) if isinstance(v, tuple) else 1
+            return {
+                (self.output, *p)
+                for p in itertools.product(
+                    *[range(dims[i]) for i in self.output_indices]
+                )
+            }
 
     def __getitem__(self, key):
         return self._dict[key]
