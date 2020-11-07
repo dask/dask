@@ -192,10 +192,11 @@ class Blockwise(Layer):
         function) must be the same for all N tasks.  This "uniformity" is
         required for the abstract `SubgraphCallable` representation used
         within Blockwise.
-    output_blocks: Tuple[list[int]]
-        Specify an output block selection (list of block indices) for each
-        dimension of `output_indices`. If a tuple element contains `None`,
-        all blocks will be selected for that dimenstion. E.g. (None, [0,1])
+    output_blocks: Set[Tuple]
+        Specify a specific set of required output blocks. Since the graph
+        will only contain the necessary tasks to generate these outputs,
+        this kwarg can be used to "cull" the abstract layer (without needing
+        to materialize the low-level graph).
 
     See Also
     --------
