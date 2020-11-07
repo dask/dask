@@ -356,7 +356,10 @@ class Blockwise(Layer):
         return self._cached_dict["dsk"]
 
     def get_output_keys(self):
-        if self.flat_size:
+        if self.output_blocks:
+            # Culling has already generated a list of output blocks
+            return {(self.output, *p) for p in self.output_blocks}
+        elif self.flat_size:
             # Simple output-key mapping for "flat" transformations
             return {
                 (self.output, *p)
