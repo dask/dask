@@ -407,8 +407,84 @@ class Blockwise(Layer):
         This method does not require graph materialization.
         """
         if not self.flat_size:
-            # TODO: Handle non-"flat" layers
-            raise ValueError("Abstract culling is only supported for flat layers")
+
+            # TODO: Much of this code is copied from `make_blockwise_graph`
+            # It would be much better to avoid duplication.
+            concatenate = None
+            if self.concatenate is True:
+                from dask.array.core import concatenate_axes as concatenate
+
+            dims = broadcast_dimensions(self.indices, self.numblocks)
+            for k, v in self.new_axes.items():
+                dims[k] = len(v) if isinstance(v, tuple) else 1
+
+            all_indices = set()
+            for name, ind in self.indices:
+                if ind is not None:
+                    for x in ind:
+                        all_indices.add(x)
+
+            dummy_indices = all_indices - set(self.output_indices)
+
+            index_pos, zero_pos = {}, {}
+            for i, ind in enumerate(self.output_indices):
+                index_pos[ind] = i
+                zero_pos[ind] = -1
+
+            _dummies_list = []
+            for i, ind in enumerate(dummy_indices):
+                index_pos[ind] = 2 * i + len(self.output_indices)
+                zero_pos[ind] = 2 * i + 1 + len(self.output_indices)
+                reps = 1 if self.concatenate else dims[ind]
+                _dummies_list.append([list(range(dims[ind])), [0] * reps])
+
+            dummies = tuple(itertools.chain.from_iterable(_dummies_list))
+            dummies += (0,)
+
+            # Axes along which to concatenate, for each input
+            coord_maps = []
+            concat_axes = []
+            for arg, ind in self.indices:
+                if ind is not None:
+                    coord_maps.append(
+                        [
+                            zero_pos[i] if nb == 1 else index_pos[i]
+                            for i, nb in zip(ind, self.numblocks[arg])
+                        ]
+                    )
+                    concat_axes.append(
+                        [n for n, i in enumerate(ind) if i in dummy_indices]
+                    )
+                else:
+                    coord_maps.append(None)
+                    concat_axes.append(None)
+
+            key_deps = {}
+            for out_coords in output_blocks:
+                deps = set()
+                coords = out_coords + dummies
+                args = []
+                for cmap, axes, (arg, ind) in zip(
+                    coord_maps, concat_axes, self.indices
+                ):
+                    if ind is None:
+                        args.append(arg)
+                    elif arg != self.io_name:
+                        arg_coords = tuple(coords[c] for c in cmap)
+                        if axes:
+                            tups = lol_product((arg,), arg_coords)
+                            deps.update(flatten(tups))
+
+                            if concatenate:
+                                tups = (concatenate, tups, axes)
+                        else:
+                            tups = (arg,) + arg_coords
+                            deps.add(tups)
+                        args.append(tups)
+                out_key = (self.output,) + out_coords
+                key_deps[out_key] = deps
+
+            return key_deps
 
         # Gather constant dependencies (for all output keys)
         const_deps = set()
@@ -443,32 +519,27 @@ class Blockwise(Layer):
         )
 
     def cull(self, keys, all_hlg_keys):
-        if self.flat_size:
-            # Culling is simple for Blockwise layers.  We can just
-            # collect a set of required output blocks (tuples), and
-            # only construct graph for these blocks in `make_blockwise_graph`
-            #
-            # Calculating dependencies is a bit more complicated,
-            # but is still simple for "flat" Blockwise layers (which
-            # is why "abstract" culling is only supported for "flat"
-            # layers for now).
-            #
-            # TODO: Handle culling for non-"flat" layers.  Barrier is the
-            # simple logic in `_cull_dependencies`.
-            output_blocks = set()
-            for key in keys:
-                if key[0] == self.output:
-                    output_blocks.add(key[1:])
-            culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-            if np.prod(self.flat_size) != len(culled_deps):
-                culled_layer = self._cull(output_blocks)
-                return culled_layer, culled_deps
-            else:
-                return self, culled_deps
 
-        # Require graph materialization for "complex" transformations
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
+        # Culling (alone)is simple for Blockwise layers.  We can just
+        # collect a set of required output blocks (tuples), and
+        # only construct graph for these blocks in `make_blockwise_graph`
+        #
+        # Calculating dependencies is a bit more complicated.  For the
+        # "general" case we have to do much of the same work required to
+        # build the actual blockwise graph (without actually building it).
+        # TODO: Clean up dependency calculation for non-"flat" layers
+        # (see `_cull_dependencies`).
+
+        output_blocks = set()
+        for key in keys:
+            if key[0] == self.output:
+                output_blocks.add(key[1:])
+        culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
+        if np.prod(self.flat_size) != len(culled_deps):
+            culled_layer = self._cull(output_blocks)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
 
     def map_tasks(self, func):
         new_indices = []
