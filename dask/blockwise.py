@@ -218,8 +218,7 @@ class Blockwise(Layer):
         super().__init__()
         self.output = output
         self.output_indices = tuple(output_indices)
-        self.io_subgraph = io_subgraph
-        self.io_subgraph_dsk = io_subgraph[1] if io_subgraph else None
+        self.io_subgraph = io_subgraph[1] if io_subgraph else None
         self.io_name = io_subgraph[0] if io_subgraph else None
         self.output_blocks = output_blocks
         if not dsk:
@@ -230,12 +229,12 @@ class Blockwise(Layer):
             # Extract actual IO function for SubgraphCallable construction.
             # Wrap func in `PackedFunctionCall`, since it will receive
             # all arguments as a sigle (packed) tuple at run time.
-            if self.io_subgraph_dsk:
+            if self.io_subgraph:
                 # We assume a 1-to-1 mapping between keys (i.e. tasks) and
                 # chunks/partitions in `io_subgraph`, and assume the first
                 # (callable) element is the same for all tasks.
-                any_key = next(iter(self.io_subgraph_dsk))
-                io_func = self.io_subgraph_dsk.get(any_key)[0]
+                any_key = next(iter(self.io_subgraph))
+                io_func = self.io_subgraph.get(any_key)[0]
             else:
                 io_func = None
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
@@ -332,14 +331,14 @@ class Blockwise(Layer):
                 output_blocks=self.output_blocks,
             )
 
-            if self.io_subgraph_dsk:
+            if self.io_subgraph:
                 # This is an IO layer.
                 for k in dsk:
                     io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
                     if io_key in dsk[k]:
                         # Inject IO-function arguments into the blockwise graph
                         # as a single (packed) tuple.
-                        io_item = self.io_subgraph_dsk.get(io_key)
+                        io_item = self.io_subgraph.get(io_key)
                         io_item = list(io_item[1:]) if len(io_item) > 1 else []
                         new_task = [io_item if v == io_key else v for v in dsk[k]]
                         dsk[k] = tuple(new_task)
@@ -406,11 +405,14 @@ class Blockwise(Layer):
                 if _name in all_hlg_keys:
                     const_deps.add(_name)
 
-        # Get key-specific dependencies
+        # Get key-specific dependencies.
+        # Do not include constant inputs or IO placeholders.
         deps = {}
         for block in output_blocks:
             deps[(self.output, *block)] = {
-                (k, *block) for k, v in self.indices if v is not None
+                (k, *block)
+                for k, v in self.indices
+                if (v is not None and k != self.io_name)
             } | const_deps
 
         return deps
@@ -424,7 +426,7 @@ class Blockwise(Layer):
             self.numblocks,
             concatenate=self.concatenate,
             new_axes=self.new_axes,
-            io_subgraph=self.io_subgraph,
+            io_subgraph=(self.io_name, self.io_subgraph) if self.io_name else None,
             output_blocks=output_blocks,
         )
 
@@ -446,8 +448,6 @@ class Blockwise(Layer):
                 if key[0] == self.output:
                     output_blocks.add(key[1:])
             culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-            # import pdb; pdb.set_trace()
-            # pass
             if np.prod(self.flat_size) != len(culled_deps):
                 culled_layer = self._cull(output_blocks)
                 return culled_layer, culled_deps
