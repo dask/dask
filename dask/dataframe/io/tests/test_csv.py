@@ -28,6 +28,13 @@ from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from fsspec.compression import compr
 
+try:
+    import distributed
+    from distributed import Client, wait
+    from distributed.utils_test import cluster, loop  # noqa: F401
+except (ImportError, SyntaxError):
+    distributed = None
+
 fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
@@ -503,6 +510,22 @@ def test_string_blocksize():
 
         c = dd.read_csv(fn, blocksize="64MiB")
         assert c.npartitions == 1
+
+
+@pytest.mark.skipif(
+    not distributed, reason="Skipped as distributed is not installed."  # noqa: F811
+)  # noqa: F811
+def test_different_blocksize_with_persist(loop):
+    with cluster() as (s, [a, b]):
+        with Client(s["address"], loop=loop):  # noqa: F811
+            with filetext(csv_text) as fn:
+                df = dd.read_csv(fn).persist()
+                wait(df)
+                expected = df.shape[0].compute()
+                df = dd.read_csv(fn, blocksize="30B").persist()
+                wait(df)
+                actual = df.shape[0].compute()
+                assert expected == actual
 
 
 def test_skipinitialspace():
