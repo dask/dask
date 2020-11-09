@@ -8,9 +8,10 @@ from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
-from ....utils import import_required, natural_sort_key, parse_bytes
+from ....delayed import Delayed
+from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
-from ....highlevelgraph import Layer
+from ....highlevelgraph import Layer, HighLevelGraph
 from ....blockwise import Blockwise
 
 
@@ -445,7 +446,6 @@ def to_parquet(
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
-    from dask import delayed
 
     if compression == "default":
         if snappy is not None:
@@ -553,31 +553,58 @@ def to_parquet(
     # Use i_offset and df.npartitions to define file-name list
     filenames = ["part.%i.parquet" % (i + i_offset) for i in range(df.npartitions)]
 
-    # write parts
-    dwrite = delayed(engine.write_partition)
-    parts = [
-        dwrite(
-            d,
-            path,
-            fs,
-            filename,
-            partition_on,
-            write_metadata_file,
-            fmd=meta,
-            compression=compression,
-            index_cols=index_cols,
-            schema=schema,
-            **kwargs_pass,
+    # Construct IO graph
+    dsk = {}
+    name = "to-parquet-" + tokenize(
+        df,
+        fs,
+        path,
+        append,
+        ignore_divisions,
+        partition_on,
+        division_info,
+        index_cols,
+        schema,
+    )
+    part_tasks = []
+    kwargs_pass["fmd"] = meta
+    kwargs_pass["compression"] = compression
+    kwargs_pass["index_cols"] = index_cols
+    kwargs_pass["schema"] = schema
+    for d, filename in enumerate(filenames):
+        dsk[(name, d)] = (
+            apply,
+            engine.write_partition,
+            [
+                (df._name, d),
+                path,
+                fs,
+                filename,
+                partition_on,
+                write_metadata_file,
+            ],
+            kwargs_pass,
         )
-        for d, filename in zip(df.to_delayed(), filenames)
-    ]
+        part_tasks.append((name, d))
 
-    # single task to complete
-    out = delayed(lambda x: None)(parts)
+    # Collect metadata and write _metadata
     if write_metadata_file:
-        out = delayed(engine.write_metadata)(
-            parts, meta, fs, path, append=append, compression=compression
+        dsk[name] = (
+            apply,
+            engine.write_metadata,
+            [
+                part_tasks,
+                meta,
+                fs,
+                path,
+            ],
+            {"append": append, "compression": compression},
         )
+    else:
+        dsk[name] = (lambda x: None, part_tasks)
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    out = Delayed(name, graph)
 
     if compute:
         if compute_kwargs is None:
