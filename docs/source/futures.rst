@@ -289,6 +289,8 @@ Additionally, for iterative algorithms, you can add more futures into the
            new_future = client.submit(...)
            seq.add(new_future)  # add back into the loop
 
+ or use `seq.update(futures)` to add multiple futures at once.
+
 
 Fire and Forget
 ---------------
