@@ -670,7 +670,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     new_axes = kwargs.pop("new_axes", {})
     key_deps = kwargs.pop("key_deps", None)
     non_blockwise_keys = kwargs.pop("non_blockwise_keys", None)
-    output_blocks = kwargs.pop("output_blocks")
+    output_blocks = kwargs.pop("output_blocks", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
