@@ -380,7 +380,7 @@ def text_blocks_to_pandas(
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
 
-    name = "read-csv-" + tokenize(reader, columns, enforce, head)
+    name = "read-csv-" + tokenize(reader, columns, enforce, head, blocks)
 
     if path:
         block_file_names = [basename(b[1].path) for b in blocks]
