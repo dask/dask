@@ -2,6 +2,7 @@ from functools import partial
 import os
 
 import pytest
+import numpy as np
 
 import dask
 import dask.array as da
@@ -150,3 +151,31 @@ def test_multiple_annotations():
     assert alayer.annotations == {"resource": "GPU", "block_id": annot_map_fn}
     assert blayer.annotations == {"block_id": annot_map_fn}
     assert clayer.annotations is None
+
+
+@pytest.mark.parametrize("flat", [True, False])
+def test_blockwise_cull(flat):
+    if flat:
+        # Simple "flat" mapping between input and
+        # outut indices
+        x = da.from_array(np.arange(40).reshape((4, 10)), (2, 4)) + 100
+    else:
+        # Complex mapping between input and output
+        # indices (outer product and transpose)
+        x = da.from_array(np.arange(10).reshape((10,)), (4,)) + 100
+        y = da.from_array(np.arange(10).reshape((10,)), (4,))
+        x = da.outer(x, y).transpose()
+
+    # Check that blockwise culling results in correct
+    # output keys and that full graph is not materialized
+    dsk = x.__dask_graph__()
+    select = (1, 1)  # Select a single chunk
+    keys = {(x._name, *select)}
+    dsk = dsk.cull(keys)
+    for layer in dsk.layers.values():
+        if not isinstance(layer, dask.blockwise.Blockwise):
+            continue
+        assert not layer.is_materialized()
+        out_keys = layer.get_output_keys()
+        assert out_keys == {(layer.output, *select)}
+        assert not layer.is_materialized()
