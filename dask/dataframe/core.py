@@ -4141,6 +4141,8 @@ class DataFrame(_Frame):
         npartitions=None,
         shuffle=None,
     ):
+        if is_series_like(other) and hasattr(other, "name"):
+            other = other.to_frame()
 
         if not is_dataframe_like(other):
             raise ValueError("other must be DataFrame")
