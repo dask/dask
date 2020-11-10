@@ -54,6 +54,7 @@ def register_sparse():
     tensordot_lookup.register(sparse.COO, sparse.tensordot)
 
 
+@tensordot_lookup.register_lazy("scipy")
 @concatenate_lookup.register_lazy("scipy")
 def register_scipy_sparse():
     import scipy.sparse
@@ -71,3 +72,19 @@ def register_scipy_sparse():
             raise ValueError(msg)
 
     concatenate_lookup.register(scipy.sparse.spmatrix, _concatenate)
+
+    def _tensordot(a, b, axes=None):
+        assert a.ndim == b.ndim == 2
+        assert len(axes[0]) == len(axes[1]) == 1
+        a_axis, = axes[0]
+        b_axis, = axes[1]
+        if a_axis == 0 and b_axis == 0:
+            return a.T * b
+        elif a_axis == 0 and b_axis == 1:
+            return a.T * b.T
+        elif a_axis == 1 and b_axis == 0:
+            return a * b
+        elif a_axis == 1 and b_axis == 1:
+            return a * b.T
+
+    tensordot_lookup.register(scipy.sparse.spmatrix, _tensordot)
