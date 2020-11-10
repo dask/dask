@@ -408,6 +408,8 @@ class Blockwise(Layer):
         """
         if self.flat_size:
 
+            # Fast path for "flat" transformations
+            #
             # Gather constant dependencies (for all output keys)
             const_deps = set()
             for _name, _ind in self.indices:
@@ -426,55 +428,29 @@ class Blockwise(Layer):
                 } | const_deps
             return deps
 
-        # TODO: Much of this code is copied from `make_blockwise_graph`
-        # It would be much better to avoid duplication.
+        # General path for arbitrary blockwise transformation
+        #
+        # Check `concatenate` option
         concatenate = None
         if self.concatenate is True:
             from dask.array.core import concatenate_axes as concatenate
 
+        # Get map of new dimenstions
         dims = broadcast_dimensions(self.indices, self.numblocks)
         for k, v in self.new_axes.items():
             dims[k] = len(v) if isinstance(v, tuple) else 1
 
-        all_indices = set()
-        for name, ind in self.indices:
-            if ind is not None:
-                for x in ind:
-                    all_indices.add(x)
+        # Generate coordinate map
+        (dummies, coord_maps, concat_axes,) = _get_coord_mapping(
+            dims,
+            self.output,
+            self.output_indices,
+            self.numblocks,
+            self.indices,
+            concatenate,
+        )
 
-        dummy_indices = all_indices - set(self.output_indices)
-
-        index_pos, zero_pos = {}, {}
-        for i, ind in enumerate(self.output_indices):
-            index_pos[ind] = i
-            zero_pos[ind] = -1
-
-        _dummies_list = []
-        for i, ind in enumerate(dummy_indices):
-            index_pos[ind] = 2 * i + len(self.output_indices)
-            zero_pos[ind] = 2 * i + 1 + len(self.output_indices)
-            reps = 1 if self.concatenate else dims[ind]
-            _dummies_list.append([list(range(dims[ind])), [0] * reps])
-
-        dummies = tuple(itertools.chain.from_iterable(_dummies_list))
-        dummies += (0,)
-
-        # Axes along which to concatenate, for each input
-        coord_maps = []
-        concat_axes = []
-        for arg, ind in self.indices:
-            if ind is not None:
-                coord_maps.append(
-                    [
-                        zero_pos[i] if nb == 1 else index_pos[i]
-                        for i, nb in zip(ind, self.numblocks[arg])
-                    ]
-                )
-                concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
-            else:
-                coord_maps.append(None)
-                concat_axes.append(None)
-
+        # Get dependencies for each output block
         key_deps = {}
         for out_coords in output_blocks:
             deps = set()
@@ -515,15 +491,9 @@ class Blockwise(Layer):
 
     def cull(self, keys, all_hlg_keys):
 
-        # Culling (alone)is simple for Blockwise layers.  We can just
+        # Culling is simple for Blockwise layers.  We can just
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
-        #
-        # Calculating dependencies is a bit more complicated.  For the
-        # "general" case we have to do much of the same work required to
-        # build the actual blockwise graph (without actually building it).
-        # TODO: Clean up dependency calculation for non-"flat" layers
-        # (see `_cull_dependencies`).
 
         output_blocks = set()
         for key in keys:
@@ -552,6 +522,77 @@ class Blockwise(Layer):
         except AttributeError:
             pass
         return ret
+
+
+def _get_coord_mapping(
+    dims,
+    output,
+    out_indices,
+    numblocks,
+    argpairs,
+    concatenate,
+):
+    """Calculate coordinate mapping for graph construction.
+
+    Used by `make_blockwise_graph` and `_cull_dependencies`.
+    """
+
+    block_names = set()
+    all_indices = set()
+    for name, ind in argpairs:
+        if ind is not None:
+            block_names.add(name)
+            for x in ind:
+                all_indices.add(x)
+    assert set(numblocks) == block_names
+
+    dummy_indices = all_indices - set(out_indices)
+
+    # For each position in the output space, we'll construct a
+    # "coordinate set" that consists of
+    # - the output indices
+    # - the dummy indices
+    # - the dummy indices, with indices replaced by zeros (for broadcasting), we
+    #   are careful to only emit a single dummy zero when concatenate=True to not
+    #   concatenate the same array with itself several times.
+    # - a 0 to assist with broadcasting.
+
+    index_pos, zero_pos = {}, {}
+    for i, ind in enumerate(out_indices):
+        index_pos[ind] = i
+        zero_pos[ind] = -1
+
+    _dummies_list = []
+    for i, ind in enumerate(dummy_indices):
+        index_pos[ind] = 2 * i + len(out_indices)
+        zero_pos[ind] = 2 * i + 1 + len(out_indices)
+        reps = 1 if concatenate else dims[ind]
+        _dummies_list.append([list(range(dims[ind])), [0] * reps])
+
+    # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
+    dummies = tuple(itertools.chain.from_iterable(_dummies_list))
+    dummies += (0,)
+
+    # For each coordinate position in each input, gives the position in
+    # the coordinate set.
+    coord_maps = []
+
+    # Axes along which to concatenate, for each input
+    concat_axes = []
+    for arg, ind in argpairs:
+        if ind is not None:
+            coord_maps.append(
+                [
+                    zero_pos[i] if nb == 1 else index_pos[i]
+                    for i, nb in zip(ind, numblocks[arg])
+                ]
+            )
+            concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
+        else:
+            coord_maps.append(None)
+            concat_axes.append(None)
+
+    return dummies, coord_maps, concat_axes
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
@@ -671,65 +712,21 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
-    block_names = set()
-    all_indices = set()
-    for name, ind in argpairs:
-        if ind is not None:
-            block_names.add(name)
-            for x in ind:
-                all_indices.add(x)
-    assert set(numblocks) == block_names
-
-    dummy_indices = all_indices - set(out_indices)
-
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
     dims = broadcast_dimensions(argpairs, numblocks)
     for k, v in new_axes.items():
         dims[k] = len(v) if isinstance(v, tuple) else 1
 
-    # For each position in the output space, we'll construct a
-    # "coordinate set" that consists of
-    # - the output indices
-    # - the dummy indices
-    # - the dummy indices, with indices replaced by zeros (for broadcasting), we
-    #   are careful to only emit a single dummy zero when concatenate=True to not
-    #   concatenate the same array with itself several times.
-    # - a 0 to assist with broadcasting.
-
-    index_pos, zero_pos = {}, {}
-    for i, ind in enumerate(out_indices):
-        index_pos[ind] = i
-        zero_pos[ind] = -1
-
-    _dummies_list = []
-    for i, ind in enumerate(dummy_indices):
-        index_pos[ind] = 2 * i + len(out_indices)
-        zero_pos[ind] = 2 * i + 1 + len(out_indices)
-        reps = 1 if concatenate else dims[ind]
-        _dummies_list.append([list(range(dims[ind])), [0] * reps])
-
-    # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
-    dummies = tuple(itertools.chain.from_iterable(_dummies_list))
-    dummies += (0,)
-
-    # For each coordinate position in each input, gives the position in
-    # the coordinate set.
-    coord_maps = []
-
-    # Axes along which to concatenate, for each input
-    concat_axes = []
-    for arg, ind in argpairs:
-        if ind is not None:
-            coord_maps.append(
-                [
-                    zero_pos[i] if nb == 1 else index_pos[i]
-                    for i, nb in zip(ind, numblocks[arg])
-                ]
-            )
-            concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
-        else:
-            coord_maps.append(None)
-            concat_axes.append(None)
+    # Generate the abstract "plan" before constructing
+    # the actual graph
+    (dummies, coord_maps, concat_axes,) = _get_coord_mapping(
+        dims,
+        output,
+        out_indices,
+        numblocks,
+        argpairs,
+        concatenate,
+    )
 
     # Unpack delayed objects in kwargs
     dsk2 = {}
