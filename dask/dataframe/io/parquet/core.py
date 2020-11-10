@@ -373,6 +373,7 @@ def to_parquet(
     compression="default",
     write_index=True,
     append=False,
+    overwrite=False,
     ignore_divisions=False,
     partition_on=None,
     storage_options=None,
@@ -408,6 +409,9 @@ def to_parquet(
         If False (default), construct data-set from scratch. If True, add new
         row-group(s) to an existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
+    overwrite : bool, optional
+        If False (default), write dataset to existing folder.  If True, delete
+        all files in the partitioned folder and write a fresh set of partitioned files
     ignore_divisions : bool, optional
         If False (default) raises error when previous divisions overlap with
         the new appended divisions. Ignored if append=False.
@@ -472,6 +476,9 @@ def to_parquet(
     fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
     # Trim any protocol information from the path before forwarding
     path = fs._strip_protocol(path)
+
+    if overwrite:
+        fs.rm(path, recursive=True)
 
     # Save divisions and corresponding index name. This is necessary,
     # because we may be resetting the index to write the file
