@@ -406,104 +406,99 @@ class Blockwise(Layer):
 
         This method does not require graph materialization.
         """
-        if not self.flat_size:
+        if self.flat_size:
 
-            # TODO: Much of this code is copied from `make_blockwise_graph`
-            # It would be much better to avoid duplication.
-            concatenate = None
-            if self.concatenate is True:
-                from dask.array.core import concatenate_axes as concatenate
+            # Gather constant dependencies (for all output keys)
+            const_deps = set()
+            for _name, _ind in self.indices:
+                if _ind is None and isinstance(_name, str):
+                    if _name in all_hlg_keys:
+                        const_deps.add(_name)
 
-            dims = broadcast_dimensions(self.indices, self.numblocks)
-            for k, v in self.new_axes.items():
-                dims[k] = len(v) if isinstance(v, tuple) else 1
+            # Get key-specific dependencies.
+            # Do not include constant inputs or IO placeholders.
+            deps = {}
+            for block in output_blocks:
+                deps[(self.output, *block)] = {
+                    (k, *block)
+                    for k, v in self.indices
+                    if (v is not None and k != self.io_name)
+                } | const_deps
+            return deps
 
-            all_indices = set()
-            for name, ind in self.indices:
-                if ind is not None:
-                    for x in ind:
-                        all_indices.add(x)
+        # TODO: Much of this code is copied from `make_blockwise_graph`
+        # It would be much better to avoid duplication.
+        concatenate = None
+        if self.concatenate is True:
+            from dask.array.core import concatenate_axes as concatenate
 
-            dummy_indices = all_indices - set(self.output_indices)
+        dims = broadcast_dimensions(self.indices, self.numblocks)
+        for k, v in self.new_axes.items():
+            dims[k] = len(v) if isinstance(v, tuple) else 1
 
-            index_pos, zero_pos = {}, {}
-            for i, ind in enumerate(self.output_indices):
-                index_pos[ind] = i
-                zero_pos[ind] = -1
+        all_indices = set()
+        for name, ind in self.indices:
+            if ind is not None:
+                for x in ind:
+                    all_indices.add(x)
 
-            _dummies_list = []
-            for i, ind in enumerate(dummy_indices):
-                index_pos[ind] = 2 * i + len(self.output_indices)
-                zero_pos[ind] = 2 * i + 1 + len(self.output_indices)
-                reps = 1 if self.concatenate else dims[ind]
-                _dummies_list.append([list(range(dims[ind])), [0] * reps])
+        dummy_indices = all_indices - set(self.output_indices)
 
-            dummies = tuple(itertools.chain.from_iterable(_dummies_list))
-            dummies += (0,)
+        index_pos, zero_pos = {}, {}
+        for i, ind in enumerate(self.output_indices):
+            index_pos[ind] = i
+            zero_pos[ind] = -1
 
-            # Axes along which to concatenate, for each input
-            coord_maps = []
-            concat_axes = []
-            for arg, ind in self.indices:
-                if ind is not None:
-                    coord_maps.append(
-                        [
-                            zero_pos[i] if nb == 1 else index_pos[i]
-                            for i, nb in zip(ind, self.numblocks[arg])
-                        ]
-                    )
-                    concat_axes.append(
-                        [n for n, i in enumerate(ind) if i in dummy_indices]
-                    )
-                else:
-                    coord_maps.append(None)
-                    concat_axes.append(None)
+        _dummies_list = []
+        for i, ind in enumerate(dummy_indices):
+            index_pos[ind] = 2 * i + len(self.output_indices)
+            zero_pos[ind] = 2 * i + 1 + len(self.output_indices)
+            reps = 1 if self.concatenate else dims[ind]
+            _dummies_list.append([list(range(dims[ind])), [0] * reps])
 
-            key_deps = {}
-            for out_coords in output_blocks:
-                deps = set()
-                coords = out_coords + dummies
-                args = []
-                for cmap, axes, (arg, ind) in zip(
-                    coord_maps, concat_axes, self.indices
-                ):
-                    if ind is None:
-                        args.append(arg)
-                    elif arg != self.io_name:
-                        arg_coords = tuple(coords[c] for c in cmap)
-                        if axes:
-                            tups = lol_product((arg,), arg_coords)
-                            deps.update(flatten(tups))
+        dummies = tuple(itertools.chain.from_iterable(_dummies_list))
+        dummies += (0,)
 
-                            if concatenate:
-                                tups = (concatenate, tups, axes)
-                        else:
-                            tups = (arg,) + arg_coords
-                            deps.add(tups)
-                        args.append(tups)
-                out_key = (self.output,) + out_coords
-                key_deps[out_key] = deps
+        # Axes along which to concatenate, for each input
+        coord_maps = []
+        concat_axes = []
+        for arg, ind in self.indices:
+            if ind is not None:
+                coord_maps.append(
+                    [
+                        zero_pos[i] if nb == 1 else index_pos[i]
+                        for i, nb in zip(ind, self.numblocks[arg])
+                    ]
+                )
+                concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
+            else:
+                coord_maps.append(None)
+                concat_axes.append(None)
 
-            return key_deps
+        key_deps = {}
+        for out_coords in output_blocks:
+            deps = set()
+            coords = out_coords + dummies
+            args = []
+            for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
+                if ind is None:
+                    args.append(arg)
+                elif arg != self.io_name:
+                    arg_coords = tuple(coords[c] for c in cmap)
+                    if axes:
+                        tups = lol_product((arg,), arg_coords)
+                        deps.update(flatten(tups))
 
-        # Gather constant dependencies (for all output keys)
-        const_deps = set()
-        for _name, _ind in self.indices:
-            if _ind is None and isinstance(_name, str):
-                if _name in all_hlg_keys:
-                    const_deps.add(_name)
+                        if concatenate:
+                            tups = (concatenate, tups, axes)
+                    else:
+                        tups = (arg,) + arg_coords
+                        deps.add(tups)
+                    args.append(tups)
+            out_key = (self.output,) + out_coords
+            key_deps[out_key] = deps
 
-        # Get key-specific dependencies.
-        # Do not include constant inputs or IO placeholders.
-        deps = {}
-        for block in output_blocks:
-            deps[(self.output, *block)] = {
-                (k, *block)
-                for k, v in self.indices
-                if (v is not None and k != self.io_name)
-            } | const_deps
-
-        return deps
+        return key_deps
 
     def _cull(self, output_blocks):
         return Blockwise(

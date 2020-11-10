@@ -162,7 +162,7 @@ def test_blockwise_cull(flat):
     else:
         # Complex mapping between input and output
         # indices (outer product and transpose)
-        x = da.from_array(np.arange(10).reshape((10,)), (4,)) + 100
+        x = da.from_array(np.arange(10).reshape((10,)), (4,))
         y = da.from_array(np.arange(10).reshape((10,)), (4,))
         x = da.outer(x, y).transpose()
 
