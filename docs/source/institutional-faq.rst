@@ -384,6 +384,6 @@ for tables and Zarr or HDF5 for arrays.
 Does Dask have a SQL interface?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-Yes, Dask supports various ways to communicate with SQL databases, some
+Dask supports various ways to communicate with SQL databases, some
 requiring extra packages to be installed; see the section
 :doc:`dataframe-sql`.
