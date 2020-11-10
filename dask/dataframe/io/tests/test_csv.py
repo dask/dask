@@ -28,12 +28,6 @@ from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from fsspec.compression import compr
 
-try:
-    import distributed
-    from distributed import Client, wait
-    from distributed.utils_test import cluster, loop  # noqa: F401
-except (ImportError, SyntaxError):
-    distributed = None
 
 fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
@@ -213,6 +207,25 @@ def test_text_blocks_to_pandas_kwargs(reader, files):
     assert list(df.columns) == ["name", "id"]
     result = df.compute()
     assert (result.columns == df.columns).all()
+
+
+@csv_and_table
+def test_text_blocks_to_pandas_has_different_task_names_based_on_blocksize(
+    reader, files
+):
+    blocks = [[files[k]] for k in sorted(files)]
+    kwargs = {}
+    head = pandas_read_text(reader, files["2014-01-01.csv"], b"", {})
+    header = files["2014-01-01.csv"].split(b"\n")[0] + b"\n"
+
+    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
+    df_names = {key[0] for key in df.dask.keys()}
+
+    values = text_blocks_to_pandas(
+        reader, blocks, header, head, kwargs, blocksize="30B"
+    )
+    value_names = {key[0] for key in values.dask.keys()}
+    assert value_names != df_names
 
 
 @csv_and_table
@@ -510,22 +523,6 @@ def test_string_blocksize():
 
         c = dd.read_csv(fn, blocksize="64MiB")
         assert c.npartitions == 1
-
-
-@pytest.mark.skipif(
-    not distributed, reason="Skipped as distributed is not installed."  # noqa: F811
-)  # noqa: F811
-def test_different_blocksize_with_persist(loop):
-    with cluster() as (s, [a, b]):
-        with Client(s["address"], loop=loop):  # noqa: F811
-            with filetext(csv_text) as fn:
-                df = dd.read_csv(fn).persist()
-                wait(df)
-                expected = df.shape[0].compute()
-                df = dd.read_csv(fn, blocksize="30B").persist()
-                wait(df)
-                actual = df.shape[0].compute()
-                assert expected == actual
 
 
 def test_skipinitialspace():
