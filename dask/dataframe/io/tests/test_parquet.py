@@ -2889,15 +2889,18 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         ignore_divisions=True,
     )
 
+
 def test_read_write_partitioned_overwrite_is_true(tmpdir):
     # https://github.com/dask/dask/issues/6824
 
     # Create a Dask DataFrame if size (10000, 10) with 5 partitions and write to local
-    ddf = dd.from_pandas(pd.DataFrame(np.random.randint(
-        low=0, high=100, size=(10000, 10)
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            np.random.randint(low=0, high=100, size=(10000, 10)),
+            columns=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
         ),
-        columns=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"]
-        ), npartitions=5)
+        npartitions=5,
+    )
     ddf = ddf.reset_index(drop=True)
     dd.to_parquet(ddf, tmpdir, engine="pyarrow")
 
@@ -2908,10 +2911,12 @@ def test_read_write_partitioned_overwrite_is_true(tmpdir):
     # the number of files against the number of dask partitions
     dd.to_parquet(ddf2, tmpdir, engine="pyarrow", overwrite=True)
 
-    # Assert the # of files written are identical to the number of Dask DataFrame partitions (we exclude _metadata and _common_metadata)
+    # Assert the # of files written are identical to the number of
+    # Dask DataFrame partitions (we exclude _metadata and _common_metadata)
     files = os.listdir(tmpdir)
-    files = [f for f in files if f not in ['_common_metadata', '_metadata']]
+    files = [f for f in files if f not in ["_common_metadata", "_metadata"]]
     assert len(files) == ddf2.npartitions
+
 
 def test_read_write_partition_on_overwrite_is_true(tmpdir):
     # https://github.com/dask/dask/issues/6824
@@ -2919,18 +2924,20 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir):
 
     # Create a Dask DataFrame if size (10000, 10) with 5 partitions and write to local, partitioning on the column E
     df = pd.DataFrame(
-        np.vstack((
-        np.full((50, 3), 0),
-        np.full((50, 3), 1),
-        np.full((20, 3), 2),
-        ))
+        np.vstack(
+            (
+                np.full((50, 3), 0),
+                np.full((50, 3), 1),
+                np.full((20, 3), 2),
+            )
+        )
     )
-    df.columns = ['A', 'B', 'C']
+    df.columns = ["A", "B", "C"]
     ddf = dd.from_pandas(df, npartitions=5)
     dd.to_parquet(ddf, tmpdir, engine="pyarrow", partition_on=["A", "B"])
 
     # Get the total number of files and directories from the original write
-    files_ = Path(tmpdir).rglob("*" )
+    files_ = Path(tmpdir).rglob("*")
     files = [f.as_posix() for f in files_]
     # Keep the contents of the DataFrame constant but change the # of partitions
     ddf2 = ddf.repartition(npartitions=3)
@@ -2938,9 +2945,11 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir):
     # Overwrite the existing Dataset with the new dataframe and evaluate
     # the number of files against the number of dask partitions
     # Get the total number of files and directories from the original write
-    dd.to_parquet(ddf2, tmpdir, engine="pyarrow", partition_on=["A", "B"], overwrite=True)
-    files2_ = Path(tmpdir).rglob("*" )
-    files2 = [f.as_posix() for f in files_]
-    # After reducing the # of partitions and overwriting, we expect there to be fewer total files than were originally written
-    assert files2 < files
-    
+    dd.to_parquet(
+        ddf2, tmpdir, engine="pyarrow", partition_on=["A", "B"], overwrite=True
+    )
+    files2_ = Path(tmpdir).rglob("*")
+    files2 = [f.as_posix() for f in files2_]
+    # After reducing the # of partitions and overwriting, we expect
+    # there to be fewer total files than were originally written
+    assert len(files2) < len(files)
