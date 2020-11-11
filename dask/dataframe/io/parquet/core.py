@@ -410,8 +410,10 @@ def to_parquet(
         row-group(s) to an existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
     overwrite : bool, optional
-        If False (default), write dataset to existing folder.  If True, delete
-        all files in the partitioned folder and write a fresh set of partitioned files
+        If False (default), write dataset to specified folder at path.  If True, delete
+        all files in the partitioned folder and write a fresh set of partitioned files.
+        Overwrite expects that path already exists, is a non-empty directory, and does
+        not reside in the location from which the function is being called.
     ignore_divisions : bool, optional
         If False (default) raises error when previous divisions overlap with
         the new appended divisions. Ignored if append=False.
@@ -478,8 +480,7 @@ def to_parquet(
     path = fs._strip_protocol(path)
 
     if overwrite:
-        import pdb;pdb.set_trace()
-        working_dir = fs.expand_path(".")
+        working_dir = fs.expand_path(".")[0]
         if path in ["", ".", "./", "/", working_dir]:
             raise ValueError(
                 "If using overwrite=True, path must be an explicit and not the current directory!!"
@@ -490,7 +491,9 @@ def to_parquet(
             if len(pfiles) > 0:
                 fs.rm(path, recursive=True)
             else:
-                raise FileNotFoundError("Can not overwrite empty path or path not found!!")
+                raise FileNotFoundError(
+                    "Can not overwrite empty path or path not found!!"
+                )
 
     # Save divisions and corresponding index name. This is necessary,
     # because we may be resetting the index to write the file
