@@ -264,46 +264,12 @@ class Blockwise(Layer):
         self.new_axes = new_axes or {}
 
     @property
-    def flat_size(self):
-        """Output dimenstions of a flat layer
-
-        This property will return `None` if the layer is
-        not a "flat" transformation.
-        """
-
-        # Always check that input and output indices
-        # match.  It is possible for `output_indices` to
-        # change after initialization.
-        if not all(
-            self.output_indices == ind for name, ind in self.indices if ind is not None
-        ):
-            return None
-
-        # Check for cached result
-        if not hasattr(self, "_flat_size"):
-
-            # Check if this is a "flat" transformation
-            # (input/output indices are aligned)
-            self._flat_size = None
-            if not self.new_axes and self.numblocks:
-
-                # Check input blocks are all the same size
-                flat = True
-                blocks = None
-                for _name, _size in self.numblocks.items():
-                    blocks = blocks or _size
-                    if blocks != _size:
-                        flat = False
-                        break
-
-                # Check that input and output sizes match
-                if flat and (len(self.output_indices) == len(_size)):
-                    # At this point we can define a single tuple
-                    # (self._flat_size) that specifies the dimensions
-                    # of the "flat" transform
-                    self._flat_size = _size
-
-        return self._flat_size
+    def dims(self):
+        if not hasattr(self, "_dims"):
+            self._dims = broadcast_dimensions(self.indices, self.numblocks)
+            for k, v in self.new_axes.items():
+                self._dims[k] = len(v) if isinstance(v, tuple) else 1
+        return self._dims
 
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
@@ -330,6 +296,7 @@ class Blockwise(Layer):
                 key_deps=key_deps,
                 non_blockwise_keys=non_blockwise_keys,
                 output_blocks=self.output_blocks,
+                dims=self.dims,
             )
 
             if self.io_subgraph:
@@ -359,23 +326,14 @@ class Blockwise(Layer):
         if self.output_blocks:
             # Culling has already generated a list of output blocks
             return {(self.output, *p) for p in self.output_blocks}
-        elif self.flat_size:
-            # Simple output-key mapping for "flat" transformations
-            return {
-                (self.output, *p)
-                for p in itertools.product(*[range(i) for i in self.flat_size])
-            }
-        else:
-            # General output-key mapping
-            dims = broadcast_dimensions(self.indices, self.numblocks)
-            for k, v in self.new_axes.items():
-                dims[k] = len(v) if isinstance(v, tuple) else 1
-            return {
-                (self.output, *p)
-                for p in itertools.product(
-                    *[range(dims[i]) for i in self.output_indices]
-                )
-            }
+
+        # Return all possible output keys (no culling)
+        return {
+            (self.output, *p)
+            for p in itertools.product(
+                *[range(self.dims[i]) for i in self.output_indices]
+            )
+        }
 
     def __getitem__(self, key):
         return self._dict[key]
@@ -406,43 +364,15 @@ class Blockwise(Layer):
 
         This method does not require graph materialization.
         """
-        if self.flat_size:
 
-            # Fast path for "flat" transformations
-            #
-            # Gather constant dependencies (for all output keys)
-            const_deps = set()
-            for _name, _ind in self.indices:
-                if _ind is None and isinstance(_name, str):
-                    if _name in all_hlg_keys:
-                        const_deps.add(_name)
-
-            # Get key-specific dependencies.
-            # Do not include constant inputs or IO placeholders.
-            deps = {}
-            for block in output_blocks:
-                deps[(self.output, *block)] = {
-                    (k, *block)
-                    for k, v in self.indices
-                    if (v is not None and k != self.io_name)
-                } | const_deps
-            return deps
-
-        # General path for arbitrary blockwise transformation
-        #
         # Check `concatenate` option
         concatenate = None
         if self.concatenate is True:
             from dask.array.core import concatenate_axes as concatenate
 
-        # Get map of new dimenstions
-        dims = broadcast_dimensions(self.indices, self.numblocks)
-        for k, v in self.new_axes.items():
-            dims[k] = len(v) if isinstance(v, tuple) else 1
-
         # Generate coordinate map
         (dummies, coord_maps, concat_axes,) = _get_coord_mapping(
-            dims,
+            self.dims,
             self.output,
             self.output_indices,
             self.numblocks,
@@ -500,7 +430,8 @@ class Blockwise(Layer):
             if key[0] == self.output:
                 output_blocks.add(key[1:])
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-        if np.prod(self.flat_size) != len(culled_deps):
+        out_size = (self.dims[i] for i in self.output_indices)
+        if np.prod(out_size) != len(culled_deps):
             culled_layer = self._cull(output_blocks)
             return culled_layer, culled_deps
         else:
@@ -707,15 +638,17 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     key_deps = kwargs.pop("key_deps", None)
     non_blockwise_keys = kwargs.pop("non_blockwise_keys", None)
     output_blocks = kwargs.pop("output_blocks", None)
+    dims = kwargs.pop("dims", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    dims = broadcast_dimensions(argpairs, numblocks)
-    for k, v in new_axes.items():
-        dims[k] = len(v) if isinstance(v, tuple) else 1
+    if dims is None:
+        dims = broadcast_dimensions(argpairs, numblocks)
+        for k, v in new_axes.items():
+            dims[k] = len(v) if isinstance(v, tuple) else 1
 
     # Generate the abstract "plan" before constructing
     # the actual graph
