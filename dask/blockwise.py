@@ -265,6 +265,9 @@ class Blockwise(Layer):
 
     @property
     def dims(self):
+        """Returns a dictionary mapping between each index specified in
+        `self.indices` and the number of output blocks for that indice.
+        """
         if not hasattr(self, "_dims"):
             self._dims = broadcast_dimensions(self.indices, self.numblocks)
             for k, v in self.new_axes.items():
@@ -359,7 +362,7 @@ class Blockwise(Layer):
             from dask.array.core import concatenate_axes as concatenate
 
         # Generate coordinate map
-        (dummies, coord_maps, concat_axes,) = _get_coord_mapping(
+        (coord_maps, concat_axes, dummies) = _get_coord_mapping(
             self.dims,
             self.output,
             self.output_indices,
@@ -454,7 +457,30 @@ def _get_coord_mapping(
 ):
     """Calculate coordinate mapping for graph construction.
 
+    This function handles the high-level logic behind Blockwise graph
+    construction. The output is a tuple containing: The mapping between
+    input and output block coordinates (`coord_maps`), the axes along
+    which to concatenate for each input (`concat_axes`), and the dummy
+    indices needed for broadcasting (`dummies`).
+
     Used by `make_blockwise_graph` and `_cull_dependencies`.
+
+    Parameters
+    ----------
+    dims: dict
+        Mapping between each index specified in `argpairs` and
+        the number of output blocks for that index. Corresponds
+        to the Blockwise `dims` attribute.
+    output: str
+        Corresponds to the Blockwise `output` attribute.
+    out_indices: tuple
+        Corresponds to the Blockwise `output_indices` attribute.
+    numblocks: dict
+        Corresponds to the Blockwise `numblocks` attribute.
+    argpairs: tuple
+        Corresponds to the Blockwise `indices` attribute.
+    argpairs: bool
+        Corresponds to the Blockwise `concatenate` attribute.
     """
 
     block_names = set()
@@ -512,7 +538,7 @@ def _get_coord_mapping(
             coord_maps.append(None)
             concat_axes.append(None)
 
-    return dummies, coord_maps, concat_axes
+    return coord_maps, concat_axes, dummies
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
@@ -639,7 +665,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     # Generate the abstract "plan" before constructing
     # the actual graph
-    (dummies, coord_maps, concat_axes,) = _get_coord_mapping(
+    (coord_maps, concat_axes, dummies) = _get_coord_mapping(
         dims,
         output,
         out_indices,
