@@ -8,7 +8,7 @@ import tlz as toolz
 
 from .core import reverse_dict, flatten, keys_in_tasks, find_all_possible_keys
 from .delayed import unpack_collections
-from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
+from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
@@ -283,8 +283,6 @@ class Blockwise(Layer):
             dsk, _ = fuse(self.dsk, [self.output])
             func = SubgraphCallable(dsk, self.output, keys)
 
-            key_deps = {}
-            non_blockwise_keys = set()
             dsk = make_blockwise_graph(
                 func,
                 self.output,
@@ -293,8 +291,6 @@ class Blockwise(Layer):
                 new_axes=self.new_axes,
                 numblocks=self.numblocks,
                 concatenate=self.concatenate,
-                key_deps=key_deps,
-                non_blockwise_keys=non_blockwise_keys,
                 output_blocks=self.output_blocks,
                 dims=self.dims,
             )
@@ -311,15 +307,7 @@ class Blockwise(Layer):
                         new_task = [io_item if v == io_key else v for v in dsk[k]]
                         dsk[k] = tuple(new_task)
 
-                # Clear IO "placeholder" dependencies
-                for k in key_deps:
-                    if k[0] == self.output:
-                        key_deps[k] = set()
-
-            self._cached_dict = {
-                "dsk": dsk,
-                "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_keys),
-            }
+            self._cached_dict = {"dsk": dsk}
         return self._cached_dict["dsk"]
 
     def get_output_keys(self):
@@ -688,7 +676,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     dsk = {}
     # Create argument lists
     for out_coords in output_blocks:
-
         deps = set()
         coords = out_coords + dummies
         args = []
