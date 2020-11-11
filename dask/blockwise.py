@@ -430,7 +430,7 @@ class Blockwise(Layer):
             if key[0] == self.output:
                 output_blocks.add(key[1:])
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-        out_size = (self.dims[i] for i in self.output_indices)
+        out_size = tuple([self.dims[i] for i in self.output_indices])
         if np.prod(out_size) != len(culled_deps):
             culled_layer = self._cull(output_blocks)
             return culled_layer, culled_deps
