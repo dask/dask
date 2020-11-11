@@ -449,35 +449,22 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
-@pytest.mark.slow
 def test_svd_compressed():
-    m, n = 2000, 250
-    r = 10
-    np.random.seed(4321)
-    mat1 = np.random.randn(m, r)
-    mat2 = np.random.randn(r, n)
-    mat = mat1.dot(mat2)
-    data = da.from_array(mat, chunks=(500, 50))
+    m, n = 100, 50
+    r = 5
+    a = da.random.random((m, n), chunks=(m, n))
 
-    u, s, vt = svd_compressed(data, r, seed=4321, n_power_iter=2)
+    # calculate approximation and true singular values
+    u, s, vt = svd_compressed(a, 2 * r, seed=4321, n_power_iter=0)  # worst case
+    s_true = scipy.linalg.svd(a.compute(), compute_uv=False)
 
-    usvt = da.dot(u, da.dot(da.diag(s), vt))
+    # compute the difference with original matrix
+    norm = scipy.linalg.norm((a - (u[:, :r] * s[:r]) @ vt[:r, :]).compute(), 2)
 
-    tol = 0.2
-    assert_eq(
-        da.linalg.norm(usvt), np.linalg.norm(mat), rtol=tol, atol=tol
-    )  # average accuracy check
-
-    u = u[:, :r]
-    s = s[:r]
-    vt = vt[:r, :]
-
-    s_exact = np.linalg.svd(mat)[1]
-    s_exact = s_exact[:r]
-
-    assert_eq(np.eye(r, r), da.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(r, r), da.dot(vt, vt.T))  # v must be orthonormal
-    assert_eq(s, s_exact)  # s must contain the singular values
+    # ||a-a_hat||_2 <= (1+tol)s_{k+1}
+    frac = norm / s_true[r + 1] - 1
+    tol = 0.4
+    assert frac < tol
 
 
 @pytest.mark.parametrize("chunks", [(10, 50), (50, 10), (-1, -1)])
