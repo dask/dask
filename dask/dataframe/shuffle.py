@@ -20,7 +20,7 @@ from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph, Layer
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
-from .utils import hash_object_dispatch, group_split_dispatch
+from .utils import hash_object_dispatch, group_split_dispatch, is_series_like
 from . import methods
 
 logger = logging.getLogger(__name__)
