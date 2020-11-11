@@ -1078,8 +1078,4 @@ def test_shuffle_hlg_layer_serialize(npartitions):
 def test_set_index_nan_partition():
     d[d.a > 3].set_index("a")  # Set index with 1 null partition
     d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
-    with pytest.raises(
-        ValueError,
-        match="Partitions with all-NaN index values are not supported for sorted indices.",
-    ):
-        d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
+    d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
