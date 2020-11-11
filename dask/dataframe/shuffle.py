@@ -1254,6 +1254,12 @@ def compute_and_set_divisions(df, **kwargs):
     maxes = df.index.map_partitions(M.max, meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
 
+    if mins.isna().any() or maxes.isna().any():
+        raise ValueError(
+            "Partitions with all-NaN index values are not supported for sorted indices. "
+            "You may want to repartition before setting the index."
+        )
+
     if (
         sorted(mins) != list(mins)
         or sorted(maxes) != list(maxes)
