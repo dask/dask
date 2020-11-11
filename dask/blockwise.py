@@ -6,7 +6,7 @@ import numpy as np
 
 import tlz as toolz
 
-from .core import reverse_dict, flatten, keys_in_tasks, find_all_possible_keys
+from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
@@ -624,8 +624,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     numblocks = kwargs.pop("numblocks")
     concatenate = kwargs.pop("concatenate", None)
     new_axes = kwargs.pop("new_axes", {})
-    key_deps = kwargs.pop("key_deps", None)
-    non_blockwise_keys = kwargs.pop("non_blockwise_keys", None)
     output_blocks = kwargs.pop("output_blocks", None)
     dims = kwargs.pop("dims", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
@@ -658,14 +656,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             kwargs2 = task
         else:
             kwargs2 = kwargs
-        if non_blockwise_keys is not None:
-            non_blockwise_keys |= find_all_possible_keys([kwargs2])
-
-    # Find all non-blockwise keys in the input arguments
-    if non_blockwise_keys is not None:
-        for arg, ind in argpairs:
-            if ind is None:
-                non_blockwise_keys |= find_all_possible_keys([arg])
 
     # Apply Culling.
     # Only need to costruct the specified set of output blocks
@@ -703,8 +693,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             val = tuple(args)
         dsk[out_key] = val
 
-        if key_deps is not None:
-            key_deps[out_key] = deps
     if dsk2:
         dsk.update(ensure_dict(dsk2))
 
