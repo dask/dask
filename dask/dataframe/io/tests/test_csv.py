@@ -210,25 +210,6 @@ def test_text_blocks_to_pandas_kwargs(reader, files):
 
 
 @csv_and_table
-def test_text_blocks_to_pandas_has_different_task_names_based_on_blocksize(
-    reader, files
-):
-    blocks = [[files[k]] for k in sorted(files)]
-    kwargs = {}
-    head = pandas_read_text(reader, files["2014-01-01.csv"], b"", {})
-    header = files["2014-01-01.csv"].split(b"\n")[0] + b"\n"
-
-    df = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
-    df_names = {key[0] for key in df.dask.keys()}
-
-    values = text_blocks_to_pandas(
-        reader, blocks, header, head, kwargs, blocksize="30B"
-    )
-    value_names = {key[0] for key in values.dask.keys()}
-    assert value_names != df_names
-
-
-@csv_and_table
 def test_text_blocks_to_pandas_blocked(reader, files):
     header = files["2014-01-01.csv"].split(b"\n")[0] + b"\n"
     blocks = []
@@ -845,6 +826,13 @@ def test_multiple_read_csv_has_deterministic_name():
         b = dd.read_csv("_foo.*.csv")
 
         assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
+
+
+def test_read_csv_has_different_names_based_on_blocksize():
+    with filetext(csv_text) as fn:
+        a = dd.read_csv(fn, blocksize="10kB")
+        b = dd.read_csv(fn, blocksize="20kB")
+        assert a._name != b._name
 
 
 def test_csv_with_integer_names():
