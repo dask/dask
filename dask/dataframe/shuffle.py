@@ -1254,6 +1254,13 @@ def compute_and_set_divisions(df, **kwargs):
     maxes = df.index.map_partitions(M.max, meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
 
+    # TODO: Remove these `is_series_like` checks when related
+    # cudf issue is resolved (https://github.com/rapidsai/cudf/issues/6738)
+    if not is_series_like(mins):
+        mins = pd.Series(mins)
+    if not is_series_like(maxes):
+        maxes = pd.Series(maxes)
+
     if mins.isna().any() or maxes.isna().any():
         raise ValueError(
             "Partitions with all-NaN index values are not supported for sorted indices. "
