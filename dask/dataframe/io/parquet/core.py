@@ -477,7 +477,7 @@ def to_parquet(
     # Trim any protocol information from the path before forwarding
     path = fs._strip_protocol(path)
 
-    if overwrite and path:
+    if overwrite:
         if path in ["", ".", "./", "/"]:
             raise ValueError("If using overwrite=True, path must be an explicit directory!!")
         fs.rm(path, recursive=True)
