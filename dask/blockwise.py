@@ -380,29 +380,30 @@ class Blockwise(Layer):
             concatenate,
         )
 
+        # Gather constant dependencies (for all output keys)
+        const_deps = set()
+        for (arg, ind) in self.indices:
+            if ind is None and isinstance(arg, str):
+                if arg in all_hlg_keys:
+                    const_deps.add(arg)
+
         # Get dependencies for each output block
         key_deps = {}
         for out_coords in output_blocks:
             deps = set()
             coords = out_coords + dummies
-            args = []
             for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
-                if ind is None:
-                    args.append(arg)
-                elif arg != self.io_name:
+                if ind is not None and arg != self.io_name:
                     arg_coords = tuple(coords[c] for c in cmap)
                     if axes:
                         tups = lol_product((arg,), arg_coords)
                         deps.update(flatten(tups))
-
                         if concatenate:
                             tups = (concatenate, tups, axes)
                     else:
                         tups = (arg,) + arg_coords
                         deps.add(tups)
-                    args.append(tups)
-            out_key = (self.output,) + out_coords
-            key_deps[out_key] = deps
+            key_deps[(self.output,) + out_coords] = deps | const_deps
 
         return key_deps
 
