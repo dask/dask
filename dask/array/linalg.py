@@ -718,7 +718,13 @@ def compression_matrix(
     elif iterator == "QR":
         q, _ = tsqr(mat_h)
         for i in range(n_power_iter):
+            if compute:
+                q = q.persist()
+                wait(q)
             q, _ = tsqr(data.T.dot(q))
+            if compute:
+                q = q.persist()
+                wait(q)
             q, _ = tsqr(data.dot(q))
     else:
         q, _ = tsqr(mat_h)

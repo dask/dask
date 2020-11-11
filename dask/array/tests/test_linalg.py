@@ -513,8 +513,23 @@ def test_svd_compressed_shapes(m, n, k, chunks):
 
 def test_svd_compressed_compute():
     x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
-    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
+    u, s, v = da.linalg.svd_compressed(
+        x, k=2, iterator="power", n_power_iter=1, compute=True, seed=123
+    )
+    uu, ss, vv = da.linalg.svd_compressed(
+        x, k=2, iterator="power", n_power_iter=1, seed=123
+    )
+
+    assert len(v.dask) < len(vv.dask)
+
+    assert_eq(v, vv)
+
+    u, s, v = da.linalg.svd_compressed(
+        x, k=2, iterator="QR", n_power_iter=1, compute=True, seed=123
+    )
+    uu, ss, vv = da.linalg.svd_compressed(
+        x, k=2, iterator="QR", n_power_iter=1, seed=123
+    )
 
     assert len(v.dask) < len(vv.dask)
 
