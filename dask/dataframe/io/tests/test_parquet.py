@@ -2956,7 +2956,7 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir):
 
 def test_nonempty_path_to_parquet_overwrite(tmpdir):
     # https://github.com/dask/dask/issues/6824
-    # Create a Dask DataFrame if size (10000, 10) with 5 partitions and write to local, partitioning on the column E
+    # Create a Dask DataFrame if size (100, 3) with 5 partitions and write to local, partitioning on the column E
     df = pd.DataFrame(
         np.vstack(
             (
@@ -2971,7 +2971,23 @@ def test_nonempty_path_to_parquet_overwrite(tmpdir):
         dd.to_parquet(ddf, "", engine="pyarrow", overwrite=True)
 
     with pytest.raises(ValueError):
-        dd.to_parquet(ddf, ".", engine="pyarrow", overwrite=True)
+        dd.to_parquet(ddf, "", engine="pyarrow", overwrite=True)
 
     with pytest.raises(ValueError):
-        dd.to_parquet(ddf, "./", engine="pyarrow", overwrite=True)
+        dd.to_parquet(ddf, ".", engine="pyarrow", overwrite=True)
+
+def test_dir_not_empty_overwrite(tmpdir):
+    # https://github.com/dask/dask/issues/6824
+    # Create a Dask DataFrame if size (100, 3) with 5 partitions and write to local, partitioning on the column E
+    df = pd.DataFrame(
+        np.vstack(
+            (
+                np.full((50, 3), 0),
+                np.full((50, 3), 1),
+            )
+        )
+    )
+    df.columns = ["A", "B", "C"]
+    ddf = dd.from_pandas(df, npartitions=5)
+    with pytest.raises(FileNotFoundError):
+        dd.to_parquet(ddf, tmpdir, overwrite=True)
