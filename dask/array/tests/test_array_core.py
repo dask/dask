@@ -2095,6 +2095,8 @@ def test_astype():
     # Check it's a noop
     assert d.astype("f8") is d
 
+    assert d.astype(d.dtype) is d
+
 
 def test_arithmetic():
     x = np.arange(5).astype("f4") + 2
@@ -2410,12 +2412,7 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(
-        dx.dask[
-            dx.name,
-        ],
-        np.ndarray,
-    )
+    assert isinstance(dx.dask[dx.name,], np.ndarray,)
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
@@ -3302,11 +3299,7 @@ def test_from_array_names():
 
 
 @pytest.mark.parametrize(
-    "array",
-    [
-        da.arange(100, chunks=25),
-        da.ones((10, 10), chunks=25),
-    ],
+    "array", [da.arange(100, chunks=25), da.ones((10, 10), chunks=25),],
 )
 def test_array_picklable(array):
     from pickle import loads, dumps

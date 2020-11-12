@@ -1883,6 +1883,8 @@ class Array(DaskMethodsMixin):
             is set to False and the `dtype` requirement is satisfied, the input
             array is returned instead of a copy.
         """
+        if self.dtype == dtype:
+            return self
         # Scalars don't take `casting` or `copy` kwargs - as such we only pass
         # them to `map_blocks` if specified by user (different than defaults).
         extra = set(kwargs) - {"casting", "copy"}
