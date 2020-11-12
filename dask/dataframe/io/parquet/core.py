@@ -483,19 +483,18 @@ def to_parquet(
 
     if overwrite:
         working_dir = fs.expand_path(".")[0]
-        if path in ["", ".", "./", "/", working_dir]:
+        if path == working_dir:
             raise ValueError(
-                "If using overwrite=True, path must be an explicit and not the current directory!!"
+                "Cannot clear the contents of the current working directory!"
             )
+        if append:
+            raise ValueError("Cannot use both `overwrite=True` and `append=True`!")
         if fs.exists(path) and fs.isdir(path):
-            # If the path exists, is a directory, and there are files present to overwrite
-            pfiles = fs.ls(path)
-            if len(pfiles) > 0:
-                fs.rm(path, recursive=True)
-            else:
-                raise FileNotFoundError(
-                    "Can not overwrite empty path or path not found!!"
-                )
+            # Only remove path contents if
+            # (1) The path exists
+            # (2) The path is a directory
+            # (3) The path is not the current working directory
+            fs.rm(path, recursive=True)
 
     # Save divisions and corresponding index name. This is necessary,
     # because we may be resetting the index to write the file
