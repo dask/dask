@@ -2945,9 +2945,7 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
     # Overwrite the existing Dataset with the new dataframe and evaluate
     # the number of files against the number of dask partitions
     # Get the total number of files and directories from the original write
-    dd.to_parquet(
-        ddf2, tmpdir, engine=engine, partition_on=["A", "B"], overwrite=True
-    )
+    dd.to_parquet(ddf2, tmpdir, engine=engine, partition_on=["A", "B"], overwrite=True)
     files2_ = Path(tmpdir).rglob("*")
     files2 = [f.as_posix() for f in files2_]
     # After reducing the # of partitions and overwriting, we expect
