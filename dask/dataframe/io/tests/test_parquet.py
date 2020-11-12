@@ -2918,7 +2918,7 @@ def test_read_write_partitioned_overwrite_is_true(tmpdir):
     assert len(files) == ddf2.npartitions
 
 
-def test_read_write_partition_on_overwrite_is_true(tmpdir):
+def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824
     from pathlib import Path
 
