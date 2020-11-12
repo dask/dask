@@ -2893,10 +2893,10 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
 def test_read_write_overwrite_is_true(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824
 
-    # Create a Dask DataFrame if size (10000, 10) with 5 partitions and write to local
+    # Create a Dask DataFrame if size (100, 10) with 5 partitions and write to local
     ddf = dd.from_pandas(
         pd.DataFrame(
-            np.random.randint(low=0, high=100, size=(10000, 10)),
+            np.random.randint(low=0, high=100, size=(100, 10)),
             columns=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
         ),
         npartitions=5,
@@ -2922,7 +2922,7 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824
     from pathlib import Path
 
-    # Create a Dask DataFrame if size (10000, 10) with 5 partitions and write to local, partitioning on the column E
+    # Create a Dask DataFrame with 5 partitions and write to local, partitioning on the column A and column B
     df = pd.DataFrame(
         np.vstack(
             (
