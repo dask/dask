@@ -2946,7 +2946,7 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
     # the number of files against the number of dask partitions
     # Get the total number of files and directories from the original write
     dd.to_parquet(
-        ddf2, tmpdir, engine="pyarrow", partition_on=["A", "B"], overwrite=True
+        ddf2, tmpdir, engine=engine, partition_on=["A", "B"], overwrite=True
     )
     files2_ = Path(tmpdir).rglob("*")
     files2 = [f.as_posix() for f in files2_]
