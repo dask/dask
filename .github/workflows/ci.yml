@@ -39,4 +39,6 @@ jobs:
       - name: Coverage
         shell: bash -l {0}
         if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
+        env:
+          COVERAGE: "true"
         run: source continuous_integration/scripts/coverage.sh
