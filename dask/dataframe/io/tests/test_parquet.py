@@ -2902,7 +2902,7 @@ def test_read_write_partitioned_overwrite_is_true(tmpdir):
         npartitions=5,
     )
     ddf = ddf.reset_index(drop=True)
-    dd.to_parquet(ddf, tmpdir, engine="pyarrow")
+    dd.to_parquet(ddf, tmpdir, engine=engine, overwrite=True)
 
     # Keep the contents of the DataFrame constatn but change the # of partitions
     ddf2 = ddf.repartition(npartitions=3)
