@@ -2909,7 +2909,7 @@ def test_read_write_partitioned_overwrite_is_true(tmpdir):
 
     # Overwrite the existing Dataset with the new dataframe and evaluate
     # the number of files against the number of dask partitions
-    dd.to_parquet(ddf2, tmpdir, engine="pyarrow", overwrite=True)
+    dd.to_parquet(ddf2, tmpdir, engine=engine, overwrite=True)
 
     # Assert the # of files written are identical to the number of
     # Dask DataFrame partitions (we exclude _metadata and _common_metadata)
