@@ -410,10 +410,12 @@ def to_parquet(
         row-group(s) to an existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
     overwrite : bool, optional
-        If False (default), write dataset to specified folder at path.  If True, delete
-        all files in the partitioned folder and write a fresh set of partitioned files.
-        Overwrite expects that path already exists, is a non-empty directory, and does
-        not reside in the location from which the function is being called.
+        Whether or not to remove the contents of `path` before writing the dataset.
+        The default is False.  If True, the specified path must correspond to
+        a directory (but not the current working directory).  This option cannot
+        be set to True if `append=True`.
+        NOTE: `overwrite=True` will remove the original data even if the current
+        write operation fails.  Use at your own risk.
     ignore_divisions : bool, optional
         If False (default) raises error when previous divisions overlap with
         the new appended divisions. Ignored if append=False.
