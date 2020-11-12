@@ -14,6 +14,7 @@ jobs:
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       PARALLEL: "true"
+      COVERAGE: "false"
 
     steps:
       - name: Checkout source
@@ -41,4 +42,5 @@ jobs:
         if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
         env:
           COVERAGE: "true"
+          PARALLEL: "false"
         run: source continuous_integration/scripts/coverage.sh
