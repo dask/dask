@@ -2955,25 +2955,13 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir):
     assert len(files2) < len(files)
 
 
-def test_nonempty_path_to_parquet_overwrite(tmpdir):
+def test_to_parquet_overwrite_raises(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824
-    # Create a Dask DataFrame if size (100, 3) with 5 partitions and write to local, partitioning on the column E
-    df = pd.DataFrame(
-        np.vstack(
-            (
-                np.full((50, 3), 0),
-                np.full((50, 3), 1),
-            )
-        )
-    )
-    df.columns = ["A", "B", "C"]
-    ddf = dd.from_pandas(df, npartitions=5)
+    # Check that overwrite=True will raise an error if the
+    # specified path is the current working directory
+    df = pd.DataFrame({"a": range(12)})
+    ddf = dd.from_pandas(df, npartitions=3)
     with pytest.raises(ValueError):
-        dd.to_parquet(ddf, "", engine="pyarrow", overwrite=True)
-
+        dd.to_parquet(ddf, "./", engine=engine, overwrite=True)
     with pytest.raises(ValueError):
-        dd.to_parquet(ddf, "", engine="pyarrow", overwrite=True)
-
-    with pytest.raises(ValueError):
-        dd.to_parquet(ddf, ".", engine="pyarrow", overwrite=True)
-
+        dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
