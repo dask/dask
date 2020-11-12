@@ -28,6 +28,7 @@ from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from fsspec.compression import compr
 
+
 fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
@@ -825,6 +826,13 @@ def test_multiple_read_csv_has_deterministic_name():
         b = dd.read_csv("_foo.*.csv")
 
         assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
+
+
+def test_read_csv_has_different_names_based_on_blocksize():
+    with filetext(csv_text) as fn:
+        a = dd.read_csv(fn, blocksize="10kB")
+        b = dd.read_csv(fn, blocksize="20kB")
+        assert a._name != b._name
 
 
 def test_csv_with_integer_names():
