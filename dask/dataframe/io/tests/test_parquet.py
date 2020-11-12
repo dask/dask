@@ -2890,7 +2890,7 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     )
 
 
-def test_read_write_partitioned_overwrite_is_true(tmpdir):
+def test_read_write_overwrite_is_true(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824
 
     # Create a Dask DataFrame if size (10000, 10) with 5 partitions and write to local
