@@ -269,9 +269,7 @@ class Blockwise(Layer):
         `self.indices` and the number of output blocks for that indice.
         """
         if not hasattr(self, "_dims"):
-            self._dims = broadcast_dimensions(self.indices, self.numblocks)
-            for k, v in self.new_axes.items():
-                self._dims[k] = len(v) if isinstance(v, tuple) else 1
+            self._dims = _make_dims(self.indices, self.numblocks, self.new_axes)
         return self._dims
 
     def __repr__(self):
@@ -658,10 +656,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
         from dask.array.core import concatenate_axes as concatenate
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    if dims is None:
-        dims = broadcast_dimensions(argpairs, numblocks)
-        for k, v in new_axes.items():
-            dims[k] = len(v) if isinstance(v, tuple) else 1
+    dims = dims or _make_dims(argpairs, numblocks, new_axes)
 
     # Generate the abstract "plan" before constructing
     # the actual graph
@@ -1145,6 +1140,16 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
         raise ValueError("Shapes do not align %s" % g)
 
     return toolz.valmap(toolz.first, g2)
+
+
+def _make_dims(indices, numblocks, new_axes):
+    """Returns a dictionary mapping between each index specified in
+    `indices` and the number of output blocks for that indice.
+    """
+    dims = broadcast_dimensions(indices, numblocks)
+    for k, v in new_axes.items():
+        dims[k] = len(v) if isinstance(v, tuple) else 1
+    return dims
 
 
 def fuse_roots(graph: HighLevelGraph, keys: list):
