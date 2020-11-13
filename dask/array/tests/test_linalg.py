@@ -461,10 +461,18 @@ def test_svd_compressed():
     # compute the difference with original matrix
     norm = scipy.linalg.norm((a - (u[:, :r] * s[:r]) @ vt[:r, :]).compute(), 2)
 
-    # ||a-a_hat||_2 <= (1+tol)s_{k+1}
+    # ||a-a_hat||_2 <= (1+tol)s_{k+1}: based on eq. 1.10/1.11:
+    # Halko, Nathan, Per-Gunnar Martinsson, and Joel A. Tropp.
+    # "Finding structure with randomness: Probabilistic algorithms for constructing
+    # approximate matrix decompositions." SIAM review 53.2 (2011): 217-288.
     frac = norm / s_true[r + 1] - 1
+    # Tolerance determined via simulation to be slightly above max norm of difference matrix in 10k samples.
+    # See https://github.com/dask/dask/pull/6799#issuecomment-726631175 for more details.
     tol = 0.4
     assert frac < tol
+
+    assert_eq(np.eye(r, r), da.dot(u[:, :r].T, u[:, :r]))  # u must be orthonormal
+    assert_eq(np.eye(r, r), da.dot(vt[:r, :], vt[:r, :].T))  # v must be orthonormal
 
 
 @pytest.mark.parametrize("chunks", [(10, 50), (50, 10), (-1, -1)])
