@@ -1019,9 +1019,17 @@ class ArrowEngine(Engine):
                 _meta.set_file_path(filename)
         # Return the schema needed to write the metadata
         if return_metadata:
-            return [{"schema": t.schema, "meta": _meta}]
+            return [{"meta": _meta}]
         else:
             return []
+
+    # @staticmethod
+    # def aggregate_metadata(parts):
+    #     parts = [p for p in parts if p[0]["meta"] is not None]
+    #     _meta = parts[0][0]["meta"]
+    #     for i in range(1, len(parts)):
+    #         _append_row_groups(_meta, parts[i][0]["meta"])
+    #     return [{"meta": _meta}]
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
@@ -1029,11 +1037,12 @@ class ArrowEngine(Engine):
         if parts:
             if not append:
                 # Get only arguments specified in the function
+                schema = parts[0][0]["meta"].schema.to_arrow_schema()
                 common_metadata_path = fs.sep.join([path, "_common_metadata"])
                 keywords = getargspec(pq.write_metadata).args
                 kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
                 with fs.open(common_metadata_path, "wb") as fil:
-                    pq.write_metadata(parts[0][0]["schema"], fil, **kwargs_meta)
+                    pq.write_metadata(schema, fil, **kwargs_meta)
 
             # Aggregate metadata and write to _metadata file
             metadata_path = fs.sep.join([path, "_metadata"])
