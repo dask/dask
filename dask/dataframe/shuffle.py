@@ -497,8 +497,8 @@ def set_index(
             sizes = []
 
         divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
-        mins = index2.map_partitions(operator.methodcaller("min"))
-        maxes = index2.map_partitions(operator.methodcaller("max"))
+        mins = index2.map_partitions(M.min)
+        maxes = index2.map_partitions(M.max)
         sizes, mins, maxes = base.optimize(sizes, mins, maxes)
         divisions, sizes, mins, maxes = base.compute(
             divisions, sizes, mins, maxes, optimize_graph=False
