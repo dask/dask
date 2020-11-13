@@ -511,14 +511,14 @@ def test_svd_compressed_shapes(m, n, k, chunks):
     assert v.shape == (r, n)
 
 
-@pytest.mark.parametrize("iterator", ["power", "QR"])
+@pytest.mark.parametrize("iterator", [("none", 0), ("power", 1), ("QR", 1)])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
     u, s, v = da.linalg.svd_compressed(
-        x, k=2, iterator=iterator, n_power_iter=1, compute=True, seed=123
+        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], compute=True, seed=123
     )
     uu, ss, vv = da.linalg.svd_compressed(
-        x, k=2, iterator=iterator, n_power_iter=1, seed=123
+        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], seed=123
     )
 
     assert len(v.dask) < len(vv.dask)
