@@ -1023,14 +1023,6 @@ class ArrowEngine(Engine):
         else:
             return []
 
-    # @staticmethod
-    # def aggregate_metadata(parts):
-    #     parts = [p for p in parts if p[0]["meta"] is not None]
-    #     _meta = parts[0][0]["meta"]
-    #     for i in range(1, len(parts)):
-    #         _append_row_groups(_meta, parts[i][0]["meta"])
-    #     return [{"meta": _meta}]
-
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
         parts = [p for p in parts if p[0]["meta"] is not None]

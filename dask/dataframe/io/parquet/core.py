@@ -568,15 +568,6 @@ def to_parquet(
     )
     part_tasks = []
 
-    # Check if the engine has an aggregate_metadata method
-    if hasattr(engine, "aggregate_metadata"):
-        agg_size = 4
-        agg_cnt = 0
-        agg_name = "agg-" + name
-        agg_tasks = []
-    else:
-        agg_size = 0
-
     kwargs_pass["fmd"] = meta
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
@@ -595,15 +586,7 @@ def to_parquet(
             ],
             kwargs_pass,
         )
-        if write_metadata_file and agg_size:
-            agg_tasks.append((name, d))
-            if len(agg_tasks) >= agg_size or (d == len(filenames) - 1):
-                dsk[(agg_name, agg_cnt)] = (engine.aggregate_metadata, agg_tasks)
-                part_tasks.append((agg_name, agg_cnt))
-                agg_tasks = []
-                agg_cnt += 1
-        else:
-            part_tasks.append((name, d))
+        part_tasks.append((name, d))
 
     # Collect metadata and write _metadata
     if write_metadata_file:
