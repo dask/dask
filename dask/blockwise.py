@@ -463,7 +463,7 @@ def _get_coord_mapping(
     which to concatenate for each input (`concat_axes`), and the dummy
     indices needed for broadcasting (`dummies`).
 
-    Used by `make_blockwise_graph` and `_cull_dependencies`.
+    Used by `make_blockwise_graph` and `Blockwise._cull_dependencies`.
 
     Parameters
     ----------
@@ -479,7 +479,7 @@ def _get_coord_mapping(
         Corresponds to the Blockwise `numblocks` attribute.
     argpairs: tuple
         Corresponds to the Blockwise `indices` attribute.
-    argpairs: bool
+    concatenate: bool
         Corresponds to the Blockwise `concatenate` attribute.
     """
 
