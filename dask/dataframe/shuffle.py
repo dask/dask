@@ -3,7 +3,7 @@ from collections import defaultdict
 import logging
 import math
 import shutil
-from operator import getitem
+import operator
 import uuid
 import tempfile
 
@@ -247,7 +247,7 @@ class SimpleShuffleLayer(Layer):
             dsk[(self.name, part_out)] = (_concat, _concat_list, self.ignore_index)
             for _, _part_out, _part_in in _concat_list:
                 dsk[(shuffle_split_name, _part_out, _part_in)] = (
-                    getitem,
+                    operator.getitem,
                     (shuffle_group_name, _part_in),
                     _part_out,
                 )
@@ -409,7 +409,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
             for _, _idx, _inp in _concat_list:
                 dsk[(shuffle_split_name, _idx, _inp)] = (
-                    getitem,
+                    operator.getitem,
                     (shuffle_group_name, _inp),
                     _idx,
                 )
@@ -497,14 +497,15 @@ def set_index(
             sizes = []
 
         divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
-        iparts = index2.to_delayed(optimize_graph=False)
-        mins = [ipart.min() for ipart in iparts]
-        maxes = [ipart.max() for ipart in iparts]
+        mins = index2.map_partitions(operator.methodcaller("min"))
+        maxes = index2.map_partitions(operator.methodcaller("max"))
         sizes, mins, maxes = base.optimize(sizes, mins, maxes)
         divisions, sizes, mins, maxes = base.compute(
             divisions, sizes, mins, maxes, optimize_graph=False
         )
         divisions = methods.tolist(divisions)
+        mins = methods.tolist(mins)
+        maxes = methods.tolist(maxes)
 
         empty_dataframe_detected = pd.isnull(divisions).all()
         if repartition or empty_dataframe_detected:
