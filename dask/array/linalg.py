@@ -696,10 +696,9 @@ def compression_matrix(
         state = seed
     else:
         state = RandomState(seed)
-    if (data.dtype).itemsize <= 4:
+    datatype = np.float64
+    if (data.dtype).type in {np.float32, np.complex64}:
         datatype = np.float32
-    else:
-        datatype = np.float64
     omega = state.standard_normal(
         size=(n, comp_level), chunks=(data.chunks[1], (comp_level,))
     ).astype(datatype, copy=False)
