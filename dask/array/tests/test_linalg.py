@@ -455,7 +455,7 @@ def test_svd_compressed():
     a = da.random.random((m, n), chunks=(m, n))
 
     # calculate approximation and true singular values
-    u, s, vt = svd_compressed(a, 2 * r, seed=4321, n_power_iter=0)  # worst case
+    u, s, vt = svd_compressed(a, 2 * r, seed=4321, n_power_iter=2)  # worst case
     s_true = scipy.linalg.svd(a.compute(), compute_uv=False)
 
     # compute the difference with original matrix
