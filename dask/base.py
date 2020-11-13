@@ -263,6 +263,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
+    from .highlevelgraph import HighLevelGraph
+
     optimizations = kwargs.pop("optimizations", None) or config.get("optimizations", [])
 
     if optimize_graph:
@@ -284,12 +286,11 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
                 _opt_list.append(_opt)
             groups = group
 
-        dsk = merge(
-            *map(
-                ensure_dict,
-                _opt_list,
-            )
-        )
+        # Merge all graphs
+        if any(isinstance(graph, HighLevelGraph) for graph in _opt_list):
+            dsk = HighLevelGraph.merge(*_opt_list)
+        else:
+            dsk = merge(*map(ensure_dict, _opt_list))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
