@@ -26,8 +26,6 @@ jobs:
 
       - name: Install
         shell: bash -l {0}
-        env:
-          UPSTREAM_DEV: 1
         run: source continuous_integration/scripts/install.sh
 
       - name: Run tests

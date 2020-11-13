@@ -1,5 +1,10 @@
 set -xe
 
+# We don't have a conda-forge package for cityhash
+# We don't include it in the conda environment.yaml, since that may
+# make things harder for contributors that don't have a C++ compiler
+python -m pip install --no-deps cityhash
+
 if [[ ${UPSTREAM_DEV} ]]; then
     conda uninstall --force numpy pandas
     python -m pip install --no-deps --pre \
