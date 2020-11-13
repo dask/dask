@@ -1141,7 +1141,7 @@ def concat(
             if not ignore_unknown_divisions:
                 warnings.warn(
                     "Concatenating dataframes with unknown divisions.\n"
-                    "We're assuming that the indexes of each dataframes"
+                    "We're assuming that the indices of each dataframes"
                     " are \n aligned. This assumption is not generally "
                     "safe."
                 )
