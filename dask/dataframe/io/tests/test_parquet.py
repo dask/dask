@@ -2327,6 +2327,7 @@ def test_subgraph_getitem():
 
 
 def test_optimize_blockwise_parquet(tmpdir):
+    check_engine()
 
     size = 40
     npartitions = 2
@@ -2828,6 +2829,7 @@ def test_divisions_with_null_partition(tmpdir, engine):
 
 def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     # https://github.com/dask/dask/issues/6600
+    check_pyarrow()
     tmpdir = str(tmpdir)
 
     df_a = dask.delayed(pd.DataFrame.from_dict)(
@@ -2856,6 +2858,7 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
 
 def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     # https://github.com/dask/dask/issues/6600
+    check_pyarrow()
     tmpdir = str(tmpdir)
 
     df_a = dask.delayed(pd.DataFrame.from_dict)(
