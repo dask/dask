@@ -567,7 +567,6 @@ def to_parquet(
         schema,
     )
     part_tasks = []
-
     kwargs_pass["fmd"] = meta
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
@@ -584,7 +583,9 @@ def to_parquet(
                 partition_on,
                 write_metadata_file,
             ],
-            kwargs_pass,
+            toolz.merge(kwargs_pass, {"return_schema": True})
+            if d == 0
+            else kwargs_pass,
         )
         part_tasks.append((name, d))
 
