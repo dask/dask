@@ -977,7 +977,7 @@ class ArrowEngine(Engine):
         compression=None,
         index_cols=None,
         schema=None,
-        return_schema=False,
+        head=False,
         **kwargs,
     ):
         _meta = None
@@ -1020,10 +1020,11 @@ class ArrowEngine(Engine):
                 _meta.set_file_path(filename)
         # Return the schema needed to write the metadata
         if return_metadata:
-            if return_schema:
-                return [{"schema": t.schema, "meta": _meta}]
-            else:
-                return [{"meta": _meta}]
+            d = {"meta": _meta}
+            if head:
+                # Only return schema if this is the "head" partition
+                d["schema"] = t.schema
+            return [d]
         else:
             return []
 
