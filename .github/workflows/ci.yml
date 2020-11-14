@@ -37,6 +37,7 @@ jobs:
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
+      # TODO: Add coverage back
       # - name: Coverage
       #   shell: bash -l {0}
       #   if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
