@@ -1030,15 +1030,16 @@ class ArrowEngine(Engine):
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        schema = parts[0][0].get("schema", None)
         parts = [p for p in parts if p[0]["meta"] is not None]
         if parts:
-            if "schema" in parts[0][0] and not append:
+            if not append:
                 # Get only arguments specified in the function
                 common_metadata_path = fs.sep.join([path, "_common_metadata"])
                 keywords = getargspec(pq.write_metadata).args
                 kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
                 with fs.open(common_metadata_path, "wb") as fil:
-                    pq.write_metadata(parts[0][0]["schema"], fil, **kwargs_meta)
+                    pq.write_metadata(schema, fil, **kwargs_meta)
 
             # Aggregate metadata and write to _metadata file
             metadata_path = fs.sep.join([path, "_metadata"])
