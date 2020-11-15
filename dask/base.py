@@ -747,7 +747,7 @@ normalize_token.register(
 
 @normalize_token.register(dict)
 def normalize_dict(d):
-    return normalize_token(sorted(d.items(), key=str))
+    return type(d).__name__, normalize_token(sorted(d.items(), key=str))
 
 
 @normalize_token.register(OrderedDict)
@@ -757,7 +757,7 @@ def normalize_ordered_dict(d):
 
 @normalize_token.register(set)
 def normalize_set(s):
-    return normalize_token(sorted(s, key=str))
+    return type(s).__name__, normalize_token(sorted(s, key=str))
 
 
 @normalize_token.register((tuple, list))
@@ -778,7 +778,7 @@ def normalize_literal(lit):
 
 @normalize_token.register(range)
 def normalize_range(r):
-    return list(map(normalize_token, [r.start, r.stop, r.step]))
+    return type(r).__name__, list(map(normalize_token, [r.start, r.stop, r.step]))
 
 
 @normalize_token.register(object)

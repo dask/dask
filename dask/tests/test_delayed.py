@@ -528,7 +528,7 @@ def test_name_consistent_across_instances():
     func = delayed(identity, pure=True)
 
     data = {"x": 1, "y": 25, "z": [1, 2, 3]}
-    assert func(data)._key == "identity-02129ed1acaffa7039deee80c5da547c"
+    assert func(data)._key == "identity-eb05fcd149122e0944e7fda234569390"
 
     data = {"x": 1, 1: "x"}
     assert func(data)._key == func(data)._key

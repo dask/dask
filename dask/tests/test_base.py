@@ -389,6 +389,18 @@ def test_tokenize_dict():
     assert tokenize({"x": 1, 1: "x"}) == tokenize({"x": 1, 1: "x"})
 
 
+def test_tokenize_dict_items_collision():
+    assert tokenize({"x": 1, 1: "x"}) != tokenize([("x", 1), (1, "x")])
+
+
+def test_tokenize_set_list_collision():
+    assert tokenize([1, 2, 3]) != tokenize({1, 2, 3})
+
+
+def test_tokenize_list_set_collision():
+    assert tokenize({1, "x"}) != tokenize([1, "x"])
+
+
 def test_tokenize_set():
     assert tokenize({1, 2, "x", (1, "x")}) == tokenize({1, 2, "x", (1, "x")})
 
