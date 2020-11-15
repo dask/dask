@@ -6,10 +6,26 @@ hashers = []  # In decreasing performance order
 
 
 # Timings on a largish array:
+# - blake3 is up to ~5x faster then CityHash on a 32 core machine (2x slower single threaded)
 # - CityHash is 2x faster than MurmurHash
 # - xxHash is slightly slower than CityHash
 # - MurmurHash is 8x faster than SHA1
 # - SHA1 is significantly faster than all other hashlib algorithms
+
+try:
+    import blake3  # `python -m pip install blake3`
+except ImportError:
+    pass
+else:
+
+    def _hash_blake3(buf):
+        """
+        Produce a 32-bytes hash of *buf* using blake3.
+        """
+        return blake3.blake3(buf, multithreading=True).digest()
+
+    hashers.append(_hash_blake3)
+
 
 try:
     import cityhash  # `python -m pip install cityhash`
