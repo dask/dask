@@ -751,7 +751,7 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=
         wait(comp)
     a_compressed = comp.dot(a)
     v, s, u = tsqr(a_compressed.T, compute_svd=True)
-    u = comp.T.dot(u)
+    u = comp.T.dot(u.T)
     v = v.T
     u = u[:, :k]
     s = s[:k]
