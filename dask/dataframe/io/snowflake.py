@@ -44,6 +44,7 @@ def get_chunk_downloader(res):
     :param res: ``ArrowResult``
     """
     from arrow.connector.arrow_results import EMPTY_UNIT, TABLE_UNIT, ROW_UNIT
+
     if res._iter_unit == EMPTY_UNIT:
         res._iter_unit = TABLE_UNIT
     elif res._iter_unit == ROW_UNIT:
