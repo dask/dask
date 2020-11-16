@@ -1,3 +1,4 @@
+import dask.dataframe as dd
 
 
 def read_snowflake(query, connection_info):
@@ -29,6 +30,7 @@ def read_snowflake(query, connection_info):
         ddf = dd.read_snowflake(query, conn_info)
     """
     from snowflake.connector import connect
+
     conn = connect(**connection_info)
     cur = conn.cursor()
     ddf = fetch_dask_dataframe(cur.execute(query), connection_info=connection_info)
@@ -41,6 +43,7 @@ def get_chunk_downloader(res):
 
     :param res: ``ArrowResult``
     """
+    from arrow.connector.arrow_results import EMPTY_UNIT, TABLE_UNIT, ROW_UNIT
     if res._iter_unit == EMPTY_UNIT:
         res._iter_unit = TABLE_UNIT
     elif res._iter_unit == ROW_UNIT:
@@ -64,18 +67,19 @@ def pandas_from_chunk(connection_info, chunk_url, chunk_downloader_headers):
     """
     from snowflake.connector.connection import SnowflakeConnection
     from snowflake.connector.chunk_downloader import ArrowBinaryHandler
+
     conn = SnowflakeConnection(**connection_info)
     cur = conn.cursor()
     try:
         result_handler = ArrowBinaryHandler(cur, conn)
 
         result = conn.rest.fetch(
-            method='get',
+            method="get",
             full_url=chunk_url,
             headers=chunk_downloader_headers,
             timeout=7,
             is_raw_binary=True,
-            binary_data_handler=result_handler
+            binary_data_handler=result_handler,
         )
     finally:
         conn.close()
@@ -92,16 +96,18 @@ def fetch_dask_dataframe(cur, connection_info):
     :param connection_info: kwargs to pass to a ``snowflake.connector.Connection`` object
     """
     cur.check_can_use_pandas()
-    if cur._query_result_format != 'arrow':
-        raise NotSupportedError("can only use fetch_dask_dataframe() with Arrow results")
+    if cur._query_result_format != "arrow":
+        raise NotImplementedError(
+            "can only use fetch_dask_dataframe() with Arrow results"
+        )
     cdl = get_chunk_downloader(cur._result)
     try:
         ddf = dd.from_delayed(
             [
-                _pandas_from_chunk(
+                pandas_from_chunk(
                     connection_info=connection_info,
                     chunk_url=chunk.url,
-                    chunk_downloader_headers=cdl._chunk_headers
+                    chunk_downloader_headers=cdl._chunk_headers,
                 )
                 for chunk in cdl._chunks.values()
             ],
