@@ -2934,7 +2934,7 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
     )
     df.columns = ["A", "B", "C"]
     ddf = dd.from_pandas(df, npartitions=5)
-    dd.to_parquet(ddf, tmpdir, engine="pyarrow", partition_on=["A", "B"])
+    dd.to_parquet(ddf, tmpdir, engine=engine, partition_on=["A", "B"], overwrite=True)
 
     # Get the total number of files and directories from the original write
     files_ = Path(tmpdir).rglob("*")
