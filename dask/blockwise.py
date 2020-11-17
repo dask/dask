@@ -661,7 +661,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             kwargs2 = kwargs
 
     # Apply Culling.
-    # Only need to costruct the specified set of output blocks
+    # Only need to construct the specified set of output blocks
     output_blocks = output_blocks or itertools.product(
         *[range(dims[i]) for i in out_indices]
     )
