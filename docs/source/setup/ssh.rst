@@ -10,7 +10,7 @@ or automatically using either the ``SSHCluster`` Python command or the
 Python Interface
 ----------------
 
-.. currentmodule:: distributed.deploy.ssh   #doctest: +SKIP
+.. currentmodule:: distributed.deploy.ssh
 
 .. autofunction:: SSHCluster
 
