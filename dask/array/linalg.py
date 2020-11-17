@@ -675,9 +675,12 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
         state = seed
     else:
         state = RandomState(seed)
+    datatype = np.float64
+    if (data.dtype).type in {np.float32, np.complex64}:
+        datatype = np.float32
     omega = state.standard_normal(
         size=(n, comp_level), chunks=(data.chunks[1], (comp_level,))
-    )
+    ).astype(datatype, copy=False)
     mat_h = data.dot(omega)
     for j in range(n_power_iter):
         if compute:
@@ -748,7 +751,7 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=
         wait(comp)
     a_compressed = comp.dot(a)
     v, s, u = tsqr(a_compressed.T, compute_svd=True)
-    u = comp.T.dot(u)
+    u = comp.T.dot(u.T)
     v = v.T
     u = u[:, :k]
     s = s[:k]

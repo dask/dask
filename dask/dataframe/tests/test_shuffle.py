@@ -1073,3 +1073,10 @@ def test_shuffle_hlg_layer_serialize(npartitions):
         assert type(layer_roundtrip) == type(layer)
         assert not hasattr(layer_roundtrip, "_cached_dict")
         assert layer_roundtrip.keys() == layer.keys()
+
+
+def test_set_index_nan_partition():
+    d[d.a > 3].set_index("a")  # Set index with 1 null partition
+    d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
+    a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
+    assert_eq(a, a)
