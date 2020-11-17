@@ -674,7 +674,7 @@ def compression_matrix(
         the input matrix decay very slowly.
     n_oversamples: int, default=10
         Number of oversamples used for generating the sampling matrix.
-        This value increases the size of the subspace computed, which is more 
+        This value increases the size of the subspace computed, which is more
         accurate at the cost of efficiency.  Results are rarely sensitive to this choice
         though and in practice a value of 10 is very commonly high enough.
     compute : bool
@@ -756,7 +756,7 @@ def svd_compressed(
         Input array
     k: int
         Rank of the desired thin SVD decomposition.
-    iterator: {'none', 'power', 'QR', 'LU'}, default='none'
+    iterator: {'none', 'power', 'QR'}, default='none'
         Define the technique used for iterations to cope with flat
         singular spectra or when the input matrix is very large.
     n_power_iter: int, default=1
