@@ -164,7 +164,7 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer({k: func(v) for k, v in self.items()})
 
-    def __dask_distributed_pack__(self) -> Optional[Any]:
+    def __dask_distributed_pack__(self, client) -> Optional[Any]:
         """Pack the layer for scheduler communication in Distributed
 
         This method should pack its current state and is called by the Client when
@@ -181,6 +181,11 @@ class Layer(collections.abc.Mapping):
 
         Alternatively, the method can return None, which will make Distributed
         materialize the layer and use a default packing method.
+
+        Parameters
+        ----------
+        client: distributed.Client
+            The client calling this function.
 
         Returns
         -------
