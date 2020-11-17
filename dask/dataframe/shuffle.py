@@ -16,7 +16,6 @@ from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_obj
 from .. import base, config
 from ..core import keys_in_tasks
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
-from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph, Layer
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
@@ -488,22 +487,14 @@ def set_index(
         index2 = index
 
     if divisions is None:
-        if repartition:
-            index2, df = base.optimize(index2, df)
-            parts = df.to_delayed(optimize_graph=False)
-            sizes = [delayed(sizeof)(part) for part in parts]
-        else:
-            (index2,) = base.optimize(index2)
-            sizes = []
-
+        sizes = df.map_partitions(sizeof) if repartition else []
         divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
         mins = index2.map_partitions(M.min)
         maxes = index2.map_partitions(M.max)
-        sizes, mins, maxes = base.optimize(sizes, mins, maxes)
-        divisions, sizes, mins, maxes = base.compute(
-            divisions, sizes, mins, maxes, optimize_graph=False
-        )
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
         divisions = methods.tolist(divisions)
+        if type(sizes) is not list:
+            sizes = methods.tolist(sizes)
         mins = methods.tolist(mins)
         maxes = methods.tolist(maxes)
 
