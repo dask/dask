@@ -2855,6 +2855,19 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     except AttributeError:
         pytest.fail("Unexpected AttributeError")
 
+    # Check that metadata files where written
+    files = os.listdir(tmpdir)
+    assert "_metadata" in files
+    assert "_common_metadata" in files
+
+    schema_common = pq.ParquetFile(
+        os.path.join(tmpdir, "_common_metadata")
+    ).schema.to_arrow_schema()
+    schema_meta = pq.ParquetFile(
+        os.path.join(tmpdir, "_metadata")
+    ).schema.to_arrow_schema()
+    assert schema_common == schema_meta
+
 
 def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     # https://github.com/dask/dask/issues/6600
