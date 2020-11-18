@@ -4,6 +4,7 @@ import tlz as toolz
 import warnings
 from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
@@ -369,6 +370,7 @@ def to_parquet(
     compression="default",
     write_index=True,
     append=False,
+    overwrite=False,
     ignore_divisions=False,
     partition_on=None,
     storage_options=None,
@@ -404,6 +406,13 @@ def to_parquet(
         If False (default), construct data-set from scratch. If True, add new
         row-group(s) to an existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
+    overwrite : bool, optional
+        Whether or not to remove the contents of `path` before writing the dataset.
+        The default is False.  If True, the specified path must correspond to
+        a directory (but not the current working directory).  This option cannot
+        be set to True if `append=True`.
+        NOTE: `overwrite=True` will remove the original data even if the current
+        write operation fails.  Use at your own risk.
     ignore_divisions : bool, optional
         If False (default) raises error when previous divisions overlap with
         the new appended divisions. Ignored if append=False.
@@ -468,6 +477,22 @@ def to_parquet(
     fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
     # Trim any protocol information from the path before forwarding
     path = fs._strip_protocol(path)
+
+    if overwrite:
+        if isinstance(fs, LocalFileSystem):
+            working_dir = fs.expand_path(".")[0]
+            if path == working_dir:
+                raise ValueError(
+                    "Cannot clear the contents of the current working directory!"
+                )
+        if append:
+            raise ValueError("Cannot use both `overwrite=True` and `append=True`!")
+        if fs.isdir(path):
+            # Only remove path contents if
+            # (1) The path exists
+            # (2) The path is a directory
+            # (3) The path is not the current working directory
+            fs.rm(path, recursive=True)
 
     # Save divisions and corresponding index name. This is necessary,
     # because we may be resetting the index to write the file
