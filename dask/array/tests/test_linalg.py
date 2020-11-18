@@ -449,13 +449,33 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
-def test_svd_compressed():
+@pytest.mark.parametrize("iterator", [("none", 0), ("power", 1), ("QR", 1)])
+def test_svd_compressed_compute(iterator):
+    x = da.ones((100, 100), chunks=(10, 10))
+    u, s, v = da.linalg.svd_compressed(
+        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], compute=True, seed=123
+    )
+    uu, ss, vv = da.linalg.svd_compressed(
+        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], seed=123
+    )
+
+    assert len(v.dask) < len(vv.dask)
+    assert_eq(v, vv)
+
+
+@pytest.mark.parametrize("iterator", [("power", 2), ("QR", 2)])
+def test_svd_compressed(iterator):
+    # Note: iterator="none" is not tested due to its
+    # difficulty with respect to the stochastic process of sampling,
+    # leading to false positives and false negatives in this test.
     m, n = 100, 50
     r = 5
     a = da.random.random((m, n), chunks=(m, n))
 
     # calculate approximation and true singular values
-    u, s, vt = svd_compressed(a, 2 * r, seed=4321, n_power_iter=2)  # worst case
+    u, s, vt = svd_compressed(
+        a, 2 * r, iterator=iterator[0], n_power_iter=iterator[1], seed=4321
+    )  # worst case
     s_true = scipy.linalg.svd(a.compute(), compute_uv=False)
 
     # compute the difference with original matrix
@@ -507,7 +527,7 @@ def test_svd_compressed_deterministic():
 @pytest.mark.parametrize("chunks", [(5, 10), (10, 5)])
 def test_svd_compressed_shapes(m, n, k, chunks):
     x = da.random.random(size=(m, n), chunks=chunks)
-    u, s, v = svd_compressed(x, k=k, n_power_iter=1, compute=True, seed=1)
+    u, s, v = svd_compressed(x, k, n_power_iter=1, compute=True, seed=1)
     u, s, v = da.compute(u, s, v)
     r = min(m, n, k)
     assert u.shape == (m, r)
@@ -515,13 +535,17 @@ def test_svd_compressed_shapes(m, n, k, chunks):
     assert v.shape == (r, n)
 
 
-def test_svd_compressed_compute():
+@pytest.mark.parametrize("iterator", [("none", 0), ("power", 1), ("QR", 1)])
+def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
-    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
+    u, s, v = da.linalg.svd_compressed(
+        x, 2, iterator=iterator[0], n_power_iter=iterator[1], compute=True, seed=123
+    )
+    uu, ss, vv = da.linalg.svd_compressed(
+        x, 2, iterator=iterator[0], n_power_iter=iterator[1], seed=123
+    )
 
     assert len(v.dask) < len(vv.dask)
-
     assert_eq(v, vv)
 
 
