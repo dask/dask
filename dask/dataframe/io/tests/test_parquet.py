@@ -2919,6 +2919,7 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         fns,
         tmpdir,
         engine="pyarrow",
+        split_every=3,  # Force tree reduction
     )
 
     # Check that we can now read the ddf
@@ -2928,7 +2929,6 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         gather_statistics=True,
         split_row_groups=False,
         engine=read_engine,
-        split_every=3,  # Force tree reduction
         index="myindex",  # python-3.6 CI
     )
     if partition_on:
