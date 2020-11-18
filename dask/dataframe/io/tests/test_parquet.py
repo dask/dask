@@ -2901,6 +2901,7 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
 
     # Write ddf without a _metadata file
     df1 = pd.DataFrame({"b": range(100), "a": ["A", "B", "C", "D"] * 25})
+    df1.index.name = "myindex"
     ddf1 = dd.from_pandas(df1, npartitions=10)
     ddf1.to_parquet(
         tmpdir,
