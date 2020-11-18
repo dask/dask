@@ -2900,9 +2900,9 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
     tmpdir = str(tmpdir)
 
     # Write ddf without a _metadata file
-    df = pd.DataFrame({"b": range(100), "a": ["A", "B", "C", "D"] * 25})
-    ddf = dd.from_pandas(df, npartitions=10)
-    ddf.to_parquet(
+    df1 = pd.DataFrame({"b": range(100), "a": ["A", "B", "C", "D"] * 25})
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+    ddf1.to_parquet(
         tmpdir,
         write_metadata_file=False,
         partition_on=partition_on,
@@ -2930,10 +2930,10 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         split_every=3,  # Force tree reduction
     )
     if partition_on:
-        ddf = df.sort_values("b")
+        ddf1 = df1.sort_values("b")
         ddf2 = ddf2.compute().sort_values("b")
         ddf2.a = ddf2.a.astype("object")
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf1, ddf2)
 
 
 def test_create_metadata_file_inconsistent_schema_cudf(tmpdir, engine):
