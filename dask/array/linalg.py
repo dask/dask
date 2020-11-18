@@ -618,26 +618,42 @@ def sfqr(data, name=None):
     return Q, R
 
 
-def compression_level(n, q, oversampling=10, min_subspace_size=20):
+def compression_level(n, q, n_oversamples=10, min_subspace_size=20):
     """Compression level to use in svd_compressed
 
     Given the size ``n`` of a space, compress that that to one of size
-    ``q`` plus oversampling.
+    ``q`` plus n_oversamples.
 
     The oversampling allows for greater flexibility in finding an
     appropriate subspace, a low value is often enough (10 is already a
     very conservative choice, it can be further reduced).
     ``q + oversampling`` should not be larger than ``n``.  In this
-    specific implementation, ``q + oversampling`` is at least
+    specific implementation, ``q + n_oversamples`` is at least
     ``min_subspace_size``.
 
+    Parameters
+    ----------
+    n: int
+        Column/row dimension of original matrix
+    q: int
+        Size of the desired subspace (the actual size will be bigger,
+        because of oversampling, see ``da.linalg.compression_level``)
+    n_oversamples: int, default=10
+        Number of oversamples used for generating the sampling matrix.
+    min_subspace_size : int, default=20
+        Minimum subspace size.
+
+     Examples
+    --------
     >>> compression_level(100, 10)
     20
     """
-    return min(max(min_subspace_size, q + oversampling), n)
+    return min(max(min_subspace_size, q + n_oversamples), n)
 
 
-def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
+def compression_matrix(
+    data, q, iterator="none", n_power_iter=0, n_oversamples=10, seed=None, compute=False
+):
     """Randomly sample matrix to find most active subspace
 
     This compression matrix returned by this algorithm can be used to
@@ -650,9 +666,17 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     q: int
         Size of the desired subspace (the actual size will be bigger,
         because of oversampling, see ``da.linalg.compression_level``)
+    iterator: {'none', 'power', 'QR'}, default='none'
+        Define the technique used for iterations to cope with flat
+        singular spectra or when the input matrix is very large.
     n_power_iter: int
         number of power iterations, useful when the singular values of
         the input matrix decay very slowly.
+    n_oversamples: int, default=10
+        Number of oversamples used for generating the sampling matrix.
+        This value increases the size of the subspace computed, which is more
+        accurate at the cost of efficiency.  Results are rarely sensitive to this choice
+        though and in practice a value of 10 is very commonly high enough.
     compute : bool
         Whether or not to compute data at each use.
         Recomputing the input while performing several passes reduces memory
@@ -670,7 +694,7 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
     https://arxiv.org/abs/0909.4061
     """
     m, n = data.shape
-    comp_level = compression_level(min(m, n), q)
+    comp_level = compression_level(min(m, n), q, n_oversamples=n_oversamples)
     if isinstance(seed, RandomState):
         state = seed
     else:
@@ -682,20 +706,43 @@ def compression_matrix(data, q, n_power_iter=0, seed=None, compute=False):
         size=(n, comp_level), chunks=(data.chunks[1], (comp_level,))
     ).astype(datatype, copy=False)
     mat_h = data.dot(omega)
-    for j in range(n_power_iter):
-        if compute:
-            mat_h = mat_h.persist()
-            wait(mat_h)
-        tmp = data.T.dot(mat_h)
-        if compute:
-            tmp = tmp.persist()
-            wait(tmp)
-        mat_h = data.dot(tmp)
-    q, _ = tsqr(mat_h)
+    if iterator == "power":
+        for i in range(n_power_iter):
+            if compute:
+                mat_h = mat_h.persist()
+                wait(mat_h)
+            tmp = data.T.dot(mat_h)
+            if compute:
+                tmp = tmp.persist()
+                wait(tmp)
+            mat_h = data.dot(tmp)
+        q, _ = tsqr(mat_h)
+    elif iterator == "QR":
+        q, _ = tsqr(mat_h)
+        for i in range(n_power_iter):
+            if compute:
+                q = q.persist()
+                wait(q)
+            q, _ = tsqr(data.T.dot(q))
+            if compute:
+                q = q.persist()
+                wait(q)
+            q, _ = tsqr(data.dot(q))
+    else:
+        q, _ = tsqr(mat_h)
     return q.T
 
 
-def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=True):
+def svd_compressed(
+    a,
+    k,
+    iterator="none",
+    n_power_iter=1,
+    n_oversamples=10,
+    seed=None,
+    compute=False,
+    coerce_signs=True,
+):
     """Randomly compressed rank-k thin Singular Value Decomposition.
 
     This computes the approximate singular value decomposition of a large
@@ -709,10 +756,15 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=
         Input array
     k: int
         Rank of the desired thin SVD decomposition.
-    n_power_iter: int
+    iterator: {'none', 'power', 'QR'}, default='none'
+        Define the technique used for iterations to cope with flat
+        singular spectra or when the input matrix is very large.
+    n_power_iter: int, default=1
         Number of power iterations, useful when the singular values
         decay slowly. Error decreases exponentially as n_power_iter
         increases. In practice, set n_power_iter <= 4.
+    n_oversamples: int, default=10
+        Number of oversamples used for generating the sampling matrix.
     compute : bool
         Whether or not to compute data at each use.
         Recomputing the input while performing several passes reduces memory
@@ -743,8 +795,16 @@ def svd_compressed(a, k, n_power_iter=0, seed=None, compute=False, coerce_signs=
     pp. 217-288, June 2011
     https://arxiv.org/abs/0909.4061
     """
+    if iterator != "none" and n_power_iter == 0:
+        raise ValueError("Iterators require n_power_iter > 0.\n")
     comp = compression_matrix(
-        a, k, n_power_iter=n_power_iter, seed=seed, compute=compute
+        a,
+        k,
+        iterator=iterator,
+        n_power_iter=n_power_iter,
+        n_oversamples=n_oversamples,
+        seed=seed,
+        compute=compute,
     )
     if compute:
         comp = comp.persist()
