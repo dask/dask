@@ -2422,6 +2422,9 @@ def test_groupby_sort_true_split_out():
         M.sum(ddf.groupby("x", sort=True), split_out=2)
 
 
+@pytest.mark.skipif(
+    not dd._compat.PANDAS_GT_100, reason="observed only supported for newer pandas"
+)
 @pytest.mark.parametrize("known_cats", [True, False])
 @pytest.mark.parametrize("ordered_cats", [True, False])
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
@@ -2429,9 +2432,12 @@ def test_groupby_sort_true_split_out():
 def test_groupby_aggregate_categorical_observed(
     known_cats, ordered_cats, agg_func, groupby, observed
 ):
-    # nunique is not implemented for DataFrameGroupBy
-    if agg_func == "nunique":
+    if agg_func in ["cov", "corr", "nunique"]:
         pytest.skip("Not implemented for DataFrameGroupBy yet.")
+    if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
+        pytest.skip("Gives zeros rather than nans.")
+    if agg_func in ["std", "var"] and observed:
+        pytest.skip("Can't calculate observed with all nans")
 
     pdf = pd.DataFrame(
         {
