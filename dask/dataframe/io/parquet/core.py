@@ -4,6 +4,7 @@ import tlz as toolz
 import warnings
 from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
+from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
 from ...core import DataFrame, new_dd_object
@@ -482,11 +483,12 @@ def to_parquet(
     path = fs._strip_protocol(path)
 
     if overwrite:
-        working_dir = fs.expand_path(".")[0]
-        if path == working_dir:
-            raise ValueError(
-                "Cannot clear the contents of the current working directory!"
-            )
+        if isinstance(fs, LocalFileSystem):
+            working_dir = fs.expand_path(".")[0]
+            if path == working_dir:
+                raise ValueError(
+                    "Cannot clear the contents of the current working directory!"
+                )
         if append:
             raise ValueError("Cannot use both `overwrite=True` and `append=True`!")
         if fs.isdir(path):
