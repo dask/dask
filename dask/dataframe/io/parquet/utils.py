@@ -195,6 +195,14 @@ class Engine:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        raise NotImplementedError()
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list):
+        raise NotImplementedError()
+
 
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section
