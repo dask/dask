@@ -347,31 +347,41 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def __dask_distributed_pack__(self):
+    def __dask_distributed_pack__(self, client):
         from distributed.worker import dumps_function
-        from distributed.utils import tokey
+        from distributed.utils import tokey, CancelledError
         from distributed.utils_comm import unpack_remotedata
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
 
         dsk = (SubgraphCallable(dsk, self.output, keys),)
-        dsk, unpacked_futures_deps = unpack_remotedata(dsk, byte_keys=True)
-        # TODO: check that all futures in `unpacked_futures_deps` are legal
+        dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
+
         func = dumps_function(dsk[0])
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(self.indices))
-        indices, global_futures_deps = unpack_remotedata(indices, byte_keys=True)
-        global_futures_deps = tuple(tokey(dep.key) for dep in global_futures_deps)
-        # TODO: check that all futures in `global_futures_deps` are legal
+        indices, indices_unpacked_futures = unpack_remotedata(indices, byte_keys=True)
+
+        # Check the legality of the unpacked futures
+        for future in itertools.chain(dsk_unpacked_futures, indices_unpacked_futures):
+            if future.client is not client:
+                raise ValueError(
+                    "Inputs contain futures that were created by another client."
+                )
+            if tokey(future.key) not in client.futures:
+                raise CancelledError(tokey(future.key))
+
+        # All blockwise tasks will depend on the futures in `indices`
+        global_dependencies = tuple(tokey(f.key) for f in indices_unpacked_futures)
 
         ret = {
             "output": self.output,
             "output_indices": self.output_indices,
             "func": func,
             "func_future_args": func_future_args,
-            "global_futures_deps": global_futures_deps,
+            "global_dependencies": global_dependencies,
             "indices": indices,
             "numblocks": self.numblocks,
             "concatenate": self.concatenate,
@@ -405,7 +415,7 @@ class Blockwise(Layer):
             func_future_args=state["func_future_args"],
         )
         io_name, io_subgraph = state["io_subgraph"]
-        global_futures_deps = list(state["global_futures_deps"])
+        global_dependencies = list(state["global_dependencies"])
 
         if io_subgraph:
             # This is an IO layer.
@@ -423,7 +433,7 @@ class Blockwise(Layer):
         dsk.update(raw)
 
         for k, v in raw_deps.items():
-            dependencies[tokey(k)] = [tokey(d) for d in v] + global_futures_deps
+            dependencies[tokey(k)] = [tokey(d) for d in v] + global_dependencies
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
