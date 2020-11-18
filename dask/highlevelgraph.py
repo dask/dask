@@ -2,7 +2,6 @@ import abc
 import collections.abc
 from typing import (
     Any,
-    Callable,
     Dict,
     Hashable,
     Optional,
@@ -139,30 +138,6 @@ class Layer(collections.abc.Mapping):
             A set of dependencies
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
-
-    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "Layer":
-        """Map `func` on tasks in the layer and returns a new layer.
-
-        `func` should take an iterable of the tasks as input and return a new
-        iterable as output and **cannot** change the dependencies between Layers.
-
-        Warning
-        -------
-        A layer is allowed to ignore the map on tasks that are part of its internals.
-        For instance, Blockwise will only invoke `func` on the input literals.
-
-        Parameters
-        ----------
-        func: callable
-            The function to call on tasks
-
-        Returns
-        -------
-        layer: Layer
-            A new layer containing the transformed tasks
-        """
-
-        return BasicLayer({k: func(v) for k, v in self.items()})
 
     def __dask_distributed_pack__(self, client) -> Optional[Any]:
         """Pack the layer for scheduler communication in Distributed
@@ -636,62 +611,6 @@ class HighLevelGraph(Mapping):
             }
 
         return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
-
-    def map_basic_layers(
-        self, func: Callable[[BasicLayer], Mapping]
-    ) -> "HighLevelGraph":
-        """Map `func` on each basic layer and returns a new high level graph.
-
-        `func` should take a BasicLayer as input and return a new Mapping as output
-        and **cannot** change the dependencies between Layers.
-
-        If `func` returns a non-Layer type, it will be wrapped in a `BasicLayer`
-        object automatically.
-
-        Parameters
-        ----------
-        func : callable
-            The function to call on each BasicLayer
-
-        Returns
-        -------
-        hlg : HighLevelGraph
-            A high level graph containing the transformed BasicLayers and the other
-            Layers untouched
-        """
-        layers = {
-            k: func(v) if isinstance(v, BasicLayer) else v
-            for k, v in self.layers.items()
-        }
-        return HighLevelGraph(layers, self.dependencies)
-
-    def map_tasks(self, func: Callable[[Iterable], Iterable]) -> "HighLevelGraph":
-        """Map `func` on all tasks and returns a new high level graph.
-
-        `func` should take an iterable of the tasks as input and return a new
-        iterable as output and **cannot** change the dependencies between Layers.
-
-        Warning
-        -------
-        A layer is allowed to ignore the map on tasks that are part of its internals.
-        For instance, Blockwise will only invoke `func` on the input literals.
-
-        Parameters
-        ----------
-        func : callable
-            The function to call on tasks
-
-        Returns
-        -------
-        hlg : HighLevelGraph
-            A high level graph containing the transformed tasks
-        """
-
-        return HighLevelGraph(
-            {k: v.map_tasks(func) for k, v in self.layers.items()},
-            self.dependencies,
-            self.key_dependencies,
-        )
 
     def validate(self):
         # Check dependencies
