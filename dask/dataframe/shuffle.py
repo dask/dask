@@ -18,33 +18,11 @@ from ..core import keys_in_tasks
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
 from ..highlevelgraph import HighLevelGraph, Layer
 from ..sizeof import sizeof
-from ..utils import digit, insert, M
+from ..utils import digit, insert, M, stringify, stringify_collection_keys
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
 
 logger = logging.getLogger(__name__)
-
-
-def key_stringify(task):
-    """Convert all keys in `task` to strings.
-
-    This is a fast version of distributed.utils.str_graph()
-    that only handles keys of the from: `("a string", ...)`
-    """
-    from distributed.utils import tokey
-
-    typ = type(task)
-    if typ is tuple and task and callable(task[0]):
-        return (task[0],) + tuple(key_stringify(x) for x in task[1:])
-    if typ is list:
-        return [key_stringify(v) for v in task]
-    if typ is dict:
-        return {k: key_stringify(v) for k, v in task.items()}
-    if typ is tuple and task and type(task[0]) is str:
-        return tokey(task)
-    elif typ is tuple:  # If the tuple itself isn't a key, check its elements
-        return tuple(key_stringify(v) for v in task)
-    return task
 
 
 class SimpleShuffleLayer(Layer):
@@ -154,7 +132,6 @@ class SimpleShuffleLayer(Layer):
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         from distributed.worker import dumps_task
-        from distributed.utils import tokey
 
         # msgpack will convert lists into tuples, here
         # we convert them back to lists
@@ -167,7 +144,7 @@ class SimpleShuffleLayer(Layer):
         raw = dict(cls(**state))
 
         # Convert all keys to strings and dump tasks
-        raw = {tokey(k): key_stringify(v) for k, v in raw.items()}
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(toolz.valmap(dumps_task, raw))
 
         # TODO: use shuffle-knowledge to calculate dependencies more efficiently

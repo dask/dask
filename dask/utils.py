@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
+from typing import Iterable, Optional
 import uuid
 from weakref import WeakValueDictionary
 from functools import lru_cache
@@ -1472,3 +1473,95 @@ def key_split(s):
             return result
     except Exception:
         return "Other"
+
+
+def stringify(obj, exclusive: Optional[Iterable] = None):
+    """Convert an object to a string
+
+    If `exclusive` is not None, search through the values in `obj`
+    and convert values that are in `exclusive`.
+    Notice, only the values of `obj` are converted not the keys.
+
+    Parameters
+    ----------
+    obj : Any
+        Object (or values within) to convert to string
+    exclusive: Iterable, optional
+        Set of values to search for when converting values to strings
+
+    Returns
+    -------
+    result : type(obj)
+        Stringified copy of `obj` or `obj` itself if it is already a
+        string or bytes.
+
+    Examples
+    --------
+    >>> stringify(b'x')
+    b'x'
+    >>> stringify('x')
+    'x'
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)})
+    "{('a', 0): ('a', 0), ('a', 1): ('a', 1)}"
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)}, exclusive={('a',0)})
+    {('a', 0): "('a', 0)", ('a', 1): ('a', 1)}
+    """
+
+    typ = type(obj)
+    if typ is str or typ is bytes:
+        return obj
+    elif exclusive is None:
+        return str(obj)
+
+    if typ is tuple and obj:
+        from .optimization import SubgraphCallable
+
+        obj0 = obj[0]
+        if type(obj0) is SubgraphCallable:
+            obj0 = obj0
+            return (
+                SubgraphCallable(
+                    stringify(obj0.dsk, exclusive),
+                    obj0.outkey,
+                    stringify(obj0.inkeys, exclusive),
+                    obj0.name,
+                ),
+            ) + tuple(stringify(x, exclusive) for x in obj[1:])
+        elif callable(obj0):
+            return (obj0,) + tuple(stringify(x, exclusive) for x in obj[1:])
+
+    if typ is list:
+        return [stringify(v, exclusive) for v in obj]
+    if typ is dict:
+        return {k: stringify(v, exclusive) for k, v in obj.items()}
+    try:
+        if obj in exclusive:
+            return stringify(obj)
+    except TypeError:  # `obj` not hashable
+        pass
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify(v, exclusive) for v in obj)
+    return obj
+
+
+def stringify_collection_keys(obj):
+    """Convert all collection keys in `obj` to strings.
+
+    This is a specialized version of stringify() that only converts keys
+    of the from: `("a string", ...)`
+    """
+
+    typ = type(obj)
+    if typ is tuple and obj:
+        obj0 = obj[0]
+        if type(obj0) is str or type(obj0) is bytes:
+            return stringify(obj)
+        if callable(obj0):
+            return (obj0,) + tuple(stringify_collection_keys(x) for x in obj[1:])
+    if typ is list:
+        return [stringify_collection_keys(v) for v in obj]
+    if typ is dict:
+        return {k: stringify_collection_keys(v) for k, v in obj.items()}
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify_collection_keys(v) for v in obj)
+    return obj
