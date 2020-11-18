@@ -24,6 +24,7 @@ from .utils import (
     raise_on_meta_error,
     is_series_like,
     is_dataframe_like,
+    PANDAS_GT_100,
 )
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
@@ -273,21 +274,12 @@ class Aggregation(object):
 
 
 def _groupby_aggregate(
-    df, aggfunc=None, levels=None, dropna=None, observed=False, **kwargs
+    df, aggfunc=None, levels=None, dropna=None, sort=False, observed=False, **kwargs
 ):
     dropna = {"dropna": dropna} if dropna is not None else {}
-
-    # This is a workaround for https://github.com/pandas-dev/pandas/issues/27075
-    if (
-        isinstance(levels, list)
-        and isinstance(df.index, pd.MultiIndex)
-        and any(pd.api.types.is_categorical(lvl) for lvl in df.index.levels)
-    ):
-        idx_names = df.index.names
-        df = df.reset_index()
-        grouped = df.groupby(idx_names, sort=False, observed=observed, **dropna)
-    else:
-        grouped = df.groupby(level=levels, sort=False, observed=observed, **dropna)
+    if not PANDAS_GT_100 and observed:
+        raise NotImplementedError("``observed`` is only supported for pandas >= 1.0.0")
+    grouped = df.groupby(level=levels, sort=sort, observed=observed, **dropna)
     return aggfunc(grouped, **kwargs)
 
 
@@ -1126,8 +1118,8 @@ class _GroupBy(object):
         grouped = sample.groupby(
             index_meta,
             group_keys=self.group_keys,
+            observed=self.observed,
             **self.dropna,
-            observed=self.observed
         )
         return _maybe_slice(grouped, self._slice)
 
@@ -1158,9 +1150,9 @@ class _GroupBy(object):
             chunk_kwargs=dict(
                 chunk=func,
                 columns=columns,
-                observed=True,
+                observed=self.observed,
                 **chunk_kwargs,
-                **self.dropna
+                **self.dropna,
             ),
             aggregate=_groupby_aggregate,
             meta=meta,
@@ -1171,7 +1163,7 @@ class _GroupBy(object):
                 levels=levels,
                 observed=self.observed,
                 **aggregate_kwargs,
-                **self.dropna
+                **self.dropna,
             ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
@@ -1198,7 +1190,7 @@ class _GroupBy(object):
             columns=columns,
             token=name_part,
             meta=meta,
-            **self.dropna
+            **self.dropna,
         )
 
         cumpart_raw_frame = (
@@ -1227,7 +1219,7 @@ class _GroupBy(object):
             chunk=M.last,
             meta=meta,
             token=name_last,
-            **self.dropna
+            **self.dropna,
         )
 
         # aggregate cumulated partitions and its previous last element
@@ -1691,7 +1683,7 @@ class _GroupBy(object):
             *args,
             group_keys=self.group_keys,
             **self.dropna,
-            **kwargs
+            **kwargs,
         )
 
         return df3
@@ -1779,7 +1771,7 @@ class _GroupBy(object):
             *args,
             group_keys=self.group_keys,
             **self.dropna,
-            **kwargs
+            **kwargs,
         )
 
         return df3
