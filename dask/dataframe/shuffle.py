@@ -137,7 +137,7 @@ class SimpleShuffleLayer(Layer):
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def __dask_distributed_pack__(self):
+    def __dask_distributed_pack__(self, client):
         from distributed.protocol.serialize import to_serialize
 
         return {
@@ -347,8 +347,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         ]
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def __dask_distributed_pack__(self):
-        ret = super().__dask_distributed_pack__()
+    def __dask_distributed_pack__(self, client):
+        ret = super().__dask_distributed_pack__(client)
         ret["inputs"] = self.inputs
         ret["stage"] = self.stage
         ret["nsplits"] = self.nsplits
