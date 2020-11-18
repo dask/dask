@@ -1,6 +1,5 @@
 from distutils.version import LooseVersion
 import math
-import os
 
 import tlz as toolz
 import warnings
@@ -8,6 +7,7 @@ from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
+from .utils import _analyze_paths
 from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....delayed import Delayed
@@ -628,10 +628,13 @@ def create_metadata_file(
     """Construct a global _metadata file from a list of parquet files.
 
     Dask's read_parquet function is designed to leverage a global
-    _metadata file when one is available.  By default, the to_parquet
-    function will generate this file automatically.  This utility
-    enables the generation of a _metadata file after the dataset has
-    already been created.
+    _metadata file whenever one is available.  The to_parquet
+    function will generate this file automatically by default, but it
+    may not exist if the dataset was generated outside of Dask.  This
+    utility provides a mechanism to generate a _metadata file from a
+    list of existing parquet files.
+
+    NOTE: This utility is not yet supported for the "fastparquet" engine.
 
     Parameters
     ----------
@@ -650,8 +653,8 @@ def create_metadata_file(
         Key/value pairs to be passed on to the file-system backend, if any.
     split_every : int, optional
         The final metadata object that is written to _metadata can be much
-        smaller than the list of all footer metadata. In order to avoid
-        combining all the footer metadata in a single task, a tree reduction
+        smaller than the list of footer metadata. In order to avoid the
+        aggregation of all metadata within a single task, a tree reduction
         is used.  This argument specifies the maximum number of metadata
         inputs to be handled by any one task in the tree. Defaults to 32.
     compute : bool, optional
@@ -661,29 +664,44 @@ def create_metadata_file(
         Options to be passed in to the compute method
     """
 
+    # Get engine.
+    # Note that "fastparquet" is not yet supported
     out_dir = out_dir or root_dir
     if isinstance(engine, str):
+        if engine not in ("pyarrow", "arrow"):
+            raise ValueError(
+                f"{engine} is not a supported engine for create_metadata_file "
+                "Try engine='pyarrow'."
+            )
         engine = get_engine(engine)
 
-    if hasattr(paths, "name"):
-        paths = stringify_path(paths)
+    # Process input path list
     fs, _, paths = get_fs_token_paths(paths, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
+    base, fns = _analyze_paths(paths, fs, root=root_dir)
 
+    # Start constructing a raw graph
     dsk = {}
     name = "gen-metadata-" + tokenize(paths, fs)
     collect_name = "collect-" + name
     agg_name = "agg-" + name
 
-    meta_list = []
-    for p, path in enumerate(paths):
-        # TODO: Use something other than os.path.relpath...
-        filename = os.path.relpath(path, root_dir)
+    # Define a "collect" task for each file in the input list.
+    # Each tasks will:
+    #   1. Extract the footer metadata from a distinct file
+    #   2. Populate the `file_path` field in the metadata
+    #   3. Return the extracted/modified metadata
+    for p, (fn, path) in enumerate(zip(fns, paths)):
         key = (collect_name, p, 0)
-        dsk[key] = (engine.collect_file_metadata, path, fs, filename)
-        meta_list.append(key)
+        dsk[key] = (engine.collect_file_metadata, path, fs, fn)
 
-    # Build reduction tree
+    # Build a reduction tree to aggregate all footer metadata
+    # into a single metadata object.  Each task in the tree
+    # will take in a list of metadata objects as input, and will
+    # usually output a single (aggregated) metadata object.
+    # The final task in the tree will write the result to disk
+    # instead of returning it (this behavior is triggered by
+    # passing a file path to `engine.aggregate_metadata`).
     parts = len(paths)
     widths = [parts]
     while parts > 1:
@@ -708,9 +726,11 @@ def create_metadata_file(
                     None,
                 )
 
+    # Convert the raw graph to a `Delayed` object
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[])
     out = Delayed(name, graph)
 
+    # Optionally compute the result
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
