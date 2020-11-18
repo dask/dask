@@ -1,14 +1,13 @@
 import itertools
 import warnings
-import copy
 
 import numpy as np
 
 import tlz as toolz
 
-from .core import reverse_dict, flatten, keys_in_tasks, find_all_possible_keys
+from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
-from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
+from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import ensure_dict, homogeneous_deepmap, apply
 
@@ -192,6 +191,11 @@ class Blockwise(Layer):
         function) must be the same for all N tasks.  This "uniformity" is
         required for the abstract `SubgraphCallable` representation used
         within Blockwise.
+    output_blocks: Set[Tuple]
+        Specify a specific set of required output blocks. Since the graph
+        will only contain the necessary tasks to generate these outputs,
+        this kwarg can be used to "cull" the abstract layer (without needing
+        to materialize the low-level graph).
 
     See Also
     --------
@@ -209,12 +213,14 @@ class Blockwise(Layer):
         concatenate=None,
         new_axes=None,
         io_subgraph=None,
+        output_blocks=None,
     ):
         super().__init__()
         self.output = output
         self.output_indices = tuple(output_indices)
         self.io_subgraph = io_subgraph[1] if io_subgraph else None
         self.io_name = io_subgraph[0] if io_subgraph else None
+        self.output_blocks = output_blocks
         if not dsk:
             # If there is no `dsk` input, there must be an IO subgraph.
             if io_subgraph is None:
@@ -256,6 +262,15 @@ class Blockwise(Layer):
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
+    @property
+    def dims(self):
+        """Returns a dictionary mapping between each index specified in
+        `self.indices` and the number of output blocks for that indice.
+        """
+        if not hasattr(self, "_dims"):
+            self._dims = _make_dims(self.indices, self.numblocks, self.new_axes)
+        return self._dims
+
     def __repr__(self):
         return "Blockwise<{} -> {}>".format(self.indices, self.output)
 
@@ -268,8 +283,6 @@ class Blockwise(Layer):
             dsk, _ = fuse(self.dsk, [self.output])
             func = SubgraphCallable(dsk, self.output, keys)
 
-            key_deps = {}
-            non_blockwise_keys = set()
             dsk = make_blockwise_graph(
                 func,
                 self.output,
@@ -278,8 +291,8 @@ class Blockwise(Layer):
                 new_axes=self.new_axes,
                 numblocks=self.numblocks,
                 concatenate=self.concatenate,
-                key_deps=key_deps,
-                non_blockwise_keys=non_blockwise_keys,
+                output_blocks=self.output_blocks,
+                dims=self.dims,
             )
 
             if self.io_subgraph:
@@ -294,44 +307,21 @@ class Blockwise(Layer):
                         new_task = [io_item if v == io_key else v for v in dsk[k]]
                         dsk[k] = tuple(new_task)
 
-                # Clear IO "placeholder" dependencies
-                for k in key_deps:
-                    if k[0] == self.output:
-                        key_deps[k] = set()
-
-            self._cached_dict = {
-                "dsk": dsk,
-                "basic_layer": BasicLayer(dsk, key_deps, non_blockwise_keys),
-            }
+            self._cached_dict = {"dsk": dsk}
         return self._cached_dict["dsk"]
 
     def get_output_keys(self):
+        if self.output_blocks:
+            # Culling has already generated a list of output blocks
+            return {(self.output, *p) for p in self.output_blocks}
 
-        # TODO: Handle N-D Collections and more-complex
-        # tensor operations.
-
-        # Only deal with 1-D collections (for now).
-        # Otherwise, we allow dict materialization.
-        if len(self.output_indices) != 1:
-            return super().get_output_keys()
-
-        # Check inputs.
-        # Only deal with 1-to-1 input-output collection
-        # mapping (for now).
-        input_cnt = 0
-        in_name = None
-        for _name, _ind in self.indices:
-            if _ind is not None:
-                if len(_ind) != 1 or input_cnt:
-                    return super().get_output_keys()
-                in_name = _name
-                input_cnt += 1
-
-        # At this point, we can assume:
-        # - Input and output indices are aligned
-        # - Collection is 1-D
-        # - Only one input collection
-        return {(self.output, p) for p in range(self.numblocks[in_name][0])}
+        # Return all possible output keys (no culling)
+        return {
+            (self.output, *p)
+            for p in itertools.product(
+                *[range(self.dims[i]) for i in self.output_indices]
+            )
+        }
 
     def __getitem__(self, key):
         return self._dict[key]
@@ -357,30 +347,178 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def get_dependencies(self, key, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].get_dependencies(key, all_hlg_keys)
+    def _cull_dependencies(self, all_hlg_keys, output_blocks):
+        """Determine the necessary dependencies to produce `output_blocks`.
+
+        This method does not require graph materialization.
+        """
+
+        # Check `concatenate` option
+        concatenate = None
+        if self.concatenate is True:
+            from dask.array.core import concatenate_axes as concatenate
+
+        # Generate coordinate map
+        (coord_maps, concat_axes, dummies) = _get_coord_mapping(
+            self.dims,
+            self.output,
+            self.output_indices,
+            self.numblocks,
+            self.indices,
+            concatenate,
+        )
+
+        # Gather constant dependencies (for all output keys)
+        const_deps = set()
+        for (arg, ind) in self.indices:
+            if ind is None and isinstance(arg, str):
+                if arg in all_hlg_keys:
+                    const_deps.add(arg)
+
+        # Get dependencies for each output block
+        key_deps = {}
+        for out_coords in output_blocks:
+            deps = set()
+            coords = out_coords + dummies
+            for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
+                if ind is not None and arg != self.io_name:
+                    arg_coords = tuple(coords[c] for c in cmap)
+                    if axes:
+                        tups = lol_product((arg,), arg_coords)
+                        deps.update(flatten(tups))
+                        if concatenate:
+                            tups = (concatenate, tups, axes)
+                    else:
+                        tups = (arg,) + arg_coords
+                        deps.add(tups)
+            key_deps[(self.output,) + out_coords] = deps | const_deps
+
+        return key_deps
+
+    def _cull(self, output_blocks):
+        return Blockwise(
+            self.output,
+            self.output_indices,
+            self.dsk,
+            self.indices,
+            self.numblocks,
+            concatenate=self.concatenate,
+            new_axes=self.new_axes,
+            io_subgraph=(self.io_name, self.io_subgraph) if self.io_name else None,
+            output_blocks=output_blocks,
+        )
 
     def cull(self, keys, all_hlg_keys):
-        _ = self._dict  # trigger materialization
-        return self._cached_dict["basic_layer"].cull(keys, all_hlg_keys)
 
-    def map_tasks(self, func):
-        new_indices = []
-        for key, input_indices in self.indices:
-            if input_indices is None:  # A literal
-                new_indices.append((func([key]), None))
-            else:
-                new_indices.append((key, input_indices))
-        ret = copy.copy(self)
-        ret.indices = new_indices
+        # Culling is simple for Blockwise layers.  We can just
+        # collect a set of required output blocks (tuples), and
+        # only construct graph for these blocks in `make_blockwise_graph`
 
-        # This operation invalidate the cache
-        try:
-            del self._cached_dict
-        except AttributeError:
-            pass
-        return ret
+        output_blocks = set()
+        for key in keys:
+            if key[0] == self.output:
+                output_blocks.add(key[1:])
+        culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
+        out_size = tuple([self.dims[i] for i in self.output_indices])
+        if np.prod(out_size) != len(culled_deps):
+            culled_layer = self._cull(output_blocks)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
+
+
+def _get_coord_mapping(
+    dims,
+    output,
+    out_indices,
+    numblocks,
+    argpairs,
+    concatenate,
+):
+    """Calculate coordinate mapping for graph construction.
+
+    This function handles the high-level logic behind Blockwise graph
+    construction. The output is a tuple containing: The mapping between
+    input and output block coordinates (`coord_maps`), the axes along
+    which to concatenate for each input (`concat_axes`), and the dummy
+    indices needed for broadcasting (`dummies`).
+
+    Used by `make_blockwise_graph` and `Blockwise._cull_dependencies`.
+
+    Parameters
+    ----------
+    dims: dict
+        Mapping between each index specified in `argpairs` and
+        the number of output blocks for that index. Corresponds
+        to the Blockwise `dims` attribute.
+    output: str
+        Corresponds to the Blockwise `output` attribute.
+    out_indices: tuple
+        Corresponds to the Blockwise `output_indices` attribute.
+    numblocks: dict
+        Corresponds to the Blockwise `numblocks` attribute.
+    argpairs: tuple
+        Corresponds to the Blockwise `indices` attribute.
+    concatenate: bool
+        Corresponds to the Blockwise `concatenate` attribute.
+    """
+
+    block_names = set()
+    all_indices = set()
+    for name, ind in argpairs:
+        if ind is not None:
+            block_names.add(name)
+            for x in ind:
+                all_indices.add(x)
+    assert set(numblocks) == block_names
+
+    dummy_indices = all_indices - set(out_indices)
+
+    # For each position in the output space, we'll construct a
+    # "coordinate set" that consists of
+    # - the output indices
+    # - the dummy indices
+    # - the dummy indices, with indices replaced by zeros (for broadcasting), we
+    #   are careful to only emit a single dummy zero when concatenate=True to not
+    #   concatenate the same array with itself several times.
+    # - a 0 to assist with broadcasting.
+
+    index_pos, zero_pos = {}, {}
+    for i, ind in enumerate(out_indices):
+        index_pos[ind] = i
+        zero_pos[ind] = -1
+
+    _dummies_list = []
+    for i, ind in enumerate(dummy_indices):
+        index_pos[ind] = 2 * i + len(out_indices)
+        zero_pos[ind] = 2 * i + 1 + len(out_indices)
+        reps = 1 if concatenate else dims[ind]
+        _dummies_list.append([list(range(dims[ind])), [0] * reps])
+
+    # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
+    dummies = tuple(itertools.chain.from_iterable(_dummies_list))
+    dummies += (0,)
+
+    # For each coordinate position in each input, gives the position in
+    # the coordinate set.
+    coord_maps = []
+
+    # Axes along which to concatenate, for each input
+    concat_axes = []
+    for arg, ind in argpairs:
+        if ind is not None:
+            coord_maps.append(
+                [
+                    zero_pos[i] if nb == 1 else index_pos[i]
+                    for i, nb in zip(ind, numblocks[arg])
+                ]
+            )
+            concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
+        else:
+            coord_maps.append(None)
+            concat_axes.append(None)
+
+    return coord_maps, concat_axes, dummies
 
 
 def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
@@ -492,72 +630,26 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     numblocks = kwargs.pop("numblocks")
     concatenate = kwargs.pop("concatenate", None)
     new_axes = kwargs.pop("new_axes", {})
-    key_deps = kwargs.pop("key_deps", None)
-    non_blockwise_keys = kwargs.pop("non_blockwise_keys", None)
+    output_blocks = kwargs.pop("output_blocks", None)
+    dims = kwargs.pop("dims", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
-    block_names = set()
-    all_indices = set()
-    for name, ind in argpairs:
-        if ind is not None:
-            block_names.add(name)
-            for x in ind:
-                all_indices.add(x)
-    assert set(numblocks) == block_names
-
-    dummy_indices = all_indices - set(out_indices)
-
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
-    dims = broadcast_dimensions(argpairs, numblocks)
-    for k, v in new_axes.items():
-        dims[k] = len(v) if isinstance(v, tuple) else 1
+    dims = dims or _make_dims(argpairs, numblocks, new_axes)
 
-    # For each position in the output space, we'll construct a
-    # "coordinate set" that consists of
-    # - the output indices
-    # - the dummy indices
-    # - the dummy indices, with indices replaced by zeros (for broadcasting), we
-    #   are careful to only emit a single dummy zero when concatenate=True to not
-    #   concatenate the same array with itself several times.
-    # - a 0 to assist with broadcasting.
-
-    index_pos, zero_pos = {}, {}
-    for i, ind in enumerate(out_indices):
-        index_pos[ind] = i
-        zero_pos[ind] = -1
-
-    _dummies_list = []
-    for i, ind in enumerate(dummy_indices):
-        index_pos[ind] = 2 * i + len(out_indices)
-        zero_pos[ind] = 2 * i + 1 + len(out_indices)
-        reps = 1 if concatenate else dims[ind]
-        _dummies_list.append([list(range(dims[ind])), [0] * reps])
-
-    # ([0, 1, 2], [0, 0, 0], ...)  For a dummy index of dimension 3
-    dummies = tuple(itertools.chain.from_iterable(_dummies_list))
-    dummies += (0,)
-
-    # For each coordinate position in each input, gives the position in
-    # the coordinate set.
-    coord_maps = []
-
-    # Axes along which to concatenate, for each input
-    concat_axes = []
-    for arg, ind in argpairs:
-        if ind is not None:
-            coord_maps.append(
-                [
-                    zero_pos[i] if nb == 1 else index_pos[i]
-                    for i, nb in zip(ind, numblocks[arg])
-                ]
-            )
-            concat_axes.append([n for n, i in enumerate(ind) if i in dummy_indices])
-        else:
-            coord_maps.append(None)
-            concat_axes.append(None)
+    # Generate the abstract "plan" before constructing
+    # the actual graph
+    (coord_maps, concat_axes, dummies) = _get_coord_mapping(
+        dims,
+        output,
+        out_indices,
+        numblocks,
+        argpairs,
+        concatenate,
+    )
 
     # Unpack delayed objects in kwargs
     dsk2 = {}
@@ -567,18 +659,16 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             kwargs2 = task
         else:
             kwargs2 = kwargs
-        if non_blockwise_keys is not None:
-            non_blockwise_keys |= find_all_possible_keys([kwargs2])
 
-    # Find all non-blockwise keys in the input arguments
-    if non_blockwise_keys is not None:
-        for arg, ind in argpairs:
-            if ind is None:
-                non_blockwise_keys |= find_all_possible_keys([arg])
+    # Apply Culling.
+    # Only need to costruct the specified set of output blocks
+    output_blocks = output_blocks or itertools.product(
+        *[range(dims[i]) for i in out_indices]
+    )
 
     dsk = {}
     # Create argument lists
-    for out_coords in itertools.product(*[range(dims[i]) for i in out_indices]):
+    for out_coords in output_blocks:
         deps = set()
         coords = out_coords + dummies
         args = []
@@ -606,8 +696,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             val = tuple(args)
         dsk[out_key] = val
 
-        if key_deps is not None:
-            key_deps[out_key] = deps
     if dsk2:
         dsk.update(ensure_dict(dsk2))
 
@@ -1034,6 +1122,16 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
         raise ValueError("Shapes do not align %s" % g)
 
     return toolz.valmap(toolz.first, g2)
+
+
+def _make_dims(indices, numblocks, new_axes):
+    """Returns a dictionary mapping between each index specified in
+    `indices` and the number of output blocks for that indice.
+    """
+    dims = broadcast_dimensions(indices, numblocks)
+    for k, v in new_axes.items():
+        dims[k] = len(v) if isinstance(v, tuple) else 1
+    return dims
 
 
 def fuse_roots(graph: HighLevelGraph, keys: list):

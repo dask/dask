@@ -3,7 +3,7 @@ from collections import defaultdict
 import logging
 import math
 import shutil
-from operator import getitem
+import operator
 import uuid
 import tempfile
 
@@ -16,7 +16,6 @@ from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_obj
 from .. import base, config
 from ..core import keys_in_tasks
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
-from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph, Layer
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
@@ -138,7 +137,7 @@ class SimpleShuffleLayer(Layer):
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def __dask_distributed_pack__(self):
+    def __dask_distributed_pack__(self, client):
         from distributed.protocol.serialize import to_serialize
 
         return {
@@ -247,7 +246,7 @@ class SimpleShuffleLayer(Layer):
             dsk[(self.name, part_out)] = (_concat, _concat_list, self.ignore_index)
             for _, _part_out, _part_in in _concat_list:
                 dsk[(shuffle_split_name, _part_out, _part_in)] = (
-                    getitem,
+                    operator.getitem,
                     (shuffle_group_name, _part_in),
                     _part_out,
                 )
@@ -348,8 +347,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         ]
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def __dask_distributed_pack__(self):
-        ret = super().__dask_distributed_pack__()
+    def __dask_distributed_pack__(self, client):
+        ret = super().__dask_distributed_pack__(client)
         ret["inputs"] = self.inputs
         ret["stage"] = self.stage
         ret["nsplits"] = self.nsplits
@@ -409,7 +408,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
             for _, _idx, _inp in _concat_list:
                 dsk[(shuffle_split_name, _idx, _inp)] = (
-                    getitem,
+                    operator.getitem,
                     (shuffle_group_name, _inp),
                     _idx,
                 )
@@ -488,23 +487,16 @@ def set_index(
         index2 = index
 
     if divisions is None:
-        if repartition:
-            index2, df = base.optimize(index2, df)
-            parts = df.to_delayed(optimize_graph=False)
-            sizes = [delayed(sizeof)(part) for part in parts]
-        else:
-            (index2,) = base.optimize(index2)
-            sizes = []
-
+        sizes = df.map_partitions(sizeof) if repartition else []
         divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
-        iparts = index2.to_delayed(optimize_graph=False)
-        mins = [ipart.min() for ipart in iparts]
-        maxes = [ipart.max() for ipart in iparts]
-        sizes, mins, maxes = base.optimize(sizes, mins, maxes)
-        divisions, sizes, mins, maxes = base.compute(
-            divisions, sizes, mins, maxes, optimize_graph=False
-        )
+        mins = index2.map_partitions(M.min)
+        maxes = index2.map_partitions(M.max)
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
         divisions = methods.tolist(divisions)
+        if type(sizes) is not list:
+            sizes = methods.tolist(sizes)
+        mins = methods.tolist(mins)
+        maxes = methods.tolist(maxes)
 
         empty_dataframe_detected = pd.isnull(divisions).all()
         if repartition or empty_dataframe_detected:
@@ -1253,12 +1245,8 @@ def compute_and_set_divisions(df, **kwargs):
     mins = df.index.map_partitions(M.min, meta=df.index)
     maxes = df.index.map_partitions(M.max, meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
-
-    if mins.isna().any() or maxes.isna().any():
-        raise ValueError(
-            "Partitions with all-NaN index values are not supported for sorted indices. "
-            "You may want to repartition before setting the index."
-        )
+    mins = remove_nans(mins)
+    maxes = remove_nans(maxes)
 
     if (
         sorted(mins) != list(mins)
