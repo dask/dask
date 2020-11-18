@@ -617,7 +617,7 @@ def to_parquet(
 
 def create_metadata_file(
     paths,
-    root_dir,
+    root_dir=None,
     out_dir=None,
     engine="pyarrow",
     storage_options=None,
@@ -640,9 +640,10 @@ def create_metadata_file(
     ----------
     paths : list(string)
         List of files to collect footer metadata from.
-    root_dir : string
+    root_dir : string, optional
         Root directory of dataset.  The `file_path` fields in the new
-        _metadata file will relative to this directory.
+        _metadata file will relative to this directory.  If None, a common
+        root directory will be inferred.
     out_dir : string, optional
         Directory location to write the final _metadata file.  By default,
         this will be set to `root_dir`.
@@ -666,7 +667,6 @@ def create_metadata_file(
 
     # Get engine.
     # Note that "fastparquet" is not yet supported
-    out_dir = out_dir or root_dir
     if isinstance(engine, str):
         if engine not in ("pyarrow", "arrow"):
             raise ValueError(
@@ -678,7 +678,9 @@ def create_metadata_file(
     # Process input path list
     fs, _, paths = get_fs_token_paths(paths, mode="rb", storage_options=storage_options)
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
-    base, fns = _analyze_paths(paths, fs, root=root_dir)
+    ap_kwargs = {"root": root_dir} if root_dir else {}
+    root_dir, fns = _analyze_paths(paths, fs, **ap_kwargs)
+    out_dir = out_dir or root_dir
 
     # Start constructing a raw graph
     dsk = {}

@@ -2917,7 +2917,6 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
     dd.io.parquet.create_metadata_file(
         fns,
-        tmpdir,
         engine="pyarrow",
         split_every=3,  # Force tree reduction
     )
