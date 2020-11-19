@@ -9,7 +9,13 @@ from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
-from .utils import ensure_dict, homogeneous_deepmap, apply
+from .utils import (
+    ensure_dict,
+    homogeneous_deepmap,
+    apply,
+    stringify,
+    stringify_collection_keys,
+)
 
 
 class PackedFunctionCall:
@@ -349,7 +355,7 @@ class Blockwise(Layer):
 
     def __dask_distributed_pack__(self, client):
         from distributed.worker import dumps_function
-        from distributed.utils import tokey, CancelledError
+        from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
@@ -370,11 +376,11 @@ class Blockwise(Layer):
                 raise ValueError(
                     "Inputs contain futures that were created by another client."
                 )
-            if tokey(future.key) not in client.futures:
-                raise CancelledError(tokey(future.key))
+            if stringify(future.key) not in client.futures:
+                raise CancelledError(stringify(future.key))
 
         # All blockwise tasks will depend on the futures in `indices`
-        global_dependencies = tuple(tokey(f.key) for f in indices_unpacked_futures)
+        global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
 
         ret = {
             "output": self.output,
@@ -396,9 +402,6 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.utils import tokey
-        from .dataframe.shuffle import key_stringify
-
         raw_deps = {}
         raw = make_blockwise_graph(
             state["func"],
@@ -429,11 +432,11 @@ class Blockwise(Layer):
                     new_task = [io_item if v == io_key else v for v in raw[k]]
                     raw[k] = tuple(new_task)
 
-        raw = {tokey(k): key_stringify(v) for k, v in raw.items()}
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
 
         for k, v in raw_deps.items():
-            dependencies[tokey(k)] = [tokey(d) for d in v] + global_dependencies
+            dependencies[stringify(k)] = [stringify(d) for d in v] + global_dependencies
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
@@ -729,7 +732,6 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
     if deserializing:
         from distributed.worker import warn_dumps, dumps_function
-        from .dataframe.shuffle import key_stringify
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -788,7 +790,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
 
         if deserializing:
             deps.update(func_future_args)
-            args = key_stringify(args) + list(func_future_args)
+            args = stringify_collection_keys(args) + list(func_future_args)
             if kwargs:
                 val = {
                     "function": dumps_function(apply),
