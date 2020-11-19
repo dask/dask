@@ -1053,3 +1053,29 @@ class ArrowEngine(Engine):
                 _append_row_groups(_meta, parts[i][0]["meta"])
             with fs.open(metadata_path, "wb") as fil:
                 _meta.write_metadata_file(fil)
+
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        with fs.open(path, "rb") as f:
+            meta = pq.ParquetFile(f).metadata
+        if file_path:
+            meta.set_file_path(file_path)
+        return meta
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        meta = None
+        for _meta in meta_list:
+            if meta:
+                _append_row_groups(meta, _meta)
+            else:
+                meta = _meta
+        if out_path:
+            metadata_path = fs.sep.join([out_path, "_metadata"])
+            with fs.open(metadata_path, "wb") as fil:
+                if not meta:
+                    raise ValueError("Cannot write empty metdata!")
+                meta.write_metadata_file(fil)
+            return None
+        else:
+            return meta

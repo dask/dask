@@ -1,5 +1,6 @@
 import math
 import os
+import glob
 import sys
 import warnings
 from distutils.version import LooseVersion
@@ -811,7 +812,6 @@ def test_ordering(tmpdir, write_engine, read_engine):
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
-    import glob
 
     tmp = str(tmpdir)
     data = pd.DataFrame(
@@ -822,8 +822,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     df2 = dd.read_parquet(tmp, columns=["i32", "f"], engine=engine)
     assert_eq(df[["i32", "f"]], df2, check_index=False)
-
-    import glob
 
     fns = glob.glob(os.path.join(tmp, "*.parquet"))
     df2 = dd.read_parquet(fns, columns=["i32"], engine=engine).compute()
@@ -2095,7 +2093,6 @@ def test_read_glob_no_stats(tmpdir, write_engine, read_engine):
 def test_read_glob_yes_stats(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
-    import glob
 
     paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
     paths.append(os.path.join(tmp_path, "_metadata"))
@@ -2904,6 +2901,51 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
         append=True,
         ignore_divisions=True,
     )
+
+
+@pytest.mark.parametrize("partition_on", [None, "a"])
+@write_read_engines()
+def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
+
+    check_pyarrow()
+    tmpdir = str(tmpdir)
+
+    # Write ddf without a _metadata file
+    df1 = pd.DataFrame({"b": range(100), "a": ["A", "B", "C", "D"] * 25})
+    df1.index.name = "myindex"
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+    ddf1.to_parquet(
+        tmpdir,
+        write_metadata_file=False,
+        partition_on=partition_on,
+        engine=write_engine,
+    )
+
+    # Add global _metadata file
+    if partition_on:
+        fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
+    else:
+        fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
+    dd.io.parquet.create_metadata_file(
+        fns,
+        engine="pyarrow",
+        split_every=3,  # Force tree reduction
+    )
+
+    # Check that we can now read the ddf
+    # with the _metadata file present
+    ddf2 = dd.read_parquet(
+        tmpdir,
+        gather_statistics=True,
+        split_row_groups=False,
+        engine=read_engine,
+        index="myindex",  # python-3.6 CI
+    )
+    if partition_on:
+        ddf1 = df1.sort_values("b")
+        ddf2 = ddf2.compute().sort_values("b")
+        ddf2.a = ddf2.a.astype("object")
+    assert_eq(ddf1, ddf2)
 
 
 def test_read_write_overwrite_is_true(tmpdir, engine):
