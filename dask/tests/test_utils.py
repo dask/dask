@@ -6,6 +6,7 @@ import pickle
 import numpy as np
 import pytest
 
+from dask import get
 from dask.utils import (
     getargspec,
     takes_multiple_arguments,
@@ -29,9 +30,12 @@ from dask.utils import (
     parse_bytes,
     is_arraylike,
     iter_chunks,
+    stringify,
+    stringify_collection_keys,
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import SubgraphCallable
 
 
 def test_getargspec():
@@ -582,3 +586,52 @@ def test_iter_chunks():
     ]
     assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
     assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
+
+
+def test_stringify():
+    obj = "Hello"
+    assert stringify(obj) is obj
+    obj = b"Hello"
+    assert stringify(obj) is obj
+    dsk = {"x": 1}
+
+    assert stringify(dsk) == str(dsk)
+    assert stringify(dsk, exclusive=()) == dsk
+
+    dsk = {("x", 1): (inc, 1)}
+    assert stringify(dsk) == str({("x", 1): (inc, 1)})
+    assert stringify(dsk, exclusive=()) == {("x", 1): (inc, 1)}
+
+    dsk = {("x", 1): (inc, 1), ("x", 2): (inc, ("x", 1))}
+    assert stringify(dsk, exclusive=dsk) == {
+        ("x", 1): (inc, 1),
+        ("x", 2): (inc, str(("x", 1))),
+    }
+
+    dsks = [
+        {"x": 1},
+        {("x", 1): (inc, 1), ("x", 2): (inc, ("x", 1))},
+        {("x", 1): (sum, [1, 2, 3]), ("x", 2): (sum, [("x", 1), ("x", 1)])},
+    ]
+    for dsk in dsks:
+        sdsk = {stringify(k): stringify(v, exclusive=dsk) for k, v in dsk.items()}
+        keys = list(dsk)
+        skeys = [str(k) for k in keys]
+        assert all(isinstance(k, str) for k in sdsk)
+        assert get(dsk, keys) == get(sdsk, skeys)
+
+    dsk = {("y", 1): (SubgraphCallable({"x": ("y", 1)}, "x", (("y", 1),)), (("z", 1),))}
+    dsk = stringify(dsk, exclusive=set(dsk) | {("z", 1)})
+    assert dsk[("y", 1)][0].dsk["x"] == "('y', 1)"
+    assert dsk[("y", 1)][1][0] == "('z', 1)"
+
+
+def test_stringify_collection_keys():
+    obj = "Hello"
+    assert stringify_collection_keys(obj) is obj
+
+    obj = [("a", 0), (b"a", 0), (1, 1)]
+    res = stringify_collection_keys(obj)
+    assert res[0] == str(obj[0])
+    assert res[1] == str(obj[1])
+    assert res[2] == obj[2]
