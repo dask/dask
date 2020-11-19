@@ -13,7 +13,6 @@ from dask.config import (
     collect,
     collect_yaml,
     collect_env,
-    default_get,
     get,
     ensure_file,
     set,
@@ -482,9 +481,8 @@ def test_default_get():
 
         # Otherwise pass the default straight through
         assert dask.config.default_get("baz", "foo") == "baz"
-        assert dask.config.default_get(False, "foo") == False
-        assert dask.config.default_get(True, "foo") == True
+        assert dask.config.default_get(False, "foo") is False
+        assert dask.config.default_get(True, "foo") is True
         assert dask.config.default_get(123, "foo") == 123
         assert dask.config.default_get({"hello": "world"}, "foo") == {"hello": "world"}
         assert dask.config.default_get(["one"], "foo") == ["one"]
-
