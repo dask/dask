@@ -368,10 +368,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
-    args = [
-        np.ones((1,) * x.ndim, dtype=x.dtype) if isinstance(x, Array) else x
-        for x in args
-    ]
+    args = [meta_nonempty(x) for x in args]
     try:
         with np.errstate(all="ignore"):
             o = func(*args, **kwargs)
@@ -5238,4 +5235,4 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
 
 
 from .blockwise import blockwise
-from .utils import compute_meta, meta_from_array
+from .utils import compute_meta, meta_from_array, meta_nonempty
