@@ -1478,9 +1478,11 @@ def key_split(s):
 def stringify(obj, exclusive: Optional[Iterable] = None):
     """Convert an object to a string
 
-    If `exclusive` is not None, search through the values in `obj`
-    and convert values that are in `exclusive`.
-    Notice, only the values of `obj` are converted not the keys.
+    If ``exclusive`` is specified, search through `obj` and convert
+    values that are in ``exclusive``.
+
+    Note that when searching through dictionaries, only values are
+    converted, not the keys.
 
     Parameters
     ----------
@@ -1492,7 +1494,7 @@ def stringify(obj, exclusive: Optional[Iterable] = None):
     Returns
     -------
     result : type(obj)
-        Stringified copy of `obj` or `obj` itself if it is already a
+        Stringified copy of ``obj`` or ``obj`` itself if it is already a
         string or bytes.
 
     Examples
@@ -1545,10 +1547,10 @@ def stringify(obj, exclusive: Optional[Iterable] = None):
 
 
 def stringify_collection_keys(obj):
-    """Convert all collection keys in `obj` to strings.
+    """Convert all collection keys in ``obj`` to strings.
 
-    This is a specialized version of stringify() that only converts keys
-    of the from: `("a string", ...)`
+    This is a specialized version of ``stringify()`` that only converts keys
+    of the form: ``("a string", ...)``
     """
 
     typ = type(obj)
