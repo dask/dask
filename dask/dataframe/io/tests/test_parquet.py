@@ -1,5 +1,6 @@
 import math
 import os
+import glob
 import sys
 import warnings
 from distutils.version import LooseVersion
@@ -811,7 +812,6 @@ def test_ordering(tmpdir, write_engine, read_engine):
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
-    import glob
 
     tmp = str(tmpdir)
     data = pd.DataFrame(
@@ -2093,7 +2093,6 @@ def test_read_glob_no_stats(tmpdir, write_engine, read_engine):
 def test_read_glob_yes_stats(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
-    import glob
 
     paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
     paths.append(os.path.join(tmp_path, "_metadata"))
@@ -2894,7 +2893,6 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
 @pytest.mark.parametrize("partition_on", [None, "a"])
 @write_read_engines()
 def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
-    import glob
 
     check_pyarrow()
     tmpdir = str(tmpdir)
