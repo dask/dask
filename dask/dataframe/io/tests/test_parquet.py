@@ -2824,8 +2824,7 @@ def test_divisions_with_null_partition(tmpdir, engine):
     assert ddf_read.divisions == (None, None, None)
 
 
-@pytest.mark.parametrize("partition_on", [None, ["x"]])
-def test_parquet_pyarrow_write_empty_metadata(tmpdir, partition_on):
+def test_parquet_pyarrow_write_empty_metadata(tmpdir):
     # https://github.com/dask/dask/issues/6600
     check_pyarrow()
     tmpdir = str(tmpdir)
@@ -2846,7 +2845,7 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir, partition_on):
         df.to_parquet(
             tmpdir,
             engine="pyarrow",
-            partition_on=partition_on,
+            partition_on=["x"],
             append=False,
         )
 
@@ -2858,16 +2857,13 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir, partition_on):
     assert "_metadata" in files
     assert "_common_metadata" in files
 
-    # If we are not partitioning, the schema in _metadata
-    # should match that in _common_metadata
-    if partition_on is None:
-        schema_common = pq.ParquetFile(
-            os.path.join(tmpdir, "_common_metadata")
-        ).schema.to_arrow_schema()
-        schema_meta = pq.ParquetFile(
-            os.path.join(tmpdir, "_metadata")
-        ).schema.to_arrow_schema()
-        assert schema_meta == schema_common
+    # Check that the schema includes pandas_metadata
+    schema_common = pq.ParquetFile(
+        os.path.join(tmpdir, "_common_metadata")
+    ).schema.to_arrow_schema()
+    pandas_metadata = schema_common.pandas_metadata
+    assert pandas_metadata
+    assert pandas_metadata.get("index_columns", False)
 
 
 def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
