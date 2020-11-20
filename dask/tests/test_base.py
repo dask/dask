@@ -365,12 +365,57 @@ def test_tokenize_method():
     a, b = Foo(1), Foo(2)
     assert tokenize(a) == tokenize(a)
     assert tokenize(a) != tokenize(b)
+    assert tokenize(a) == tokenize(Foo(1))
 
     # dispatch takes precedence
     before = tokenize(a)
     normalize_token.register(Foo, lambda self: self.x + 1)
     after = tokenize(a)
     assert before != after
+
+
+def test_tokenize_method_nested():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+
+        def __dask_tokenize__(self):
+            return self.x
+
+    class Bar(object):
+        def __init__(self, y):
+            self.y = y
+
+        def __dask_tokenize__(self):
+            return self.y
+
+    foo1a, foo1b = Foo(1), Foo(1)
+    bar1a, bar1b = Bar(foo1a), Bar(foo1b)
+    assert tokenize(bar1a) == tokenize(bar1b)
+    foo2 = Foo(2)
+    bar2 = Bar(foo2)
+    assert tokenize(bar1a) != tokenize(bar2)
+
+
+def test_tokenize_same_key_different_type():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+
+        def __dask_tokenize__(self):
+            return self.x
+
+
+    class Bar(object):
+        def __init__(self, y):
+            self.y = y
+
+        def __dask_tokenize__(self):
+            return self.y
+
+    foo = Foo(1)
+    bar = Bar(1)
+    assert tokenize(foo) != tokenize(bar)
 
 
 @pytest.mark.skipif("not np")
