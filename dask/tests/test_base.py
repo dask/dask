@@ -226,8 +226,8 @@ def test_tokenize_numpy_memmap_no_filename():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_ufunc_consistent():
-    assert tokenize(np.sin) == "02106e2c67daf452fb480d264e0dac21"
-    assert tokenize(np.cos) == "c99e52e912e4379882a9a4b387957a0b"
+    assert tokenize(np.sin) == "17c145f71d7f1bcf31b1693795a01c0d"
+    assert tokenize(np.cos) == "ebd679a0380854b824f8620fd8d0eccc"
 
     # Make a ufunc that isn't in the numpy namespace. Similar to
     # any found in other packages.
@@ -404,7 +404,6 @@ def test_tokenize_same_key_different_type():
 
         def __dask_tokenize__(self):
             return self.x
-
 
     class Bar(object):
         def __init__(self, y):

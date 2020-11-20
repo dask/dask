@@ -5,6 +5,7 @@ from functools import partial
 from hashlib import md5
 from operator import getitem
 import inspect
+import itertools
 import pickle
 import os
 import threading
@@ -16,7 +17,7 @@ from tlz.functoolz import Compose
 
 from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
-from .core import flatten, quote, get as simple_get, literal
+from .core import flatten, quote, get as simple_get
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
@@ -736,7 +737,9 @@ def tokenize(*args, **kwargs):
     """
     if kwargs:
         args = args + (kwargs,)
-    return md5(str(tuple(map(normalize_token, args))).encode()).hexdigest()
+    types = [type(arg).__qualname__ for arg in args]
+    values = map(normalize_token, args)
+    return md5(str(tuple(itertools.chain(types, values))).encode()).hexdigest()
 
 
 normalize_token = Dispatch()
@@ -747,17 +750,17 @@ normalize_token.register(
 
 @normalize_token.register(dict)
 def normalize_dict(d):
-    return type(d).__name__, normalize_token(sorted(d.items(), key=str))
+    return normalize_token(sorted(d.items(), key=str))
 
 
 @normalize_token.register(OrderedDict)
 def normalize_ordered_dict(d):
-    return type(d).__name__, normalize_token(list(d.items()))
+    return normalize_token(list(d.items()))
 
 
 @normalize_token.register(set)
 def normalize_set(s):
-    return type(s).__name__, normalize_token(sorted(s, key=str))
+    return normalize_token(sorted(s, key=str))
 
 
 @normalize_token.register((tuple, list))
@@ -768,17 +771,12 @@ def normalize_seq(seq):
         except RecursionError:
             return str(uuid.uuid4())
 
-    return type(seq).__name__, func(seq)
-
-
-@normalize_token.register(literal)
-def normalize_literal(lit):
-    return "literal", normalize_token(lit())
+    return func(seq)
 
 
 @normalize_token.register(range)
 def normalize_range(r):
-    return type(r).__name__, list(map(normalize_token, [r.start, r.stop, r.step]))
+    return list(map(normalize_token, [r.start, r.stop, r.step]))
 
 
 @normalize_token.register(object)
@@ -786,6 +784,8 @@ def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return normalize_token(method())
+    # TODO: I guess normalize_token should also be called on normalize_function
+    # if so, no test exposes that
     return normalize_function(o) if callable(o) else uuid.uuid4().hex
 
 
@@ -990,7 +990,6 @@ def register_scipy():
 
     def normalize_sparse_matrix(x, attrs):
         return (
-            type(x).__name__,
             normalize_seq((normalize_token(getattr(x, key)) for key in attrs)),
         )
 
@@ -1006,7 +1005,7 @@ def register_scipy():
 
     @normalize_token.register(sp.dok_matrix)
     def normalize_dok_matrix(x):
-        return type(x).__name__, normalize_token(sorted(x.items()))
+        return normalize_token(sorted(x.items()))
 
 
 def _colorize(t):
