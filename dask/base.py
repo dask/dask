@@ -989,9 +989,7 @@ def register_scipy():
     import scipy.sparse as sp
 
     def normalize_sparse_matrix(x, attrs):
-        return (
-            normalize_seq((normalize_token(getattr(x, key)) for key in attrs)),
-        )
+        return normalize_seq((normalize_token(getattr(x, key)) for key in attrs))
 
     for cls, attrs in [
         (sp.dia_matrix, ("data", "offsets", "shape")),
