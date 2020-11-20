@@ -785,7 +785,7 @@ def normalize_range(r):
 def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
-        return method()
+        return normalize_token(method())
     return normalize_function(o) if callable(o) else uuid.uuid4().hex
 
 
