@@ -606,7 +606,7 @@ def to_parquet(
                 partition_on,
                 write_metadata_file,
             ],
-            kwargs_pass,
+            toolz.merge(kwargs_pass, {"head": True}) if d == 0 else kwargs_pass,
         )
         part_tasks.append((name, d))
 
