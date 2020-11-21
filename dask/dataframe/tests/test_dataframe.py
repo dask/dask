@@ -2545,6 +2545,24 @@ def test_drop_axis_1():
     assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
+@pytest.mark.parametrize("columns", [["b"], []])
+def test_drop_columns(columns):
+    # Check both populated and empty list argument
+    # https://github.com/dask/dask/issues/6870
+
+    df = pd.DataFrame(
+        {
+            "a": [2, 4, 6, 8],
+            "b": ["1a", "2b", "3c", "4d"],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.drop(columns=columns)
+    ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
+
+    assert_eq(df.drop(columns=columns), ddf2)
+
+
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
