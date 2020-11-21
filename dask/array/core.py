@@ -661,6 +661,22 @@ def map_blocks(
 
     original_kwargs = kwargs
 
+    # issue warning when mapping function with axis argument when array chunks > 1
+    if has_keyword(func, "axis"):
+        if len(arrs) == 1:
+            n_axis_chunks = [len(x) for x in arrs[0].chunks]
+            if any([n_chunks > 1 for n_chunks in n_axis_chunks]):
+                if "axis" in original_kwargs.keys():
+                    axis_chunks = n_axis_chunks[original_kwargs["axis"]]
+                    if axis_chunks > 1:
+                        warnings.warn(
+                            "Operating along axis with nchunks>1 may produce unexpected behavior"
+                        )
+                else:
+                    warnings.warn(
+                        "Mapping function with axis arguments along axis with nchunks>1 may produce unexpected behavior"
+                    )
+
     if dtype is None and meta is None:
         try:
             meta = compute_meta(func, dtype, *args, **kwargs)
