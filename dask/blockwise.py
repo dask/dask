@@ -402,8 +402,7 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        raw_deps = {}
-        raw = make_blockwise_graph(
+        raw, raw_deps = make_blockwise_graph(
             state["func"],
             state["output"],
             state["output_indices"],
@@ -413,7 +412,7 @@ class Blockwise(Layer):
             concatenate=state["concatenate"],
             output_blocks=state["output_blocks"],
             dims=state["dims"],
-            key_deps=raw_deps,
+            return_key_deps=True,
             deserializing=True,
             func_future_args=state["func_future_args"],
         )
@@ -726,9 +725,11 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     dims = kwargs.pop("dims", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
 
-    key_deps = kwargs.pop("key_deps", None)
     deserializing = kwargs.pop("deserializing", False)
     func_future_args = kwargs.pop("func_future_args", None)
+    return_key_deps = kwargs.pop("return_key_deps", False)
+    if return_key_deps:
+        key_deps = {}
 
     if deserializing:
         from distributed.worker import warn_dumps, dumps_function
@@ -806,13 +807,16 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                 args.insert(0, func)
                 val = tuple(args)
         dsk[out_key] = val
-        if key_deps is not None:
+        if return_key_deps:
             key_deps[out_key] = deps
 
     if dsk2:
         dsk.update(ensure_dict(dsk2))
 
-    return dsk
+    if return_key_deps:
+        return dsk, key_deps
+    else:
+        return dsk
 
 
 def lol_product(head, values):
