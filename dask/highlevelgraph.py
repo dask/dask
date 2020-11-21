@@ -165,7 +165,7 @@ class Layer(collections.abc.Mapping):
         Returns
         -------
         state: Object serializable by msgpack
-            Scheduler compatible state of the layer
+            Scheduler compatible state of the layer or None
         """
         return None
 

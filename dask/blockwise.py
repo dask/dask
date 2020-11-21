@@ -9,7 +9,13 @@ from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
-from .utils import ensure_dict, homogeneous_deepmap, apply
+from .utils import (
+    ensure_dict,
+    homogeneous_deepmap,
+    apply,
+    stringify,
+    stringify_collection_keys,
+)
 
 
 class PackedFunctionCall:
@@ -347,6 +353,90 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
+    def __dask_distributed_pack__(self, client):
+        from distributed.worker import dumps_function
+        from distributed.utils import CancelledError
+        from distributed.utils_comm import unpack_remotedata
+
+        keys = tuple(map(blockwise_token, range(len(self.indices))))
+        dsk, _ = fuse(self.dsk, [self.output])
+
+        dsk = (SubgraphCallable(dsk, self.output, keys),)
+        dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
+
+        func = dumps_function(dsk[0])
+        func_future_args = dsk[1:]
+
+        indices = list(toolz.concat(self.indices))
+        indices, indices_unpacked_futures = unpack_remotedata(indices, byte_keys=True)
+
+        # Check the legality of the unpacked futures
+        for future in itertools.chain(dsk_unpacked_futures, indices_unpacked_futures):
+            if future.client is not client:
+                raise ValueError(
+                    "Inputs contain futures that were created by another client."
+                )
+            if stringify(future.key) not in client.futures:
+                raise CancelledError(stringify(future.key))
+
+        # All blockwise tasks will depend on the futures in `indices`
+        global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
+
+        ret = {
+            "output": self.output,
+            "output_indices": self.output_indices,
+            "func": func,
+            "func_future_args": func_future_args,
+            "global_dependencies": global_dependencies,
+            "indices": indices,
+            "numblocks": self.numblocks,
+            "concatenate": self.concatenate,
+            "new_axes": self.new_axes,
+            "io_subgraph": (self.io_name, self.io_subgraph)
+            if self.io_name
+            else (None, None),
+            "output_blocks": self.output_blocks,
+            "dims": self.dims,
+        }
+        return ret
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        raw, raw_deps = make_blockwise_graph(
+            state["func"],
+            state["output"],
+            state["output_indices"],
+            *state["indices"],
+            new_axes=state["new_axes"],
+            numblocks=state["numblocks"],
+            concatenate=state["concatenate"],
+            output_blocks=state["output_blocks"],
+            dims=state["dims"],
+            return_key_deps=True,
+            deserializing=True,
+            func_future_args=state["func_future_args"],
+        )
+        io_name, io_subgraph = state["io_subgraph"]
+        global_dependencies = list(state["global_dependencies"])
+
+        if io_subgraph:
+            # This is an IO layer.
+            for k in raw:
+                io_key = (io_name,) + tuple([k[i] for i in range(1, len(k))])
+                if io_key in raw[k]:
+                    # Inject IO-function arguments into the blockwise graph
+                    # as a single (packed) tuple.
+                    io_item = io_subgraph.get(io_key)
+                    io_item = list(io_item[1:]) if len(io_item) > 1 else []
+                    new_task = [io_item if v == io_key else v for v in raw[k]]
+                    raw[k] = tuple(new_task)
+
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        dsk.update(raw)
+
+        for k, v in raw_deps.items():
+            dependencies[stringify(k)] = [stringify(d) for d in v] + global_dependencies
+
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
 
@@ -627,12 +717,22 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     dask.array.blockwise
     dask.blockwise.blockwise
     """
+
     numblocks = kwargs.pop("numblocks")
     concatenate = kwargs.pop("concatenate", None)
     new_axes = kwargs.pop("new_axes", {})
     output_blocks = kwargs.pop("output_blocks", None)
     dims = kwargs.pop("dims", None)
     argpairs = list(toolz.partition(2, arrind_pairs))
+
+    deserializing = kwargs.pop("deserializing", False)
+    func_future_args = kwargs.pop("func_future_args", None)
+    return_key_deps = kwargs.pop("return_key_deps", False)
+    if return_key_deps:
+        key_deps = {}
+
+    if deserializing:
+        from distributed.worker import warn_dumps, dumps_function
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -661,7 +761,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
             kwargs2 = kwargs
 
     # Apply Culling.
-    # Only need to costruct the specified set of output blocks
+    # Only need to construct the specified set of output blocks
     output_blocks = output_blocks or itertools.product(
         *[range(dims[i]) for i in out_indices]
     )
@@ -689,17 +789,34 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                 args.append(tups)
         out_key = (output,) + out_coords
 
-        if kwargs:
-            val = (apply, func, args, kwargs2)
+        if deserializing:
+            deps.update(func_future_args)
+            args = stringify_collection_keys(args) + list(func_future_args)
+            if kwargs:
+                val = {
+                    "function": dumps_function(apply),
+                    "args": warn_dumps(args),
+                    "kwargs": warn_dumps(kwargs2),
+                }
+            else:
+                val = {"function": func, "args": warn_dumps(args)}
         else:
-            args.insert(0, func)
-            val = tuple(args)
+            if kwargs:
+                val = (apply, func, args, kwargs2)
+            else:
+                args.insert(0, func)
+                val = tuple(args)
         dsk[out_key] = val
+        if return_key_deps:
+            key_deps[out_key] = deps
 
     if dsk2:
         dsk.update(ensure_dict(dsk2))
 
-    return dsk
+    if return_key_deps:
+        return dsk, key_deps
+    else:
+        return dsk
 
 
 def lol_product(head, values):
