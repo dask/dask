@@ -2420,8 +2420,15 @@ Dask Name: {name}, {task} tasks"""
         # segfaulting.
         if is_dataframe_like(self._meta) and is_categorical_dtype(dtype):
             meta = self._meta_nonempty.astype(dtype)
+            # If the meta doesn't change, there's no need to map any tasks
+            if meta.equals(self._meta_nonempty):
+                return self
         else:
             meta = self._meta.astype(dtype)
+            # If the meta doesn't change, there's no need to map any tasks
+            if meta.equals(self._meta):
+                return self
+
         if hasattr(dtype, "items"):
             set_unknown = [
                 k
@@ -2432,36 +2439,8 @@ Dask Name: {name}, {task} tasks"""
         elif is_categorical_dtype(dtype) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
 
-        from numpy import dtype as npdtype
-
-        if hasattr(dtype, "items"):
-            print(dtype)
-            culled_dtype = {}
-            for k,v in dtype.items():
-                ###### note that meta has already been changed by
-                ###### the first statements in this function
-
-                ###### TODO: these kinds of checks should be run on the meta
-                ###### at the very start of this function, not here
-                try:
-                    converted_dtype = npdtype(dtype.get(k))
-                except TypeError as e:
-                    converted_dtype = v
-                try:
-                    print(meta[k].dtype)
-                    converted_meta_dtype = npdtype(meta[k].dtype)
-                except TypeError as e:
-                    converted_meta_dtype = meta[k].dtype
-
-                if not converted_meta_dtype == converted_dtype:
-                    culled_dtype[k] = v
-
-
-        if culled_dtype=={}:
-            return self
-
         return self.map_partitions(
-            M.astype, dtype=culled_dtype, meta=meta, enforce_metadata=False
+            M.astype, dtype=dtype, meta=meta, enforce_metadata=False
         )
 
     @derived_from(pd.Series)
