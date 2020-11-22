@@ -3131,14 +3131,16 @@ def test_astype():
     assert_eq(a.astype(float), df.astype(float))
     assert_eq(a.x.astype(float), df.x.astype(float))
 
+
 def test_astype_skips_if_type_unchanged():
     df = pd.DataFrame(
         {"x": [1.0, 2.0, 3.0, 4.0], "y": [10, 20, 30, 40]}, index=[10, 20, 30, 40]
     )
     a = dd.from_pandas(df, 2)
-    a = a.astype({"x":"float", "y":"int64"})
+    a = a.astype({"x": "float", "y": "int64"})
 
     assert_eq(df, a)
+
 
 def test_astype_categoricals():
     df = pd.DataFrame(
