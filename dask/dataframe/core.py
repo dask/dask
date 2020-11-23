@@ -4011,10 +4011,11 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if (axis == 1) or (columns is not None):
-            return self.map_partitions(
-                drop_by_shallow_copy, columns or labels, errors=errors
-            )
+        if axis == 0 and columns is not None:
+            # Columns must be specified if axis==0
+            return self.map_partitions(drop_by_shallow_copy, columns, errors=errors)
+        elif axis == 1:
+            return self.map_partitions(drop_by_shallow_copy, labels, errors=errors)
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
         )
@@ -4141,6 +4142,8 @@ class DataFrame(_Frame):
         npartitions=None,
         shuffle=None,
     ):
+        if is_series_like(other) and hasattr(other, "name"):
+            other = other.to_frame()
 
         if not is_dataframe_like(other):
             raise ValueError("other must be DataFrame")

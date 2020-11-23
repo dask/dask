@@ -1019,16 +1019,24 @@ def test_shuffle_hlg_layer():
     ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
     keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
 
-    # Make sure HLG culling reduces the graph size
+    # Cull the HLG
     dsk = ddf_shuffled.__dask_graph__()
     dsk_culled = dsk.cull(set(keys))
-    assert len(dsk_culled) < len(dsk)
     assert isinstance(dsk_culled, dask.highlevelgraph.HighLevelGraph)
 
     # Ensure we have ShuffleLayers
     assert any(
         isinstance(layer, dd.shuffle.ShuffleLayer) for layer in dsk.layers.values()
     )
+
+    # Check that the ShuffleLayers are non-materialized
+    for layer in dsk.layers.values():
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert not hasattr(layer, "_cached_dict")
+
+    # Make sure HLG culling reduces the graph size
+    assert len(dsk_culled) < len(dsk)
+
     # Check ShuffleLayer names
     for name, layer in dsk.layers.items():
         if isinstance(layer, dd.shuffle.ShuffleLayer):
@@ -1065,3 +1073,10 @@ def test_shuffle_hlg_layer_serialize(npartitions):
         assert type(layer_roundtrip) == type(layer)
         assert not hasattr(layer_roundtrip, "_cached_dict")
         assert layer_roundtrip.keys() == layer.keys()
+
+
+def test_set_index_nan_partition():
+    d[d.a > 3].set_index("a")  # Set index with 1 null partition
+    d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
+    a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
+    assert_eq(a, a)

@@ -778,6 +778,7 @@ class ArrowDatasetEngine(Engine):
         compression=None,
         index_cols=None,
         schema=None,
+        head=False,
         **kwargs,
     ):
         _meta = None
@@ -820,12 +821,17 @@ class ArrowDatasetEngine(Engine):
                 _meta.set_file_path(filename)
         # Return the schema needed to write the metadata
         if return_metadata:
-            return [{"schema": t.schema, "meta": _meta}]
+            d = {"meta": _meta}
+            if head:
+                # Only return schema if this is the "head" partition
+                d["schema"] = t.schema
+            return [d]
         else:
             return []
 
     @staticmethod
     def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        schema = parts[0][0].get("schema", None)
         parts = [p for p in parts if p[0]["meta"] is not None]
         if parts:
             if not append:
@@ -834,7 +840,7 @@ class ArrowDatasetEngine(Engine):
                 keywords = getargspec(pq.write_metadata).args
                 kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
                 with fs.open(common_metadata_path, "wb") as fil:
-                    pq.write_metadata(parts[0][0]["schema"], fil, **kwargs_meta)
+                    pq.write_metadata(schema, fil, **kwargs_meta)
 
             # Aggregate metadata and write to _metadata file
             metadata_path = fs.sep.join([path, "_metadata"])
@@ -1925,6 +1931,32 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             cls._parquet_piece_as_arrow,
             **kwargs,
         )
+
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        with fs.open(path, "rb") as f:
+            meta = pq.ParquetFile(f).metadata
+        if file_path:
+            meta.set_file_path(file_path)
+        return meta
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        meta = None
+        for _meta in meta_list:
+            if meta:
+                _append_row_groups(meta, _meta)
+            else:
+                meta = _meta
+        if out_path:
+            metadata_path = fs.sep.join([out_path, "_metadata"])
+            with fs.open(metadata_path, "wb") as fil:
+                if not meta:
+                    raise ValueError("Cannot write empty metdata!")
+                meta.write_metadata_file(fil)
+            return None
+        else:
+            return meta
 
 
 # Compatibility access to legacy ArrowEngine
