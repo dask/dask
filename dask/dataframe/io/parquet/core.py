@@ -15,7 +15,7 @@ from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import Layer, HighLevelGraph
-from ....blockwise import Blockwise
+from ....blockwise import BlockwiseIO
 
 
 try:
@@ -115,9 +115,9 @@ class ParquetSubgraph(Layer):
         return ret, ret.get_dependencies(all_hlg_keys)
 
 
-class BlockwiseParquet(Blockwise):
+class BlockwiseParquet(BlockwiseIO):
     """
-    Specialized Blockwise Layer for read_parquet.
+    Specialized BlockwiseIO Layer for read_parquet.
 
     Enables HighLevelGraph optimizations.
     """
@@ -149,12 +149,12 @@ class BlockwiseParquet(Blockwise):
         )
 
         super().__init__(
+            (self.io_name, dsk_io),
             self.name,
             "i",
             None,
             [(self.io_name, "i")],
             {self.io_name: (len(self.part_ids),)},
-            io_subgraph=(self.io_name, dsk_io),
         )
 
     def __repr__(self):

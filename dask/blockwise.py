@@ -183,20 +183,6 @@ class Blockwise(Layer):
         single input to the block function
     new_axes: Dict
         New index dimensions that may have been created, and their extent
-    io_subgraph: Tuple[str, Dict or Mapping]
-        If the blockwise operation corresponds to the generation of a new
-        collection (i.e. `indices` includes keys for a collection that has
-        yet to be constructed), this argument must be used to specify the
-        `(key-name, subgraph)` pair for the to-be-created collection. Note
-        that `key-name` must match the name used in both `indices` and in
-        the keys of `subgraph`.
-
-        NOTE: The `subgraph` must comprise of exactly N keys (where N is the
-        number of chunks/partitions in the new collection), and each value
-        must correspond to a "callable" task. The first element (a callable
-        function) must be the same for all N tasks.  This "uniformity" is
-        required for the abstract `SubgraphCallable` representation used
-        within Blockwise.
     output_blocks: Set[Tuple]
         Specify a specific set of required output blocks. Since the graph
         will only contain the necessary tasks to generate these outputs,
@@ -218,39 +204,12 @@ class Blockwise(Layer):
         numblocks,
         concatenate=None,
         new_axes=None,
-        io_subgraph=None,
         output_blocks=None,
     ):
         super().__init__()
         self.output = output
         self.output_indices = tuple(output_indices)
-        self.io_subgraph = io_subgraph[1] if io_subgraph else None
-        self.io_name = io_subgraph[0] if io_subgraph else None
         self.output_blocks = output_blocks
-        if not dsk:
-            # If there is no `dsk` input, there must be an IO subgraph.
-            if io_subgraph is None:
-                raise ValueError("io_subgraph required if dsk is not supplied.")
-
-            # Extract actual IO function for SubgraphCallable construction.
-            # Wrap func in `PackedFunctionCall`, since it will receive
-            # all arguments as a sigle (packed) tuple at run time.
-            if self.io_subgraph:
-                # We assume a 1-to-1 mapping between keys (i.e. tasks) and
-                # chunks/partitions in `io_subgraph`, and assume the first
-                # (callable) element is the same for all tasks.
-                any_key = next(iter(self.io_subgraph))
-                io_func = self.io_subgraph.get(any_key)[0]
-            else:
-                io_func = None
-            ninds = 1 if isinstance(output_indices, str) else len(output_indices)
-            dsk = {
-                output: (
-                    PackedFunctionCall(io_func),
-                    *[blockwise_token(i) for i in range(ninds)],
-                )
-            }
-
         self.dsk = dsk
         self.indices = tuple(
             (name, tuple(ind) if ind is not None else ind) for name, ind in indices
@@ -300,18 +259,6 @@ class Blockwise(Layer):
                 output_blocks=self.output_blocks,
                 dims=self.dims,
             )
-
-            if self.io_subgraph:
-                # This is an IO layer.
-                for k in dsk:
-                    io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
-                    if io_key in dsk[k]:
-                        # Inject IO-function arguments into the blockwise graph
-                        # as a single (packed) tuple.
-                        io_item = self.io_subgraph.get(io_key)
-                        io_item = list(io_item[1:]) if len(io_item) > 1 else []
-                        new_task = [io_item if v == io_key else v for v in dsk[k]]
-                        dsk[k] = tuple(new_task)
 
             self._cached_dict = {"dsk": dsk}
         return self._cached_dict["dsk"]
@@ -393,12 +340,254 @@ class Blockwise(Layer):
             "concatenate": self.concatenate,
             "new_axes": self.new_axes,
             "io_subgraph": (self.io_name, self.io_subgraph)
-            if self.io_name
+            if isinstance(self.BlockwiseIO)
             else (None, None),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
         return ret
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        raw, raw_deps = make_blockwise_graph(
+            state["func"],
+            state["output"],
+            state["output_indices"],
+            *state["indices"],
+            new_axes=state["new_axes"],
+            numblocks=state["numblocks"],
+            concatenate=state["concatenate"],
+            output_blocks=state["output_blocks"],
+            dims=state["dims"],
+            return_key_deps=True,
+            deserializing=True,
+            func_future_args=state["func_future_args"],
+        )
+        global_dependencies = list(state["global_dependencies"])
+
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        dsk.update(raw)
+
+        for k, v in raw_deps.items():
+            dependencies[stringify(k)] = [stringify(d) for d in v] + global_dependencies
+
+    def _cull_dependencies(self, all_hlg_keys, output_blocks):
+        """Determine the necessary dependencies to produce `output_blocks`.
+
+        This method does not require graph materialization.
+        """
+
+        # Check `concatenate` option
+        concatenate = None
+        if self.concatenate is True:
+            from dask.array.core import concatenate_axes as concatenate
+
+        # Generate coordinate map
+        (coord_maps, concat_axes, dummies) = _get_coord_mapping(
+            self.dims,
+            self.output,
+            self.output_indices,
+            self.numblocks,
+            self.indices,
+            concatenate,
+        )
+
+        # Gather constant dependencies (for all output keys)
+        const_deps = set()
+        for (arg, ind) in self.indices:
+            if ind is None and isinstance(arg, str):
+                if arg in all_hlg_keys:
+                    const_deps.add(arg)
+
+        # Need to exclude IO keys if this is a `BlockwiseIO` layer
+        io_name = self.io_name if isinstance(self, BlockwiseIO) else None
+
+        # Get dependencies for each output block
+        key_deps = {}
+        for out_coords in output_blocks:
+            deps = set()
+            coords = out_coords + dummies
+            for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
+                if ind is not None and arg != io_name:
+                    arg_coords = tuple(coords[c] for c in cmap)
+                    if axes:
+                        tups = lol_product((arg,), arg_coords)
+                        deps.update(flatten(tups))
+                        if concatenate:
+                            tups = (concatenate, tups, axes)
+                    else:
+                        tups = (arg,) + arg_coords
+                        deps.add(tups)
+            key_deps[(self.output,) + out_coords] = deps | const_deps
+
+        return key_deps
+
+    def _cull(self, output_blocks):
+        return Blockwise(
+            self.output,
+            self.output_indices,
+            self.dsk,
+            self.indices,
+            self.numblocks,
+            concatenate=self.concatenate,
+            new_axes=self.new_axes,
+            output_blocks=output_blocks,
+        )
+
+    def cull(self, keys, all_hlg_keys):
+
+        # Culling is simple for Blockwise layers.  We can just
+        # collect a set of required output blocks (tuples), and
+        # only construct graph for these blocks in `make_blockwise_graph`
+
+        output_blocks = set()
+        for key in keys:
+            if key[0] == self.output:
+                output_blocks.add(key[1:])
+        culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
+        out_size = tuple([self.dims[i] for i in self.output_indices])
+        if np.prod(out_size) != len(culled_deps):
+            culled_layer = self._cull(output_blocks)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
+
+
+class BlockwiseIO(Blockwise):
+    """Tensor Operation
+
+    This a specialized Blockwise layer containing an IO subgraph.
+
+    Parameters
+    ----------
+    io_subgraph: Tuple[str, Dict or Mapping]
+        Since a BlockwiseIO layer corresponds to the generation of a new
+        collection (i.e. `indices` includes keys for a collection that has
+        yet to be constructed), this argument must be used to specify the
+        `(key-name, subgraph)` pair for the to-be-created collection. Note
+        that `key-name` must match the name used in both `indices` and in
+        the keys of `subgraph`.
+
+        NOTE: The `subgraph` must comprise of exactly N keys (where N is the
+        number of chunks/partitions in the new collection), and each value
+        must correspond to a "callable" task. The first element (a callable
+        function) must be the same for all N tasks.  This "uniformity" is
+        required for the abstract `SubgraphCallable` representation used
+        within Blockwise.
+    output: str
+        The name of the output collection.  Used in keynames
+    output_indices: tuple
+        The output indices, like ``('i', 'j', 'k')`` used to determine the
+        structure of the block computations
+    dsk: dict
+        A small graph to apply per-output-block.  May include keys from the
+        input indices.
+    indices: Tuple[str, Tuple[str, str]]
+        An ordered mapping from input key name, like ``'x'``
+        to input indices, like ``('i', 'j')``
+        Or includes literals, which have ``None`` for an index value
+    numblocks: Dict[key, Sequence[int]]
+        Number of blocks along each dimension for each input
+    concatenate: boolean
+        Whether or not to pass contracted dimensions as a list of inputs or a
+        single input to the block function
+    new_axes: Dict
+        New index dimensions that may have been created, and their extent
+    output_blocks: Set[Tuple]
+        Specify a specific set of required output blocks. Since the graph
+        will only contain the necessary tasks to generate these outputs,
+        this kwarg can be used to "cull" the abstract layer (without needing
+        to materialize the low-level graph).
+
+    See Also
+    --------
+    dask.blockwise.BlockwiseIO
+    """
+
+    def __init__(
+        self,
+        io_subgraph,
+        output,
+        output_indices,
+        dsk,
+        indices,
+        numblocks,
+        concatenate=None,
+        new_axes=None,
+        output_blocks=None,
+    ):
+        # BlockwiseIO requires an `io_subgraph` input.
+        # This is a tuple: (key-name, subgraph)
+        self.io_name, self.io_subgraph = io_subgraph
+
+        # Hanlde the case that this is a "pure" IO layer (dsk is None).
+        # Note that `dsk` should only be defined after fusion.
+        if not dsk:
+            # Extract actual IO function for SubgraphCallable construction.
+            # Wrap func in `PackedFunctionCall`, since it will receive
+            # all arguments as a sigle (packed) tuple at run time.
+            if self.io_subgraph:
+                # We assume a 1-to-1 mapping between keys (i.e. tasks) and
+                # chunks/partitions in `io_subgraph`, and assume the first
+                # (callable) element is the same for all tasks.
+                any_key = next(iter(self.io_subgraph))
+                io_func = self.io_subgraph.get(any_key)[0]
+            else:
+                io_func = None
+            ninds = 1 if isinstance(output_indices, str) else len(output_indices)
+            dsk = {
+                output: (
+                    PackedFunctionCall(io_func),
+                    *[blockwise_token(i) for i in range(ninds)],
+                )
+            }
+
+        # Super-class initializer
+        super().__init__(
+            output,
+            output_indices,
+            dsk,
+            indices,
+            numblocks,
+            concatenate=None,
+            new_axes=None,
+            output_blocks=None,
+        )
+
+    @property
+    def _dict(self):
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict["dsk"]
+        else:
+            keys = tuple(map(blockwise_token, range(len(self.indices))))
+            dsk, _ = fuse(self.dsk, [self.output])
+            func = SubgraphCallable(dsk, self.output, keys)
+
+            dsk = make_blockwise_graph(
+                func,
+                self.output,
+                self.output_indices,
+                *list(toolz.concat(self.indices)),
+                new_axes=self.new_axes,
+                numblocks=self.numblocks,
+                concatenate=self.concatenate,
+                output_blocks=self.output_blocks,
+                dims=self.dims,
+            )
+
+            # Handle IO Subgraph
+            for k in dsk:
+                io_key = (self.io_name,) + tuple([k[i] for i in range(1, len(k))])
+                if io_key in dsk[k]:
+                    # Inject IO-function arguments into the blockwise graph
+                    # as a single (packed) tuple.
+                    io_item = self.io_subgraph.get(io_key)
+                    io_item = list(io_item[1:]) if len(io_item) > 1 else []
+                    new_task = [io_item if v == io_key else v for v in dsk[k]]
+                    dsk[k] = tuple(new_task)
+
+            self._cached_dict = {"dsk": dsk}
+        return self._cached_dict["dsk"]
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
@@ -437,56 +626,9 @@ class Blockwise(Layer):
         for k, v in raw_deps.items():
             dependencies[stringify(k)] = [stringify(d) for d in v] + global_dependencies
 
-    def _cull_dependencies(self, all_hlg_keys, output_blocks):
-        """Determine the necessary dependencies to produce `output_blocks`.
-
-        This method does not require graph materialization.
-        """
-
-        # Check `concatenate` option
-        concatenate = None
-        if self.concatenate is True:
-            from dask.array.core import concatenate_axes as concatenate
-
-        # Generate coordinate map
-        (coord_maps, concat_axes, dummies) = _get_coord_mapping(
-            self.dims,
-            self.output,
-            self.output_indices,
-            self.numblocks,
-            self.indices,
-            concatenate,
-        )
-
-        # Gather constant dependencies (for all output keys)
-        const_deps = set()
-        for (arg, ind) in self.indices:
-            if ind is None and isinstance(arg, str):
-                if arg in all_hlg_keys:
-                    const_deps.add(arg)
-
-        # Get dependencies for each output block
-        key_deps = {}
-        for out_coords in output_blocks:
-            deps = set()
-            coords = out_coords + dummies
-            for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
-                if ind is not None and arg != self.io_name:
-                    arg_coords = tuple(coords[c] for c in cmap)
-                    if axes:
-                        tups = lol_product((arg,), arg_coords)
-                        deps.update(flatten(tups))
-                        if concatenate:
-                            tups = (concatenate, tups, axes)
-                    else:
-                        tups = (arg,) + arg_coords
-                        deps.add(tups)
-            key_deps[(self.output,) + out_coords] = deps | const_deps
-
-        return key_deps
-
     def _cull(self, output_blocks):
-        return Blockwise(
+        return BlockwiseIO(
+            (self.io_name, self.io_subgraph),
             self.output,
             self.output_indices,
             self.dsk,
@@ -494,27 +636,8 @@ class Blockwise(Layer):
             self.numblocks,
             concatenate=self.concatenate,
             new_axes=self.new_axes,
-            io_subgraph=(self.io_name, self.io_subgraph) if self.io_name else None,
             output_blocks=output_blocks,
         )
-
-    def cull(self, keys, all_hlg_keys):
-
-        # Culling is simple for Blockwise layers.  We can just
-        # collect a set of required output blocks (tuples), and
-        # only construct graph for these blocks in `make_blockwise_graph`
-
-        output_blocks = set()
-        for key in keys:
-            if key[0] == self.output:
-                output_blocks.add(key[1:])
-        culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-        out_size = tuple([self.dims[i] for i in self.output_indices])
-        if np.prod(out_size) != len(culled_deps):
-            culled_layer = self._cull(output_blocks)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
 
 
 def _get_coord_mapping(
@@ -956,7 +1079,8 @@ def _optimize_blockwise(full_graph, keys=()):
         if isinstance(layers[layer], Blockwise):
             blockwise_layers = {layer}
             deps = set(blockwise_layers)
-            io_names.add(layers[layer].io_name)
+            if isinstance(layers[layer], BlockwiseIO):
+                io_names.add(layers[layer].io_name)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
                 if dep not in layers:
@@ -1072,8 +1196,12 @@ def rewrite_blockwise(inputs):
             changed = True
 
             # Update IO-subgraph information
-            if not io_info and inputs[dep].io_name:
+            if not io_info and isinstance(inputs[dep], BlockwiseIO):
                 io_info = (inputs[dep].io_name, inputs[dep].io_subgraph)
+
+            # # Update IO-subgraph information
+            # if not io_info and inputs[dep].io_name:
+            #     io_info = (inputs[dep].io_name, inputs[dep].io_subgraph)
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -1145,16 +1273,29 @@ def rewrite_blockwise(inputs):
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
     numblocks = {k: v for k, v in numblocks.items() if v is None or k in indices_check}
 
-    out = Blockwise(
-        root,
-        inputs[root].output_indices,
-        dsk,
-        new_indices,
-        numblocks=numblocks,
-        new_axes=new_axes,
-        concatenate=concatenate,
-        io_subgraph=io_info,
-    )
+    if io_info:
+        # Fused layer includes IO
+        out = BlockwiseIO(
+            io_info,
+            root,
+            inputs[root].output_indices,
+            dsk,
+            new_indices,
+            numblocks=numblocks,
+            new_axes=new_axes,
+            concatenate=concatenate,
+        )
+    else:
+        out = Blockwise(
+            root,
+            inputs[root].output_indices,
+            dsk,
+            new_indices,
+            numblocks=numblocks,
+            new_axes=new_axes,
+            concatenate=concatenate,
+            # io_subgraph=io_info,
+        )
 
     return out
 
