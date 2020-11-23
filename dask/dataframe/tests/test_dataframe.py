@@ -3139,7 +3139,7 @@ def test_astype_skips_if_type_unchanged():
     a = dd.from_pandas(df, 2)
     b = a.astype({"x": "float", "y": "int64"})
 
-    assert_eq(a, b)
+    assert a == b
 
 
 def test_astype_categoricals():
