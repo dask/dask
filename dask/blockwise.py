@@ -227,6 +227,10 @@ class Blockwise(Layer):
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
+        # No IO subgraph allowed in `Blockwise`.
+        # Use `BlockwiseIO` to include IO.
+        self.io_name = None
+
     @property
     def dims(self):
         """Returns a dictionary mapping between each index specified in
@@ -340,7 +344,7 @@ class Blockwise(Layer):
             "concatenate": self.concatenate,
             "new_axes": self.new_axes,
             "io_subgraph": (self.io_name, self.io_subgraph)
-            if isinstance(self.BlockwiseIO)
+            if self.io_name
             else (None, None),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
@@ -399,16 +403,13 @@ class Blockwise(Layer):
                 if arg in all_hlg_keys:
                     const_deps.add(arg)
 
-        # Need to exclude IO keys if this is a `BlockwiseIO` layer
-        io_name = self.io_name if isinstance(self, BlockwiseIO) else None
-
         # Get dependencies for each output block
         key_deps = {}
         for out_coords in output_blocks:
             deps = set()
             coords = out_coords + dummies
             for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
-                if ind is not None and arg != io_name:
+                if ind is not None and arg != self.io_name:
                     arg_coords = tuple(coords[c] for c in cmap)
                     if axes:
                         tups = lol_product((arg,), arg_coords)
@@ -516,22 +517,19 @@ class BlockwiseIO(Blockwise):
         new_axes=None,
         output_blocks=None,
     ):
-        # BlockwiseIO requires an `io_subgraph` input.
-        # This is a tuple: (key-name, subgraph)
-        self.io_name, self.io_subgraph = io_subgraph
-
-        # Hanlde the case that this is a "pure" IO layer (dsk is None).
+        # Handel the case that this is a "pure" IO layer (dsk is None).
         # Note that `dsk` should only be defined after fusion.
         if not dsk:
             # Extract actual IO function for SubgraphCallable construction.
             # Wrap func in `PackedFunctionCall`, since it will receive
             # all arguments as a sigle (packed) tuple at run time.
-            if self.io_subgraph:
+            subgraph = io_subgraph[1]
+            if subgraph:
                 # We assume a 1-to-1 mapping between keys (i.e. tasks) and
                 # chunks/partitions in `io_subgraph`, and assume the first
                 # (callable) element is the same for all tasks.
-                any_key = next(iter(self.io_subgraph))
-                io_func = self.io_subgraph.get(any_key)[0]
+                any_key = next(iter(subgraph))
+                io_func = subgraph.get(any_key)[0]
             else:
                 io_func = None
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
@@ -553,6 +551,10 @@ class BlockwiseIO(Blockwise):
             new_axes=None,
             output_blocks=None,
         )
+
+        # BlockwiseIO requires an `io_subgraph` input.
+        # This is a tuple: (key-name, subgraph)
+        self.io_name, self.io_subgraph = io_subgraph
 
     @property
     def _dict(self):
@@ -1079,8 +1081,7 @@ def _optimize_blockwise(full_graph, keys=()):
         if isinstance(layers[layer], Blockwise):
             blockwise_layers = {layer}
             deps = set(blockwise_layers)
-            if isinstance(layers[layer], BlockwiseIO):
-                io_names.add(layers[layer].io_name)
+            io_names.add(layers[layer].io_name)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
                 if dep not in layers:
@@ -1196,12 +1197,8 @@ def rewrite_blockwise(inputs):
             changed = True
 
             # Update IO-subgraph information
-            if not io_info and isinstance(inputs[dep], BlockwiseIO):
+            if not io_info and inputs[dep].io_name:
                 io_info = (inputs[dep].io_name, inputs[dep].io_subgraph)
-
-            # # Update IO-subgraph information
-            # if not io_info and inputs[dep].io_name:
-            #     io_info = (inputs[dep].io_name, inputs[dep].io_subgraph)
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
