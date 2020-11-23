@@ -191,6 +191,7 @@ class Blockwise(Layer):
 
     See Also
     --------
+    dask.blockwise.BlockwiseIO
     dask.blockwise.blockwise
     dask.array.blockwise
     """
@@ -455,19 +456,20 @@ class Blockwise(Layer):
 
 
 class BlockwiseIO(Blockwise):
-    """Tensor Operation
+    """Blockwise layer with IO
 
-    This a specialized Blockwise layer containing an IO subgraph.
+    This a specialized Blockwise layer containing the IO "subgraph"
+    required to construct a brand new collection.
 
     Parameters
     ----------
     io_subgraph: Tuple[str, Dict or Mapping]
-        Since a BlockwiseIO layer corresponds to the generation of a new
+        A BlockwiseIO layer corresponds to the generation of a new
         collection (i.e. `indices` includes keys for a collection that has
-        yet to be constructed), this argument must be used to specify the
-        `(key-name, subgraph)` pair for the to-be-created collection. Note
-        that `key-name` must match the name used in both `indices` and in
-        the keys of `subgraph`.
+        yet to be constructed). Therefore, this argument must be used to
+        specify the `(key-name, subgraph)` pair for the to-be-created
+        collection. Note that `key-name` must match the name used in both
+        `indices` and in the keys of `subgraph`.
 
         NOTE: The `subgraph` must comprise of exactly N keys (where N is the
         number of chunks/partitions in the new collection), and each value
@@ -517,7 +519,7 @@ class BlockwiseIO(Blockwise):
         new_axes=None,
         output_blocks=None,
     ):
-        # Handel the case that this is a "pure" IO layer (dsk is None).
+        # Handle the case that this is a "pure" IO layer (dsk is None).
         # Note that `dsk` should only be defined after fusion.
         if not dsk:
             # Extract actual IO function for SubgraphCallable construction.
@@ -1283,6 +1285,7 @@ def rewrite_blockwise(inputs):
             concatenate=concatenate,
         )
     else:
+        # Fused layer does NOT include IO
         out = Blockwise(
             root,
             inputs[root].output_indices,
@@ -1291,7 +1294,6 @@ def rewrite_blockwise(inputs):
             numblocks=numblocks,
             new_axes=new_axes,
             concatenate=concatenate,
-            # io_subgraph=io_info,
         )
 
     return out
