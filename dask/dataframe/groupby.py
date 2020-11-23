@@ -162,24 +162,40 @@ def _groupby_raise_unaligned(df, **kwargs):
 
 
 def _groupby_slice_apply(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+    df,
+    grouper,
+    key,
+    func,
+    *args,
+    group_keys=True,
+    dropna=None,
+    observed=False,
+    **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
-    g = df.groupby(grouper, group_keys=group_keys, **dropna)
+    g = df.groupby(grouper, group_keys=group_keys, observed=observed, **dropna)
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
 
 
 def _groupby_slice_transform(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+    df,
+    grouper,
+    key,
+    func,
+    *args,
+    group_keys=True,
+    dropna=None,
+    observed=False,
+    **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
-    g = df.groupby(grouper, group_keys=group_keys, **dropna)
+    g = df.groupby(grouper, group_keys=group_keys, observed=observed, **dropna)
     if key:
         g = g[key]
 
@@ -1682,6 +1698,7 @@ class _GroupBy(object):
             token=funcname(func),
             *args,
             group_keys=self.group_keys,
+            observed=self.observed,
             **self.dropna,
             **kwargs,
         )
@@ -1770,6 +1787,7 @@ class _GroupBy(object):
             token=funcname(func),
             *args,
             group_keys=self.group_keys,
+            observed=self.observed,
             **self.dropna,
             **kwargs,
         )
@@ -1826,7 +1844,7 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = "series-groupby-"
 
-    def __init__(self, df, by=None, slice=None, **kwargs):
+    def __init__(self, df, by=None, slice=None, observed=False, **kwargs):
         # for any non series object, raise pandas-compat error message
 
         if isinstance(df, Series):
@@ -1838,12 +1856,12 @@ class SeriesGroupBy(_GroupBy):
 
                 non_series_items = [item for item in by if not isinstance(item, Series)]
                 # raise error from pandas, if applicable
-                df._meta.groupby(non_series_items)
+                df._meta.groupby(non_series_items, observed=observed)
             else:
                 # raise error from pandas, if applicable
-                df._meta.groupby(by)
+                df._meta.groupby(by, observed=observed)
 
-        super().__init__(df, by=by, slice=slice, **kwargs)
+        super().__init__(df, by=by, slice=slice, observed=observed, **kwargs)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
