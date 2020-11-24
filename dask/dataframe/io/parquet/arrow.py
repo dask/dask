@@ -23,8 +23,6 @@ from .utils import (
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
 schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
-NONE_LABEL = "__null_dask_index__"
-
 #
 #  Private Helper Functions
 #
