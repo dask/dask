@@ -23,6 +23,7 @@ from .utils import (
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
 schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
+NONE_LABEL = "__null_dask_index__"
 
 #
 #  Private Helper Functions
@@ -314,7 +315,15 @@ def _generate_dd_meta(schema, index, categories, partition_info):
 
     index_cols = index or ()
     meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
-    meta = clear_known_categories(meta, cols=categories)
+    if categories:
+        # Make sure all categories are set to "unknown".
+        # Cannot include the `NONE_LABEL` in the `cols` argument
+        # if it is the index of `meta`.
+        meta = clear_known_categories(
+            meta, cols=[c for c in categories if c != NONE_LABEL]
+        )
+        if NONE_LABEL in categories:
+            meta.index = clear_known_categories(meta.index, cols=[NONE_LABEL])
 
     if partition_obj:
         for partition in partition_obj:
