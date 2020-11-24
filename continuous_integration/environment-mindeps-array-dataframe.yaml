@@ -6,8 +6,8 @@ dependencies:
   - python=3.7
   - pyyaml
   # optional dependencies pulled in by pip install dask[array, dataframe]
-  - numpy
-  - pandas
+  - numpy=1.15
+  - pandas=0.23
   - partd
   - fsspec
   - toolz
