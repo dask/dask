@@ -218,23 +218,17 @@ class Layer(collections.abc.Mapping):
 class BasicLayer(Layer):
     """Basic implementation of `Layer`
 
+    Fully materialized layer implemented by a mapping
+
     Parameters
     ----------
     mapping: Mapping
         The mapping between keys and tasks, typically a dask graph.
-    dependencies: Mapping[Hashable, Set], optional
-        Mapping between keys and their dependencies
-    global_dependencies: Set, optional
-        Set of dependencies that all keys in the layer depend on. Notice,
-        the set might also contain literals that will be ignored.
     """
 
-    def __init__(self, mapping, dependencies=None, global_dependencies=None):
+    def __init__(self, mapping: Mapping):
         super().__init__()
         self.mapping = mapping
-        self.dependencies = dependencies
-        self.global_dependencies = global_dependencies
-        self.global_dependencies_has_been_trimmed = False
 
     def __contains__(self, k):
         return k in self.mapping
@@ -250,16 +244,6 @@ class BasicLayer(Layer):
 
     def is_materialized(self):
         return True
-
-    def get_dependencies(self, key, all_hlg_keys):
-        if self.dependencies is None or self.global_dependencies is None:
-            return super().get_dependencies(key, all_hlg_keys)
-
-        if not self.global_dependencies_has_been_trimmed:
-            self.global_dependencies = self.global_dependencies & all_hlg_keys
-            self.global_dependencies_has_been_trimmed = True
-
-        return self.dependencies[key] | self.global_dependencies
 
 
 class HighLevelGraph(Mapping):
