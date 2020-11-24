@@ -24,6 +24,7 @@ except ImportError:
 
 from .. import array as da
 from .. import core
+from ..array import stats as da_stats
 
 from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, apply
 from .. import threaded
@@ -2028,6 +2029,95 @@ Dask Name: {name}, {task} tasks"""
                 np.sqrt, v, meta=meta, token=name, enforce_metadata=False
             )
             return handle_out(out, result)
+
+    @derived_from(pd.DataFrame)
+    def skew(self, axis=None, bias=True, nan_policy="propagate", out=None):
+        axis = self._validate_axis(axis)
+        _raise_if_object_series(self, "skew")
+        meta = self._meta_nonempty.skew()
+        if axis == 1:
+            result = map_partitions(
+                M.skew,
+                self,
+                meta=meta,
+                token=self._token_prefix + "skew",
+                axis=axis,
+                enforce_metadata=False,
+            )
+            return handle_out(out, result)
+        else:
+            if self.ndim == 1:
+                result = self._skew_1d(self, bias=bias, nan_policy=nan_policy)
+                return handle_out(out, result)
+            else:
+                result = self._skew_numeric(bias=bias, nan_policy=nan_policy)
+
+            if isinstance(self, DataFrame):
+                result.divisions = (self.columns.min(), self.columns.max())
+
+            return handle_out(out, result)
+
+    def _skew_1d(self, column, bias=True, nan_policy="propagate"):
+        """1D version of the skew calculation.
+
+        Uses the array version from da.stats in case we are passing in a single series
+        """
+        is_timedelta = is_timedelta64_dtype(column._meta)
+
+        if is_timedelta:
+            is_nan = column.isna()
+            column = column.astype("i8")
+            column = column.mask(is_nan)
+
+        if PANDAS_VERSION >= "0.24.0":
+            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+                column = column.astype("f8")
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype("f8")
+
+        name = self._token_prefix + "skew-1d-" + tokenize(column)
+
+        array_skew = da_stats.skew(
+            column.values, axis=0, bias=bias, nan_policy=nan_policy
+        )
+
+        layer = {(name, 0): (methods.wrap_skew_reduction, (array_skew._name,), None)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_skew])
+
+        return new_dd_object(
+            graph, name, column._meta_nonempty.skew(), divisions=[None, None]
+        )
+
+    def _skew_numeric(self, bias=True, nan_policy="propagate"):
+        """Method for dataframes with numeric columns.
+
+        Maps the array version from da.stats onto the numeric array of columns.
+        """
+        num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype("f8")
+
+        array_skew = da_stats.skew(
+            array_values, axis=0, bias=bias, nan_policy=nan_policy
+        )
+
+        name = self._token_prefix + "var-numeric" + tokenize(num)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        skew_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_skew_name = (array_skew._name,) + (0,) * len(skew_shape)
+
+        layer = {(name, 0): (methods.wrap_skew_reduction, array_skew_name, cols)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_skew])
+
+        return new_dd_object(
+            graph, name, num._meta_nonempty.skew(), divisions=[None, None]
+        )
 
     @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
