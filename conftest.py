@@ -15,6 +15,17 @@ collect_ignore = [
     "dask/dot.py",
 ]
 
+collect_ignore_glob = []
+try:
+    import numpy  # noqa: F401
+except ImportError:
+    collect_ignore_glob.append("dask/array/*")
+
+try:
+    import pandas  # noqa: F401
+except ImportError:
+    collect_ignore_glob.append("dask/dataframe/*")
+
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")
