@@ -1322,6 +1322,7 @@ def format_time_ago(n: datetime) -> str:
     >>> past = datetime.now() - timedelta(days=800)
     >>> format_time_ago(past)
     '2 years ago'
+
     """
     units = {
         "years": lambda diff: diff.days / 365,
