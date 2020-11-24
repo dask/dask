@@ -317,13 +317,14 @@ def _generate_dd_meta(schema, index, categories, partition_info):
     meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
     if categories:
         # Make sure all categories are set to "unknown".
-        # Cannot include the `NONE_LABEL` in the `cols` argument
-        # if it is the index of `meta`.
+        # Cannot include index names in the `cols` argument.
         meta = clear_known_categories(
-            meta, cols=[c for c in categories if c != NONE_LABEL]
+            meta, cols=[c for c in categories if c not in meta.index.names]
         )
-        if NONE_LABEL in categories:
-            meta.index = clear_known_categories(meta.index, cols=[NONE_LABEL])
+        # Handle index categories
+        index_cats = [name for name in meta.index.names if name in categories]
+        if index_cats:
+            meta.index = clear_known_categories(meta.index, cols=index_cats)
 
     if partition_obj:
         for partition in partition_obj:
