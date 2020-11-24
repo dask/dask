@@ -1275,6 +1275,8 @@ def format_time(n):
 def format_time_ago(n):
     """Calculate a '3 hours ago' type string from a Python datetime.
 
+    Examples
+    --------
     >>> from datetime import datetime, timedelta
     >>> now = datetime.now()
     >>> format_time_ago(now)
