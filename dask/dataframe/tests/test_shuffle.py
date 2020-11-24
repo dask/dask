@@ -650,6 +650,26 @@ def test_set_index_timezone():
         d2.divisions[0] == s2badtype[0]
 
 
+@pytest.mark.parametrize("unit", ["ns", "us"])
+def test_set_index_datetime_precision(unit):
+    # https://github.com/dask/dask/issues/6864
+
+    df = pd.DataFrame(
+        [
+            [1567703791155681, 1],
+            [1567703792155681, 2],
+            [1567703790155681, 0],
+            [1567703793155681, 3],
+        ],
+        columns=["ts", "rank"],
+    )
+    df.ts = pd.to_datetime(df.ts, unit=unit)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.set_index("ts")
+
+    assert_eq(ddf, df.set_index("ts"))
+
+
 @pytest.mark.parametrize("drop", [True, False])
 def test_set_index_drop(drop):
     pdf = pd.DataFrame(
