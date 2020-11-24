@@ -47,11 +47,7 @@ def test_keys_values_items_methods():
 
 def test_cull():
     a = {"x": 1, "y": (inc, "x")}
-    layers = {
-        "a": BasicLayer(
-            a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
-        )
-    }
+    layers = {"a": BasicLayer(a)}
     dependencies = {"a": set()}
     hg = HighLevelGraph(layers, dependencies)
 

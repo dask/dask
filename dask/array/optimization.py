@@ -46,11 +46,11 @@ def optimize(
     dsk = optimize_blockwise(dsk, keys=keys)
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
-    dependencies = dsk.get_all_dependencies()
 
     if not config.get("optimization.fuse.active"):
         return dsk
 
+    dependencies = dsk.get_all_dependencies()
     dsk = ensure_dict(dsk)
 
     # Low level task optimizations
