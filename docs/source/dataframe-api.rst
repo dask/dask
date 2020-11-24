@@ -9,14 +9,21 @@ Dataframe
 .. autosummary::
 
     DataFrame
+    DataFrame.abs
     DataFrame.add
+    DataFrame.align
+    DataFrame.all
+    DataFrame.any
     DataFrame.append
     DataFrame.apply
+    DataFrame.applymap
     DataFrame.assign
     DataFrame.astype
+    DataFrame.bfill
     DataFrame.categorize
     DataFrame.columns
     DataFrame.compute
+    DataFrame.copy
     DataFrame.corr
     DataFrame.count
     DataFrame.cov
@@ -25,40 +32,62 @@ Dataframe
     DataFrame.cumprod
     DataFrame.cumsum
     DataFrame.describe
+    DataFrame.diff
     DataFrame.div
+    DataFrame.divide
     DataFrame.drop
     DataFrame.drop_duplicates
     DataFrame.dropna
     DataFrame.dtypes
+    DataFrame.eq
+    DataFrame.eval
     DataFrame.explode
+    DataFrame.ffill
     DataFrame.fillna
+    DataFrame.first
     DataFrame.floordiv
+    DataFrame.ge
     DataFrame.get_partition
     DataFrame.groupby
+    DataFrame.gt
     DataFrame.head
+    DataFrame.idxmax
+    DataFrame.idxmin
     DataFrame.iloc
     DataFrame.index
+    DataFrame.info
+    DataFrame.isin
     DataFrame.isna
     DataFrame.isnull
+    DataFrame.items
+    DataFrame.iteritems
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
     DataFrame.known_divisions
+    DataFrame.last
+    DataFrame.le
     DataFrame.loc
+    DataFrame.lt
     DataFrame.map_partitions
     DataFrame.mask
     DataFrame.max
     DataFrame.mean
+    DataFrame.melt
     DataFrame.memory_usage
     DataFrame.memory_usage_per_partition
     DataFrame.merge
     DataFrame.min
     DataFrame.mod
+    DataFrame.mode
     DataFrame.mul
     DataFrame.ndim
+    DataFrame.ne
     DataFrame.nlargest
     DataFrame.npartitions
+    DataFrame.nsmallest
     DataFrame.partitions
+    DataFrame.pivot_table
     DataFrame.pop
     DataFrame.pow
     DataFrame.prod
@@ -70,16 +99,22 @@ Dataframe
     DataFrame.rename
     DataFrame.repartition
     DataFrame.replace
+    DataFrame.resample
     DataFrame.reset_index
     DataFrame.rfloordiv
     DataFrame.rmod
     DataFrame.rmul
+    DataFrame.round
     DataFrame.rpow
     DataFrame.rsub
     DataFrame.rtruediv
     DataFrame.sample
+    DataFrame.select_dtypes
+    DataFrame.sem
     DataFrame.set_index
     DataFrame.shape
+    DataFrame.size
+    DataFrame.squeeze
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
@@ -89,10 +124,13 @@ Dataframe
     DataFrame.to_dask_array
     DataFrame.to_delayed
     DataFrame.to_hdf
+    DataFrame.to_html
     DataFrame.to_json
     DataFrame.to_parquet
     DataFrame.to_records
+    DataFrame.to_string
     DataFrame.to_sql
+    DataFrame.to_timestamp
     DataFrame.truediv
     DataFrame.values
     DataFrame.var
@@ -449,8 +487,8 @@ Other functions
 .. currentmodule:: dask.dataframe.multi
 
 .. autofunction:: concat
-.. autofunction:: merge
-.. autofunction:: merge_asof
+.. autofunction:: merge         # doctest: +ELLIPSIS
+.. autofunction:: merge_asof    # doctest: +ELLIPSIS
 
 .. currentmodule:: dask.dataframe.reshape
 

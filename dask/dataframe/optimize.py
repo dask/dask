@@ -10,25 +10,28 @@ from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
 
 
 def optimize(dsk, keys, **kwargs):
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    keys = list(core.flatten(keys))
 
-    if isinstance(dsk, HighLevelGraph):
-        # Think about an API for this.
-        flat_keys = list(core.flatten(keys))
-        dsk = optimize_read_parquet_getitem(dsk, keys=flat_keys)
-        dsk = optimize_blockwise(dsk, keys=flat_keys)
-        dsk = fuse_roots(dsk, keys=flat_keys)
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
 
+    dsk = optimize_read_parquet_getitem(dsk, keys=keys)
+    dsk = optimize_blockwise(dsk, keys=keys)
+    dsk = fuse_roots(dsk, keys=keys)
+    dsk = dsk.cull(set(keys))
+
+    if not config.get("optimization.fuse.active"):
+        return dsk
+
+    dependencies = dsk.get_all_dependencies()
     dsk = ensure_dict(dsk)
-
-    if isinstance(keys, list):
-        dsk, dependencies = cull(dsk, list(core.flatten(keys)))
-    else:
-        dsk, dependencies = cull(dsk, [keys])
 
     fuse_subgraphs = config.get("optimization.fuse.subgraphs")
     if fuse_subgraphs is None:
         fuse_subgraphs = True
-    dsk, dependencies = fuse(
+    dsk, _ = fuse(
         dsk,
         keys,
         dependencies=dependencies,
@@ -40,9 +43,11 @@ def optimize(dsk, keys, **kwargs):
 
 def optimize_read_parquet_getitem(dsk, keys):
     # find the keys to optimize
-    from .io.parquet.core import ParquetSubgraph
+    from .io.parquet.core import BlockwiseParquet
 
-    read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
+    read_parquets = [
+        k for k, v in dsk.layers.items() if isinstance(v, BlockwiseParquet)
+    ]
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
@@ -115,7 +120,7 @@ def optimize_read_parquet_getitem(dsk, keys):
             meta = old.meta
             columns = list(meta.columns)
 
-        new = ParquetSubgraph(
+        new = BlockwiseParquet(
             name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
         )
         layers[name] = new

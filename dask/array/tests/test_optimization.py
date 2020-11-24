@@ -5,6 +5,7 @@ pytest.importorskip("numpy")
 import numpy as np
 import dask
 import dask.array as da
+from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import fuse
 from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
@@ -264,7 +265,8 @@ def test_dont_fuse_numpy_arrays():
 
 
 def test_minimize_data_transfer():
-    x = np.ones(100)
+    zarr = pytest.importorskip("zarr")
+    x = zarr.ones((100,))
     y = da.from_array(x, chunks=25)
     z = y + 1
     dsk = z.__dask_optimize__(z.dask, z.__dask_keys__())
@@ -368,6 +370,22 @@ def test_turn_off_fusion():
 
     assert dask.get(a, y.__dask_keys__()) == dask.get(b, y.__dask_keys__())
     assert len(a) < len(b)
+
+
+def test_disable_lowlevel_fusion():
+    """Check that by disabling fusion, the HLG survives through optimizations"""
+
+    with dask.config.set({"optimization.fuse.active": False}):
+        y = da.ones(3, chunks=(3,), dtype="int")
+        optimize = y.__dask_optimize__
+        dsk1 = y.__dask_graph__()
+        dsk2 = optimize(dsk1, y.__dask_keys__())
+        assert isinstance(dsk1, HighLevelGraph)
+        assert isinstance(dsk2, HighLevelGraph)
+        assert dsk1 == dsk2
+        y = y.persist()
+        assert isinstance(y.__dask_graph__(), HighLevelGraph)
+        assert_eq(y, [1] * 3)
 
 
 def test_gh3937():

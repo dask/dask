@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from collections.abc import Mapping, Iterator
+from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
 from operator import getitem
@@ -23,6 +24,7 @@ from . import config, local, threaded
 
 __all__ = (
     "DaskMethodsMixin",
+    "annotate",
     "is_dask_collection",
     "compute",
     "persist",
@@ -31,6 +33,61 @@ __all__ = (
     "tokenize",
     "normalize_token",
 )
+
+
+@contextmanager
+def annotate(**annotations):
+    """Context Manager for setting HighLevelGraph Layer annotations.
+
+    Annotations are metadata or soft constraints associated with
+    tasks that dask schedulers may choose to respect: They signal intent
+    without enforcing hard constraints. As such, they are
+    primarily designed for use with the distributed scheduler.
+
+    Almost any object can serve as an annotation, but small Python objects
+    are preferred, while large objects such as NumPy arrays are discouraged.
+
+    Callables supplied as an annotation should take a single *key* argument and
+    produce the appropriate annotation. Individual task keys in the annotated collection
+    are supplied to the callable.
+
+    Parameters
+    ----------
+    **annotations : key-value pairs
+
+    Examples
+    --------
+
+    All tasks within array A should have priority 100 and be retried 3 times
+    on failure.
+
+    >>> import dask
+    >>> import dask.array as da
+    >>> with dask.annotate(priority=100, retries=3):
+    ...     A = da.ones((10000, 10000))
+
+    Prioritise tasks within Array A on flattened block ID.
+
+    >>> nblocks = (10, 10)
+    >>> with dask.annotate(priority=lambda k: k[1]*nblocks[1] + k[2]):
+    ...     A = da.ones((1000, 1000), chunks=(100, 100))
+
+    Annotations may be nested.
+
+    >>> with dask.annotate(priority=1):
+    ...     with dask.annotate(retries=3):
+    ...         A = da.ones((1000, 1000))
+    ...     B = A + 1
+    """
+
+    prev_annotations = config.get("annotations", {})
+    new_annotations = {
+        **prev_annotations,
+        **{f"annotations.{k}": v for k, v in annotations.items()},
+    }
+
+    with config.set(new_annotations):
+        yield
 
 
 def is_dask_collection(x):
@@ -95,7 +152,7 @@ class DaskMethodsMixin(object):
             filename=filename,
             format=format,
             optimize_graph=optimize_graph,
-            **kwargs
+            **kwargs,
         )
 
     def persist(self, **kwargs):
@@ -206,6 +263,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
+    from .highlevelgraph import HighLevelGraph
+
     optimizations = kwargs.pop("optimizations", None) or config.get("optimizations", [])
 
     if optimize_graph:
@@ -227,12 +286,11 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
                 _opt_list.append(_opt)
             groups = group
 
-        dsk = merge(
-            *map(
-                ensure_dict,
-                _opt_list,
-            )
-        )
+        # Merge all graphs
+        if any(isinstance(graph, HighLevelGraph) for graph in _opt_list):
+            dsk = HighLevelGraph.merge(*_opt_list)
+        else:
+            dsk = merge(*map(ensure_dict, _opt_list))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -367,10 +425,11 @@ def optimize(*args, **kwargs):
 
     Examples
     --------
+    >>> import dask as d
     >>> import dask.array as da
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
-    >>> a2, b2 = optimize(a, b)
+    >>> a2, b2 = d.optimize(a, b)
 
     >>> a2.compute() == a.compute()
     True
@@ -419,15 +478,16 @@ def compute(*args, **kwargs):
 
     Examples
     --------
+    >>> import dask as d
     >>> import dask.array as da
     >>> a = da.arange(10, chunks=2).sum()
     >>> b = da.arange(10, chunks=2).mean()
-    >>> compute(a, b)
+    >>> d.compute(a, b)
     (45, 4.5)
 
     By default, dask objects inside python collections will also be computed:
 
-    >>> compute({'a': a, 'b': b, 'c': 1})  # doctest: +SKIP
+    >>> d.compute({'a': a, 'b': b, 'c': 1})
     ({'a': 45, 'b': 4.5, 'c': 1},)
     """
     traverse = kwargs.pop("traverse", True)

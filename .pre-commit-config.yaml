@@ -1,11 +1,12 @@
 repos:
--   repo: https://github.com/python/black
+-   repo: https://github.com/psf/black
     rev: stable
     hooks:
     - id: black
-      language_version: python3.7
+      language_version: python3
+      exclude: versioneer.py
 -   repo: https://gitlab.com/pycqa/flake8
-    rev: 3.7.9
+    rev: 3.8.3
     hooks:
     - id: flake8
-      language_version: python3.7
+      language_version: python3

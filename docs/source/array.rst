@@ -46,8 +46,17 @@ Design
    :alt: Dask arrays coordinate many numpy arrays
    :align: right
 
-Dask arrays coordinate many NumPy arrays arranged into a grid.  These
-NumPy arrays may live on disk or on other machines.
+Dask arrays coordinate many NumPy arrays (or "duck arrays" that are
+sufficiently NumPy-like in API such as CuPy or Spare arrays) arranged into a
+grid. These arrays may live on disk or on other machines.
+
+New duck array chunk types (types below Dask on
+`NEP-13's type-casting heirarchy`_) can be registered via
+:func:`~dask.array.register_chunk_type`. Any other duck array types that are
+not registered will be deferred to in binary operations and NumPy
+ufuncs/functions (that is, Dask will return ``NotImplemented``). Note, however,
+that *any* ndarray-like type can be inserted into a Dask Array using
+:func:`~dask.array.Array.from_array`.
 
 Common Uses
 -----------
@@ -100,3 +109,4 @@ transfer costs, and because NumPy releases the GIL well.  It is also quite
 effective on a cluster using the `dask.distributed`_ scheduler.
 
 .. _`dask.distributed`: https://distributed.dask.org/en/latest/
+.. _`NEP-13's type-casting hierarchy`: https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy

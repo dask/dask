@@ -73,7 +73,14 @@ def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return empty(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
+    return empty(
+        shape,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
 
 
 def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -115,7 +122,14 @@ def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return ones(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
+    return ones(
+        shape,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
 
 
 def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
@@ -157,7 +171,14 @@ def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
 
     a = asarray(a, name=False)
     shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
-    return zeros(shape, dtype=(dtype or a.dtype), order=order, chunks=chunks, name=name)
+    return zeros(
+        shape,
+        dtype=(dtype or a.dtype),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
+    )
 
 
 def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shape=None):
@@ -210,6 +231,7 @@ def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shap
         order=order,
         chunks=chunks,
         name=name,
+        meta=a._meta,
     )
 
 
@@ -691,6 +713,7 @@ def triu(m, k=0):
     token = tokenize(m, k)
     name = "triu-" + token
 
+    triu_is_empty = True
     dsk = {}
     for i in range(rdim):
         for j in range(hdim):
@@ -701,9 +724,13 @@ def triu(m, k=0):
                 )
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
+                triu_is_empty = False
             else:
                 dsk[(name, i, j)] = (m.name, i, j)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
+                triu_is_empty = False
+    graph = HighLevelGraph.from_collections(
+        name, dsk, dependencies=[] if triu_is_empty else [m]
+    )
     return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 
@@ -744,19 +771,24 @@ def tril(m, k=0):
     token = tokenize(m, k)
     name = "tril-" + token
 
+    tril_is_empty = True
     dsk = {}
     for i in range(rdim):
         for j in range(hdim):
             if chunk * (j - i + 1) < k:
                 dsk[(name, i, j)] = (m.name, i, j)
+                tril_is_empty = False
             elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
                 dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
+                tril_is_empty = False
             else:
                 dsk[(name, i, j)] = (
                     partial(zeros_like_safe, shape=(m.chunks[0][i], m.chunks[1][j])),
                     m._meta,
                 )
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
+    graph = HighLevelGraph.from_collections(
+        name, dsk, dependencies=[] if tril_is_empty else [m]
+    )
     return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
 

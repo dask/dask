@@ -29,23 +29,24 @@ class Profiler(Callback):
 
     >>> from operator import add, mul
     >>> from dask.threaded import get
+    >>> from dask.diagnostics import Profiler
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     >>> with Profiler() as prof:
     ...     get(dsk, 'z')
     22
 
-    >>> prof.results  # doctest: +SKIP
+    >>> prof.results        # doctest: +SKIP
     [('y', (add, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
      ('z', (mul, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
 
     These results can be visualized in a bokeh plot using the ``visualize``
     method. Note that this requires bokeh to be installed.
 
-    >>> prof.visualize() # doctest: +SKIP
+    >>> prof.visualize()    # doctest: +SKIP
 
     You can activate the profiler globally
 
-    >>> prof.register()  # doctest: +SKIP
+    >>> prof.register()     # doctest: +SKIP
 
     If you use the profiler globally you will need to clear out old results
     manually.
@@ -61,7 +62,7 @@ class Profiler(Callback):
 
     def __enter__(self):
         self.clear()
-        return super(Profiler, self).__enter__()
+        return super().__enter__()
 
     def _start(self, dsk):
         self._dsk.update(dsk)
@@ -166,13 +167,13 @@ class ResourceProfiler(Callback):
         self._entered = True
         self.clear()
         self._start_collect()
-        return super(ResourceProfiler, self).__enter__()
+        return super().__enter__()
 
     def __exit__(self, *args):
         self._entered = False
         self._stop_collect()
         self.close()
-        super(ResourceProfiler, self).__exit__(*args)
+        super().__exit__(*args)
 
     def _start(self, dsk):
         self._start_collect()
@@ -289,6 +290,7 @@ class CacheProfiler(Callback):
 
     >>> from operator import add, mul
     >>> from dask.threaded import get
+    >>> from dask.diagnostics import CacheProfiler
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
     >>> with CacheProfiler() as prof:
     ...     get(dsk, 'z')
@@ -335,7 +337,7 @@ class CacheProfiler(Callback):
 
     def __enter__(self):
         self.clear()
-        return super(CacheProfiler, self).__enter__()
+        return super().__enter__()
 
     def _start(self, dsk):
         self._dsk.update(dsk)

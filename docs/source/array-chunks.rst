@@ -1,11 +1,13 @@
+.. _array.chunks:
+
 Chunks
 ======
 
-Dask arrays are composed of many NumPy arrays.  How these arrays are arranged
-can significantly affect performance.  For example, for a square array you might
-arrange your chunks along rows, along columns, or in a more square-like
-fashion.  Different arrangements of NumPy arrays will be faster or slower for
-different algorithms.
+Dask arrays are composed of many NumPy (or NumPy-like) arrays. How these arrays
+are arranged can significantly affect performance.  For example, for a square
+array you might arrange your chunks along rows, along columns, or in a more
+square-like fashion. Different arrangements of NumPy arrays will be faster or
+slower for different algorithms.
 
 Thinking about and controlling chunking is important to optimize advanced
 algorithms.

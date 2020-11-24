@@ -1,5 +1,6 @@
 import copyreg
 import multiprocessing
+import os
 import pickle
 import sys
 import traceback
@@ -182,6 +183,15 @@ def get(
     pool = pool or config.get("pool", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
+        # In order to get consistent hashing in subprocesses, we need to set a
+        # consistent seed for the Python hash algorithm. Unfortunatley, there
+        # is no way to specify environment variables only for the Pool
+        # processes, so we have to rely on environment variables being
+        # inherited.
+        if os.environ.get("PYTHONHASHSEED") in (None, "0"):
+            # This number is arbitrary; it was chosen to commemorate
+            # https://github.com/dask/dask/issues/6640.
+            os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
         pool = context.Pool(num_workers, initializer=initialize_worker_process)
         cleanup = True

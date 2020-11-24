@@ -413,7 +413,7 @@ def test_to_hdf_lock_delays():
     )
     a = dd.from_pandas(df16, 16)
 
-    # adding artifichial delays to make sure last tasks finish first
+    # adding artificial delays to make sure last tasks finish first
     # that's a way to simulate last tasks finishing last
     def delayed_nop(i):
         if i[1] < 10:
@@ -428,7 +428,7 @@ def test_to_hdf_lock_delays():
         assert_eq(df16, out)
 
     # saving to multiple hdf files
-    # adding artifichial delays to make sure last tasks finish first
+    # adding artificial delays to make sure last tasks finish first
     with tmpdir() as dn:
         fn = os.path.join(dn, "data*")
         a = a.apply(delayed_nop, axis=1, meta=a)

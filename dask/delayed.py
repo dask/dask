@@ -59,6 +59,7 @@ def unpack_collections(expr):
 
     Examples
     --------
+    >>> import dask
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')
     >>> task, collections = unpack_collections([a, b, 3])
@@ -132,6 +133,7 @@ def to_task_dask(expr):
 
     Examples
     --------
+    >>> import dask
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')
     >>> task, dask = to_task_dask([a, b, 3])  # doctest: +SKIP
@@ -262,6 +264,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     --------
     Apply to functions to delay execution:
 
+    >>> from dask import delayed
     >>> def inc(x):
     ...     return x + 1
 
@@ -269,7 +272,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     11
 
     >>> x = delayed(inc, pure=True)(10)
-    >>> type(x) == Delayed
+    >>> type(x) == Delayed              # doctest: +SKIP
     True
     >>> x.compute()
     11
@@ -309,10 +312,10 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     it contextually using the ``delayed_pure`` setting. Note that this
     influences the *call* and not the *creation* of the callable:
 
-    >>> import dask
     >>> @delayed
     ... def mul(a, b):
     ...     return a * b
+    >>> import dask
     >>> with dask.config.set(delayed_pure=True):
     ...     print(mul(1, 2).key == mul(1, 2).key)
     True
@@ -324,7 +327,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     hashing the arguments by default. To explicitly set the name, you can use
     the ``dask_key_name`` keyword when calling the function:
 
-    >>> add(1, 2)    # doctest: +SKIP
+    >>> add(1, 2)   # doctest: +SKIP
     Delayed('add-3dce7c56edd1ac2614add714086e950f')
     >>> add(1, 2, dask_key_name='three')
     Delayed('three')
@@ -333,14 +336,17 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     result. If you set the names explicitly you should make sure your key names
     are different for different results.
 
-    >>> add(1, 2, dask_key_name='three')  # doctest: +SKIP
-    >>> add(2, 1, dask_key_name='three')  # doctest: +SKIP
-    >>> add(2, 2, dask_key_name='four')   # doctest: +SKIP
+    >>> add(1, 2, dask_key_name='three')
+    Delayed('three')
+    >>> add(2, 1, dask_key_name='three')
+    Delayed('three')
+    >>> add(2, 2, dask_key_name='four')
+    Delayed('four')
 
     ``delayed`` can also be applied to objects to make operations on them lazy:
 
     >>> a = delayed([1, 2, 3])
-    >>> isinstance(a, Delayed)
+    >>> isinstance(a, Delayed)      # doctest: +SKIP
     True
     >>> a.compute()
     [1, 2, 3]
@@ -360,19 +366,19 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     Delayed results act as a proxy to the underlying object. Many operators
     are supported:
 
-    >>> (a + [1, 2]).compute()
+    >>> (a + [1, 2]).compute()      # doctest: +SKIP
     [1, 2, 3, 1, 2]
-    >>> a[1].compute()
+    >>> a[1].compute()              # doctest: +SKIP
     2
 
     Method and attribute access also works:
 
-    >>> a.count(2).compute()
+    >>> a.count(2).compute()        # doctest: +SKIP
     1
 
     Note that if a method doesn't exist, no error will be thrown until runtime:
 
-    >>> res = a.not_a_real_method()
+    >>> res = a.not_a_real_method() # doctest: +SKIP
     >>> res.compute()  # doctest: +SKIP
     AttributeError("'list' object has no attribute 'not_a_real_method'")
 
@@ -411,6 +417,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     >>> a.count(2, dask_key_name="count_2")
     Delayed('count_2')
+    >>> import dask
     >>> with dask.config.set(delayed_pure=True):
     ...     print(a.count(2).key == a.count(2).key)
     True
@@ -470,12 +477,19 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "dask", "_length")
+    __slots__ = ("_key", "dask", "_length", "_dask_layers")
 
     def __init__(self, key, dsk, length=None):
         self._key = key
         self.dask = dsk
         self._length = length
+
+        # `__dask_layers__` of an one-layered HLG is the layer name
+        # TODO: what is the name of a multi-layered HLG?
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            self._dask_layers = set(iter(dsk.layers))
+        else:
+            self._dask_layers = (self.key,)
 
     def __dask_graph__(self):
         return self.dask
@@ -484,7 +498,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        return (self.key,)
+        if hasattr(self, "_dask_layers"):
+            return self._dask_layers
+        else:
+            return (self.key,)
 
     def __dask_tokenize__(self):
         return self.key
@@ -643,7 +660,7 @@ class DelayedAttr(Delayed):
         # code). See https://github.com/dask/dask/pull/4374#issuecomment-454381465
         if attr == "dtype" and self._attr == "dtype":
             raise AttributeError("Attribute %s not found" % attr)
-        return super(DelayedAttr, self).__getattr__(attr)
+        return super().__getattr__(attr)
 
     @property
     def dask(self):

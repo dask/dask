@@ -23,11 +23,12 @@ def cull(dsk, keys):
 
     Examples
     --------
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
-    >>> dsk, dependencies = cull(d, 'out')  # doctest: +SKIP
-    >>> dsk  # doctest: +SKIP
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}    # doctest: +SKIP
+    >>> dsk, dependencies = cull(d, 'out')                      # doctest: +SKIP
+    >>> dsk                                                     # doctest: +SKIP
     {'x': 1, 'out': (add, 'x', 10)}
-    >>> dependencies  # doctest: +SKIP
+    >>> dependencies                                            # doctest: +SKIP
     {'x': set(), 'out': set(['x'])}
 
     Returns
@@ -233,14 +234,15 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
     Examples
     --------
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    >>> inline(d)  # doctest: +SKIP
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')} # doctest: +SKIP
+    >>> inline(d)       # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
 
-    >>> inline(d, keys='y')  # doctest: +SKIP
+    >>> inline(d, keys='y') # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
 
-    >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
+    >>> inline(d, keys='y', inline_constants=False) # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
     if dependencies and isinstance(next(iter(dependencies.values())), list):
@@ -947,10 +949,9 @@ class SubgraphCallable(object):
     def __eq__(self, other):
         return (
             type(self) is type(other)
-            and self.dsk == other.dsk
+            and self.name == other.name
             and self.outkey == other.outkey
             and set(self.inkeys) == set(other.inkeys)
-            and self.name == other.name
         )
 
     def __ne__(self, other):
@@ -963,3 +964,6 @@ class SubgraphCallable(object):
 
     def __reduce__(self):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
+
+    def __hash__(self):
+        return hash(tuple((self.outkey, tuple(self.inkeys), self.name)))

@@ -536,7 +536,8 @@ def test_array_reduction_out(func):
 @pytest.mark.parametrize("func", ["cumsum", "cumprod", "nancumsum", "nancumprod"])
 @pytest.mark.parametrize("use_nan", [False, True])
 @pytest.mark.parametrize("axis", [None, 0, 1, -1])
-def test_array_cumreduction_axis(func, use_nan, axis):
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
+def test_array_cumreduction_axis(func, use_nan, axis, method):
     np_func = getattr(np, func)
     da_func = getattr(da, func)
 
@@ -547,7 +548,7 @@ def test_array_cumreduction_axis(func, use_nan, axis):
     d = da.from_array(a, chunks=(4, 5, 6))
 
     a_r = np_func(a, axis=axis)
-    d_r = da_func(d, axis=axis)
+    d_r = da_func(d, axis=axis, method=method)
 
     assert_eq(a_r, d_r)
 
@@ -644,11 +645,16 @@ def test_topk_argtopk3():
     "func",
     [da.cumsum, da.cumprod, da.argmin, da.argmax, da.min, da.max, da.nansum, da.nanmax],
 )
-def test_regres_3940(func):
+@pytest.mark.parametrize("method", ["sequential", "blelloch"])
+def test_regres_3940(func, method):
+    if func in {da.cumsum, da.cumprod}:
+        kwargs = {"method": method}
+    else:
+        kwargs = {}
     a = da.ones((5, 2), chunks=(2, 2))
-    assert func(a).name != func(a + 1).name
-    assert func(a, axis=0).name != func(a).name
-    assert func(a, axis=0).name != func(a, axis=1).name
+    assert func(a, **kwargs).name != func(a + 1, **kwargs).name
+    assert func(a, axis=0, **kwargs).name != func(a, **kwargs).name
+    assert func(a, axis=0, **kwargs).name != func(a, axis=1, **kwargs).name
     if func not in {da.cumsum, da.cumprod, da.argmin, da.argmax}:
         assert func(a, axis=()).name != func(a).name
         assert func(a, axis=()).name != func(a, axis=0).name
@@ -689,3 +695,22 @@ def test_median(axis, keepdims, func):
         getattr(da, func)(d, axis=axis, keepdims=keepdims),
         getattr(np, func)(x, axis=axis, keepdims=keepdims),
     )
+
+
+@pytest.mark.parametrize("method", ["sum", "mean", "prod"])
+def test_object_reduction(method):
+    arr = da.ones(1).astype(object)
+    result = getattr(arr, method)().compute()
+    assert result == 1
+
+
+@pytest.mark.parametrize("func", ["nanvar", "nanstd"])
+def test_nan_func_does_not_warn(func):
+    # non-regression test for #6105
+    x = np.ones((10,)) * np.nan
+    x[0] = 1
+    x[1] = 2
+    d = da.from_array(x, chunks=2)
+    with pytest.warns(None) as rec:
+        getattr(da, func)(d).compute()
+    assert not rec  # did not warn

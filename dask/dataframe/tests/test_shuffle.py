@@ -17,6 +17,7 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm, assert_categorical_equal
 from dask import delayed
 from dask.base import compute_as_if_collection
+from dask.optimization import cull
 from dask.dataframe.shuffle import (
     shuffle,
     partitioning_index,
@@ -649,6 +650,26 @@ def test_set_index_timezone():
         d2.divisions[0] == s2badtype[0]
 
 
+@pytest.mark.parametrize("unit", ["ns", "us"])
+def test_set_index_datetime_precision(unit):
+    # https://github.com/dask/dask/issues/6864
+
+    df = pd.DataFrame(
+        [
+            [1567703791155681, 1],
+            [1567703792155681, 2],
+            [1567703790155681, 0],
+            [1567703793155681, 3],
+        ],
+        columns=["ts", "rank"],
+    )
+    df.ts = pd.to_datetime(df.ts, unit=unit)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.set_index("ts")
+
+    assert_eq(ddf, df.set_index("ts"))
+
+
 @pytest.mark.parametrize("drop", [True, False])
 def test_set_index_drop(drop):
     pdf = pd.DataFrame(
@@ -1007,3 +1028,75 @@ def test_set_index_overlap():
     a = a.set_index("key", sorted=True)
     b = a.repartition(divisions=a.divisions)
     assert_eq(a, b)
+
+
+def test_shuffle_hlg_layer():
+    # This test checks that the `ShuffleLayer` HLG Layer
+    # is used (as expected) for a multi-stage shuffle.
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=10
+    )
+    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
+    keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
+
+    # Cull the HLG
+    dsk = ddf_shuffled.__dask_graph__()
+    dsk_culled = dsk.cull(set(keys))
+    assert isinstance(dsk_culled, dask.highlevelgraph.HighLevelGraph)
+
+    # Ensure we have ShuffleLayers
+    assert any(
+        isinstance(layer, dd.shuffle.ShuffleLayer) for layer in dsk.layers.values()
+    )
+
+    # Check that the ShuffleLayers are non-materialized
+    for layer in dsk.layers.values():
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert not hasattr(layer, "_cached_dict")
+
+    # Make sure HLG culling reduces the graph size
+    assert len(dsk_culled) < len(dsk)
+
+    # Check ShuffleLayer names
+    for name, layer in dsk.layers.items():
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert name.startswith("shuffle-")
+
+    # Since we already culled the HLG,
+    # culling the dictionary should not change the graph
+    dsk_dict = dict(dsk_culled)
+    dsk_dict_culled, _ = cull(dsk_dict, keys)
+    assert dsk_dict_culled == dsk_dict
+
+
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        10,  # ShuffleLayer
+        1,  # SimpleShuffleLayer
+    ],
+)
+def test_shuffle_hlg_layer_serialize(npartitions):
+    ddf = dd.from_pandas(
+        pd.DataFrame({"a": np.random.randint(0, 10, 100)}), npartitions=npartitions
+    )
+    ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
+
+    # Ensure shuffle layers can be serialized and don't result in
+    # the underlying low-level graph being materialized
+    dsk = ddf_shuffled.__dask_graph__()
+    for layer in dsk.layers.values():
+        if not isinstance(layer, dd.shuffle.SimpleShuffleLayer):
+            continue
+        assert not hasattr(layer, "_cached_dict")
+        layer_roundtrip = pickle.loads(pickle.dumps(layer))
+        assert type(layer_roundtrip) == type(layer)
+        assert not hasattr(layer_roundtrip, "_cached_dict")
+        assert layer_roundtrip.keys() == layer.keys()
+
+
+def test_set_index_nan_partition():
+    d[d.a > 3].set_index("a")  # Set index with 1 null partition
+    d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
+    a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
+    assert_eq(a, a)

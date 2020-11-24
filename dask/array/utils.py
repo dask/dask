@@ -101,7 +101,22 @@ def meta_from_array(x, ndim=None, dtype=None):
         meta = np.array(meta)
 
     if dtype and meta.dtype != dtype:
-        meta = meta.astype(dtype)
+        try:
+            meta = meta.astype(dtype)
+        except ValueError as e:
+            if (
+                any(
+                    s in str(e)
+                    for s in [
+                        "invalid literal",
+                        "could not convert string to float",
+                    ]
+                )
+                and meta.dtype.kind in "SU"
+            ):
+                meta = np.array([]).astype(dtype)
+            else:
+                raise e
 
     return meta
 
@@ -126,12 +141,21 @@ def compute_meta(func, _dtype, *args, **kwargs):
                     kwargs_meta["computing_meta"] = True
                 meta = func(*args_meta, **kwargs_meta)
             except TypeError as e:
-                if (
-                    "unexpected keyword argument" in str(e)
-                    or "is an invalid keyword for" in str(e)
-                    or "Did not understand the following kwargs" in str(e)
+                if any(
+                    s in str(e)
+                    for s in [
+                        "unexpected keyword argument",
+                        "is an invalid keyword for",
+                        "Did not understand the following kwargs",
+                    ]
                 ):
                     raise
+                else:
+                    return None
+            except ValueError as e:
+                # min/max functions have no identity, attempt to use the first meta
+                if "zero-size array to reduction operation" in str(e):
+                    meta = args_meta[0]
                 else:
                     return None
             except Exception:
@@ -178,6 +202,7 @@ def _check_dsk(dsk):
     if not isinstance(dsk, HighLevelGraph):
         return
 
+    dsk.validate()
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
     freqs = frequencies(concat(dsk.dicts.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
@@ -347,6 +372,48 @@ def validate_axis(axis, ndim):
     if axis < 0:
         axis += ndim
     return axis
+
+
+def svd_flip(u, v, u_based_decision=False):
+    """Sign correction to ensure deterministic output from SVD.
+
+    This function is useful for orienting eigenvectors such that
+    they all lie in a shared but arbitrary half-space. This makes
+    it possible to ensure that results are equivalent across SVD
+    implementations and random number generator states.
+
+    Parameters
+    ----------
+
+    u : (M, K) array_like
+        Left singular vectors (in columns)
+    v : (K, N) array_like
+        Right singular vectors (in rows)
+    u_based_decision: bool
+        Whether or not to choose signs based
+        on `u` rather than `v`, by default False
+
+    Returns
+    -------
+
+    u : (M, K) array_like
+        Left singular vectors with corrected sign
+    v:  (K, N) array_like
+        Right singular vectors with corrected sign
+    """
+    # Determine half-space in which all singular vectors
+    # lie relative to an arbitrary vector; summation
+    # equivalent to dot product with row vector of ones
+    if u_based_decision:
+        dtype = u.dtype
+        signs = np.sum(u, axis=0, keepdims=True)
+    else:
+        dtype = v.dtype
+        signs = np.sum(v, axis=1, keepdims=True).T
+    signs = 2.0 * ((signs >= 0) - 0.5).astype(dtype)
+    # Force all singular vectors into same half-space
+    u, v = u * signs, v * signs.T
+    return u, v
 
 
 def _is_nep18_active():

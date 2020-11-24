@@ -28,6 +28,7 @@ from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from fsspec.compression import compr
 
+
 fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
@@ -827,6 +828,13 @@ def test_multiple_read_csv_has_deterministic_name():
         assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
 
 
+def test_read_csv_has_different_names_based_on_blocksize():
+    with filetext(csv_text) as fn:
+        a = dd.read_csv(fn, blocksize="10kB")
+        b = dd.read_csv(fn, blocksize="20kB")
+        assert a._name != b._name
+
+
 def test_csv_with_integer_names():
     with filetext("alice,1\nbob,2") as fn:
         df = dd.read_csv(fn, header=None)
@@ -1564,3 +1572,26 @@ def test_to_csv_line_ending():
 def test_block_mask(block_lists):
     mask = list(block_mask(block_lists))
     assert len(mask) == len(list(flatten(block_lists)))
+
+
+def test_reading_empty_csv_files_with_path():
+    with tmpdir() as tdir:
+        for k, content in enumerate(["0, 1, 2", "", "6, 7, 8"]):
+            with open(os.path.join(tdir, str(k) + ".csv"), "w") as file:
+                file.write(content)
+        result = dd.read_csv(
+            os.path.join(tdir, "*.csv"),
+            include_path_column=True,
+            converters={"path": parse_filename},
+            names=["A", "B", "C"],
+        ).compute()
+        df = pd.DataFrame(
+            {
+                "A": [0, 6],
+                "B": [1, 7],
+                "C": [2, 8],
+                "path": ["0.csv", "2.csv"],
+            }
+        )
+        df["path"] = df["path"].astype("category")
+        assert_eq(result, df, check_index=False)

@@ -1,3 +1,4 @@
+from distutils.version import LooseVersion
 import os
 import pytest
 from operator import add, mul
@@ -45,6 +46,15 @@ dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pd = import_or_none("pandas")
+
+if pd:
+    PANDAS_VERSION = LooseVersion(pd.__version__)
+    PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
+
+    if PANDAS_GT_100:
+        import pandas.testing as tm  # noqa: F401
+    else:
+        import pandas.util.testing as tm  # noqa: F401
 
 
 def f1(a, b, c=1):
@@ -270,7 +280,7 @@ def test_tokenize_pandas_invalid_unicode():
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_mixed_unicode_bytes():
     df = pd.DataFrame(
-        {u"ö".encode("utf8"): [1, 2, 3], u"ö": [u"ö", u"ö".encode("utf8"), None]},
+        {"ö".encode("utf8"): [1, 2, 3], "ö": ["ö", "ö".encode("utf8"), None]},
         index=[1, 2, 3],
     )
     tokenize(df)
@@ -403,7 +413,7 @@ def test_tokenize_range():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_object_array_with_nans():
-    a = np.array([u"foo", u"Jos\xe9", np.nan], dtype="O")
+    a = np.array(["foo", "Jos\xe9", np.nan], dtype="O")
     assert tokenize(a) == tokenize(a)
 
 
@@ -677,8 +687,8 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    pd.testing.assert_series_equal(out1, df.a + 1)
-    pd.testing.assert_series_equal(out2, df.a + df.b)
+    tm.assert_series_equal(out1, df.a + 1)
+    tm.assert_series_equal(out2, df.a + df.b)
 
 
 @pytest.mark.skipif("not dd or not da")
@@ -694,7 +704,7 @@ def test_compute_array_dataframe():
 
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe_valid_unicode_in_bytes():
-    df = pd.DataFrame(data=np.random.random((3, 1)), columns=[u"ö".encode("utf8")])
+    df = pd.DataFrame(data=np.random.random((3, 1)), columns=["ö".encode("utf8")])
     dd.from_pandas(df, npartitions=4)
 
 

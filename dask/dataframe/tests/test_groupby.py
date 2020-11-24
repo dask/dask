@@ -242,7 +242,7 @@ def test_full_groupby_multilevel(grouper, reverse):
     def func(df):
         return df.assign(b=df.b - df.b.mean())
 
-    # last one causes a DeprcationWarning from pandas.
+    # last one causes a DeprecationWarning from pandas.
     # See https://github.com/pandas-dev/pandas/issues/16481
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
@@ -1846,7 +1846,8 @@ def test_groupby_agg_custom__mode():
     assert_eq(actual, expected)
 
 
-def test_groupby_select_column_agg():
+@pytest.mark.parametrize("func", ["var", list])
+def test_groupby_select_column_agg(func):
     pdf = pd.DataFrame(
         {
             "A": [1, 2, 3, 1, 2, 3, 1, 2, 4],
@@ -1854,8 +1855,8 @@ def test_groupby_select_column_agg():
         }
     )
     ddf = dd.from_pandas(pdf, npartitions=4)
-    actual = ddf.groupby("A")["B"].agg("var")
-    expected = pdf.groupby("A")["B"].agg("var")
+    actual = ddf.groupby("A")["B"].agg(func)
+    expected = pdf.groupby("A")["B"].agg(func)
     assert_eq(actual, expected)
 
 
@@ -1963,7 +1964,7 @@ def test_groupby_cov(columns):
     # MultiIndex
     if isinstance(columns, np.ndarray):
         result = result.compute()
-        # don't bother checking index -- MulitIndex levels are in a frozenlist
+        # don't bother checking index -- MultiIndex levels are in a frozenlist
         result.columns = result.columns.astype(np.dtype("O"))
         assert_eq(expected, result, check_index=False)
     else:
@@ -2403,7 +2404,7 @@ def test_groupby_sort_argument_agg(agg, sort):
     assert_eq(result, result_pd)
     if sort:
         # Check order of index if sort==True
-        # (no guarentee that order will match otherwise)
+        # (no guarantee that order will match otherwise)
         assert_eq(result.index, result_pd.index)
 
 

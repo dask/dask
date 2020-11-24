@@ -9,6 +9,7 @@ from tlz import merge
 
 from ...base import tokenize
 from ... import array as da
+from ...dataframe.core import new_dd_object
 from ...delayed import delayed
 
 from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
@@ -165,6 +166,7 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     Examples
     --------
+    >>> from dask.dataframe import from_pandas
     >>> df = pd.DataFrame(dict(a=list('aabbcc'), b=list(range(6))),
     ...                   index=pd.date_range(start='20100101', periods=6))
     >>> ddf = from_pandas(df, npartitions=3)

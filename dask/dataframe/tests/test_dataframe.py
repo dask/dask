@@ -1190,7 +1190,7 @@ def test_nbytes():
 
 @pytest.mark.parametrize(
     "method,expected",
-    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 5.4, 1.2, 7.8, 5.0))],
+    [("tdigest", (0.35, 3.80, 2.5, 6.5, 2.0)), ("dask", (0.0, 4.0, 1.2, 6.2, 2.0))],
 )
 def test_quantile(method, expected):
     if method == "tdigest":
@@ -1278,9 +1278,9 @@ def test_empty_quantile(method):
         (
             "dask",
             (
-                pd.Series([16.5, 36.5, 26.5], index=["A", "X", "B"]),
+                pd.Series([7.0, 27.0, 17.0], index=["A", "X", "B"]),
                 pd.DataFrame(
-                    [[1.50, 21.50, 11.50], [17.75, 37.75, 27.75]],
+                    [[1.50, 21.50, 11.50], [14.0, 34.0, 24.0]],
                     index=[0.25, 0.75],
                     columns=["A", "X", "B"],
                 ),
@@ -1353,6 +1353,14 @@ def test_quantile_for_possibly_unsorted_q():
 
     r = ds.quantile(0.25).compute()
     assert_eq(r, 25.0)
+
+
+def test_quantile_tiny_partitions():
+    """ See https://github.com/dask/dask/issues/6551 """
+    df = pd.DataFrame({"a": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    r = ddf["a"].quantile(0.5).compute()
+    assert r == 2
 
 
 def test_index():
@@ -2537,6 +2545,24 @@ def test_drop_axis_1():
     assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
+@pytest.mark.parametrize("columns", [["b"], []])
+def test_drop_columns(columns):
+    # Check both populated and empty list argument
+    # https://github.com/dask/dask/issues/6870
+
+    df = pd.DataFrame(
+        {
+            "a": [2, 4, 6, 8],
+            "b": ["1a", "2b", "3c", "4d"],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.drop(columns=columns)
+    ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
+
+    assert_eq(df.drop(columns=columns), ddf2)
+
+
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
@@ -2609,7 +2635,7 @@ def test_to_dask_array_raises(as_frame):
         a.to_dask_array(5)
 
 
-@pytest.mark.parametrize("as_frame", [False, False])
+@pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_unknown(as_frame):
     s = pd.Series([1, 2, 3, 4, 5], name="foo")
     a = dd.from_pandas(s, chunksize=2)
@@ -2622,25 +2648,32 @@ def test_to_dask_array_unknown(as_frame):
     result = result.chunks
 
     if as_frame:
+        assert len(result) == 2
         assert result[1] == (1,)
+    else:
+        assert len(result) == 1
 
-    assert len(result) == 1
     result = result[0]
-
     assert len(result) == 2
     assert all(np.isnan(x) for x in result)
 
 
-@pytest.mark.parametrize("lengths", [[2, 3], True])
-@pytest.mark.parametrize("as_frame", [False, False])
-def test_to_dask_array(as_frame, lengths):
-    s = pd.Series([1, 2, 3, 4, 5], name="foo")
+@pytest.mark.parametrize(
+    "lengths,as_frame,meta",
+    [
+        ([2, 3], False, None),
+        (True, False, None),
+        (True, False, np.array([], dtype="f4")),
+    ],
+)
+def test_to_dask_array(meta, as_frame, lengths):
+    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
     a = dd.from_pandas(s, chunksize=2)
 
     if as_frame:
         a = a.to_frame()
 
-    result = a.to_dask_array(lengths=lengths)
+    result = a.to_dask_array(lengths=lengths, meta=meta)
     assert isinstance(result, da.Array)
 
     expected_chunks = ((2, 3),)
@@ -3502,6 +3535,12 @@ def test_getitem_column_types(col_type):
     assert_eq(df[cols], ddf[cols])
 
 
+def test_getitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    assert_eq(df[df > 3], ddf[ddf > 3])
+
+
 def test_ipython_completion():
     df = pd.DataFrame({"a": [1], "b": [2]})
     ddf = dd.from_pandas(df, npartitions=1)
@@ -4039,7 +4078,7 @@ def test_map_partition_array(func):
 @pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
-    # Aviod searchsorted failure.
+    # Avoid searchsorted failure.
     pytest.importorskip("numba", minversion="0.40.0")
 
     df = pd.DataFrame(
@@ -4180,6 +4219,24 @@ def test_setitem():
     df[df.columns] = 1
     ddf[ddf.columns] = 1
     assert_eq(df, ddf)
+
+
+def test_setitem_with_bool_dataframe_as_key():
+    df = pd.DataFrame({"A": [1, 4], "B": [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    df[df > 2] = 5
+    ddf[ddf > 2] = 5
+    assert_eq(df, ddf)
+
+
+def test_setitem_with_numeric_column_name_raises_not_implemented():
+    df = pd.DataFrame({0: [1, 4], 1: [3, 2]})
+    ddf = dd.from_pandas(df.copy(), 2)
+    # works for pandas
+    df[0] = 5
+    # raises error for dask
+    with pytest.raises(NotImplementedError, match="not supported"):
+        ddf[0] = 5
 
 
 def test_broadcast():
@@ -4390,3 +4447,45 @@ def test_fuse_roots():
     res = ddf1.where(ddf2)
     hlg = fuse_roots(res.__dask_graph__(), keys=res.__dask_keys__())
     hlg.validate()
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
+def test_attrs_dataframe():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    df.attrs = {"date": "2020-10-16"}
+    ddf = dd.from_pandas(df, 2)
+
+    assert df.attrs == ddf.attrs
+    assert df.abs().attrs == ddf.abs().attrs
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
+def test_attrs_series():
+    s = pd.Series([1, 2], name="A")
+    s.attrs["unit"] = "kg"
+    ds = dd.from_pandas(s, 2)
+
+    assert s.attrs == ds.attrs
+    assert s.fillna(1).attrs == ds.fillna(1).attrs
+
+
+@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
+@pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
+def test_attrs_series_in_dataframes():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    df.A.attrs["unit"] = "kg"
+    ddf = dd.from_pandas(df, 2)
+
+    # Fails because the pandas iloc method doesn't currently persist
+    # the attrs dict for series in a dataframee. Dask uses df.iloc[:0]
+    # when creating the _meta dataframe in make_meta_pandas(x, index=None).
+    # Should start xpassing when df.iloc works. Remove the xfail then.
+    assert df.A.attrs == ddf.A.attrs
+
+
+def test_join_series():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
+    actual_df = ddf.join(ddf["x"], lsuffix="_")
+    assert_eq(actual_df, expected_df)

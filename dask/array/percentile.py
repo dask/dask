@@ -24,8 +24,11 @@ def _percentile(a, q, interpolation="linear"):
         return pd.Categorical.from_codes(result, a.categories, a.ordered), n
     if np.issubdtype(a.dtype, np.datetime64):
         a2 = a.astype("i8")
-        result = np.percentile(a2, q, interpolation=interpolation)
-        return result.astype(a.dtype), n
+        result = np.percentile(a2, q, interpolation=interpolation).astype(a.dtype)
+        if q[0] == 0:
+            # https://github.com/dask/dask/issues/6864
+            result[0] = min(result[0], a.min())
+        return result, n
     if not np.issubdtype(a.dtype, np.number):
         interpolation = "nearest"
     return np.percentile(a, q, interpolation=interpolation), n
@@ -126,10 +129,12 @@ def percentile(a, q, interpolation="linear", method="default"):
 
     # Otherwise use the custom percentile algorithm
     else:
-
+        # Add 0 and 100 during calculation for more robust behavior (hopefully)
+        calc_q = np.pad(q, 1, mode="constant")
+        calc_q[-1] = 100
         name = "percentile_chunk-" + token
         dsk = dict(
-            ((name, i), (_percentile, key, q, interpolation))
+            ((name, i), (_percentile, key, calc_q, interpolation))
             for i, key in enumerate(a.__dask_keys__())
         )
 
@@ -138,7 +143,7 @@ def percentile(a, q, interpolation="linear", method="default"):
             (name2, 0): (
                 merge_percentiles,
                 q,
-                [q] * len(a.chunks[0]),
+                [calc_q] * len(a.chunks[0]),
                 sorted(dsk),
                 interpolation,
             )

@@ -1,5 +1,6 @@
 import math
 import os
+import glob
 import sys
 import warnings
 from distutils.version import LooseVersion
@@ -11,10 +12,11 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
+from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
-from dask.dataframe.io.parquet.core import ParquetSubgraph
+from dask.dataframe.io.parquet.core import BlockwiseParquet, ParquetSubgraph
 from dask.utils import natural_sort_key, parse_bytes
 
 
@@ -810,7 +812,6 @@ def test_ordering(tmpdir, write_engine, read_engine):
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
-    import glob
 
     tmp = str(tmpdir)
     data = pd.DataFrame(
@@ -821,8 +822,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     df2 = dd.read_parquet(tmp, columns=["i32", "f"], engine=engine)
     assert_eq(df[["i32", "f"]], df2, check_index=False)
-
-    import glob
 
     fns = glob.glob(os.path.join(tmp, "*.parquet"))
     df2 = dd.read_parquet(fns, columns=["i32"], engine=engine).compute()
@@ -2094,7 +2093,6 @@ def test_read_glob_no_stats(tmpdir, write_engine, read_engine):
 def test_read_glob_yes_stats(tmpdir, write_engine, read_engine):
     tmp_path = str(tmpdir)
     ddf.to_parquet(tmp_path, engine=write_engine)
-    import glob
 
     paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
     paths.append(os.path.join(tmp_path, "_metadata"))
@@ -2255,20 +2253,25 @@ def test_graph_size_pyarrow(tmpdir, engine):
 @pytest.mark.parametrize("preserve_index", [True, False])
 @pytest.mark.parametrize("index", [None, np.random.permutation(2000)])
 def test_getitem_optimization(tmpdir, engine, preserve_index, index):
+    tmp_path_rd = str(tmpdir.mkdir("read"))
+    tmp_path_wt = str(tmpdir.mkdir("write"))
     df = pd.DataFrame(
         {"A": [1, 2] * 1000, "B": [3, 4] * 1000, "C": [5, 6] * 1000}, index=index
     )
     df.index.name = "my_index"
     ddf = dd.from_pandas(df, 2, sort=False)
-    fn = os.path.join(str(tmpdir))
-    ddf.to_parquet(fn, engine=engine, write_index=preserve_index)
 
-    ddf = dd.read_parquet(fn, engine=engine)["B"]
+    ddf.to_parquet(tmp_path_rd, engine=engine, write_index=preserve_index)
+    ddf = dd.read_parquet(tmp_path_rd, engine=engine)["B"]
 
-    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[ddf._name])
-    get, read = sorted(dsk.layers)  # keys are getitem-, read-parquet-
+    # Write ddf back to disk to check that the round trip
+    # preserves the getitem optimization
+    out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
+    dsk = optimize_read_parquet_getitem(out.dask, keys=[out.key])
+
+    read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
@@ -2284,7 +2287,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
 
     subgraph = list(dsk.layers.values())[0]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == []
 
 
@@ -2318,6 +2321,51 @@ def test_subgraph_getitem():
 
     with pytest.raises(KeyError):
         subgraph[("name", 3)]
+
+
+def test_optimize_blockwise_parquet(tmpdir):
+    check_engine()
+
+    size = 40
+    npartitions = 2
+    tmp = str(tmpdir)
+    df = pd.DataFrame({"a": np.arange(size, dtype=np.int32)})
+    expect = dd.from_pandas(df, npartitions=npartitions)
+    expect.to_parquet(tmp)
+    ddf = dd.read_parquet(tmp)
+
+    # `ddf` should now have ONE Blockwise layer
+    layers = ddf.__dask_graph__().layers
+    assert len(layers) == 1
+    assert isinstance(list(layers.values())[0], Blockwise)
+
+    # Check single-layer result
+    assert_eq(ddf, expect)
+
+    # Increment by 1
+    ddf += 1
+    expect += 1
+
+    # Increment by 10
+    ddf += 10
+    expect += 10
+
+    # `ddf` should now have THREE Blockwise layers
+    layers = ddf.__dask_graph__().layers
+    assert len(layers) == 3
+    assert all(isinstance(layer, Blockwise) for layer in layers.values())
+
+    # Check that `optimize_blockwise` fuses all three
+    # `Blockwise` layers together
+    keys = [(ddf._name, i) for i in range(npartitions)]
+    graph = optimize_blockwise(ddf.__dask_graph__(), keys)
+    layers = graph.layers
+    name = list(layers.keys())[0]
+    assert len(layers) == 1
+    assert isinstance(layers[name], Blockwise)
+
+    # Check final result
+    assert_eq(ddf, expect)
 
 
 def test_split_row_groups_pyarrow(tmpdir):
@@ -2774,3 +2822,202 @@ def test_divisions_with_null_partition(tmpdir, engine):
 
     ddf_read = dd.read_parquet(str(tmpdir), engine=engine, index="a")
     assert ddf_read.divisions == (None, None, None)
+
+
+def test_parquet_pyarrow_write_empty_metadata(tmpdir):
+    # https://github.com/dask/dask/issues/6600
+    check_pyarrow()
+    tmpdir = str(tmpdir)
+
+    df_a = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [], "y": []}, dtype=("int", "int")
+    )
+    df_b = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
+    df_c = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 2, 1, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
+
+    df = dd.from_delayed([df_a, df_b, df_c])
+
+    try:
+        df.to_parquet(
+            tmpdir,
+            engine="pyarrow",
+            partition_on=["x"],
+            append=False,
+        )
+
+    except AttributeError:
+        pytest.fail("Unexpected AttributeError")
+
+    # Check that metadata files where written
+    files = os.listdir(tmpdir)
+    assert "_metadata" in files
+    assert "_common_metadata" in files
+
+    # Check that the schema includes pandas_metadata
+    schema_common = pq.ParquetFile(
+        os.path.join(tmpdir, "_common_metadata")
+    ).schema.to_arrow_schema()
+    pandas_metadata = schema_common.pandas_metadata
+    assert pandas_metadata
+    assert pandas_metadata.get("index_columns", False)
+
+
+def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
+    # https://github.com/dask/dask/issues/6600
+    check_pyarrow()
+    tmpdir = str(tmpdir)
+
+    df_a = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 1, 2, 2], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
+    df_b = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [1, 2, 1, 2], "y": [2, 0, 2, 0]}, dtype=("int64", "int64")
+    )
+
+    df1 = dd.from_delayed([df_a, df_b])
+    df1.to_parquet(
+        tmpdir,
+        engine="pyarrow",
+        partition_on=["x"],
+        append=False,
+    )
+
+    df_c = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [], "y": []}, dtype=("int64", "int64")
+    )
+    df_d = dask.delayed(pd.DataFrame.from_dict)(
+        {"x": [3, 3, 4, 4], "y": [1, 0, 1, 0]}, dtype=("int64", "int64")
+    )
+
+    df2 = dd.from_delayed([df_c, df_d])
+    df2.to_parquet(
+        tmpdir,
+        engine="pyarrow",
+        partition_on=["x"],
+        append=True,
+        ignore_divisions=True,
+    )
+
+
+@pytest.mark.parametrize("partition_on", [None, "a"])
+@write_read_engines()
+def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
+
+    check_pyarrow()
+    tmpdir = str(tmpdir)
+
+    # Write ddf without a _metadata file
+    df1 = pd.DataFrame({"b": range(100), "a": ["A", "B", "C", "D"] * 25})
+    df1.index.name = "myindex"
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+    ddf1.to_parquet(
+        tmpdir,
+        write_metadata_file=False,
+        partition_on=partition_on,
+        engine=write_engine,
+    )
+
+    # Add global _metadata file
+    if partition_on:
+        fns = glob.glob(os.path.join(tmpdir, partition_on + "=*/*.parquet"))
+    else:
+        fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
+    dd.io.parquet.create_metadata_file(
+        fns,
+        engine="pyarrow",
+        split_every=3,  # Force tree reduction
+    )
+
+    # Check that we can now read the ddf
+    # with the _metadata file present
+    ddf2 = dd.read_parquet(
+        tmpdir,
+        gather_statistics=True,
+        split_row_groups=False,
+        engine=read_engine,
+        index="myindex",  # python-3.6 CI
+    )
+    if partition_on:
+        ddf1 = df1.sort_values("b")
+        ddf2 = ddf2.compute().sort_values("b")
+        ddf2.a = ddf2.a.astype("object")
+    assert_eq(ddf1, ddf2)
+
+
+def test_read_write_overwrite_is_true(tmpdir, engine):
+    # https://github.com/dask/dask/issues/6824
+
+    # Create a Dask DataFrame if size (100, 10) with 5 partitions and write to local
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            np.random.randint(low=0, high=100, size=(100, 10)),
+            columns=["A", "B", "C", "D", "E", "F", "G", "H", "I", "J"],
+        ),
+        npartitions=5,
+    )
+    ddf = ddf.reset_index(drop=True)
+    dd.to_parquet(ddf, tmpdir, engine=engine, overwrite=True)
+
+    # Keep the contents of the DataFrame constatn but change the # of partitions
+    ddf2 = ddf.repartition(npartitions=3)
+
+    # Overwrite the existing Dataset with the new dataframe and evaluate
+    # the number of files against the number of dask partitions
+    dd.to_parquet(ddf2, tmpdir, engine=engine, overwrite=True)
+
+    # Assert the # of files written are identical to the number of
+    # Dask DataFrame partitions (we exclude _metadata and _common_metadata)
+    files = os.listdir(tmpdir)
+    files = [f for f in files if f not in ["_common_metadata", "_metadata"]]
+    assert len(files) == ddf2.npartitions
+
+
+def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
+    # https://github.com/dask/dask/issues/6824
+    from pathlib import Path
+
+    # Create a Dask DataFrame with 5 partitions and write to local, partitioning on the column A and column B
+    df = pd.DataFrame(
+        np.vstack(
+            (
+                np.full((50, 3), 0),
+                np.full((50, 3), 1),
+                np.full((20, 3), 2),
+            )
+        )
+    )
+    df.columns = ["A", "B", "C"]
+    ddf = dd.from_pandas(df, npartitions=5)
+    dd.to_parquet(ddf, tmpdir, engine=engine, partition_on=["A", "B"], overwrite=True)
+
+    # Get the total number of files and directories from the original write
+    files_ = Path(tmpdir).rglob("*")
+    files = [f.as_posix() for f in files_]
+    # Keep the contents of the DataFrame constant but change the # of partitions
+    ddf2 = ddf.repartition(npartitions=3)
+
+    # Overwrite the existing Dataset with the new dataframe and evaluate
+    # the number of files against the number of dask partitions
+    # Get the total number of files and directories from the original write
+    dd.to_parquet(ddf2, tmpdir, engine=engine, partition_on=["A", "B"], overwrite=True)
+    files2_ = Path(tmpdir).rglob("*")
+    files2 = [f.as_posix() for f in files2_]
+    # After reducing the # of partitions and overwriting, we expect
+    # there to be fewer total files than were originally written
+    assert len(files2) < len(files)
+
+
+def test_to_parquet_overwrite_raises(tmpdir, engine):
+    # https://github.com/dask/dask/issues/6824
+    # Check that overwrite=True will raise an error if the
+    # specified path is the current working directory
+    df = pd.DataFrame({"a": range(12)})
+    ddf = dd.from_pandas(df, npartitions=3)
+    with pytest.raises(ValueError):
+        dd.to_parquet(ddf, "./", engine=engine, overwrite=True)
+    with pytest.raises(ValueError):
+        dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)

@@ -400,7 +400,7 @@ def _cov_chunk(df, *index):
     Returns
     -------
     tuple
-        Processed X, Multipled Cols,
+        Processed X, Multiplied Cols,
     """
     if is_series_like(df):
         df = df.to_frame()
@@ -659,7 +659,7 @@ def _build_agg_args(spec):
     Parameters
     ----------
     spec: a list of (result-column, aggregation-function, input-column) triples.
-        To work with all arugment forms understood by pandas use
+        To work with all argument forms understood by pandas use
         ``_normalize_spec`` to normalize the argment before passing it on to
         ``_build_agg_args``.
 
@@ -668,7 +668,7 @@ def _build_agg_args(spec):
     chunk_funcs: a list of (intermediate-column, function, keyword) triples
         that are applied on grouped chunks of the initial dataframe.
 
-    agg_funcs: a list of (intermediate-column, functions, keword) triples that
+    agg_funcs: a list of (intermediate-column, functions, keyword) triples that
         are applied on the grouped concatination of the preprocessed chunks.
 
     finalizers: a list of (result-column, function, keyword) triples that are
@@ -736,6 +736,9 @@ def _build_agg_args_single(result_column, func, input_column):
 
     elif func == "mean":
         return _build_agg_args_mean(result_column, func, input_column)
+
+    elif func == "list":
+        return _build_agg_args_list(result_column, func, input_column)
 
     elif isinstance(func, Aggregation):
         return _build_agg_args_custom(result_column, func, input_column)
@@ -817,6 +820,33 @@ def _build_agg_args_mean(result_column, func, input_column):
             _finalize_mean,
             dict(sum_column=int_sum, count_column=int_count),
         ),
+    )
+
+
+def _build_agg_args_list(result_column, func, input_column):
+    intermediate = _make_agg_id("list", input_column)
+
+    return dict(
+        chunk_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(column=input_column, func=lambda s: s.apply(list)),
+            )
+        ],
+        aggregate_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(
+                    column=intermediate,
+                    func=lambda s0: s0.apply(
+                        lambda chunks: list(it.chain.from_iterable(chunks))
+                    ),
+                ),
+            )
+        ],
+        finalizer=(result_column, itemgetter(intermediate), dict()),
     )
 
 
@@ -1756,9 +1786,7 @@ class DataFrameGroupBy(_GroupBy):
         if arg == "size":
             return self.size()
 
-        return super(DataFrameGroupBy, self).aggregate(
-            arg, split_every=split_every, split_out=split_out
-        )
+        return super().aggregate(arg, split_every=split_every, split_out=split_out)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def agg(self, arg, split_every=None, split_out=1):
@@ -1786,7 +1814,7 @@ class SeriesGroupBy(_GroupBy):
                 # raise error from pandas, if applicable
                 df._meta.groupby(by)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
+        super().__init__(df, by=by, slice=slice, **kwargs)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
@@ -1828,9 +1856,7 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
-        result = super(SeriesGroupBy, self).aggregate(
-            arg, split_every=split_every, split_out=split_out
-        )
+        result = super().aggregate(arg, split_every=split_every, split_out=split_out)
         if self._slice:
             result = result[self._slice]
 

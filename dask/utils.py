@@ -12,6 +12,7 @@ from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
+from typing import Iterable, Optional
 import uuid
 from weakref import WeakValueDictionary
 from functools import lru_cache
@@ -760,7 +761,7 @@ def typename(typ):
 def ensure_bytes(s):
     """Turn string or bytes to bytes
 
-    >>> ensure_bytes(u'123')
+    >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes('123')
     b'123'
@@ -778,7 +779,7 @@ def ensure_bytes(s):
 def ensure_unicode(s):
     """Turn string or bytes to bytes
 
-    >>> ensure_unicode(u'123')
+    >>> ensure_unicode('123')
     '123'
     >>> ensure_unicode('123')
     '123'
@@ -1183,6 +1184,7 @@ def factors(n):
 def parse_bytes(s):
     """Parse byte string to numbers
 
+    >>> from dask.utils import parse_bytes
     >>> parse_bytes('100')
     100
     >>> parse_bytes('100 MB')
@@ -1256,6 +1258,7 @@ byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 def format_time(n):
     """format integers as time
 
+    >>> from dask.utils import format_time
     >>> format_time(1)
     '1.00 s'
     >>> format_time(0.001234)
@@ -1275,6 +1278,7 @@ def format_time(n):
 def format_bytes(n):
     """Format bytes as text
 
+    >>> from dask.utils import format_bytes
     >>> format_bytes(1)
     '1 B'
     >>> format_bytes(1234)
@@ -1330,6 +1334,8 @@ def parse_timedelta(s, default="seconds"):
 
     Examples
     --------
+    >>> from datetime import timedelta
+    >>> from dask.utils import parse_timedelta
     >>> parse_timedelta('3s')
     3
     >>> parse_timedelta('3.5 seconds')
@@ -1467,3 +1473,97 @@ def key_split(s):
             return result
     except Exception:
         return "Other"
+
+
+def stringify(obj, exclusive: Optional[Iterable] = None):
+    """Convert an object to a string
+
+    If ``exclusive`` is specified, search through `obj` and convert
+    values that are in ``exclusive``.
+
+    Note that when searching through dictionaries, only values are
+    converted, not the keys.
+
+    Parameters
+    ----------
+    obj : Any
+        Object (or values within) to convert to string
+    exclusive: Iterable, optional
+        Set of values to search for when converting values to strings
+
+    Returns
+    -------
+    result : type(obj)
+        Stringified copy of ``obj`` or ``obj`` itself if it is already a
+        string or bytes.
+
+    Examples
+    --------
+    >>> stringify(b'x')
+    b'x'
+    >>> stringify('x')
+    'x'
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)})
+    "{('a', 0): ('a', 0), ('a', 1): ('a', 1)}"
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)}, exclusive={('a',0)})
+    {('a', 0): "('a', 0)", ('a', 1): ('a', 1)}
+    """
+
+    typ = type(obj)
+    if typ is str or typ is bytes:
+        return obj
+    elif exclusive is None:
+        return str(obj)
+
+    if typ is tuple and obj:
+        from .optimization import SubgraphCallable
+
+        obj0 = obj[0]
+        if type(obj0) is SubgraphCallable:
+            obj0 = obj0
+            return (
+                SubgraphCallable(
+                    stringify(obj0.dsk, exclusive),
+                    obj0.outkey,
+                    stringify(obj0.inkeys, exclusive),
+                    obj0.name,
+                ),
+            ) + tuple(stringify(x, exclusive) for x in obj[1:])
+        elif callable(obj0):
+            return (obj0,) + tuple(stringify(x, exclusive) for x in obj[1:])
+
+    if typ is list:
+        return [stringify(v, exclusive) for v in obj]
+    if typ is dict:
+        return {k: stringify(v, exclusive) for k, v in obj.items()}
+    try:
+        if obj in exclusive:
+            return stringify(obj)
+    except TypeError:  # `obj` not hashable
+        pass
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify(v, exclusive) for v in obj)
+    return obj
+
+
+def stringify_collection_keys(obj):
+    """Convert all collection keys in ``obj`` to strings.
+
+    This is a specialized version of ``stringify()`` that only converts keys
+    of the form: ``("a string", ...)``
+    """
+
+    typ = type(obj)
+    if typ is tuple and obj:
+        obj0 = obj[0]
+        if type(obj0) is str or type(obj0) is bytes:
+            return stringify(obj)
+        if callable(obj0):
+            return (obj0,) + tuple(stringify_collection_keys(x) for x in obj[1:])
+    if typ is list:
+        return [stringify_collection_keys(v) for v in obj]
+    if typ is dict:
+        return {k: stringify_collection_keys(v) for k, v in obj.items()}
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify_collection_keys(v) for v in obj)
+    return obj

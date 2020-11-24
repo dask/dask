@@ -1,3 +1,4 @@
+from os.path import basename
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -26,6 +27,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
+from ...blockwise import Blockwise
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -107,6 +109,58 @@ class CSVSubgraph(Mapping):
     def __iter__(self):
         for i in range(len(self)):
             yield (self.name, i)
+
+
+class BlockwiseReadCSV(Blockwise):
+    """
+    Specialized Blockwise Layer for read_csv.
+
+    Enables HighLevelGraph optimizations.
+    """
+
+    def __init__(
+        self,
+        name,
+        reader,
+        blocks,
+        is_first,
+        head,
+        header,
+        kwargs,
+        dtypes,
+        columns,
+        enforce,
+        path,
+    ):
+        self.name = name
+        self.blocks = blocks
+        self.io_name = "blockwise-io-" + name
+        dsk_io = CSVSubgraph(
+            self.io_name,
+            reader,
+            blocks,
+            is_first,
+            head,
+            header,
+            kwargs,
+            dtypes,
+            columns,
+            enforce,
+            path,
+        )
+        super().__init__(
+            self.name,
+            "i",
+            None,
+            [(self.io_name, "i")],
+            {self.io_name: (len(self.blocks),)},
+            io_subgraph=(self.io_name, dsk_io),
+        )
+
+    def __repr__(self):
+        return "BlockwiseReadCSV<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.blocks), list(self.columns)
+        )
 
 
 def pandas_read_text(
@@ -264,6 +318,7 @@ def text_blocks_to_pandas(
     enforce=False,
     specified_dtypes=None,
     path=None,
+    blocksize=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -326,9 +381,15 @@ def text_blocks_to_pandas(
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
 
-    name = "read-csv-" + tokenize(reader, columns, enforce, head)
+    name = "read-csv-" + tokenize(reader, columns, enforce, head, blocksize)
 
     if path:
+        block_file_names = [basename(b[1].path) for b in blocks]
+        path = (
+            path[0],
+            [p for p in path[1] if basename(p) in block_file_names],
+        )
+
         colname, paths = path
         head = head.assign(
             **{
@@ -340,7 +401,7 @@ def text_blocks_to_pandas(
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
-    subgraph = CSVSubgraph(
+    subgraph = BlockwiseReadCSV(
         name,
         reader,
         blocks,
@@ -544,6 +605,7 @@ def read_pandas(
         enforce=enforce,
         specified_dtypes=specified_dtypes,
         path=path,
+        blocksize=blocksize,
     )
 
 

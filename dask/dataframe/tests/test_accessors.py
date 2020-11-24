@@ -146,7 +146,7 @@ def test_str_accessor(df_ddf):
     assert_eq(ddf.index.str.upper(), df.index.str.upper())
     assert set(ddf.index.str.upper().dask) == set(ddf.index.str.upper().dask)
 
-    # make sure to pass thru args & kwargs
+    # make sure to pass through args & kwargs
     assert_eq(ddf.str_col.str.contains("a"), df.str_col.str.contains("a"))
     if dd._compat.PANDAS_GT_100:
         assert_eq(ddf.string_col.str.contains("a"), df.string_col.str.contains("a"))
