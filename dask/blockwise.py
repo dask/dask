@@ -384,9 +384,12 @@ class Blockwise(Layer):
         global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
 
         if self.annotations:
+            annotations = self.annotations
             annotations = {
-                a: dumps_function(v) if callable(v) else v
-                for a, v in self.annotations.items()
+                stringify(k): {
+                    a: v(k) if callable(v) else v for a, v in annotations.items()
+                }
+                for k in self.get_output_keys()
             }
         else:
             annotations = None
@@ -443,14 +446,7 @@ class Blockwise(Layer):
                     raw[k] = tuple(new_task)
 
         if state["annotations"]:
-            annots = {
-                a: pickle.loads(v) if type(v) is bytes else v
-                for a, v in state["annotations"].items()
-            }
-            for k in raw:
-                annotations[stringify(k)] = {
-                    a: v(k) if callable(v) else v for a, v in annots.items()
-                }
+            annotations.update(state["annotations"])
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
