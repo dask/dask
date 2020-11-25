@@ -12,7 +12,6 @@ import dask
 from dask import compute
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
-from dask.dataframe.utils import assert_eq
 
 try:
     from operator import matmul
@@ -630,17 +629,16 @@ def test_attribute_of_attribute():
 
 
 def test_check_meta_flag():
+    dd = pytest.importorskip("dask.dataframe")
     from pandas import Series
-    from dask.delayed import delayed
-    from dask.dataframe import from_delayed
 
     a = Series(["a", "b", "a"], dtype="category")
     b = Series(["a", "c", "a"], dtype="category")
     da = delayed(lambda x: x)(a)
     db = delayed(lambda x: x)(b)
 
-    c = from_delayed([da, db], verify_meta=False)
-    assert_eq(c, c)
+    c = dd.from_delayed([da, db], verify_meta=False)
+    dd.utils.assert_eq(c, c)
 
 
 def modlevel_eager(x):

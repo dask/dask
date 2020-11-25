@@ -3,7 +3,6 @@ import functools
 import operator
 import pickle
 
-import numpy as np
 import pytest
 
 from dask import get
@@ -157,6 +156,7 @@ def test_dispatch_lazy():
 
 
 def test_random_state_data():
+    np = pytest.importorskip("numpy")
     seed = 37
     state = np.random.RandomState(seed)
     n = 10000
@@ -562,6 +562,8 @@ def test_parse_timedelta():
 
 
 def test_is_arraylike():
+    np = pytest.importorskip("numpy")
+
     assert is_arraylike(0) is False
     assert is_arraylike(()) is False
     assert is_arraylike(0) is False
