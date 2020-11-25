@@ -1,6 +1,5 @@
 import collections
 import warnings
-from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -2105,10 +2104,6 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
-@pytest.mark.skipif(
-    version.parse(pd.__version__) < version.parse("0.25.0"),
-    reason="'explode' is not implemented",
-)
 def test_groupby_unique():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(

@@ -3051,7 +3051,7 @@ Dask Name: {name}, {task} tasks""".format(
     def mode(self, dropna=True, split_every=False):
         return super().mode(dropna=dropna, split_every=split_every)
 
-    @derived_from(pd.Series, version="0.25.0")
+    @derived_from(pd.Series)
     def explode(self):
         meta = self._meta.explode()
         return self.map_partitions(M.explode, meta=meta, enforce_metadata=False)
@@ -4051,7 +4051,7 @@ class DataFrame(_Frame):
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
-    @derived_from(pd.DataFrame, version="0.25.0")
+    @derived_from(pd.DataFrame)
     def explode(self, column):
         meta = self._meta.explode(column)
         return self.map_partitions(M.explode, column, meta=meta, enforce_metadata=False)

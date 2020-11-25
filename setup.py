@@ -17,7 +17,7 @@ extras_require = {
     ],
     "dataframe": [
         "numpy >= 1.15.0",
-        "pandas >= 0.24.0",
+        "pandas >= 0.25.0",
         "toolz >= 0.8.2",
         "partd >= 0.3.10",
         "fsspec >= 0.6.0",

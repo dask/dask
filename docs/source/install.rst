@@ -104,7 +104,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |     numpy     | >=1.15.0 |                   Required for dask.array                    |
 +---------------+----------+--------------------------------------------------------------+
-|     pandas    | >=0.24.0 |                  Required for dask.dataframe                 |
+|     pandas    | >=0.25.0 |                  Required for dask.dataframe                 |
 +---------------+----------+--------------------------------------------------------------+
 |     partd     | >=0.3.10 |            Concurrent appendable key-value storage           |
 +---------------+----------+--------------------------------------------------------------+
