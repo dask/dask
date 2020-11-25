@@ -567,22 +567,14 @@ def _nonempty_series(s, idx=None):
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
     elif is_sparse(dtype):
-        # TODO: pandas <0.24
-        # Pandas <= 0.23.4:
-        if PANDAS_GT_0240:
-            entry = _scalar_from_dtype(dtype.subtype)
-        else:
-            entry = _scalar_from_dtype(dtype.subtype)
+        entry = _scalar_from_dtype(dtype.subtype)
         if PANDAS_GT_100:
             data = pd.array([entry, entry], dtype=dtype)
         else:
             data = pd.SparseArray([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
-        if PANDAS_GT_0240:
-            data = pd.array([entry, entry], dtype=dtype)
-        else:
-            data = np.array([entry, entry], dtype=dtype)
+        data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:
         data = make_array_nonempty(dtype)
     else:

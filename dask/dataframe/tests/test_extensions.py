@@ -4,7 +4,7 @@ import pytest
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq, PANDAS_VERSION
 
-pd = pytest.importorskip("pandas", minversion="0.23.4")
+pd = pytest.importorskip("pandas")
 
 from pandas.tests.extension.decimal.array import DecimalArray, DecimalDtype
 from dask.dataframe.extensions import make_array_nonempty, make_scalar

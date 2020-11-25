@@ -152,10 +152,8 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def extractall(self, pat, flags=0):
-        # TODO: metadata inference here won't be necessary for pandas >= 0.23.0
-        meta = self._series._meta.str.extractall(pat, flags=flags)
         return self._series.map_partitions(
-            str_extractall, pat, flags, meta=meta, token="str-extractall"
+            str_extractall, pat, flags, token="str-extractall"
         )
 
     def __getitem__(self, index):

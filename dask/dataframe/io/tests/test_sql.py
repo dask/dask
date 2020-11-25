@@ -5,7 +5,7 @@ import pytest
 
 # import dask
 from dask.dataframe.io.sql import read_sql_table
-from dask.dataframe.utils import assert_eq, PANDAS_GT_0240
+from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -477,17 +477,7 @@ def test_to_sql(npartitions, parallel):
 def test_to_sql_kwargs():
     ddf = dd.from_pandas(df, 2)
     with tmp_db_uri() as uri:
-        # "method" keyword is allowed iff pandas>=0.24.0
-        if PANDAS_GT_0240:
-            ddf.to_sql("test", uri, method="multi")
-        else:
-            with pytest.raises(
-                NotImplementedError,
-                match=r"'method' requires pandas>=0.24.0. You have version 0.23.\d",
-            ):
-                ddf.to_sql("test", uri, method="multi")
-
-        # Other, unknown keywords always disallowed
+        ddf.to_sql("test", uri, method="multi")
         with pytest.raises(
             TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"
         ):

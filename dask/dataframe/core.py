@@ -4366,6 +4366,7 @@ class DataFrame(_Frame):
         reduce=None,
         args=(),
         meta=no_default,
+        result_type=None,
         **kwds,
     ):
         """Parallel version of pandas.DataFrame.apply
@@ -4430,10 +4431,7 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
-        pandas_kwargs = {"axis": axis, "raw": raw}
-
-        if PANDAS_VERSION >= "0.23.0":
-            kwds.setdefault("result_type", None)
+        pandas_kwargs = {"axis": axis, "raw": raw, "result_type": result_type}
 
         if not PANDAS_GT_100:
             pandas_kwargs["broadcast"] = broadcast
