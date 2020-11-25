@@ -68,8 +68,8 @@ class Layer(collections.abc.Mapping):
         Output keys are all keys in the layer that might be referenced by
         other layers.
 
-        An layer overriding this implementation, should not materialize the
-        layer.
+        Classes overriding this implementation should not cause the layer
+        to be materialized.
 
         Returns
         -------
