@@ -1616,6 +1616,7 @@ class Array(DaskMethodsMixin):
                 )
             else:
                 return self.map_blocks(getitem, index, dtype=dt)
+
         if not isinstance(index, tuple):
             index = (index,)
 
@@ -1645,6 +1646,8 @@ class Array(DaskMethodsMixin):
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
 
         meta = meta_from_array(self._meta, ndim=len(chunks))
+        if np.isscalar(meta):
+            meta = np.array(meta)
 
         return Array(graph, out, chunks, meta=meta)
 
