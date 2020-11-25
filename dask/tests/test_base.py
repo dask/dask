@@ -298,10 +298,7 @@ def test_tokenize_pandas_no_pickle():
 
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_extension_array():
-    from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_0240
-
-    if not PANDAS_GT_0240:
-        pytest.skip("requires pandas>=1.0.0")
+    from dask.dataframe._compat import PANDAS_GT_100
 
     arrays = [
         pd.array([1, 0, None], dtype="Int64"),

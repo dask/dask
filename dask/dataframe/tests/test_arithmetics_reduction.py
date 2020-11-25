@@ -12,7 +12,6 @@ from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
     make_meta,
-    HAS_INT_NA,
     PANDAS_GT_0250,
 )
 
@@ -1136,11 +1135,10 @@ def test_reductions_frame_dtypes():
         }
     )
 
-    if HAS_INT_NA:
-        if not PANDAS_GT_0250:
-            # Pandas master is returning NA for IntegerNA.sum() when mixed with other dtypes.
-            # https://github.com/pandas-dev/pandas/issues/27185
-            df["intna"] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
+    if not PANDAS_GT_0250:
+        # Pandas master is returning NA for IntegerNA.sum() when mixed with other dtypes.
+        # https://github.com/pandas-dev/pandas/issues/27185
+        df["intna"] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
 
     ddf = dd.from_pandas(df, 3)
 
@@ -1321,10 +1319,6 @@ def test_series_comparison_nan(comparison):
     )
 
 
-skip_if_no_intna = pytest.mark.skipif(not HAS_INT_NA, reason="integer na")
-
-
-@skip_if_no_intna
 def test_sum_intna():
     a = pd.Series([1, None, 2], dtype=pd.Int32Dtype())
     b = dd.from_pandas(a, 2)
