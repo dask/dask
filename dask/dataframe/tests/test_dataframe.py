@@ -1501,11 +1501,6 @@ def test_unknown_divisions():
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.22.0",
-    reason="Parameter min_count not implemented in "
-    "DataFrame.sum() and DataFrame.prod()",
-)
 def test_with_min_count():
     dfs = [
         pd.DataFrame([[None, 2, 3], [None, 5, 6], [5, 4, 9]]),
@@ -3898,7 +3893,6 @@ def test_to_timedelta():
     assert_eq(pd.to_timedelta(s, errors="coerce"), dd.to_timedelta(ds, errors="coerce"))
 
 
-@pytest.mark.skipif(PANDAS_VERSION < "0.22.0", reason="No isna method")
 @pytest.mark.parametrize("values", [[np.NaN, 0], [1, 1]])
 def test_isna(values):
     s = pd.Series(values)

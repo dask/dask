@@ -4,7 +4,6 @@ import warnings
 from collections.abc import Iterable
 from functools import wraps, partial
 from numbers import Real, Integral
-from distutils.version import LooseVersion
 from typing import List
 
 import numpy as np
@@ -209,24 +208,7 @@ ALPHABET = alphabet.upper()
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
-
-    # workaround may be removed when numpy version (currently 1.13.0) is bumped
-    a_dims = np.array([a.shape[i] for i in axes[0]])
-    b_dims = np.array([b.shape[i] for i in axes[1]])
-    if (
-        len(a_dims) > 0
-        and (a_dims == b_dims).all()
-        and a_dims.min() == 0
-        and LooseVersion(np.__version__) < LooseVersion("1.14")
-    ):
-        x = np.zeros(
-            tuple(
-                [s for i, s in enumerate(a.shape) if i not in axes[0]]
-                + [s for i, s in enumerate(b.shape) if i not in axes[1]]
-            )
-        )
-    else:
-        x = tensordot(a, b, axes=axes)
+    x = tensordot(a, b, axes=axes)
 
     if len(axes[0]) != 1:
         ind = [slice(None, None)] * x.ndim

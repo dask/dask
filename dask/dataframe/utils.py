@@ -21,7 +21,6 @@ from pandas.api.types import (
 
 # include these here for compat
 from ._compat import (  # noqa: F401
-    PANDAS_VERSION,
     PANDAS_GT_0250,
     PANDAS_GT_100,
     PANDAS_GT_110,
