@@ -1,4 +1,5 @@
 import itertools
+import pickle
 import warnings
 
 import numpy as np
@@ -382,6 +383,14 @@ class Blockwise(Layer):
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
 
+        if self.annotations:
+            annotations = {
+                a: dumps_function(v) if callable(v) else v
+                for a, v in self.annotations.items()
+            }
+        else:
+            annotations = None
+
         ret = {
             "output": self.output,
             "output_indices": self.output_indices,
@@ -395,7 +404,7 @@ class Blockwise(Layer):
             "io_subgraph": (self.io_name, self.io_subgraph)
             if self.io_name
             else (None, None),
-            "annotations": self.annotations,
+            "annotations": annotations,
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
@@ -420,7 +429,6 @@ class Blockwise(Layer):
         )
         io_name, io_subgraph = state["io_subgraph"]
         global_dependencies = list(state["global_dependencies"])
-        state_annotations = state["annotations"]
 
         if io_subgraph:
             # This is an IO layer.
@@ -434,10 +442,14 @@ class Blockwise(Layer):
                     new_task = [io_item if v == io_key else v for v in raw[k]]
                     raw[k] = tuple(new_task)
 
-        if state_annotations:
+        if state["annotations"]:
+            annots = {
+                a: pickle.loads(v) if type(v) is bytes else v
+                for a, v in state["annotations"].items()
+            }
             for k in raw:
                 annotations[stringify(k)] = {
-                    a: v(k) if callable(v) else v for a, v in state_annotations
+                    a: v(k) if callable(v) else v for a, v in annots.items()
                 }
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
