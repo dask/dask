@@ -58,6 +58,8 @@ def meta_from_array(x, ndim=None, dtype=None):
 
     if x is None:
         x = np.ndarray
+    elif dtype is None and hasattr(x, "dtype"):
+        dtype = x.dtype
 
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
