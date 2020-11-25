@@ -8,7 +8,6 @@ from ..utils import derived_from
 _numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
 _numpy_117 = LooseVersion(np.__version__) >= "1.17.0"
 _numpy_118 = LooseVersion(np.__version__) >= "1.18.0"
-_numpy_120 = LooseVersion(np.__version__) >= "1.20.0"
 
 
 # Taken from scikit-learn:
