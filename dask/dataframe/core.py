@@ -24,7 +24,6 @@ except ImportError:
 
 from .. import array as da
 from .. import core
-from ..array import stats as da_stats
 
 from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, apply
 from .. import threaded
@@ -2062,6 +2061,9 @@ Dask Name: {name}, {task} tasks"""
 
         Uses the array version from da.stats in case we are passing in a single series
         """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
         is_timedelta = is_timedelta64_dtype(column._meta)
 
         if is_timedelta:
@@ -2094,6 +2096,9 @@ Dask Name: {name}, {task} tasks"""
 
         Maps the array version from da.stats onto the numeric array of columns.
         """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
         num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
 
         values_dtype = num.values.dtype
