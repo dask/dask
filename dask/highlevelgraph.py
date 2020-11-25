@@ -171,7 +171,11 @@ class Layer(collections.abc.Mapping):
 
     @classmethod
     def __dask_distributed_unpack__(
-        cls, state: Any, dsk: Dict[str, Any], dependencies: Mapping[Hashable, Set]
+        cls,
+        state: Any,
+        dsk: Dict[str, Any],
+        dependencies: Mapping[Hashable, Set],
+        annotations: Dict[str, Any],
     ) -> None:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
@@ -191,6 +195,8 @@ class Layer(collections.abc.Mapping):
             The materialized low level graph of the already unpacked layers
         dependencies: Mapping
             The dependencies of each key in `dsk`
+        annotations: dict
+            The materialized task annotations
         """
         raise NotImplementedError(
             f"{type(cls)} doesn't implement __dask_distributed_unpack__()"

@@ -395,13 +395,15 @@ class Blockwise(Layer):
             "io_subgraph": (self.io_name, self.io_subgraph)
             if self.io_name
             else (None, None),
+            "annotations": self.annotations,
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
+
         return ret
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
         raw, raw_deps = make_blockwise_graph(
             state["func"],
             state["output"],
@@ -418,6 +420,7 @@ class Blockwise(Layer):
         )
         io_name, io_subgraph = state["io_subgraph"]
         global_dependencies = list(state["global_dependencies"])
+        state_annotations = state["annotations"]
 
         if io_subgraph:
             # This is an IO layer.
@@ -430,6 +433,12 @@ class Blockwise(Layer):
                     io_item = list(io_item[1:]) if len(io_item) > 1 else []
                     new_task = [io_item if v == io_key else v for v in raw[k]]
                     raw[k] = tuple(new_task)
+
+        if state_annotations:
+            for k in raw:
+                annotations[stringify[k]] = {
+                    a: v(k) if callable(v) else v for a, v in state_annotations
+                }
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
