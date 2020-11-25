@@ -436,7 +436,7 @@ class Blockwise(Layer):
 
         if state_annotations:
             for k in raw:
-                annotations[stringify[k]] = {
+                annotations[stringify(k)] = {
                     a: v(k) if callable(v) else v for a, v in state_annotations
                 }
 
