@@ -2031,6 +2031,19 @@ Dask Name: {name}, {task} tasks"""
 
     @derived_from(pd.DataFrame)
     def skew(self, axis=None, bias=True, nan_policy="propagate", out=None):
+        """
+        .. note::
+
+           This implementation follows the dask.array.stats implementation
+           of skewness and calculates skewness without taking into account
+           a bias term for finite sample size, which corresponds to the
+           default settings of the scipy.stats skewness calculation. However,
+           Pandas corrects for this, so the values differ by a factor of
+           (n * (n - 1)) ** 0.5 / (n - 2), where n is the number of samples.
+
+           Further, this method currently does not support filtering out NaN
+           values, which is again a difference to Pandas.
+        """
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "skew")
         meta = self._meta_nonempty.skew()
