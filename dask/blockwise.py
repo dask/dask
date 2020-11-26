@@ -383,17 +383,6 @@ class Blockwise(Layer):
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
 
-        if self.annotations:
-            annotations = self.annotations
-            annotations = {
-                stringify(k): {
-                    a: v(k) if callable(v) else v for a, v in annotations.items()
-                }
-                for k in self.get_output_keys()
-            }
-        else:
-            annotations = None
-
         ret = {
             "output": self.output,
             "output_indices": self.output_indices,
@@ -407,7 +396,7 @@ class Blockwise(Layer):
             "io_subgraph": (self.io_name, self.io_subgraph)
             if self.io_name
             else (None, None),
-            "annotations": annotations,
+            "annotations": self.expand_annotations(string_keys=True),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }

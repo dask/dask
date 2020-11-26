@@ -4,6 +4,7 @@ import logging
 import math
 import shutil
 import operator
+import pickle
 import uuid
 import tempfile
 
@@ -23,6 +24,13 @@ from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
 
 logger = logging.getLogger(__name__)
+
+
+def shuffle_layer_factory(cls, *args):
+    annotations = args[-1]
+    layer = cls(args[:-1])
+    layer.annotations = annotations
+    return layer
 
 
 class SimpleShuffleLayer(Layer):
@@ -63,6 +71,7 @@ class SimpleShuffleLayer(Layer):
         meta_input,
         parts_out=None,
     ):
+        super().__init__()
         self.name = name
         self.column = column
         self.npartitions = npartitions
@@ -112,8 +121,10 @@ class SimpleShuffleLayer(Layer):
             "name_input",
             "meta_input",
             "parts_out",
+            "annotations",
         ]
-        return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+        args = (SimpleShuffleLayer,) + tuple(getattr(self, attr) for attr in attrs)
+        return (shuffle_layer_factory, args)
 
     def __dask_distributed_pack__(self, client):
         from distributed.protocol.serialize import to_serialize
@@ -127,10 +138,11 @@ class SimpleShuffleLayer(Layer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
+            "annotations": self.expand_annotations(string_keys=True),
         }
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
         from distributed.worker import dumps_task
 
         # msgpack will convert lists into tuples, here
@@ -140,8 +152,13 @@ class SimpleShuffleLayer(Layer):
         if "inputs" in state:
             state["inputs"] = list(state["inputs"])
 
+        annots = state.pop("annotations", None)
+
         # Materialize the layer
         raw = dict(cls(**state))
+
+        if annots:
+            annotations.update(annots)
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
@@ -291,17 +308,19 @@ class ShuffleLayer(SimpleShuffleLayer):
         meta_input,
         parts_out=None,
     ):
-        self.column = column
-        self.name = name
+        super().__init__(
+            name,
+            column,
+            npartitions,
+            npartitions_input,
+            ignore_index,
+            name_input,
+            meta_input,
+            parts_out=parts_out or range(len(inputs)),
+        )
         self.inputs = inputs
         self.stage = stage
-        self.npartitions = npartitions
-        self.npartitions_input = npartitions_input
         self.nsplits = nsplits
-        self.ignore_index = ignore_index
-        self.name_input = name_input
-        self.meta_input = meta_input
-        self.parts_out = parts_out or range(len(inputs))
 
     def __repr__(self):
         return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
@@ -321,8 +340,11 @@ class ShuffleLayer(SimpleShuffleLayer):
             "name_input",
             "meta_input",
             "parts_out",
+            "annotations",
         ]
-        return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
+        args = (SimpleShuffleLayer,) + tuple(getattr(self, attr) for attr in attrs)
+        return (shuffle_layer_factory, args)
 
     def __dask_distributed_pack__(self, client):
         ret = super().__dask_distributed_pack__(client)

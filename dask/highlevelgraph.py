@@ -15,7 +15,7 @@ import copy
 import tlz as toolz
 
 from . import config
-from .utils import ignoring
+from .utils import ignoring, stringify
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
@@ -77,6 +77,36 @@ class Layer(collections.abc.Mapping):
             All output keys
         """
         return self.keys()
+
+    def expand_annotations(self, string_keys=True) -> Mapping[str, Any]:
+        """Expands associated annotations into a :code:`{key: annotation}`, mapping
+
+        Annotations associated with the Layer are expanded over the set
+        of output keys. Value or literal annotations are copied to each key
+        while callable annotations are called with each key.
+
+        Returns
+        -------
+        annotations : dict or None
+            :code:`{key: annotation}` mapping
+        """
+        if not self.annotations:
+            return None
+
+        annotations = self.annotations
+
+        if string_keys:
+            return {
+                stringify(k): {
+                    a: v(k) if callable(v) else v for a, v in annotations.items()
+                }
+                for k in self.get_output_keys()
+            }
+        else:
+            return {
+                k: {a: v(k) if callable(v) else v for a, v in annotations.items()}
+                for k in self.get_output_keys()
+            }
 
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
