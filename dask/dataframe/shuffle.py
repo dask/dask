@@ -4,7 +4,6 @@ import logging
 import math
 import shutil
 import operator
-import pickle
 import uuid
 import tempfile
 

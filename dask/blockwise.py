@@ -1,5 +1,4 @@
 import itertools
-import pickle
 import warnings
 
 import numpy as np
