@@ -27,7 +27,7 @@ logger = logging.getLogger(__name__)
 
 def shuffle_layer_factory(cls, *args):
     annotations = args[-1]
-    layer = cls(args[:-1])
+    layer = cls(*args[:-1])
     layer.annotations = annotations
     return layer
 
@@ -342,7 +342,7 @@ class ShuffleLayer(SimpleShuffleLayer):
             "annotations",
         ]
 
-        args = (SimpleShuffleLayer,) + tuple(getattr(self, attr) for attr in attrs)
+        args = (ShuffleLayer,) + tuple(getattr(self, attr) for attr in attrs)
         return (shuffle_layer_factory, args)
 
     def __dask_distributed_pack__(self, client):
