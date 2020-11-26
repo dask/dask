@@ -2064,13 +2064,6 @@ Dask Name: {name}, {task} tasks"""
         # import depends on scipy, not installed by default
         from ..array import stats as da_stats
 
-        is_timedelta = is_timedelta64_dtype(column._meta)
-
-        if is_timedelta:
-            is_nan = column.isna()
-            column = column.astype("i8")
-            column = column.mask(is_nan)
-
         if PANDAS_VERSION >= "0.24.0":
             if pd.Int64Dtype.is_dtype(column._meta_nonempty):
                 column = column.astype("f8")
