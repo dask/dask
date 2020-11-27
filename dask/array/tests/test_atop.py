@@ -202,6 +202,26 @@ def test_optimize_blockwise():
     )
 
 
+def test_optimize_blockwise_annotations():
+    x = da.ones(10, chunks=(5,))
+    u = x + 1
+    v = u + 2
+
+    with dask.annotate(qux="bax"):
+        w = v + 3
+
+    y = w + 4
+    z = y + 5
+
+    dsk = da.optimization.optimize_blockwise(z.dask)
+
+    assert isinstance(dsk, HighLevelGraph)
+    assert (
+        len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)])
+        == 3
+    )
+
+
 def test_blockwise_diamond_fusion():
     x = da.ones(10, chunks=(5,))
     y = ((x + 1) + 2) + 3

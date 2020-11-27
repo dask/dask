@@ -964,6 +964,7 @@ def _optimize_blockwise(full_graph, keys=()):
             io_names.add(layers[layer].io_name)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
+
                 if dep not in layers:
                     stack.append(dep)
                     continue
@@ -982,6 +983,12 @@ def _optimize_blockwise(full_graph, keys=()):
                 ):
                     stack.append(dep)
                     continue
+                if len(blockwise_layers) > 0:
+                    sample_layer = layers[next(iter(blockwise_layers))]
+
+                    if sample_layer.annotations != layers[dep].annotations:
+                        stack.append(dep)
+                        continue
 
                 # passed everything, proceed
                 blockwise_layers.add(dep)
