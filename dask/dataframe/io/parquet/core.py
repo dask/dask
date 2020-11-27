@@ -839,7 +839,7 @@ def sorted_columns(statistics):
             continue
         divisions = [c["min"]]
         max = c["max"]
-        success = True
+        success = c["min"] is not None
         for stats in statistics[1:]:
             c = stats["columns"][i]
             if c["min"] is None:
