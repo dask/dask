@@ -3042,3 +3042,34 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
         dd.to_parquet(ddf, "./", engine=engine, overwrite=True)
     with pytest.raises(ValueError):
         dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
+
+
+def test_dir_filter(tmpdir, engine):
+    # github #6898
+    df = pd.DataFrame.from_dict(
+        {
+            "A": {
+                0: 351.0,
+                1: 355.0,
+                2: 358.0,
+                3: 266.0,
+                4: 266.0,
+                5: 268.0,
+                6: np.nan,
+            },
+            "B": {
+                0: 2063.0,
+                1: 2051.0,
+                2: 1749.0,
+                3: 4281.0,
+                4: 3526.0,
+                5: 3462.0,
+                6: np.nan,
+            },
+            "year": {0: 2019, 1: 2019, 2: 2020, 3: 2020, 4: 2020, 5: 2020, 6: 2020},
+        }
+    )
+    ddf = dask.dataframe.from_pandas(df, npartitions=1)
+    ddf.to_parquet(tmpdir, partition_on="year", engine=engine)
+    dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
+    assert all
