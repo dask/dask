@@ -2410,12 +2410,7 @@ def test_from_array_scalar(type_):
 
     dx = da.from_array(x, chunks=-1)
     assert_eq(np.array(x), dx)
-    assert isinstance(
-        dx.dask[
-            dx.name,
-        ],
-        np.ndarray,
-    )
+    assert isinstance(dx.dask[dx.name,], np.ndarray,)
 
 
 @pytest.mark.parametrize("asarray,cls", [(True, np.ndarray), (False, np.matrix)])
@@ -3302,11 +3297,7 @@ def test_from_array_names():
 
 
 @pytest.mark.parametrize(
-    "array",
-    [
-        da.arange(100, chunks=25),
-        da.ones((10, 10), chunks=25),
-    ],
+    "array", [da.arange(100, chunks=25), da.ones((10, 10), chunks=25),],
 )
 def test_array_picklable(array):
     from pickle import loads, dumps
@@ -4453,6 +4444,17 @@ def test_map_blocks_series():
     assert s.npartitions == x.npartitions
 
     dd_assert_eq(s, s)
+
+
+def test_map_blocks_axis_kwarg_warning():
+    x = da.zeros((2, 2), chunks=(2, 1))
+    with pytest.warns(UserWarning) as record_with_warning:
+        x.map_blocks(np.argsort, axis=1)
+    with pytest.warns(None) as record_without_warning:
+        x.map_blocks(np.argsort, axis=0)
+
+    assert len(record_with_warning) == 1
+    assert len(record_without_warning) == 0
 
 
 @pytest.mark.xfail(reason="need to remove singleton index dimension")
