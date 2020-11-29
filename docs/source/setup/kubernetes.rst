@@ -22,9 +22,9 @@ following two ways:
        helm repo add dask https://helm.dask.org/    # add the Dask Helm chart repository
        helm repo update                             # get latest Helm charts
        # For single-user deployments, use dask/dask
-       helm install dask/dask                       # deploy standard Dask chart
+       helm install my-dask dask/dask               # deploy standard Dask chart
        # For multi-user deployments, use dask/daskhub
-       helm install dask/daskhub                    # deploy JupyterHub & Dask
+       helm install my-dask dask/daskhub            # deploy JupyterHub & Dask
 
     This is a good choice if you want to do the following:
 
