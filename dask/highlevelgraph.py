@@ -102,9 +102,10 @@ class Layer(collections.abc.Mapping):
 
         if len(keys) == len(self):
             # Nothing to cull if preserving all existing keys
-            return self, {
-                k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()
-            }
+            return (
+                self,
+                {k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()},
+            )
 
         ret_deps = {}
         seen = set()
@@ -606,6 +607,9 @@ class HighLevelGraph(Mapping):
             for dep in deps:
                 if dep not in self.dependencies:
                     raise ValueError(f"{repr(dep)} not found in dependencies")
+
+        for layer in self.layers.values():
+            assert hasattr(layer, "annotations")
 
         # Re-calculate all layer dependencies
         dependencies = compute_layer_dependencies(self.layers)
