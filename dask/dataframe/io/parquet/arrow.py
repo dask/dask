@@ -32,7 +32,6 @@ else:
     pa_ds = None
 schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
-
 #
 #  Helper Utilities
 #
@@ -1040,7 +1039,12 @@ class ArrowDatasetEngine(Engine):
 
         index_cols = index or ()
         meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
-        meta = clear_known_categories(meta, cols=categories)
+        if categories:
+            # Make sure all categories are set to "unknown".
+            # Cannot include index names in the `cols` argument.
+            meta = clear_known_categories(
+                meta, cols=[c for c in categories if c not in meta.index.names]
+            )
 
         if partition_obj:
 

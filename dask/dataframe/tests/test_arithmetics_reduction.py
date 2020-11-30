@@ -732,6 +732,10 @@ def test_reductions(split_every):
         assert_eq(dds.min(split_every=split_every), pds.min())
         assert_eq(dds.max(split_every=split_every), pds.max())
         assert_eq(dds.count(split_every=split_every), pds.count())
+        # pandas uses unbiased skew, need to correct for that
+        n = pds.shape[0]
+        bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
+        assert_eq(dds.skew(), pds.skew() / bias_factor)
 
         with pytest.warns(None):
             # runtime warnings; https://github.com/dask/dask/issues/2381
@@ -988,6 +992,7 @@ def test_reductions_non_numeric_dtypes():
     check_raises(dds, pds, "std")
     check_raises(dds, pds, "var")
     check_raises(dds, pds, "sem")
+    check_raises(dds, pds, "skew")
     if not PANDAS_GT_0250:
         # pandas 0.25 added DatetimeIndex.mean. We need to follow.
         check_raises(dds, pds, "mean")
@@ -1008,6 +1013,7 @@ def test_reductions_non_numeric_dtypes():
         check_raises(dds, pds, "std")
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
+        check_raises(dds, pds, "skew")
         if not (PANDAS_GT_0250 and is_datetime64_ns_dtype(pds.dtype)):
             # pandas 0.25 added DatetimeIndex.mean. We need to follow
             check_raises(dds, pds, "mean")
@@ -1019,6 +1025,8 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.min(), pds.min())
     assert_eq(dds.max(), pds.max())
     assert_eq(dds.count(), pds.count())
+    # both pandas and dask skew calculations do not support timedelta
+    check_raises(dds, pds, "skew")
 
     # ToDo: pandas supports timedelta std, dask returns float64
     # assert_eq(dds.std(), pds.std())

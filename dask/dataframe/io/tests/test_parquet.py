@@ -934,6 +934,27 @@ def test_categories(tmpdir, engine):
         ddf2 = dd.read_parquet(fn, categories=["foo"], engine=engine)
 
 
+def test_categories_unnamed_index(tmpdir, engine):
+    # Check that we can handle an unnamed categorical index
+    # https://github.com/dask/dask/issues/6885
+
+    if engine == "pyarrow" and pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
+
+    tmpdir = str(tmpdir)
+
+    df = pd.DataFrame(
+        data={"A": [1, 2, 3], "B": ["a", "a", "b"]}, index=["x", "y", "y"]
+    )
+    ddf = dd.from_pandas(df, npartitions=1)
+    ddf = ddf.categorize(columns=["B"])
+
+    ddf.to_parquet(tmpdir, engine=engine)
+    ddf2 = dd.read_parquet(tmpdir, engine=engine)
+
+    assert_eq(ddf.index, ddf2.index, check_divisions=False)
+
+
 def test_empty_partition(tmpdir, engine):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": range(10), "b": range(10)})
@@ -3212,3 +3233,34 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
         dd.to_parquet(ddf, "./", engine=engine, overwrite=True)
     with pytest.raises(ValueError):
         dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
+
+
+def test_dir_filter(tmpdir, engine):
+    # github #6898
+    df = pd.DataFrame.from_dict(
+        {
+            "A": {
+                0: 351.0,
+                1: 355.0,
+                2: 358.0,
+                3: 266.0,
+                4: 266.0,
+                5: 268.0,
+                6: np.nan,
+            },
+            "B": {
+                0: 2063.0,
+                1: 2051.0,
+                2: 1749.0,
+                3: 4281.0,
+                4: 3526.0,
+                5: 3462.0,
+                6: np.nan,
+            },
+            "year": {0: 2019, 1: 2019, 2: 2020, 3: 2020, 4: 2020, 5: 2020, 6: 2020},
+        }
+    )
+    ddf = dask.dataframe.from_pandas(df, npartitions=1)
+    ddf.to_parquet(tmpdir, partition_on="year", engine=engine)
+    dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
+    assert all
