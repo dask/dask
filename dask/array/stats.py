@@ -203,9 +203,8 @@ def skew(a, axis=0, bias=True, nan_policy="propagate"):
         raise NotImplementedError("bias=False is not implemented.")
 
     if vals.ndim == 0:
-        return vals
-        # TODO: scalar
-        # return vals.item()
+        # TODO: scalar, min is a workaround
+        return vals.min()
 
     return vals
 

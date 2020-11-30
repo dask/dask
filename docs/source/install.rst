@@ -114,6 +114,8 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |     s3fs      | >=0.4.0  |                    Reading from Amazon S3                    |
 +---------------+----------+--------------------------------------------------------------+
+|     scipy     |          |                  Required for dask.array.stats               |
++---------------+----------+--------------------------------------------------------------+
 |   sqlalchemy  |          |            Writing and reading from SQL databases            |
 +---------------+----------+--------------------------------------------------------------+
 | cytoolz/toolz | >=0.8.2  | Utility functions for iterators, functions, and dictionaries |
