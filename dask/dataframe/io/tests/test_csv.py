@@ -469,7 +469,7 @@ def test_read_csv_include_path_column_with_multiple_partitions_per_file(dd_read,
         assert df.path.dtype == "category"
         assert has_known_categories(df.path)
 
-        dfs = dd_read("2014-01-*.csv", include_path_column=True)
+        dfs = dd_read("2014-01-*.csv", blocksize="10B", include_path_column=True)
         result = dfs.compute()
         assert result.path.dtype == "category"
         assert has_known_categories(result.path)
