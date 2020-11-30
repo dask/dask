@@ -938,7 +938,7 @@ def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
     # https://github.com/dask/dask/issues/6885
 
-    if engine == "pyarrow" and pa.__version__ < LooseVersion("0.15.0"):
+    if engine.startswith("pyarrow") and pa.__version__ < LooseVersion("0.15.0"):
         pytest.skip("PyArrow>=0.15 Required.")
 
     tmpdir = str(tmpdir)
