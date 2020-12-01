@@ -173,6 +173,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=None,
+    read_from_paths=None,
     chunksize=None,
     **kwargs,
 ):
@@ -196,8 +197,10 @@ def read_parquet(
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
-        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. This
-        implements partition-level (hive) filtering only, i.e., to prevent the
+        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
+        argument will NOT result in row-wise filtering of the final partitions
+        unless `engine="pyarrow-dataset"` is also specified.  For other engines,
+        filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
         Predicates can be expressed in disjunctive normal form (DNF). This means
@@ -222,9 +225,19 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
-    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet reader library to use. If only one library is installed, it
-        will use that one; if both, it will use 'fastparquet'
+    engine : str, default 'auto'
+        Parquet reader library to use. Options include: 'auto', 'fastparquet',
+        'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
+        which selects the FastParquetEngine if fastparquet is installed (and
+        ArrowLegacyEngine otherwise).  If 'pyarrow-dataset' is specified, the
+        ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
+        for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
+        specified, the ArrowLegacyEngine will be used (which leverages the
+        pyarrow.parquet.ParquetDataset API).
+        NOTE: 'pyarrow-dataset' enables row-wise filtering, but requires
+        pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
+        ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
+        option will be deprecated once the ParquetDataset API is deprecated.
     gather_statistics : bool or None (default).
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -238,6 +251,15 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
+    read_from_paths : bool or None (default)
+        Only used by `ArrowDatasetEngine`. Determines whether the engine should
+        avoid inserting large pyarrow (`ParquetFileFragment`) objects in the
+        task graph.  If this option is `True`, `read_partition` will need to
+        depend on the file path and row-group ID list (rather than a fragment).
+        This option will reduce the size of the task graph, but will add minor
+        overhead to `read_partition`, and will disable row-wise filtering at
+        read time.  By default (None), `ArrowDatasetEngine` will set this
+        option to `False`.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -271,6 +293,9 @@ def read_parquet(
             storage_options,
             engine,
             gather_statistics,
+            split_row_groups,
+            read_from_paths,
+            chunksize,
         )
         return df[columns]
 
@@ -286,6 +311,8 @@ def read_parquet(
         storage_options,
         engine,
         gather_statistics,
+        read_from_paths,
+        chunksize,
     )
 
     if isinstance(engine, str):
@@ -309,9 +336,10 @@ def read_parquet(
         paths,
         categories=categories,
         index=index,
-        gather_statistics=gather_statistics,
+        gather_statistics=True if chunksize else gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
+        read_from_paths=read_from_paths,
         **kwargs,
     )
 
@@ -769,9 +797,20 @@ def get_engine(engine):
 
     Parameters
     ----------
-    engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
-        Parquet reader library to use. Defaults to fastparquet if both are
-        installed
+    engine : str, default 'auto'
+        Backend parquet library to use. Options include: 'auto', 'fastparquet',
+        'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
+        which selects the FastParquetEngine if fastparquet is installed (and
+        ArrowLegacyEngine otherwise).  If 'pyarrow-dataset' is specified, the
+        ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
+        for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
+        specified, the ArrowLegacyEngine will be used (which leverages the
+        pyarrow.parquet.ParquetDataset API).
+        NOTE: 'pyarrow-dataset' enables row-wise filtering, but requires
+        pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
+        ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
+        option will be deprecated once the ParquetDataset API is deprecated.
+    gather_statistics : bool or None (default).
 
     Returns
     -------
@@ -796,14 +835,20 @@ def get_engine(engine):
         _ENGINES["fastparquet"] = eng = FastParquetEngine
         return eng
 
-    elif engine == "pyarrow" or engine == "arrow":
+    elif engine in ("pyarrow", "arrow", "pyarrow-legacy", "pyarrow-dataset"):
         pa = import_required("pyarrow", "`pyarrow` not installed")
-        from .arrow import ArrowEngine
 
         if LooseVersion(pa.__version__) < "0.13.1":
             raise RuntimeError("PyArrow version >= 0.13.1 required")
 
-        _ENGINES["pyarrow"] = eng = ArrowEngine
+        if engine == "pyarrow-dataset" and LooseVersion(pa.__version__) >= "1.0.0":
+            from .arrow import ArrowDatasetEngine
+
+            _ENGINES[engine] = eng = ArrowDatasetEngine
+        else:
+            from .arrow import ArrowLegacyEngine
+
+            _ENGINES[engine] = eng = ArrowLegacyEngine
         return eng
 
     else:
