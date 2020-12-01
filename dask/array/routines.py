@@ -1471,7 +1471,7 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     if not trim_excess and not all(x.shape[i] % div == 0 for i, div in axes.items()):
-        msg = "Coarsening factor does not align with block dimensions"
+        msg = f"Coarsening factors {axes} do not align with array shape {x.shape}."
         raise ValueError(msg)
 
     if "dask" in inspect.getfile(reduction):
