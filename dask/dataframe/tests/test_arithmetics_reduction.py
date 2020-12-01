@@ -13,6 +13,11 @@ from dask.dataframe.utils import (
     make_meta,
 )
 
+try:
+    import scipy
+except ImportError:
+    scipy = None
+
 
 @pytest.mark.slow
 def test_arithmetics():
@@ -720,10 +725,12 @@ def test_reductions(split_every):
         assert_eq(dds.min(split_every=split_every), pds.min())
         assert_eq(dds.max(split_every=split_every), pds.max())
         assert_eq(dds.count(split_every=split_every), pds.count())
-        # pandas uses unbiased skew, need to correct for that
-        n = pds.shape[0]
-        bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
-        assert_eq(dds.skew(), pds.skew() / bias_factor)
+
+        if scipy:
+            # pandas uses unbiased skew, need to correct for that
+            n = pds.shape[0]
+            bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
+            assert_eq(dds.skew(), pds.skew() / bias_factor)
 
         with pytest.warns(None):
             # runtime warnings; https://github.com/dask/dask/issues/2381
@@ -1310,8 +1317,8 @@ def test_divmod():
     assert_eq(result[1], expected[1])
 
 
+@pytest.mark.skipif("not scipy")
 def test_moment():
-    scipy = pytest.importorskip("scipy")
     from dask.array import stats
     from dask.array.utils import assert_eq
 
