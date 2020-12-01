@@ -2030,6 +2030,107 @@ Dask Name: {name}, {task} tasks"""
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
+    def skew(self, axis=None, bias=True, nan_policy="propagate", out=None):
+        """
+        .. note::
+
+           This implementation follows the dask.array.stats implementation
+           of skewness and calculates skewness without taking into account
+           a bias term for finite sample size, which corresponds to the
+           default settings of the scipy.stats skewness calculation. However,
+           Pandas corrects for this, so the values differ by a factor of
+           (n * (n - 1)) ** 0.5 / (n - 2), where n is the number of samples.
+
+           Further, this method currently does not support filtering out NaN
+           values, which is again a difference to Pandas.
+        """
+        axis = self._validate_axis(axis)
+        _raise_if_object_series(self, "skew")
+        meta = self._meta_nonempty.skew()
+        if axis == 1:
+            result = map_partitions(
+                M.skew,
+                self,
+                meta=meta,
+                token=self._token_prefix + "skew",
+                axis=axis,
+                enforce_metadata=False,
+            )
+            return handle_out(out, result)
+        else:
+            if self.ndim == 1:
+                result = self._skew_1d(self, bias=bias, nan_policy=nan_policy)
+                return handle_out(out, result)
+            else:
+                result = self._skew_numeric(bias=bias, nan_policy=nan_policy)
+
+            if isinstance(self, DataFrame):
+                result.divisions = (self.columns.min(), self.columns.max())
+
+            return handle_out(out, result)
+
+    def _skew_1d(self, column, bias=True, nan_policy="propagate"):
+        """1D version of the skew calculation.
+
+        Uses the array version from da.stats in case we are passing in a single series
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        if PANDAS_VERSION >= "0.24.0":
+            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+                column = column.astype("f8")
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype("f8")
+
+        name = self._token_prefix + "skew-1d-" + tokenize(column)
+
+        array_skew = da_stats.skew(
+            column.values, axis=0, bias=bias, nan_policy=nan_policy
+        )
+
+        layer = {(name, 0): (methods.wrap_skew_reduction, (array_skew._name,), None)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_skew])
+
+        return new_dd_object(
+            graph, name, column._meta_nonempty.skew(), divisions=[None, None]
+        )
+
+    def _skew_numeric(self, bias=True, nan_policy="propagate"):
+        """Method for dataframes with numeric columns.
+
+        Maps the array version from da.stats onto the numeric array of columns.
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype("f8")
+
+        array_skew = da_stats.skew(
+            array_values, axis=0, bias=bias, nan_policy=nan_policy
+        )
+
+        name = self._token_prefix + "var-numeric" + tokenize(num)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        skew_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_skew_name = (array_skew._name,) + (0,) * len(skew_shape)
+
+        layer = {(name, 0): (methods.wrap_skew_reduction, array_skew_name, cols)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_skew])
+
+        return new_dd_object(
+            graph, name, num._meta_nonempty.skew(), divisions=[None, None]
+        )
+
+    @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
@@ -4011,10 +4112,11 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if (axis == 1) or (columns is not None):
-            return self.map_partitions(
-                drop_by_shallow_copy, columns or labels, errors=errors
-            )
+        if axis == 0 and columns is not None:
+            # Columns must be specified if axis==0
+            return self.map_partitions(drop_by_shallow_copy, columns, errors=errors)
+        elif axis == 1:
+            return self.map_partitions(drop_by_shallow_copy, labels, errors=errors)
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
         )
@@ -4141,6 +4243,8 @@ class DataFrame(_Frame):
         npartitions=None,
         shuffle=None,
     ):
+        if is_series_like(other) and hasattr(other, "name"):
+            other = other.to_frame()
 
         if not is_dataframe_like(other):
             raise ValueError("other must be DataFrame")

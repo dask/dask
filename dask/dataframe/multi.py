@@ -59,7 +59,7 @@ import warnings
 from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal, is_categorical_dtype
+from pandas.api.types import is_dtype_equal, is_categorical_dtype, union_categoricals
 
 from ..base import tokenize, is_dask_collection
 from ..highlevelgraph import HighLevelGraph
@@ -231,7 +231,48 @@ allowed_right = ("inner", "right")
 
 def merge_chunk(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
-    out = lhs.merge(*args, **kwargs)
+    categorical_columns = kwargs.pop("categorical_columns", None)
+
+    rhs, *args = args
+    left_index = kwargs.get("left_index", False)
+    right_index = kwargs.get("right_index", False)
+
+    if categorical_columns is not None and PANDAS_GT_100:
+        for col in categorical_columns:
+            left = None
+            right = None
+
+            if col in lhs:
+                left = lhs[col]
+            elif col == kwargs.get("right_on", None) and left_index:
+                if is_categorical_dtype(lhs.index):
+                    left = lhs.index
+
+            if col in rhs:
+                right = rhs[col]
+            elif col == kwargs.get("left_on", None) and right_index:
+                if is_categorical_dtype(rhs.index):
+                    right = rhs.index
+
+            dtype = "category"
+            if left is not None and right is not None:
+                dtype = union_categoricals(
+                    [left.astype("category").values, right.astype("category").values]
+                ).dtype
+
+            if left is not None:
+                if isinstance(left, pd.Index):
+                    lhs.index = left.astype(dtype)
+                else:
+                    lhs[col] = left.astype(dtype)
+            if right is not None:
+                if isinstance(right, pd.Index):
+                    rhs.index = right.astype(dtype)
+                else:
+                    rhs[col] = right.astype(dtype)
+
+    out = lhs.merge(rhs, *args, **kwargs)
+
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
     # of input dtypes.
@@ -253,6 +294,7 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
@@ -323,6 +365,8 @@ def hash_join(
     name = "hash-join-" + token
 
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+
     dsk = {
         (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
         for i in range(npartitions)
@@ -334,11 +378,13 @@ def hash_join(
 
 
 def single_partition_join(left, right, **kwargs):
-    # if the merge is perfomed on_index, divisions can be kept, otherwise the
-    # new index will not necessarily correspond the current divisions
+    # if the merge is performed on_index, divisions can be kept, otherwise the
+    # new index will not necessarily correspond with the current divisions
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+
     name = "merge-" + tokenize(left, right, **kwargs)
     if left.npartitions == 1 and kwargs["how"] in allowed_right:
         left_key = first(left.__dask_keys__())
@@ -531,6 +577,8 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
         )
+        categorical_columns = meta.select_dtypes(include="category").columns
+
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(
                 right, right_on, left.divisions, max_branch, shuffle=shuffle
@@ -555,6 +603,7 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
             empty_index_dtype=meta.index.dtype,
+            categorical_columns=categorical_columns,
         )
     # Catch all hash join
     else:
@@ -1092,7 +1141,7 @@ def concat(
             if not ignore_unknown_divisions:
                 warnings.warn(
                     "Concatenating dataframes with unknown divisions.\n"
-                    "We're assuming that the indexes of each dataframes"
+                    "We're assuming that the indices of each dataframes"
                     " are \n aligned. This assumption is not generally "
                     "safe."
                 )

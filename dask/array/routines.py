@@ -228,10 +228,12 @@ def _tensordot(a, b, axes):
     else:
         x = tensordot(a, b, axes=axes)
 
-    ind = [slice(None, None)] * x.ndim
-    for a in sorted(axes[0]):
-        ind.insert(a, None)
-    x = x[tuple(ind)]
+    if len(axes[0]) != 1:
+        ind = [slice(None, None)] * x.ndim
+        for a in sorted(axes[0]):
+            ind.insert(a, None)
+        x = x[tuple(ind)]
+
     return x
 
 
@@ -251,6 +253,10 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
+    if len(left_axes) == 1:
+        concatenate = True
+    else:
+        concatenate = False
 
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
@@ -261,6 +267,8 @@ def tensordot(lhs, rhs, axes=2):
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
+        if concatenate:
+            out_index.remove(left_index[l])
 
     intermediate = blockwise(
         _tensordot,
@@ -270,11 +278,14 @@ def tensordot(lhs, rhs, axes=2):
         rhs,
         right_index,
         dtype=dt,
+        concatenate=concatenate,
         axes=(left_axes, right_axes),
     )
 
-    result = intermediate.sum(axis=left_axes)
-    return result
+    if concatenate:
+        return intermediate
+    else:
+        return intermediate.sum(axis=left_axes)
 
 
 @derived_from(np)
@@ -1460,7 +1471,7 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     if not trim_excess and not all(x.shape[i] % div == 0 for i, div in axes.items()):
-        msg = "Coarsening factor does not align with block dimensions"
+        msg = f"Coarsening factors {axes} do not align with array shape {x.shape}."
         raise ValueError(msg)
 
     if "dask" in inspect.getfile(reduction):

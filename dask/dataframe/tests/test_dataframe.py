@@ -2545,6 +2545,24 @@ def test_drop_axis_1():
     assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
 
 
+@pytest.mark.parametrize("columns", [["b"], []])
+def test_drop_columns(columns):
+    # Check both populated and empty list argument
+    # https://github.com/dask/dask/issues/6870
+
+    df = pd.DataFrame(
+        {
+            "a": [2, 4, 6, 8],
+            "b": ["1a", "2b", "3c", "4d"],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.drop(columns=columns)
+    ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
+
+    assert_eq(df.drop(columns=columns), ddf2)
+
+
 def test_gh580():
     df = pd.DataFrame({"x": np.arange(10, dtype=float)})
     ddf = dd.from_pandas(df, 2)
@@ -4463,3 +4481,11 @@ def test_attrs_series_in_dataframes():
     # when creating the _meta dataframe in make_meta_pandas(x, index=None).
     # Should start xpassing when df.iloc works. Remove the xfail then.
     assert df.A.attrs == ddf.A.attrs
+
+
+def test_join_series():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
+    actual_df = ddf.join(ddf["x"], lsuffix="_")
+    assert_eq(actual_df, expected_df)
