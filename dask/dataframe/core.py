@@ -585,9 +585,10 @@ Dask Name: {name}, {task} tasks"""
         args, kwargs :
             Arguments and keywords to pass to the function. The partition will
             be the first argument, and these will be passed *after*. Arguments
-            and keywords may contain ``Scalar``, ``Delayed`` or regular
-            python objects. DataFrame-like args (both dask and pandas) will be
-            repartitioned to align (if necessary) before applying the function.
+            and keywords may contain ``Scalar``, ``Delayed``, ``partition_info`` 
+            or regular python objects. DataFrame-like args (both dask and 
+            pandas) will be repartitioned to align (if necessary) before 
+            applying the function.
         $META
 
         Examples
