@@ -71,6 +71,7 @@ class SimpleShuffleLayer(Layer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
+        super().__init__()
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -302,6 +303,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(len(inputs))
+        Layer.__init__(self)
 
     def __repr__(self):
         return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
