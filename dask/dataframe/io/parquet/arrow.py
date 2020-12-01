@@ -437,10 +437,9 @@ def _get_rg_statistics(row_group, col_indices):
             if field_index < 0:
                 return None, None
 
-            typ = row_group.schema.field(field_index).type
             return col.path_in_schema, {
-                "min": pa.scalar(stats.min, type=typ).as_py(),
-                "max": pa.scalar(stats.max, type=typ).as_py(),
+                "min": stats.min,
+                "max": stats.max,
             }
 
         return {
