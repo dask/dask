@@ -690,6 +690,7 @@ def test_read_text_large_gzip():
         assert "".join(c.compute()) == data.decode()
 
 
+@pytest.mark.xfail(reason="https://github.com/dask/dask/issues/6914")
 @pytest.mark.slow
 @pytest.mark.network
 def test_from_s3():
