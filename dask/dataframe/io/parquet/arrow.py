@@ -30,6 +30,7 @@ if pa.__version__ >= LooseVersion("1.0.0"):
     from pyarrow import dataset as pa_ds
 else:
     pa_ds = None
+subset_stats_supported = pa.__version__ > LooseVersion("2.0.0")
 schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
 #
@@ -410,6 +411,46 @@ def _read_table_from_path(
                     use_threads=False,
                     use_pandas_metadata=True,
                 )
+
+
+def _get_rg_statistics(row_group, col_indices):
+    """Custom version of pyarrow's RowGroupInfo.statistics method
+    (https://github.com/apache/arrow/blob/master/python/pyarrow/_dataset.pyx)
+
+    We use col_indices to specify the specific subset of columns
+    that we need statistics for.  This is more optimal than the
+    upstream `RowGroupInfo.statistics` method, which will return
+    statistics for all columns.
+    """
+
+    if subset_stats_supported:
+
+        def name_stats(i):
+            col = row_group.metadata.column(i)
+
+            stats = col.statistics
+            if stats is None or not stats.has_min_max:
+                return None, None
+
+            name = col.path_in_schema
+            field_index = row_group.schema.get_field_index(name)
+            if field_index < 0:
+                return None, None
+
+            typ = row_group.schema.field(field_index).type
+            return col.path_in_schema, {
+                "min": pa.scalar(stats.min, type=typ).as_py(),
+                "max": pa.scalar(stats.max, type=typ).as_py(),
+            }
+
+        return {
+            name: stats
+            for name, stats in map(name_stats, col_indices.values())
+            if stats is not None
+        }
+
+    else:
+        return row_group.statistics
 
 
 #
@@ -1247,9 +1288,6 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
-                elif gather_statistics and (row_group_info[0].statistics is None):
-                    frag.ensure_complete_metadata()
-                    row_group_info = frag.row_groups
                 frag_map[(fpath, row_group_info[0].id)] = frag
             else:
                 file_row_groups[fpath] = [None]
@@ -1258,7 +1296,7 @@ class ArrowDatasetEngine(Engine):
             for row_group in row_group_info:
                 file_row_groups[fpath].append(row_group.id)
                 if gather_statistics:
-                    statistics = row_group.statistics
+                    statistics = _get_rg_statistics(row_group, stat_col_indices)
                     if single_rg_parts:
                         s = {
                             "file_path_0": fpath,
