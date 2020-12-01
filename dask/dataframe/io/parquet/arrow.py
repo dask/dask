@@ -1247,11 +1247,7 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
-                elif (
-                    gather_statistics
-                    and row_group_info[0].num_rows
-                    and (row_group_info[0].statistics is None)
-                ):
+                elif gather_statistics and (row_group_info[0].statistics is None):
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
                 frag_map[(fpath, row_group_info[0].id)] = frag
@@ -1262,7 +1258,7 @@ class ArrowDatasetEngine(Engine):
             for row_group in row_group_info:
                 file_row_groups[fpath].append(row_group.id)
                 if gather_statistics:
-                    statistics = row_group.statistics if row_group.num_rows else {}
+                    statistics = row_group.statistics
                     if single_rg_parts:
                         s = {
                             "file_path_0": fpath,
