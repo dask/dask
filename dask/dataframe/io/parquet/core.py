@@ -233,8 +233,11 @@ def read_parquet(
         ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
         for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
         specified, the ArrowLegacyEngine will be used (which leverages the
-        pyarrow.parquet.ParquetDataset API).  Note that 'pyarrow-dataset' enables
-        row-wise filtering, but requires pyarrow>=1.0.
+        pyarrow.parquet.ParquetDataset API).
+        NOTE: 'pyarrow-dataset' enables row-wise filtering, but requires
+        pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
+        ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
+        option will be deprecated once the ParquetDataset API is deprecated.
     gather_statistics : bool or None (default).
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -802,10 +805,12 @@ def get_engine(engine):
         ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
         for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
         specified, the ArrowLegacyEngine will be used (which leverages the
-        pyarrow.parquet.ParquetDataset API).  Note that the behavior of 'pyarrow'
-        will most likely change to ArrowDatasetEngine in a future release.  Also,
-        the 'pyarrow-legacy' option will be deprecated once the ParquetDataset
-        API is deprecated.
+        pyarrow.parquet.ParquetDataset API).
+        NOTE: 'pyarrow-dataset' enables row-wise filtering, but requires
+        pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
+        ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
+        option will be deprecated once the ParquetDataset API is deprecated.
+    gather_statistics : bool or None (default).
 
     Returns
     -------
