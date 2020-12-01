@@ -129,6 +129,13 @@ def wrap_var_reduction(array_var, index):
     return array_var
 
 
+def wrap_skew_reduction(array_skew, index):
+    if isinstance(array_skew, np.ndarray) or isinstance(array_skew, list):
+        return pd.Series(array_skew, index=index)
+
+    return array_skew
+
+
 def var_mixed_concat(numeric_var, timedelta_var, columns):
     vars = pd.concat([numeric_var, timedelta_var])
 
