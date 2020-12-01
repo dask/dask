@@ -225,10 +225,16 @@ def read_parquet(
         data written by dask/fastparquet, not otherwise.
     storage_options : dict
         Key/value pairs to be passed on to the file-system backend, if any.
-    engine : {'auto', 'fastparquet', 'pyarrow', 'pyarrow-dataset'}, default 'auto'
-        Parquet reader library to use. If only one library is installed, it
-        will use that one; if both, it will use 'fastparquet'.  Note that
-        'pyarrow-dataset' enables row-wise filtering, but requires pyarrow>=1.0.
+    engine : str, default 'auto'
+        Parquet reader library to use. Options include: 'auto', 'fastparquet',
+        'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
+        which selects the FastParquetEngine if fastparquet is installed (and
+        ArrowLegacyEngine otherwise).  If 'pyarrow-dataset' is specified, the
+        ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
+        for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
+        specified, the ArrowLegacyEngine will be used (which leverages the
+        pyarrow.parquet.ParquetDataset API).  Note that 'pyarrow-dataset' enables
+        row-wise filtering, but requires pyarrow>=1.0.
     gather_statistics : bool or None (default).
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -788,10 +794,18 @@ def get_engine(engine):
 
     Parameters
     ----------
-    engine : {'auto', 'fastparquet', 'pyarrow', 'pyarrow-dataset'}, default 'auto'
-        Parquet reader library to use. Defaults to fastparquet if both are
-        installed.  The pyarrow.dataset API will be used for newer PyArrow
-        versions (>=1.0.0) if 'pyarrow-dataset' is specified.
+    engine : str, default 'auto'
+        Backend parquet library to use. Options include: 'auto', 'fastparquet',
+        'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
+        which selects the FastParquetEngine if fastparquet is installed (and
+        ArrowLegacyEngine otherwise).  If 'pyarrow-dataset' is specified, the
+        ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
+        for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
+        specified, the ArrowLegacyEngine will be used (which leverages the
+        pyarrow.parquet.ParquetDataset API).  Note that the behavior of 'pyarrow'
+        will most likely change to ArrowDatasetEngine in a future release.  Also,
+        the 'pyarrow-legacy' option will be deprecated once the ParquetDataset
+        API is deprecated.
 
     Returns
     -------
