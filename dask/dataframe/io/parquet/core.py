@@ -340,6 +340,7 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
+        engine=engine,
         **kwargs,
     )
 
@@ -778,6 +779,10 @@ def create_metadata_file(
                     None,
                     None,
                 )
+
+    # There will be no aggregation tasks if there is only one file
+    if len(paths) == 1:
+        dsk[name] = (engine.aggregate_metadata, [(collect_name, 0, 0)], fs, out_dir)
 
     # Convert the raw graph to a `Delayed` object
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[])

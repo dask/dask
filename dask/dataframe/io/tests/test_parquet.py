@@ -1,7 +1,6 @@
 import math
 import glob
 import os
-import glob
 import sys
 import warnings
 from distutils.version import LooseVersion
