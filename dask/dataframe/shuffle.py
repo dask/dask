@@ -138,7 +138,7 @@ class SimpleShuffleLayer(Layer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
-            "annotations": self.expand_annotations(string_keys=True),
+            "annotations": self.expand_annotations(),
         }
 
     @classmethod

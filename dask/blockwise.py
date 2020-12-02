@@ -395,7 +395,7 @@ class Blockwise(Layer):
             "io_subgraph": (self.io_name, self.io_subgraph)
             if self.io_name
             else (None, None),
-            "annotations": self.expand_annotations(string_keys=True),
+            "annotations": self.expand_annotations(),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }

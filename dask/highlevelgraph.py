@@ -78,7 +78,7 @@ class Layer(collections.abc.Mapping):
         """
         return self.keys()
 
-    def expand_annotations(self, string_keys=True) -> Mapping[str, Any]:
+    def expand_annotations(self) -> Mapping[str, Any]:
         """Expands associated annotations into a :code:`{key: annotation}`, mapping
 
         Annotations associated with the Layer are expanded over the set
@@ -95,18 +95,12 @@ class Layer(collections.abc.Mapping):
 
         annotations = self.annotations
 
-        if string_keys:
-            return {
-                stringify(k): {
-                    a: v(k) if callable(v) else v for a, v in annotations.items()
-                }
-                for k in self.get_output_keys()
+        return {
+            stringify(k): {
+                a: v(k) if callable(v) else v for a, v in annotations.items()
             }
-        else:
-            return {
-                k: {a: v(k) if callable(v) else v for a, v in annotations.items()}
-                for k in self.get_output_keys()
-            }
+            for k in self.get_output_keys()
+        }
 
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
