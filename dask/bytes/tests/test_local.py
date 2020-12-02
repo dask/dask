@@ -4,6 +4,7 @@ import pathlib
 import sys
 from time import sleep
 from functools import partial
+from distutils.version import LooseVersion
 
 import pytest
 from tlz import concat, valmap
@@ -361,6 +362,8 @@ def test_get_pyarrow_filesystem():
     from fsspec.implementations.local import LocalFileSystem
 
     pa = pytest.importorskip("pyarrow")
+    if pa.__version__ >= LooseVersion("2.0.0"):
+        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
 
     fs = LocalFileSystem()
     assert isinstance(fs, pa.filesystem.FileSystem)
