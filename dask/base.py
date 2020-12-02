@@ -86,9 +86,9 @@ def annotate(**annotations):
     if "workers" in annotations:
         if isinstance(annotations["workers"], (list, set, tuple)):
             annotations["workers"] = list(annotations["workers"])
-        elif isinstance(anotations["workers"], str):
+        elif isinstance(annotations["workers"], str):
             annotations["workers"] = [annotations["workers"]]
-        elif isinstance(anotations["workers"], callable):
+        elif callable(annotations["workers"]):
             pass
         else:
             raise TypeError(
@@ -96,32 +96,40 @@ def annotate(**annotations):
                 % type(annotations["workers"])
             )
 
-    if "priority" in annotations and not isinstance(
-        annotations["priority"], (Number, callable)
+    if (
+        "priority" in annotations
+        and not isinstance(annotations["priority"], Number)
+        and not callable(annotations["priority"])
     ):
         raise TypeError(
             "'priority' annotation must be a Number. Got %s"
             % type(annotations["priority"])
         )
 
-    if "retries" in annotations and not isinstance(
-        annotations["retries"], (Number, callable)
+    if (
+        "retries" in annotations
+        and not isinstance(annotations["retries"], Number)
+        and not callable(annotations["retries"])
     ):
         raise TypeError(
             "'retries' annotation must be a Number. Got %s"
             % type(annotations["retries"])
         )
 
-    if "resources" in annotations and not isinstance(
-        annotations["resources"], (dict, callable)
+    if (
+        "resources" in annotations
+        and not isinstance(annotations["resources"], dict)
+        and not callable(annotations["resources"])
     ):
         raise TypeError(
             "'resources' annotation must be a dict. Got %s"
             % type(annotations["resources"])
         )
 
-    if "allow_other_workers" in annotations and not isinstance(
-        annotations["allow_other_workers"], (bool, callable)
+    if (
+        "allow_other_workers" in annotations
+        and not isinstance(annotations["allow_other_workers"], bool)
+        and not callable(annotations["allow_other_workers"])
     ):
         raise TypeError(
             "'allow_other_workers' annotations must be a bool. Got %s"
