@@ -1170,6 +1170,7 @@ def rewrite_blockwise(inputs):
         new_axes=new_axes,
         concatenate=concatenate,
         io_subgraph=io_info,
+        annotations=inputs[root].annotations,
     )
 
     return out
