@@ -25,13 +25,6 @@ from . import methods
 logger = logging.getLogger(__name__)
 
 
-def shuffle_layer_factory(cls, *args):
-    annotations = args[-1]
-    layer = cls(*args[:-1])
-    layer.annotations = annotations
-    return layer
-
-
 class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
@@ -57,6 +50,8 @@ class SimpleShuffleLayer(Layer):
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
+    annotations : dict (optional)
+        Layer annotations
     """
 
     def __init__(
@@ -69,8 +64,9 @@ class SimpleShuffleLayer(Layer):
         name_input,
         meta_input,
         parts_out=None,
+        annotations=None,
     ):
-        super().__init__()
+        super().__init__(annotations=annotations)
         self.name = name
         self.column = column
         self.npartitions = npartitions
@@ -122,8 +118,7 @@ class SimpleShuffleLayer(Layer):
             "parts_out",
             "annotations",
         ]
-        args = (SimpleShuffleLayer,) + tuple(getattr(self, attr) for attr in attrs)
-        return (shuffle_layer_factory, args)
+        return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
     def __dask_distributed_pack__(self, client):
         from distributed.protocol.serialize import to_serialize
@@ -291,6 +286,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
+    annotations : dict (optional)
+        Layer annotations
     """
 
     def __init__(
@@ -306,6 +303,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         name_input,
         meta_input,
         parts_out=None,
+        annotations=None,
     ):
         super().__init__(
             name,
@@ -316,6 +314,7 @@ class ShuffleLayer(SimpleShuffleLayer):
             name_input,
             meta_input,
             parts_out=parts_out or range(len(inputs)),
+            annotations=annotations,
         )
         self.inputs = inputs
         self.stage = stage
@@ -342,8 +341,7 @@ class ShuffleLayer(SimpleShuffleLayer):
             "annotations",
         ]
 
-        args = (ShuffleLayer,) + tuple(getattr(self, attr) for attr in attrs)
-        return (shuffle_layer_factory, args)
+        return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
     def __dask_distributed_pack__(self, client):
         ret = super().__dask_distributed_pack__(client)

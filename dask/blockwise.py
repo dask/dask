@@ -202,6 +202,8 @@ class Blockwise(Layer):
         will only contain the necessary tasks to generate these outputs,
         this kwarg can be used to "cull" the abstract layer (without needing
         to materialize the low-level graph).
+    annotations: dict (optional)
+        Layer annotations
 
     See Also
     --------
@@ -220,8 +222,9 @@ class Blockwise(Layer):
         new_axes=None,
         io_subgraph=None,
         output_blocks=None,
+        annotations=None,
     ):
-        super().__init__()
+        super().__init__(annotations=annotations)
         self.output = output
         self.output_indices = tuple(output_indices)
         self.io_subgraph = io_subgraph[1] if io_subgraph else None

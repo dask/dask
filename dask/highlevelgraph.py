@@ -54,8 +54,11 @@ class Layer(collections.abc.Mapping):
     implementations.
     """
 
-    def __init__(self):
-        self.annotations = copy.copy(config.get("annotations", None))
+    def __init__(self, annotations=None):
+        if annotations:
+            self.annotations = annotations
+        else:
+            self.annotations = copy.copy(config.get("annotations", None))
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
@@ -257,8 +260,8 @@ class BasicLayer(Layer):
         The mapping between keys and tasks, typically a dask graph.
     """
 
-    def __init__(self, mapping: Mapping):
-        super().__init__()
+    def __init__(self, mapping: Mapping, annotations=None):
+        super().__init__(annotations=annotations)
         self.mapping = mapping
 
     def __contains__(self, k):
