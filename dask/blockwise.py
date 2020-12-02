@@ -230,7 +230,7 @@ class Blockwise(Layer):
 
         # No IO subgraph allowed in `Blockwise`.
         # Use `BlockwiseIO` to include IO. Note that the `io_name`
-        # attribute is only included added to `Blockwise` to help
+        # attribute is only included in `Blockwise` to help
         # simplify `_optimize_blockwise` logic.
         self.io_name = None
 
