@@ -92,8 +92,8 @@ def annotate(**annotations):
             pass
         else:
             raise TypeError(
-                "'workers' annotation must be a sequence of str or a str. Got %s"
-                % type(annotations["workers"])
+                "'workers' annotation must be a sequence of str, a str or a callable, but got %s."
+                % annotations["workers"]
             )
 
     if (
@@ -102,8 +102,8 @@ def annotate(**annotations):
         and not callable(annotations["priority"])
     ):
         raise TypeError(
-            "'priority' annotation must be a Number. Got %s"
-            % type(annotations["priority"])
+            "'priority' annotation must be a Number or a callable, but got %s"
+            % annotations["priority"]
         )
 
     if (
@@ -112,8 +112,8 @@ def annotate(**annotations):
         and not callable(annotations["retries"])
     ):
         raise TypeError(
-            "'retries' annotation must be a Number. Got %s"
-            % type(annotations["retries"])
+            "'retries' annotation must be a Number or a callable, but got %s"
+            % annotations["retries"]
         )
 
     if (
@@ -122,8 +122,8 @@ def annotate(**annotations):
         and not callable(annotations["resources"])
     ):
         raise TypeError(
-            "'resources' annotation must be a dict. Got %s"
-            % type(annotations["resources"])
+            "'resources' annotation must be a dict, but got %s"
+            % annotations["resources"]
         )
 
     if (
@@ -132,8 +132,8 @@ def annotate(**annotations):
         and not callable(annotations["allow_other_workers"])
     ):
         raise TypeError(
-            "'allow_other_workers' annotations must be a bool. Got %s"
-            % type(annotations["allow_other_workers"])
+            "'allow_other_workers' annotations must be a bool or a callable, but got %s"
+            % annotations["allow_other_workers"]
         )
 
     prev_annotations = config.get("annotations", {})
