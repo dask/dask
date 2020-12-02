@@ -3159,6 +3159,21 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         ddf2.a = ddf2.a.astype("object")
     assert_eq(ddf1, ddf2)
 
+    # Check if we can avoid writing an actual file
+    fmd = dd.io.parquet.create_metadata_file(
+        fns,
+        engine="pyarrow",
+        split_every=3,  # Force tree reduction
+        out_dir=False,  # Avoid writing file
+    )
+
+    # Check that the in-memory metadata is the same as
+    # the metadata in the file.
+    fmd_file = pq.ParquetFile(os.path.join(tmpdir, "_metadata")).metadata
+    assert fmd.num_rows == fmd_file.num_rows
+    assert fmd.num_columns == fmd_file.num_columns
+    assert fmd.num_row_groups == fmd_file.num_row_groups
+
 
 def test_read_write_overwrite_is_true(tmpdir, engine):
     # https://github.com/dask/dask/issues/6824

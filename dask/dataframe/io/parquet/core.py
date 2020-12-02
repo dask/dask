@@ -693,9 +693,11 @@ def create_metadata_file(
         Root directory of dataset.  The `file_path` fields in the new
         _metadata file will relative to this directory.  If None, a common
         root directory will be inferred.
-    out_dir : string, optional
+    out_dir : string or False, optional
         Directory location to write the final _metadata file.  By default,
-        this will be set to `root_dir`.
+        this will be set to `root_dir`.  If False is specified, the global
+        metadata will be returned as an in-memory object (and will not be
+        written to disk).
     engine : str or Engine, default 'pyarrow'
         Parquet Engine to use. Only 'pyarrow' is supported if a string
         is passed.
@@ -729,7 +731,7 @@ def create_metadata_file(
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
     ap_kwargs = {"root": root_dir} if root_dir else {}
     root_dir, fns = _analyze_paths(paths, fs, **ap_kwargs)
-    out_dir = out_dir or root_dir
+    out_dir = root_dir if out_dir is None else out_dir
 
     # Start constructing a raw graph
     dsk = {}
