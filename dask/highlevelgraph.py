@@ -81,29 +81,49 @@ class Layer(collections.abc.Mapping):
         """
         return self.keys()
 
-    def expand_annotations(self) -> Mapping[str, Any]:
-        """Expands associated annotations into a :code:`{key: annotation}`, mapping
+    def pack_annotations(self) -> Mapping[str, Any]:
+        """Packs Layer annotations for transmission to scheduler
 
-        Annotations associated with the Layer are expanded over the set
-        of output keys. Value or literal annotations are copied to each key
-        while callable annotations are called with each key.
+        Callables annotations are fully expanded over Layer keys, while
+        other values are simply transmitted as is
 
         Returns
         -------
-        annotations : dict or None
-            :code:`{key: annotation}` mapping
+        packed_annotations : dict
+            Packed annotations.
         """
-        if not self.annotations:
+        if self.annotations is None:
             return None
 
-        annotations = self.annotations
+        packed = {}
 
-        return {
-            stringify(k): {
-                a: v(k) if callable(v) else v for a, v in annotations.items()
-            }
-            for k in self.get_output_keys()
-        }
+        for a, v in self.annotations.items():
+            if callable(v):
+                packed[a] = {stringify(k): v(k) for k in self}
+                packed[a]["__expanded_annotations__"] = True
+            else:
+                packed[a] = v
+
+        return packed
+
+    @staticmethod
+    def expand_annotations(annotations, keys) -> Mapping[str, Any]:
+        if annotations is None:
+            return None
+
+        expanded = {}
+        keys = {stringify(k) for k in keys}
+
+        for a, v in annotations.items():
+            if type(v) is dict and "__expanded_annotations__" in v:
+                # Maybe do a destructive update for efficiency?
+                v = v.copy()
+                del v["__expanded_annotations__"]
+                expanded[a] = v
+            else:
+                expanded[a] = {stringify(k): v for k in keys}
+
+        return expanded
 
     def cull(
         self, keys: Set, all_hlg_keys: Iterable

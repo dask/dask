@@ -132,7 +132,7 @@ class SimpleShuffleLayer(Layer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
-            "annotations": self.expand_annotations(),
+            "annotations": self.pack_annotations(),
         }
 
     @classmethod
@@ -146,13 +146,8 @@ class SimpleShuffleLayer(Layer):
         if "inputs" in state:
             state["inputs"] = list(state["inputs"])
 
-        annots = state.pop("annotations", None)
-
         # Materialize the layer
         raw = dict(cls(**state))
-
-        if annots:
-            annotations.update(annots)
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
@@ -162,6 +157,9 @@ class SimpleShuffleLayer(Layer):
         dependencies.update(
             {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
         )
+
+        if state["annotations"]:
+            annotations.update(cls.expand_annotations(state["annotations"], raw.keys()))
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""

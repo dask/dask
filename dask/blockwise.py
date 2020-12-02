@@ -398,7 +398,7 @@ class Blockwise(Layer):
             "io_subgraph": (self.io_name, self.io_subgraph)
             if self.io_name
             else (None, None),
-            "annotations": self.expand_annotations(),
+            "annotations": self.pack_annotations(),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
@@ -437,7 +437,7 @@ class Blockwise(Layer):
                     raw[k] = tuple(new_task)
 
         if state["annotations"]:
-            annotations.update(state["annotations"])
+            annotations.update(cls.expand_annotations(state["annotations"], raw.keys()))
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
