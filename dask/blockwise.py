@@ -983,12 +983,13 @@ def _optimize_blockwise(full_graph, keys=()):
                 ):
                     stack.append(dep)
                     continue
-                if len(blockwise_layers) > 0:
-                    sample_layer = layers[next(iter(blockwise_layers))]
-
-                    if sample_layer.annotations != layers[dep].annotations:
-                        stack.append(dep)
-                        continue
+                if (
+                    blockwise_layers
+                    and layers[next(iter(blockwise_layers))].annotations
+                    != layers[dep].annotations
+                ):
+                    stack.append(dep)
+                    continue
 
                 # passed everything, proceed
                 blockwise_layers.add(dep)
