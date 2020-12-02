@@ -229,7 +229,9 @@ class Blockwise(Layer):
         self.new_axes = new_axes or {}
 
         # No IO subgraph allowed in `Blockwise`.
-        # Use `BlockwiseIO` to include IO.
+        # Use `BlockwiseIO` to include IO. Note that the `io_name`
+        # attribute is only included added to `Blockwise` to help
+        # simplify `_optimize_blockwise` logic.
         self.io_name = None
 
     @property
@@ -344,9 +346,6 @@ class Blockwise(Layer):
             "numblocks": self.numblocks,
             "concatenate": self.concatenate,
             "new_axes": self.new_axes,
-            "io_subgraph": (self.io_name, self.io_subgraph)
-            if self.io_name
-            else (None, None),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
@@ -463,15 +462,13 @@ class BlockwiseIO(Blockwise):
 
     Parameters
     ----------
-    io_subgraph: Tuple[str, Dict or Mapping]
-        A BlockwiseIO layer corresponds to the generation of a new
-        collection (i.e. `indices` includes keys for a collection that has
-        yet to be constructed). Therefore, this argument must be used to
-        specify the `(key-name, subgraph)` pair for the to-be-created
-        collection. Note that `key-name` must match the name used in both
-        `indices` and in the keys of `subgraph`.
-
-        NOTE: The `subgraph` must comprise of exactly N keys (where N is the
+    io_name: str
+        The name of the new collection to be created within this layer.
+        Note that this must match the name used in both `indices` and in
+        the keys of the `io_subgraph` input.
+    io_subgraph: Dict or Mapping
+        The graph needed to construct a new collection within this layer.
+        The `subgraph` must comprise of exactly N keys (where N is the
         number of chunks/partitions in the new collection), and each value
         must correspond to a "callable" task. The first element (a callable
         function) must be the same for all N tasks.  This "uniformity" is
@@ -509,6 +506,7 @@ class BlockwiseIO(Blockwise):
 
     def __init__(
         self,
+        io_name,
         io_subgraph,
         output,
         output_indices,
@@ -525,13 +523,12 @@ class BlockwiseIO(Blockwise):
             # Extract actual IO function for SubgraphCallable construction.
             # Wrap func in `PackedFunctionCall`, since it will receive
             # all arguments as a sigle (packed) tuple at run time.
-            subgraph = io_subgraph[1]
-            if subgraph:
+            if io_subgraph:
                 # We assume a 1-to-1 mapping between keys (i.e. tasks) and
                 # chunks/partitions in `io_subgraph`, and assume the first
                 # (callable) element is the same for all tasks.
-                any_key = next(iter(subgraph))
-                io_func = subgraph.get(any_key)[0]
+                any_key = next(iter(io_subgraph))
+                io_func = io_subgraph.get(any_key)[0]
             else:
                 io_func = None
             ninds = 1 if isinstance(output_indices, str) else len(output_indices)
@@ -554,9 +551,9 @@ class BlockwiseIO(Blockwise):
             output_blocks=None,
         )
 
-        # BlockwiseIO requires an `io_subgraph` input.
-        # This is a tuple: (key-name, subgraph)
-        self.io_name, self.io_subgraph = io_subgraph
+        # BlockwiseIO requires `io_name` and `io_subgraph` inputs
+        self.io_name = io_name
+        self.io_subgraph = io_subgraph
 
     @property
     def _dict(self):
@@ -593,6 +590,11 @@ class BlockwiseIO(Blockwise):
             self._cached_dict = {"dsk": dsk}
         return self._cached_dict["dsk"]
 
+    def __dask_distributed_pack__(self, client):
+        ret = super().__dask_distributed_pack__(client)
+        ret["io_info"] = (self.io_name, self.io_subgraph)
+        return ret
+
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         raw, raw_deps = make_blockwise_graph(
@@ -609,7 +611,7 @@ class BlockwiseIO(Blockwise):
             deserializing=True,
             func_future_args=state["func_future_args"],
         )
-        io_name, io_subgraph = state["io_subgraph"]
+        io_name, io_subgraph = state["io_info"]
         global_dependencies = list(state["global_dependencies"])
 
         if io_subgraph:
@@ -632,7 +634,8 @@ class BlockwiseIO(Blockwise):
 
     def _cull(self, output_blocks):
         return BlockwiseIO(
-            (self.io_name, self.io_subgraph),
+            self.io_name,
+            self.io_subgraph,
             self.output,
             self.output_indices,
             self.dsk,
@@ -1275,7 +1278,7 @@ def rewrite_blockwise(inputs):
     if io_info:
         # Fused layer includes IO
         out = BlockwiseIO(
-            io_info,
+            *io_info,  # (io_name, io_subgraph)
             root,
             inputs[root].output_indices,
             dsk,
