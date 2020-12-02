@@ -112,7 +112,7 @@ class Layer(collections.abc.Mapping):
             return None
 
         expanded = {}
-        keys = {stringify(k) for k in keys}
+        keys = [stringify(k) for k in keys]
 
         for a, v in annotations.items():
             if type(v) is dict and "__expanded_annotations__" in v:
@@ -121,7 +121,7 @@ class Layer(collections.abc.Mapping):
                 del v["__expanded_annotations__"]
                 expanded[a] = v
             else:
-                expanded[a] = {stringify(k): v for k in keys}
+                expanded[a] = {k: v for k in keys}
 
         return expanded
 
