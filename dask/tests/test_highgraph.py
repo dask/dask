@@ -82,7 +82,7 @@ def test_single_annotation(annotation):
 def test_multiple_annotations():
     da = pytest.importorskip("dask.array")
     with dask.annotate(block_id=annot_map_fn):
-        with dask.annotate(resource="GPU"):
+        with dask.annotate(resources={"GPU": 1}):
             A = da.ones((10, 10), chunks=(5, 5))
 
         B = A + 1
@@ -94,7 +94,7 @@ def test_multiple_annotations():
     alayer = A.__dask_graph__().layers[A.name]
     blayer = B.__dask_graph__().layers[B.name]
     clayer = C.__dask_graph__().layers[C.name]
-    assert alayer.annotations == {"resource": "GPU", "block_id": annot_map_fn}
+    assert alayer.annotations == {"resources": {"GPU": 1}, "block_id": annot_map_fn}
     assert blayer.annotations == {"block_id": annot_map_fn}
     assert clayer.annotations is None
 
