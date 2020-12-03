@@ -441,6 +441,7 @@ class Blockwise(Layer):
             concatenate=self.concatenate,
             new_axes=self.new_axes,
             output_blocks=output_blocks,
+            annotations=self.annotations,
         )
 
     def cull(self, keys, all_hlg_keys):
