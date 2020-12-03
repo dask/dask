@@ -3,7 +3,7 @@ from distutils.version import LooseVersion
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
-from ...blockwise import Blockwise
+from ...blockwise import BlockwiseIO
 from ...bytes.core import get_fs_token_paths
 from ...highlevelgraph import HighLevelGraph
 from ...utils import import_required
@@ -97,13 +97,14 @@ def read_orc(path, columns=None, storage_options=None):
 
     # Create Blockwise layer
     npartitions = len(dsk_io)
-    layer = Blockwise(
+    layer = BlockwiseIO(
+        name,
+        dsk_io,
         output_name,
         "i",
         None,
         [(name, "i")],
         {name: (npartitions,)},
-        io_subgraph=(name, dsk_io),
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 

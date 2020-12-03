@@ -27,7 +27,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from ...blockwise import Blockwise
+from ...blockwise import BlockwiseIO
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -111,7 +111,7 @@ class CSVSubgraph(Mapping):
             yield (self.name, i)
 
 
-class BlockwiseReadCSV(Blockwise):
+class BlockwiseReadCSV(BlockwiseIO):
     """
     Specialized Blockwise Layer for read_csv.
 
@@ -149,12 +149,13 @@ class BlockwiseReadCSV(Blockwise):
             path,
         )
         super().__init__(
+            self.io_name,
+            dsk_io,
             self.name,
             "i",
             None,
             [(self.io_name, "i")],
             {self.io_name: (len(self.blocks),)},
-            io_subgraph=(self.io_name, dsk_io),
         )
 
     def __repr__(self):
