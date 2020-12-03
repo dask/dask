@@ -50,6 +50,8 @@ class SimpleShuffleLayer(Layer):
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
+    annotations : dict (optional)
+        Layer annotations
     """
 
     def __init__(
@@ -62,7 +64,9 @@ class SimpleShuffleLayer(Layer):
         name_input,
         meta_input,
         parts_out=None,
+        annotations=None,
     ):
+        super().__init__(annotations=annotations)
         self.name = name
         self.column = column
         self.npartitions = npartitions
@@ -71,7 +75,6 @@ class SimpleShuffleLayer(Layer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
-        super().__init__()
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -113,6 +116,7 @@ class SimpleShuffleLayer(Layer):
             "name_input",
             "meta_input",
             "parts_out",
+            "annotations",
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
@@ -128,10 +132,11 @@ class SimpleShuffleLayer(Layer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
+            "annotations": self.pack_annotations(),
         }
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
         from distributed.worker import dumps_task
 
         # msgpack will convert lists into tuples, here
@@ -152,6 +157,9 @@ class SimpleShuffleLayer(Layer):
         dependencies.update(
             {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
         )
+
+        if state["annotations"]:
+            annotations.update(cls.expand_annotations(state["annotations"], raw.keys()))
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -276,6 +284,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
+    annotations : dict (optional)
+        Layer annotations
     """
 
     def __init__(
@@ -291,19 +301,22 @@ class ShuffleLayer(SimpleShuffleLayer):
         name_input,
         meta_input,
         parts_out=None,
+        annotations=None,
     ):
-        self.column = column
-        self.name = name
+        super().__init__(
+            name,
+            column,
+            npartitions,
+            npartitions_input,
+            ignore_index,
+            name_input,
+            meta_input,
+            parts_out=parts_out or range(len(inputs)),
+            annotations=annotations,
+        )
         self.inputs = inputs
         self.stage = stage
-        self.npartitions = npartitions
-        self.npartitions_input = npartitions_input
         self.nsplits = nsplits
-        self.ignore_index = ignore_index
-        self.name_input = name_input
-        self.meta_input = meta_input
-        self.parts_out = parts_out or range(len(inputs))
-        Layer.__init__(self)
 
     def __repr__(self):
         return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
@@ -323,7 +336,9 @@ class ShuffleLayer(SimpleShuffleLayer):
             "name_input",
             "meta_input",
             "parts_out",
+            "annotations",
         ]
+
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
     def __dask_distributed_pack__(self, client):

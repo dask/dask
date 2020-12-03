@@ -202,6 +202,8 @@ class Blockwise(Layer):
         will only contain the necessary tasks to generate these outputs,
         this kwarg can be used to "cull" the abstract layer (without needing
         to materialize the low-level graph).
+    annotations: dict (optional)
+        Layer annotations
 
     See Also
     --------
@@ -220,8 +222,9 @@ class Blockwise(Layer):
         new_axes=None,
         io_subgraph=None,
         output_blocks=None,
+        annotations=None,
     ):
-        super().__init__()
+        super().__init__(annotations=annotations)
         self.output = output
         self.output_indices = tuple(output_indices)
         self.io_subgraph = io_subgraph[1] if io_subgraph else None
@@ -395,13 +398,15 @@ class Blockwise(Layer):
             "io_subgraph": (self.io_name, self.io_subgraph)
             if self.io_name
             else (None, None),
+            "annotations": self.pack_annotations(),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
+
         return ret
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
         raw, raw_deps = make_blockwise_graph(
             state["func"],
             state["output"],
@@ -430,6 +435,9 @@ class Blockwise(Layer):
                     io_item = list(io_item[1:]) if len(io_item) > 1 else []
                     new_task = [io_item if v == io_key else v for v in raw[k]]
                     raw[k] = tuple(new_task)
+
+        if state["annotations"]:
+            annotations.update(cls.expand_annotations(state["annotations"], raw.keys()))
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
@@ -959,6 +967,7 @@ def _optimize_blockwise(full_graph, keys=()):
             io_names.add(layers[layer].io_name)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
+
                 if dep not in layers:
                     stack.append(dep)
                     continue
@@ -974,6 +983,13 @@ def _optimize_blockwise(full_graph, keys=()):
                 if (
                     sum(k == dep for k, ind in layers[layer].indices if ind is not None)
                     > 1
+                ):
+                    stack.append(dep)
+                    continue
+                if (
+                    blockwise_layers
+                    and layers[next(iter(blockwise_layers))].annotations
+                    != layers[dep].annotations
                 ):
                     stack.append(dep)
                     continue
@@ -1154,6 +1170,7 @@ def rewrite_blockwise(inputs):
         new_axes=new_axes,
         concatenate=concatenate,
         io_subgraph=io_info,
+        annotations=inputs[root].annotations,
     )
 
     return out

@@ -3,6 +3,7 @@ from collections.abc import Mapping, Iterator
 from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
+from numbers import Number
 from operator import getitem
 import inspect
 import pickle
@@ -79,6 +80,61 @@ def annotate(**annotations):
     ...         A = da.ones((1000, 1000))
     ...     B = A + 1
     """
+
+    # Sanity check annotations used in place of
+    # legacy distributed Client.{submit, persist, compute} keywords
+    if "workers" in annotations:
+        if isinstance(annotations["workers"], (list, set, tuple)):
+            annotations["workers"] = list(annotations["workers"])
+        elif isinstance(annotations["workers"], str):
+            annotations["workers"] = [annotations["workers"]]
+        elif callable(annotations["workers"]):
+            pass
+        else:
+            raise TypeError(
+                "'workers' annotation must be a sequence of str, a str or a callable, but got %s."
+                % annotations["workers"]
+            )
+
+    if (
+        "priority" in annotations
+        and not isinstance(annotations["priority"], Number)
+        and not callable(annotations["priority"])
+    ):
+        raise TypeError(
+            "'priority' annotation must be a Number or a callable, but got %s"
+            % annotations["priority"]
+        )
+
+    if (
+        "retries" in annotations
+        and not isinstance(annotations["retries"], Number)
+        and not callable(annotations["retries"])
+    ):
+        raise TypeError(
+            "'retries' annotation must be a Number or a callable, but got %s"
+            % annotations["retries"]
+        )
+
+    if (
+        "resources" in annotations
+        and not isinstance(annotations["resources"], dict)
+        and not callable(annotations["resources"])
+    ):
+        raise TypeError(
+            "'resources' annotation must be a dict, but got %s"
+            % annotations["resources"]
+        )
+
+    if (
+        "allow_other_workers" in annotations
+        and not isinstance(annotations["allow_other_workers"], bool)
+        and not callable(annotations["allow_other_workers"])
+    ):
+        raise TypeError(
+            "'allow_other_workers' annotations must be a bool or a callable, but got %s"
+            % annotations["allow_other_workers"]
+        )
 
     prev_annotations = config.get("annotations", {})
     new_annotations = {
