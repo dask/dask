@@ -15,7 +15,7 @@ import copy
 import tlz as toolz
 
 from . import config
-from .utils import ignoring
+from .utils import ignoring, stringify
 from .base import is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
@@ -54,8 +54,11 @@ class Layer(collections.abc.Mapping):
     implementations.
     """
 
-    def __init__(self):
-        self.annotations = copy.copy(config.get("annotations", None))
+    def __init__(self, annotations=None):
+        if annotations:
+            self.annotations = annotations
+        else:
+            self.annotations = copy.copy(config.get("annotations", None))
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
@@ -68,8 +71,8 @@ class Layer(collections.abc.Mapping):
         Output keys are all keys in the layer that might be referenced by
         other layers.
 
-        An layer overriding this implementation, should not materialize the
-        layer.
+        Classes overriding this implementation should not cause the layer
+        to be materialized.
 
         Returns
         -------
@@ -77,6 +80,54 @@ class Layer(collections.abc.Mapping):
             All output keys
         """
         return self.keys()
+
+    def pack_annotations(self) -> Mapping[str, Any]:
+        """Packs Layer annotations for transmission to scheduler
+
+        Callables annotations are fully expanded over Layer keys, while
+        other values are simply transmitted as is
+
+        Returns
+        -------
+        packed_annotations : dict
+            Packed annotations.
+        """
+        if self.annotations is None:
+            return None
+
+        packed = {}
+
+        for a, v in self.annotations.items():
+            if callable(v):
+                packed[a] = {stringify(k): v(k) for k in self}
+                packed[a]["__expanded_annotations__"] = True
+            else:
+                packed[a] = v
+
+        return packed
+
+    @staticmethod
+    def expand_annotations(annotations, keys) -> Mapping[str, Any]:
+        if annotations is None:
+            return None
+
+        expanded = {}
+        keys_stringified = False
+
+        for a, v in annotations.items():
+            if type(v) is dict and "__expanded_annotations__" in v:
+                # Maybe do a destructive update for efficiency?
+                v = v.copy()
+                del v["__expanded_annotations__"]
+                expanded[a] = v
+            else:
+                if not keys_stringified:
+                    keys = [stringify(k) for k in keys]
+                    keys_stringified = True
+
+                expanded[a] = {k: v for k in keys}
+
+        return expanded
 
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
@@ -102,9 +153,10 @@ class Layer(collections.abc.Mapping):
 
         if len(keys) == len(self):
             # Nothing to cull if preserving all existing keys
-            return self, {
-                k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()
-            }
+            return (
+                self,
+                {k: self.get_dependencies(k, all_hlg_keys) for k in self.keys()},
+            )
 
         ret_deps = {}
         seen = set()
@@ -171,7 +223,11 @@ class Layer(collections.abc.Mapping):
 
     @classmethod
     def __dask_distributed_unpack__(
-        cls, state: Any, dsk: Dict[str, Any], dependencies: Mapping[Hashable, Set]
+        cls,
+        state: Any,
+        dsk: Dict[str, Any],
+        dependencies: Mapping[Hashable, Set],
+        annotations: Dict[str, Any],
     ) -> None:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
@@ -191,6 +247,8 @@ class Layer(collections.abc.Mapping):
             The materialized low level graph of the already unpacked layers
         dependencies: Mapping
             The dependencies of each key in `dsk`
+        annotations: dict
+            The materialized task annotations
         """
         raise NotImplementedError(
             f"{type(cls)} doesn't implement __dask_distributed_unpack__()"
@@ -218,23 +276,17 @@ class Layer(collections.abc.Mapping):
 class BasicLayer(Layer):
     """Basic implementation of `Layer`
 
+    Fully materialized layer implemented by a mapping
+
     Parameters
     ----------
     mapping: Mapping
         The mapping between keys and tasks, typically a dask graph.
-    dependencies: Mapping[Hashable, Set], optional
-        Mapping between keys and their dependencies
-    global_dependencies: Set, optional
-        Set of dependencies that all keys in the layer depend on. Notice,
-        the set might also contain literals that will be ignored.
     """
 
-    def __init__(self, mapping, dependencies=None, global_dependencies=None):
-        super().__init__()
+    def __init__(self, mapping: Mapping, annotations=None):
+        super().__init__(annotations=annotations)
         self.mapping = mapping
-        self.dependencies = dependencies
-        self.global_dependencies = global_dependencies
-        self.global_dependencies_has_been_trimmed = False
 
     def __contains__(self, k):
         return k in self.mapping
@@ -250,16 +302,6 @@ class BasicLayer(Layer):
 
     def is_materialized(self):
         return True
-
-    def get_dependencies(self, key, all_hlg_keys):
-        if self.dependencies is None or self.global_dependencies is None:
-            return super().get_dependencies(key, all_hlg_keys)
-
-        if not self.global_dependencies_has_been_trimmed:
-            self.global_dependencies = self.global_dependencies & all_hlg_keys
-            self.global_dependencies_has_been_trimmed = True
-
-        return self.dependencies[key] | self.global_dependencies
 
 
 class HighLevelGraph(Mapping):
@@ -622,6 +664,9 @@ class HighLevelGraph(Mapping):
             for dep in deps:
                 if dep not in self.dependencies:
                     raise ValueError(f"{repr(dep)} not found in dependencies")
+
+        for layer in self.layers.values():
+            assert hasattr(layer, "annotations")
 
         # Re-calculate all layer dependencies
         dependencies = compute_layer_dependencies(self.layers)

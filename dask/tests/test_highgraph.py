@@ -1,16 +1,15 @@
 import os
 
 import pytest
-import numpy as np
 
 import dask
-import dask.array as da
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
 
 
 def test_visualize(tmpdir):
     pytest.importorskip("graphviz")
+    da = pytest.importorskip("dask.array")
     fn = str(tmpdir)
     a = da.ones(10, chunks=(5,))
     b = a + 1
@@ -32,6 +31,7 @@ def test_basic():
 
 
 def test_keys_values_items_methods():
+    da = pytest.importorskip("dask.array")
     a = da.ones(10, chunks=(5,))
     b = a + 1
     c = a + 2
@@ -47,11 +47,7 @@ def test_keys_values_items_methods():
 
 def test_cull():
     a = {"x": 1, "y": (inc, "x")}
-    layers = {
-        "a": BasicLayer(
-            a, dependencies={"x": set(), "y": {"x"}}, global_dependencies=set()
-        )
-    }
+    layers = {"a": BasicLayer(a)}
     dependencies = {"a": set()}
     hg = HighLevelGraph(layers, dependencies)
 
@@ -74,6 +70,7 @@ def annot_map_fn(key):
     ],
 )
 def test_single_annotation(annotation):
+    da = pytest.importorskip("dask.array")
     with dask.annotate(**annotation):
         A = da.ones((10, 10), chunks=(5, 5))
 
@@ -83,8 +80,9 @@ def test_single_annotation(annotation):
 
 
 def test_multiple_annotations():
+    da = pytest.importorskip("dask.array")
     with dask.annotate(block_id=annot_map_fn):
-        with dask.annotate(resource="GPU"):
+        with dask.annotate(resources={"GPU": 1}):
             A = da.ones((10, 10), chunks=(5, 5))
 
         B = A + 1
@@ -96,13 +94,15 @@ def test_multiple_annotations():
     alayer = A.__dask_graph__().layers[A.name]
     blayer = B.__dask_graph__().layers[B.name]
     clayer = C.__dask_graph__().layers[C.name]
-    assert alayer.annotations == {"resource": "GPU", "block_id": annot_map_fn}
+    assert alayer.annotations == {"resources": {"GPU": 1}, "block_id": annot_map_fn}
     assert blayer.annotations == {"block_id": annot_map_fn}
     assert clayer.annotations is None
 
 
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
     if flat:
         # Simple "flat" mapping between input and
         # outut indices

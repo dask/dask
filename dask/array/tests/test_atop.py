@@ -202,6 +202,37 @@ def test_optimize_blockwise():
     )
 
 
+def test_optimize_blockwise_annotations():
+    a = da.ones(10, chunks=(5,))
+    b = a + 1
+
+    with dask.annotate(qux="foo"):
+        c = b + 2
+        d = c + 3
+
+    with dask.annotate(qux="baz"):
+        e = d + 4
+        f = e + 5
+
+    g = f + 6
+
+    dsk = da.optimization.optimize_blockwise(g.dask)
+
+    annotations = (
+        layer.annotations
+        for layer in dsk.dicts.values()
+        if isinstance(layer, Blockwise)
+    )
+    annotations = collections.Counter(
+        tuple(a.items()) if type(a) is dict else a for a in annotations
+    )
+
+    assert len(annotations) == 3
+    assert annotations[None] == 2
+    assert annotations[(("qux", "baz"),)] == 1
+    assert annotations[(("qux", "foo"),)] == 1
+
+
 def test_blockwise_diamond_fusion():
     x = da.ones(10, chunks=(5,))
     y = ((x + 1) + 2) + 3

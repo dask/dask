@@ -55,7 +55,7 @@ of the collection:
 
 The compute method takes a number of keywords:
 
-- ``scheduler``: the name of the desired scheduler like ``"threads"``, ``"processes"``, or ``"single-threaded"`, a ``get`` function, or a ``dask.distributed.Client`` object.  Overrides the default for the collection.
+- ``scheduler``: the name of the desired scheduler as a string (``"threads"``, ``"processes"``, ``"single-threaded"``, etc.), a ``get`` function, or a ``dask.distributed.Client`` object.  Overrides the default for the collection.
 - ``**kwargs``: extra keywords to pass on to the scheduler ``get`` function.
 
 See also: :ref:`configuring-schedulers`.
@@ -105,7 +105,7 @@ The dask collections each have a default scheduler:
 For most cases, the default settings are good choices. However, sometimes you
 may want to use a different scheduler. There are two ways to do this.
 
-1. Using the ``get`` keyword in the ``compute`` method:
+1. Using the ``scheduler`` keyword in the ``compute`` method:
 
     .. code-block:: python
 
