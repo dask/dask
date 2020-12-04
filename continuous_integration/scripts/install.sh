@@ -23,6 +23,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/distributed
 fi
 
+# Try nightly version of pyarrow
+pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ --pre pyarrow
+
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
 echo conda list
