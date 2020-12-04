@@ -552,9 +552,9 @@ class BlockwiseIO(Blockwise):
             dsk,
             indices,
             numblocks,
-            concatenate=None,
-            new_axes=None,
-            output_blocks=None,
+            concatenate=concatenate,
+            new_axes=new_axes,
+            output_blocks=output_blocks,
             annotations=annotations,
         )
 
