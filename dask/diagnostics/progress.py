@@ -104,8 +104,7 @@ class ProgressBar(Callback):
             self._draw_bar(1, elapsed)
         else:
             self._update_bar(elapsed)
-        self._file.write("\n")
-        self._file.flush()
+        self._draw_stop()
 
     def _timer_func(self):
         """Background thread for updating the progress bar"""
@@ -135,3 +134,7 @@ class ProgressBar(Callback):
         with ignoring(ValueError):
             self._file.write(msg)
             self._file.flush()
+
+    def _draw_stop(self):
+        self._file.write("\n")
+        self._file.flush()
