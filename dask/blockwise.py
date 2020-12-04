@@ -512,7 +512,7 @@ class BlockwiseIO(Blockwise):
 
     See Also
     --------
-    dask.blockwise.BlockwiseIO
+    dask.blockwise.Blockwise
     """
 
     def __init__(
@@ -543,13 +543,7 @@ class BlockwiseIO(Blockwise):
                 io_func = io_subgraph.get(any_key)[0]
             else:
                 io_func = None
-            ninds = 1 if isinstance(output_indices, str) else len(output_indices)
-            dsk = {
-                output: (
-                    PackedFunctionCall(io_func),
-                    *[blockwise_token(i) for i in range(ninds)],
-                )
-            }
+            dsk = {output: (PackedFunctionCall(io_func), blockwise_token(0))}
 
         # Super-class initializer
         super().__init__(
