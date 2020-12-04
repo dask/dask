@@ -1,12 +1,104 @@
 import numbers
+import string
 import warnings
 
 import tlz as toolz
 
+from collections.abc import Mapping
+from functools import reduce
+from itertools import product
+
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..blockwise import blockwise as core_blockwise
+from ..blockwise import BlockwiseIO, blockwise as core_blockwise
+
+
+class CreateArraySubgraph(Mapping):
+    """
+    Subgraph for numpy array creation utilities
+    """
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+    ):
+        self.name = name
+        self.func = func
+        self.shape = shape
+        self.chunks = chunks
+        self._len = reduce(lambda acc, x: len(x) * acc, chunks, 1)  # Too tricky?
+
+    def __getitem__(self, key):
+        try:
+            name, *idx = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
+
+        if name != self.name:
+            raise KeyError(key)
+
+        # TODO: check for invalid indices
+
+        # Get this chunk shape
+        ndim = len(self.chunks)
+        chunk = tuple(self.chunks[i][idx[i]] for i in range(ndim))
+
+        return (self.func, chunk)
+
+    def __len__(self):
+        return self._len
+
+    def __iter__(self):
+        """
+        Produce keys for each chunk lazily.
+        """
+        ind = tuple(tuple(range(len(c))) for c in self.chunks)
+        for chunk in product(*ind):
+            yield (self.name, *chunk)
+
+
+class BlockwiseCreateArray(BlockwiseIO):
+    """
+    Specialized Blockwise Layer for numpy array creation routines.
+
+    Enables HighLevelGraph optimizations.
+    """
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+    ):
+        self.name = name
+        self.func = func
+        self.shape = shape
+        self.chunks = chunks
+        self.io_name = "blockwise-create-" + name
+        dsk_io = CreateArraySubgraph(
+            self.io_name,
+            func,
+            shape,
+            chunks,
+        )
+        # out_ind = tuple(range(len(shape)))
+        out_ind = string.ascii_lowercase[: len(shape)]  # mayday
+
+        nchunks = tuple(len(chunk) for chunk in self.chunks)
+        super().__init__(
+            { self.io_name: dsk_io },
+            self.name,
+            out_ind,
+            None,
+            [(self.io_name, out_ind)],
+            {self.io_name: nchunks},
+        )
 
 
 def blockwise(
