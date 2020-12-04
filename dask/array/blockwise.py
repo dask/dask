@@ -1,5 +1,4 @@
 import numbers
-import string
 import warnings
 
 import tlz as toolz
@@ -87,8 +86,7 @@ class BlockwiseCreateArray(BlockwiseIO):
             shape,
             chunks,
         )
-        # out_ind = tuple(range(len(shape)))
-        out_ind = string.ascii_lowercase[: len(shape)]  # mayday
+        out_ind = tuple(range(len(shape)))
 
         nchunks = tuple(len(chunk) for chunk in self.chunks)
         super().__init__(
