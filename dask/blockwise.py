@@ -609,7 +609,7 @@ class BlockwiseIO(Blockwise):
         return ret
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
         raw, raw_deps = make_blockwise_graph(
             state["func"],
             state["output"],
@@ -638,6 +638,9 @@ class BlockwiseIO(Blockwise):
                     io_item = list(io_item[1:]) if len(io_item) > 1 else []
                     new_task = [io_item if v == io_key else v for v in raw[k]]
                     raw[k] = tuple(new_task)
+
+        if state["annotations"]:
+            annotations.update(cls.expand_annotations(state["annotations"], raw.keys()))
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
