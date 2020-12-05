@@ -56,6 +56,7 @@ try:
         flatnonzero,
         nonzero,
         unravel_index,
+        ravel_multi_index,
         around,
         isin,
         isnull,
