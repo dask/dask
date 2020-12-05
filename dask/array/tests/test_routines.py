@@ -1503,7 +1503,7 @@ def test_unravel_index():
         assert_eq(darr.vindex[d_indices], arr[indices])
 
 
-    def test_ravel_multi_index():
+def test_ravel_multi_index():
     for arr, chunks, kwargs in [
         # Numpy doctests:
         (np.array([[3, 6, 6], [4, 5, 1]]), (2, 3), dict(dims=(7, 6), order="C")),
