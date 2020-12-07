@@ -108,6 +108,7 @@ def test_weighted_sampling_without_replacement():
     )
     assert len(set(sampled)) == k
 
+
 def test_sample_return_bag():
     seq = range(20)
     sut = db.from_sequence(seq, npartitions=3)
