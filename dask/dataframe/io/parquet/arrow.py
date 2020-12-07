@@ -15,6 +15,7 @@ from ...utils import clear_known_categories
 from ....core import flatten
 from dask import delayed
 
+from .core import create_metadata_file
 from .utils import (
     _parse_pandas_metadata,
     _normalize_index_columns,
@@ -434,6 +435,7 @@ class ArrowDatasetEngine(Engine):
         filters=None,
         split_row_groups=None,
         read_from_paths=None,
+        engine=None,
         **kwargs,
     ):
         # Reading from fragments by default if we are filtering.
@@ -1709,18 +1711,30 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             # that they want to split by row-group and/or gather statistics.
             # This is the only case where we MUST scan all files to collect
             # metadata.
-            for piece, fn in zip(dataset.pieces, fns):
-                md = piece.get_metadata()
+            if len(dataset.pieces) > 1:
+                # Perform metadata collection in parallel.
+                metadata = create_metadata_file(
+                    [p.path for p in dataset.pieces],
+                    root_dir=base,
+                    engine=cls,
+                    out_dir=False,
+                )
                 if schema is None:
-                    schema = md.schema.to_arrow_schema()
-                if fn_partitioned:
-                    md.set_file_path(piece.path.replace(base + fs.sep, ""))
-                elif fn:
-                    md.set_file_path(fn)
-                if metadata:
-                    _append_row_groups(metadata, md)
-                else:
-                    metadata = md
+                    schema = metadata.schema.to_arrow_schema()
+            else:
+                for piece, fn in zip(dataset.pieces, fns):
+                    md = piece.get_metadata()
+                    if schema is None:
+                        schema = md.schema.to_arrow_schema()
+                    if fn_partitioned:
+                        md.set_file_path(piece.path.replace(base + fs.sep, ""))
+                    elif fn:
+                        md.set_file_path(fn)
+                    if metadata:
+                        _append_row_groups(metadata, md)
+                    else:
+                        metadata = md
+
             return (
                 schema,
                 metadata,

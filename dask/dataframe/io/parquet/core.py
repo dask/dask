@@ -341,6 +341,7 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
+        engine=engine,
         **kwargs,
     )
 
@@ -694,9 +695,11 @@ def create_metadata_file(
         Root directory of dataset.  The `file_path` fields in the new
         _metadata file will relative to this directory.  If None, a common
         root directory will be inferred.
-    out_dir : string, optional
+    out_dir : string or False, optional
         Directory location to write the final _metadata file.  By default,
-        this will be set to `root_dir`.
+        this will be set to `root_dir`.  If False is specified, the global
+        metadata will be returned as an in-memory object (and will not be
+        written to disk).
     engine : str or Engine, default 'pyarrow'
         Parquet Engine to use. Only 'pyarrow' is supported if a string
         is passed.
@@ -730,7 +733,7 @@ def create_metadata_file(
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
     ap_kwargs = {"root": root_dir} if root_dir else {}
     root_dir, fns = _analyze_paths(paths, fs, **ap_kwargs)
-    out_dir = out_dir or root_dir
+    out_dir = root_dir if out_dir is None else out_dir
 
     # Start constructing a raw graph
     dsk = {}
@@ -777,6 +780,10 @@ def create_metadata_file(
                     None,
                     None,
                 )
+
+    # There will be no aggregation tasks if there is only one file
+    if len(paths) == 1:
+        dsk[name] = (engine.aggregate_metadata, [(collect_name, 0, 0)], fs, out_dir)
 
     # Convert the raw graph to a `Delayed` object
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[])
