@@ -1503,30 +1503,26 @@ def test_unravel_index():
         assert_eq(darr.vindex[d_indices], arr[indices])
 
 
-def test_ravel_multi_index():
-    for arr, chunks, kwargs in [
+@pytest.mark.parametrize(
+    "arr, chunks, kwargs",
+    [
         # Numpy doctests:
-        (np.array([[3, 6, 6], [4, 5, 1]]), (2, 3), dict(dims=(7, 6), order="C")),
-        (np.array([[3, 6, 6], [4, 5, 1]]), (2, 1), dict(dims=(7, 6), order="F")),
-        (np.array([[3, 6, 6], [4, 5, 1]]), 1, dict(dims=(4, 6), mode="clip")),
-        (
-            np.array([[3, 6, 6], [4, 5, 1]]),
-            (2, 3),
-            dict(dims=(4, 4), mode=("clip", "wrap")),
-        ),
-        # Shape tests:
-        (np.array([[3, 6, 6]]), (1, 1), dict(dims=(7), order="C")),
-        (
-            np.array([[3, 6, 6], [4, 5, 1], [8, 6, 2]]),
-            (3, 1),
-            dict(dims=(7, 6, 9), order="C"),
-        ),
-    ]:
-        darr = da.from_array(arr, chunks=chunks)
-        assert_eq(
-            da.ravel_multi_index(darr, **kwargs).compute(),
-            np.ravel_multi_index(arr, **kwargs),
-        )
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(7, 6), order="C")),
+        ([[3, 6, 6], [4, 5, 1]], (2, 1), dict(dims=(7, 6), order="F")),
+        ([[3, 6, 6], [4, 5, 1]], 1, dict(dims=(4, 6), mode="clip")),
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(4, 4), mode=("clip", "wrap"))),
+        # Shaoe tests:
+        ([[3, 6, 6]], (1, 1), dict(dims=(7), order="C")),
+        ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
+    ],
+)
+def test_ravel_multi_index(arr, chunks, kwargs):
+    arr = np.asarray(arr)
+    darr = da.from_array(arr, chunks=chunks)
+    assert_eq(
+        da.ravel_multi_index(darr, **kwargs).compute(),
+        np.ravel_multi_index(arr, **kwargs),
+    )
 
 
 def test_coarsen():
