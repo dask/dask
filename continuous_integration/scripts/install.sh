@@ -25,8 +25,7 @@ fi
 
 # Try nightly version of pyarrow
 conda uninstall --force pyarrow
-python -m pip install --extra-index-url https://pypi.fury.io/arrow-nightlies/ \
-    --pre pyarrow
+conda install -y -c arrow-nightlies pyarrow
 
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
