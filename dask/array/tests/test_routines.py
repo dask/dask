@@ -1511,7 +1511,7 @@ def test_unravel_index():
         ([[3, 6, 6], [4, 5, 1]], (2, 1), dict(dims=(7, 6), order="F")),
         ([[3, 6, 6], [4, 5, 1]], 1, dict(dims=(4, 6), mode="clip")),
         ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(4, 4), mode=("clip", "wrap"))),
-        # Shaoe tests:
+        # Shape tests:
         ([[3, 6, 6]], (1, 1), dict(dims=(7), order="C")),
         ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
     ],
