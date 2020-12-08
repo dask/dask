@@ -586,9 +586,13 @@ class BlockwiseIO(Blockwise):
             # Handle IO Subgraph
             for k in dsk:
                 # Leave out `new_axes` in key
-                # TODO: Check that this makes sense
-                sz = len([i for i in self.output_indices if i not in self.new_axes])
-                io_key = (self.io_name,) + tuple([k[i + 1] for i in range(sz)])
+                io_key = (self.io_name,) + tuple(
+                    [
+                        k[i + 1]
+                        for i, idx in enumerate(self.output_indices)
+                        if idx not in self.new_axes
+                    ]
+                )
                 if io_key in dsk[k]:
                     # Inject IO-function arguments into the blockwise graph
                     # as a single (packed) tuple.
@@ -627,7 +631,14 @@ class BlockwiseIO(Blockwise):
         if io_subgraph:
             # This is an IO layer.
             for k in raw:
-                io_key = (io_name,) + tuple([k[i] for i in range(1, len(k))])
+                # Leave out `new_axes` in key
+                io_key = (io_name,) + tuple(
+                    [
+                        k[i + 1]
+                        for i, idx in enumerate(state["output_indices"])
+                        if idx not in state["new_axes"]
+                    ]
+                )
                 if io_key in raw[k]:
                     # Inject IO-function arguments into the blockwise graph
                     # as a single (packed) tuple.
