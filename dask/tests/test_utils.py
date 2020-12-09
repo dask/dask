@@ -594,7 +594,7 @@ def test_stringify():
     obj = "Hello"
     assert stringify(obj) is obj
     obj = b"Hello"
-    assert stringify(obj) is obj
+    assert stringify(obj) is obj.decode()
     dsk = {"x": 1}
 
     assert stringify(dsk) == str(dsk)
@@ -635,5 +635,5 @@ def test_stringify_collection_keys():
     obj = [("a", 0), (b"a", 0), (1, 1)]
     res = stringify_collection_keys(obj)
     assert res[0] == str(obj[0])
-    assert res[1] == str(obj[1])
+    assert res[1] == str((obj[1][0].decode(), obj[1][1]))
     assert res[2] == obj[2]

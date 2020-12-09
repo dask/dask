@@ -1570,7 +1570,7 @@ def stringify(obj, exclusive: Optional[Iterable] = None):
     Examples
     --------
     >>> stringify(b'x')
-    b'x'
+    'x'
     >>> stringify('x')
     'x'
     >>> stringify({('a',0):('a',0), ('a',1): ('a',1)})
@@ -1580,8 +1580,10 @@ def stringify(obj, exclusive: Optional[Iterable] = None):
     """
 
     typ = type(obj)
-    if typ is str or typ is bytes:
+    if typ is str:
         return obj
+    elif typ is bytes:
+        return obj.decode()
     elif exclusive is None:
         return str(obj)
 
