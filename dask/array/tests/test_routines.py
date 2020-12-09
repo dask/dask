@@ -1503,6 +1503,28 @@ def test_unravel_index():
         assert_eq(darr.vindex[d_indices], arr[indices])
 
 
+@pytest.mark.parametrize(
+    "arr, chunks, kwargs",
+    [
+        # Numpy doctests:
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(7, 6), order="C")),
+        ([[3, 6, 6], [4, 5, 1]], (2, 1), dict(dims=(7, 6), order="F")),
+        ([[3, 6, 6], [4, 5, 1]], 1, dict(dims=(4, 6), mode="clip")),
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(4, 4), mode=("clip", "wrap"))),
+        # Shape tests:
+        ([[3, 6, 6]], (1, 1), dict(dims=(7), order="C")),
+        ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
+    ],
+)
+def test_ravel_multi_index(arr, chunks, kwargs):
+    arr = np.asarray(arr)
+    darr = da.from_array(arr, chunks=chunks)
+    assert_eq(
+        da.ravel_multi_index(darr, **kwargs).compute(),
+        np.ravel_multi_index(arr, **kwargs),
+    )
+
+
 def test_coarsen():
     x = np.random.randint(10, size=(24, 24))
     d = da.from_array(x, chunks=(4, 8))
