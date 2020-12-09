@@ -1,4 +1,3 @@
-from os.path import basename
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -78,9 +77,12 @@ class CSVSubgraph(Mapping):
             raise KeyError(key)
 
         block = self.blocks[i]
-
         if self.paths is not None:
-            path_info = (self.colname, self.paths[i], self.paths)
+            path_info = (
+                self.colname,
+                self.paths[i],
+                list(self.head[self.colname].cat.categories),
+            )
         else:
             path_info = None
 
@@ -190,7 +192,7 @@ def pandas_read_text(
     dtypes : dict
         DTypes to assign to columns
     path : tuple
-        A tuple containing path column name, path to file, and all paths.
+        A tuple containing path column name, path to file, and an ordered list of paths.
 
     See Also
     --------
@@ -341,7 +343,7 @@ def text_blocks_to_pandas(
     kwargs : dict
         Keyword arguments to pass down to ``reader``
     path : tuple, optional
-        A tuple containing column name for path and list of all paths
+        A tuple containing column name for path and the path_converter if provided
 
     Returns
     -------
@@ -385,20 +387,19 @@ def text_blocks_to_pandas(
     name = "read-csv-" + tokenize(reader, columns, enforce, head, blocksize)
 
     if path:
-        block_file_names = [basename(b[1].path) for b in blocks]
-        path = (
-            path[0],
-            [p for p in path[1] if basename(p) in block_file_names],
-        )
-
-        colname, paths = path
+        colname, path_converter = path
+        paths = [b[1].path for b in blocks]
+        if path_converter:
+            paths = [path_converter(p) for p in paths]
         head = head.assign(
             **{
                 colname: pd.Categorical.from_codes(
-                    np.zeros(len(head), dtype=int), paths
+                    np.zeros(len(head), dtype=int), set(paths)
                 )
             }
         )
+        path = (colname, paths)
+
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
@@ -543,9 +544,7 @@ def read_pandas(
 
     if include_path_column:
         b_sample, values, paths = b_out
-        if path_converter:
-            paths = [path_converter(path) for path in paths]
-        path = (include_path_column, paths)
+        path = (include_path_column, path_converter)
     else:
         b_sample, values = b_out
         path = None
