@@ -81,7 +81,7 @@ class CSVSubgraph(Mapping):
             path_info = (
                 self.colname,
                 self.paths[i],
-                list(self.head[self.colname].cat.categories),
+                sorted(list(self.head[self.colname].cat.categories)),
             )
         else:
             path_info = None
