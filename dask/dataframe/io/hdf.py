@@ -297,25 +297,20 @@ def _read_single_hdf(
         """
         with pd.HDFStore(path, mode=mode) as hdf:
             import glob
-            from distutils.version import LooseVersion
 
-            if LooseVersion(pd.__version__) >= LooseVersion("0.24"):
-                if not glob.has_magic(key):
-                    keys = [key]
-                else:
-                    keys = [k for k in hdf.keys() if fnmatch(k, key)]
-                    # https://github.com/dask/dask/issues/5934
-                    # TODO: remove this part if/when pandas copes with all keys
-                    keys.extend(
-                        n._v_pathname
-                        for n in hdf._handle.walk_nodes("/", classname="Table")
-                        if fnmatch(n._v_pathname, key)
-                        and n._v_name != "table"
-                        and n._v_pathname not in keys
-                    )
+            if not glob.has_magic(key):
+                keys = [key]
             else:
-                # TODO: remove if we require pandas >= 0.24
                 keys = [k for k in hdf.keys() if fnmatch(k, key)]
+                # https://github.com/dask/dask/issues/5934
+                # TODO: remove this part if/when pandas copes with all keys
+                keys.extend(
+                    n._v_pathname
+                    for n in hdf._handle.walk_nodes("/", classname="Table")
+                    if fnmatch(n._v_pathname, key)
+                    and n._v_name != "table"
+                    and n._v_pathname not in keys
+                )
             stops = []
             divisions = []
             for k in keys:

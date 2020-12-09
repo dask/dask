@@ -2189,7 +2189,6 @@ def test_categorical_merge_with_columns_missing_from_left():
     assert assert_eq(expected, actual)
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_0250, reason="Changes in categoricals")
 def test_categorical_merge_with_merge_column_cat_in_one_and_not_other_upcasts():
     df1 = pd.DataFrame({"A": pd.Categorical([0, 1]), "B": pd.Categorical(["a", "b"])})
     df2 = pd.DataFrame({"C": pd.Categorical(["a", "b"])})

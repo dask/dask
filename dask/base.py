@@ -10,7 +10,6 @@ import pickle
 import os
 import threading
 import uuid
-from distutils.version import LooseVersion
 
 from tlz import merge, groupby, curry, identity
 from tlz.functoolz import Compose
@@ -898,21 +897,14 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
-    # Intentionally not importing PANDAS_GT_0240 from dask.dataframe._compat
-    # to avoid ImportErrors from extra dependencies
-    PANDAS_GT_0240 = LooseVersion(pd.__version__) >= LooseVersion("0.24.0")
-
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
-        if PANDAS_GT_0240:
-            values = ind.array
-        else:
-            values = ind.values
+        values = ind.array
         return [ind.name, normalize_token(values)]
 
     @normalize_token.register(pd.MultiIndex)
     def normalize_index(ind):
-        codes = ind.codes if PANDAS_GT_0240 else ind.levels
+        codes = ind.codes
         return (
             [ind.name]
             + [normalize_token(x) for x in ind.levels]
@@ -923,21 +915,19 @@ def register_pandas():
     def normalize_categorical(cat):
         return [normalize_token(cat.codes), normalize_token(cat.dtype)]
 
-    if PANDAS_GT_0240:
+    @normalize_token.register(pd.arrays.PeriodArray)
+    @normalize_token.register(pd.arrays.DatetimeArray)
+    @normalize_token.register(pd.arrays.TimedeltaArray)
+    def normalize_period_array(arr):
+        return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
 
-        @normalize_token.register(pd.arrays.PeriodArray)
-        @normalize_token.register(pd.arrays.DatetimeArray)
-        @normalize_token.register(pd.arrays.TimedeltaArray)
-        def normalize_period_array(arr):
-            return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
-
-        @normalize_token.register(pd.arrays.IntervalArray)
-        def normalize_interval_array(arr):
-            return [
-                normalize_token(arr.left),
-                normalize_token(arr.right),
-                normalize_token(arr.closed),
-            ]
+    @normalize_token.register(pd.arrays.IntervalArray)
+    def normalize_interval_array(arr):
+        return [
+            normalize_token(arr.left),
+            normalize_token(arr.right),
+            normalize_token(arr.closed),
+        ]
 
     @normalize_token.register(pd.Series)
     def normalize_series(s):

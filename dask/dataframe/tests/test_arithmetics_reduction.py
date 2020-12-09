@@ -4,7 +4,6 @@ import warnings
 import pytest
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_datetime64_ns_dtype
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_100, PANDAS_VERSION
@@ -12,9 +11,12 @@ from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
     make_meta,
-    HAS_INT_NA,
-    PANDAS_GT_0250,
 )
+
+try:
+    import scipy
+except ImportError:
+    scipy = None
 
 
 @pytest.mark.slow
@@ -615,9 +617,6 @@ def test_frame_series_arithmetic_methods():
 
             assert_eq(l.rdiv(r, fill_value=0), el.rdiv(er, fill_value=0))
             assert_eq(l.rtruediv(r, fill_value=0), el.rtruediv(er, fill_value=0))
-            if not PANDAS_GT_0250:
-                # https://github.com/pandas-dev/pandas/issues/27464
-                assert_eq(l.rfloordiv(r, fill_value=1), el.rfloordiv(er, fill_value=1))
             assert_eq(l.rpow(r, fill_value=0), el.rpow(er, fill_value=0))
             assert_eq(l.rmod(r, fill_value=0), el.rmod(er, fill_value=0))
 
@@ -642,9 +641,6 @@ def test_frame_series_arithmetic_methods():
         assert_eq(l.rmul(r, axis=0), el.rmul(er, axis=0))
         assert_eq(l.rdiv(r, axis=0), el.rdiv(er, axis=0))
         assert_eq(l.rtruediv(r, axis=0), el.rtruediv(er, axis=0))
-        if not PANDAS_GT_0250:
-            # https://github.com/pandas-dev/pandas/issues/27464
-            assert_eq(l.rfloordiv(r, axis=0), el.rfloordiv(er, axis=0))
         assert_eq(l.rmod(r, axis=0), el.rmod(er, axis=0))
         assert_eq(l.rpow(r, axis=0), el.rpow(er, axis=0))
 
@@ -669,9 +665,6 @@ def test_frame_series_arithmetic_methods():
                 assert_eq(l.pow(r, axis=axis), el.pow(er, axis=axis))
                 assert_eq(l.rdiv(r, axis=axis), el.rdiv(er, axis=axis))
                 assert_eq(l.rtruediv(r, axis=axis), el.rtruediv(er, axis=axis))
-                if not PANDAS_GT_0250:
-                    # https://github.com/pandas-dev/pandas/issues/27464
-                    assert_eq(l.rfloordiv(r, axis=axis), el.rfloordiv(er, axis=axis))
                 assert_eq(l.rpow(r, axis=axis), el.rpow(er, axis=axis))
                 assert_eq(l.rmod(r, axis=axis), el.rmod(er, axis=axis))
 
@@ -732,10 +725,12 @@ def test_reductions(split_every):
         assert_eq(dds.min(split_every=split_every), pds.min())
         assert_eq(dds.max(split_every=split_every), pds.max())
         assert_eq(dds.count(split_every=split_every), pds.count())
-        # pandas uses unbiased skew, need to correct for that
-        n = pds.shape[0]
-        bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
-        assert_eq(dds.skew(), pds.skew() / bias_factor)
+
+        if scipy:
+            # pandas uses unbiased skew, need to correct for that
+            n = pds.shape[0]
+            bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
+            assert_eq(dds.skew(), pds.skew() / bias_factor)
 
         with pytest.warns(None):
             # runtime warnings; https://github.com/dask/dask/issues/2381
@@ -993,9 +988,6 @@ def test_reductions_non_numeric_dtypes():
     check_raises(dds, pds, "var")
     check_raises(dds, pds, "sem")
     check_raises(dds, pds, "skew")
-    if not PANDAS_GT_0250:
-        # pandas 0.25 added DatetimeIndex.mean. We need to follow.
-        check_raises(dds, pds, "mean")
     assert_eq(dds.nunique(), pds.nunique())
 
     for pds in [
@@ -1014,9 +1006,6 @@ def test_reductions_non_numeric_dtypes():
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
         check_raises(dds, pds, "skew")
-        if not (PANDAS_GT_0250 and is_datetime64_ns_dtype(pds.dtype)):
-            # pandas 0.25 added DatetimeIndex.mean. We need to follow
-            check_raises(dds, pds, "mean")
         assert_eq(dds.nunique(), pds.nunique())
 
     pds = pd.Series(pd.timedelta_range("1 days", freq="D", periods=5))
@@ -1136,12 +1125,6 @@ def test_reductions_frame_dtypes():
         }
     )
 
-    if HAS_INT_NA:
-        if not PANDAS_GT_0250:
-            # Pandas master is returning NA for IntegerNA.sum() when mixed with other dtypes.
-            # https://github.com/pandas-dev/pandas/issues/27185
-            df["intna"] = pd.array([1, 2, 3, 4, None, 6, 7, 8], dtype=pd.Int64Dtype())
-
     ddf = dd.from_pandas(df, 3)
 
     # TODO: std and mean do not support timedelta dtype
@@ -1165,26 +1148,15 @@ def test_reductions_frame_dtypes():
     assert_eq(df.count(), ddf.count())
     assert_eq(df_no_timedelta.std(), ddf_no_timedelta.std())
     assert_eq(df_no_timedelta.var(), ddf_no_timedelta.var())
-    if PANDAS_GT_0250:
-        # https://github.com/pandas-dev/pandas/issues/18880
-        assert_eq(
-            df.drop("timedelta", axis=1).var(skipna=False),
-            ddf.drop("timedelta", axis=1).var(skipna=False),
-        )
-    else:
-        assert_eq(df.var(skipna=False), ddf.var(skipna=False))
 
+    df2 = df.drop("timedelta", axis=1)
+    ddf2 = ddf.drop("timedelta", axis=1)
+
+    assert_eq(df2.var(skipna=False), ddf2.var(skipna=False))
     assert_eq(df.sem(), ddf.sem())
     assert_eq(df_no_timedelta.std(ddof=0), ddf_no_timedelta.std(ddof=0))
-    if PANDAS_GT_0250:
-        # https://github.com/pandas-dev/pandas/issues/18880
-        df2 = df.drop("timedelta", axis=1)
-        ddf2 = ddf.drop("timedelta", axis=1)
-        assert_eq(df2.var(ddof=0), ddf2.var(ddof=0))
-        assert_eq(df2.var(ddof=0, skipna=False), ddf2.var(ddof=0, skipna=False))
-    else:
-        assert_eq(df.var(ddof=0), ddf.var(ddof=0))
-        assert_eq(df.var(ddof=0, skipna=False), ddf.var(ddof=0, skipna=False))
+    assert_eq(df2.var(ddof=0), ddf2.var(ddof=0))
+    assert_eq(df2.var(ddof=0, skipna=False), ddf2.var(ddof=0, skipna=False))
     assert_eq(df.sem(ddof=0), ddf.sem(ddof=0))
 
     assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
@@ -1321,10 +1293,6 @@ def test_series_comparison_nan(comparison):
     )
 
 
-skip_if_no_intna = pytest.mark.skipif(not HAS_INT_NA, reason="integer na")
-
-
-@skip_if_no_intna
 def test_sum_intna():
     a = pd.Series([1, None, 2], dtype=pd.Int32Dtype())
     b = dd.from_pandas(a, 2)
@@ -1349,8 +1317,8 @@ def test_divmod():
     assert_eq(result[1], expected[1])
 
 
+@pytest.mark.skipif("not scipy")
 def test_moment():
-    scipy = pytest.importorskip("scipy")
     from dask.array import stats
     from dask.array.utils import assert_eq
 

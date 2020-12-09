@@ -6,7 +6,7 @@ import numpy as np
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq
 
 N = 40
 df = pd.DataFrame(
@@ -168,15 +168,6 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     )
 
 
-if PANDAS_VERSION <= "0.25.0":
-    filter_panel_warning = pytest.mark.filterwarnings(
-        "ignore::DeprecationWarning:pandas[.*]"
-    )
-else:
-    filter_panel_warning = lambda f: f
-
-
-@filter_panel_warning
 @pytest.mark.parametrize("window", [1, 2, 4, 5])
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_cov(window, center):
@@ -300,7 +291,6 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
-@filter_panel_warning
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame

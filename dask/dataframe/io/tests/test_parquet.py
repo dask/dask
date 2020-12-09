@@ -13,7 +13,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
-from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.io.parquet.core import BlockwiseParquet, ParquetSubgraph
@@ -539,9 +539,6 @@ def test_names(tmpdir, engine):
     assert set(read(fn, columns=("x",)).dask) == set(read(fn, columns=["x"]).dask)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.22.0", reason="new pyarrow assumes new-ish pandas versions"
-)
 @write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join("test.parquet"))
@@ -2033,7 +2030,6 @@ def test_with_tz(tmpdir, engine):
     with warnings.catch_warnings():
         if engine == "fastparquet":
             # fastparquet-442
-            warnings.simplefilter("ignore", DeprecationWarning)  # pandas 0.23
             warnings.simplefilter("ignore", FutureWarning)  # pandas 0.25
             fn = str(tmpdir)
             df = pd.DataFrame([[0]], columns=["a"], dtype="datetime64[ns, UTC]")

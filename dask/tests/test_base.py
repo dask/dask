@@ -1,4 +1,3 @@
-from distutils.version import LooseVersion
 import os
 import pytest
 from operator import add, mul
@@ -46,15 +45,6 @@ dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
 pd = import_or_none("pandas")
-
-if pd:
-    PANDAS_VERSION = LooseVersion(pd.__version__)
-    PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
-
-    if PANDAS_GT_100:
-        import pandas.testing as tm  # noqa: F401
-    else:
-        import pandas.util.testing as tm  # noqa: F401
 
 
 def f1(a, b, c=1):
@@ -296,13 +286,8 @@ def test_tokenize_pandas_no_pickle():
     tokenize(df)
 
 
-@pytest.mark.skipif("not pd")
+@pytest.mark.skipif("not dd")
 def test_tokenize_pandas_extension_array():
-    from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_0240
-
-    if not PANDAS_GT_0240:
-        pytest.skip("requires pandas>=1.0.0")
-
     arrays = [
         pd.array([1, 0, None], dtype="Int64"),
         pd.array(["2000"], dtype="Period[D]"),
@@ -315,7 +300,7 @@ def test_tokenize_pandas_extension_array():
         ),
     ]
 
-    if PANDAS_GT_100:
+    if dd._compat.PANDAS_GT_100:
         arrays.extend(
             [
                 pd.array(["a", "b", None], dtype="string"),
@@ -687,8 +672,8 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    tm.assert_series_equal(out1, df.a + 1)
-    tm.assert_series_equal(out2, df.a + df.b)
+    dd._compat.tm.assert_series_equal(out1, df.a + 1)
+    dd._compat.tm.assert_series_equal(out2, df.a + df.b)
 
 
 @pytest.mark.skipif("not dd or not da")

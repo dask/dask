@@ -61,7 +61,6 @@ def get_dummies(
 
     dtype : dtype, default np.uint8
         Data type for new columns. Only a single dtype is allowed.
-        Only valid if pandas is 0.23.0 or newer.
 
         .. versionadded:: 0.18.2
 
