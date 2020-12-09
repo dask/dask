@@ -157,7 +157,7 @@ constructor:
       'add': {('add', 0): (operator.add, ('read-csv', 0), 100),
               ('add', 1): (operator.add, ('read-csv', 1), 100),
               ('add', 2): (operator.add, ('read-csv', 2), 100),
-              ('add', 3): (operator.add, ('read-csv', 3), 100)}
+              ('add', 3): (operator.add, ('read-csv', 3), 100)},
 
       'filter': {('filter', 0): (lambda part: part[part.name == 'Alice'], ('add', 0)),
                  ('filter', 1): (lambda part: part[part.name == 'Alice'], ('add', 1)),
