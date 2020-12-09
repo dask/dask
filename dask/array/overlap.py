@@ -820,6 +820,15 @@ def coerce_depth(ndim, depth):
         for i in range(ndim):
             if i not in depth:
                 depth[i] = 0
+    return coerce_depth_type(ndim, depth)
+
+
+def coerce_depth_type(ndim, depth):
+    for i in range(ndim):
+        if isinstance(depth[i], tuple):
+            depth[i] = tuple(int(d) for d in depth[i])
+        else:
+            depth[i] = int(depth[i])
     return depth
 
 
