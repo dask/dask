@@ -2,14 +2,12 @@ import itertools
 from numbers import Number
 
 import pytest
-from distutils.version import LooseVersion
 
 np = pytest.importorskip("numpy")
 
 import dask.array as da
 from dask.utils import ignoring
 from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
-from dask.array.numpy_compat import _numpy_115
 
 
 def test_array():
@@ -926,9 +924,6 @@ def test_shape(shape):
 )
 @pytest.mark.parametrize("reverse", [True, False])
 def test_union1d(shape, reverse):
-    if any(len(x) > 1 for x in shape) and not _numpy_115:
-        pytest.skip("NumPy-10563.")
-
     s1, s2 = shape
     x1 = np.arange(12).reshape(s1)
     x2 = np.arange(6, 18).reshape(s2)
@@ -1460,10 +1455,6 @@ def test_nonzero_method():
             assert_eq(d_nz[i], x_nz[i])
 
 
-@pytest.mark.skipif(
-    LooseVersion(np.__version__) < LooseVersion("1.14.0"),
-    reason="NumPy 1.14.0+ needed for `unravel_index` to take an empty shape.",
-)
 def test_unravel_index_empty():
     shape = tuple()
     findices = np.array(0, dtype=int)

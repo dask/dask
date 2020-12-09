@@ -62,7 +62,6 @@ from .utils import (
     group_split_dispatch,
     is_categorical_dtype,
     has_known_categories,
-    PANDAS_VERSION,
     PANDAS_GT_100,
     PANDAS_GT_110,
     index_summary,
@@ -1983,9 +1982,8 @@ Dask Name: {name}, {task} tasks"""
             else:
                 column = column.dropna().astype("i8")
 
-        if PANDAS_VERSION >= "0.24.0":
-            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
-                column = column.astype("f8")
+        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+            column = column.astype("f8")
 
         if not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
@@ -2077,9 +2075,8 @@ Dask Name: {name}, {task} tasks"""
         # import depends on scipy, not installed by default
         from ..array import stats as da_stats
 
-        if PANDAS_VERSION >= "0.24.0":
-            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
-                column = column.astype("f8")
+        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+            column = column.astype("f8")
 
         if not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
@@ -3053,7 +3050,7 @@ Dask Name: {name}, {task} tasks""".format(
     def mode(self, dropna=True, split_every=False):
         return super().mode(dropna=dropna, split_every=split_every)
 
-    @derived_from(pd.Series, version="0.25.0")
+    @derived_from(pd.Series)
     def explode(self):
         meta = self._meta.explode()
         return self.map_partitions(M.explode, meta=meta, enforce_metadata=False)
@@ -3519,18 +3516,9 @@ class Index(Series):
         if not index:
             raise NotImplementedError()
 
-        if PANDAS_VERSION >= "0.24.0":
-            return self.map_partitions(
-                M.to_frame, index, name, meta=self._meta.to_frame(index, name)
-            )
-        else:
-            if name is not None:
-                raise ValueError(
-                    "The 'name' keyword was added in pandas 0.24.0. "
-                    "Your version of pandas is '{}'.".format(PANDAS_VERSION)
-                )
-            else:
-                return self.map_partitions(M.to_frame, meta=self._meta.to_frame())
+        return self.map_partitions(
+            M.to_frame, index, name, meta=self._meta.to_frame(index, name)
+        )
 
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Index)
@@ -4062,7 +4050,7 @@ class DataFrame(_Frame):
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
-    @derived_from(pd.DataFrame, version="0.25.0")
+    @derived_from(pd.DataFrame)
     def explode(self, column):
         meta = self._meta.explode(column)
         return self.map_partitions(M.explode, column, meta=meta, enforce_metadata=False)
@@ -4366,6 +4354,7 @@ class DataFrame(_Frame):
         reduce=None,
         args=(),
         meta=no_default,
+        result_type=None,
         **kwds,
     ):
         """Parallel version of pandas.DataFrame.apply
@@ -4430,10 +4419,7 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
-        pandas_kwargs = {"axis": axis, "raw": raw}
-
-        if PANDAS_VERSION >= "0.23.0":
-            kwds.setdefault("result_type", None)
+        pandas_kwargs = {"axis": axis, "raw": raw, "result_type": result_type}
 
         if not PANDAS_GT_100:
             pandas_kwargs["broadcast"] = broadcast

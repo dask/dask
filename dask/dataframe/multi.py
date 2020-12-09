@@ -729,10 +729,9 @@ def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
 
 def get_unsorted_columns(frames):
     """
-    Determine the unsorted colunn order.
+    Determine the unsorted column order.
 
     This should match the output of concat([frames], sort=False)
-    for pandas >=0.23
     """
     new_columns = pd.concat([frame._meta for frame in frames]).columns
     order = []
@@ -743,15 +742,6 @@ def get_unsorted_columns(frames):
     order = pd.unique(order)
     order = new_columns.take(order)
     return order
-
-
-def concat_and_unsort(frames, columns):
-    """
-    Compatibility concat for Pandas <0.23.0
-
-    Concatenates and then selects the desired (unsorted) column order.
-    """
-    return pd.concat(frames)[columns]
 
 
 def _concat_compat(frames, left, right):

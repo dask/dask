@@ -7,7 +7,6 @@ np = pytest.importorskip("numpy")
 import os
 import time
 from io import StringIO
-from distutils.version import LooseVersion
 import operator
 from operator import add, sub, getitem
 from threading import Lock
@@ -299,10 +298,6 @@ def test_Array_computation():
     assert float(a[0, 0]) == 1
 
 
-@pytest.mark.skipif(
-    LooseVersion(np.__version__) < "1.14.0",
-    reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
-)
 def test_Array_numpy_gufunc_call__array_ufunc__01():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -312,10 +307,6 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
     assert_eq(ny, vy)
 
 
-@pytest.mark.skipif(
-    LooseVersion(np.__version__) < "1.14.0",
-    reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
-)
 def test_Array_numpy_gufunc_call__array_ufunc__02():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()

@@ -3,7 +3,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq
 
 
 # Fixtures
@@ -78,10 +78,6 @@ def on(request):
 
 # Tests
 # =====
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0",
-    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
-)
 def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
@@ -95,10 +91,6 @@ def test_merge_known_to_known(df_left, df_right, ddf_left, ddf_right, on, how):
     assert len(result.__dask_graph__()) < 80
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0",
-    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
-)
 @pytest.mark.parametrize("how", ["inner", "left"])
 def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on, how):
     # Compute expected
@@ -113,10 +105,6 @@ def test_merge_known_to_single(df_left, df_right, ddf_left, ddf_right_single, on
     assert len(result.__dask_graph__()) < 30
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0",
-    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
-)
 @pytest.mark.parametrize("how", ["inner", "right"])
 def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on, how):
     # Compute expected
@@ -131,10 +119,6 @@ def test_merge_single_to_known(df_left, df_right, ddf_left_single, ddf_right, on
     assert len(result.__dask_graph__()) < 30
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0",
-    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
-)
 def test_merge_known_to_unknown(
     df_left, df_right, ddf_left, ddf_right_unknown, on, how
 ):
@@ -150,10 +134,6 @@ def test_merge_known_to_unknown(
     assert len(result.__dask_graph__()) >= 390
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0",
-    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
-)
 def test_merge_unknown_to_known(
     df_left, df_right, ddf_left_unknown, ddf_right, on, how
 ):
@@ -169,10 +149,6 @@ def test_merge_unknown_to_known(
     assert len(result.__dask_graph__()) >= 390
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.23.0",
-    reason="Need pandas col+index merge support (pandas-dev/pandas#14355)",
-)
 def test_merge_unknown_to_unknown(
     df_left, df_right, ddf_left_unknown, ddf_right_unknown, on, how
 ):

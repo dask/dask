@@ -8,7 +8,7 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-    "array": ["numpy >= 1.13.0", "toolz >= 0.8.2"],
+    "array": ["numpy >= 1.15.1", "toolz >= 0.8.2"],
     "bag": [
         "cloudpickle >= 0.2.2",
         "fsspec >= 0.6.0",
@@ -16,8 +16,8 @@ extras_require = {
         "partd >= 0.3.10",
     ],
     "dataframe": [
-        "numpy >= 1.13.0",
-        "pandas >= 0.23.0",
+        "numpy >= 1.15.1",
+        "pandas >= 0.25.0",
         "toolz >= 0.8.2",
         "partd >= 0.3.10",
         "fsspec >= 0.6.0",

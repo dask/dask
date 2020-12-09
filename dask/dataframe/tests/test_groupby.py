@@ -1,6 +1,5 @@
 import collections
 import warnings
-from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -16,7 +15,6 @@ from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
     assert_max_deps,
-    PANDAS_VERSION,
 )
 
 AGG_FUNCS = [
@@ -1893,11 +1891,6 @@ def test_timeseries():
     assert_eq(df.groupby("name").std(), df.groupby("name").std())
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.22.0",
-    reason="Parameter min_count not implemented in "
-    "DataFrame.groupby().sum() and DataFrame.groupby().prod()",
-)
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3])
 def test_with_min_count(min_count):
     dfs = [
@@ -2111,10 +2104,6 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
-@pytest.mark.skipif(
-    version.parse(pd.__version__) < version.parse("0.25.0"),
-    reason="'explode' is not implemented",
-)
 def test_groupby_unique():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
