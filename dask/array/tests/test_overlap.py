@@ -246,6 +246,13 @@ def test_overlap():
     assert_eq(g, expected)
     assert same_keys(g, overlap(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: "reflect"}))
 
+    u_depth = np.uint16([2, 1])
+    u_depth = {k: v for k, v in enumerate(u_depth)}
+    g = overlap(d, depth=u_depth, boundary={0: 100, 1: "reflect"})
+    assert g.chunks == ((8, 8), (6, 6))
+    assert_eq(g, expected)
+    assert same_keys(g, overlap(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: "reflect"}))
+
     g = overlap(d, depth={0: 2, 1: 1}, boundary={0: 100, 1: "none"})
     expected = np.array(
         [
@@ -267,6 +274,12 @@ def test_overlap():
             [100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
         ]
     )
+    assert_eq(g, expected)
+    assert g.chunks == ((8, 8), (5, 5))
+
+    u_depth = np.uint16([2, 1])
+    u_depth = {k: v for k, v in enumerate(u_depth)}
+    g = overlap(d, depth=u_depth, boundary={0: 100, 1: "none"})
     assert_eq(g, expected)
     assert g.chunks == ((8, 8), (5, 5))
 
