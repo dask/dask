@@ -547,8 +547,11 @@ class BlockwiseIO(Blockwise):
                 # chunks/partitions in `io_subgraph`, and assume the first
                 # (callable) element is the same for all tasks.
                 io_subgraph = next(iter(io_deps.items()))[1]
-                any_key = next(iter(io_subgraph))
-                io_func = io_subgraph.get(any_key)[0]
+                if io_subgraph:
+                    any_key = next(iter(io_subgraph))
+                    io_func = io_subgraph.get(any_key)[0]
+                else:
+                    io_func = None
             else:
                 io_func = None
             dsk = {output: (PackedFunctionCall(io_func), blockwise_token(0))}
