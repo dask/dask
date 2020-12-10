@@ -18,6 +18,7 @@ Highlights
   etc. with the ``dask.annotations`` context manager.
 - Updated minimum supported version of pandas to 0.25.0 and NumPy to 1.15.1.
 - Support for the ``pyarrow.dataset`` API to ``read_parquet``.
+- Several fixes to Dask Array's SVD.
 
 All changes
 ^^^^^^^^^^^
