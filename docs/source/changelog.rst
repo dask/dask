@@ -28,7 +28,7 @@ All changes
 - Improve "pyarrow-dataset" statistics performance for ``read_parquet`` (:pr:`6918`) `Richard (Rick) Zamora`_
 - Add ``observed`` keyword to ``groupby`` (:pr:`6854`) `Julia Signell`_
 - Make sure ``include_path_column`` works when there are multiple partitions per file (:pr:`6911`) `Julia Signell`_
-- Fix for github issue 6849 (:pr:`6909`) `GFleishman`_
+- Fix: array.overlap and array.map_overlap block sizes are incorrect when depth is an unsigned bit type (:pr:`6909`) `GFleishman`_
 - Fix syntax error in HLG docs example (:pr:`6946`) `Mark`_
 - Return a ``Bag`` from ``sample`` (:pr:`6941`) `Shang Wang`_
 - Add ``ravel_multi_index`` (:pr:`6939`) `Illviljan`_
@@ -47,7 +47,7 @@ All changes
 - Added dataframe ``skew`` method (:pr:`6881`) `Jan Borchmann`_
 - Fix ``dtype`` in array ``meta`` (:pr:`6893`) `Julia Signell`_
 - Missing ``name`` arg in ``helm install ...`` (:pr:`6903`) `Ruben van de Geer`_
-- Fixes #6898 (:pr:`6901`) `Martin Durant`_
+- Fix: exception when reading an item with filters (:pr:`6901`) `Martin Durant`_
 - Add support for ``cupyx`` sparse to ``dask.array.dot`` (:pr:`6846`) `Akira Naruse`_
 - Pin array mindeps up a bit to get the tests to pass [test-mindeps] (:pr:`6894`) `Julia Signell`_
 - Update/remove pandas and numpy in mindeps (:pr:`6888`) `Julia Signell`_
@@ -81,7 +81,7 @@ All changes
 - Add blocksize to task name (:pr:`6818`) `Julia Signell`_
 - Check for all-NaN partitions (:pr:`6821`) `Rockwell Weiner`_
 - Change "institutional" SQL doc section to point to main SQL doc (:pr:`6823`) `Martin Durant`_
-- Fix #6775 (:pr:`6809`) `David Katz`_
+- Fix: DataFrame.join doesn't accept Series as other (:pr:`6809`) `David Katz`_
 - Remove ``to_delayed`` operations from ``to_parquet`` (:pr:`6801`) `Richard (Rick) Zamora`_
 - Layer annotation docstrings improvements (:pr:`6806`) `Simon Perkins`_
 - Avro reader (:pr:`6780`) `Martin Durant`_
