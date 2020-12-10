@@ -459,29 +459,6 @@ def get(key, default=no_default, config=config):
     return result
 
 
-def default_get(default, key, **kwargs):
-    """Get config if default is not set.
-
-    It is common for functions in Dask to fall back to config if
-    a keyword argument has not been set. This results in code like the following.
-
-    >>> def my_func(my_kwarg=None):
-    ...     var = my_kwarg if my_kwarg is not None else dask.config.get("some.option")
-
-    This method replaces this pattern.
-
-    >>> def my_func(my_kwarg=None):
-    ...     var = dask.config.default_get(my_kwarg, "some.option")
-
-    In this case if ``my_kwarg`` has been set it will be returned, otherwise the config option
-    ``some.option`` will be returned.
-
-    """
-    if default is not None:
-        return default
-    return get(key, **kwargs)
-
-
 def rename(aliases, config=config):
     """Rename old keys to new keys
 
