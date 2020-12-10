@@ -423,9 +423,12 @@ def refresh(config=config, defaults=defaults, **kwargs):
     update(config, collect(**kwargs))
 
 
-def get(key, default=no_default, config=config):
+def get(key, default=no_default, config=config, if_not_set=None):
     """
     Get elements from global config
+
+    If ``if_not_set`` is not None this value will be passed straight back.
+    Useful for getting kwarg defaults from Dask config.
 
     Use '.' for nested access
 
@@ -441,10 +444,18 @@ def get(key, default=no_default, config=config):
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
 
+    >>> config.get('foo.y', if_not_set=None)  # doctest: +SKIP
+    2
+
+    >>> config.get('foo.y', if_not_set=3)  # doctest: +SKIP
+    3
+
     See Also
     --------
     dask.config.set
     """
+    if if_not_set is not None:
+        return if_not_set
     keys = key.split(".")
     result = config
     for k in keys:

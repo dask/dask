@@ -472,3 +472,20 @@ def test_deprecations():
             assert dask.config.get("optimization.fuse.ave-width") == 123
 
     assert "optimization.fuse.ave-width" in str(info[0].message)
+
+
+def test_get_if_not_set():
+    with dask.config.set({"foo": "bar"}):
+        # If if_not_set is None get the config key
+        assert dask.config.get("foo") == "bar"
+        assert dask.config.get("foo", if_not_set=None) == "bar"
+
+        # Otherwise pass the default straight through
+        assert dask.config.get("foo", if_not_set="baz") == "baz"
+        assert dask.config.get("foo", if_not_set=False) is False
+        assert dask.config.get("foo", if_not_set=True) is True
+        assert dask.config.get("foo", if_not_set=123) == 123
+        assert dask.config.get("foo", if_not_set={"hello": "world"}) == {
+            "hello": "world"
+        }
+        assert dask.config.get("foo", if_not_set=["one"]) == ["one"]
