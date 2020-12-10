@@ -9,13 +9,13 @@ Released on December 10, 2020
 Highlights
 ^^^^^^^^^^
 
+- Switched to `CalVer <https://calver.org/>`_ for versioning scheme.
 - Introduced new APIs for ``HighLevelGraph`` to enable sending high-level representations of
   task graphs to the distributed scheduler.
 - Introduced new ``HighLevelGraph`` layer objects including ``BasicLayer``, ``Blockwise``,
   ``BlockwiseIO``, ``ShuffleLayer``, and more.
 - Added support for applying custom ``Layer``-level annotations like ``priority``, ``retries``,
   etc. with the ``dask.annotations`` context manager.
-- Switched to `CalVer <https://calver.org/>`_ for versioning scheme.
 - Updated minimum supported version of pandas to 0.25.0 and NumPy to 1.15.1.
 - Support for the ``pyarrow.dataset`` API to ``read_parquet``.
 
@@ -28,7 +28,7 @@ All changes
 - Improve "pyarrow-dataset" statistics performance for ``read_parquet`` (:pr:`6918`) `Richard (Rick) Zamora`_
 - Add ``observed`` keyword to ``groupby`` (:pr:`6854`) `Julia Signell`_
 - Make sure ``include_path_column`` works when there are multiple partitions per file (:pr:`6911`) `Julia Signell`_
-- Fix: array.overlap and array.map_overlap block sizes are incorrect when depth is an unsigned bit type (:pr:`6909`) `GFleishman`_
+- Fix: ``array.overlap`` and ``array.map_overlap`` block sizes are incorrect when depth is an unsigned bit type (:pr:`6909`) `GFleishman`_
 - Fix syntax error in HLG docs example (:pr:`6946`) `Mark`_
 - Return a ``Bag`` from ``sample`` (:pr:`6941`) `Shang Wang`_
 - Add ``ravel_multi_index`` (:pr:`6939`) `Illviljan`_
@@ -81,7 +81,7 @@ All changes
 - Add blocksize to task name (:pr:`6818`) `Julia Signell`_
 - Check for all-NaN partitions (:pr:`6821`) `Rockwell Weiner`_
 - Change "institutional" SQL doc section to point to main SQL doc (:pr:`6823`) `Martin Durant`_
-- Fix: DataFrame.join doesn't accept Series as other (:pr:`6809`) `David Katz`_
+- Fix: ``DataFrame.join`` doesn't accept Series as other (:pr:`6809`) `David Katz`_
 - Remove ``to_delayed`` operations from ``to_parquet`` (:pr:`6801`) `Richard (Rick) Zamora`_
 - Layer annotation docstrings improvements (:pr:`6806`) `Simon Perkins`_
 - Avro reader (:pr:`6780`) `Martin Durant`_
