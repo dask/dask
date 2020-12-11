@@ -546,7 +546,7 @@ class BlockwiseIO(Blockwise):
                 # We assume a 1-to-1 mapping between keys (i.e. tasks) and
                 # chunks/partitions in `io_subgraph`, and assume the first
                 # (callable) element is the same for all tasks.
-                io_subgraph = next(iter(io_deps.items()))[1]
+                io_subgraph = next(iter(io_deps.values()))
                 if io_subgraph:
                     any_key = next(iter(io_subgraph))
                     io_func = io_subgraph.get(any_key)[0]
