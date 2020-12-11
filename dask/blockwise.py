@@ -655,18 +655,10 @@ def _inject_io_tasks(dsk, io_deps, output_indices, new_axes):
     # Loop through graph, and replace IO-placeholder tasks
     # with the actual underlying IO function
     for k in dsk:
-        for io_name, io_subgraph in io_deps.items():
-            # Leave out `new_axes` in key
-            io_key = (io_name,) + tuple(
-                [
-                    k[i + 1]
-                    for i, idx in enumerate(output_indices)
-                    if idx not in new_axes
-                ]
-            )
-            if io_key in dsk[k]:
-                # Inject IO-function arguments into the blockwise graph
-                # as a single (packed) tuple.
+        for i in range(1, len(dsk[k])):
+            io_key = dsk[k][i]
+            if isinstance(io_key, tuple) and len(io_key) and io_key[0] in io_deps:
+                io_subgraph = io_deps.get(io_key[0])
                 io_item = io_subgraph.get(io_key)
                 io_item = list(io_item[1:]) if len(io_item) > 1 else []
                 new_task = [io_item if v == io_key else v for v in dsk[k]]
