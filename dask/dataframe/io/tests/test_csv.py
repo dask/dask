@@ -721,13 +721,15 @@ def test_read_csv_sensitive_to_enforce():
 def test_read_csv_compression(fmt, blocksize):
     if fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
+    suffix = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}.get(fmt, "")
     files2 = valmap(compress[fmt], csv_files)
-    with filetexts(files2, mode="b"):
+    renamed_files = {k + suffix: v for k, v in files2.items()}
+    with filetexts(renamed_files, mode="b"):
         if fmt and blocksize:
             with pytest.warns(UserWarning):
-                df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+                df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
         else:
-            df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+            df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
         assert_eq(
             df.compute(scheduler="sync").reset_index(drop=True),
             expected.reset_index(drop=True),
