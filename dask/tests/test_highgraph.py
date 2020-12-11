@@ -138,6 +138,7 @@ def test_layer_interface():
     import dask.array  # noqa
     import dask.dataframe  # noqa
     import dask.bag  # noqa
+    import dask.delayed  # noqa
 
     stack = {Layer}
 
