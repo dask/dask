@@ -135,9 +135,9 @@ def test_blockwise_cull(flat):
 
 def test_layer_interface():
     # Import collections to populate Layer.__subclasses__
-    import dask.array
-    import dask.dataframe
-    import dask.bag
+    import dask.array  # noqa
+    import dask.dataframe  # noqa
+    import dask.bag  # noqa
 
     stack = {Layer}
 
