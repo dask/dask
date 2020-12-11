@@ -417,3 +417,18 @@ def test_fuse_roots():
     # assert len(zz.dask) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
     assert_eq(zz, z)
+
+
+def test_fuse_roots_annotations():
+    x = da.ones(10, chunks=(2,))
+    y = da.zeros(10, chunks=(2,))
+
+    with dask.annotate(foo="bar"):
+        y = y ** 2
+
+    z = (x + 1) + (2 * y)
+    hlg = dask.blockwise.optimize_blockwise(z.dask)
+    assert len(hlg.layers) == 4
+    assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
+    za = da.Array(hlg, z.name, z.chunks, z.dtype)
+    assert_eq(za, z)
