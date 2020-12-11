@@ -661,7 +661,19 @@ def _inject_io_tasks(dsk, io_deps, output_indices, new_axes):
                 io_subgraph = io_deps.get(io_key[0])
                 io_item = io_subgraph.get(io_key)
                 io_item = list(io_item[1:]) if len(io_item) > 1 else []
-                new_task = [io_item if v == io_key else v for v in dsk[k]]
+                new_task = []
+                for v in dsk[k]:
+                    # Add additional type check to short circuit equality check.
+                    # In some cases v can be array-like and want elementwise
+                    # comparisons over strict object equality, which is not what
+                    # we want here. For more discussion, see
+                    # https://github.com/dask/dask/pull/4805#discussion_r284312315
+                    if type(v) == type(io_key) and v == io_key:
+                        new_task.append(io_item)
+                    else:
+                        new_task.append(v)
+
+                # new_task = [io_item if v == io_key else v for v in dsk[k]]
                 dsk[k] = tuple(new_task)
 
     return dsk
