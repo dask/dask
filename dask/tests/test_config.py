@@ -472,3 +472,20 @@ def test_deprecations():
             assert dask.config.get("optimization.fuse.ave-width") == 123
 
     assert "optimization.fuse.ave-width" in str(info[0].message)
+
+
+def test_get_override_with():
+    with dask.config.set({"foo": "bar"}):
+        # If override_with is None get the config key
+        assert dask.config.get("foo") == "bar"
+        assert dask.config.get("foo", override_with=None) == "bar"
+
+        # Otherwise pass the default straight through
+        assert dask.config.get("foo", override_with="baz") == "baz"
+        assert dask.config.get("foo", override_with=False) is False
+        assert dask.config.get("foo", override_with=True) is True
+        assert dask.config.get("foo", override_with=123) == 123
+        assert dask.config.get("foo", override_with={"hello": "world"}) == {
+            "hello": "world"
+        }
+        assert dask.config.get("foo", override_with=["one"]) == ["one"]
