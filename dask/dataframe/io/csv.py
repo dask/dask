@@ -151,8 +151,7 @@ class BlockwiseReadCSV(BlockwiseIO):
             path,
         )
         super().__init__(
-            self.io_name,
-            dsk_io,
+            {self.io_name: dsk_io},
             self.name,
             "i",
             None,

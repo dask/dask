@@ -98,8 +98,7 @@ def read_orc(path, columns=None, storage_options=None):
     # Create Blockwise layer
     npartitions = len(dsk_io)
     layer = BlockwiseIO(
-        name,
-        dsk_io,
+        {name: dsk_io},
         output_name,
         "i",
         None,
