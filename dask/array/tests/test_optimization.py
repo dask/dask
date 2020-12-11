@@ -428,7 +428,7 @@ def test_fuse_roots_annotations():
 
     z = (x + 1) + (2 * y)
     hlg = dask.blockwise.optimize_blockwise(z.dask)
-    assert len(hlg.layers) == 4
+    assert len(hlg.layers) == 3
     assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
     za = da.Array(hlg, z.name, z.chunks, z.dtype)
     assert_eq(za, z)
