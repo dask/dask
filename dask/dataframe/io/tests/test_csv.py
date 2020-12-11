@@ -680,7 +680,8 @@ def test_categorical_known():
 
 
 @pytest.mark.slow
-def test_compression_multiple_files():
+@pytest.mark.parametrize("compression", ["infer", "gzip"])
+def test_compression_multiple_files(compression):
     with tmpdir() as tdir:
         f = gzip.open(os.path.join(tdir, "a.csv.gz"), "wb")
         f.write(csv_text.encode())
@@ -691,7 +692,7 @@ def test_compression_multiple_files():
         f.close()
 
         with pytest.warns(UserWarning):
-            df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression="gzip")
+            df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression=compression)
 
         assert len(df.compute()) == (len(csv_text.split("\n")) - 1) * 2
 

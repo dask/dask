@@ -1,3 +1,4 @@
+import os
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -30,6 +31,7 @@ from ...blockwise import BlockwiseIO
 
 import fsspec.implementations.local
 from fsspec.compression import compr
+from fsspec.core import get_fs_token_paths
 
 
 class CSVSubgraph(Mapping):
@@ -456,7 +458,7 @@ def read_pandas(
     urlpath,
     blocksize="default",
     lineterminator=None,
-    compression=None,
+    compression="infer",
     sample=256000,
     enforce=False,
     assume_missing=False,
@@ -507,6 +509,20 @@ def read_pandas(
         path_converter = kwargs.get("converters").get(include_path_column, None)
     else:
         path_converter = None
+
+    # If compression is "infer", inspect the (first) path suffix and
+    # set the proper compression option if the suffix is recongnized.
+    if compression == "infer":
+        # Translate the input urlpath to a simple path list
+        if not isinstance(urlpath, (str, list, tuple, os.PathLike)):
+            raise TypeError("Path should be a string, os.PathLike, list or tuple")
+        paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)[2]
+
+        # "Recognized" compression options
+        compression_options = {"gz": "gzip", "bz2": "bz2", "zip": "zip", "xz": "xz"}
+
+        # Check if the first path suffix is a recognized compression option
+        compression = compression_options.get(paths[0].split(".")[-1], None)
 
     if blocksize == "default":
         blocksize = AUTO_BLOCKSIZE
@@ -688,7 +704,7 @@ def make_reader(reader, reader_name, file_type):
         urlpath,
         blocksize="default",
         lineterminator=None,
-        compression=None,
+        compression="infer",
         sample=256000,
         enforce=False,
         assume_missing=False,
