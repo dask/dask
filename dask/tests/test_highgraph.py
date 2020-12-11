@@ -141,12 +141,14 @@ def test_layer_interface():
     import dask.delayed  # noqa
 
     stack = {Layer}
+    checked = {".".join((Layer.__module__, Layer.__name__))}
 
     while stack:
         cls = stack.pop()
 
         for subclass in cls.__subclasses__():
             stack.add(subclass)
+            checked.add(".".join((subclass.__module__, subclass.__name__)))
 
         members = dict(inspect.getmembers(cls))
         # Must be able to pickle it
@@ -168,3 +170,15 @@ def test_layer_interface():
         unpack = getattr(cls, "__dask_distributed_unpack__")
         # https://stackoverflow.com/a/19228282
         assert inspect.ismethod(unpack) and unpack.__self__ is cls
+
+    assert checked == {
+        "dask.dataframe.io.csv.BlockwiseReadCSV",
+        "dask.dataframe.shuffle.SimpleShuffleLayer",
+        "dask.dataframe.io.parquet.core.BlockwiseParquet",
+        "dask.dataframe.shuffle.ShuffleLayer",
+        "dask.blockwise.BlockwiseIO",
+        "dask.dataframe.io.parquet.core.ParquetSubgraph",
+        "dask.highlevelgraph.Layer",
+        "dask.highlevelgraph.BasicLayer",
+        "dask.blockwise.Blockwise",
+    }
