@@ -15,6 +15,7 @@ from ...utils import clear_known_categories
 from ....core import flatten
 from dask import delayed
 
+from .core import create_metadata_file
 from .utils import (
     _parse_pandas_metadata,
     _normalize_index_columns,
@@ -30,6 +31,7 @@ if pa.__version__ >= LooseVersion("1.0.0"):
     from pyarrow import dataset as pa_ds
 else:
     pa_ds = None
+subset_stats_supported = pa.__version__ > LooseVersion("2.0.0")
 schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
 
 #
@@ -412,6 +414,45 @@ def _read_table_from_path(
                 )
 
 
+def _get_rg_statistics(row_group, col_indices):
+    """Custom version of pyarrow's RowGroupInfo.statistics method
+    (https://github.com/apache/arrow/blob/master/python/pyarrow/_dataset.pyx)
+
+    We use col_indices to specify the specific subset of columns
+    that we need statistics for.  This is more optimal than the
+    upstream `RowGroupInfo.statistics` method, which will return
+    statistics for all columns.
+    """
+
+    if subset_stats_supported:
+
+        def name_stats(i):
+            col = row_group.metadata.column(i)
+
+            stats = col.statistics
+            if stats is None or not stats.has_min_max:
+                return None, None
+
+            name = col.path_in_schema
+            field_index = row_group.schema.get_field_index(name)
+            if field_index < 0:
+                return None, None
+
+            return col.path_in_schema, {
+                "min": stats.min,
+                "max": stats.max,
+            }
+
+        return {
+            name: stats
+            for name, stats in map(name_stats, col_indices.values())
+            if stats is not None
+        }
+
+    else:
+        return row_group.statistics
+
+
 #
 #  ArrowDatasetEngine
 #
@@ -434,6 +475,7 @@ class ArrowDatasetEngine(Engine):
         filters=None,
         split_row_groups=None,
         read_from_paths=None,
+        engine=None,
         **kwargs,
     ):
         # Reading from fragments by default if we are filtering.
@@ -1247,9 +1289,6 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
-                elif gather_statistics and (row_group_info[0].statistics is None):
-                    frag.ensure_complete_metadata()
-                    row_group_info = frag.row_groups
                 frag_map[(fpath, row_group_info[0].id)] = frag
             else:
                 file_row_groups[fpath] = [None]
@@ -1258,7 +1297,7 @@ class ArrowDatasetEngine(Engine):
             for row_group in row_group_info:
                 file_row_groups[fpath].append(row_group.id)
                 if gather_statistics:
-                    statistics = row_group.statistics
+                    statistics = _get_rg_statistics(row_group, stat_col_indices)
                     if single_rg_parts:
                         s = {
                             "file_path_0": fpath,
@@ -1709,18 +1748,30 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             # that they want to split by row-group and/or gather statistics.
             # This is the only case where we MUST scan all files to collect
             # metadata.
-            for piece, fn in zip(dataset.pieces, fns):
-                md = piece.get_metadata()
+            if len(dataset.pieces) > 1:
+                # Perform metadata collection in parallel.
+                metadata = create_metadata_file(
+                    [p.path for p in dataset.pieces],
+                    root_dir=base,
+                    engine=cls,
+                    out_dir=False,
+                )
                 if schema is None:
-                    schema = md.schema.to_arrow_schema()
-                if fn_partitioned:
-                    md.set_file_path(piece.path.replace(base + fs.sep, ""))
-                elif fn:
-                    md.set_file_path(fn)
-                if metadata:
-                    _append_row_groups(metadata, md)
-                else:
-                    metadata = md
+                    schema = metadata.schema.to_arrow_schema()
+            else:
+                for piece, fn in zip(dataset.pieces, fns):
+                    md = piece.get_metadata()
+                    if schema is None:
+                        schema = md.schema.to_arrow_schema()
+                    if fn_partitioned:
+                        md.set_file_path(piece.path.replace(base + fs.sep, ""))
+                    elif fn:
+                        md.set_file_path(fn)
+                    if metadata:
+                        _append_row_groups(metadata, md)
+                    else:
+                        metadata = md
+
             return (
                 schema,
                 metadata,

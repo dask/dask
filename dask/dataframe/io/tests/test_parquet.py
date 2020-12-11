@@ -1,7 +1,6 @@
 import math
 import glob
 import os
-import glob
 import sys
 import warnings
 from distutils.version import LooseVersion
@@ -14,7 +13,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
-from dask.dataframe.utils import assert_eq, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.io.parquet.core import BlockwiseParquet, ParquetSubgraph
@@ -540,9 +539,6 @@ def test_names(tmpdir, engine):
     assert set(read(fn, columns=("x",)).dask) == set(read(fn, columns=["x"]).dask)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.22.0", reason="new pyarrow assumes new-ish pandas versions"
-)
 @write_read_engines()
 def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
     fn = str(tmpdir.join("test.parquet"))
@@ -2034,7 +2030,6 @@ def test_with_tz(tmpdir, engine):
     with warnings.catch_warnings():
         if engine == "fastparquet":
             # fastparquet-442
-            warnings.simplefilter("ignore", DeprecationWarning)  # pandas 0.23
             warnings.simplefilter("ignore", FutureWarning)  # pandas 0.25
             fn = str(tmpdir)
             df = pd.DataFrame([[0]], columns=["a"], dtype="datetime64[ns, UTC]")
@@ -3158,6 +3153,21 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         ddf2 = ddf2.compute().sort_values("b")
         ddf2.a = ddf2.a.astype("object")
     assert_eq(ddf1, ddf2)
+
+    # Check if we can avoid writing an actual file
+    fmd = dd.io.parquet.create_metadata_file(
+        fns,
+        engine="pyarrow",
+        split_every=3,  # Force tree reduction
+        out_dir=False,  # Avoid writing file
+    )
+
+    # Check that the in-memory metadata is the same as
+    # the metadata in the file.
+    fmd_file = pq.ParquetFile(os.path.join(tmpdir, "_metadata")).metadata
+    assert fmd.num_rows == fmd_file.num_rows
+    assert fmd.num_columns == fmd_file.num_columns
+    assert fmd.num_row_groups == fmd_file.num_row_groups
 
 
 def test_read_write_overwrite_is_true(tmpdir, engine):

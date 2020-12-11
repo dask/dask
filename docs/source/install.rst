@@ -102,9 +102,9 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |   murmurhash  |          |                   Faster hashing of arrays                   |
 +---------------+----------+--------------------------------------------------------------+
-|     numpy     | >=1.13.0 |                   Required for dask.array                    |
+|     numpy     | >=1.15.1 |                   Required for dask.array                    |
 +---------------+----------+--------------------------------------------------------------+
-|     pandas    | >=0.23.0 |                  Required for dask.dataframe                 |
+|     pandas    | >=0.25.0 |                  Required for dask.dataframe                 |
 +---------------+----------+--------------------------------------------------------------+
 |     partd     | >=0.3.10 |            Concurrent appendable key-value storage           |
 +---------------+----------+--------------------------------------------------------------+

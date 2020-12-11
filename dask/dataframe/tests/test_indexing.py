@@ -8,7 +8,7 @@ import dask.dataframe as dd
 
 from dask.dataframe._compat import tm, PANDAS_GT_100
 from dask.dataframe.indexing import _coerce_loc_index
-from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq, make_meta
 
 
 dsk = {
@@ -513,7 +513,6 @@ def test_to_frame():
     assert_eq(df.index.to_frame(), ddf.index.to_frame())
 
 
-@pytest.mark.skipif(PANDAS_VERSION < "0.24.0", reason="No renaming for index")
 def test_to_frame_name():
     # Test for time index
     df = pd.DataFrame(
