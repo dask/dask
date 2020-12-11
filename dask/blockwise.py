@@ -594,23 +594,7 @@ class BlockwiseIO(Blockwise):
             )
 
             # Handle IO Subgraph
-            for k in dsk:
-                for io_name, io_subgraph in self.io_deps.items():
-                    # Leave out `new_axes` in key
-                    io_key = (io_name,) + tuple(
-                        [
-                            k[i + 1]
-                            for i, idx in enumerate(self.output_indices)
-                            if idx not in self.new_axes
-                        ]
-                    )
-                    if io_key in dsk[k]:
-                        # Inject IO-function arguments into the blockwise graph
-                        # as a single (packed) tuple.
-                        io_item = io_subgraph.get(io_key)
-                        io_item = list(io_item[1:]) if len(io_item) > 1 else []
-                        new_task = [io_item if v == io_key else v for v in dsk[k]]
-                        dsk[k] = tuple(new_task)
+            _inject_io_tasks(dsk, self.io_deps, self.output_indices, self.new_axes)
 
             self._cached_dict = {"dsk": dsk}
         return self._cached_dict["dsk"]
@@ -641,23 +625,7 @@ class BlockwiseIO(Blockwise):
 
         if io_deps:
             # This is an IO layer.
-            for k in raw:
-                for io_name, io_subgraph in io_deps.items():
-                    # Leave out `new_axes` in key
-                    io_key = (io_name,) + tuple(
-                        [
-                            k[i + 1]
-                            for i, idx in enumerate(state["output_indices"])
-                            if idx not in state["new_axes"]
-                        ]
-                    )
-                    if io_key in raw[k]:
-                        # Inject IO-function arguments into the blockwise graph
-                        # as a single (packed) tuple.
-                        io_item = io_subgraph.get(io_key)
-                        io_item = list(io_item[1:]) if len(io_item) > 1 else []
-                        new_task = [io_item if v == io_key else v for v in raw[k]]
-                        raw[k] = tuple(new_task)
+            _inject_io_tasks(raw, io_deps, state["output_indices"], state["new_axes"])
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
@@ -677,6 +645,28 @@ class BlockwiseIO(Blockwise):
             new_axes=self.new_axes,
             output_blocks=output_blocks,
         )
+
+
+def _inject_io_tasks(dsk, io_deps, output_indices, new_axes):
+    # Loop through graph, and replace IO-placeholder tasks
+    # with the actual underlying IO function
+    for k in dsk:
+        for io_name, io_subgraph in io_deps.items():
+            # Leave out `new_axes` in key
+            io_key = (io_name,) + tuple(
+                [
+                    k[i + 1]
+                    for i, idx in enumerate(output_indices)
+                    if idx not in new_axes
+                ]
+            )
+            if io_key in dsk[k]:
+                # Inject IO-function arguments into the blockwise graph
+                # as a single (packed) tuple.
+                io_item = io_subgraph.get(io_key)
+                io_item = list(io_item[1:]) if len(io_item) > 1 else []
+                new_task = [io_item if v == io_key else v for v in dsk[k]]
+                dsk[k] = tuple(new_task)
 
 
 def _get_coord_mapping(
