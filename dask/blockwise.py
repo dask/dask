@@ -594,7 +594,9 @@ class BlockwiseIO(Blockwise):
             )
 
             # Handle IO Subgraph
-            _inject_io_tasks(dsk, self.io_deps, self.output_indices, self.new_axes)
+            dsk = _inject_io_tasks(
+                dsk, self.io_deps, self.output_indices, self.new_axes
+            )
 
             self._cached_dict = {"dsk": dsk}
         return self._cached_dict["dsk"]
@@ -625,7 +627,9 @@ class BlockwiseIO(Blockwise):
 
         if io_deps:
             # This is an IO layer.
-            _inject_io_tasks(raw, io_deps, state["output_indices"], state["new_axes"])
+            raw = _inject_io_tasks(
+                raw, io_deps, state["output_indices"], state["new_axes"]
+            )
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
@@ -667,6 +671,8 @@ def _inject_io_tasks(dsk, io_deps, output_indices, new_axes):
                 io_item = list(io_item[1:]) if len(io_item) > 1 else []
                 new_task = [io_item if v == io_key else v for v in dsk[k]]
                 dsk[k] = tuple(new_task)
+
+    return dsk
 
 
 def _get_coord_mapping(
