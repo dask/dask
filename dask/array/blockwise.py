@@ -90,7 +90,7 @@ class BlockwiseCreateArray(BlockwiseIO):
 
         nchunks = tuple(len(chunk) for chunk in self.chunks)
         super().__init__(
-            { self.io_name: dsk_io },
+            {self.io_name: dsk_io},
             self.name,
             out_ind,
             None,
