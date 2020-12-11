@@ -29,9 +29,13 @@ class CreateArraySubgraph(Mapping):
         self.func = func
         self.shape = shape
         self.chunks = chunks
-        self._len = reduce(lambda acc, x: len(x) * acc, chunks, 1)  # Too tricky?
+        # Compute total number of blocks
+        self._len = reduce(lambda acc, x: len(x) * acc, chunks, 1)
 
     def __getitem__(self, key):
+        """
+        Construct a task for a given key.
+        """
         try:
             name, *idx = key
         except ValueError:
@@ -41,7 +45,9 @@ class CreateArraySubgraph(Mapping):
         if name != self.name:
             raise KeyError(key)
 
-        # TODO: check for invalid indices
+        # Check for invalid indices
+        if any(i < 0 or i >= len(c) for i, c in zip(idx, self.chunks)):
+            raise KeyError(key)
 
         # Get this chunk shape
         ndim = len(self.chunks)
