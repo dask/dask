@@ -1,3 +1,4 @@
+import inspect
 import os
 
 import pytest
@@ -130,3 +131,39 @@ def test_blockwise_cull(flat):
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
         assert not layer.is_materialized()
+
+
+def test_layer_interface():
+    # Import collections to populate Layer.__subclasses__
+    import dask.array
+    import dask.dataframe
+    import dask.bag
+
+    stack = {Layer}
+
+    while stack:
+        cls = stack.pop()
+
+        for subclass in cls.__subclasses__():
+            stack.add(subclass)
+
+        members = dict(inspect.getmembers(cls))
+        # Must be able to pickle it
+        assert "__reduce__" in members
+        spec = inspect.getfullargspec(members["__reduce__"])
+        assert spec.args == ["self"]
+
+        # Must be able to pack it
+        assert "__dask_distributed_pack__" in members
+        spec = inspect.getfullargspec(members["__dask_distributed_pack__"])
+        assert spec.args == ["self", "client"]
+        pack = getattr(cls, "__dask_distributed_pack__")
+        assert inspect.isfunction(pack) and not hasattr(pack, "__self__")
+
+        # Must be able to unpack it
+        assert "__dask_distributed_unpack__" in members
+        spec = inspect.getfullargspec(members["__dask_distributed_unpack__"])
+        assert spec.args == ["cls", "state", "dsk", "dependencies", "annotations"]
+        unpack = getattr(cls, "__dask_distributed_unpack__")
+        # https://stackoverflow.com/a/19228282
+        assert inspect.ismethod(unpack) and unpack.__self__ is cls
