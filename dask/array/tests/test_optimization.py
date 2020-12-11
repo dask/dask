@@ -388,6 +388,23 @@ def test_disable_lowlevel_fusion():
         assert_eq(y, [1] * 3)
 
 
+def test_array_creation_blockwise_fusion():
+    """
+    Check that certain array creation routines work with blockwise and can be
+    fused with other blockwise operations.
+    """
+    x = da.ones(3, chunks=(3,))
+    y = da.zeros(3, chunks=(3,))
+    z = da.full(3, fill_value=2, chunks=(3,))
+    a = x + y + z
+    dsk1 = a.__dask_graph__()
+    assert len(dsk1) == 5
+    with dask.config.set({"optimization.fuse.active": False}):
+        dsk2 = optimize(dsk1, y.__dask_keys__())
+        assert len(dsk2) == 1
+    assert_eq(a, np.full(3, 3))
+
+
 def test_gh3937():
     # test for github issue #3937
     x = da.from_array([1, 2, 3.0], (2,))

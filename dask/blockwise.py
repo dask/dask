@@ -571,6 +571,9 @@ class BlockwiseIO(Blockwise):
         # BlockwiseIO requires `io_deps` inputs
         self.io_deps = io_deps
 
+    def __repr__(self):
+        return "BlockwiseIO<{} -> {}>".format(self.indices, self.output)
+
     @property
     def _dict(self):
         if hasattr(self, "_cached_dict"):
