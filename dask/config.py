@@ -423,9 +423,12 @@ def refresh(config=config, defaults=defaults, **kwargs):
     update(config, collect(**kwargs))
 
 
-def get(key, default=no_default, config=config):
+def get(key, default=no_default, config=config, override_with=None):
     """
     Get elements from global config
+
+    If ``override_with`` is not None this value will be passed straight back.
+    Useful for getting kwarg defaults from Dask config.
 
     Use '.' for nested access
 
@@ -441,10 +444,18 @@ def get(key, default=no_default, config=config):
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
 
+    >>> config.get('foo.y', override_with=None)  # doctest: +SKIP
+    2
+
+    >>> config.get('foo.y', override_with=3)  # doctest: +SKIP
+    3
+
     See Also
     --------
     dask.config.set
     """
+    if override_with is not None:
+        return override_with
     keys = key.split(".")
     result = config
     for k in keys:
