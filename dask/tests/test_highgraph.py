@@ -1,4 +1,3 @@
-import inspect
 import os
 
 import pytest
@@ -131,54 +130,3 @@ def test_blockwise_cull(flat):
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
         assert not layer.is_materialized()
-
-
-def test_layer_interface():
-    # Import collections to populate Layer.__subclasses__
-    import dask.array  # noqa
-    import dask.dataframe  # noqa
-    import dask.bag  # noqa
-    import dask.delayed  # noqa
-
-    stack = {Layer}
-    checked = {".".join((Layer.__module__, Layer.__name__))}
-
-    while stack:
-        cls = stack.pop()
-
-        for subclass in cls.__subclasses__():
-            stack.add(subclass)
-            checked.add(".".join((subclass.__module__, subclass.__name__)))
-
-        members = dict(inspect.getmembers(cls))
-        # Must be able to pickle it
-        assert "__reduce__" in members
-        spec = inspect.getfullargspec(members["__reduce__"])
-        assert spec.args == ["self"]
-
-        # Must be able to pack it
-        assert "__dask_distributed_pack__" in members
-        spec = inspect.getfullargspec(members["__dask_distributed_pack__"])
-        assert spec.args == ["self", "client"]
-        pack = getattr(cls, "__dask_distributed_pack__")
-        assert inspect.isfunction(pack) and not hasattr(pack, "__self__")
-
-        # Must be able to unpack it
-        assert "__dask_distributed_unpack__" in members
-        spec = inspect.getfullargspec(members["__dask_distributed_unpack__"])
-        assert spec.args == ["cls", "state", "dsk", "dependencies", "annotations"]
-        unpack = getattr(cls, "__dask_distributed_unpack__")
-        # https://stackoverflow.com/a/19228282
-        assert inspect.ismethod(unpack) and unpack.__self__ is cls
-
-    assert checked == {
-        "dask.dataframe.io.csv.BlockwiseReadCSV",
-        "dask.dataframe.shuffle.SimpleShuffleLayer",
-        "dask.dataframe.io.parquet.core.BlockwiseParquet",
-        "dask.dataframe.shuffle.ShuffleLayer",
-        "dask.blockwise.BlockwiseIO",
-        "dask.dataframe.io.parquet.core.ParquetSubgraph",
-        "dask.highlevelgraph.Layer",
-        "dask.highlevelgraph.BasicLayer",
-        "dask.blockwise.Blockwise",
-    }
