@@ -32,6 +32,7 @@ from ...blockwise import BlockwiseIO
 import fsspec.implementations.local
 from fsspec.compression import compr
 from fsspec.core import get_fs_token_paths
+from fsspec.utils import infer_compression
 
 
 class CSVSubgraph(Mapping):
@@ -518,11 +519,8 @@ def read_pandas(
             raise TypeError("Path should be a string, os.PathLike, list or tuple")
         paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)[2]
 
-        # "Recognized" compression options
-        compression_options = {"gz": "gzip", "bz2": "bz2", "zip": "zip", "xz": "xz"}
-
-        # Check if the first path suffix is a recognized compression option
-        compression = compression_options.get(paths[0].split(".")[-1], None)
+        # Infer compression from first path
+        compression = infer_compression(paths[0])
 
     if blocksize == "default":
         blocksize = AUTO_BLOCKSIZE
