@@ -29,7 +29,7 @@ Garreth,6,20,0
 df = pd.read_csv(io.StringIO(data), index_col="number")
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def db():
     with tmpfile() as f:
         uri = "sqlite:///%s" % f
