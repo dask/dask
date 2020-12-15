@@ -9,7 +9,13 @@ from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import fuse
 from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
-from dask.array.optimization import getitem, optimize, optimize_slices, fuse_slice
+from dask.array.optimization import (
+    getitem,
+    optimize,
+    optimize_blockwise,
+    optimize_slices,
+    fuse_slice,
+)
 from dask.array.utils import assert_eq
 
 
@@ -399,9 +405,8 @@ def test_array_creation_blockwise_fusion():
     a = x + y + z
     dsk1 = a.__dask_graph__()
     assert len(dsk1) == 5
-    with dask.config.set({"optimization.fuse.active": False}):
-        dsk2 = optimize(dsk1, y.__dask_keys__())
-        assert len(dsk2) == 1
+    dsk2 = optimize_blockwise(dsk1)
+    assert len(dsk2) == 1
     assert_eq(a, np.full(3, 3))
 
 

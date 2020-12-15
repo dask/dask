@@ -16,6 +16,18 @@ from ..blockwise import BlockwiseIO, blockwise as core_blockwise
 class CreateArraySubgraph(Mapping):
     """
     Subgraph for numpy array creation utilities
+
+    Parameters
+    ----------
+    name: string
+        The output name.
+    func : callable
+        Function to apply to populate individual blocks. This function should take
+        an iterable containing the dimensions of the given block.
+    shape: iterable
+        Iterable containing the overall shape of the array.
+    chunks: iterable
+        Iterable containing the chunk sizes along each dimension of array.
     """
 
     def __init__(
@@ -34,7 +46,9 @@ class CreateArraySubgraph(Mapping):
 
     def __getitem__(self, key):
         """
-        Construct a task for a given key.
+        Get a task for a given key.
+
+        The tasks are constructed on demand.
         """
         try:
             name, *idx = key
@@ -69,9 +83,21 @@ class CreateArraySubgraph(Mapping):
 
 class BlockwiseCreateArray(BlockwiseIO):
     """
-    Specialized Blockwise Layer for numpy array creation routines.
+    Specialized Blockwise Layer for array creation routines.
 
     Enables HighLevelGraph optimizations.
+
+    Parameters
+    ----------
+    name: string
+        The output name.
+    func : callable
+        Function to apply to populate individual blocks. This function should take
+        an iterable containing the dimensions of the given block.
+    shape: iterable
+        Iterable containing the overall shape of the array.
+    chunks: iterable
+        Iterable containing the chunk sizes along each dimension of array.
     """
 
     def __init__(
