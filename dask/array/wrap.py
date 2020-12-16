@@ -48,6 +48,14 @@ def _parse_wrap_args(func, args, kwargs, shape):
     }
 
 
+def _create_array_from_block_info(func, block_info, **kwargs):
+    """
+    BlockwiseCreateArray passes a block_info object. Adapt numpy-like
+    array creation routines with shape as first arg to that.
+    """
+    return func(block_info["chunk-shape"], **kwargs)
+
+
 def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     """
     Transform np creation function into blocked version
@@ -69,7 +77,8 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     chunks = parsed["chunks"]
     name = parsed["name"]
     kwargs = parsed["kwargs"]
-    func = partial(func, dtype=dtype, **kwargs)
+
+    func = partial(_create_array_from_block_info, func, dtype=dtype, **kwargs)
 
     graph = BlockwiseCreateArray(
         name,
