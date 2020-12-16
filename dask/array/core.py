@@ -59,7 +59,7 @@ from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
 from .numpy_compat import _Recurser, _make_sliced_dtype
 from .slicing import slice_array, replace_ellipsis, cached_cumsum
-from .blockwise import blockwise
+from .blockwise import blockwise, BlockwiseCreateArray
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 
@@ -222,7 +222,11 @@ def slices_from_chunks(chunks):
     return list(product(*slices))
 
 
-def getem(
+def _get_from_block_info(getter, block_info):
+    return getter(tuple(slice(*s, None) for s in block_info["array-location"]))
+
+
+def graph_from_arraylike(
     arr,
     chunks,
     getitem=getter,
@@ -234,13 +238,13 @@ def getem(
 ):
     """Dask getting various chunks from an array-like
 
-    >>> getem('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
+    >>> graph_from_arraylike('X', chunks=(2, 3), shape=(4, 6))  # doctest: +SKIP
     {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
 
-    >>> getem('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
+    >>> graph_from_arraylike('X', chunks=((2, 2), (3, 3)))  # doctest: +SKIP
     {('X', 0, 0): (getter, 'X', (slice(0, 2), slice(0, 3))),
      ('X', 1, 0): (getter, 'X', (slice(2, 4), slice(0, 3))),
      ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
@@ -248,20 +252,20 @@ def getem(
     """
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    keys = product([out_name], *(range(len(bds)) for bds in chunks))
-    slices = slices_from_chunks(chunks)
 
     if (
         has_keyword(getitem, "asarray")
         and has_keyword(getitem, "lock")
         and (not asarray or lock)
     ):
-        values = [(getitem, arr, x, asarray, lock) for x in slices]
+        getter = partial(getitem, arr, asarray=asarray, lock=lock)
     else:
         # Common case, drop extra parameters
-        values = [(getitem, arr, x) for x in slices]
+        getter = partial(getitem, arr)
 
-    return dict(zip(keys, values))
+    return BlockwiseCreateArray(
+        out_name, partial(_get_from_block_info, getter), shape, chunks
+    )
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -2978,12 +2982,9 @@ def from_array(
 
     if name in (None, True):
         token = tokenize(x, chunks)
-        original_name = "array-original-" + token
         name = name or "array-" + token
     elif name is False:
-        original_name = name = "array-" + str(uuid.uuid1())
-    else:
-        original_name = name
+        name = "array-" + str(uuid.uuid1())
 
     if lock is True:
         lock = SerializableLock()
@@ -3010,8 +3011,8 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
-        dsk = getem(
-            original_name,
+        dsk = graph_from_arraylike(
+            x,
             chunks,
             getitem=getitem,
             shape=x.shape,
@@ -3020,7 +3021,7 @@ def from_array(
             asarray=asarray,
             dtype=x.dtype,
         )
-        dsk[original_name] = x
+        dsk = HighLevelGraph.from_collections(name, dsk)
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
