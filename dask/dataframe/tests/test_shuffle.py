@@ -1039,10 +1039,8 @@ def test_set_index_overlap_2():
     )
     ddf1 = dd.from_pandas(data, npartitions=2)
     ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
-    # import pdb; pdb.set_trace()
-    # pass
+
     assert_eq(ddf1, ddf2)
-    # assert_eq(data.reset_index(), ddf2.reset_index(), check_index=False)
     assert ddf2.npartitions == 8
 
 
