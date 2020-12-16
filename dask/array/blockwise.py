@@ -7,6 +7,7 @@ from collections.abc import Mapping
 from functools import reduce
 from itertools import product
 
+from .slicing import cached_cumsum
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -63,11 +64,21 @@ class CreateArraySubgraph(Mapping):
         if any(i < 0 or i >= len(c) for i, c in zip(idx, self.chunks)):
             raise KeyError(key)
 
-        # Get this chunk shape
+        # Get the block info for this chunk
         ndim = len(self.chunks)
-        chunk = tuple(self.chunks[i][idx[i]] for i in range(ndim))
+        chunk_shape = tuple(self.chunks[i][idx[i]] for i in range(ndim))
+        starts = [cached_cumsum(c, initial_zero=True) for c in self.chunks]
+        array_location = tuple(
+            (starts[i][idx[i]], starts[i][idx[i] + 1]) for i in range(ndim)
+        )
+        block_info = {
+            "shape": self.shape,
+            "num-chunks": tuple(len(c) for c in self.chunks),
+            "array-location": array_location,
+            "chunk-shape": chunk_shape,
+        }
 
-        return (self.func, chunk)
+        return (self.func, block_info)
 
     def __len__(self):
         return self._len
