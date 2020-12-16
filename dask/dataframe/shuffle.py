@@ -1229,12 +1229,13 @@ def fix_overlap(ddf, overlap):
     frames = []
     for i in overlap:
 
-        # `frames` is a list of data from <i partitions that may belong in
-        # partition i.  Add "overlap" from the previous partition (i-1) to the list.
+        # `frames` is a list of data from previous partitions that we may want to
+        # move to partition i.  Here, we add "overlap" from the previous partition
+        # (i-1) to this list.
         frames.append((get_overlap, (ddf._name, i - 1), ddf.divisions[i]))
 
-        # Make sure data that any data added from i-1 to `frames` is removed from
-        # that partition.
+        # Make sure that any data added from partition i-1 to `frames` is removed
+        # from partition i-1.
         dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
 
         # We do not want to move "overlap" from the previous partition (i-1) into
