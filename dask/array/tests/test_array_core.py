@@ -24,7 +24,7 @@ from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
 from dask.utils_test import inc, dec
 
 from dask.array.core import (
-    getem,
+    graph_from_arraylike,
     getter,
     dotmany,
     concatenate3,
@@ -45,6 +45,7 @@ from dask.array.core import (
     concatenate_axes,
 )
 from dask.blockwise import (
+    Blockwise,
     make_blockwise_graph as top,
     broadcast_dimensions,
     optimize_blockwise,
@@ -54,14 +55,16 @@ from dask.array.utils import assert_eq, same_keys
 from numpy import nancumsum, nancumprod
 
 
-def test_getem():
+def test_graph_from_arraylike():
     sol = {
         ("X", 0, 0): (getter, "X", (slice(0, 2), slice(0, 3))),
         ("X", 1, 0): (getter, "X", (slice(2, 4), slice(0, 3))),
         ("X", 1, 1): (getter, "X", (slice(2, 4), slice(3, 6))),
         ("X", 0, 1): (getter, "X", (slice(0, 2), slice(3, 6))),
     }
-    assert getem("X", (2, 3), shape=(4, 6)) == sol
+    dsk = graph_from_arraylike("X", (2, 3), shape=(4, 6))
+    assert isinstance(dsk, Blockwise)
+    assert dict(dsk) == sol
 
 
 def test_top():
@@ -195,16 +198,14 @@ def test_chunked_dot_product():
     x = np.arange(400).reshape((20, 20))
     o = np.ones((20, 20))
 
-    d = {"x": x, "o": o}
-
-    getx = getem("x", (5, 5), shape=(20, 20))
-    geto = getem("o", (5, 5), shape=(20, 20))
+    getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), out_name="x")
+    geto = graph_from_arraylike(o, (5, 5), shape=(20, 20), out_name="o")
 
     result = top(
         dotmany, "out", "ik", "x", "ij", "o", "jk", numblocks={"x": (4, 4), "o": (4, 4)}
     )
 
-    dsk = merge(d, getx, geto, result)
+    dsk = merge(getx, geto, result)
     out = dask.get(dsk, [[("out", i, j) for j in range(4)] for i in range(4)])
 
     assert_eq(np.dot(x, o), concatenate3(out))
@@ -213,14 +214,12 @@ def test_chunked_dot_product():
 def test_chunked_transpose_plus_one():
     x = np.arange(400).reshape((20, 20))
 
-    d = {"x": x}
-
-    getx = getem("x", (5, 5), shape=(20, 20))
+    getx = graph_from_arraylike(x, (5, 5), shape=(20, 20), out_name="x")
 
     f = lambda x: x.T + 1
     comp = top(f, "out", "ij", "x", "ji", numblocks={"x": (4, 4)})
 
-    dsk = merge(d, getx, comp)
+    dsk = merge(getx, comp)
     out = dask.get(dsk, [[("out", i, j) for j in range(4)] for i in range(4)])
 
     assert_eq(concatenate3(out), x.T + 1)
@@ -242,7 +241,7 @@ def test_Array():
     shape = (1000, 1000)
     chunks = (100, 100)
     name = "x"
-    dsk = merge({name: "some-array"}, getem(name, chunks, shape=shape))
+    dsk = merge({name: "some-array"}, graph_from_arraylike(name, chunks, shape=shape))
     a = Array(dsk, name, chunks, shape=shape, dtype="f8")
 
     assert a.numblocks == (10, 10)
@@ -270,7 +269,9 @@ def test_numblocks_suppoorts_singleton_block_dims():
     shape = (100, 10)
     chunks = (10, 10)
     name = "x"
-    dsk = merge({name: "some-array"}, getem(name, shape=shape, chunks=chunks))
+    dsk = merge(
+        {name: "some-array"}, graph_from_arraylike(name, shape=shape, chunks=chunks)
+    )
     a = Array(dsk, name, chunks, shape=shape, dtype="f8")
 
     assert set(concat(a.__dask_keys__())) == {("x", i, 0) for i in range(10)}
@@ -320,7 +321,7 @@ def test_Array_numpy_gufunc_call__array_ufunc__02():
 def test_stack():
     a, b, c = [
         Array(
-            getem(name, chunks=(2, 3), shape=(4, 6)),
+            graph_from_arraylike(name, chunks=(2, 3), shape=(4, 6)),
             name,
             chunks=(2, 3),
             dtype="f8",
@@ -451,7 +452,7 @@ def test_stack_unknown_chunksizes():
 def test_concatenate():
     a, b, c = [
         Array(
-            getem(name, chunks=(2, 3), shape=(4, 6)),
+            graph_from_arraylike(name, chunks=(2, 3), shape=(4, 6)),
             name,
             chunks=(2, 3),
             dtype="f8",
