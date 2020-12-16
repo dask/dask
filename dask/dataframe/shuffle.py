@@ -1226,10 +1226,25 @@ def fix_overlap(ddf, overlap):
     n = len(ddf.divisions) - 1
     dsk = {(name, i): (ddf._name, i) for i in range(n)}
 
+    frames = []
     for i in overlap:
-        frames = [(get_overlap, (ddf._name, i - 1), ddf.divisions[i]), (ddf._name, i)]
-        dsk[(name, i)] = (methods.concat, frames)
+
+        # `frames` is a list of data from <i partitions that may belong in
+        # partition i.  Add "overlap" from the previous partition (i-1) to the list.
+        frames.append((get_overlap, (ddf._name, i - 1), ddf.divisions[i]))
+
+        # Make sure data that any data added from i-1 to `frames` is removed from
+        # that partition.
         dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
+
+        # We do not want to move "overlap" from the previous partition (i-1) into
+        # this partition (i) if the data from this partition will need to be moved
+        # to the next partitition (i+1) anyway.  If we concatenate data too early,
+        # we may loose rows (https://github.com/dask/dask/issues/6972).
+        if i == ddf.npartitions - 2 or ddf.divisions[i] != ddf.divisions[i + 1]:
+            frames.append((ddf._name, i))
+            dsk[(name, i)] = (methods.concat, frames)
+            frames = []
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, ddf._meta, ddf.divisions)

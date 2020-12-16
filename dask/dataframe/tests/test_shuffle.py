@@ -1030,6 +1030,22 @@ def test_set_index_overlap():
     assert_eq(a, b)
 
 
+def test_set_index_overlap_2():
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
+            name="index",
+        )
+    )
+    ddf1 = dd.from_pandas(data, npartitions=2)
+    ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
+    # import pdb; pdb.set_trace()
+    # pass
+    assert_eq(ddf1, ddf2)
+    # assert_eq(data.reset_index(), ddf2.reset_index(), check_index=False)
+    assert ddf2.npartitions == 8
+
+
 def test_shuffle_hlg_layer():
     # This test checks that the `ShuffleLayer` HLG Layer
     # is used (as expected) for a multi-stage shuffle.
