@@ -2330,10 +2330,15 @@ def test_from_array_with_lock():
     x = np.arange(10)
     d = da.from_array(x, chunks=5, lock=True)
 
+    # Pull io_subgraph and getter functions from deep in the graph
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
+    io_subgraphs = [t[0] for t in tasks]
+    getters = [next(iter(i.dsk.values()))[0].func.args[0] for i in io_subgraphs]
 
-    assert hasattr(tasks[0][4], "acquire")
-    assert len(set(task[4] for task in tasks)) == 1
+    # Check that a lock is set.
+    assert hasattr(getters[0].keywords.get("lock"), "acquire")
+    # Check that the same lock is shared between tasks.
+    assert len(set(getter.keywords["lock"] for getter in getters)) == 1
 
     assert_eq(d, x)
 
