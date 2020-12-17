@@ -28,8 +28,8 @@ from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from fsspec.compression import compr
 
-
-fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
+# List of available compression format for test_read_csv_compression
+compression_fmts = [fmt for fmt in compr] + [None]
 
 
 def normalize_text(s):
@@ -717,14 +717,17 @@ def test_read_csv_sensitive_to_enforce():
         assert a._name != b._name
 
 
-@pytest.mark.parametrize("fmt,blocksize", fmt_bs)
+@pytest.mark.parametrize("blocksize", [None, 10])
+@pytest.mark.parametrize("fmt", compression_fmts)
 def test_read_csv_compression(fmt, blocksize):
-    if fmt not in compress:
+    if fmt and fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
     suffix = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}.get(fmt, "")
-    files2 = valmap(compress[fmt], csv_files)
+    files2 = valmap(compress[fmt], csv_files) if fmt else csv_files
     renamed_files = {k + suffix: v for k, v in files2.items()}
     with filetexts(renamed_files, mode="b"):
+        # This test is using `compression="infer"` (the default) for
+        # read_csv.  The paths must have the appropriate extension.
         if fmt and blocksize:
             with pytest.warns(UserWarning):
                 df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)

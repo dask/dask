@@ -1,4 +1,3 @@
-import os
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -515,8 +514,6 @@ def read_pandas(
     # set the proper compression option if the suffix is recongnized.
     if compression == "infer":
         # Translate the input urlpath to a simple path list
-        if not isinstance(urlpath, (str, list, tuple, os.PathLike)):
-            raise TypeError("Path should be a string, os.PathLike, list or tuple")
         paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)[2]
 
         # Infer compression from first path
