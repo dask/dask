@@ -1145,7 +1145,6 @@ def _optimize_blockwise(full_graph, keys=()):
 
             # Merge these Blockwise layers into one
             new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
-            # io_names |= set(new_layer.io_deps)
             out[layer] = new_layer
 
             new_deps = set()
