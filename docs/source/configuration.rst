@@ -213,8 +213,8 @@ This is typically handled by the downstream libraries which use base64 encoding 
 config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
 
 .. autosummary::
-   dask.config.serialize_for_cli
-   dask.config.deserialize_for_cli
+   dask.config.serialize
+   dask.config.deserialize
 
 Conversion Utility
 ~~~~~~~~~~~~~~~~~~

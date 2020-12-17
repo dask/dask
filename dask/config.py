@@ -588,8 +588,10 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
         return key
 
 
-def serialize_for_cli(data):
-    """Serialize config data into a string that can be passed via the CLI.
+def serialize(data):
+    """Serialize config data into a string.
+
+    Typically used to pass config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
 
     Parameters
     ----------
@@ -605,13 +607,15 @@ def serialize_for_cli(data):
     return base64.urlsafe_b64encode(json.dumps(data).encode()).decode()
 
 
-def deserialize_for_cli(data):
+def deserialize(data):
     """De-serialize config data into the original object.
+
+    Typically when receiving config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
 
     Parameters
     ----------
     data: str
-        String serialied by serialize_for_cli()
+        String serialied by :func:`dask.config.serialize`
 
     Returns
     -------
@@ -624,8 +628,7 @@ def deserialize_for_cli(data):
 
 def _initialize():
     if "DASK_INTERNAL_INHERIT_CONFIG" in os.environ:
-        config = deserialize_for_cli(os.environ["DASK_INTERNAL_INHERIT_CONFIG"])
-        update(global_config, config)
+        update(global_config, deserialize(os.environ["DASK_INTERNAL_INHERIT_CONFIG"]))
 
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
 
