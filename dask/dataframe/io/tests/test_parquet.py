@@ -3300,7 +3300,6 @@ def test_roundtrip_decimal_dtype(tmpdir):
     check_pyarrow()
     tmpdir = str(tmpdir)
 
-    schema = {"col1": pa.decimal128(5, 2)}
     data = [
         {
             "ts": pd.to_datetime("2021-01-01", utc="Europe/Berlin"),
@@ -3310,7 +3309,7 @@ def test_roundtrip_decimal_dtype(tmpdir):
     ]
     ddf1 = dd.from_pandas(pd.DataFrame(data), npartitions=1)
 
-    ddf1.to_parquet(path=tmpdir, engine="pyarrow", schema=schema)
+    ddf1.to_parquet(path=tmpdir, engine="pyarrow")
     ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
 
     assert ddf1["col1"].dtype == ddf2["col1"].dtype
