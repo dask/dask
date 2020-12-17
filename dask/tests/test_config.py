@@ -494,7 +494,7 @@ def test_get_override_with():
         assert dask.config.get("foo", override_with=["one"]) == ["one"]
 
 
-def test_cli_serialization():
+def test_config_serialization():
     # Use context manager without changing the value to ensure test side effects are restored
     with dask.config.set({"array.svg.size": dask.config.get("array.svg.size")}):
 
