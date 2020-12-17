@@ -1145,6 +1145,7 @@ def _optimize_blockwise(full_graph, keys=()):
 
             # Merge these Blockwise layers into one
             new_layer = rewrite_blockwise([layers[l] for l in blockwise_layers])
+            # io_names |= set(new_layer.io_deps)
             out[layer] = new_layer
 
             new_deps = set()
@@ -1206,7 +1207,6 @@ def rewrite_blockwise(inputs):
     concatenate = inputs[root].concatenate
     dsk = dict(inputs[root].dsk)
 
-    io_deps = {}
     changed = True
     while changed:
         changed = False
@@ -1217,9 +1217,6 @@ def rewrite_blockwise(inputs):
                 continue
 
             changed = True
-
-            # Update IO-subgraph information
-            io_deps.update(inputs[dep].io_deps)
 
             # Replace _n with dep name in existing tasks
             # (inc, _0) -> (inc, 'b')
@@ -1290,6 +1287,11 @@ def rewrite_blockwise(inputs):
     indices_check = {k for k, v in indices if v is not None}
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])
     numblocks = {k: v for k, v in numblocks.items() if v is None or k in indices_check}
+
+    # Update IO-subgraph information
+    io_deps = {}
+    for v in inputs.values():
+        io_deps.update(v.io_deps)
 
     if io_deps:
         # Fused layer includes IO
