@@ -41,7 +41,7 @@ def test_progressbar(capsys):
 
 
 def test_minimum_time(capsys):
-    with ProgressBar(1.0):
+    with ProgressBar(10.0):
         out = get_threaded(dsk, "e")
     out, err = capsys.readouterr()
     assert out == "" and err == ""
