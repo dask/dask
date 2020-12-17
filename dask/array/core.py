@@ -261,6 +261,7 @@ def graph_from_arraylike(
      ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
     """
+    # TODO: probably get shape, dtype(?) from arr
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
