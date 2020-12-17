@@ -3,6 +3,7 @@ import glob
 import os
 import sys
 import warnings
+from decimal import Decimal
 from distutils.version import LooseVersion
 
 import numpy as np
@@ -3295,8 +3296,6 @@ def test_dir_filter(tmpdir, engine):
 
 def test_roundtrip_decimal_dtype(tmpdir):
     # https://github.com/dask/dask/issues/6948
-    from decimal import Decimal
-
     check_pyarrow()
     tmpdir = str(tmpdir)
 
