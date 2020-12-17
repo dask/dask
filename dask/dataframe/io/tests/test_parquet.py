@@ -3291,3 +3291,27 @@ def test_dir_filter(tmpdir, engine):
     ddf.to_parquet(tmpdir, partition_on="year", engine=engine)
     dd.read_parquet(tmpdir, filters=[("year", "==", 2020)], engine=engine)
     assert all
+
+
+def test_roundtrip_decimal_dtype(tmpdir):
+    # https://github.com/dask/dask/issues/6948
+    from decimal import Decimal
+
+    check_pyarrow()
+    tmpdir = str(tmpdir)
+
+    schema = {"col1": pa.decimal128(5, 2)}
+    data = [
+        {
+            "ts": pd.to_datetime("2021-01-01", utc="Europe/Berlin"),
+            "col1": Decimal("123.00"),
+        }
+        for i in range(23)
+    ]
+    ddf1 = dd.from_pandas(pd.DataFrame(data), npartitions=1)
+
+    ddf1.to_parquet(path=tmpdir, engine="pyarrow", schema=schema)
+    ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
+
+    assert ddf1["col1"].dtype == ddf2["col1"].dtype
+    assert_eq(ddf1, ddf2, check_divisions=False)
