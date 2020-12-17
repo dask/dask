@@ -22,6 +22,9 @@ from dask.config import (
     refresh,
     expand_environment_variables,
     canonical_name,
+    serialize_for_cli,
+    deserialize_for_cli,
+    _initialize,
 )
 
 from dask.utils import tmpfile
@@ -489,3 +492,23 @@ def test_get_override_with():
             "hello": "world"
         }
         assert dask.config.get("foo", override_with=["one"]) == ["one"]
+
+
+def test_cli_serialization():
+    # Use context manager without changing the value to ensure test side effects are restored
+    with dask.config.set({"array.svg.size": dask.config.get("array.svg.size")}):
+
+        # Take a round trip through the serialization
+        serialized = serialize_for_cli({"array": {"svg": {"size": 150}}})
+        config = deserialize_for_cli(serialized)
+
+        dask.config.update(dask.config.global_config, config)
+        assert dask.config.get("array.svg.size") == 150
+
+
+def test_config_inheritance():
+    os.environ["DASK_INTERNAL_INHERIT_CONFIG"] = serialize_for_cli(
+        {"array": {"svg": {"size": 150}}}
+    )
+    _initialize()
+    assert dask.config.get("array.svg.size") == 150

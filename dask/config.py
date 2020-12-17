@@ -1,6 +1,8 @@
 import ast
+import base64
 import builtins
 from collections.abc import Mapping
+import json
 import os
 import sys
 import threading
@@ -586,7 +588,45 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
         return key
 
 
+def serialize_for_cli(data):
+    """Serialize config data into a string that can be passed via the CLI.
+
+    Parameters
+    ----------
+    data: json-serializable object
+        The data to serialize
+
+    Returns
+    -------
+    serialized_data: str
+        The serialized data as a string
+
+    """
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).decode()
+
+
+def deserialize_for_cli(data):
+    """De-serialize config data into the original object.
+
+    Parameters
+    ----------
+    data: str
+        String serialied by serialize_for_cli()
+
+    Returns
+    -------
+    deserialized_data: obj
+        The de-serialized data
+
+    """
+    return json.loads(base64.urlsafe_b64decode(data.encode()).decode())
+
+
 def _initialize():
+    if "DASK_INTERNAL_INHERIT_CONFIG" in os.environ:
+        config = deserialize_for_cli(os.environ["DASK_INTERNAL_INHERIT_CONFIG"])
+        update(global_config, config)
+
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
 
     with open(fn) as f:
