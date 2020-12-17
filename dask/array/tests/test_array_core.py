@@ -19,6 +19,7 @@ import dask
 import dask.array as da
 import dask.dataframe
 from dask.base import tokenize, compute_as_if_collection
+from dask.core import istask
 from dask.delayed import Delayed, delayed
 from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
 from dask.utils_test import inc, dec
@@ -57,15 +58,36 @@ from numpy import nancumsum, nancumprod
 
 
 def test_graph_from_arraylike():
-    sol = {
-        ("X", 0, 0): (getter, "X", (slice(0, 2), slice(0, 3))),
-        ("X", 1, 0): (getter, "X", (slice(2, 4), slice(0, 3))),
-        ("X", 1, 1): (getter, "X", (slice(2, 4), slice(3, 6))),
-        ("X", 0, 1): (getter, "X", (slice(0, 2), slice(3, 6))),
-    }
-    dsk = graph_from_arraylike("X", (2, 3), shape=(4, 6))
+    d = 2
+    chunk = (2, 3)
+    shape = tuple(d * n for n in chunk)
+    arr = np.ones(shape)
+
+    def check_task(dsk, i, j):
+        key = ("X", i, j)
+        assert key in dsk
+
+        # Check the array is bound
+        func = dsk[key][0].dsk["X"][0].func
+        assert arr in func.args[0].args
+
+        # Check the block dimensions
+        block_info = dsk[key][1][0]
+        assert block_info["shape"] == shape
+        assert block_info["chunk-shape"] == chunk
+        assert block_info["array-location"] == (
+            (chunk[0] * i, chunk[0] * (i + 1)),
+            (chunk[1] * j, chunk[1] * (j + 1)),
+        )
+        assert block_info["num-chunks"] == (d, d)
+
+    dsk = graph_from_arraylike(arr, chunk, out_name="X", shape=shape)
     assert isinstance(dsk, BlockwiseIO)
-    assert dict(dsk) == sol
+    dsk = dict(dsk)
+    check_task(dsk, 0, 0)
+    check_task(dsk, 1, 0)
+    check_task(dsk, 0, 1)
+    check_task(dsk, 1, 1)
 
 
 def test_top():
@@ -2525,8 +2547,13 @@ def test_asarray_h5py(asarray):
         with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
             x = asarray(d)
-            assert d in x.dask.values()
-            assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
+
+            # Check the array is bound
+            dsk = dict(x.dask)
+            key = next(iter(dsk))
+            func = dsk[key][0].dsk[key[0]][0].func
+            assert d in func.args[0].args
+            assert all(istask(v) for v in dsk.values())
 
 
 def test_asarray_chunks():
