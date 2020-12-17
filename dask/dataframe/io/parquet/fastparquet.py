@@ -322,8 +322,9 @@ class FastParquetEngine(Engine):
                             skip_cols.add(col)
                             continue
                         if isinstance(cs_min, np.datetime64):
-                            cs_min = pd.Timestamp(cs_min)
-                            cs_max = pd.Timestamp(cs_max)
+                            tz = getattr(dtypes[col], "tz", None)
+                            cs_min = pd.Timestamp(cs_min, tz=tz)
+                            cs_max = pd.Timestamp(cs_max, tz=tz)
                         d.update(
                             {
                                 "min": cs_min,
