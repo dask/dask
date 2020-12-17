@@ -22,8 +22,8 @@ from dask.config import (
     refresh,
     expand_environment_variables,
     canonical_name,
-    serialize_for_cli,
-    deserialize_for_cli,
+    serialize,
+    deserialize,
     _initialize,
 )
 
@@ -499,15 +499,15 @@ def test_cli_serialization():
     with dask.config.set({"array.svg.size": dask.config.get("array.svg.size")}):
 
         # Take a round trip through the serialization
-        serialized = serialize_for_cli({"array": {"svg": {"size": 150}}})
-        config = deserialize_for_cli(serialized)
+        serialized = serialize({"array": {"svg": {"size": 150}}})
+        config = deserialize(serialized)
 
         dask.config.update(dask.config.global_config, config)
         assert dask.config.get("array.svg.size") == 150
 
 
 def test_config_inheritance():
-    os.environ["DASK_INTERNAL_INHERIT_CONFIG"] = serialize_for_cli(
+    os.environ["DASK_INTERNAL_INHERIT_CONFIG"] = serialize(
         {"array": {"svg": {"size": 150}}}
     )
     _initialize()
