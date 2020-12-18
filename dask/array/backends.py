@@ -91,3 +91,21 @@ def _tensordot_scipy_sparse(a, b, axes):
         return a * b
     elif a_axis == 1 and b_axis == 1:
         return a * b.T
+
+
+import numpy as np
+
+
+def numpy_matrix_concatenate(L, axis=0):
+    if axis == 0:
+        return np.vstack(L)
+    elif axis == 1:
+        return np.hstack(L)
+    else:
+        msg = (
+            "Can only concatenate numpy matrices for axis in " "{0, 1}.  Got %s" % axis
+        )
+        raise ValueError(msg)
+
+
+concatenate_lookup.register(np.matrix, numpy_matrix_concatenate)
