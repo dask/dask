@@ -633,6 +633,8 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             "Index, got `%s`" % typename(type(meta))
         )
 
+    # Notice, we use .__class__ as opposed to type() in order to support
+    # object proxies see <https://github.com/dask/dask/pull/6981>
     if x.__class__ != meta.__class__:
         errmsg = "Expected partition of type `%s` but got `%s`" % (
             typename(type(meta)),
