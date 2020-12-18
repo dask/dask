@@ -4946,7 +4946,9 @@ def handle_out(out, result):
         else:
             out = None
 
-    if out is not None and type(out) != type(result):
+    # Notice, we use .__class__ as opposed to type() in order to support
+    # object proxies see <https://github.com/dask/dask/pull/6981>
+    if out is not None and out.__class__ != result.__class__:
         raise TypeError(
             "Mismatched types between result and out parameter. "
             "out=%s, result=%s" % (str(type(out)), str(type(result)))
@@ -6391,28 +6393,19 @@ def get_parallel_type_index(_):
     return Index
 
 
-@get_parallel_type.register(object)
-def get_parallel_type_object(o):
-    return Scalar
-
-
 @get_parallel_type.register(_Frame)
 def get_parallel_type_frame(o):
     return get_parallel_type(o._meta)
 
 
-def parallel_types():
-    return tuple(
-        k
-        for k, v in get_parallel_type._lookup.items()
-        if v is not get_parallel_type_object
-    )
+@get_parallel_type.register(object)
+def get_parallel_type_object(_):
+    return Scalar
 
 
 def has_parallel_type(x):
     """ Does this object have a dask dataframe equivalent? """
-    get_parallel_type(x)  # trigger lazy registration
-    return isinstance(x, parallel_types())
+    return get_parallel_type(x) is not Scalar
 
 
 def new_dd_object(dsk, name, meta, divisions):
