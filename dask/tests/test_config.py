@@ -511,3 +511,6 @@ def test_config_inheritance():
     )
     refresh()
     assert dask.config.get("array.svg.size") == 150
+
+    del os.environ["DASK_INTERNAL_INHERIT_CONFIG"]
+    refresh()
