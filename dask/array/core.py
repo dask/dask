@@ -4218,18 +4218,16 @@ def is_scalar_for_elemwise(arg):
     >>> is_scalar_for_elemwise(np.dtype('i4'))
     True
     """
-    # the second half of shape_condition is essentially just to ensure that
-    # dask series / frame are treated as scalars in elemwise.
     maybe_shape = getattr(arg, "shape", None)
-    shape_condition = not isinstance(maybe_shape, Iterable) or any(
-        is_dask_collection(x) for x in maybe_shape
-    )
+
+    from ..dataframe import _Frame
 
     return (
         np.isscalar(arg)
-        or shape_condition
+        or not isinstance(maybe_shape, Iterable)
         or isinstance(arg, np.dtype)
         or (isinstance(arg, np.ndarray) and arg.ndim == 0)
+        or isinstance(arg, _Frame)
     )
 
 
