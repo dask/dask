@@ -19,7 +19,7 @@ def _get_pyarrow_dtypes(schema, categories):
                 "timezone", None
             )
             for c in pandas_metadata.get("columns", [])
-            if c["metadata"]
+            if c["pandas_type"] in ("datetime", "datetimetz") and c["metadata"]
         }
     else:
         pandas_metadata_dtypes = {}
