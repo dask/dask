@@ -1,4 +1,5 @@
 import itertools
+import warnings
 
 import numpy as np
 
@@ -571,9 +572,6 @@ class BlockwiseIO(Blockwise):
         # BlockwiseIO requires `io_deps` inputs
         self.io_deps = io_deps
 
-    def __repr__(self):
-        return "BlockwiseIO<{} -> {}>".format(self.indices, self.output)
-
     @property
     def _dict(self):
         if hasattr(self, "_cached_dict"):
@@ -660,13 +658,21 @@ def _inject_io_tasks(dsk, io_deps, output_indices, new_axes):
     # Loop through graph, and replace IO-placeholder tasks
     # with the actual underlying IO function
     for k in dsk:
-        for i in range(1, len(dsk[k])):
-            io_key = dsk[k][i]
-            if isinstance(io_key, tuple) and len(io_key) and io_key[0] in io_deps:
-                io_subgraph = io_deps.get(io_key[0])
+        for io_name, io_subgraph in io_deps.items():
+            # Leave out `new_axes` in key
+            io_key = (io_name,) + tuple(
+                [
+                    k[i + 1]
+                    for i, idx in enumerate(output_indices)
+                    if idx not in new_axes
+                ]
+            )
+            if io_key in dsk[k]:
+                # Inject IO-function arguments into the blockwise graph
+                # as a single (packed) tuple.
                 io_item = io_subgraph.get(io_key)
                 io_item = list(io_item[1:]) if len(io_item) > 1 else []
-                new_task = [io_item if j == i else v for j, v in enumerate(dsk[k])]
+                new_task = [io_item if v == io_key else v for v in dsk[k]]
                 dsk[k] = tuple(new_task)
 
     return dsk
@@ -1066,10 +1072,26 @@ def optimize_blockwise(graph, keys=()):
     --------
     rewrite_blockwise
     """
-    out = _optimize_blockwise(graph, keys=keys)
-    while out.dependencies != graph.dependencies:
-        graph = out
+    with warnings.catch_warnings():
+        # In some cases, rewrite_blockwise (called internally) will do a bad
+        # thing like `string in array[int].
+        # See dask/array/tests/test_atop.py::test_blockwise_numpy_arg for
+        # an example. NumPy currently raises a warning that 'a' == array([1, 2])
+        # will change from returning `False` to `array([False, False])`.
+        #
+        # Users shouldn't see those warnings, so we filter them.
+        # We set the filter here, rather than lower down, to avoid having to
+        # create and remove the filter many times inside a tight loop.
+
+        # https://github.com/dask/dask/pull/4805#discussion_r286545277 explains
+        # why silencing this warning shouldn't cause issues.
+        warnings.filterwarnings(
+            "ignore", "elementwise comparison failed", Warning
+        )  # FutureWarning or DeprecationWarning
         out = _optimize_blockwise(graph, keys=keys)
+        while out.dependencies != graph.dependencies:
+            graph = out
+            out = _optimize_blockwise(graph, keys=keys)
     return out
 
 
