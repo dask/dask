@@ -632,14 +632,14 @@ def test_set_index_timezone():
     df = pd.DataFrame({"tz": s_aware, "notz": s_naive})
     d = dd.from_pandas(df, 2)
 
-    d1 = d.set_index("notz", npartitions=2)
+    d1 = d.set_index("notz", npartitions=1)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
     assert d1.divisions[0] == s_naive[0] == s1[0]
     assert d1.divisions[-1] == s_naive[2] == s1[2]
 
     # We currently lose "freq".  Converting data with pandas-defined dtypes
     # to numpy or pure Python can be lossy like this.
-    d2 = d.set_index("tz", npartitions=2)
+    d2 = d.set_index("tz", npartitions=1)
     s2 = pd.DatetimeIndex(s_aware, dtype=s_aware.dtype)
     assert d2.divisions[0] == s2[0]
     assert d2.divisions[-1] == s2[2]
@@ -648,6 +648,18 @@ def test_set_index_timezone():
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
     with pytest.raises(TypeError):
         d2.divisions[0] == s2badtype[0]
+
+
+def test_set_index_npartitions():
+    # https://github.com/dask/dask/issues/6974
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"]
+        )
+    )
+    data = dd.from_pandas(data, npartitions=2)
+    output = data.reset_index().set_index("index", npartitions=1)
+    assert output.npartitions == 1
 
 
 @pytest.mark.parametrize("unit", ["ns", "us"])

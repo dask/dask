@@ -519,6 +519,7 @@ def set_index(
             mins == sorted(mins)
             and maxes == sorted(maxes)
             and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+            and npartitions == df.npartitions
         ):
             divisions = mins + [maxes[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
