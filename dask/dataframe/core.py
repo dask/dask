@@ -4177,7 +4177,43 @@ class DataFrame(_Frame):
 
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+
+            if self.partition_sizes:
+                if isinstance(key, list):
+                    key = np.array(key)
+
+                dtype = key.dtype
+                if dtype == np.dtype("bool"):
+                    partition_ends = np.cumsum(self.partition_sizes)
+                    assert len(key) == partition_ends[-1]
+                    partition_starts = [0] + list(partition_ends[:-1])
+                    partition_sizes = []
+                    partition_keys = []
+                    for start, end in zip(partition_starts, partition_ends):
+                        keys = key[start:end]
+                        partition_keys.append(keys)
+                        size = np.sum(keys)
+                        partition_sizes.append(size)
+
+                    dsk = {
+                        (name, i): (
+                            operator.getitem,
+                            (self._name, i),
+                            partition_keys[i],
+                        )
+                        for i in range(self.npartitions)
+                    }
+                    graph = HighLevelGraph.from_collections(
+                        name, dsk, dependencies=[self]
+                    )
+                    return new_dd_object(
+                        graph, name, meta, self.divisions, partition_sizes
+                    )
+
+            return new_dd_object(
+                graph, name, meta, self.divisions, self.partition_sizes
+            )
+
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             if self.divisions != key.divisions:

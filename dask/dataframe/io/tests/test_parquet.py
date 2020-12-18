@@ -327,7 +327,7 @@ def test_columns_auto_index(tmpdir, write_engine, read_engine):
     assert_eq(
         dd.read_parquet(fn, columns=[], engine=read_engine),
         ddf[[]],
-        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+        partition_sizes=(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4),
     )
 
     # No divisions
@@ -342,7 +342,7 @@ def test_columns_auto_index(tmpdir, write_engine, read_engine):
     assert_eq(
         dd.read_parquet(fn, columns=["x"], engine=read_engine),
         ddf[["x"]],
-        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+        partition_sizes=(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4),
     )
 
     # No divisions
@@ -365,7 +365,7 @@ def test_columns_index(tmpdir, write_engine, read_engine):
     assert_eq(
         dd.read_parquet(fn, columns=[], engine=read_engine, index="myindex"),
         ddf[[]],
-        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+        partition_sizes=(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4),
     )
 
     # No divisions
@@ -383,7 +383,7 @@ def test_columns_index(tmpdir, write_engine, read_engine):
     assert_eq(
         dd.read_parquet(fn, index="myindex", columns=["x"], engine=read_engine),
         ddf[["x"]],
-        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+        partition_sizes=(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4),
     )
 
     # No divisions
@@ -459,6 +459,7 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
         ddf2[["x", "y"]],
         check_index=False,
         divisions=[(None,) * 14, tuple(range(0, 42, 3))],
+        partition_sizes=[None, (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4)],
     )
 
     # One column and one index, all as columns
@@ -473,6 +474,7 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
         ddf2[["myindex", "x"]],
         check_index=False,
         divisions=[(None,) * 14, tuple(range(0, 42, 3))],
+        partition_sizes=[None, (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4)],
     )
 
 
@@ -580,7 +582,7 @@ def test_read_series(tmpdir, engine):
     assert_eq(
         ddf[["x"]],
         ddf2,
-        partition_sizes=[None, (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4)],
+        partition_sizes=(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4),
     )
 
     ddf2 = dd.read_parquet(fn, columns="x", index="myindex", engine=engine)
@@ -931,7 +933,10 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     df2 = dd.read_parquet(tmp, columns=["i32", "f"], engine=engine)
     assert_eq(
-        df[["i32", "f"]], df2, check_index=False, partition_sizes=[None, (50,) * 20]
+        df[["i32", "f"]],
+        df2,
+        check_index=False,
+        partition_sizes=(50,) * 20,
     )
 
     fns = glob.glob(os.path.join(tmp, "*.parquet"))
@@ -941,7 +946,10 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 
     df3 = dd.read_parquet(tmp, columns=["f", "i32"], engine=engine)
     assert_eq(
-        df[["f", "i32"]], df3, check_index=False, partition_sizes=[None, (50,) * 20]
+        df[["f", "i32"]],
+        df3,
+        check_index=False,
+        partition_sizes=(50,) * 20,
     )
 
 
