@@ -874,6 +874,9 @@ def test_read_parquet_custom_columns(tmpdir, engine):
         ),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"), {}, {}),
+        (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns]"), {}, {}),
+        (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, UTC]"), {}, {}),
+        (pd.DataFrame({"x": [3000, 2000, 1000]}).astype("datetime64[ns, CET]"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("uint16"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("float32"), {}, {}),
         (pd.DataFrame({"x": [3, 1, 2]}, index=[3, 2, 1]), {}, {}),
@@ -2932,6 +2935,22 @@ def test_from_pandas_preserve_none_index(tmpdir, engine):
     expect = pd.read_parquet(fn)
     got = dd.read_parquet(fn, engine=engine)
     assert_eq(expect, got)
+
+
+def test_multi_partition_none_index_false(tmpdir, engine):
+    check_pyarrow()
+    if pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
+
+    # Write dataset without dast.to_parquet
+    ddf1 = ddf.reset_index(drop=True)
+    for i, part in enumerate(ddf1.partitions):
+        path = tmpdir.join(f"test.{i}.parquet")
+        part.compute().to_parquet(str(path), engine="pyarrow")
+
+    # Read back with index=False
+    ddf2 = dd.read_parquet(str(tmpdir), index=False)
+    assert_eq(ddf1, ddf2)
 
 
 @write_read_engines()
