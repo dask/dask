@@ -4,10 +4,10 @@ from itertools import product
 from operator import add
 
 import numpy as np
-from numpy import nan
-from numpy.testing import assert_equal
 import pandas as pd
 import pytest
+from numpy import nan
+from numpy.testing import assert_equal
 from pandas.io.formats import format as pandas_format
 
 import dask

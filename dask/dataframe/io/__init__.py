@@ -8,6 +8,7 @@ from .io import (
     from_dask_array,
     from_delayed,
     from_pandas,
+    series_from_dask_array,
     to_bag,
     to_records,
 )
