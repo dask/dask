@@ -303,6 +303,26 @@ def test_getitem_slice():
     assert_eq(ddf["f":], df["f":])
 
 
+def test_series_getitem_slice():
+    df = pd.DataFrame(
+        {
+            "A": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+            "B": [9, 8, 7, 6, 5, 4, 3, 2, 1],
+            "C": [True, False, True] * 3,
+        },
+        index=list("abcdefghi"),
+    )
+    ddf = dd.from_pandas(df, 3)
+    A = ddf.A
+    C = ddf.C
+    assert_eq(A[C], df.A[df.C])
+    # Slicing doesn't require equal divisions; alignment flow sorts it out
+    C2 = C.repartition(divisions=("a", "e", "i"))
+    assert_eq(ddf.A[C2], df.A[df.C])
+    C4 = C.repartition(divisions=("a", "c", "g", "i"))
+    assert_eq(ddf.A[C4], df.A[df.C])
+
+
 def test_getitem_integer_slice():
     df = pd.DataFrame({"A": range(6)})
     ddf = dd.from_pandas(df, 2)
