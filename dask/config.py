@@ -178,10 +178,19 @@ def collect_env(env=None):
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
     -  Calls ``ast.literal_eval`` on the value
+
+    Any serialized config passed via ``DASK_INTERNAL_INHERIT_CONFIG`` is also set here.
+
     """
+
     if env is None:
         env = os.environ
-    d = {}
+
+    if "DASK_INTERNAL_INHERIT_CONFIG" in env:
+        d = deserialize(env["DASK_INTERNAL_INHERIT_CONFIG"])
+    else:
+        d = {}
+
     for name, value in env.items():
         if name.startswith("DASK_"):
             varname = name[5:].lower().replace("__", ".")
@@ -627,9 +636,6 @@ def deserialize(data):
 
 
 def _initialize():
-    if "DASK_INTERNAL_INHERIT_CONFIG" in os.environ:
-        update(global_config, deserialize(os.environ["DASK_INTERNAL_INHERIT_CONFIG"]))
-
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
 
     with open(fn) as f:

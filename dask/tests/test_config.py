@@ -24,7 +24,6 @@ from dask.config import (
     canonical_name,
     serialize,
     deserialize,
-    _initialize,
 )
 
 from dask.utils import tmpfile
@@ -510,5 +509,5 @@ def test_config_inheritance():
     os.environ["DASK_INTERNAL_INHERIT_CONFIG"] = serialize(
         {"array": {"svg": {"size": 150}}}
     )
-    _initialize()
+    refresh()
     assert dask.config.get("array.svg.size") == 150
