@@ -327,8 +327,7 @@ def test_getitem_integer_slice():
     df = pd.DataFrame({"A": range(6)})
     ddf = dd.from_pandas(df, 2)
     # integer slicing is iloc based
-    with pytest.raises(NotImplementedError):
-        ddf[1:3]
+    assert_eq(ddf[1:3], df[1:3])
 
     df = pd.DataFrame({"A": range(6)}, index=[1.0, 2.0, 3.0, 5.0, 10.0, 11.0])
     ddf = dd.from_pandas(df, 2)
@@ -591,23 +590,22 @@ def test_iloc(indexer):
 def test_iloc_series():
     s = pd.Series([1, 2, 3])
     ds = dd.from_pandas(s, 2)
-    with pytest.raises(AttributeError):
-        ds.iloc[:]
+    assert_eq(ds.iloc[:], ds.compute())
 
 
-def test_iloc_raises():
+def test_iloc_dataframe():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     ddf = dd.from_pandas(df, 2)
+    assert_eq(ddf.iloc[[0, 1], :], df.iloc[[0, 1], :])
+    assert_eq(ddf.iloc[[0, 1], [0, 1]], df.iloc[[0, 1], [0, 1]])
 
-    with pytest.raises(NotImplementedError):
-        ddf.iloc[[0, 1], :]
-
-    with pytest.raises(NotImplementedError):
-        ddf.iloc[[0, 1], [0, 1]]
-
-    with pytest.raises(ValueError):
+    with pytest.raises(pd.core.indexing.IndexingError):
+        df.iloc[[0, 1], [0, 1], [1, 2]]
+    with pytest.raises(pd.core.indexing.IndexingError):
         ddf.iloc[[0, 1], [0, 1], [1, 2]]
 
+    with pytest.raises(IndexError):
+        df.iloc[:, [5, 6]]
     with pytest.raises(IndexError):
         ddf.iloc[:, [5, 6]]
 

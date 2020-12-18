@@ -2,6 +2,7 @@ import warnings
 from functools import partial
 from itertools import product
 from operator import add
+from unittest import TestCase
 
 import numpy as np
 import pandas as pd
@@ -9,6 +10,7 @@ import pytest
 from numpy import nan
 from numpy.testing import assert_equal
 from pandas.io.formats import format as pandas_format
+from pandas.testing import assert_frame_equal, assert_series_equal
 
 import dask
 import dask.array as da
@@ -246,6 +248,215 @@ def test_partition_sizes():
     a = np.array(range(1100)).reshape((100, 11))
     d = da.from_array(a, chunks=(23, 4))
     assert d.chunks == ((23, 23, 23, 23, 8), (4, 4, 3))
+
+
+class IlocChecks:
+    df = pd.DataFrame([{"i": f"{i}{i}"} for i in range(100)])
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    def __init__(self, seed=123):
+        np.random.seed(seed)
+
+    def check(self, fn, pandas_fn=None):
+        l_exc = None
+        try:
+            l = fn(self.dask).compute()
+        except Exception as exc:
+            l_exc = exc
+
+        pandas_fn = pandas_fn or fn
+        r_exc = None
+        try:
+            r = pandas_fn(self.pandas)
+        except Exception as exc:
+            r_exc = exc
+
+        if l_exc or r_exc:
+            # TODO: match error msgs
+            assert type(l_exc) == type(r_exc)
+        else:
+            self.cmp(l, r)
+
+    bools = np.random.choice(a=[False, True], size=(100,), p=[0.5, 0.5])
+
+    def check_arr_slice(self, elems, chunks=None):
+        pnds_key = np.array(elems)
+        if chunks:
+            dask_key = da.from_array(elems, chunks)
+        else:
+            dask_key = pnds_key
+
+        self.check(lambda df: df.iloc[dask_key], lambda df: df.iloc[pnds_key])
+
+    def test_ranges(self):
+        idxs = (None, 0, 1, 10, 33, 34, 35, 68, 69, 70, 99, 100)
+        steps = [None] + [
+            sgn * i for i in [1, 2, 5, 30, 70, 99, 100] for sgn in [1, -1]
+        ]
+
+        def check(idx, args):
+            self.check(lambda df: df.iloc[range(*args)])
+
+        idx = 0
+        for start in idxs:
+            for end in idxs:
+                if end is None:
+                    continue
+                for step in steps:
+                    if step is not None:
+                        if step < 0:
+                            end -= 1
+
+                    if start is None:
+                        args = (end,)
+                    else:
+                        args = (start, end)
+
+                    if step is not None:
+                        args = (*args, step)
+
+                    try:
+                        check(idx, args)
+                        idx += 1
+                    except AssertionError:
+                        self.assertTrue(False)
+
+    def test_slices(self):
+        class Check:
+            def __getitem__(slf, slc):
+                self.check(lambda df: df.iloc[slc])
+
+        check = Check()
+
+        check[:100]
+        check[:]
+        check[0:100]
+
+        check[:34]
+        check[0:34]
+        check[10:34]
+
+        check[10:24]
+
+        check[:10]
+        check[0:10]
+
+        # 2nd partition
+        check[34:68]
+        check[35:68]
+        check[34:67]
+        check[35:67]
+        check[40:50]
+
+        # 3rd/last partition:
+        check[68:100]
+        check[69:100]
+        check[68:]
+        check[69:]
+        check[68:99]
+        check[69:99]
+        check[68:-1]
+        check[69:-1]
+
+        # empty slices
+        check[0:0]
+        check[1:1]
+        check[10:10]
+        check[33:33]
+        check[34:34]
+        check[35:35]
+        check[99:99]
+        check[100:100]
+        check[-1:-1]
+        check[-100:-100]
+        check[101:101]
+        check[200:200]
+        check[-101:-101]
+        check[-200:-200]
+
+        # across partitions:
+        check[10:90]
+        check[10:-10]
+        check[-90:-10]
+        check[1:-1]
+        check[-99:99]
+        check[:50]
+        check[1:50]
+        check[33:50]
+        check[:68]
+        check[1:68]
+        check[33:68]
+        check[:69]
+        check[1:69]
+        check[33:69]
+        check[34:69]
+        check[35:69]
+
+        check[:200]
+        check[0:200]
+        check[10:200]
+        check[50:200]
+        check[90:200]
+
+        check[::2]
+        check[99:-1:-1]
+
+    def test_arrays(self):
+        def check_arr_slice(chunks=None):
+            self.check_arr_slice(self.bools, chunks)
+
+        check_arr_slice()
+        check_arr_slice(
+            (
+                34,
+                34,
+                32,
+            )
+        )
+        check_arr_slice((100,))
+        check_arr_slice(
+            (
+                50,
+                50,
+            )
+        )
+        check_arr_slice((10,) * 10)
+        check_arr_slice((1,) * 100)
+
+    def test_ints(self):
+        # assert_frame_equal(self.df.iloc[range(10)], self.df.iloc[:10])
+        self.check(lambda df: df.iloc[range(1)])
+        self.check(lambda df: df.iloc[range(10)])
+        self.check(lambda df: df.iloc[range(99)])
+        self.check(lambda df: df.iloc[range(100)])
+
+        self.check(lambda df: df.iloc[range(99, -1, -1)])
+
+    # Pandas squeezes these to Series, but Dask generally doesn't have enough info to make that
+    # decision at graph-construction time. In principle, DDF.iloc does know whether the row-indexer
+    # will return exactly one row, so it could mimic Pandas. That would be a departure from other
+    # parts of Dask, which don't squeeze in situations like this. TODO: it's probably worth adding
+    # the squeeze, for consistency with Pandas.
+    # check(lambda df: df.iloc[0])
+    # check(lambda df: df.iloc[10])
+    # check(lambda df: df.iloc[34])
+    # check(lambda df: df.iloc[-1])
+
+
+class DataFrameIloc(TestCase, IlocChecks):
+    dask = IlocChecks.ddf
+    pandas = IlocChecks.df
+
+    def cmp(self, l, r):
+        assert_frame_equal(l, r)
+
+
+class SeriesIloc(TestCase, IlocChecks):
+    dask = IlocChecks.ddf.i
+    pandas = IlocChecks.df.i
+
+    def cmp(self, l, r):
+        assert_series_equal(l, r)
 
 
 def test_column_names():
