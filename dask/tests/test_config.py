@@ -506,11 +506,7 @@ def test_config_serialization():
 
 
 def test_config_inheritance():
-    os.environ["DASK_INTERNAL_INHERIT_CONFIG"] = serialize(
-        {"array": {"svg": {"size": 150}}}
+    config = collect_env(
+        {"DASK_INTERNAL_INHERIT_CONFIG": serialize({"array": {"svg": {"size": 150}}})}
     )
-    refresh()
-    assert dask.config.get("array.svg.size") == 150
-
-    del os.environ["DASK_INTERNAL_INHERIT_CONFIG"]
-    refresh()
+    assert dask.config.get("array.svg.size", config=config) == 150
