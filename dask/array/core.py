@@ -1914,7 +1914,11 @@ class Array(DaskMethodsMixin):
 
     @property
     def A(self):
-        return self
+        if type(self._meta) is np.ndarray:
+            return self
+        else:
+            # numpy.matrix, scipy.sparse.spmatrix, …
+            return self.map_blocks(lambda block: block.A, dtype=self.dtype)
 
     @property
     def T(self):
