@@ -4522,6 +4522,39 @@ def test_partitions_indexer():
 
 
 @pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
+def test_dask_array_holds_numpy_matrix_containers():
+    x = da.random.random((100, 10), chunks=(10, 5))
+    assert isinstance(x._meta, np.ndarray)
+    xx = x.compute()
+    assert isinstance(xx, np.ndarray)
+
+    y = x.map_blocks(np.matrix)
+    assert isinstance(y._meta, np.matrix)
+    yy = y.compute()
+    assert isinstance(yy, np.matrix)
+
+    assert_array_equal(yy, xx)
+
+    xT = x.T
+    assert isinstance(xT._meta, np.ndarray)
+    xxT = xT.compute()
+    assert isinstance(xxT, np.ndarray)
+
+    yT = y.T
+    assert isinstance(yT._meta, np.matrix)
+    yyT = yT.compute()
+    assert isinstance(yyT, np.matrix)
+
+    assert_array_equal(yyT, xxT)
+
+    z = x.T.map_blocks(np.matrix)
+    zz = z.compute()
+    assert isinstance(zz, np.matrix)
+
+    assert_array_equal(zz, xx.T)
+
+
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
 def test_dask_array_holds_scipy_sparse_containers():
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
