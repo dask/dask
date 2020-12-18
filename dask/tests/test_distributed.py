@@ -175,7 +175,6 @@ def test_zarr_distributed_roundtrip():
         a.to_zarr(d)
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
-        assert a2.chunks == a.chunks
 
 
 def test_zarr_in_memory_distributed_err(c):

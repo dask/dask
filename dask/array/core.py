@@ -3034,7 +3034,7 @@ def from_array(
 
 
 def from_zarr(
-    url, component=None, storage_options=None, chunks=None, name=None, **kwargs
+    url, component=None, storage_options=None, chunks="auto", name=None, **kwargs
 ):
     """Load array from the zarr storage format
 
@@ -3052,13 +3052,15 @@ def from_zarr(
     storage_options: dict
         Any additional parameters for the storage backend (ignored for local
         paths)
-    chunks: tuple of ints or tuples of ints
-        Passed to ``da.from_array``, allows setting the chunks on
-        initialisation, if the chunking scheme in the on-disc dataset is not
-        optimal for the calculations to follow.
+    chunks: str, int, tuple
+        Passed to ``da.from_array``.  See docstring there.
     name : str, optional
          An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
+
+    See Also
+    --------
+    from_array
     """
     import zarr
 
@@ -3073,10 +3075,10 @@ def from_zarr(
     else:
         mapper = url
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
-    chunks = chunks if chunks is not None else z.chunks
+
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
-    return from_array(z, chunks, name=name)
+    return from_array(z, chunks=chunks, name=name)
 
 
 def to_zarr(

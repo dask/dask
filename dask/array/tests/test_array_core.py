@@ -3876,7 +3876,22 @@ def test_zarr_roundtrip():
         a.to_zarr(d)
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
-        assert a2.chunks == a.chunks
+
+
+def test_from_zarr_align_chunks():
+    zarr = pytest.importorskip("zarr")
+    a = zarr.ones(shape=(40000, 40000), chunks=(1000, 4))
+    x = da.from_zarr(a)
+    assert x.chunksize[0] % 1000 == 0
+    assert x.chunksize[1] % 4 == 0
+    assert x.chunksize[0] > x.chunksize[1]
+
+
+def test_from_zarr_auto_chunks():
+    zarr = pytest.importorskip("zarr")
+    a = zarr.array(range(100), chunks=(1,))
+    x = da.from_zarr(a)
+    assert x.npartitions < 100
 
 
 @pytest.mark.parametrize("compute", [False, True])
@@ -3887,7 +3902,6 @@ def test_zarr_return_stored(compute):
         a2 = a.to_zarr(d, compute=compute, return_stored=True)
         assert isinstance(a2, Array)
         assert_eq(a, a2, check_graph=False)
-        assert a2.chunks == a.chunks
 
 
 def test_to_zarr_delayed_creates_no_metadata():
@@ -3910,7 +3924,6 @@ def test_zarr_existing_array():
     a.to_zarr(z)
     a2 = da.from_zarr(z)
     assert_eq(a, a2)
-    assert a2.chunks == a.chunks
 
 
 def test_to_zarr_unknown_chunks_raises():
@@ -3940,7 +3953,6 @@ def test_zarr_pass_mapper():
         a.to_zarr(mapper)
         a2 = da.from_zarr(mapper)
         assert_eq(a, a2)
-        assert a2.chunks == a.chunks
 
 
 def test_zarr_group():
@@ -3961,7 +3973,6 @@ def test_zarr_group():
 
         a2 = da.from_zarr(d, component="test")
         assert_eq(a, a2)
-        assert a2.chunks == a.chunks
 
 
 @pytest.mark.parametrize(
@@ -3991,7 +4002,6 @@ def test_zarr_nocompute():
         dask.compute(out)
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
-        assert a2.chunks == a.chunks
 
 
 def test_tiledb_roundtrip():
