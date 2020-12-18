@@ -422,6 +422,22 @@ def test_stack_unknown_chunksizes():
     a_x = a_ddf.values
     b_x = b_ddf.values
 
+    assert a_x.shape == (12, 1)
+    assert b_x.shape == (12, 1)
+
+    c_x = da.stack([a_x, b_x], axis=0)
+    assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=0))
+
+    c_x = da.stack([a_x, b_x], axis=1)
+    assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=1))
+
+    # Clear partition_sizes, which otherwise allow us to know the shapes (and stack along axis=0)
+    a_ddf.partition_sizes = None
+    b_ddf.partition_sizes = None
+
+    a_x = a_ddf.values
+    b_x = b_ddf.values
+
     assert np.isnan(a_x.shape[0])
     assert np.isnan(b_x.shape[0])
 
@@ -512,6 +528,22 @@ def test_concatenate_unknown_axes():
 
     a_ddf = dd.from_pandas(a_df, sort=False, npartitions=3)
     b_ddf = dd.from_pandas(b_df, sort=False, npartitions=3)
+
+    a_x = a_ddf.values
+    b_x = b_ddf.values
+
+    assert a_x.shape == (12, 1)
+    assert b_x.shape == (12, 1)
+
+    c_x = da.concatenate([a_x, b_x], axis=0)
+    assert_eq(c_x, np.concatenate([a_df.values, b_df.values], axis=0))
+
+    c_x = da.concatenate([a_x, b_x], axis=1)
+    assert_eq(c_x, np.concatenate([a_df.values, b_df.values], axis=1))
+
+    # Clear partition_sizes, which otherwise allow us to know the shapes, and concatenate along axis=0
+    a_ddf.partition_sizes = None
+    b_ddf.partition_sizes = None
 
     a_x = a_ddf.values
     b_x = b_ddf.values
