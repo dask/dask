@@ -4495,6 +4495,7 @@ class DataFrame(_Frame):
                 or pd.api.types.is_scalar(v)
                 or is_index_like(v)
                 or isinstance(v, Array)
+                or isinstance(v, np.ndarray)
             ):
                 raise TypeError(
                     "Column assignment doesn't support type "
@@ -4504,17 +4505,20 @@ class DataFrame(_Frame):
                 kwargs[k] = v(self)
 
             if isinstance(v, Array):
-                from .io import from_dask_array
+                from .io import series_from_dask_array
 
-                if len(v.shape) > 1:
-                    raise ValueError("Array assignment only supports 1-D arrays")
-                if v.npartitions != self.npartitions:
-                    raise ValueError(
-                        "Number of partitions do not match ({0} != {1})".format(
-                            v.npartitions, self.npartitions
-                        )
+                kwargs[k] = series_from_dask_array(v, index=self.index)
+            elif isinstance(v, np.ndarray):
+                if not self.partition_sizes:
+                    ValueError(
+                        "Can't assign a numpy array to a DataFrame without knowing the latter's partition_sizes"
                     )
-                kwargs[k] = from_dask_array(v, index=self.index, meta=self._meta)
+                from dask.array import from_array
+
+                darr = from_array(v, chunks=(self.partition_sizes,))
+                from .io import series_from_dask_array
+
+                kwargs[k] = series_from_dask_array(darr, index=self.index)
 
         pairs = list(sum(kwargs.items(), ()))
 
