@@ -2285,6 +2285,18 @@ def test_groupby_dropna_cudf(dropna, by):
     assert_eq(dask_result, cudf_result)
 
 
+def test_groupby_dropna_with_agg():
+    # https://github.com/dask/dask/issues/6986
+    df = pd.DataFrame(
+        {"id1": ["a", None, "b"], "id2": [1, 2, None], "v1": [4.5, 5.5, None]}
+    )
+    expected = df.groupby(["id1", "id2"], dropna=False).agg("sum")
+
+    ddf = dd.from_pandas(df, 1, sort=False)
+    actual = ddf.groupby(["id1", "id2"], dropna=False).agg("sum")
+    assert_eq(expected, actual)
+
+
 def test_rounding_negative_var():
     x = [-0.00179999999 for _ in range(10)]
     ids = [1 for _ in range(5)] + [2 for _ in range(5)]

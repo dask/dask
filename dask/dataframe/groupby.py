@@ -1595,7 +1595,7 @@ class _GroupBy(object):
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
-            chunk_kwargs={"funcs": chunk_funcs, **self.observed, **self.dropna},
+            chunk_kwargs=dict(funcs=chunk_funcs, **self.observed, **self.dropna),
             combine=_groupby_apply_funcs,
             combine_kwargs=dict(
                 funcs=aggregate_funcs, level=levels, **self.observed, **self.dropna
