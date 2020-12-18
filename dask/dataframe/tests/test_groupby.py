@@ -2285,6 +2285,10 @@ def test_groupby_dropna_cudf(dropna, by):
     assert_eq(dask_result, cudf_result)
 
 
+@pytest.mark.xfail(
+    not dask.dataframe.utils.PANDAS_GT_110,
+    reason="Should work starting from pandas 1.1.0",
+)
 def test_groupby_dropna_with_agg():
     # https://github.com/dask/dask/issues/6986
     df = pd.DataFrame(

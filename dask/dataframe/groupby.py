@@ -25,6 +25,7 @@ from .utils import (
     is_series_like,
     is_dataframe_like,
     PANDAS_GT_100,
+    PANDAS_GT_110,
 )
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
@@ -1591,6 +1592,12 @@ class _GroupBy(object):
 
         else:
             chunk_args = [self.obj] + self.index
+
+        if not PANDAS_GT_110 and self.dropna:
+            raise NotImplementedError(
+                "dropna is not a valid argument for dask.groupby.agg"
+                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+            )
 
         return aca(
             chunk_args,
