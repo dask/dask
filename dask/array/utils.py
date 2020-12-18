@@ -69,6 +69,9 @@ def meta_from_array(x, ndim=None, dtype=None):
         not hasattr(x, "shape")
         or not hasattr(x, "dtype")
         or not isinstance(x.shape, tuple)
+        or not hasattr(
+            x, "__getitem__"
+        )  # scipy.sparse.coo_matrix doesn't implement slicing, but is a suitable _meta value
     ):
         return x
 
