@@ -2936,6 +2936,22 @@ def test_from_pandas_preserve_none_index(tmpdir, engine):
     assert_eq(expect, got)
 
 
+def test_multi_partition_none_index_false(tmpdir, engine):
+    check_pyarrow()
+    if pa.__version__ < LooseVersion("0.15.0"):
+        pytest.skip("PyArrow>=0.15 Required.")
+
+    # Write dataset without dast.to_parquet
+    ddf1 = ddf.reset_index(drop=True)
+    for i, part in enumerate(ddf1.partitions):
+        path = tmpdir.join(f"test.{i}.parquet")
+        part.compute().to_parquet(str(path), engine="pyarrow")
+
+    # Read back with index=False
+    ddf2 = dd.read_parquet(str(tmpdir), index=False)
+    assert_eq(ddf1, ddf2)
+
+
 @write_read_engines()
 def test_from_pandas_preserve_none_rangeindex(tmpdir, write_engine, read_engine):
     # See GitHub Issue#6348

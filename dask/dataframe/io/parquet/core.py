@@ -1068,7 +1068,12 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
         # User didn't specify columns, so ignore any intersection
         # of auto-detected values with the index (if necessary)
         ignore_index_column_intersection = True
-        columns = [c for c in meta.columns]
+        # Do not allow "un-named" fields to be read in as columns.
+        # These were intended to be un-named indices at write time.
+        _index = index or []
+        columns = [
+            c for c in meta.columns if c not in (None, NONE_LABEL) or c in _index
+        ]
 
     if not set(columns).issubset(set(meta.columns)):
         raise ValueError(
