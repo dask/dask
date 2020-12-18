@@ -1703,6 +1703,22 @@ class Array(DaskMethodsMixin):
         self._chunks = y.chunks
 
     def __getitem__(self, index):
+        from dask.dataframe import Series
+
+        if isinstance(index, Series):
+            from numpy import dtype
+
+            if not index.dtype == dtype(bool):
+                raise ValueError(
+                    "Slicing by %s series not supported, only bools" % index.dtype
+                )
+            if index.partition_sizes is not None:
+                partition_sizes = self.chunks[0]
+                series = index.repartition(partition_sizes=partition_sizes)
+                return self[series.to_dask_array(lengths=True)]
+            else:
+                return self[index.to_dask_array(lengths=True)]
+
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (
             isinstance(index, list) and index and all(isinstance(i, str) for i in index)
@@ -2027,13 +2043,18 @@ class Array(DaskMethodsMixin):
     def __abs__(self):
         return elemwise(operator.abs, self)
 
-    @check_if_handled_given_other
-    def __add__(self, other):
+    def _elemwise_binary_df_op(self, op, other):
+        """Given a binary operation `op`, delegate to _Frame's impl if `other` is a _Frame, otherwise call perform `op`
+        elemwise"""
         from ..dataframe import DataFrame, Series
 
         if isinstance(other, (DataFrame, Series)):
             return NotImplemented
-        return elemwise(operator.add, self, other)
+        return elemwise(op, self, other)
+
+    @check_if_handled_given_other
+    def __add__(self, other):
+        return self._elemwise_binary_df_op(operator.add, other)
 
     @check_if_handled_given_other
     def __radd__(self, other):
@@ -2041,11 +2062,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __and__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.and_, self, other)
+        return self._elemwise_binary_df_op(operator.and_, other)
 
     @check_if_handled_given_other
     def __rand__(self, other):
@@ -2053,11 +2070,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __div__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.div, self, other)
+        return self._elemwise_binary_df_op(operator.div, other)
 
     @check_if_handled_given_other
     def __rdiv__(self, other):
@@ -2096,11 +2109,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __mod__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.mod, self, other)
+        return self._elemwise_binary_df_op(operator.mod, other)
 
     @check_if_handled_given_other
     def __rmod__(self, other):
@@ -2108,11 +2117,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __mul__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.mul, self, other)
+        return self._elemwise_binary_df_op(operator.mul, other)
 
     @check_if_handled_given_other
     def __rmul__(self, other):
@@ -2127,11 +2132,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __or__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.or_, self, other)
+        return self._elemwise_binary_df_op(operator.or_, other)
 
     @check_if_handled_given_other
     def __ror__(self, other):
@@ -2142,11 +2143,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __pow__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.pow, self, other)
+        return self._elemwise_binary_df_op(operator.pow, other)
 
     @check_if_handled_given_other
     def __rpow__(self, other):
@@ -2162,11 +2159,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __sub__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.sub, self, other)
+        return self._elemwise_binary_df_op(operator.sub, other)
 
     @check_if_handled_given_other
     def __rsub__(self, other):
@@ -2174,11 +2167,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __truediv__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.truediv, self, other)
+        return self._elemwise_binary_df_op(operator.truediv, other)
 
     @check_if_handled_given_other
     def __rtruediv__(self, other):
@@ -2186,11 +2175,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __floordiv__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.floordiv, self, other)
+        return self._elemwise_binary_df_op(operator.floordiv, other)
 
     @check_if_handled_given_other
     def __rfloordiv__(self, other):
@@ -2198,11 +2183,7 @@ class Array(DaskMethodsMixin):
 
     @check_if_handled_given_other
     def __xor__(self, other):
-        from ..dataframe import DataFrame, Series
-
-        if isinstance(other, (DataFrame, Series)):
-            return NotImplemented
-        return elemwise(operator.xor, self, other)
+        return self._elemwise_binary_df_op(operator.xor, other)
 
     @check_if_handled_given_other
     def __rxor__(self, other):
