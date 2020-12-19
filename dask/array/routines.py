@@ -1618,6 +1618,6 @@ def tril(m, k=0):
 @derived_from(np)
 def triu(m, k=0):
     m = asarray(m)
-    mask = tri(*m.shape[-2:], k=k-1, dtype=bool)
+    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool)
 
     return where(mask, zeros(1, dtype=m.dtype), m)
