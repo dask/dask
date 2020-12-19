@@ -6944,7 +6944,9 @@ def to_datetime(arg, meta=None, **kwargs):
             meta = pd.Series([pd.Timestamp("2000")])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
-    return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
+    return map_partitions(
+        pd.to_datetime, arg, meta=meta, preserve_partition_sizes=True, **kwargs
+    )
 
 
 @wraps(pd.to_timedelta)
