@@ -4346,11 +4346,22 @@ def test_mixed_dask_array_operations():
     df = pd.DataFrame({"x": [1, 2, 3]}, index=[4, 5, 6])
     ddf = dd.from_pandas(df, npartitions=2)
 
-    assert_eq(df.x + df.x.values, ddf.x + ddf.x.values)
-    assert_eq(df.x.values + df.x, ddf.x.values + ddf.x)
+    x = ddf.x
+    v = x.values
+    chunks = v.chunks
+    assert chunks == ((3,),)
+
+    l = df.x + df.x.values
+    r = x + v
+    assert_eq(l, r)
+    l = df.x.values + df.x
+    r = v + x
+    assert_eq(l, r)
 
     assert_eq(df.x + df.index.values, ddf.x + ddf.index.values)
-    assert_eq(df.index.values + df.x, ddf.index.values + ddf.x)
+    l = df.index.values + df.x
+    r = ddf.index.values + ddf.x
+    assert_eq(l, r)
 
     assert_eq(df.x + df.x.values.sum(), ddf.x + ddf.x.values.sum())
 
