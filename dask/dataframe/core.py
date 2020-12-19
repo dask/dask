@@ -1686,6 +1686,8 @@ Dask Name: {name}, {task} tasks"""
                 lengths = tuple(
                     self.map_partitions(len, enforce_metadata=False).compute()
                 )
+        elif isinstance(lengths, Sequence):
+            return self.repartition(partition_sizes=lengths).to_dask_array(lengths=True)
 
         arr = self.values
 

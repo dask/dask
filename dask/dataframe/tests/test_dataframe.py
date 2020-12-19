@@ -3089,7 +3089,7 @@ def test_to_frame():
     assert_eq(s.to_frame("bar"), a.to_frame("bar"))
 
 
-@pytest.mark.parametrize("as_frame", [False, False])
+@pytest.mark.parametrize("as_frame", [False, True])
 def test_to_dask_array_raises(as_frame):
     s = pd.Series([1, 2, 3, 4, 5, 6], name="foo")
     a = dd.from_pandas(s, npartitions=2)
@@ -3097,7 +3097,7 @@ def test_to_dask_array_raises(as_frame):
     if as_frame:
         a = a.to_frame()
 
-    with pytest.raises(ValueError, match="4 != 2"):
+    with pytest.raises(ValueError, match="6 != 10"):
         a.to_dask_array((1, 2, 3, 4))
 
     with pytest.raises(ValueError, match="Unexpected value"):
