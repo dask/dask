@@ -28,6 +28,7 @@ from .ufunc import rint
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
+
 def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
     Return a new array with the same shape and type as a given array.
