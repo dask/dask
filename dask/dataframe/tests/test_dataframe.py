@@ -16,7 +16,7 @@ import dask
 import dask.array as da
 import dask.dataframe as dd
 from dask.array.numpy_compat import _numpy_118
-from dask.base import compute_as_if_collection
+from dask.base import compute, compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
 from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, tm
@@ -457,6 +457,52 @@ class SeriesIloc(TestCase, IlocChecks):
 
     def cmp(self, l, r):
         assert_series_equal(l, r)
+
+
+def check_partition_sizes(df, *args, **kwargs):
+    if args or kwargs:
+        if args:
+            assert len(args) == 1
+            assert not kwargs
+            partition_sizes = args[0]
+        else:
+            assert not args
+            assert "partition_sizes" in kwargs
+            partition_sizes = kwargs.pop("partition_sizes")
+            assert not kwargs
+        assert df.partition_sizes == partition_sizes
+        if partition_sizes is not None:
+            computed = compute(*[partition for partition in df.partitions])
+            actual_sizes = tuple(len(partition) for partition in computed)
+            assert actual_sizes == partition_sizes
+    else:
+        computed = compute(*[partition for partition in df.partitions])
+        partition_sizes = tuple(len(partition) for partition in computed)
+        assert partition_sizes == df.partition_sizes
+
+
+def test_repartition_sizes():
+    df = dd.from_pandas(
+        pd.DataFrame([{"i": f"{i}{i}"} for i in range(100)]), npartitions=3
+    )
+    check_partition_sizes(df, (34, 34, 32))
+    df["len"] = df.i.map(len)
+
+    df2 = df.repartition(partition_sizes=(40, 40, 20))
+
+    assert_eq(
+        df,
+        df2,
+        divisions=[(0, 34, 68, 99), (None, None, None, None)],
+        partition_sizes=[(34, 34, 32), (40, 40, 20)],
+    )
+    assert_frame_equal(df.compute(), df2.compute())
+    check_partition_sizes(df2, (40, 40, 20))
+
+    df3 = df.repartition(partition_sizes=[10] * 10)
+
+    assert_frame_equal(df.compute(), df3.compute())
+    check_partition_sizes(df3, (10,) * 10)
 
 
 def test_column_names():
