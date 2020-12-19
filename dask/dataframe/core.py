@@ -3702,10 +3702,38 @@ class Index(Series):
         Caveat, this only checks the first partition.
         """
         name = "head-%d-%s" % (n, self._name)
-        dsk = {(name, 0): (operator.getitem, (self._name, 0), slice(0, n))}
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+        if self.partition_sizes:
+            num = n
+            idx = 0
+            partition_sizes = []
+            while num > 0 and idx < self.npartitions:
+                cur = self.partition_sizes[idx]
+                if cur >= num:
+                    partition_sizes.append(num)
+                    num = 0
+                    break
+                else:
+                    partition_sizes.append(cur)
+                    num -= cur
+                idx += 1
 
-        result = new_dd_object(graph, name, self._meta, self.divisions[:2])
+            dsk = {(name, i): (lambda x: x, (self._name, i)) for i in range(idx)}
+            dsk[(name, idx)] = (
+                operator.getitem,
+                (self._name, idx),
+                slice(0, partition_sizes[-1]),
+            )
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+
+            result = new_dd_object(
+                graph, name, self._meta, self.divisions[:2], partition_sizes
+            )
+
+        else:
+            dsk = {(name, 0): (operator.getitem, (self._name, 0), slice(0, n))}
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
+
+            result = new_dd_object(graph, name, self._meta, self.divisions[:2])
 
         if compute:
             result = result.compute()
