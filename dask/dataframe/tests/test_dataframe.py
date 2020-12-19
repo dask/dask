@@ -1,4 +1,5 @@
 import warnings
+from functools import partial
 from itertools import product
 from operator import add
 
@@ -1471,15 +1472,17 @@ def test_map():
     )
     ddf = dd.from_pandas(df, npartitions=3)
 
-    assert_eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
+    eq = partial(assert_eq, partition_sizes=(3, 3, 3))
+
+    eq(ddf.a.map(lambda x: x + 1), df.a.map(lambda x: x + 1))
     lk = dict((v, v + 1) for v in df.a.values)
-    assert_eq(ddf.a.map(lk), df.a.map(lk))
-    assert_eq(ddf.b.map(lk), df.b.map(lk))
+    eq(ddf.a.map(lk), df.a.map(lk))
+    eq(ddf.b.map(lk), df.b.map(lk))
     lk = pd.Series(lk)
-    assert_eq(ddf.a.map(lk), df.a.map(lk))
-    assert_eq(ddf.b.map(lk), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
-    assert_eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk))
+    eq(ddf.a.map(lk), df.a.map(lk))
+    eq(ddf.b.map(lk), df.b.map(lk))
+    eq(ddf.b.map(lk, meta=ddf.b), df.b.map(lk))
+    eq(ddf.b.map(lk, meta=("b", "i8")), df.b.map(lk))
 
 
 def test_concat():
