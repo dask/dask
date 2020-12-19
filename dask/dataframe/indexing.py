@@ -128,7 +128,10 @@ class _LocIndexer(_IndexerBase):
 
             meta = self._make_meta(iindexer, cindexer)
             return self.obj.map_partitions(
-                methods.try_loc, iindexer, cindexer, meta=meta
+                methods.try_loc,
+                iindexer,
+                cindexer,
+                meta=meta,  # TODO: partition_sizes
             )
 
     def _maybe_partial_time_string(self, iindexer):
@@ -143,7 +146,11 @@ class _LocIndexer(_IndexerBase):
     def _loc_series(self, iindexer, cindexer):
         meta = self._make_meta(iindexer, cindexer)
         return self.obj.map_partitions(
-            methods.loc, iindexer, cindexer, token="loc-series", meta=meta
+            methods.loc,
+            iindexer,
+            cindexer,
+            token="loc-series",
+            meta=meta,  # TODO: partition_sizes
         )
 
     def _loc_array(self, iindexer, cindexer):
@@ -281,6 +288,8 @@ class _LocIndexer(_IndexerBase):
 
         meta = self._make_meta(iindexer, cindexer)
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
+        # TODO: could at least figure out partition_sizes for ":" all-rows iindexer, and non-boundary partition_sizes in
+        # general (leaving Nones in self.partition_sizes on the ends?)
         return new_dd_object(graph, name, meta=meta, divisions=divisions)
 
 

@@ -148,7 +148,9 @@ def categorize(df, columns=None, index=None, split_every=None, **kwargs):
     categories, index = compute_as_if_collection(type(df), dsk, (prefix, 0), **kwargs)
 
     # Categorize each partition
-    return df.map_partitions(_categorize_block, categories, index)
+    return df.map_partitions(
+        _categorize_block, categories, index
+    )  # TODO: partition_sizes
 
 
 class CategoricalAccessor(Accessor):
@@ -273,6 +275,7 @@ class CategoricalAccessor(Accessor):
             {"new_categories": new_categories},
             meta=meta,
             token="cat-set_categories",
+            # TODO: partition_sizes
         )
 
 

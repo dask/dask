@@ -549,7 +549,7 @@ def to_records(df):
     dask.dataframe._Frame.values
     dask.dataframe.from_dask_array
     """
-    return df.map_partitions(M.to_records)
+    return df.map_partitions(M.to_records)  # TODO: partition_sizes
 
 
 @insert_meta_param_description
@@ -609,7 +609,7 @@ def from_delayed(
         if len(divs) != len(dfs) + 1:
             raise ValueError("divisions should be a tuple of len(dfs) + 1")
 
-    df = new_dd_object(dsk, name, meta, divs)
+    df = new_dd_object(dsk, name, meta, divs)  # TODO(partition-sizes)
 
     if divisions == "sorted":
         from ..shuffle import compute_and_set_sorted_divisions

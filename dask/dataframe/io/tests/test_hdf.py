@@ -707,7 +707,7 @@ def test_read_hdf_multiple():
         r = dd.read_hdf(fn, "/data*", sorted_index=True)
         assert a.npartitions == r.npartitions
         assert a.divisions == r.divisions
-        assert_eq(a, r)
+        assert_eq(a, r)  # TODO: HDF5 partition_sizes
 
 
 def test_read_hdf_start_stop_values():
