@@ -666,8 +666,9 @@ def tri(N, M=None, k=0, dtype=float, chunks="auto"):
         chunks = chunks[0][0]
 
     # TODO: Add numpys _min_int() helper function?
-    m = greater_equal.outer(arange(N, chunks=chunks, dtype=int),
-                            arange(-k, M-k, chunks=chunks, dtype=int))
+    m = greater_equal.outer(
+        arange(N, chunks=chunks, dtype=int), arange(-k, M - k, chunks=chunks, dtype=int)
+    )
 
     # Avoid making a copy if the requested type is already bool
     m = m.astype(dtype, copy=False)
