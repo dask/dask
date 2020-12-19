@@ -3911,7 +3911,9 @@ class DataFrame(_Frame):
             meta = self._meta[_extract_meta(key)]
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            return new_dd_object(
+                graph, name, meta, self.divisions, self.partition_sizes
+            )
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 

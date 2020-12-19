@@ -553,7 +553,9 @@ def test_read_series(tmpdir, engine):
     assert_eq(ddf[["x"]], ddf2)
 
     ddf2 = dd.read_parquet(fn, columns="x", index="myindex", engine=engine)
-    assert_eq(ddf.x, ddf2)
+    assert_eq(
+        ddf.x, ddf2, partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None]
+    )
 
 
 def test_names(tmpdir, engine):
@@ -991,7 +993,7 @@ def test_categories(tmpdir, engine):
     assert cats_set.tolist() == ["a", "c", "a", "b"]
 
     if engine == "fastparquet":
-        assert_eq(ddf.y, ddf2.y, check_names=False)
+        assert_eq(ddf.y, ddf2.y, check_names=False, partition_sizes=[(3, 2), None])
         with pytest.raises(TypeError):
             # attempt to load as category that which is not so encoded
             ddf2 = dd.read_parquet(fn, categories=["x"], engine=engine).compute()
