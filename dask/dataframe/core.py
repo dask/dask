@@ -4929,7 +4929,15 @@ class DataFrame(_Frame):
             )
             warnings.warn(meta_warning(meta))
 
-        return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
+        return map_partitions(
+            M.apply,
+            self,
+            func,
+            args=args,
+            meta=meta,
+            preserve_partition_sizes=True,
+            **kwds,
+        )
 
     @derived_from(pd.DataFrame)
     def applymap(self, func, meta="__no_default__"):
