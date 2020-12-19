@@ -3205,7 +3205,7 @@ def test_reset_index():
 
     sol = df.reset_index()
     res = ddf.reset_index()
-    assert all(d is None for d in res.divisions)
+    assert res.divisions == (0, 2, 3)
     assert_eq(res, sol, check_index=False)
 
     sol = df.reset_index(drop=True)

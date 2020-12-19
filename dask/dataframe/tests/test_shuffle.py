@@ -1116,8 +1116,9 @@ def test_set_index_overlap_2():
     ddf1 = dd.from_pandas(data, npartitions=2)
     ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
 
+    # TODO: partition-sizes should be 3?
     assert_eq(ddf1, ddf2, partition_sizes=[(9, 4), None])
-    assert ddf2.npartitions == 3
+    assert ddf2.npartitions == 2
 
 
 def test_shuffle_hlg_layer():

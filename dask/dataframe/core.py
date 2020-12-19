@@ -540,9 +540,48 @@ Dask Name: {name}, {task} tasks"""
         drop : boolean, default False
             Do not try to insert index into dataframe columns.
         """
-        return self.map_partitions(
-            M.reset_index, drop=drop, enforce_metadata=False
-        ).clear_divisions()
+        result = self.map_partitions(
+            M.reset_index,
+            drop=drop,
+            enforce_metadata=False,
+            preserve_partition_sizes=True,
+        )
+        partition_sizes = result.partition_sizes
+        if partition_sizes:
+            name = "default-index-%s" % tokenize(partition_sizes)
+            partition_idx_starts = result.partition_idx_starts
+            _len = result._len
+            divisions = partition_idx_starts + (max(0, _len - 1),)
+
+            from pandas import RangeIndex
+
+            meta = RangeIndex(0, 0)
+
+            partition_idx_ranges = result.partition_idx_ranges
+            dsk = HighLevelGraph.from_collections(
+                name,
+                {
+                    (name, idx): RangeIndex(start, end)
+                    for idx, (start, end) in enumerate(partition_idx_ranges)
+                },
+            )
+
+            index = Index(dsk, name, meta, divisions, partition_sizes)
+            # Force divisions to conform to partition_sizes (and new index's divisions, so alignment works as expected)
+            result.divisions = index.divisions
+            if isinstance(result, DataFrame):
+                result = result.set_index(
+                    index, drop=True, sorted=True, divisions=divisions
+                )
+            else:
+                assert isinstance(result, Series)
+                result = result.to_frame().set_index(
+                    index, drop=True, sorted=True, divisions=divisions
+                )[result.name]
+            result.partition_sizes = partition_sizes
+        else:
+            result = result.clear_divisions()
+        return result
 
     @property
     def known_divisions(self):
@@ -6681,6 +6720,9 @@ def repartition_npartitions(df, npartitions):
                 )
             elif np.issubdtype(original_divisions.dtype, np.integer):
                 divisions = divisions.astype(original_divisions.dtype)
+                # Coercion from floats back to ints can result in duplicate `divisions` entries (which fail
+                # `check_divisions` validation; silently "drop" would-be empty partitions here)
+                divisions = np.unique(divisions)
 
             if isinstance(divisions, np.ndarray):
                 divisions = divisions.tolist()
