@@ -2819,6 +2819,27 @@ Dask Name: {name}, {task} tasks"""
             enforce_metadata=False,
         )
 
+        from .multi import maybe_infer_partition_sizes
+
+        if join == "left":
+            out_size_guide = self
+        elif join == "right":
+            out_size_guide = other
+        else:
+            out_size_guide = None
+
+        if axis in [1, "1", "columns"]:
+            out_size_guides = (self, other)
+        else:
+            out_size_guides = (out_size_guide, out_size_guide)
+
+        partition_sizes1 = maybe_infer_partition_sizes(
+            aligned.divisions, out_size_guides[0]
+        )
+        partition_sizes2 = maybe_infer_partition_sizes(
+            aligned.divisions, out_size_guides[1]
+        )
+
         token = tokenize(self, other, join, axis, fill_value)
 
         name1 = "align1-" + token
@@ -2827,7 +2848,9 @@ Dask Name: {name}, {task} tasks"""
             for i, key in enumerate(aligned.__dask_keys__())
         }
         dsk1.update(aligned.dask)
-        result1 = new_dd_object(dsk1, name1, meta1, aligned.divisions)
+        result1 = new_dd_object(
+            dsk1, name1, meta1, aligned.divisions, partition_sizes=partition_sizes1
+        )
 
         name2 = "align2-" + token
         dsk2 = {
@@ -2835,7 +2858,9 @@ Dask Name: {name}, {task} tasks"""
             for i, key in enumerate(aligned.__dask_keys__())
         }
         dsk2.update(aligned.dask)
-        result2 = new_dd_object(dsk2, name2, meta2, aligned.divisions)
+        result2 = new_dd_object(
+            dsk2, name2, meta2, aligned.divisions, partition_sizes=partition_sizes2
+        )
 
         return result1, result2
 
