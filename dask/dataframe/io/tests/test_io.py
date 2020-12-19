@@ -378,15 +378,9 @@ def test_from_dask_array_index(as_frame):
     s = dd.from_pandas(pd.Series(range(10), index=list("abcdefghij")), npartitions=3)
     if as_frame:
         s = s.to_frame()
-        partition_sizes = [
-            None,  # TODO(partition-sizes): to_frame
-            None,  # TODO(partition-sizes): from_dask_array
-        ]
-    else:
-        partition_sizes = (4, 4, 2)
 
     result = dd.from_dask_array(s.values, index=s.index)
-    assert_eq(s, result, partition_sizes=partition_sizes)
+    assert_eq(s, result, partition_sizes=(4, 4, 2))
 
 
 def test_from_dask_array_index_raises():

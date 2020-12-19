@@ -3534,7 +3534,12 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def to_frame(self, name=None):
-        return self.map_partitions(M.to_frame, name, meta=self._meta.to_frame(name))
+        return self.map_partitions(
+            M.to_frame,
+            name,
+            meta=self._meta.to_frame(name),
+            preserve_partition_sizes=True,
+        )
 
     @derived_from(pd.Series)
     def to_string(self, max_rows=5):

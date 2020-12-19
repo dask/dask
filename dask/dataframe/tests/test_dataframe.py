@@ -2810,7 +2810,7 @@ def test_to_dask_array_unknown(as_frame):
     result = result.chunks
 
     if as_frame:
-        np.testing.assert_array_equal(result, ((np.nan, np.nan), (1,)))
+        assert result == ((2, 3), (1,))
     else:
         assert result == ((2, 3),)
 
