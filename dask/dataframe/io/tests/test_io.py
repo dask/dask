@@ -224,8 +224,9 @@ def test_from_pandas_dataframe():
     )
     ddf = dd.from_pandas(df, 3)
     assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
-    assert isinstance(ddf.divisions[0], type(df.index[0]))
+    assert ddf.divisions == tuple(
+        pd.to_datetime("201201%02d" % d) for d in (1, 9, 17, 22)
+    )
     tm.assert_frame_equal(df, ddf.compute())
     ddf = dd.from_pandas(df, chunksize=8)
     msg = "Exactly one of npartitions and chunksize must be specified."
@@ -236,8 +237,9 @@ def test_from_pandas_dataframe():
         dd.from_pandas(df)
     assert msg in str(err.value)
     assert len(ddf.dask) == 3
-    assert len(ddf.divisions) == len(ddf.dask) + 1
-    assert isinstance(ddf.divisions[0], type(df.index[0]))
+    assert ddf.divisions == tuple(
+        pd.to_datetime("201201%02d" % d) for d in (1, 9, 17, 22)
+    )
     tm.assert_frame_equal(df, ddf.compute())
 
 
