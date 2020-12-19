@@ -3128,6 +3128,12 @@ Dask Name: {name}, {task} tasks"""
                     "the number of partitions. "
                     "{} != {}".format(len(lengths), self.npartitions)
                 )
+            if self.partition_sizes and self.partition_sizes != lengths:
+                raise ValueError(
+                    "The provided 'lengths' do not match "
+                    "the existing partition sizes. "
+                    "{} != {}".format(len(lengths), self.partition_sizes)
+                )
 
             if self.ndim == 1:
                 chunks = normalize_chunks((lengths,))
