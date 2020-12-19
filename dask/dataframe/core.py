@@ -380,6 +380,31 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         )
 
     @property
+    def _len(self):
+        if self.partition_sizes is None:
+            return None
+        else:
+            return sum(self.partition_sizes)
+
+    @property
+    def partition_idx_starts(self):
+        if self.partition_sizes:
+            return tuple([0] + np.cumsum(self.partition_sizes)[:-1].tolist())
+        else:
+            return None
+
+    @property
+    def partition_idx_ranges(self):
+        if self.partition_sizes:
+            partition_ends = [0] + np.cumsum(self.partition_sizes).tolist()
+            return zip(
+                partition_ends,
+                partition_ends[1:],
+            )
+        else:
+            return None
+
+    @property
     def _meta_nonempty(self):
         """ A non-empty version of `_meta` with fake data."""
         return meta_nonempty(self._meta)
@@ -569,6 +594,9 @@ Dask Name: {name}, {task} tasks"""
         )
 
     def __len__(self):
+        _len = self._len
+        if _len is not None:
+            return _len
         return self.reduction(
             len, np.sum, token="len", meta=int, split_every=False
         ).compute()
@@ -3024,7 +3052,8 @@ class Series(_Frame):
         >>> series.shape  # doctest: +SKIP
         # (dd.Scalar<size-ag..., dtype=int64>,)
         """
-        return (self.size,)
+        _len = self._len
+        return (_len if _len is not None else self.size,)
 
     @property
     def dtype(self):
@@ -3848,6 +3877,9 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
+        _len = getattr(self, "_len", None)
+        if _len is not None:
+            return _len
         try:
             s = self.iloc[:, 0]
         except IndexError:
@@ -3992,9 +4024,13 @@ class DataFrame(_Frame):
         (Delayed('int-07f06075-5ecc-4d77-817e-63c69a9188a8'), 2)
         """
         col_size = len(self.columns)
-        if col_size == 0:
-            return (self.index.shape[0], 0)
-        row_size = delayed(int)(self.size / col_size)
+        _len = self._len
+        if _len is not None:
+            row_size = _len
+        else:
+            if col_size == 0:
+                return (self.index.shape[0], 0)
+            row_size = delayed(int)(self.size / col_size)
         return (row_size, col_size)
 
     @property

@@ -1192,9 +1192,10 @@ def test_shape():
     assert_eq(dd.compute(result)[0], (len(full.a),))
 
     sh = dd.from_pandas(pd.DataFrame(index=[1, 2, 3]), npartitions=2).shape
-    assert (sh[0].compute(), sh[1]) == (3, 0)
-    sh = dd.from_pandas(pd.DataFrame({"a": [], "b": []}, index=[]), npartitions=1).shape
-    assert (sh[0].compute(), sh[1]) == (0, 2)
+    assert sh == (3, 0)
+    ddf = dd.from_pandas(pd.DataFrame({"a": [], "b": []}, index=[]), npartitions=1)
+    sh = ddf.shape
+    assert sh == (0, 2)
 
 
 def test_nbytes():
