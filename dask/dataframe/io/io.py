@@ -459,6 +459,16 @@ def from_dask_array(x, columns=None, index=None, meta=None):
     if index is not None:
         if not isinstance(index, Index):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
+        partition_sizes = index.partition_sizes
+        if partition_sizes:
+            chunks = x.chunks[0]
+            if partition_sizes != chunks:
+                if any(np.isnan(chunk) for chunk in x.chunks[0]):
+                    # mimic partition-size-unaware behavior: verify npartitions match, and assume partitions are the
+                    # same sizes
+                    pass
+                else:
+                    x = x.rechunk({0: partition_sizes})
         if index.npartitions != x.numblocks[0]:
             msg = (
                 "The index and array have different numbers of blocks. "
@@ -466,12 +476,14 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             )
             raise ValueError(msg)
         divisions = index.divisions
+        partition_sizes = index.partition_sizes
         to_merge.append(ensure_dict(index.dask))
         index = index.__dask_keys__()
 
     elif np.isnan(sum(x.shape)):
         divisions = [None] * (len(x.chunks[0]) + 1)
         index = [None] * len(x.chunks[0])
+        partition_sizes = None
     else:
         divisions = [0]
         for c in x.chunks[0]:
@@ -480,6 +492,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             (np.arange, a, b, 1, "i8") for a, b in zip(divisions[:-1], divisions[1:])
         ]
         divisions[-1] -= 1
+        partition_sizes = tuple(x.chunks[0])
 
     dsk = {}
     for i, (chunk, ind) in enumerate(zip(x.__dask_keys__(), index)):
@@ -491,7 +504,9 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             dsk[name, i] = (type(meta), chunk, ind, meta.columns)
 
     to_merge.extend([ensure_dict(x.dask), dsk])
-    return new_dd_object(merge(*to_merge), name, meta, divisions)
+    return new_dd_object(
+        merge(*to_merge), name, meta, divisions, partition_sizes=partition_sizes
+    )
 
 
 def _link(token, result):
