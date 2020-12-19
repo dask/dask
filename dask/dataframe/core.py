@@ -3277,7 +3277,9 @@ Dask Name: {name}, {task} tasks""".format(
             res = self if inplace else self.copy()
             res.name = index
         else:
-            res = self.map_partitions(M.rename, index, enforce_metadata=False)
+            res = self.map_partitions(
+                M.rename, index, enforce_metadata=False, preserve_partition_sizes=True
+            )
             if self.known_divisions:
                 if sorted_index and (callable(index) or is_dict_like(index)):
                     old = pd.Series(range(self.npartitions + 1), index=self.divisions)
@@ -3296,6 +3298,7 @@ Dask Name: {name}, {task} tasks""".format(
                 self._name = res._name
                 self.divisions = res.divisions
                 self._meta = res._meta
+                self.partition_sizes = res.partition_sizes
                 res = self
         return res
 
