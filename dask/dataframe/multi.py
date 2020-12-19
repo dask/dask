@@ -1137,7 +1137,14 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 )
             i += 1
 
-    return new_dd_object(dsk, name, meta, divisions)
+    # TODO(partition-sizes): is it ever worth keeping some partitions non-None while others are None?
+    partition_sizes = (
+        [partition_size for df in dfs for partition_size in df.partition_sizes]
+        if all(df.partition_sizes for df in dfs) and join == "outer"
+        else None
+    )
+
+    return new_dd_object(dsk, name, meta, divisions, partition_sizes=partition_sizes)
 
 
 def concat(
