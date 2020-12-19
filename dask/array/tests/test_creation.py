@@ -365,6 +365,10 @@ def test_meshgrid_inputcoercion():
     assert_eq(z, z_d)
 
 
+def test_tri():
+    assert_eq(da.tri(3), np.tri(3))
+
+    
 def test_tril_triu():
     A = np.random.randn(20, 20)
     for chk in [5, 4]:
