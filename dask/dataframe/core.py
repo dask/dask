@@ -1123,9 +1123,28 @@ Dask Name: {name}, {task} tasks"""
         else:
             dsk = {(name, 0): (head, (self._name, 0), n)}
 
+        partition_sizes = None
+        if self.partition_sizes:
+            partition_sizes = list(self.partition_sizes[:npartitions])
+            num_elems = sum(partition_sizes)
+            idx = npartitions - 1
+            while num_elems > n and idx >= 0:
+                cur_size = partition_sizes[idx]
+                if cur_size >= num_elems:
+                    partition_sizes[idx] -= num_elems
+                    break
+                else:
+                    partition_sizes[idx] = 0
+                    num_elems -= cur_size
+                    idx -= 1
+
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         result = new_dd_object(
-            graph, name, self._meta, [self.divisions[0], self.divisions[npartitions]]
+            graph,
+            name,
+            self._meta,
+            [self.divisions[0], self.divisions[npartitions]],
+            partition_sizes,
         )
 
         if compute:
@@ -1141,7 +1160,15 @@ Dask Name: {name}, {task} tasks"""
         dsk = {(name, 0): (M.tail, (self._name, self.npartitions - 1), n)}
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-        result = new_dd_object(graph, name, self._meta, self.divisions[-2:])
+
+        partition_sizes = None
+        if self.partition_sizes:
+            size = min(n, self.partition_sizes[-1])
+            partition_sizes = [size]
+
+        result = new_dd_object(
+            graph, name, self._meta, self.divisions[-2:], partition_sizes
+        )
 
         if compute:
             result = result.compute()
