@@ -1050,7 +1050,13 @@ def test_categories_unnamed_index(tmpdir, engine):
     ddf.to_parquet(tmpdir, engine=engine)
     ddf2 = dd.read_parquet(tmpdir, engine=engine)
 
-    assert_eq(ddf.index, ddf2.index, check_divisions=False)
+    if engine.startswith("pyarrow"):
+        partition_sizes = [None, (3,)]
+    else:
+        partition_sizes = [None, None]
+    assert_eq(
+        ddf.index, ddf2.index, check_divisions=False, partition_sizes=partition_sizes
+    )
 
 
 def test_empty_partition(tmpdir, engine):

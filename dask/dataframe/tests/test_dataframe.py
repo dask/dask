@@ -288,8 +288,10 @@ def test_rename_series():
 
     ind = s.index
     dind = ds.index
+    assert dind.partition_sizes == (4, 3)
     ind.name = "renamed"
     dind.name = "renamed"
+    assert dind.partition_sizes == (4, 3)
     assert ind.name == "renamed"
     with warnings.catch_warnings():
         if _numpy_118:
