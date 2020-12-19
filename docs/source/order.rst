@@ -7,7 +7,7 @@ Ordering
 
    This is an advanced topic that most users won't need to worry about.
 
-When Dask is given a task graph to compute, it needs to choose a an order to
+When Dask is given a task graph to compute, it needs to choose an order to
 execute the tasks in. We have some constraints: dependencies must be executed
 before their dependants. But beyond that there's a large space of options. We
 want Dask to choose an ordering that maximizes parallelism while minimizing
@@ -22,7 +22,7 @@ At a high level, Dask has a policy that works towards *small goals* with *big st
     can terminate quickly.
 
     With more detail, we compute the total number of dependencies that each
-    task depends on (both its own dependencies, and the dependencies of its
+    task depends on (both its own dependencies, the dependencies of its
     dependencies, and so on), and then we choose those tasks that drive towards
     results with a low number of total dependencies.  We choose to prioritize
     tasks that work towards finishing shorter computations first.
@@ -109,7 +109,7 @@ to light yellow) and the node labels are the order Dask's assigned to each task.
 It's a bit hard to see, but there are actually four mostly independent "towers"
 of execution here. We start at the middle-right array (label 1, bottom), move
 up to the right (label 8, top-right) and then jump to a completely different
-array (label 11, bottom-left). However, computing the first town (downstream
+array (label 11, bottom-left). However, computing the first tower (downstream
 of label 8, top-right) required loading some data from our second input array
 (label 5, bottom-right). We'd much prefer to finish tasks downstream of it.
 
@@ -148,7 +148,7 @@ one chain of computation before moving onto the next.
 The lesson here is *not* "always use ``inline_array=True``". While the static
 ordering looks better, there are other :ref:`phases-of-computation` to consider.
 Whether the actual performance is better will depend on more factors than we
-can consider here. See :ref:`dask.array.from_array` for more.
+can consider here. See :func:`dask.array.from_array` for more.
 
 Instead, the lessons to take away here are:
 

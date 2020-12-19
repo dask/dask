@@ -3918,7 +3918,7 @@ def test_to_zarr_delayed_creates_no_metadata():
         assert_eq(a, a2)
 
 
-def test_zarr_existing_array():
+def test_zarr_inline_array():
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
     dsk = dict(da.from_zarr(a, inline_array=True).dask)
@@ -3926,7 +3926,7 @@ def test_zarr_existing_array():
     assert a in list(dsk.values())[0]
 
 
-def test_zarr_inline_array():
+def test_zarr_existing_array():
     zarr = pytest.importorskip("zarr")
     c = (1, 1)
     a = da.ones((3, 3), chunks=c)
