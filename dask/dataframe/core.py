@@ -5569,6 +5569,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
+    preserve_partition_sizes=False,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -5605,6 +5606,7 @@ def map_partitions(
     from .multi import _maybe_align_partitions
 
     args = _maybe_from_pandas(args)
+    unaligned_args = args
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
@@ -5710,7 +5712,63 @@ def map_partitions(
             ) + v[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, divisions)
+    if preserve_partition_sizes:
+        from .multi import maybe_infer_partition_sizes
+
+        partition_sizes = maybe_infer_partition_sizes(divisions, dfs[0])
+
+        # Want to check whether divisions are unchanged below, ignoring changes betwwn null variants (e.g. None -> NaT)
+        from pandas import isnull
+
+        def normalize(divs):
+            return [None if isnull(d) else d for d in divs]
+
+        if normalize(divisions) == normalize(dfs[0].divisions):
+            if partition_sizes is None:
+                # If caller indicated partitions would be preserved, and divisions are not known (e.g.
+                # if the Frame is empty, and hence has divisions [None,None], but may have valid
+                # partition_sizes set), keep the original partition_sizes
+                partition_sizes = dfs[0].partition_sizes
+        else:
+            warnings.warn(
+                "\n".join(
+                    [
+                        "Expected partitions to be preserved, but partition-realignment detected:",
+                        "divisions: %s" % str(divisions),
+                        "\tBefore:",
+                        "\t\t%s"
+                        % "\n\t\t".join(
+                            [
+                                str(getattr(arg, "divisions", None))
+                                for arg in unaligned_args
+                            ]
+                        ),
+                        "\tAfter:",
+                        "\t\t%s"
+                        % "\n\t\t".join(
+                            [str(getattr(arg, "divisions", None)) for arg in args]
+                        ),
+                        "partition_sizes: %s" % str(partition_sizes),
+                        "\tBefore:",
+                        "\t\t%s"
+                        % "\n\t\t".join(
+                            [
+                                str(getattr(arg, "partition_sizes", None))
+                                for arg in unaligned_args
+                            ]
+                        ),
+                        "\tAfter:",
+                        "\t\t%s"
+                        % "\n\t\t".join(
+                            [str(getattr(arg, "partition_sizes", None)) for arg in args]
+                        ),
+                    ]
+                )
+            )
+    else:
+        partition_sizes = None
+
+    return new_dd_object(graph, name, meta, divisions, partition_sizes=partition_sizes)
 
 
 def apply_and_enforce(*args, **kwargs):
