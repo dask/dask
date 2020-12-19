@@ -14,7 +14,6 @@ from . import chunk
 from .core import (
     Array,
     asarray,
-    greater_equal,
     normalize_chunks,
     stack,
     concatenate,
@@ -23,8 +22,7 @@ from .core import (
     broadcast_arrays,
     cached_cumsum,
 )
-from .routines import where
-from .ufunc import rint
+from .ufunc import rint, greater_equal
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
@@ -675,22 +673,6 @@ def tri(N, chunks="auto", M=None, k=0, dtype=float):
     m = m.astype(dtype, copy=False)
 
     return m
-
-
-@derived_from(np)
-def tril(m, k=0):
-    m = asarray(m)
-    mask = tri(*m.shape[-2:], k=k, dtype=bool)
-
-    return where(mask, m, zeros(1, dtype=m.dtype))
-
-
-@derived_from(np)
-def triu(m, k=0):
-    m = asarray(m)
-    mask = da_tri(*m.shape[-2:], k=k-1, dtype=bool)
-
-    return where(mask, zeros(1, dtype=m.dtype), m)
 
 
 def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
