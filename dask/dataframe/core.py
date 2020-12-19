@@ -1901,6 +1901,7 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
         else:
             scalar = not is_series_like(meta)
@@ -1918,6 +1919,7 @@ Dask Name: {name}, {task} tasks"""
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
+                result.partition_sizes = (len(self.columns),)
             return result
 
     @derived_from(pd.DataFrame)
@@ -1934,6 +1936,7 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 axis=axis,
                 enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
         else:
             scalar = not is_series_like(meta)
@@ -1951,6 +1954,7 @@ Dask Name: {name}, {task} tasks"""
             )
             if isinstance(self, DataFrame):
                 result.divisions = (min(self.columns), max(self.columns))
+                result.partition_sizes = (len(self.columns),)
             return result
 
     @derived_from(pd.DataFrame)
@@ -1960,7 +1964,12 @@ Dask Name: {name}, {task} tasks"""
         if axis == 1:
             meta = self._meta_nonempty.count(axis=axis)
             return self.map_partitions(
-                M.count, meta=meta, token=token, axis=axis, enforce_metadata=False
+                M.count,
+                meta=meta,
+                token=token,
+                axis=axis,
+                enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
         else:
             meta = self._meta_nonempty.count()
@@ -1975,6 +1984,7 @@ Dask Name: {name}, {task} tasks"""
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
+                result.partition_sizes = (len(self.columns),)
             return result
 
     @derived_from(pd.DataFrame)
@@ -2003,6 +2013,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 skipna=skipna,
                 enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
             return handle_out(out, result)
         else:
@@ -2019,7 +2030,8 @@ Dask Name: {name}, {task} tasks"""
                 enforce_metadata=False,
             )
             if isinstance(self, DataFrame):
-                result.divisions = (self.columns.min(), self.columns.max())
+                result.divisions = (num.columns.min(), num.columns.max())
+                result.partition_sizes = (len(num.columns),)
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -2039,6 +2051,7 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
             return handle_out(out, result)
         else:
@@ -2085,7 +2098,11 @@ Dask Name: {name}, {task} tasks"""
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
 
         return new_dd_object(
-            graph, name, num._meta_nonempty.var(), divisions=[None, None]
+            graph,
+            name,
+            num._meta_nonempty.var(),
+            divisions=[None, None],
+            partition_sizes=(len(num.columns),),
         )
 
     def _var_timedeltas(self, skipna=True, ddof=1, split_every=False):
@@ -2113,7 +2130,11 @@ Dask Name: {name}, {task} tasks"""
         )
 
         return new_dd_object(
-            graph, name, timedeltas._meta_nonempty.var(), divisions=[None, None]
+            graph,
+            name,
+            timedeltas._meta_nonempty.var(),
+            divisions=[None, None],
+            partition_sizes=(len(timedeltas.columns),),
         )
 
     def _var_mixed(self, skipna=True, ddof=1, split_every=False):
@@ -2137,7 +2158,11 @@ Dask Name: {name}, {task} tasks"""
             name, layer, dependencies=[numeric_vars, timedelta_vars]
         )
         return new_dd_object(
-            graph, name, self._meta_nonempty.var(), divisions=[None, None]
+            graph,
+            name,
+            self._meta_nonempty.var(),
+            divisions=[None, None],
+            partition_sizes=(len(data.columns),),
         )
 
     def _var_1d(self, column, skipna=True, ddof=1, split_every=False):
@@ -2166,7 +2191,11 @@ Dask Name: {name}, {task} tasks"""
         graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_var])
 
         return new_dd_object(
-            graph, name, column._meta_nonempty.var(), divisions=[None, None]
+            graph,
+            name,
+            column._meta_nonempty.var(),
+            divisions=[None, None],
+            partition_sizes=(1,),
         )
 
     @derived_from(pd.DataFrame)
@@ -2186,13 +2215,19 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
             return handle_out(out, result)
         else:
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + "std"
             result = map_partitions(
-                np.sqrt, v, meta=meta, token=name, enforce_metadata=False
+                np.sqrt,
+                v,
+                meta=meta,
+                token=name,
+                enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
             return handle_out(out, result)
 
@@ -2419,6 +2454,7 @@ Dask Name: {name}, {task} tasks"""
                 M.sem,
                 self,
                 meta=meta,
+                preserve_partition_sizes=True,
                 token=self._token_prefix + "sem",
                 axis=axis,
                 skipna=skipna,
@@ -2435,6 +2471,7 @@ Dask Name: {name}, {task} tasks"""
 
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
+                result.partition_sizes = (len(num.columns),)
             return result
 
     def quantile(self, q=0.5, axis=0, method="default"):
@@ -2465,6 +2502,7 @@ Dask Name: {name}, {task} tasks"""
                 axis,
                 token=keyname,
                 enforce_metadata=False,
+                preserve_partition_sizes=True,
                 meta=(q, "f8"),
             )
         else:
@@ -2483,13 +2521,18 @@ Dask Name: {name}, {task} tasks"""
                     keyname, layer, dependencies=quantiles
                 )
                 divisions = (min(num.columns), max(num.columns))
-                return Series(graph, keyname, meta, divisions)
+                partition_sizes = (len(self.columns),)
+                return Series(
+                    graph, keyname, meta, divisions, partition_sizes=partition_sizes
+                )
             else:
                 layer = {(keyname, 0): (methods.concat, qnames, 1)}
                 graph = HighLevelGraph.from_collections(
                     keyname, layer, dependencies=quantiles
                 )
-                return DataFrame(graph, keyname, meta, quantiles[0].divisions)
+                return DataFrame(
+                    graph, keyname, meta, quantiles[0].divisions
+                )  # TODO: partition_sizes
 
     @derived_from(pd.DataFrame)
     def describe(
@@ -2653,7 +2696,9 @@ Dask Name: {name}, {task} tasks"""
 
         if axis == 1:
             name = "{0}{1}(axis=1)".format(self._token_prefix, op_name)
-            result = self.map_partitions(chunk, token=name, **chunk_kwargs)
+            result = self.map_partitions(
+                chunk, token=name, **chunk_kwargs, preserve_partition_sizes=True
+            )
             return handle_out(out, result)
         else:
             # cumulate each partitions
@@ -2695,7 +2740,9 @@ Dask Name: {name}, {task} tasks"""
             graph = HighLevelGraph.from_collections(
                 name, layer, dependencies=[cumpart, cumlast]
             )
-            result = new_dd_object(graph, name, chunk(self._meta), self.divisions)
+            result = new_dd_object(
+                graph, name, chunk(self._meta), self.divisions, self.partition_sizes
+            )
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
@@ -2750,24 +2797,44 @@ Dask Name: {name}, {task} tasks"""
     def where(self, cond, other=np.nan):
         # cond and other may be dask instance,
         # passing map_partitions via keyword will not be aligned
-        return map_partitions(M.where, self, cond, other, enforce_metadata=False)
+        return map_partitions(
+            M.where,
+            self,
+            cond,
+            other,
+            enforce_metadata=False,
+            preserve_partition_sizes=True,
+        )
 
     @derived_from(pd.DataFrame)
     def mask(self, cond, other=np.nan):
-        return map_partitions(M.mask, self, cond, other, enforce_metadata=False)
+        return map_partitions(
+            M.mask,
+            self,
+            cond,
+            other,
+            enforce_metadata=False,
+            preserve_partition_sizes=True,
+        )
 
     @derived_from(pd.DataFrame)
     def notnull(self):
-        return self.map_partitions(M.notnull, enforce_metadata=False)
+        return self.map_partitions(
+            M.notnull, enforce_metadata=False, preserve_partition_sizes=True
+        )
 
     @derived_from(pd.DataFrame)
     def isnull(self):
-        return self.map_partitions(M.isnull, enforce_metadata=False)
+        return self.map_partitions(
+            M.isnull, enforce_metadata=False, preserve_partition_sizes=True
+        )
 
     @derived_from(pd.DataFrame)
     def isna(self):
         if hasattr(pd, "isna"):
-            return self.map_partitions(M.isna, enforce_metadata=False)
+            return self.map_partitions(
+                M.isna, enforce_metadata=False, preserve_partition_sizes=True
+            )
         else:
             raise NotImplementedError(
                 "Need more recent version of Pandas "
@@ -2789,7 +2856,11 @@ Dask Name: {name}, {task} tasks"""
         # - avoid serializing data in every task
         # - avoid cost of traversal of large list in optimizations
         return self.map_partitions(
-            M.isin, delayed(values), meta=meta, enforce_metadata=False
+            M.isin,
+            delayed(values),
+            meta=meta,
+            enforce_metadata=False,
+            preserve_partition_sizes=True,
         )
 
     @derived_from(pd.DataFrame)
@@ -2812,7 +2883,11 @@ Dask Name: {name}, {task} tasks"""
         elif is_categorical_dtype(dtype) and getattr(dtype, "categories", None) is None:
             meta = clear_known_categories(meta)
         return self.map_partitions(
-            M.astype, dtype=dtype, meta=meta, enforce_metadata=False
+            M.astype,
+            dtype=dtype,
+            meta=meta,
+            enforce_metadata=False,
+            preserve_partition_sizes=True,
         )
 
     @derived_from(pd.Series)
