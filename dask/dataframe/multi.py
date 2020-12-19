@@ -154,6 +154,34 @@ def align_partitions(*dfs):
     return dfs2, tuple(divisions), result
 
 
+def maybe_infer_partition_sizes(divisions, prev):
+    if prev is None or not prev.partition_sizes or not prev.known_divisions:
+        return None
+    partition_bounds = [0] + np.cumsum(prev.partition_sizes).tolist()[:-1]
+    _len = prev._len
+    division_idx_map = {
+        division: idx for idx, division in zip(partition_bounds, prev.divisions[:-1])
+    }
+    m = min(prev.divisions)
+    M = max(prev.divisions)
+
+    idxs = []
+    for idx, division in enumerate(divisions[:-1]):
+        if division in division_idx_map:
+            idxs.append(division_idx_map[division])
+        elif division < m:
+            idxs.append(0)
+        elif (
+            division > M or division == M and idx + 1 == len(divisions)
+        ):  # final division is inclusive, so only admissible when it is both sides' final division
+            idxs.append(_len)
+        else:
+            return None
+    idxs.append(_len)
+    sizes = [end - start for start, end in zip(idxs[:-1], idxs[1:])]
+    return sizes
+
+
 def _maybe_align_partitions(args):
     """Align DataFrame blocks if divisions are different.
 
