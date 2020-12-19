@@ -2483,6 +2483,19 @@ def test_from_array_dask_collection_warns():
         da.array(x)
 
 
+def test_from_array_inline():
+    class MyArray(np.ndarray):
+        pass
+
+    a = np.array([1, 2, 3]).view(MyArray)
+    dsk = dict(da.from_array(a, name="my-array").dask)
+    assert dsk["my-array"] is a
+
+    dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
+    assert "my-array" not in dsk
+    assert a is dsk[("my-array", 0)][1]
+
+
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
 def test_asarray(asarray):
     assert_eq(asarray([1, 2, 3]), np.asarray([1, 2, 3]))
@@ -3900,6 +3913,14 @@ def test_to_zarr_delayed_creates_no_metadata():
         result.compute()
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
+
+
+def test_zarr_inline_array():
+    zarr = pytest.importorskip("zarr")
+    a = zarr.array([1, 2, 3])
+    dsk = dict(da.from_zarr(a, inline_array=True).dask)
+    assert len(dsk) == 1
+    assert a in list(dsk.values())[0]
 
 
 def test_zarr_existing_array():
