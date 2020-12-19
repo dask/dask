@@ -3,11 +3,11 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.6
+  - python=3.7
   - pyyaml
   # optional dependencies pulled in by pip install dask[array, dataframe]
-  - numpy=1.15
-  - pandas=0.23
+  - numpy=1.15.1
+  - pandas=0.25.0
   - partd
   - fsspec
   - toolz

@@ -4,7 +4,6 @@ import warnings
 from collections.abc import Iterable
 from functools import wraps, partial
 from numbers import Real, Integral
-from distutils.version import LooseVersion
 from typing import List
 
 import numpy as np
@@ -209,29 +208,14 @@ ALPHABET = alphabet.upper()
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
+    x = tensordot(a, b, axes=axes)
 
-    # workaround may be removed when numpy version (currently 1.13.0) is bumped
-    a_dims = np.array([a.shape[i] for i in axes[0]])
-    b_dims = np.array([b.shape[i] for i in axes[1]])
-    if (
-        len(a_dims) > 0
-        and (a_dims == b_dims).all()
-        and a_dims.min() == 0
-        and LooseVersion(np.__version__) < LooseVersion("1.14")
-    ):
-        x = np.zeros(
-            tuple(
-                [s for i, s in enumerate(a.shape) if i not in axes[0]]
-                + [s for i, s in enumerate(b.shape) if i not in axes[1]]
-            )
-        )
-    else:
-        x = tensordot(a, b, axes=axes)
+    if len(axes[0]) != 1:
+        ind = [slice(None, None)] * x.ndim
+        for a in sorted(axes[0]):
+            ind.insert(a, None)
+        x = x[tuple(ind)]
 
-    ind = [slice(None, None)] * x.ndim
-    for a in sorted(axes[0]):
-        ind.insert(a, None)
-    x = x[tuple(ind)]
     return x
 
 
@@ -251,6 +235,10 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
+    if len(left_axes) == 1:
+        concatenate = True
+    else:
+        concatenate = False
 
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
@@ -261,6 +249,8 @@ def tensordot(lhs, rhs, axes=2):
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
+        if concatenate:
+            out_index.remove(left_index[l])
 
     intermediate = blockwise(
         _tensordot,
@@ -270,11 +260,14 @@ def tensordot(lhs, rhs, axes=2):
         rhs,
         right_index,
         dtype=dt,
+        concatenate=concatenate,
         axes=(left_axes, right_axes),
     )
 
-    result = intermediate.sum(axis=left_axes)
-    return result
+    if concatenate:
+        return intermediate
+    else:
+        return intermediate.sum(axis=left_axes)
 
 
 @derived_from(np)
@@ -1362,12 +1355,6 @@ def nonzero(a):
         return (ind,)
 
 
-def _int_piecewise(x, *condlist, **kwargs):
-    return np.piecewise(
-        x, list(condlist), kwargs["funclist"], *kwargs["func_args"], **kwargs["func_kw"]
-    )
-
-
 def _unravel_index_kernel(indices, func_kwargs):
     return np.stack(np.unravel_index(indices, **func_kwargs))
 
@@ -1388,6 +1375,27 @@ def unravel_index(indices, shape, order="C"):
         unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in shape)
 
     return unraveled_indices
+
+
+def _ravel_multi_index_kernel(multi_index, func_kwargs):
+    return np.ravel_multi_index(multi_index, **func_kwargs)
+
+
+@wraps(np.ravel_multi_index)
+def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
+    return multi_index.map_blocks(
+        _ravel_multi_index_kernel,
+        dtype=np.intp,
+        chunks=(multi_index.shape[-1],),
+        drop_axis=0,
+        func_kwargs=dict(dims=dims, mode=mode, order=order),
+    )
+
+
+def _int_piecewise(x, *condlist, **kwargs):
+    return np.piecewise(
+        x, list(condlist), kwargs["funclist"], *kwargs["func_args"], **kwargs["func_kw"]
+    )
 
 
 @derived_from(np)
@@ -1460,7 +1468,7 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     if not trim_excess and not all(x.shape[i] % div == 0 for i, div in axes.items()):
-        msg = "Coarsening factor does not align with block dimensions"
+        msg = f"Coarsening factors {axes} do not align with array shape {x.shape}."
         raise ValueError(msg)
 
     if "dask" in inspect.getfile(reduction):

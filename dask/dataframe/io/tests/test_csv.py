@@ -28,6 +28,7 @@ from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from fsspec.compression import compr
 
+
 fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
 
 
@@ -457,6 +458,23 @@ def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
         assert has_known_categories(result.path)
 
 
+@pytest.mark.parametrize(
+    "dd_read,files", [(dd.read_csv, csv_files), (dd.read_table, tsv_files)]
+)
+@read_table_mark
+def test_read_csv_include_path_column_with_multiple_partitions_per_file(dd_read, files):
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", blocksize="10B", include_path_column=True)
+        assert df.npartitions > 3
+        assert df.path.dtype == "category"
+        assert has_known_categories(df.path)
+
+        dfs = dd_read("2014-01-*.csv", blocksize="10B", include_path_column=True)
+        result = dfs.compute()
+        assert result.path.dtype == "category"
+        assert has_known_categories(result.path)
+
+
 # After this point, we test just using read_csv, as all functionality
 # for both is implemented using the same code.
 
@@ -825,6 +843,13 @@ def test_multiple_read_csv_has_deterministic_name():
         b = dd.read_csv("_foo.*.csv")
 
         assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
+
+
+def test_read_csv_has_different_names_based_on_blocksize():
+    with filetext(csv_text) as fn:
+        a = dd.read_csv(fn, blocksize="10kB")
+        b = dd.read_csv(fn, blocksize="20kB")
+        assert a._name != b._name
 
 
 def test_csv_with_integer_names():

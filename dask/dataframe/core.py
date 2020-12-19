@@ -62,7 +62,6 @@ from .utils import (
     group_split_dispatch,
     is_categorical_dtype,
     has_known_categories,
-    PANDAS_VERSION,
     PANDAS_GT_100,
     PANDAS_GT_110,
     index_summary,
@@ -1983,9 +1982,8 @@ Dask Name: {name}, {task} tasks"""
             else:
                 column = column.dropna().astype("i8")
 
-        if PANDAS_VERSION >= "0.24.0":
-            if pd.Int64Dtype.is_dtype(column._meta_nonempty):
-                column = column.astype("f8")
+        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+            column = column.astype("f8")
 
         if not np.issubdtype(column.dtype, np.number):
             column = column.astype("f8")
@@ -2028,6 +2026,106 @@ Dask Name: {name}, {task} tasks"""
                 np.sqrt, v, meta=meta, token=name, enforce_metadata=False
             )
             return handle_out(out, result)
+
+    @derived_from(pd.DataFrame)
+    def skew(self, axis=None, bias=True, nan_policy="propagate", out=None):
+        """
+        .. note::
+
+           This implementation follows the dask.array.stats implementation
+           of skewness and calculates skewness without taking into account
+           a bias term for finite sample size, which corresponds to the
+           default settings of the scipy.stats skewness calculation. However,
+           Pandas corrects for this, so the values differ by a factor of
+           (n * (n - 1)) ** 0.5 / (n - 2), where n is the number of samples.
+
+           Further, this method currently does not support filtering out NaN
+           values, which is again a difference to Pandas.
+        """
+        axis = self._validate_axis(axis)
+        _raise_if_object_series(self, "skew")
+        meta = self._meta_nonempty.skew()
+        if axis == 1:
+            result = map_partitions(
+                M.skew,
+                self,
+                meta=meta,
+                token=self._token_prefix + "skew",
+                axis=axis,
+                enforce_metadata=False,
+            )
+            return handle_out(out, result)
+        else:
+            if self.ndim == 1:
+                result = self._skew_1d(self, bias=bias, nan_policy=nan_policy)
+                return handle_out(out, result)
+            else:
+                result = self._skew_numeric(bias=bias, nan_policy=nan_policy)
+
+            if isinstance(self, DataFrame):
+                result.divisions = (self.columns.min(), self.columns.max())
+
+            return handle_out(out, result)
+
+    def _skew_1d(self, column, bias=True, nan_policy="propagate"):
+        """1D version of the skew calculation.
+
+        Uses the array version from da.stats in case we are passing in a single series
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+            column = column.astype("f8")
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype("f8")
+
+        name = self._token_prefix + "skew-1d-" + tokenize(column)
+
+        array_skew = da_stats.skew(
+            column.values, axis=0, bias=bias, nan_policy=nan_policy
+        )
+
+        layer = {(name, 0): (methods.wrap_skew_reduction, (array_skew._name,), None)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_skew])
+
+        return new_dd_object(
+            graph, name, column._meta_nonempty.skew(), divisions=[None, None]
+        )
+
+    def _skew_numeric(self, bias=True, nan_policy="propagate"):
+        """Method for dataframes with numeric columns.
+
+        Maps the array version from da.stats onto the numeric array of columns.
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype("f8")
+
+        array_skew = da_stats.skew(
+            array_values, axis=0, bias=bias, nan_policy=nan_policy
+        )
+
+        name = self._token_prefix + "var-numeric" + tokenize(num)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        skew_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_skew_name = (array_skew._name,) + (0,) * len(skew_shape)
+
+        layer = {(name, 0): (methods.wrap_skew_reduction, array_skew_name, cols)}
+        graph = HighLevelGraph.from_collections(name, layer, dependencies=[array_skew])
+
+        return new_dd_object(
+            graph, name, num._meta_nonempty.skew(), divisions=[None, None]
+        )
 
     @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
@@ -2952,7 +3050,7 @@ Dask Name: {name}, {task} tasks""".format(
     def mode(self, dropna=True, split_every=False):
         return super().mode(dropna=dropna, split_every=split_every)
 
-    @derived_from(pd.Series, version="0.25.0")
+    @derived_from(pd.Series)
     def explode(self):
         meta = self._meta.explode()
         return self.map_partitions(M.explode, meta=meta, enforce_metadata=False)
@@ -3418,18 +3516,9 @@ class Index(Series):
         if not index:
             raise NotImplementedError()
 
-        if PANDAS_VERSION >= "0.24.0":
-            return self.map_partitions(
-                M.to_frame, index, name, meta=self._meta.to_frame(index, name)
-            )
-        else:
-            if name is not None:
-                raise ValueError(
-                    "The 'name' keyword was added in pandas 0.24.0. "
-                    "Your version of pandas is '{}'.".format(PANDAS_VERSION)
-                )
-            else:
-                return self.map_partitions(M.to_frame, meta=self._meta.to_frame())
+        return self.map_partitions(
+            M.to_frame, index, name, meta=self._meta.to_frame(index, name)
+        )
 
     @insert_meta_param_description(pad=12)
     @derived_from(pd.Index)
@@ -3961,7 +4050,7 @@ class DataFrame(_Frame):
         df.divisions = tuple(pd.Index(self.divisions).to_timestamp())
         return df
 
-    @derived_from(pd.DataFrame, version="0.25.0")
+    @derived_from(pd.DataFrame)
     def explode(self, column):
         meta = self._meta.explode(column)
         return self.map_partitions(M.explode, column, meta=meta, enforce_metadata=False)
@@ -4011,10 +4100,11 @@ class DataFrame(_Frame):
     @derived_from(pd.DataFrame)
     def drop(self, labels=None, axis=0, columns=None, errors="raise"):
         axis = self._validate_axis(axis)
-        if (axis == 1) or (columns is not None):
-            return self.map_partitions(
-                drop_by_shallow_copy, columns or labels, errors=errors
-            )
+        if axis == 0 and columns is not None:
+            # Columns must be specified if axis==0
+            return self.map_partitions(drop_by_shallow_copy, columns, errors=errors)
+        elif axis == 1:
+            return self.map_partitions(drop_by_shallow_copy, labels, errors=errors)
         raise NotImplementedError(
             "Drop currently only works for axis=1 or when columns is not None"
         )
@@ -4141,6 +4231,8 @@ class DataFrame(_Frame):
         npartitions=None,
         shuffle=None,
     ):
+        if is_series_like(other) and hasattr(other, "name"):
+            other = other.to_frame()
 
         if not is_dataframe_like(other):
             raise ValueError("other must be DataFrame")
@@ -4262,6 +4354,7 @@ class DataFrame(_Frame):
         reduce=None,
         args=(),
         meta=no_default,
+        result_type=None,
         **kwds,
     ):
         """Parallel version of pandas.DataFrame.apply
@@ -4326,10 +4419,7 @@ class DataFrame(_Frame):
         """
 
         axis = self._validate_axis(axis)
-        pandas_kwargs = {"axis": axis, "raw": raw}
-
-        if PANDAS_VERSION >= "0.23.0":
-            kwds.setdefault("result_type", None)
+        pandas_kwargs = {"axis": axis, "raw": raw, "result_type": result_type}
 
         if not PANDAS_GT_100:
             pandas_kwargs["broadcast"] = broadcast
@@ -4856,7 +4946,9 @@ def handle_out(out, result):
         else:
             out = None
 
-    if out is not None and type(out) != type(result):
+    # Notice, we use .__class__ as opposed to type() in order to support
+    # object proxies see <https://github.com/dask/dask/pull/6981>
+    if out is not None and out.__class__ != result.__class__:
         raise TypeError(
             "Mismatched types between result and out parameter. "
             "out=%s, result=%s" % (str(type(out)), str(type(result)))
@@ -6301,28 +6393,19 @@ def get_parallel_type_index(_):
     return Index
 
 
-@get_parallel_type.register(object)
-def get_parallel_type_object(o):
-    return Scalar
-
-
 @get_parallel_type.register(_Frame)
 def get_parallel_type_frame(o):
     return get_parallel_type(o._meta)
 
 
-def parallel_types():
-    return tuple(
-        k
-        for k, v in get_parallel_type._lookup.items()
-        if v is not get_parallel_type_object
-    )
+@get_parallel_type.register(object)
+def get_parallel_type_object(_):
+    return Scalar
 
 
 def has_parallel_type(x):
     """ Does this object have a dask dataframe equivalent? """
-    get_parallel_type(x)  # trigger lazy registration
-    return isinstance(x, parallel_types())
+    return get_parallel_type(x) is not Scalar
 
 
 def new_dd_object(dsk, name, meta, divisions):

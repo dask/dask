@@ -1,6 +1,5 @@
 import collections
 import warnings
-from packaging import version
 
 import numpy as np
 import pandas as pd
@@ -16,7 +15,6 @@ from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
     assert_max_deps,
-    PANDAS_VERSION,
 )
 
 AGG_FUNCS = [
@@ -1893,11 +1891,6 @@ def test_timeseries():
     assert_eq(df.groupby("name").std(), df.groupby("name").std())
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.22.0",
-    reason="Parameter min_count not implemented in "
-    "DataFrame.groupby().sum() and DataFrame.groupby().prod()",
-)
 @pytest.mark.parametrize("min_count", [0, 1, 2, 3])
 def test_with_min_count(min_count):
     dfs = [
@@ -2111,10 +2104,6 @@ def test_series_groupby_idxmax_skipna(skipna):
     assert_eq(result_pd, result_dd)
 
 
-@pytest.mark.skipif(
-    version.parse(pd.__version__) < version.parse("0.25.0"),
-    reason="'explode' is not implemented",
-)
 def test_groupby_unique():
     rng = np.random.RandomState(42)
     df = pd.DataFrame(
@@ -2420,3 +2409,44 @@ def test_groupby_sort_true_split_out():
     with pytest.raises(NotImplementedError):
         # Cannot use sort=True with split_out>1 (for now)
         M.sum(ddf.groupby("x", sort=True), split_out=2)
+
+
+@pytest.mark.skipif(
+    not dd._compat.PANDAS_GT_100, reason="observed only supported for newer pandas"
+)
+@pytest.mark.parametrize("known_cats", [True, False])
+@pytest.mark.parametrize("ordered_cats", [True, False])
+@pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
+@pytest.mark.parametrize("observed", [True, False])
+def test_groupby_aggregate_categorical_observed(
+    known_cats, ordered_cats, agg_func, groupby, observed
+):
+    if agg_func in ["cov", "corr", "nunique"]:
+        pytest.skip("Not implemented for DataFrameGroupBy yet.")
+    if agg_func in ["sum", "count", "prod"] and groupby != "cat_1":
+        pytest.skip("Gives zeros rather than nans.")
+    if agg_func in ["std", "var"] and observed:
+        pytest.skip("Can't calculate observed with all nans")
+
+    pdf = pd.DataFrame(
+        {
+            "cat_1": pd.Categorical(
+                list("AB"), categories=list("ABCDE"), ordered=ordered_cats
+            ),
+            "cat_2": pd.Categorical([1, 2], categories=[1, 2, 3], ordered=ordered_cats),
+            "value_1": np.random.uniform(size=2),
+        }
+    )
+    ddf = dd.from_pandas(pdf, 2)
+
+    if not known_cats:
+        ddf["cat_1"] = ddf["cat_1"].cat.as_unknown()
+        ddf["cat_2"] = ddf["cat_2"].cat.as_unknown()
+
+    def agg(grp, **kwargs):
+        return getattr(grp, agg_func)(**kwargs)
+
+    assert_eq(
+        agg(pdf.groupby(groupby, observed=observed)),
+        agg(ddf.groupby(groupby, observed=observed)),
+    )

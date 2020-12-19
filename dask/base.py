@@ -1,14 +1,15 @@
 from collections import OrderedDict
 from collections.abc import Mapping, Iterator
+from contextlib import contextmanager
 from functools import partial
 from hashlib import md5
+from numbers import Number
 from operator import getitem
 import inspect
 import pickle
 import os
 import threading
 import uuid
-from distutils.version import LooseVersion
 
 from tlz import merge, groupby, curry, identity
 from tlz.functoolz import Compose
@@ -23,6 +24,7 @@ from . import config, local, threaded
 
 __all__ = (
     "DaskMethodsMixin",
+    "annotate",
     "is_dask_collection",
     "compute",
     "persist",
@@ -31,6 +33,116 @@ __all__ = (
     "tokenize",
     "normalize_token",
 )
+
+
+@contextmanager
+def annotate(**annotations):
+    """Context Manager for setting HighLevelGraph Layer annotations.
+
+    Annotations are metadata or soft constraints associated with
+    tasks that dask schedulers may choose to respect: They signal intent
+    without enforcing hard constraints. As such, they are
+    primarily designed for use with the distributed scheduler.
+
+    Almost any object can serve as an annotation, but small Python objects
+    are preferred, while large objects such as NumPy arrays are discouraged.
+
+    Callables supplied as an annotation should take a single *key* argument and
+    produce the appropriate annotation. Individual task keys in the annotated collection
+    are supplied to the callable.
+
+    Parameters
+    ----------
+    **annotations : key-value pairs
+
+    Examples
+    --------
+
+    All tasks within array A should have priority 100 and be retried 3 times
+    on failure.
+
+    >>> import dask
+    >>> import dask.array as da
+    >>> with dask.annotate(priority=100, retries=3):
+    ...     A = da.ones((10000, 10000))
+
+    Prioritise tasks within Array A on flattened block ID.
+
+    >>> nblocks = (10, 10)
+    >>> with dask.annotate(priority=lambda k: k[1]*nblocks[1] + k[2]):
+    ...     A = da.ones((1000, 1000), chunks=(100, 100))
+
+    Annotations may be nested.
+
+    >>> with dask.annotate(priority=1):
+    ...     with dask.annotate(retries=3):
+    ...         A = da.ones((1000, 1000))
+    ...     B = A + 1
+    """
+
+    # Sanity check annotations used in place of
+    # legacy distributed Client.{submit, persist, compute} keywords
+    if "workers" in annotations:
+        if isinstance(annotations["workers"], (list, set, tuple)):
+            annotations["workers"] = list(annotations["workers"])
+        elif isinstance(annotations["workers"], str):
+            annotations["workers"] = [annotations["workers"]]
+        elif callable(annotations["workers"]):
+            pass
+        else:
+            raise TypeError(
+                "'workers' annotation must be a sequence of str, a str or a callable, but got %s."
+                % annotations["workers"]
+            )
+
+    if (
+        "priority" in annotations
+        and not isinstance(annotations["priority"], Number)
+        and not callable(annotations["priority"])
+    ):
+        raise TypeError(
+            "'priority' annotation must be a Number or a callable, but got %s"
+            % annotations["priority"]
+        )
+
+    if (
+        "retries" in annotations
+        and not isinstance(annotations["retries"], Number)
+        and not callable(annotations["retries"])
+    ):
+        raise TypeError(
+            "'retries' annotation must be a Number or a callable, but got %s"
+            % annotations["retries"]
+        )
+
+    if (
+        "resources" in annotations
+        and not isinstance(annotations["resources"], dict)
+        and not callable(annotations["resources"])
+    ):
+        raise TypeError(
+            "'resources' annotation must be a dict, but got %s"
+            % annotations["resources"]
+        )
+
+    if (
+        "allow_other_workers" in annotations
+        and not isinstance(annotations["allow_other_workers"], bool)
+        and not callable(annotations["allow_other_workers"])
+    ):
+        raise TypeError(
+            "'allow_other_workers' annotations must be a bool or a callable, but got %s"
+            % annotations["allow_other_workers"]
+        )
+
+    prev_annotations = config.get("annotations", {})
+    new_annotations = {
+        **prev_annotations,
+        **{f"annotations.{k}": v for k, v in annotations.items()},
+    }
+
+    with config.set(new_annotations):
+        yield
 
 
 def is_dask_collection(x):
@@ -95,7 +207,7 @@ class DaskMethodsMixin(object):
             filename=filename,
             format=format,
             optimize_graph=optimize_graph,
-            **kwargs
+            **kwargs,
         )
 
     def persist(self, **kwargs):
@@ -206,6 +318,8 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
+    from .highlevelgraph import HighLevelGraph
+
     optimizations = kwargs.pop("optimizations", None) or config.get("optimizations", [])
 
     if optimize_graph:
@@ -227,12 +341,11 @@ def collections_to_dsk(collections, optimize_graph=True, **kwargs):
                 _opt_list.append(_opt)
             groups = group
 
-        dsk = merge(
-            *map(
-                ensure_dict,
-                _opt_list,
-            )
-        )
+        # Merge all graphs
+        if any(isinstance(graph, HighLevelGraph) for graph in _opt_list):
+            dsk = HighLevelGraph.merge(*_opt_list)
+        else:
+            dsk = merge(*map(ensure_dict, _opt_list))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
@@ -784,21 +897,14 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
-    # Intentionally not importing PANDAS_GT_0240 from dask.dataframe._compat
-    # to avoid ImportErrors from extra dependencies
-    PANDAS_GT_0240 = LooseVersion(pd.__version__) >= LooseVersion("0.24.0")
-
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
-        if PANDAS_GT_0240:
-            values = ind.array
-        else:
-            values = ind.values
+        values = ind.array
         return [ind.name, normalize_token(values)]
 
     @normalize_token.register(pd.MultiIndex)
     def normalize_index(ind):
-        codes = ind.codes if PANDAS_GT_0240 else ind.levels
+        codes = ind.codes
         return (
             [ind.name]
             + [normalize_token(x) for x in ind.levels]
@@ -809,21 +915,19 @@ def register_pandas():
     def normalize_categorical(cat):
         return [normalize_token(cat.codes), normalize_token(cat.dtype)]
 
-    if PANDAS_GT_0240:
+    @normalize_token.register(pd.arrays.PeriodArray)
+    @normalize_token.register(pd.arrays.DatetimeArray)
+    @normalize_token.register(pd.arrays.TimedeltaArray)
+    def normalize_period_array(arr):
+        return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
 
-        @normalize_token.register(pd.arrays.PeriodArray)
-        @normalize_token.register(pd.arrays.DatetimeArray)
-        @normalize_token.register(pd.arrays.TimedeltaArray)
-        def normalize_period_array(arr):
-            return [normalize_token(arr.asi8), normalize_token(arr.dtype)]
-
-        @normalize_token.register(pd.arrays.IntervalArray)
-        def normalize_interval_array(arr):
-            return [
-                normalize_token(arr.left),
-                normalize_token(arr.right),
-                normalize_token(arr.closed),
-            ]
+    @normalize_token.register(pd.arrays.IntervalArray)
+    def normalize_interval_array(arr):
+        return [
+            normalize_token(arr.left),
+            normalize_token(arr.right),
+            normalize_token(arr.closed),
+        ]
 
     @normalize_token.register(pd.Series)
     def normalize_series(s):

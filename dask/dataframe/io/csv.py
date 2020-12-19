@@ -1,4 +1,3 @@
-from os.path import basename
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -27,6 +26,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
+from ...blockwise import BlockwiseIO
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -77,9 +77,12 @@ class CSVSubgraph(Mapping):
             raise KeyError(key)
 
         block = self.blocks[i]
-
         if self.paths is not None:
-            path_info = (self.colname, self.paths[i], self.paths)
+            path_info = (
+                self.colname,
+                self.paths[i],
+                sorted(list(self.head[self.colname].cat.categories)),
+            )
         else:
             path_info = None
 
@@ -110,6 +113,58 @@ class CSVSubgraph(Mapping):
             yield (self.name, i)
 
 
+class BlockwiseReadCSV(BlockwiseIO):
+    """
+    Specialized Blockwise Layer for read_csv.
+
+    Enables HighLevelGraph optimizations.
+    """
+
+    def __init__(
+        self,
+        name,
+        reader,
+        blocks,
+        is_first,
+        head,
+        header,
+        kwargs,
+        dtypes,
+        columns,
+        enforce,
+        path,
+    ):
+        self.name = name
+        self.blocks = blocks
+        self.io_name = "blockwise-io-" + name
+        dsk_io = CSVSubgraph(
+            self.io_name,
+            reader,
+            blocks,
+            is_first,
+            head,
+            header,
+            kwargs,
+            dtypes,
+            columns,
+            enforce,
+            path,
+        )
+        super().__init__(
+            {self.io_name: dsk_io},
+            self.name,
+            "i",
+            None,
+            [(self.io_name, "i")],
+            {self.io_name: (len(self.blocks),)},
+        )
+
+    def __repr__(self):
+        return "BlockwiseReadCSV<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.blocks), list(self.columns)
+        )
+
+
 def pandas_read_text(
     reader,
     b,
@@ -136,7 +191,7 @@ def pandas_read_text(
     dtypes : dict
         DTypes to assign to columns
     path : tuple
-        A tuple containing path column name, path to file, and all paths.
+        A tuple containing path column name, path to file, and an ordered list of paths.
 
     See Also
     --------
@@ -265,6 +320,7 @@ def text_blocks_to_pandas(
     enforce=False,
     specified_dtypes=None,
     path=None,
+    blocksize=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -286,7 +342,7 @@ def text_blocks_to_pandas(
     kwargs : dict
         Keyword arguments to pass down to ``reader``
     path : tuple, optional
-        A tuple containing column name for path and list of all paths
+        A tuple containing column name for path and the path_converter if provided
 
     Returns
     -------
@@ -327,27 +383,26 @@ def text_blocks_to_pandas(
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
 
-    name = "read-csv-" + tokenize(reader, columns, enforce, head)
+    name = "read-csv-" + tokenize(reader, columns, enforce, head, blocksize)
 
     if path:
-        block_file_names = [basename(b[1].path) for b in blocks]
-        path = (
-            path[0],
-            [p for p in path[1] if basename(p) in block_file_names],
-        )
-
-        colname, paths = path
+        colname, path_converter = path
+        paths = [b[1].path for b in blocks]
+        if path_converter:
+            paths = [path_converter(p) for p in paths]
         head = head.assign(
             **{
                 colname: pd.Categorical.from_codes(
-                    np.zeros(len(head), dtype=int), paths
+                    np.zeros(len(head), dtype=int), set(paths)
                 )
             }
         )
+        path = (colname, paths)
+
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
-    subgraph = CSVSubgraph(
+    subgraph = BlockwiseReadCSV(
         name,
         reader,
         blocks,
@@ -488,9 +543,7 @@ def read_pandas(
 
     if include_path_column:
         b_sample, values, paths = b_out
-        if path_converter:
-            paths = [path_converter(path) for path in paths]
-        path = (include_path_column, paths)
+        path = (include_path_column, path_converter)
     else:
         b_sample, values = b_out
         path = None
@@ -551,6 +604,7 @@ def read_pandas(
         enforce=enforce,
         specified_dtypes=specified_dtypes,
         path=path,
+        blocksize=blocksize,
     )
 
 

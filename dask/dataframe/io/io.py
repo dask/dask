@@ -9,6 +9,7 @@ from tlz import merge
 
 from ...base import tokenize
 from ... import array as da
+from ...dataframe.core import new_dd_object
 from ...delayed import delayed
 
 from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
@@ -136,7 +137,11 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     This splits an in-memory Pandas dataframe into several parts and constructs
     a dask.dataframe from those parts on which Dask.dataframe can operate in
-    parallel.
+    parallel.  By default, the input dataframe will be sorted by the index to
+    produce cleanly-divided partitions (with known divisions).  To preserve the
+    input ordering, make sure the input index is monotonically-increasing. The
+    ``sort=False`` option will also avoid reordering, but will not result in
+    known divisions.
 
     Note that, despite parallelism, Dask.dataframe may not always be faster
     than Pandas.  We recommend that you stay with Pandas for as long as
@@ -153,8 +158,9 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     chunksize : int, optional
         The number of rows per index partition to use.
     sort: bool
-        Sort input first to obtain cleanly divided partitions or don't sort and
-        don't get cleanly divided partitions
+        Sort the input by index first to obtain cleanly divided partitions
+        (with known divisions).  If False, the input will not be sorted, and
+        all divisions will be set to None. Default is True.
     name: string, optional
         An optional keyname for the dataframe.  Defaults to hashing the input
 
