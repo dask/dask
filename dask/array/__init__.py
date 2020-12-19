@@ -82,6 +82,8 @@ try:
         fliplr,
         einsum,
         average,
+        triu,
+        tril,
     )
     from .reshape import reshape
     from .ufunc import (
@@ -231,8 +233,6 @@ try:
         diag,
         eye,
         tri,
-        triu,
-        tril,
         fromfunction,
         tile,
         repeat,
