@@ -7,11 +7,11 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    conda uninstall --force numpy pandas
-    python -m pip install --no-deps --pre \
-        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
-        numpy
-    python -m pip install --pre pandas==1.1.0rc0
+    conda uninstall --force pandas
+    # python -m pip install --no-deps --pre \
+    #     -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
+    #     numpy
+    python -m pip install --pre pandas==1.2.0rc0
     python -m pip install \
         --upgrade \
         locket \
