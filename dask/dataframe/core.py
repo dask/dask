@@ -6952,7 +6952,14 @@ def to_datetime(arg, meta=None, **kwargs):
 @wraps(pd.to_timedelta)
 def to_timedelta(arg, unit="ns", errors="raise"):
     meta = pd.Series([pd.Timedelta(1, unit=unit)])
-    return map_partitions(pd.to_timedelta, arg, unit=unit, errors=errors, meta=meta)
+    return map_partitions(
+        pd.to_timedelta,
+        arg,
+        unit=unit,
+        errors=errors,
+        meta=meta,
+        preserve_partition_sizes=True,
+    )
 
 
 if hasattr(pd, "isna"):
