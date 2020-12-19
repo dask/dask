@@ -1423,7 +1423,9 @@ Dask Name: {name}, {task} tasks"""
                 for i in range(self.npartitions)
             }
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            parts = new_dd_object(graph, name, meta, self.divisions)
+            parts = new_dd_object(
+                graph, name, meta, self.divisions, self.partition_sizes
+            )
         else:
             parts = self
 
