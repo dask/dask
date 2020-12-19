@@ -3111,8 +3111,6 @@ def from_zarr(
         optimal for the calculations to follow.
     name : str, optional
          An optional keyname for the array.  Defaults to hashing the input
-    getitem : callable, optional
-        The getitem function to slice the arary with. See Notes for more.
     kwargs: passed to ``zarr.Array``.
     inline_array : bool, default False
         Whether to inline the zarr Array in the values of the task graph.
