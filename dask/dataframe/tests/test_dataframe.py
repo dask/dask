@@ -1911,9 +1911,13 @@ def test_repartition_on_pandas_dataframe():
     assert_eq(ddf, df.y)
 
 
+ns = [1, 2, 4, 5]
+ks = [1, 2, 4, 5]
+
+
 @pytest.mark.parametrize("use_index", [True, False])
-@pytest.mark.parametrize("n", [1, 2, 4, 5])
-@pytest.mark.parametrize("k", [1, 2, 4, 5])
+@pytest.mark.parametrize("n", ns)
+@pytest.mark.parametrize("k", ks)
 @pytest.mark.parametrize("dtype", [float, "M8[ns]"])
 @pytest.mark.parametrize("transform", [lambda df: df, lambda df: df.x])
 def test_repartition_npartitions(use_index, n, k, dtype, transform):
@@ -1925,17 +1929,64 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(k)
 
-    partition_sizes_dict = {
-        (1, 1, True): (60,),
-        (1, 1, False): (60,),
-        (2, 2, True): (30, 30),
-        (2, 2, False): (30, 30),
-        (4, 4, True): (20, 10, 20, 10),
-        (4, 4, False): (15,) * 4,
-        (5, 5, True): (20, 10, 10, 10, 10),
-        (5, 5, False): (12,) * 5,
-    }
-    partition_sizes = partition_sizes_dict.get((n, k, use_index))
+    expected_str = """
+    n |  1 |  2            |    4                      |     5                           |
+    1 | 60 |               |                           |                                 |
+    2 | 60 | 30,30         |                           |                                 |
+    4 | 60 | 30,30         | 20,10,20,10 / 15,15,15,15 |                                 |
+    5 | 60 | 30,30 / 24,36 | 20,10,10,20 / 12,12,12,24 | 20,10,10,10,10 / 12,12,12,12,12 |
+    """
+
+    # stripped rows with header row removed
+    expected_str_lines = expected_str.strip().split("\n")[1:]
+
+    # stripped strings with row/col headers removed
+    expected_str_entries = [
+        [nk.strip() for nk in line.strip().split("|")[1:]]
+        for line in expected_str_lines
+    ]
+
+    def build_partition_sizes_dict():
+        partition_sizes_dict = {}
+        for r, nks in enumerate(expected_str_entries):
+            n = ns[r]
+            for c, nk in enumerate(nks):
+                if not nk:
+                    continue
+                k = ks[c]
+                elems = nk.split("/")
+                nkus = []
+                for elem in elems:
+                    elem = elem.strip()
+                    if not elem:
+                        nkus.append(None)
+                    else:
+                        sizes = elem.strip().split(",")
+                        nkus.append(tuple(int(size) for size in sizes))
+
+                if len(nkus) == 2:
+                    partition_sizes_dict[(n, k, True)] = nkus[0]
+                    partition_sizes_dict[(n, k, False)] = nkus[1]
+                elif len(nkus) == 1:
+                    partition_sizes_dict[(n, k)] = nkus[0]
+
+        return partition_sizes_dict
+
+    partition_sizes_dict = build_partition_sizes_dict()
+
+    def get(*keys):
+        if not keys:
+            return None
+        (key, *keys) = keys
+        return partition_sizes_dict.get(key, get(*keys))
+
+    partition_sizes = get(
+        (n, k, use_index),
+        (
+            n,
+            k,
+        ),
+    )
 
     # skip left-side partition_sizes (which vary from case to case, and are set by from_pandas, which is not the focus
     # of this test); right side is usually None except when n == k (that's the only case where repartition currently
@@ -1958,7 +2009,19 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
-    assert_eq(a, b, check_divisions=False, partition_sizes=[False, None])
+    expected_partition_sizes = {
+        (dd.DataFrame, "1kiB", 5, False): (12, 12, 12, 12, 12),
+        (dd.Series, "1kiB", 2, True): (60,),
+        (dd.Series, "1kiB", 2, False): (60,),
+        (dd.Series, "1kiB", 5, True): (60,),
+        (dd.Series, "1kiB", 5, False): (60,),
+        (dd.Series, 379, 5, True): (20, 20, 20),
+        (dd.Series, 379, 5, False): (12, 12, 12, 12, 12),
+    }
+    partition_sizes = expected_partition_sizes.get(
+        (type(a), partition_size, n, use_index)
+    )
+    assert_eq(a, b, check_divisions=False, partition_sizes=[False, partition_sizes])
     assert np.alltrue(b.map_partitions(total_mem_usage, deep=True).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
@@ -1995,7 +2058,11 @@ def test_repartition_npartitions_numeric_edge_case():
     a = dd.from_pandas(df, npartitions=15)
     assert a.npartitions == 15
     b = a.repartition(npartitions=11)
-    assert_eq(a, b, partition_sizes=[(7,) * 14 + (2,), None])
+    assert_eq(
+        a,
+        b,
+        partition_sizes=[(7,) * 14 + (2,), (7, 7, 14, 7, 7, 14, 7, 7, 14, 7, 7, 2)],
+    )
 
 
 def test_repartition_object_index():

@@ -6585,9 +6585,27 @@ def _repartition_from_boundaries(df, new_partitions_boundaries, new_name):
         zip(new_partitions_boundaries, new_partitions_boundaries[1:])
     ):
         dsk[new_name, i] = (methods.concat, [(df._name, j) for j in range(start, end)])
+
+    partition_idx_starts = df.partition_idx_starts
+    if partition_idx_starts:
+        partition_idx_bounds = df.partition_idx_starts + (df._len,)
+        new_partition_idx_bounds = [
+            partition_idx_bounds[i] for i in new_partitions_boundaries
+        ]
+        partition_sizes = [
+            end - start
+            for start, end in zip(
+                new_partition_idx_bounds[:-1], new_partition_idx_bounds[1:]
+            )
+        ]
+    else:
+        partition_sizes = None
+
     divisions = [df.divisions[i] for i in new_partitions_boundaries]
     graph = HighLevelGraph.from_collections(new_name, dsk, dependencies=[df])
-    return new_dd_object(graph, new_name, df._meta, divisions)
+    return new_dd_object(
+        graph, new_name, df._meta, divisions, partition_sizes=partition_sizes
+    )
 
 
 def _split_partitions(df, nsplits, new_name):
@@ -6670,9 +6688,10 @@ def repartition(df, divisions=None, force=False):
         name = "repartition-dataframe-" + token
         from .utils import shard_df_on_index
 
-        dfs = shard_df_on_index(df, divisions[1:-1])
+        dfs = list(shard_df_on_index(df, divisions[1:-1]))
+        partition_sizes = [len(df) for df in dfs]
         dsk = dict(((name, i), df) for i, df in enumerate(dfs))
-        return new_dd_object(dsk, name, df, divisions)
+        return new_dd_object(dsk, name, df, divisions, partition_sizes=partition_sizes)
     raise ValueError("Data must be DataFrame or Series")
 
 
