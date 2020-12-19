@@ -1432,15 +1432,20 @@ def test_assign():
         index=pd.Index(list("abcdefgh")),
     )
     ddf = dd.from_pandas(df, npartitions=3)
+    assert ddf.known_divisions
     ddf_unknown = dd.from_pandas(df, npartitions=3, sort=False)
     assert not ddf_unknown.known_divisions
 
+    h = np.array(range(len(df)))
+    i = da.from_array(h)
     res = ddf.assign(
         c=1,
         d="string",
         e=ddf.a.sum(),
         f=ddf.a + ddf.b,
         g=lambda x: x.a + x.b,
+        h=h,
+        i=i,
         dt=pd.Timestamp(2018, 2, 13),
     )
     res_unknown = ddf_unknown.assign(
@@ -1449,6 +1454,8 @@ def test_assign():
         e=ddf_unknown.a.sum(),
         f=ddf_unknown.a + ddf_unknown.b,
         g=lambda x: x.a + x.b,
+        h=h,
+        i=i,
         dt=pd.Timestamp(2018, 2, 13),
     )
     sol = df.assign(
@@ -1457,6 +1464,8 @@ def test_assign():
         e=df.a.sum(),
         f=df.a + df.b,
         g=lambda x: x.a + x.b,
+        h=h,
+        i=i.compute(),
         dt=pd.Timestamp(2018, 2, 13),
     )
     assert_eq(res, sol)
@@ -3618,6 +3627,11 @@ def test_array_assignment():
 
     arr = np.array(np.random.normal(size=50))
     darr = da.from_array(arr, chunks=10)
+    ddf["z"] = darr
+    np.testing.assert_array_equal(ddf.z.values.compute(), darr.compute())
+
+    # If we don't know the partition_sizes, assigning an Array w/ a different number of partitions raises
+    ddf.partition_sizes = None
     msg = "Number of partitions do not match"
     with pytest.raises(ValueError, match=msg):
         ddf["z"] = darr
