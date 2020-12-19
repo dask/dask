@@ -522,7 +522,9 @@ def test_rechunk_unknown_from_pandas():
     pd = pytest.importorskip("pandas")
 
     arr = np.random.randn(50, 10)
-    x = dd.from_pandas(pd.DataFrame(arr), 2).values
+    x = dd.from_pandas(pd.DataFrame(arr), 2, sort=False)
+    x.partition_sizes = None
+    x = x.values
     result = x.rechunk((None, (5, 5)))
     assert np.isnan(x.chunks[0]).all()
     assert np.isnan(result.chunks[0]).all()
@@ -533,9 +535,9 @@ def test_rechunk_unknown_from_pandas():
 
 def test_rechunk_unknown_from_array():
     dd = pytest.importorskip("dask.dataframe")
-    # pd = pytest.importorskip('pandas')
-    x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2))).values
-    # result = x.rechunk({1: 5})
+    x = dd.from_array(da.ones(shape=(4, 4), chunks=(2, 2)))
+    x.partition_sizes = None
+    x = x.values
     result = x.rechunk((None, 4))
     assert np.isnan(x.chunks[0]).all()
     assert np.isnan(result.chunks[0]).all()
@@ -573,7 +575,9 @@ def test_rechunk_unknown(x, chunks):
 def test_rechunk_unknown_explicit():
     dd = pytest.importorskip("dask.dataframe")
     x = da.ones(shape=(10, 10), chunks=(5, 2))
-    y = dd.from_array(x).values
+    y = dd.from_array(x)
+    y.partition_sizes = None
+    y = y.values
     result = y.rechunk(((float("nan"), float("nan")), (5, 5)))
     expected = x.rechunk((None, (5, 5)))
     assert_chunks_match(result.chunks, expected.chunks)

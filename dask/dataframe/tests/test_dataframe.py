@@ -251,6 +251,7 @@ def test_rename_columns():
     ddf = dd.from_pandas(df, 2)
 
     ddf.columns = ["x", "y"]
+    assert ddf.partition_sizes == (4, 3)
     df.columns = ["x", "y"]
     tm.assert_index_equal(ddf.columns, pd.Index(["x", "y"]))
     tm.assert_index_equal(ddf._meta.columns, pd.Index(["x", "y"]))
@@ -267,6 +268,7 @@ def test_rename_columns():
 
     df.columns = ["x", "y"]
     ddf.columns = ["x", "y"]
+    assert ddf.partition_sizes == (2, 2)
     tm.assert_index_equal(ddf.columns, pd.Index(["x", "y"]))
     tm.assert_index_equal(ddf._meta.columns, pd.Index(["x", "y"]))
     assert_eq(ddf, df)
@@ -279,6 +281,7 @@ def test_rename_series():
 
     s.name = "renamed"
     ds.name = "renamed"
+    assert ds.partition_sizes == (4, 3)
     assert s.name == "renamed"
     assert_eq(ds, s)
 

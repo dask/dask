@@ -228,7 +228,7 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 
     ddf.to_parquet(fn, write_index=index, engine=write_engine)
     read_df = dd.read_parquet(fn, engine=read_engine)
-    assert_eq(ddf, read_df)
+    assert_eq(ddf, read_df, partition_sizes=[(0,), None])
 
 
 @write_read_engines()
@@ -242,7 +242,7 @@ def test_simple(tmpdir, write_engine, read_engine):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
     read_df = dd.read_parquet(fn, index=["a"], engine=read_engine)
-    assert_eq(ddf, read_df)
+    assert_eq(ddf, read_df, partition_sizes=[(3,), None])
 
 
 @write_read_engines()
@@ -263,7 +263,7 @@ def test_delayed_no_metadata(tmpdir, write_engine, read_engine):
         engine=read_engine,
         gather_statistics=True,
     )
-    assert_eq(ddf, read_df)
+    assert_eq(ddf, read_df, partition_sizes=[(3,), None])
 
 
 @write_read_engines()
@@ -281,7 +281,9 @@ def test_read_glob(tmpdir, write_engine, read_engine):
         index="myindex",  # Must specify index without _metadata
         gather_statistics=True,
     )
-    assert_eq(ddf, ddf2)
+    assert_eq(
+        ddf, ddf2, partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None]
+    )
 
 
 @write_read_engines()
@@ -305,7 +307,9 @@ def test_read_list(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(
         files, engine=read_engine, index="myindex", gather_statistics=True
     )
-    assert_eq(ddf, ddf2)
+    assert_eq(
+        ddf, ddf2, partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None]
+    )
 
 
 @write_read_engines()
@@ -384,6 +388,7 @@ def test_columns_index(tmpdir, write_engine, read_engine):
     assert_eq(
         dd.read_parquet(fn, index="myindex", columns=["x", "y"], engine=read_engine),
         ddf,
+        partition_sizes=[None, (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4)],
     )
 
     # No divisions
@@ -881,7 +886,7 @@ def test_ordering(tmpdir, write_engine, read_engine):
         assert pf.columns == ["myindex", "c", "a", "b"]
 
     ddf2 = dd.read_parquet(tmp, index="myindex", engine=read_engine)
-    assert_eq(ddf, ddf2, check_divisions=False)
+    assert_eq(ddf, ddf2, check_divisions=False, partition_sizes=[(3,), None])
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
@@ -964,7 +969,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     else:
         dd.to_parquet(ddf, tmp, engine=engine, **write_kwargs)
     ddf2 = dd.read_parquet(tmp, index=df.index.name, engine=engine, **read_kwargs)
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, partition_sizes=[(3,), None])
 
 
 def test_categories(tmpdir, engine):
@@ -1038,7 +1043,7 @@ def test_timestamp_index(tmpdir, engine):
     ddf = dd.from_pandas(df, npartitions=5)
     ddf.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, engine=engine)
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, partition_sizes=[(6, 6, 6, 6, 6), None])
 
 
 def test_to_parquet_default_writes_nulls(tmpdir):
@@ -1229,7 +1234,11 @@ def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
         # pyarrow-written dataset with string index
         assert_eq(df, df_out, check_divisions=False)
     else:
-        assert_eq(df, df_out)
+        if index and engine.startswith("pyarrow"):
+            partition_sizes = None
+        else:
+            partition_sizes = [(4, 3), None]
+        assert_eq(df, df_out, partition_sizes=partition_sizes)
 
 
 def test_partition_on(tmpdir, engine):
@@ -1599,7 +1608,7 @@ def test_to_parquet_lazy(tmpdir, scheduler, engine):
 
     ddf2 = dd.read_parquet(tmpdir, engine=engine)
 
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, partition_sizes=[(2, 2), None])
 
 
 def test_timestamp96(tmpdir):
@@ -1712,7 +1721,7 @@ def test_writing_parquet_with_compression(tmpdir, compression, engine):
 
     ddf.to_parquet(fn, compression=compression, engine=engine)
     out = dd.read_parquet(fn, engine=engine)
-    assert_eq(out, ddf)
+    assert_eq(out, ddf, partition_sizes=[None, (10, 10, 10)])
     check_compression(engine, fn, compression)
 
 
@@ -2019,7 +2028,12 @@ def test_writing_parquet_with_kwargs(tmpdir, engine):
 
     ddf.to_parquet(path1, engine=engine, **engine_kwargs[engine])
     out = dd.read_parquet(path1, engine=engine)
-    assert_eq(out, ddf, check_index=(engine != "fastparquet"))
+    assert_eq(
+        out,
+        ddf,
+        check_index=(engine != "fastparquet"),
+        partition_sizes=[None, (34, 34, 32)],
+    )
 
     # Avoid race condition in pyarrow 0.8.0 on writing partitioned datasets
     with dask.config.set(scheduler="sync"):
@@ -2104,7 +2118,13 @@ def test_with_tz(tmpdir, engine):
             df = dd.from_pandas(df, 1)
             df.to_parquet(fn, engine=engine)
             df2 = dd.read_parquet(fn, engine=engine)
-            assert_eq(df, df2, check_divisions=False, check_index=False)
+            assert_eq(
+                df,
+                df2,
+                check_divisions=False,
+                check_index=False,
+                partition_sizes=[(1,), None],
+            )
 
 
 def test_arrow_partitioning(tmpdir):
@@ -2188,7 +2208,7 @@ def test_roundtrip_arrow(tmpdir, df):
     ddf = dd.from_pandas(df, npartitions=2)
     dd.to_parquet(ddf, tmp_path, engine="pyarrow", write_index=True)
     ddf2 = dd.read_parquet(tmp_path, engine="pyarrow", gather_statistics=True)
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, partition_sizes=False)
 
 
 def test_datasets_timeseries(tmpdir, engine):
@@ -2211,7 +2231,7 @@ def test_pathlib_path(tmpdir, engine):
     path = pathlib.Path(str(tmpdir))
     ddf.to_parquet(path, engine=engine)
     ddf2 = dd.read_parquet(path, engine=engine)
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, partition_sizes=[(3, 3), None])
 
 
 def test_pyarrow_metadata_nthreads(tmpdir):
@@ -2223,7 +2243,7 @@ def test_pyarrow_metadata_nthreads(tmpdir):
     ddf.to_parquet(tmp_path, engine="pyarrow")
     ops = {"dataset": {"metadata_nthreads": 2}}
     ddf2 = dd.read_parquet(tmp_path, engine="pyarrow", **ops)
-    assert_eq(ddf, ddf2)
+    assert_eq(ddf, ddf2, partition_sizes=[(3, 3), None])
 
 
 def test_categories_large(tmpdir, engine):
@@ -2248,7 +2268,12 @@ def test_read_glob_no_meta(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(
         os.path.join(tmp_path, "*.parquet"), engine=read_engine, gather_statistics=False
     )
-    assert_eq(ddf, ddf2, check_divisions=False)
+    assert_eq(
+        ddf,
+        ddf2,
+        check_divisions=False,
+        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+    )
 
 
 @write_read_engines()
@@ -2258,7 +2283,12 @@ def test_read_glob_yes_meta(tmpdir, write_engine, read_engine):
     paths = glob.glob(os.path.join(tmp_path, "*.parquet"))
     paths.append(os.path.join(tmp_path, "_metadata"))
     ddf2 = dd.read_parquet(paths, engine=read_engine, gather_statistics=False)
-    assert_eq(ddf, ddf2, check_divisions=False)
+    assert_eq(
+        ddf,
+        ddf2,
+        check_divisions=False,
+        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+    )
 
 
 @pytest.mark.parametrize("statistics", [True, False, None])
@@ -2276,12 +2306,17 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
         os.unlink(os.path.join(tmp_path, "_common_metadata"))
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
-    assert_eq(ddf, ddf2, check_divisions=False)
-    assert ddf.divisions == tuple(range(0, 420, 30))
+    divisions1 = tuple(range(0, 420, 30))
     if statistics is False or statistics is None and read_engine.startswith("pyarrow"):
-        assert ddf2.divisions == (None,) * 14
+        divisions2 = (None,) * 14
     else:
-        assert ddf2.divisions == tuple(range(0, 420, 30))
+        divisions2 = divisions1
+    assert_eq(
+        ddf,
+        ddf2,
+        divisions=[divisions1, divisions2],
+        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+    )
 
 
 @write_read_engines()
@@ -2290,9 +2325,12 @@ def test_statistics_nometa(tmpdir, write_engine, read_engine):
     ddf.to_parquet(tmp_path, engine=write_engine, write_metadata_file=False)
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=True)
-    assert_eq(ddf, ddf2)
-    assert ddf.divisions == tuple(range(0, 420, 30))
-    assert ddf2.divisions == tuple(range(0, 420, 30))
+    assert_eq(
+        ddf,
+        ddf2,
+        divisions=tuple(range(0, 420, 30)),
+        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
+    )
 
 
 @pytest.mark.parametrize("schema", ["infer", None])
@@ -2381,6 +2419,7 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
         ddf2,
         check_divisions=False,
         check_index=False,
+        partition_sizes=[None, (2, 2)],
     )
 
 
@@ -2528,7 +2567,7 @@ def test_optimize_blockwise_parquet(tmpdir):
     assert isinstance(list(layers.values())[0], Blockwise)
 
     # Check single-layer result
-    assert_eq(ddf, expect)
+    assert_eq(ddf, expect, partition_sizes=[None, (20, 20)])
 
     # Increment by 1
     ddf += 1
@@ -2744,7 +2783,7 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         index="index",
     )
 
-    assert_eq(ddf1, ddf2, check_divisions=False)
+    assert_eq(ddf1, ddf2, check_divisions=False, partition_sizes=[(50, 50), None])
 
     num_row_groups = df_size // row_group_size
     if not chunksize:
@@ -2862,7 +2901,7 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir):
     ddf1.to_parquet(tmpdir, engine="pyarrow")
     ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
 
-    assert_eq(ddf1, ddf2, check_index=False)
+    assert_eq(ddf1, ddf2, check_index=False, partition_sizes=[(3,), None])
 
 
 def test_pandas_timestamp_overflow_pyarrow(tmpdir):
@@ -3095,7 +3134,7 @@ def test_pyarrow_dataset_simple(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
     read_df = dd.read_parquet(fn, engine="pyarrow-legacy")
     read_df.compute(scheduler="synchronous")
-    assert_eq(ddf, read_df)
+    assert_eq(ddf, read_df, partition_sizes=[(3,), None])
 
 
 @pytest.mark.parametrize("test_filter", [True, False])
@@ -3121,7 +3160,7 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
     if test_filter:
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
     else:
-        assert_eq(ddf, read_df)
+        assert_eq(ddf, read_df, partition_sizes=[(3,), None])
 
 
 @pytest.mark.parametrize("read_from_paths", [True, False])
@@ -3155,7 +3194,7 @@ def test_pyarrow_dataset_read_from_paths(
     if test_filter_partitioned:
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
     else:
-        assert_eq(ddf, read_df)
+        assert_eq(ddf, read_df, partition_sizes=[(3,), None])
 
 
 @pytest.mark.parametrize("split_row_groups", [True, False])
@@ -3313,7 +3352,11 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         ddf1 = df1.sort_values("b")
         ddf2 = ddf2.compute().sort_values("b")
         ddf2.a = ddf2.a.astype("object")
-    assert_eq(ddf1, ddf2)
+        assert_eq(ddf1, ddf2, partition_sizes=False)
+    else:
+        assert_eq(
+            ddf1, ddf2, partition_sizes=[(10, 10, 10, 10, 10, 10, 10, 10, 10, 10), None]
+        )
 
     # Check if we can avoid writing an actual file
     fmd = dd.io.parquet.create_metadata_file(
@@ -3455,7 +3498,7 @@ def test_roundtrip_decimal_dtype(tmpdir):
     ddf2 = dd.read_parquet(tmpdir, engine="pyarrow")
 
     assert ddf1["col1"].dtype == ddf2["col1"].dtype
-    assert_eq(ddf1, ddf2, check_divisions=False)
+    assert_eq(ddf1, ddf2, check_divisions=False, partition_sizes=[(23,), None])
 
 
 def test_roundtrip_rename_columns(tmpdir, engine):
