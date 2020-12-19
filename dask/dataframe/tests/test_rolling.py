@@ -21,8 +21,9 @@ df = pd.DataFrame(
 ddf = dd.from_pandas(df, 3)
 
 idx = (
-    pd.date_range("2016-01-01", freq="3s", periods=100)
-    | pd.date_range("2016-01-01", freq="5s", periods=100)
+    pd.date_range("2016-01-01", freq="3s", periods=100).union(
+        pd.date_range("2016-01-01", freq="5s", periods=100)
+    )
 )[:N]
 
 ts = pd.DataFrame(
