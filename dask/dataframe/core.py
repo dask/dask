@@ -3647,7 +3647,14 @@ Dask Name: {name}, {task} tasks""".format(
             warnings.warn(meta_warning(meta))
 
         return map_partitions(
-            M.apply, self, func, convert_dtype, args, meta=meta, **kwds
+            M.apply,
+            self,
+            func,
+            convert_dtype,
+            args,
+            meta=meta,
+            preserve_partition_sizes=True,
+            **kwds,
         )
 
     @derived_from(pd.Series)
