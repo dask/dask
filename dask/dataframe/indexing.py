@@ -71,7 +71,9 @@ class _iLocIndexer(_IndexerBase):
         assert iindexer == slice(None)
         meta = self._make_meta(iindexer, cindexer)
 
-        return self.obj.map_partitions(methods.iloc, cindexer, meta=meta)
+        return self.obj.map_partitions(
+            methods.iloc, cindexer, meta=meta, preserve_partition_sizes=True
+        )
 
 
 class _LocIndexer(_IndexerBase):
