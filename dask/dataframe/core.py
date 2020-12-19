@@ -5237,7 +5237,11 @@ def elemwise(op, *args, **kwargs):
 
     from .multi import _maybe_align_partitions
 
+    original_args = args
     args = _maybe_align_partitions(args)
+    # TODO: is this a valid way to test whether partitions were already aligned?
+    partitions_already_aligned = args is original_args
+
     dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
     dfs = [df for df in dasks if isinstance(df, _Frame)]
 
@@ -5260,6 +5264,8 @@ def elemwise(op, *args, **kwargs):
 
     divisions = dfs[0].divisions
     if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+        # TODO: not sure about partition-size implications of this block
+        partitions_already_aligned = False
         try:
             divisions = op(
                 *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
@@ -5304,7 +5310,12 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
+    partition_sizes = None
+    if partitions_already_aligned:
+        partition_sizes = dfs[0].partition_sizes
+    result = new_dd_object(
+        graph, _name, meta, divisions, partition_sizes=partition_sizes
+    )
     return handle_out(out, result)
 
 
