@@ -1028,7 +1028,7 @@ def valid_divisions(divisions):
     >>> valid_divisions([0, float('nan'), 1])
     False
     """
-    if not isinstance(divisions, (tuple, list)):
+    if not isinstance(divisions, (tuple, list, np.ndarray)):
         return False
 
     for i, x in enumerate(divisions[:-2]):

@@ -3000,7 +3000,7 @@ Dask Name: {name}, {task} tasks"""
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
-        return self.map_partitions(methods.values)
+        return self.map_partitions(methods.values, preserve_partition_sizes=True)
 
     def _validate_chunks(self, arr, lengths):
         from dask.array.core import normalize_chunks

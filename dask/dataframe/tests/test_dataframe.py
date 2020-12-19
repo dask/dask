@@ -2810,14 +2810,9 @@ def test_to_dask_array_unknown(as_frame):
     result = result.chunks
 
     if as_frame:
-        assert len(result) == 2
-        assert result[1] == (1,)
+        np.testing.assert_array_equal(result, ((np.nan, np.nan), (1,)))
     else:
-        assert len(result) == 1
-
-    result = result[0]
-    assert len(result) == 2
-    assert all(np.isnan(x) for x in result)
+        assert result == ((2, 3),)
 
 
 @pytest.mark.parametrize(
