@@ -655,7 +655,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 
 @derived_from(np)
-def tri(N, chunks="auto", M=None, k=0, dtype=float):
+def tri(N, M=None, k=0, dtype=float, chunks="auto"):
     if M is None:
         M = N
 
