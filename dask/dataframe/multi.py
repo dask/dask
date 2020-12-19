@@ -1041,7 +1041,31 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **k
     for df in dfs2:
         dsk.update(df.dask)
 
-    return new_dd_object(dsk, name, meta, divisions)
+    # In general, we don't know what the result's partition_sizes will be, but there are a few cases where we do:
+    all_divisions = list(set([df.divisions for df in dfs]))
+    if len(all_divisions) == 1 and all_divisions[0] is not None:
+        if axis in [1, "1", "columns"]:
+            # When concatenating columns, only infer partition_sizes if they are all equal (in which case we copy
+            # that partition_sizes value)
+            distinct_partition_sizes = list(set([df.partition_sizes for df in dfs]))
+            if len(distinct_partition_sizes) == 1:
+                partition_sizes = distinct_partition_sizes[0]
+            else:
+                partition_sizes = None
+        else:
+            if all([df.partition_sizes is not None for df in dfs]):
+                # If all dataframes have the same divisions and known partition_sizes, the result's partition_sizes
+                # will be the partition-wise sums of each dataframe's respective partition_sizes
+                partition_sizes = tuple(
+                    sum(partitions)
+                    for partitions in zip(*[df.partition_sizes for df in dfs])
+                )
+            else:
+                partition_sizes = None
+    else:
+        partition_sizes = None
+
+    return new_dd_object(dsk, name, meta, divisions, partition_sizes=partition_sizes)
 
 
 def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs):
