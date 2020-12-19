@@ -6764,8 +6764,13 @@ def repartition(df, divisions=None, force=False):
         dsk = repartition_divisions(
             df.divisions, divisions, df._name, tmp, out, force=force
         )
+        from .multi import maybe_infer_partition_sizes
+
+        partition_sizes = maybe_infer_partition_sizes(divisions, df)
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[df])
-        return new_dd_object(graph, out, df._meta, divisions)
+        return new_dd_object(
+            graph, out, df._meta, divisions, partition_sizes=partition_sizes
+        )
     elif is_dataframe_like(df) or is_series_like(df):
         name = "repartition-dataframe-" + token
         from .utils import shard_df_on_index
