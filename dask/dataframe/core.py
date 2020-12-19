@@ -5965,9 +5965,11 @@ def quantile(df, q, method="default"):
             name,
             df._meta,
             [None, None],
+            partition_sizes=(0,),
         )
     else:
         new_divisions = [np.min(q), np.max(q)]
+        new_partition_sizes = (len(qs),)
 
     df = df.dropna()
 
@@ -6014,7 +6016,9 @@ def quantile(df, q, method="default"):
         }
     dsk = merge(val_dsk, merge_dsk)
     graph = HighLevelGraph.from_collections(name2, dsk, dependencies=[df])
-    return return_type(graph, name2, meta, new_divisions)
+    return return_type(
+        graph, name2, meta, new_divisions, partition_sizes=new_partition_sizes
+    )
 
 
 def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
