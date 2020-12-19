@@ -17,11 +17,11 @@ from dask.dataframe.multi import (
     merge_indexed_dataframes,
 )
 from dask.dataframe.utils import (
-    assert_divisions,
     assert_eq,
     clear_known_categories,
     has_known_categories,
     make_meta,
+    verify_divisions,
 )
 
 
@@ -1338,11 +1338,11 @@ def test_cheap_single_partition_merge_divisions():
 
     actual = aa.merge(bb, on="x", how="inner")
     assert not actual.known_divisions
-    assert_divisions(actual)
+    verify_divisions(actual)
 
     actual = bb.merge(aa, on="x", how="inner")
     assert not actual.known_divisions
-    assert_divisions(actual)
+    verify_divisions(actual)
 
 
 @pytest.mark.parametrize("how", ["left", "right"])

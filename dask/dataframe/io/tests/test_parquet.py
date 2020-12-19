@@ -2199,7 +2199,7 @@ def test_datasets_timeseries(tmpdir, engine):
     df.to_parquet(tmp_path, engine=engine)
 
     df2 = dd.read_parquet(tmp_path, engine=engine)
-    assert_eq(df, df2)
+    assert_eq(df, df2, partition_sizes=[(1, 1, 1, 1, 1, 1, 1, 1, 1), None])
 
 
 def test_pathlib_path(tmpdir, engine):

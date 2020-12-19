@@ -795,6 +795,47 @@ def _maybe_sort(a):
     return a.sort_index()
 
 
+def check_attr(k, verify_fn, level, a, b):
+    msg = (
+        "Invalid `%s` param %s; must be a %s-tuple, a list of two %s-tuples (with `False` in "
+        % (k, level, k, k)
+        + 'either position meaning "skip"), "verify", "dtype", True, False, or None'
+    )
+    if level:
+        verify_fn(a)
+        verify_fn(b)
+        if level in ["dtype", "dtype?"]:
+            if level == "dtype?" and hasattr(a, k) and hasattr(b, k):
+                at = type(np.asarray(a.divisions).tolist()[0])  # numpy to python
+                bt = type(np.asarray(b.divisions).tolist()[0])  # scalar conversion
+                assert at == bt, (at, bt)
+        elif isinstance(level, tuple):
+            if not is_dask_collection(a) and not is_dask_collection(b):
+                raise ValueError(
+                    "Expected at least one Dask collection: %s, %s" % (str(a), str(b))
+                )
+            if is_dask_collection(a):
+                assert getattr(a, k) == level, (k, getattr(a, k), level)
+            if is_dask_collection(b):
+                assert getattr(b, k) == level, (k, getattr(b, k), level)
+        elif isinstance(level, list):
+            if len(level) != 2:
+                raise ValueError(msg)
+            [a_val, b_val] = level
+            if a_val is not False:
+                assert getattr(a, k) == a_val, (k, getattr(a, k), a_val)
+            if b_val is not False:
+                assert getattr(b, k) == b_val, (k, getattr(b, k), b_val)
+        elif level is True or level == "check":
+            assert getattr(a, k) == getattr(b, k), (k, getattr(a, k), getattr(b, k))
+        elif level == "check?":
+            if hasattr(a, k) and hasattr(b, k):
+                assert getattr(a, k) == getattr(b, k), (k, getattr(a, k), getattr(b, k))
+        elif level != "verify":
+            raise ValueError(msg)
+            # already verified above; happens for all non-Falsey cases
+
+
 def assert_eq(
     a,
     b,
@@ -802,15 +843,29 @@ def assert_eq(
     check_dtypes=True,
     check_divisions=True,
     check_index=True,
+    divisions="dtype?",
+    partition_sizes="check?",
     **kwargs,
 ):
-    if check_divisions:
-        assert_divisions(a)
-        assert_divisions(b)
-        if hasattr(a, "divisions") and hasattr(b, "divisions"):
-            at = type(np.asarray(a.divisions).tolist()[0])  # numpy to python
-            bt = type(np.asarray(b.divisions).tolist()[0])  # scalar conversion
-            assert at == bt, (at, bt)
+    """Verify that two _Frame-like objects are equal, subject to flexible matching constraints.
+
+    `divisions` takes the following values:
+    - <a tuple>: require that `a` and `b` both have `divisions` matching the given tuple
+    - <a list of two tuples>: require that `a`'s (resp. `b`'s) `divisions` matches the first (resp. second) list
+        element; `False` in either position means "skip this position".
+    - "verify": check `divisions` for internal consistency; `compute` all partitions and verify that their bounds. This
+        check is performed for all non-False-y values of `divisions`.
+    - "dtype": verify the sides' divisions' dtypes match
+    - "dtype?" (default, for backwards-compatibility): similar to "dtype", but only perform the check if `a` and `b`
+        both have `divisions` attrs
+    - "check" | True: verify that both sides' divisions match the other's (without checking their specific value)
+    - "check?": similar to "check", but only applied if both sides have `divisions`
+    - False (or anything "False-y"): perform no checks
+
+    `partition_sizes` behaves just like `divisions`
+    """
+    check_attr("divisions", verify_divisions, check_divisions and divisions, a, b)
+    check_attr("partition_sizes", verify_partition_sizes, partition_sizes, a, b)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
     a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
@@ -857,7 +912,7 @@ def assert_dask_graph(dask, label):
     )
 
 
-def assert_divisions(ddf):
+def verify_divisions(ddf):
     if not hasattr(ddf, "divisions"):
         return
     if not getattr(ddf, "known_divisions", False):
@@ -880,6 +935,17 @@ def assert_divisions(ddf):
     if len(results[-1]):
         assert index(results[-1]).min() >= ddf.divisions[-2]
         assert index(results[-1]).max() <= ddf.divisions[-1]
+
+
+def verify_partition_sizes(ddf):
+    if not hasattr(ddf, "partition_sizes") or ddf.partition_sizes is None:
+        return
+    results = get_sync(ddf.dask, ddf.__dask_keys__())
+    partition_sizes = tuple(len(df) for df in results)
+    assert ddf.partition_sizes == partition_sizes, (
+        ddf.partition_sizes,
+        partition_sizes,
+    )
 
 
 def assert_sane_keynames(ddf):
