@@ -40,6 +40,7 @@ def to_numeric(arg, errors="raise", meta=None):
             token=arg._name + "-to_numeric",
             meta=meta,
             enforce_metadata=False,
+            preserve_partition_sizes=True,
             errors=errors,
         )
     if is_array:
