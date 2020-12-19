@@ -1485,7 +1485,12 @@ Dask Name: {name}, {task} tasks"""
         -------
         """
         if lengths is True:
-            lengths = tuple(self.map_partitions(len, enforce_metadata=False).compute())
+            if self.partition_sizes:
+                lengths = self.partition_sizes
+            else:
+                lengths = tuple(
+                    self.map_partitions(len, enforce_metadata=False).compute()
+                )
 
         arr = self.values
 
