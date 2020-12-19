@@ -230,6 +230,7 @@ try:
         indices,
         diag,
         eye,
+        tri,
         triu,
         tril,
         fromfunction,
