@@ -1460,6 +1460,46 @@ def test_concat_one_series():
     assert isinstance(c, dd.DataFrame)
 
 
+def test_concat_partition_sizes_ax0():
+    a = pd.DataFrame({"a": range(100), "b": range(100, 200)})
+    b = pd.DataFrame({"a": range(-1, -101, -1), "b": range(-100, -200, -1)})
+    aa = dd.from_pandas(a, npartitions=3, sort=False)
+    bb = dd.from_pandas(b, npartitions=3, sort=False)
+
+    assert not aa.known_divisions
+    assert not bb.known_divisions
+
+    assert aa.partition_sizes == (34, 34, 32)
+    assert aa.partition_sizes == (34, 34, 32)
+
+    ab0 = pd.concat([a, b])
+    aabb0 = dd.concat([aa, bb])
+    assert_eq(ab0, aabb0)
+
+    assert not aabb0.known_divisions
+    assert aabb0.partition_sizes == (34, 34, 32, 34, 34, 32)
+
+
+def test_concat_partition_sizes_ax1():
+    a = pd.DataFrame({"a": range(100), "b": range(100, 200)})
+    b = pd.DataFrame({"c": range(-1, -101, -1), "d": range(-100, -200, -1)})
+    aa = dd.from_pandas(a, npartitions=3)
+    bb = dd.from_pandas(b, npartitions=3)
+
+    assert aa.divisions == (0, 34, 68, 99)
+    assert bb.divisions == (0, 34, 68, 99)
+
+    assert aa.partition_sizes == (34, 34, 32)
+    assert aa.partition_sizes == (34, 34, 32)
+
+    ab = pd.concat([a, b], axis=1)
+    aabb = dd.concat([aa, bb], axis=1)
+
+    assert_eq(ab, aabb)
+    assert aabb.divisions == (0, 34, 68, 99)
+    assert aabb.partition_sizes == (34, 34, 32)
+
+
 def test_concat_unknown_divisions():
     a = pd.Series([1, 2, 3, 4])
     b = pd.Series([4, 3, 2, 1])
