@@ -5986,7 +5986,7 @@ def map_partitions(
             divisions = func(
                 *[pd.Index(a.divisions) if a is dfs[0] else a for a in args], **kwargs
             )
-            if isinstance(divisions, pd.Index):
+            if isinstance(divisions, (pd.Index, np.ndarray)):
                 divisions = methods.tolist(divisions)
         except Exception:
             pass
