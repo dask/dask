@@ -321,6 +321,11 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
     kwargs["right_index"] = right_index
 
     (lhs, rhs), divisions, parts = align_partitions(lhs, rhs)
+    partition_sizes = None
+    if how == "left":
+        partition_sizes = lhs.partition_sizes
+    elif how == "right":
+        partition_sizes = rhs.partition_sizes
     divisions, parts = require(divisions, parts, required[how])
 
     name = "join-indexed-" + tokenize(lhs, rhs, **kwargs)
@@ -334,7 +339,7 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
         dsk[(name, i)] = (apply, merge_chunk, [a, b], kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs, rhs])
-    return new_dd_object(graph, name, meta, divisions)
+    return new_dd_object(graph, name, meta, divisions, partition_sizes=partition_sizes)
 
 
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
