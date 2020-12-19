@@ -197,7 +197,10 @@ class _LocIndexer(_IndexerBase):
 
         meta = self._make_meta(iindexer, cindexer)
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self.obj])
-        return new_dd_object(graph, name, meta=meta, divisions=[iindexer, iindexer])
+        # TODO: partition_sizes presumably [1], unless index values can repeat?
+        return new_dd_object(
+            graph, name, meta=meta, divisions=[iindexer, iindexer], partition_sizes=None
+        )
 
     def _get_partitions(self, keys):
         if isinstance(keys, (list, np.ndarray)):
