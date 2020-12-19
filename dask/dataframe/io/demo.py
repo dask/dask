@@ -183,9 +183,12 @@ def make_timeseries(
         io_func=MakeTimeseriesPart(dtypes, freq, kwargs),
         label=label,
     )
+    partition_sizes = [
+        (end - start) // freq for start, end in zip(divisions, divisions[1:])
+    ]
     graph = HighLevelGraph({name: layer}, {name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(graph, name, head, divisions)
+    return DataFrame(graph, name, head, divisions, partition_sizes)
 
 
 class GenerateDay:
