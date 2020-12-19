@@ -4799,6 +4799,7 @@ class DataFrame(_Frame):
                         axis=axis,
                         fill_value=fill_value,
                         enforce_metadata=False,
+                        preserve_partition_sizes=True,
                     )
 
             meta = _emulate(op, self, other, axis=axis, fill_value=fill_value)
@@ -4810,6 +4811,7 @@ class DataFrame(_Frame):
                 axis=axis,
                 fill_value=fill_value,
                 enforce_metadata=False,
+                preserve_partition_sizes=True,
             )
 
         meth.__name__ = name
