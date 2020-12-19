@@ -17,7 +17,7 @@ from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
-from .creation import arange, diag, empty, indices, tri
+from .creation import arange, diag, empty, indices, tri, zeros
 from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -1618,6 +1618,6 @@ def tril(m, k=0):
 @derived_from(np)
 def triu(m, k=0):
     m = asarray(m)
-    mask = da_tri(*m.shape[-2:], k=k-1, dtype=bool)
+    mask = tri(*m.shape[-2:], k=k-1, dtype=bool)
 
     return where(mask, zeros(1, dtype=m.dtype), m)
