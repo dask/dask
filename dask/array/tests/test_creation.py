@@ -405,10 +405,10 @@ def test_tril_triu():
             assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
 
 
-def test_tril_triu_errors():
+def test_tril_ndims():
     A = np.random.randint(0, 11, (10, 10, 10))
     dA = da.from_array(A, chunks=(5, 5, 5))
-    pytest.raises(ValueError, lambda: da.triu(dA))
+    assert_eq(da.triu(dA), np.triu(A))
 
 
 def test_tril_triu_non_square_arrays():
