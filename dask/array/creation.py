@@ -656,6 +656,8 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 @derived_from(np)
 def tri(N, M=None, k=0, dtype=float, chunks="auto"):
+    _min_int = np.lib.twodim_base._min_int
+
     if M is None:
         M = N
 
@@ -665,9 +667,9 @@ def tri(N, M=None, k=0, dtype=float, chunks="auto"):
         chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
         chunks = chunks[0][0]
 
-    # TODO: Add numpys _min_int() helper function?
     m = greater_equal.outer(
-        arange(N, chunks=chunks, dtype=int), arange(-k, M - k, chunks=chunks, dtype=int)
+        arange(N, chunks=chunks, dtype=_min_int(0, N)),
+        arange(-k, M - k, chunks=chunks, dtype=_min_int(-k, M - k)),
     )
 
     # Avoid making a copy if the requested type is already bool
