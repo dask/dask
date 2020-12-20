@@ -1621,3 +1621,27 @@ def triu(m, k=0):
     mask = tri(*m.shape[-2:], k=k - 1, dtype=bool)
 
     return where(mask, zeros(1, dtype=m.dtype), m)
+
+
+@derived_from(np)
+def tril_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(tri(n, m, k=k, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def tril_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return tril_indices(arr.shape[-2], k=k, m=arr.shape[-1])
+
+
+@derived_from(np)
+def triu_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(~tri(n, m, k=k - 1, dtype=bool))
+
+
+@derived_from(np)
+def triu_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return triu_indices(arr.shape[-2], k=k, m=arr.shape[-1])
