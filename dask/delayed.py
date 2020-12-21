@@ -407,7 +407,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
 
     In contrast, methods are assumed to be impure by default, meaning that
     subsequent calls may return different results. To assume purity, set
-    `pure=True`. This allows sharing of any intermediate values.
+    ``pure=True``. This allows sharing of any intermediate values.
 
     >>> a.count(2, pure=True).key == a.count(2, pure=True).key
     True

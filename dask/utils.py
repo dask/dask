@@ -194,7 +194,9 @@ class IndexCallable(object):
 def filetexts(d, open=open, mode="t", use_tmpdir=True):
     """Dumps a number of textfiles to disk
 
-    d - dict
+    Parameters
+    ----------
+    d : dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
 
     Since this is meant for use in tests, this context manager will
