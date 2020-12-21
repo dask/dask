@@ -776,7 +776,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
             ),
         ),
         pytest.param(
-            "median", 
+            "median",
             marks=pytest.mark.skip(reason="Not implemented"),
         ),
         pytest.param(
