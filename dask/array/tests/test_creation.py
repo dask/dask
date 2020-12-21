@@ -376,7 +376,7 @@ def test_meshgrid_inputcoercion():
         (3, None, 2, int, 1),
         (6, 8, -2, int, (3, 4)),
         (6, 8, 0, int, (3, "auto")),
-    ]
+    ],
 )
 def test_tri(N, M, k, dtype, chunks):
     assert_eq(da.tri(N, M, k, dtype, chunks), np.tri(N, M, k, dtype))
@@ -775,10 +775,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
                 reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
             ),
         ),
-        pytest.param(
-            "median",
-            marks=pytest.mark.skip(reason="Not implemented"),
-        ),
+        pytest.param("median", marks=pytest.mark.skip(reason="Not implemented"),),
         pytest.param(
             "empty",
             marks=pytest.mark.skip(
