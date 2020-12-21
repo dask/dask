@@ -954,7 +954,7 @@ def test_metadata_inference_single_partition_aligned_args():
         assert len(df) > 0
         return df
 
-    res = dd.map_partitions(check, ddf, ddf.x)
+    res = dd.map_partitions(check, ddf, ddf.x, preserve_partition_sizes=True)
     assert_eq(res, ddf)
 
 
