@@ -365,8 +365,21 @@ def test_meshgrid_inputcoercion():
     assert_eq(z, z_d)
 
 
-def test_tri():
-    assert_eq(da.tri(3), np.tri(3))
+@pytest.mark.parametrize(
+    "N, M, k, dtype, chunks",
+    [
+        (3, None, 0, float, "auto"),
+        (4, None, 0, float, "auto"),
+        (3, 4, 0, bool, "auto"),
+        (3, None, 1, int, "auto"),
+        (3, None, -1, int, "auto"),
+        (3, None, 2, int, 1),
+        (6, 8, -2, int, (3, 4)),
+        (6, 8, 0, int, (3, "auto")),
+    ]
+)
+def test_tri(N, M, k, dtype, chunks):
+    assert_eq(da.tri(N, M, k, dtype, chunks), np.tri(N, M, k, dtype))
 
 
 def test_eye():
