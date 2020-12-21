@@ -1921,7 +1921,23 @@ def test_repartition_npartitions(use_index, n, k, dtype, transform):
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(k)
-    assert_eq(a, b)
+
+    partition_sizes_dict = {
+        (1, 1, True): (60,),
+        (1, 1, False): (60,),
+        (2, 2, True): (30, 30),
+        (2, 2, False): (30, 30),
+        (4, 4, True): (20, 10, 20, 10),
+        (4, 4, False): (15,) * 4,
+        (5, 5, True): (20, 10, 10, 10, 10),
+        (5, 5, False): (12,) * 5,
+    }
+    partition_sizes = partition_sizes_dict.get((n, k, use_index))
+
+    # skip left-side partition_sizes (which vary from case to case, and are set by from_pandas, which is not the focus
+    # of this test); right side is usually None except when n == k (that's the only case where repartition currently
+    # propagates partition_sizes, since it returns the input DataFrame)
+    assert_eq(a, b, partition_sizes=[False, partition_sizes])
     assert b.npartitions == k
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
@@ -1939,7 +1955,7 @@ def test_repartition_partition_size(use_index, n, partition_size, transform):
     df = transform(df)
     a = dd.from_pandas(df, npartitions=n, sort=use_index)
     b = a.repartition(partition_size=partition_size)
-    assert_eq(a, b, check_divisions=False)
+    assert_eq(a, b, check_divisions=False, partition_sizes=[False, None])
     assert np.alltrue(b.map_partitions(total_mem_usage, deep=True).compute() <= 1024)
     parts = dask.get(b.dask, b.__dask_keys__())
     assert all(map(len, parts))
@@ -1976,7 +1992,7 @@ def test_repartition_npartitions_numeric_edge_case():
     a = dd.from_pandas(df, npartitions=15)
     assert a.npartitions == 15
     b = a.repartition(npartitions=11)
-    assert_eq(a, b)
+    assert_eq(a, b, partition_sizes=[(7,) * 14 + (2,), None])
 
 
 def test_repartition_object_index():
@@ -4576,7 +4592,7 @@ def test_join_series():
     ddf = dd.from_pandas(df, npartitions=1)
     expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
     actual_df = ddf.join(ddf["x"], lsuffix="_")
-    assert_eq(actual_df, expected_df)
+    assert_eq(actual_df, expected_df, partition_sizes=[None, (8,)])
 
 
 def test_dask_layers():
