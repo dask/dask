@@ -14,6 +14,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
+from dask.dataframe._compat import PANDAS_GT_110
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -146,6 +147,10 @@ def write_read_engines(**kwargs):
     )
 
 
+pandas_110_xfail = pytest.mark.xfail(
+    PANDAS_GT_110, reason="https://github.com/pandas-dev/pandas/issues/38642"
+)
+
 pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
 write_read_engines_xfail = write_read_engines(
     **{
@@ -157,6 +162,9 @@ write_read_engines_xfail = write_read_engines(
 fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
 fp_pandas_xfail = write_read_engines(
     **{
+        "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
+        "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
+        "xfail_fastparquet_fastparquet": fp_pandas_msg,
         "xfail_fastparquet_pyarrow-dataset": fp_pandas_msg,
         "xfail_fastparquet_pyarrow-legacy": fp_pandas_msg,
     }
@@ -553,6 +561,7 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
+@pandas_110_xfail
 def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({"x": ["a", "b", "c"] * 100}, dtype="category")
@@ -2891,7 +2900,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
 
 
-@write_read_engines_xfail
+@fp_pandas_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
 
     if write_engine.startswith("pyarrow") and pa.__version__ < LooseVersion("0.15.0"):
