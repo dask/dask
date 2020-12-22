@@ -39,14 +39,16 @@ functions = [
     lambda x: x.moment(order=0),
     pytest.param(
         lambda x: x.std(),
-        marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
+        marks=pytest.mark.skipif(
+            sparse.__version__ < LooseVersion("0.7.0+10"),
+            reason="fixed in https://github.com/pydata/sparse/pull/243",
         ),
     ),
     pytest.param(
         lambda x: x.var(),
-        marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
+        marks=pytest.mark.skipif(
+            sparse.__version__ < LooseVersion("0.7.0+10"),
+            reason="fixed in https://github.com/pydata/sparse/pull/243",
         ),
     ),
     pytest.param(lambda x: x.dot(np.arange(x.shape[-1])), marks=numpy_120_xfail),
