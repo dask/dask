@@ -145,9 +145,13 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
         check_less_precise = {}
     else:
         check_less_precise = {"check_less_precise": check_less_precise}
+    if dd._compat.PANDAS_GT_120 and method == "count":
+        min_periods = 0
+    else:
+        min_periods = None
     # DataFrame
-    prolling = df.rolling(window, center=center)
-    drolling = ddf.rolling(window, center=center)
+    prolling = df.rolling(window, center=center, min_periods=min_periods)
+    drolling = ddf.rolling(window, center=center, min_periods=min_periods)
     if method == "apply":
         kwargs = {"raw": False}
     else:
@@ -160,8 +164,8 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     )
 
     # Series
-    prolling = df.a.rolling(window, center=center)
-    drolling = ddf.a.rolling(window, center=center)
+    prolling = df.a.rolling(window, center=center, min_periods=min_periods)
+    drolling = ddf.a.rolling(window, center=center, min_periods=min_periods)
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
