@@ -661,17 +661,11 @@ def tri(N, M=None, k=0, dtype=float, chunks="auto"):
     if M is None:
         M = N
 
-    if not isinstance(chunks, (int, str, Sequence)):
-        raise ValueError("chunks must be an int, string or a sequence of int or string")
-    elif isinstance(chunks, str):
-        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
-        chunks = (chunks[0][0], chunks[1][0])
-    elif isinstance(chunks, int):
-        chunks = (chunks, chunks)
+    chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
 
     m = greater_equal.outer(
-        arange(N, chunks=chunks[0], dtype=_min_int(0, N)),
-        arange(-k, M - k, chunks=chunks[1], dtype=_min_int(-k, M - k)),
+        arange(N, chunks=chunks[0][0], dtype=_min_int(0, N)),
+        arange(-k, M - k, chunks=chunks[1][0], dtype=_min_int(-k, M - k)),
     )
 
     # Avoid making a copy if the requested type is already bool
