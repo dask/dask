@@ -142,7 +142,10 @@ rolling_method_args_check_less_precise = [
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
     if dd._compat.PANDAS_GT_110:
-        check_less_precise = {}
+        if check_less_precise:
+            check_less_precise = {"atol": 0.5e-3, "rtol": 0.5e-3}
+        else:
+            check_less_precise = {}
     else:
         check_less_precise = {"check_less_precise": check_less_precise}
     if dd._compat.PANDAS_GT_120 and method == "count":
