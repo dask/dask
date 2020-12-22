@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_100, PANDAS_VERSION
+from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_120, PANDAS_VERSION
 from dask.dataframe.utils import (
     assert_eq,
     assert_dask_graph,
@@ -1002,7 +1002,12 @@ def test_reductions_non_numeric_dtypes():
         assert_eq(dds.min(), pds.min())
         assert_eq(dds.max(), pds.max())
         assert_eq(dds.count(), pds.count())
-        check_raises(dds, pds, "std")
+        if PANDAS_GT_120 and pds.dtype == "datetime64[ns]":
+            # std is implemented for datetimes in pandas 1.2.0, but dask
+            # implementation depends on var which isn't
+            pass
+        else:
+            check_raises(dds, pds, "std")
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
         check_raises(dds, pds, "skew")
