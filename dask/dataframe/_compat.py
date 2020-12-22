@@ -9,6 +9,7 @@ PANDAS_VERSION = LooseVersion(pd.__version__)
 PANDAS_GT_100 = PANDAS_VERSION >= LooseVersion("1.0.0")
 PANDAS_GT_104 = PANDAS_VERSION >= LooseVersion("1.0.4")
 PANDAS_GT_110 = PANDAS_VERSION >= LooseVersion("1.1.0")
+PANDAS_GT_120 = PANDAS_VERSION >= LooseVersion("1.2.0")
 
 
 if PANDAS_GT_100:

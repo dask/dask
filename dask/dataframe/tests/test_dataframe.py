@@ -13,7 +13,7 @@ from dask.array.numpy_compat import _numpy_118, _numpy_120
 import dask.dataframe as dd
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
+from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120
 from dask.base import compute_as_if_collection
 from dask.utils import put_lines, M
 
@@ -400,42 +400,54 @@ def test_describe_numeric(method, test_values):
             None,
             None,
             None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_110 and not PANDAS_GT_120, reason="upstream changes"
+            ),
         ),
         pytest.param(
             ["number"],
             None,
             [0.25, 0.5],
             None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_110 and not PANDAS_GT_120, reason="upstream changes"
+            ),
         ),
         pytest.param(
             [np.timedelta64],
             None,
             None,
             None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_110 and not PANDAS_GT_120, reason="upstream changes"
+            ),
         ),
         pytest.param(
             ["number", "object"],
             None,
             [0.25, 0.75],
             None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_110 and not PANDAS_GT_120, reason="upstream changes"
+            ),
         ),
         pytest.param(
             None,
             ["number", "object"],
             None,
             None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_110 and not PANDAS_GT_120, reason="upstream changes"
+            ),
         ),
         pytest.param(
             ["object", "datetime", "bool"],
             None,
             None,
             None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
+            marks=pytest.mark.xfail(
+                PANDAS_GT_110 and not PANDAS_GT_120, reason="upstream changes"
+            ),
         ),
     ],
 )
