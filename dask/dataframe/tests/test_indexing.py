@@ -431,19 +431,19 @@ def test_getitem_timestamp_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    assert_eq(df["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], df["2011-01-02":"2011-01-10"])
+    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
+    assert_eq(df.loc["2011-01-02":"2011-01-10"], df.loc["2011-01-02":"2011-01-10"])
 
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df["2011-01"], ddf["2011-01"])
-    assert_eq(df["2011"], ddf["2011"])
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
+    assert_eq(df.loc["2011"], ddf.loc["2011"])
 
-    assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
-    assert_eq(df["2011":"2015"], ddf["2011":"2015"])
+    assert_eq(df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"])
+    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"])
 
 
 def test_loc_period_str():
@@ -461,8 +461,8 @@ def test_getitem_period_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    assert_eq(df["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], df["2011-01-02":"2011-01-10"])
+    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
+    assert_eq(df.loc["2011-01-02":"2011-01-10"], df.loc["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
 
     df = pd.DataFrame(
@@ -470,11 +470,11 @@ def test_getitem_period_str():
         index=pd.period_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df["2011-01"], ddf["2011-01"])
-    assert_eq(df["2011"], ddf["2011"])
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
+    assert_eq(df.loc["2011"], ddf.loc["2011"])
 
-    assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
-    assert_eq(df["2011":"2015"], ddf["2011":"2015"])
+    assert_eq(df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"])
+    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"])
 
 
 def test_to_series():
