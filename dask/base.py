@@ -314,38 +314,32 @@ def optimization_function(x):
     return getattr(x, "__dask_optimize__", dont_optimize)
 
 
-def collections_to_dsk(collections, optimize_graph=True, **kwargs):
+def collections_to_dsk(collections, optimize_graph=True, optimizations=[], **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
     from .highlevelgraph import HighLevelGraph
 
-    optimizations = kwargs.pop("optimizations", None) or config.get("optimizations", [])
+    optimizations = optimizations + config.get("optimizations", [])
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
 
-        _opt_list = []
+        graphs = []
         for opt, val in groups.items():
             dsk, keys = _extract_graph_and_keys(val)
-            groups[opt] = (dsk, keys)
-            _opt = opt(dsk, keys, **kwargs)
-            _opt_list.append(_opt)
+            dsk = opt(dsk, keys, **kwargs)
 
-        for opt in optimizations:
-            _opt_list = []
-            group = {}
-            for k, (dsk, keys) in groups.items():
-                _opt = opt(dsk, keys, **kwargs)
-                group[k] = (_opt, keys)
-                _opt_list.append(_opt)
-            groups = group
+            for opt in optimizations:
+                dsk = opt(dsk, keys, **kwargs)
+
+            graphs.append(dsk)
 
         # Merge all graphs
-        if any(isinstance(graph, HighLevelGraph) for graph in _opt_list):
-            dsk = HighLevelGraph.merge(*_opt_list)
+        if any(isinstance(graph, HighLevelGraph) for graph in graphs):
+            dsk = HighLevelGraph.merge(*graphs)
         else:
-            dsk = merge(*map(ensure_dict, _opt_list))
+            dsk = merge(*map(ensure_dict, graphs))
     else:
         dsk, _ = _extract_graph_and_keys(collections)
 
