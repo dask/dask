@@ -1165,7 +1165,7 @@ def slice_with_bool_dask_array(x, index):
             chunks.append((np.nan,) * len(chunk))
         else:
             chunks.append(chunk)
-    out._set_chunks(tuple(chunks))
+    out._chunks = tuple(chunks)
     return out, tuple(out_index)
 
 
