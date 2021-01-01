@@ -51,7 +51,6 @@ from ..utils import (
     is_dataframe_like,
     is_series_like,
     is_index_like,
-    cached_property,
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
@@ -63,6 +62,11 @@ from .slicing import slice_array, replace_ellipsis, cached_cumsum
 from .blockwise import blockwise
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
+# TODO: Remove once only python +3.8 is supported:
+if sys.version_info.major >= 3 and sys.version_info.minor >= 8:
+    from functools import cached_property
+else:
+    from ..utils import cached_property
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
