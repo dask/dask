@@ -989,7 +989,7 @@ def unique(ar, return_index=False, return_inverse=False, return_counts=False):
         args.extend([None, None])
 
     out = blockwise(_unique_internal, "i", *args, dtype=out_dtype, return_inverse=False)
-    out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
+    out._set_chunks(tuple((np.nan,) * len(c) for c in out.chunks))
 
     # Take the results from the unique chunks and do the following.
     #
