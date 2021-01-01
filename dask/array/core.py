@@ -48,6 +48,9 @@ from ..utils import (
     ndimlist,
     format_bytes,
     typename,
+    is_dataframe_like,
+    is_series_like,
+    is_index_like,
     cached_property,
 )
 from ..core import quote
@@ -451,6 +454,11 @@ def map_blocks(
 ):
     """Map a function across all blocks of a dask array.
 
+    Note that ``map_blocks`` will attempt to automatically determine the output
+    array type by calling ``func`` on 0-d versions of the inputs. Please refer to
+    the ``meta`` keyword argument below if you expect that the function will not
+    succeed when operating on 0-d arrays.
+
     Parameters
     ----------
     func : callable
@@ -476,6 +484,16 @@ def map_blocks(
         The key name to use for the output array. Note that this fully
         specifies the output key name, and must be unique. If not provided,
         will be determined by a hash of the arguments.
+    meta : array-like, optional
+        The ``meta`` of the output array, when specified is expected to be an
+        array of the same type and dtype of that returned when calling ``.compute()``
+        on the array returned by this function. When not provided, ``meta`` will be
+        inferred by applying the function to a small set of fake data, usually a
+        0-d array. It's important to ensure that ``func`` can successfully complete
+        computation without raising exceptions when 0-d is passed to it, providing
+        ``meta`` will be required otherwise. If the output type is known beforehand
+        (e.g., ``np.ndarray``, ``cupy.ndarray``), an empty array of such type dtype
+        can be passed, for example: ``meta=np.array((), dtype=np.int32)``.
     **kwargs :
         Other keyword arguments to pass to function. Values must be constants
         (not dask.arrays)
@@ -497,7 +515,7 @@ def map_blocks(
     >>> d = da.arange(5, chunks=2)
     >>> e = da.arange(5, chunks=2)
 
-    >>> f = map_blocks(lambda a, b: a + b**2, d, e)
+    >>> f = da.map_blocks(lambda a, b: a + b**2, d, e)
     >>> f.compute()
     array([ 0,  2,  6, 12, 20])
 
@@ -594,6 +612,23 @@ def map_blocks(
 
     >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
     dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), chunktype=numpy.ndarray>
+
+    For functions that may not handle 0-d arrays, it's also possible to specify
+    ``meta`` with an empty array matching the type of the expected result. In
+    the example below, ``func`` will result in an ``IndexError`` when computing
+    ``meta``:
+
+    >>> da.map_blocks(lambda x: x[2], da.random.random(5), meta=np.array(()))
+    dask.array<lambda, shape=(5,), dtype=float64, chunksize=(5,), chunktype=numpy.ndarray>
+
+    Similarly, it's possible to specify a non-NumPy array to ``meta``, and provide
+    a ``dtype``:
+
+    >>> import cupy  # doctest: +SKIP
+    >>> rs = da.random.RandomState(RandomState=cupy.random.RandomState)  # doctest: +SKIP
+    >>> dt = np.float32
+    >>> da.map_blocks(lambda x: x[2], rs.random(5, dtype=dt), meta=cupy.array((), dtype=dt))  # doctest: +SKIP
+    dask.array<lambda, shape=(5,), dtype=float32, chunksize=(5,), chunktype=cupy.ndarray>
     """
     if not callable(func):
         msg = (
@@ -628,6 +663,11 @@ def map_blocks(
     original_kwargs = kwargs
 
     if dtype is None and meta is None:
+        try:
+            meta = compute_meta(func, dtype, *args, **kwargs)
+        except Exception:
+            pass
+
         dtype = apply_infer_dtype(func, args, original_kwargs, "map_blocks")
 
     if drop_axis:
@@ -1554,7 +1594,15 @@ class Array(DaskMethodsMixin):
         if isinstance(key, Array):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
-            y = where(key, value, self)
+            try:
+                y = where(key, value, self)
+            except ValueError as e:
+                raise ValueError(
+                    "Boolean index assignment in Dask "
+                    "expects equally shaped arrays.\nExample: da1[da2] = da3 "
+                    "where da1.shape == (4,), da2.shape == (4,) "
+                    "and da3.shape == (4,)."
+                ) from e
             self._meta = y._meta
             self.dask = y.dask
             self.name = y.name
@@ -1645,8 +1693,9 @@ class Array(DaskMethodsMixin):
         This is equivalent to numpy's advanced indexing, using arrays that are
         broadcast against each other. This allows for pointwise indexing:
 
+        >>> import dask.array as da
         >>> x = np.array([[1, 2, 3], [4, 5, 6], [7, 8, 9]])
-        >>> x = from_array(x, chunks=2)
+        >>> x = da.from_array(x, chunks=2)
         >>> x.vindex[[0, 1, 2], [0, 1, 2]].compute()
         array([1, 5, 9])
 
@@ -2213,6 +2262,11 @@ class Array(DaskMethodsMixin):
         We share neighboring zones between blocks of the array, then map a
         function, then trim away the neighboring strips.
 
+        Note that this function will attempt to automatically determine the output
+        array type before computing it, please refer to the ``meta`` keyword argument
+        in ``map_blocks`` if you expect that the function will not succeed when
+        operating on 0-d arrays.
+
         Parameters
         ----------
         func: function
@@ -2233,8 +2287,9 @@ class Array(DaskMethodsMixin):
 
         Examples
         --------
+        >>> import dask.array as da
         >>> x = np.array([1, 1, 2, 3, 3, 3, 2, 1, 1])
-        >>> x = from_array(x, chunks=5)
+        >>> x = da.from_array(x, chunks=5)
         >>> def derivative(x):
         ...     return x - np.roll(x, 1)
 
@@ -2259,6 +2314,29 @@ class Array(DaskMethodsMixin):
                [16,  17,  18,  19],
                [20,  21,  22,  23],
                [24,  25,  26,  27]])
+
+        >>> x = np.arange(16).reshape((4, 4))
+        >>> d = da.from_array(x, chunks=(2, 2))
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=np.array(()))
+        >>> y
+        dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
+        >>> y.compute()
+        array([[ 4,  6,  8, 10],
+               [ 8, 10, 12, 14],
+               [20, 22, 24, 26],
+               [24, 26, 28, 30]])
+
+        >>> import cupy  # doctest: +SKIP
+        >>> x = cupy.arange(16).reshape((5, 4))  # doctest: +SKIP
+        >>> d = da.from_array(x, chunks=(2, 2))  # doctest: +SKIP
+        >>> y = d.map_overlap(lambda x: x + x[2], depth=1, meta=cupy.array(()))  # doctest: +SKIP
+        >>> y  # doctest: +SKIP
+        dask.array<_trim, shape=(4, 4), dtype=float64, chunksize=(2, 2), chunktype=cupy.ndarray>
+        >>> y.compute()  # doctest: +SKIP
+        array([[ 4,  6,  8, 10],
+               [ 8, 10, 12, 14],
+               [20, 22, 24, 26],
+               [24, 26, 28, 30]])
         """
         from .overlap import map_overlap
 
@@ -2267,16 +2345,38 @@ class Array(DaskMethodsMixin):
         )
 
     @derived_from(np.ndarray)
-    def cumsum(self, axis, dtype=None, out=None):
+    def cumsum(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Dask added an additional keyword-only argument ``method``.
+
+        method : {'sequential', 'blelloch'}, optional
+            Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+            * 'sequential' performs the cumsum of each prior block before the current block.
+            * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
+              first taking the sum of each block and combines the sums via a binary tree.
+              This method may be faster or more memory efficient depending on workload,
+              scheduler, and hardware.  More benchmarking is necessary.
+        """
         from .reductions import cumsum
 
-        return cumsum(self, axis, dtype, out=out)
+        return cumsum(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
-    def cumprod(self, axis, dtype=None, out=None):
+    def cumprod(self, axis, dtype=None, out=None, *, method="sequential"):
+        """Dask added an additional keyword-only argument ``method``.
+
+        method : {'sequential', 'blelloch'}, optional
+            Choose which method to use to perform the cumprod.  Default is 'sequential'.
+
+            * 'sequential' performs the cumprod of each prior block before the current block.
+            * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
+              taking the product of each block and combines the products via a binary tree.
+              This method may be faster or more memory efficient depending on workload,
+              scheduler, and hardware.  More benchmarking is necessary.
+        """
         from .reductions import cumprod
 
-        return cumprod(self, axis, dtype, out=out)
+        return cumprod(self, axis, dtype, out=out, method=method)
 
     @derived_from(np.ndarray)
     def squeeze(self, axis=None):
@@ -2472,6 +2572,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     --------
     Specify uniform chunk sizes
 
+    >>> from dask.array.core import normalize_chunks
     >>> normalize_chunks((2, 2), shape=(5, 6))
     ((2, 2, 1), (2, 2, 2))
 
@@ -2781,6 +2882,7 @@ def from_array(
     fancy=True,
     getitem=None,
     meta=None,
+    inline_array=False,
 ):
     """Create dask array from something that looks like an array
 
@@ -2833,6 +2935,46 @@ def from_array(
         The metadata for the resulting dask array.  This is the kind of array
         that will result from slicing the input array.
         Defaults to the input array.
+    inline_array : bool, default False
+        How to include the array in the task graph. By default
+        (``inline_array=False``) the array is included in a task by itself,
+        and each chunk refers to that task by its key.
+
+        .. code-block:: python
+
+           >>> x = h5py.File("data.h5")["/x"]  # doctest: +SKIP
+           >>> a = da.from_array(x, chunks=500)  # doctest: +SKIP
+           >>> dict(a.dask)  # doctest: +SKIP
+           {
+              'array-original-<name>': <HDF5 dataset ...>,
+              ('array-<name>', 0): (getitem, "array-original-<name>", ...),
+              ('array-<name>', 1): (getitem, "array-original-<name>", ...)
+           }
+
+        With ``inline_array=True``, Dask will instead inline the array directly
+        in the values of the task graph.
+
+        .. code-block:: python
+
+           >>> a = da.from_array(x, chunks=500, inline_array=True)  # doctest: +SKIP
+           >>> dict(a.dask)  # doctest: +SKIP
+           {
+              ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
+              ('array-<name>', 1): (getitem, <HDF5 dataset ...>, ...)
+           }
+
+        Note that there's no key in the task graph with just the array `x`
+        anymore. Instead it's placed directly in the values.
+
+        The right choice for ``inline_arary`` depends on several factors,
+        including the size of ``x``, how expensive it is to create, which
+        scheduler you're using, and the pattern of downstream computations.
+        As a hueristic, ``inline_array=True`` may be the right choice when
+        the array ``x`` is cheap to serialize and deserialize (since it's
+        included in the graph many times) and if you're experiencing ordering
+        issues (see :ref:`order` for more).
+
+        This has no effect when ``x`` is a NumPy array.
 
     Examples
     --------
@@ -2860,7 +3002,7 @@ def from_array(
     >>> token = dask.base.tokenize(x)  # doctest: +SKIP
     >>> a = da.from_array('myarray-' + token)  # doctest: +SKIP
 
-    Numpy ndarrays are eagerly sliced and then embedded in the graph.
+    NumPy ndarrays are eagerly sliced and then embedded in the graph.
 
     >>> import dask.array
     >>> a = dask.array.from_array(np.array([[1, 2], [3, 4]]), chunks=(1,1))
@@ -2924,8 +3066,13 @@ def from_array(
             else:
                 getitem = getter_nofancy
 
+        if inline_array:
+            get_from = x
+        else:
+            get_from = original_name
+
         dsk = getem(
-            original_name,
+            get_from,
             chunks,
             getitem=getitem,
             shape=x.shape,
@@ -2934,7 +3081,8 @@ def from_array(
             asarray=asarray,
             dtype=x.dtype,
         )
-        dsk[original_name] = x
+        if not inline_array:
+            dsk[original_name] = x
 
     # Workaround for TileDB, its indexing is 1-based,
     # and doesn't seems to support 0-length slicing
@@ -2948,7 +3096,13 @@ def from_array(
 
 
 def from_zarr(
-    url, component=None, storage_options=None, chunks=None, name=None, **kwargs
+    url,
+    component=None,
+    storage_options=None,
+    chunks=None,
+    name=None,
+    inline_array=False,
+    **kwargs,
 ):
     """Load array from the zarr storage format
 
@@ -2973,6 +3127,13 @@ def from_zarr(
     name : str, optional
          An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
+    inline_array : bool, default False
+        Whether to inline the zarr Array in the values of the task graph.
+        See :meth:`dask.array.from_array` for an explanation.
+
+    See Also
+    --------
+    from_array
     """
     import zarr
 
@@ -2990,7 +3151,7 @@ def from_zarr(
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
-    return from_array(z, chunks, name=name)
+    return from_array(z, chunks, name=name, inline_array=inline_array)
 
 
 def to_zarr(
@@ -3147,6 +3308,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     --------
     >>> import dask
     >>> import dask.array as da
+    >>> import numpy as np
     >>> value = dask.delayed(np.ones)(5)
     >>> array = da.from_delayed(value, (5,), dtype=float)
     >>> array
@@ -3576,7 +3738,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
+    >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
     ...          for i in range(3)]
 
     >>> x = da.concatenate(data, axis=0)
@@ -4375,8 +4537,8 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     >>> import dask.array as da
     >>> import numpy as np
 
-    >>> data = [from_array(np.ones((4, 4)), chunks=(2, 2))
-    ...          for i in range(3)]
+    >>> data = [da.from_array(np.ones((4, 4)), chunks=(2, 2))
+    ...         for i in range(3)]
 
     >>> x = da.stack(data, axis=0)
     >>> x.shape
@@ -4921,4 +5083,19 @@ def from_npy_stack(dirname, mmap_mode="r"):
     return Array(dsk, name, chunks, dtype)
 
 
-from .utils import meta_from_array
+def new_da_object(dsk, name, chunks, meta=None, dtype=None):
+    """Generic constructor for dask.array or dask.dataframe objects.
+
+    Decides the appropriate output class based on the type of `meta` provided.
+    """
+    if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
+        from ..dataframe.core import new_dd_object
+
+        assert all(len(c) == 1 for c in chunks[1:])
+        divisions = [None] * (len(chunks[0]) + 1)
+        return new_dd_object(dsk, name, meta, divisions)
+    else:
+        return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
+
+
+from .utils import meta_from_array, compute_meta

@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 import dask
-from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
@@ -342,13 +341,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine
-    >>> with tmpfile() as f:
-    ...     db = 'sqlite:///%s' % f
-    ...     ddf.to_sql('test', db)
-    ...     engine = create_engine(db, echo=False)
-    ...     result = engine.execute("SELECT * FROM test").fetchall()
-    >>> result
+    >>> from sqlalchemy import create_engine    # doctest: +SKIP
+    >>> with tmpfile() as f:                    # doctest: +SKIP
+    ...     db = 'sqlite:///%s' %f              # doctest: +SKIP
+    ...     ddf.to_sql('test', db)              # doctest: +SKIP
+    ...     engine = create_engine(db, echo=False) # doctest: +SKIP
+    ...     result = engine.execute("SELECT * FROM test").fetchall() # doctest: +SKIP
+    >>> result                                  # doctest: +SKIP
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):
@@ -364,15 +363,8 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
+        method=method,
     )
-
-    if method:
-        if not PANDAS_GT_0240:
-            raise NotImplementedError(
-                "'method' requires pandas>=0.24.0. You have version %s" % PANDAS_VERSION
-            )
-        else:
-            kwargs["method"] = method
 
     def make_meta(meta):
         return meta.to_sql(**kwargs)

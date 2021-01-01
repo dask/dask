@@ -170,6 +170,7 @@ messy situations in everyday problems.
    diagnostics-local.rst
    diagnostics-distributed.rst
    debugging.rst
+   order.rst
 
 .. toctree::
    :maxdepth: 1

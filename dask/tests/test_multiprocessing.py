@@ -3,9 +3,6 @@ import sys
 import multiprocessing
 from operator import add
 import pickle
-import random
-
-import numpy as np
 
 import pytest
 import dask
@@ -28,6 +25,7 @@ not_cloudpickle = pytest.mark.skipif(has_cloudpickle, reason="cloudpickle is ins
 
 
 def unrelated_function_global(a):
+    np = pytest.importorskip("numpy")
     return np.array([a])
 
 
@@ -46,6 +44,7 @@ def test_pickle_globals():
 @requires_cloudpickle
 def test_pickle_locals():
     """Unrelated locals should not be included in serialized bytes"""
+    np = pytest.importorskip("numpy")
 
     def unrelated_function_local(a):
         return np.array([a])
@@ -78,6 +77,7 @@ def test_pickle_kwargs():
 @pytest.mark.skipif(pickle.HIGHEST_PROTOCOL < 5, reason="requires pickle protocol 5")
 def test_out_of_band_pickling():
     """Test that out-of-band pickling works"""
+    np = pytest.importorskip("numpy")
     if has_cloudpickle:
         if cloudpickle.__version__ < LooseVersion("1.3.0"):
             pytest.skip("when using cloudpickle, it must be version 1.3.0+")
@@ -201,8 +201,14 @@ def test_optimize_graph_false():
 
 
 @requires_cloudpickle
-@pytest.mark.parametrize("random", [np.random, random])
+@pytest.mark.parametrize("random", ["numpy", "random"])
 def test_random_seeds(random):
+    if random == "numpy":
+        np = pytest.importorskip("numpy")
+        random = np.random
+    else:
+        import random
+
     @delayed(pure=False)
     def f():
         return tuple(random.randint(0, 10000) for i in range(5))

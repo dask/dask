@@ -5,6 +5,7 @@ pytest.importorskip("numpy")
 import numpy as np
 import dask
 import dask.array as da
+from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import fuse
 from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
@@ -371,6 +372,22 @@ def test_turn_off_fusion():
     assert len(a) < len(b)
 
 
+def test_disable_lowlevel_fusion():
+    """Check that by disabling fusion, the HLG survives through optimizations"""
+
+    with dask.config.set({"optimization.fuse.active": False}):
+        y = da.ones(3, chunks=(3,), dtype="int")
+        optimize = y.__dask_optimize__
+        dsk1 = y.__dask_graph__()
+        dsk2 = optimize(dsk1, y.__dask_keys__())
+        assert isinstance(dsk1, HighLevelGraph)
+        assert isinstance(dsk2, HighLevelGraph)
+        assert dsk1 == dsk2
+        y = y.persist()
+        assert isinstance(y.__dask_graph__(), HighLevelGraph)
+        assert_eq(y, [1] * 3)
+
+
 def test_gh3937():
     # test for github issue #3937
     x = da.from_array([1, 2, 3.0], (2,))
@@ -400,3 +417,18 @@ def test_fuse_roots():
     # assert len(zz.dask) == 5
     assert sum(map(dask.istask, zz.dask.values())) == 5  # there are some aliases
     assert_eq(zz, z)
+
+
+def test_fuse_roots_annotations():
+    x = da.ones(10, chunks=(2,))
+    y = da.zeros(10, chunks=(2,))
+
+    with dask.annotate(foo="bar"):
+        y = y ** 2
+
+    z = (x + 1) + (2 * y)
+    hlg = dask.blockwise.optimize_blockwise(z.dask)
+    assert len(hlg.layers) == 4
+    assert {"foo": "bar"} in [l.annotations for l in hlg.layers.values()]
+    za = da.Array(hlg, z.name, z.chunks, z.dtype)
+    assert_eq(za, z)

@@ -21,12 +21,8 @@ from pandas.api.types import (
 
 # include these here for compat
 from ._compat import (  # noqa: F401
-    PANDAS_VERSION,
-    PANDAS_GT_0240,
-    PANDAS_GT_0250,
     PANDAS_GT_100,
     PANDAS_GT_110,
-    HAS_INT_NA,
     tm,
 )
 
@@ -46,19 +42,16 @@ from . import methods
 
 def is_integer_na_dtype(t):
     dtype = getattr(t, "dtype", t)
-    if HAS_INT_NA:
-        types = (
-            pd.Int8Dtype,
-            pd.Int16Dtype,
-            pd.Int32Dtype,
-            pd.Int64Dtype,
-            pd.UInt8Dtype,
-            pd.UInt16Dtype,
-            pd.UInt32Dtype,
-            pd.UInt64Dtype,
-        )
-    else:
-        types = ()
+    types = (
+        pd.Int8Dtype,
+        pd.Int16Dtype,
+        pd.Int32Dtype,
+        pd.Int64Dtype,
+        pd.UInt8Dtype,
+        pd.UInt16Dtype,
+        pd.UInt32Dtype,
+        pd.UInt64Dtype,
+    )
     return isinstance(dtype, types)
 
 
@@ -314,13 +307,14 @@ def make_meta_object(x, index=None):
 
     Examples
     --------
-    >>> make_meta([('a', 'i8'), ('b', 'O')])
+
+    >>> make_meta([('a', 'i8'), ('b', 'O')])    # doctest: +SKIP
     Empty DataFrame
     Columns: [a, b]
     Index: []
-    >>> make_meta(('a', 'f8'))
+    >>> make_meta(('a', 'f8'))                  # doctest: +SKIP
     Series([], Name: a, dtype: float64)
-    >>> make_meta('i8')
+    >>> make_meta('i8')                         # doctest: +SKIP
     1
     """
     if hasattr(x, "_meta"):
@@ -398,6 +392,8 @@ def meta_nonempty_dataframe(x):
         data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
+    if PANDAS_GT_100:
+        res.attrs = x.attrs
     return res
 
 
@@ -564,29 +560,24 @@ def _nonempty_series(s, idx=None):
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
     elif is_sparse(dtype):
-        # TODO: pandas <0.24
-        # Pandas <= 0.23.4:
-        if PANDAS_GT_0240:
-            entry = _scalar_from_dtype(dtype.subtype)
-        else:
-            entry = _scalar_from_dtype(dtype.subtype)
+        entry = _scalar_from_dtype(dtype.subtype)
         if PANDAS_GT_100:
             data = pd.array([entry, entry], dtype=dtype)
         else:
             data = pd.SparseArray([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
-        if PANDAS_GT_0240:
-            data = pd.array([entry, entry], dtype=dtype)
-        else:
-            data = np.array([entry, entry], dtype=dtype)
+        data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:
         data = make_array_nonempty(dtype)
     else:
         entry = _scalar_from_dtype(dtype)
         data = np.array([entry, entry], dtype=dtype)
 
-    return pd.Series(data, name=s.name, index=idx)
+    out = pd.Series(data, name=s.name, index=idx)
+    if PANDAS_GT_100:
+        out.attrs = s.attrs
+    return out
 
 
 def is_dataframe_like(df):
@@ -642,7 +633,9 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             "Index, got `%s`" % typename(type(meta))
         )
 
-    if type(x) != type(meta):
+    # Notice, we use .__class__ as opposed to type() in order to support
+    # object proxies see <https://github.com/dask/dask/pull/6981>
+    if x.__class__ != meta.__class__:
         errmsg = "Expected partition of type `%s` but got `%s`" % (
             typename(type(meta)),
             typename(type(x)),
