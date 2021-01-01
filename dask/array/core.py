@@ -9,7 +9,7 @@ import uuid
 import warnings
 from bisect import bisect
 from collections.abc import Iterable, Iterator, Mapping
-from functools import partial, wraps, reduce
+from functools import partial, wraps, reduce, cached_property
 from itertools import product, zip_longest
 from numbers import Number, Integral
 from operator import add, getitem, mul
@@ -1083,8 +1083,8 @@ class Array(DaskMethodsMixin):
             dt = meta.dtype
         else:
             dt = None
-        self._chunks = normalize_chunks(chunks, shape, dtype=dt)
-        if self._chunks is None:
+        self._set_chunks(normalize_chunks(chunks, shape, dtype=dt))
+        if self.chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
         self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
@@ -1190,9 +1190,9 @@ class Array(DaskMethodsMixin):
 
         # `map_blocks` assigns numpy dtypes
         # cast chunk dimensions back to python int before returning
-        x._chunks = tuple(
+        x._set_chunks(tuple(
             [tuple([int(chunk) for chunk in chunks]) for chunks in compute(tuple(c))[0]]
-        )
+        ))
         return x
 
     @property
@@ -1211,6 +1211,15 @@ class Array(DaskMethodsMixin):
         return self._chunks
 
     def _set_chunks(self, chunks):
+        self._chunks = chunks
+
+        # When the chunks changes the cached properties that was dependent
+        # on it needs to be deleted:
+        for v in ["shape"]:
+            if v in self.__dict__:
+                del(self.__dict__[v])
+
+    def _set_chunks_directly(self, chunks):
         msg = (
             "Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
@@ -1220,7 +1229,7 @@ class Array(DaskMethodsMixin):
         )
         raise TypeError(msg.format(chunks))
 
-    chunks = property(_get_chunks, _set_chunks, "chunks property")
+    chunks = property(_get_chunks, _set_chunks_directly, "chunks property")
 
     def __len__(self):
         if not self.chunks:
@@ -1543,7 +1552,7 @@ class Array(DaskMethodsMixin):
             self._meta = y._meta
             self.dask = y.dask
             self.name = y.name
-            self._chunks = y.chunks
+            self._set_chunks(y.chunks)
             return self
         else:
             raise NotImplementedError(
@@ -4070,7 +4079,7 @@ def handle_out(out, result):
                 "Mismatched shapes between result and out parameter. "
                 "out=%s, result=%s" % (str(out.shape), str(result.shape))
             )
-        out._chunks = result.chunks
+        out._set_chunks(result.chunks)
         out.dask = result.dask
         out._meta = result._meta
         out.name = result.name
