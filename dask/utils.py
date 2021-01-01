@@ -1644,6 +1644,7 @@ def stringify_collection_keys(obj):
 
 _NOT_FOUND = object()
 
+
 # TODO: Copied from functools.cached_property in python 3.8:
 class cached_property:
     def __init__(self, func):
