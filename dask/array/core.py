@@ -1193,8 +1193,8 @@ class Array(DaskMethodsMixin):
         x._set_chunks(
             tuple(
                 [
-                   tuple([int(chunk) for chunk in chunks])
-                   for chunks in compute(tuple(c))[0]
+                    tuple([int(chunk) for chunk in chunks])
+                    for chunks in compute(tuple(c))[0]
                 ]
             )
         )
