@@ -1190,9 +1190,14 @@ class Array(DaskMethodsMixin):
 
         # `map_blocks` assigns numpy dtypes
         # cast chunk dimensions back to python int before returning
-        x._set_chunks(tuple(
-            [tuple([int(chunk) for chunk in chunks]) for chunks in compute(tuple(c))[0]]
-        ))
+        x._set_chunks(
+            tuple(
+                [
+                   tuple([int(chunk) for chunk in chunks])
+                   for chunks in compute(tuple(c))[0]
+                ]
+            )
+        )
         return x
 
     @property
@@ -1217,7 +1222,7 @@ class Array(DaskMethodsMixin):
         # on it needs to be deleted:
         for v in ["shape"]:
             if v in self.__dict__:
-                del(self.__dict__[v])
+                del self.__dict__[v]
 
     def _set_chunks_directly(self, chunks):
         msg = (
