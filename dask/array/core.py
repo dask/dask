@@ -1268,7 +1268,7 @@ class Array(DaskMethodsMixin):
     def _get_chunks(self):
         return self.__chunks
 
-    def _set_chunks_directly(self, chunks):
+    def _set_chunks(self, chunks):
         msg = (
             "Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
@@ -1278,7 +1278,7 @@ class Array(DaskMethodsMixin):
         )
         raise TypeError(msg.format(chunks))
 
-    chunks = property(_get_chunks, _set_chunks_directly, "chunks property")
+    chunks = property(_get_chunks, _set_chunks, "chunks property")
 
     def __len__(self):
         if not self.chunks:
