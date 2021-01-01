@@ -1200,7 +1200,7 @@ class Array(DaskMethodsMixin):
         )
         return x
 
-    @property
+    @cached_property
     def shape(self):
         return tuple(cached_cumsum(c, initial_zero=True)[-1] for c in self.chunks)
 
