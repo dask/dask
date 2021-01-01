@@ -166,9 +166,9 @@ def reduction(
     tmp = blockwise(
         chunk, inds, x, inds, axis=axis, keepdims=True, token=name, dtype=dtype or float
     )
-    tmp._set_chunks(tuple(
+    tmp._chunks = tuple(
         (output_size,) * len(c) if i in axis else c for i, c in enumerate(tmp.chunks)
-    ))
+    )
 
     if meta is None and hasattr(x, "_meta"):
         try:
@@ -197,9 +197,9 @@ def reduction(
         reduced_meta=reduced_meta,
     )
     if keepdims and output_size != 1:
-        result._set_chunks(tuple(
+        result._chunks = tuple(
             (output_size,) if i in axis else c for i, c in enumerate(tmp.chunks)
-        ))
+        )
     if meta is not None:
         result._meta = meta
     return handle_out(out, result)
