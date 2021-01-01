@@ -9,7 +9,7 @@ import uuid
 import warnings
 from bisect import bisect
 from collections.abc import Iterable, Iterator, Mapping
-from functools import partial, wraps, reduce, cached_property
+from functools import partial, wraps, reduce
 from itertools import product, zip_longest
 from numbers import Number, Integral
 from operator import add, getitem, mul
@@ -48,6 +48,7 @@ from ..utils import (
     ndimlist,
     format_bytes,
     typename,
+    cached_property,
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
