@@ -1232,10 +1232,7 @@ class Array(DaskMethodsMixin):
         # `map_blocks` assigns numpy dtypes
         # cast chunk dimensions back to python int before returning
         x._chunks = tuple(
-            [
-                tuple([int(chunk) for chunk in chunks])
-                for chunks in compute(tuple(c))[0]
-            ]
+            [tuple([int(chunk) for chunk in chunks]) for chunks in compute(tuple(c))[0]]
         )
         return x
 
