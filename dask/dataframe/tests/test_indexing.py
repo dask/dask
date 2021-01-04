@@ -6,7 +6,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 
-from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
+from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -489,7 +489,8 @@ def test_getitem_period_str():
     # partial string slice
     # TODO starting with pandas 1.2, __getitem__ with an implicit slice
     # is deprecated -> should we deprecate this in dask as well?
-    assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    if not PANDAS_GT_120:
+        assert_eq(df["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
 
@@ -498,8 +499,9 @@ def test_getitem_period_str():
         index=pd.period_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df.loc["2011-01"], ddf["2011-01"])
-    assert_eq(df.loc["2011"], ddf["2011"])
+    if not PANDAS_GT_120:
+        assert_eq(df["2011-01"], ddf["2011-01"])
+        assert_eq(df["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
