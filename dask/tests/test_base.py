@@ -24,6 +24,7 @@ from dask.base import (
     unpack_collections,
     named_schedulers,
     get_scheduler,
+    collections_to_dsk,
 )
 from dask.core import literal
 from dask.delayed import Delayed
@@ -1077,3 +1078,13 @@ def test_num_workers_config(scheduler):
     workers = {i.worker_id for i in prof.results}
 
     assert len(workers) == num_workers
+
+
+def test_optimizations_ctd():
+    da = pytest.importorskip("dask.array")
+    x = da.arange(2, chunks=1)[:1]
+    dsk1 = collections_to_dsk([x])
+    with dask.config.set({"optimizations": [lambda dsk, keys: dsk]}):
+        dsk2 = collections_to_dsk([x])
+
+    assert dsk1 == dsk2
