@@ -462,7 +462,7 @@ def test_getitem_period_str():
 
     # partial string slice
     assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
-    assert_eq(df.loc["2011-01-02":"2011-01-10"], df.loc["2011-01-02":"2011-01-10"])
+    assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
 
     df = pd.DataFrame(
