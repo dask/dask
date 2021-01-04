@@ -314,13 +314,13 @@ def optimization_function(x):
     return getattr(x, "__dask_optimize__", dont_optimize)
 
 
-def collections_to_dsk(collections, optimize_graph=True, optimizations=[], **kwargs):
+def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwargs):
     """
     Convert many collections into a single dask graph, after optimization
     """
     from .highlevelgraph import HighLevelGraph
 
-    optimizations = optimizations + config.get("optimizations", [])
+    optimizations = tuple(optimizations) + tuple(config.get("optimizations", ()))
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
