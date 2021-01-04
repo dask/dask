@@ -401,9 +401,7 @@ def _read_table_from_path(
         with fs.open(path, mode="rb") as fil:
             if row_groups == [None]:
                 return pq.ParquetFile(fil).read(
-                    columns=columns,
-                    use_threads=False,
-                    use_pandas_metadata=True,
+                    columns=columns, use_threads=False, use_pandas_metadata=True,
                 )
             else:
                 return pq.ParquetFile(fil).read_row_groups(
@@ -438,10 +436,7 @@ def _get_rg_statistics(row_group, col_indices):
             if field_index < 0:
                 return None, None
 
-            return col.path_in_schema, {
-                "min": stats.min,
-                "max": stats.max,
-            }
+            return col.path_in_schema, {"min": stats.min, "max": stats.max,}
 
         return {
             name: stats
@@ -623,8 +618,7 @@ class ArrowDatasetEngine(Engine):
                     # need to convert non-categorical types.
                     df[partition.name] = pd.Series(
                         pd.Categorical(
-                            categories=partition.keys,
-                            values=df[partition.name].values,
+                            categories=partition.keys, values=df[partition.name].values,
                         ),
                         index=df.index,
                     )
@@ -1094,12 +1088,12 @@ class ArrowDatasetEngine(Engine):
                 if isinstance(index, list) and partition.name == index[0]:
                     # Index from directory structure
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=index[0]
+                        [], categories=partition.keys, name=index[0]
                     )
                 elif partition.name == meta.index.name:
                     # Index created from a categorical column
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=meta.index.name
+                        [], categories=partition.keys, name=meta.index.name
                     )
                 elif partition.name in meta.columns:
                     meta[partition.name] = pd.Series(

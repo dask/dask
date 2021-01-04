@@ -14,7 +14,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -148,7 +148,8 @@ def write_read_engines(**kwargs):
 
 
 pandas_110_xfail = pytest.mark.xfail(
-    PANDAS_GT_110, reason="https://github.com/pandas-dev/pandas/issues/38642"
+    PANDAS_GT_110 and not PANDAS_GT_121,
+    reason="https://github.com/pandas-dev/pandas/issues/38642",
 )
 
 pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
@@ -586,7 +587,7 @@ def test_categorical(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(tmp, categories=[], engine=read_engine)
 
     ddf2.loc[:1000].compute()
-    assert (df.x == ddf2.x).all()
+    assert (df.x == ddf2.x.compute()).all()
 
 
 def test_append(tmpdir, engine):
@@ -1023,9 +1024,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(
     # Test that schema is not validated by default
     # (shouldn't raise error with legacy dataset)
     dd.read_parquet(
-        str(tmpdir),
-        engine="pyarrow-legacy",
-        gather_statistics=False,
+        str(tmpdir), engine="pyarrow-legacy", gather_statistics=False,
     ).compute()
 
     # Test that read fails when validate_schema=True
@@ -3032,9 +3031,7 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine, partition_on="b")
     read_df = dd.read_parquet(
-        fn,
-        engine="pyarrow",
-        filters=[("b", "==", "a")] if test_filter else None,
+        fn, engine="pyarrow", filters=[("b", "==", "a")] if test_filter else None,
     )
 
     if test_filter:
@@ -3096,10 +3093,7 @@ def test_parquet_pyarrow_write_empty_metadata(tmpdir):
 
     try:
         df.to_parquet(
-            tmpdir,
-            engine="pyarrow",
-            partition_on=["x"],
-            append=False,
+            tmpdir, engine="pyarrow", partition_on=["x"], append=False,
         )
 
     except AttributeError:
@@ -3133,10 +3127,7 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
 
     df1 = dd.from_delayed([df_a, df_b])
     df1.to_parquet(
-        tmpdir,
-        engine="pyarrow",
-        partition_on=["x"],
-        append=False,
+        tmpdir, engine="pyarrow", partition_on=["x"], append=False,
     )
 
     df_c = dask.delayed(pd.DataFrame.from_dict)(
@@ -3180,9 +3171,7 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
     else:
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
     dd.io.parquet.create_metadata_file(
-        fns,
-        engine="pyarrow",
-        split_every=3,  # Force tree reduction
+        fns, engine="pyarrow", split_every=3,  # Force tree reduction
     )
 
     # Check that we can now read the ddf
@@ -3250,13 +3239,7 @@ def test_read_write_partition_on_overwrite_is_true(tmpdir, engine):
 
     # Create a Dask DataFrame with 5 partitions and write to local, partitioning on the column A and column B
     df = pd.DataFrame(
-        np.vstack(
-            (
-                np.full((50, 3), 0),
-                np.full((50, 3), 1),
-                np.full((20, 3), 2),
-            )
-        )
+        np.vstack((np.full((50, 3), 0), np.full((50, 3), 1), np.full((20, 3), 2),))
     )
     df.columns = ["A", "B", "C"]
     ddf = dd.from_pandas(df, npartitions=5)
