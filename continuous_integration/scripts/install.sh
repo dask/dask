@@ -7,11 +7,14 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    conda uninstall --force numpy pandas
-    python -m pip install --no-deps --pre \
-        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
-        numpy
-    python -m pip install --pre pandas==1.1.0rc0
+    conda uninstall --force pyarrow
+    # python -m pip install --no-deps --pre \
+    #     -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
+    #     numpy
+
+    # Try nightly version of pyarrow
+    conda install -y -c arrow-nightlies pyarrow
+
     python -m pip install \
         --upgrade \
         locket \
