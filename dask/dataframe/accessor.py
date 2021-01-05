@@ -127,9 +127,11 @@ class StringAccessor(Accessor):
                 )
             else:
                 delimiter = " " if pat is None else pat
-                meta = type(self._series._meta)([delimiter.join(["a"] * (n + 1))])
+                meta = self._series._meta._constructor(
+                    [delimiter.join(["a"] * (n + 1))],
+                    index=self._series._meta_nonempty[:1].index,
+                )
                 meta = meta.str.split(n=n, expand=expand, pat=pat)
-                meta = meta.iloc[:0].set_index(self._series._meta.index)
         else:
             meta = (self._series.name, object)
         return self._function_map("split", pat=pat, n=n, expand=expand, meta=meta)
