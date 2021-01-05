@@ -13,7 +13,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
     #     numpy
 
     # Try nightly version of pyarrow
-    conda install -y -c arrow-nightlies pyarrow
+    conda install -y -c arrow-nightlies pyarrow>2.0
 
     python -m pip install \
         --upgrade \
