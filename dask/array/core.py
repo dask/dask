@@ -1575,47 +1575,47 @@ class Array(DaskMethodsMixin):
 
     def __setitem__(self, key, value):
         def parse_indices(shape, indices):
-            '''Reformat the indices.
+            """Reformat the indices.
 
-    The aim of this is is convert the indices to a standardised form
-    so that it is easier a) to check them for validity, and b) to
-    ascertain which chunks are touched by the indices.
+            The aim of this is is convert the indices to a standardised form
+            so that it is easier a) to check them for validity, and b) to
+            ascertain which chunks are touched by the indices.
 
-    Note that when the indices are "decreasing" (such as as ``slice(7,
-    3, -1)`` and ``[6, 2, 1]``) are recast as *increasing* indices
-    (``slice(4, 8, 1)`` and ``[1, 2, 6]`` respectively) to facilitate
-    finding which chunks are touched by the indices. The make sure
-    that the correct values are still assigned, the *value* is
-    (effectively) reversed along the appropriate dimensions at compute
-    time.
+            Note that when the indices are "decreasing" (such as as ``slice(7,
+            3, -1)`` and ``[6, 2, 1]``) are recast as *increasing* indices
+            (``slice(4, 8, 1)`` and ``[1, 2, 6]`` respectively) to facilitate
+            finding which chunks are touched by the indices. The make sure
+            that the correct values are still assigned, the *value* is
+            (effectively) reversed along the appropriate dimensions at compute
+            time.
 
-    :Parameters:
+            :Parameters:
 
-        shape: sequence of `ints`
-            The shape of the global array.
+                shape: sequence of `ints`
+                    The shape of the global array.
 
-        indices: `tuple`
-            The given indices for assignment.
+                indices: `tuple`
+                    The given indices for assignment.
 
-    :Returns:
+            :Returns:
 
-        (`list` , `list`)
-            The reformated indices that are equivalent to the input
-            indices; and the dimensions that need to be reversed in
-            the assigment value, prior to assignment.
+                (`list` , `list`)
+                    The reformated indices that are equivalent to the input
+                    indices; and the dimensions that need to be reversed in
+                    the assigment value, prior to assignment.
 
-    **Examples:**
+            **Examples:**
 
-    >>> parse_indices((8,), (slice(1, -1),))
-    (slice(1, 7, 1)] [])
-    >>> parse_indices((8,), ([1, 2, 4, 6],))
-    (array([1, 2, 4, 6]), [])
-    >>> parse_indices((8,), (slice(-1, 2, -1),))
-    (slice(3, 8, 1)] [0])
-    >>> parse_indices((8,), ([6, 4, 2, 1],))
-    (array([1, 2, 4, 6]), [0])
+            >>> parse_indices((8,), (slice(1, -1),))
+            (slice(1, 7, 1)] [])
+            >>> parse_indices((8,), ([1, 2, 4, 6],))
+            (array([1, 2, 4, 6]), [])
+            >>> parse_indices((8,), (slice(-1, 2, -1),))
+            (slice(3, 8, 1)] [0])
+            >>> parse_indices((8,), ([6, 4, 2, 1],))
+            (array([1, 2, 4, 6]), [0])
 
-            '''
+            """
             parsed_indices = []
             mirror = []
 
@@ -1643,16 +1643,15 @@ class Array(DaskMethodsMixin):
             if ndim and len_parsed_indices > ndim:
                 raise IndexError(
                     "Invalid indices {} for array with shape {}".format(
-                        parsed_indices, shape)
+                        parsed_indices, shape
+                    )
                 )
 
             if len_parsed_indices < ndim:
-                parsed_indices.extend([slice(None)]*(ndim-len_parsed_indices))
+                parsed_indices.extend([slice(None)] * (ndim - len_parsed_indices))
 
             if not ndim and parsed_indices:
-                raise IndexError(
-                    "Scalar array can only be indexed with () or Ellipsis"
-                )
+                raise IndexError("Scalar array can only be indexed with () or Ellipsis")
 
             n_lists = 0
 
@@ -1665,7 +1664,7 @@ class Array(DaskMethodsMixin):
                     start, stop, step = index.indices(size)
                     if step < 0 and stop == -1:
                         stop = None
-                    
+
                     index = slice(start, stop, step)
 
                 elif isinstance(index, (int, np.integer)):
@@ -1682,14 +1681,13 @@ class Array(DaskMethodsMixin):
                     if n_lists > 1:
                         raise ValueError(
                             "Can provide at most one dimension's index as a "
-                            "list of integers or booleans. Got: {}".format(
-                                indices
-                            )
+                            "list of integers or booleans. Got: {}".format(indices)
                         )
 
                     convert2positve = True
-                    if (getattr(getattr(index, 'dtype', None), 'kind', None) == 'b' or
-                            isinstance(index[0], bool)):
+                    if getattr(
+                        getattr(index, "dtype", None), "kind", None
+                    ) == "b" or isinstance(index[0], bool):
                         # --------------------------------------------
                         # Index is a sequence of booleans, so convert
                         # the booleans to non-negative integers. We're
@@ -1700,7 +1698,8 @@ class Array(DaskMethodsMixin):
                             raise IndexError(
                                 "Incorrect number ({}) of boolean indices for "
                                 "dimension with size {}: {}".format(
-                                    np.size(index), size, index)
+                                    np.size(index), size, index
+                                )
                             )
 
                         index = np.where(index)[0]
@@ -1719,15 +1718,14 @@ class Array(DaskMethodsMixin):
                             if index < 0:
                                 index += size
 
-                            index = slice(index, index + x1, 1)
+                            index = slice(index, index + 1, 1)
                             is_slice = True
                         elif len_index:
                             if convert2positve:
                                 # Convert to non-negative integer
                                 # numpy array
                                 index = np.array(index)
-                                index = np.where(index < 0,
-                                                 index + size, index)
+                                index = np.where(index < 0, index + size, index)
 
                             steps = index[1:] - index[:-1]
                             step = steps[0]
@@ -1745,9 +1743,11 @@ class Array(DaskMethodsMixin):
                                 index = slice(start, stop, step)
                                 is_slice = True
                             else:
-                                if ((step > 0 and (steps <= 0).any()) or
-                                        (step < 0 and (steps >= 0).any()) or
-                                        not step):
+                                if (
+                                    (step > 0 and (steps <= 0).any())
+                                    or (step < 0 and (steps >= 0).any())
+                                    or not step
+                                ):
                                     raise ValueError(
                                         "Bad index (not strictly monotonic): "
                                         "{}".format(index)
@@ -1804,38 +1804,38 @@ class Array(DaskMethodsMixin):
             return parsed_indices, mirror
 
         def size_of_index(index, size):
-            '''Return the number of elements resulting in applying an index to a
-    dimension of given size.
+            """Return the number of elements resulting in applying an index to a
+            dimension of given size.
 
-    :Parameters:
+            :Parameters:
 
-        index: `slice` or sequence of `int`
-            The index being applied to the sequence.
+                index: `slice` or sequence of `int`
+                    The index being applied to the sequence.
 
-        size: `int`, optional
-            The size of the dimension being indexed (ignored if
-            *index* is sequence of `int`).
+                size: `int`, optional
+                    The size of the dimension being indexed (ignored if
+                    *index* is sequence of `int`).
 
-    :Returns:
+            :Returns:
 
-        `int`
-            The length of the sequence resulting from applying
-            the index. May be zero.
+                `int`
+                    The length of the sequence resulting from applying
+                    the index. May be zero.
 
-    **Examples:**
+            **Examples:**
 
-    >>> size_of_index(slice(None, None, -2), 10)
-    5
-    >>> size_of_index([1, 4, 9], 10)
-    3
-    >>> size_of_index(slice(2, 2), 10)
-    0
-    >>> size_of_index(slice(4, 2), 10)
-    0
-    >>> size_of_index(slice(2, 4, -1), 10)
-    0
+            >>> size_of_index(slice(None, None, -2), 10)
+            5
+            >>> size_of_index([1, 4, 9], 10)
+            3
+            >>> size_of_index(slice(2, 2), 10)
+            0
+            >>> size_of_index(slice(4, 2), 10)
+            0
+            >>> size_of_index(slice(2, 4, -1), 10)
+            0
 
-            '''
+            """
             if isinstance(index, slice):
                 # Index is a slice object
                 start, stop, step = index.indices(size)
@@ -1851,49 +1851,56 @@ class Array(DaskMethodsMixin):
             # Index is a sequence of integers
             return len(index)
 
-        def setitem(array, value=None, block_info=None, indices=None,
-                    non_broadcast_dimensions=None, offset=None,
-                    base_value_indices=None, mirror=None,
-                    value_shape1=None):
-            '''Function to be mapped across all blocks which assigns new values to
-    elements of each block.
+        def setitem(
+            array,
+            value=None,
+            block_info=None,
+            indices=None,
+            non_broadcast_dimensions=None,
+            offset=None,
+            base_value_indices=None,
+            mirror=None,
+            value_shape1=None,
+        ):
+            """Function to be mapped across all blocks which assigns new values to
+            elements of each block.
 
-    This function must not be used directly, instead, a new partial
-    function with *value* set must be used, e.g.::
+            This function must not be used directly, instead, a new partial
+            function with *value* set must be used, e.g.::
 
-        self.map_blocks(functools.partial(setitem, value=x), **kwargs)
+                self.map_blocks(functools.partial(setitem, value=x), **kwargs)
 
-    :Parameters:
+            :Parameters:
 
-        value: array-like
-            The value from which to assign to the indices.
+                value: array-like
+                    The value from which to assign to the indices.
 
-        block_info:
+                block_info:
 
-        indices: sequence of `slice` or `int`
-            A reformated version of the original indices passed to
-            __setitem__.
+                indices: sequence of `slice` or `int`
+                    A reformated version of the original indices passed to
+                    __setitem__.
 
-        non_broadcast_dimensions: `list` of `int` The dimensions of
-            *value* which do not need to be broadcast against the
-            subspace defined by the *indices*.
+                non_broadcast_dimensions: `list` of `int` The dimensions of
+                    *value* which do not need to be broadcast against the
+                    subspace defined by the *indices*.
 
-        offset: `int`
-            The difference in the relative positions of a dimension in
-            'value' and the corresponding dimension in self. A
-            positive value means the dimension position is higher
-            (further to the right) in self then *value*.
+                offset: `int`
+                    The difference in the relative positions of a dimension in
+                    'value' and the corresponding dimension in self. A
+                    positive value means the dimension position is higher
+                    (further to the right) in self then *value*.
 
-        base_value_indices: `list` of `slice` or `None`
+                base_value_indices: `list` of `slice` or `None`
 
-        mirror: `list` of `int`
+                mirror: `list` of `int`
 
-        value_shape1: `tuple` of `int`
-            The shape of those dimensions of *value* which correspond
-            to dimensions of self.
+                value_shape1: `tuple` of `int`
+                    The shape of those dimensions of *value* which correspond
+                    to dimensions of self.
 
-            '''
-            array_location = block_info[None]['array-location']
+            """
+            array_location = block_info[None]["array-location"]
 
             # --------------------------------------------------------
             # See if this block overlaps the indices
@@ -1904,15 +1911,13 @@ class Array(DaskMethodsMixin):
             preceeding_size = []
 
             for index, (loc0, loc1), size in zip(
-                    indices,
-                    array_location,
-                    block_info[None]['chunk-shape']
+                indices, array_location, block_info[None]["chunk-shape"]
             ):
                 if isinstance(index, slice):
-                    # Index is a slice                    
+                    # Index is a slice
                     stop = size
                     if index.stop < loc1:
-                        stop -= (loc1 - index.stop)
+                        stop -= loc1 - index.stop
 
                     start = index.start - loc0
                     if start < 0:
@@ -1942,8 +1947,7 @@ class Array(DaskMethodsMixin):
                         n_preceeding += 1
                 else:
                     # Index is a list of integers
-                    block_index = [i - loc0 for i in index
-                                   if loc0 <= i < loc1]
+                    block_index = [i - loc0 for i in index if loc0 <= i < loc1]
                     if not block_index:
                         # This block does not overlap the indices
                         overlaps = False
@@ -2124,12 +2128,16 @@ class Array(DaskMethodsMixin):
         # ------------------------------------------------------------
         # Map the setitem function across all blocks
         # ------------------------------------------------------------
-        y = self.map_blocks(partial(setitem, value=value),
-                            dtype=self.dtype, indices=indices,
-                            non_broadcast_dimensions=non_broadcast_dimensions,
-                            offset=offset,
-                            base_value_indices=base_value_indices,
-                            mirror=mirror, value_shape1=value_shape1)
+        y = self.map_blocks(
+            partial(setitem, value=value),
+            dtype=self.dtype,
+            indices=indices,
+            non_broadcast_dimensions=non_broadcast_dimensions,
+            offset=offset,
+            base_value_indices=base_value_indices,
+            mirror=mirror,
+            value_shape1=value_shape1,
+        )
 
         self._meta = y._meta
         self.dask = y.dask
