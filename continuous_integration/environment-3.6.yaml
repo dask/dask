@@ -51,6 +51,9 @@ dependencies:
   - python-snappy
   - sparse
   - cachey
+  # TODO: python-graphviz 0.16 is broken on windows so we're pinning to
+  # 0.15 as a temporary workaround. Remove pinning once
+  # https://github.com/conda-forge/python-graphviz-feedstock/issues/42 is resolved
   - python-graphviz=0.15
   - pandas-datareader
   - python-xxhash
