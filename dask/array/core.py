@@ -2037,6 +2037,12 @@ class Array(DaskMethodsMixin):
                 array = array.view(np.ma.MaskedArray)
 
             # Assign elements of 'value' to elements of this block
+            if not array.flags["WRITEABLE"]:
+                # array is read-only, so need to copy it first
+                # (e.g. this might be the case if the dask array was
+                # created by da.empty)
+                array = array.copy()
+
             array[tuple(block_indices)] = v
 
             return array
@@ -2075,6 +2081,10 @@ class Array(DaskMethodsMixin):
         indices_shape = list(map(size_of_index, indices, self_shape))
 
         # Cast 'value' as a dask array
+        if value is np.ma.masked:
+            # Convert masked to a scalar masked array
+            value = np.ma.array(0, mask=True)
+
         value = asanyarray(value)
         value_shape = value.shape
 

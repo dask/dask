@@ -3612,7 +3612,7 @@ def test_setitem_2d():
 
 
 def test_setitem_extended_API():
-    x = np.arange(60).reshape((6, 10))
+    x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.copy(), chunks=(2, 2))
 
     x[::2, ::-1] = -1
@@ -3624,8 +3624,9 @@ def test_setitem_extended_API():
     x[x % 2 == 0] = -8
     x[[4, 3, 1]] = -9
     x[5, ...] = -10
-    x[2:4, 5:1:-2] = -x[:2, :2]
     x[:2, :3] = [[1, 2, 3]]
+    x[1, 1:7:2] = np.ma.masked
+    #x[2:4, 5:1:-2] = -x[:2, :2]
 
     dx[::2, ::-1] = -1
     dx[1::2] = -2
@@ -3636,10 +3637,25 @@ def test_setitem_extended_API():
     dx[dx % 2 == 0] = -8
     dx[[4, 3, 1]] = -9
     dx[5, ...] = -10
-    dx[2:4, 5:1:-2] = -dx[:2, :2]
     dx[:2, :3] = [[1, 2, 3]]
+    dx[1, 1:7:2] = np.ma.masked
+    #dx[2:4, 5:1:-2] = -dx[:2, :2].copy()
 
-    assert_eq(x, dx)
+    assert_eq(x, dx.compute())
+    assert_eq(x.mask, da.ma.getmaskarray(dx))
+
+
+def test_setitem_on_read_only_blocks():
+    # Outputs of broadcast_trick-style functions contain read-only
+    # arrays
+    dx = da.empty((4, 6), dtype=float, chunks=(2, 2))
+    dx[0] = 99
+
+    assert_eq(dx[0, 0].compute(), 99)
+
+    dx[0:2] = 88
+
+    assert_eq(dx[0, 0].compute(), 88)
 
 
 def test_setitem_errs():
