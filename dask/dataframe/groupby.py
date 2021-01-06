@@ -25,6 +25,7 @@ from .utils import (
     is_series_like,
     is_dataframe_like,
     PANDAS_GT_100,
+    PANDAS_GT_110,
 )
 from ..base import tokenize
 from ..utils import derived_from, M, funcname, itemgetter
@@ -945,14 +946,16 @@ def _compute_sum_of_squares(grouped, column):
     return df.groupby(keys).sum()
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False):
+def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwargs):
     # finish the final aggregation level
-    df = _groupby_apply_funcs(df, funcs=aggregate_funcs, level=level, sort=sort)
+    df = _groupby_apply_funcs(
+        df, funcs=aggregate_funcs, level=level, sort=sort, **kwargs
+    )
 
     # and finalize the result
     result = collections.OrderedDict()
-    for result_column, func, kwargs in finalize_funcs:
-        result[result_column] = func(df, **kwargs)
+    for result_column, func, finalize_kwargs in finalize_funcs:
+        result[result_column] = func(df, **finalize_kwargs)
 
     return type(df)(result)
 
@@ -1592,15 +1595,29 @@ class _GroupBy(object):
         else:
             chunk_args = [self.obj] + self.index
 
+        if not PANDAS_GT_110 and self.dropna:
+            raise NotImplementedError(
+                "dropna is not a valid argument for dask.groupby.agg"
+                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+            )
+
+        print(self.observed)
+
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
-            chunk_kwargs=dict(funcs=chunk_funcs),
+            chunk_kwargs=dict(funcs=chunk_funcs, **self.observed, **self.dropna),
             combine=_groupby_apply_funcs,
-            combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
+            combine_kwargs=dict(
+                funcs=aggregate_funcs, level=levels, **self.observed, **self.dropna
+            ),
             aggregate=_agg_finalize,
             aggregate_kwargs=dict(
-                aggregate_funcs=aggregate_funcs, finalize_funcs=finalizers, level=levels
+                aggregate_funcs=aggregate_funcs,
+                finalize_funcs=finalizers,
+                level=levels,
+                **self.observed,
+                **self.dropna,
             ),
             token="aggregate",
             split_every=split_every,
