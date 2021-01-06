@@ -7,7 +7,7 @@ dependencies:
   - python=3.8.*
   # For the dependencies. These will be re-installed later.
   - numpy
-  - pandas
+  - pandas=1.0.*
   # test dependencies
   - pytest
   - pytest-xdist
@@ -19,7 +19,7 @@ dependencies:
   - zarr
   - tiledb-py
   - sqlalchemy
-  - pyarrow>=0.14.0,!=2.0.0
+  - pyarrow>=0.14.0
   - jsonschema
   # other -- IO
   - bcolz
