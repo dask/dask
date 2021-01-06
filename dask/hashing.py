@@ -6,29 +6,10 @@ hashers = []  # In decreasing performance order
 
 
 # Timings on a largish array:
+# - xxHash3 is faster than CityHash
 # - CityHash is 2x faster than MurmurHash
-# - xxHash is slightly slower than CityHash
 # - MurmurHash is 8x faster than SHA1
 # - SHA1 is significantly faster than all other hashlib algorithms
-
-try:
-    import cityhash  # `python -m pip install cityhash`
-except ImportError:
-    pass
-else:
-    # CityHash disabled unless the reference leak in
-    # https://github.com/escherba/python-cityhash/pull/16
-    # is fixed.
-    if cityhash.__version__ >= "0.2.2":
-
-        def _hash_cityhash(buf):
-            """
-            Produce a 16-bytes hash of *buf* using CityHash.
-            """
-            h = cityhash.CityHash128(buf)
-            return h.to_bytes(16, "little")
-
-        hashers.append(_hash_cityhash)
 
 try:
     import xxhash  # `python -m pip install xxhash`
@@ -40,9 +21,24 @@ else:
         """
         Produce a 8-bytes hash of *buf* using xxHash.
         """
-        return xxhash.xxh64(buf).digest()
+        return xxhash.xxh3_64(buf).digest()
 
     hashers.append(_hash_xxhash)
+
+try:
+    import cityhash  # `python -m pip install cityhash`
+except ImportError:
+    pass
+else:
+
+    def _hash_cityhash(buf):
+        """
+        Produce a 16-bytes hash of *buf* using CityHash.
+        """
+        h = cityhash.CityHash128(buf)
+        return h.to_bytes(16, "little")
+
+    hashers.append(_hash_cityhash)
 
 try:
     import mmh3  # `python -m pip install mmh3`
