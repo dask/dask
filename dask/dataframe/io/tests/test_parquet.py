@@ -69,7 +69,7 @@ if pa and pa.__version__ < LooseVersion("1.0.0"):
     SKIP_PYARROW_DS = True
     SKIP_PYARROW_DS_REASON = "pyarrow >= 1.0.0 required for pyarrow dataset API"
 else:
-    SKIP_PYARROW_DS = not pa
+    SKIP_PYARROW_DS = SKIP_PYARROW
     SKIP_PYARROW_DS_REASON = "pyarrow not found"
 PYARROW_DS_MARK = pytest.mark.skipif(SKIP_PYARROW_DS, reason=SKIP_PYARROW_DS_REASON)
 
