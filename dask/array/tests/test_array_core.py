@@ -3622,7 +3622,9 @@ def test_setitem_extended_API():
     x[2:4, x[0] > 3] = -5
     x[2, x[0] < -2] = -7
     x[x % 2 == 0] = -8
-
+    x[[4, 3, 1]] = -9
+    x[5, ...] = -10
+    
     dx[::2, ::-1] = -1
     dx[1::2] = -2
     dx[:, [3, 5, 6]] = -3
@@ -3630,7 +3632,9 @@ def test_setitem_extended_API():
     dx[2:4, dx[0] > 3] = -5
     dx[2, dx[0] < -2] = -7
     dx[dx % 2 == 0] = -8
-     
+    dx[[4, 3, 1]] = -9
+    dx[5, ...] = -10
+    
     assert_eq(x, dx)
 
 
@@ -3639,6 +3643,24 @@ def test_setitem_errs():
 
     with pytest.raises(ValueError):
         x[x > 1] = x
+
+    # Multiple 1-d boolean/integer arrays
+    with pytest.raises(ValueError):
+        x[[1, 2], [2, 3]] = x
+
+    with pytest.raises(ValueError):
+        x[[True, True, False, False], [2, 3]] = x
+
+    with pytest.raises(ValueError):
+        x[[True, True, False, False], [False, True, False, False]] = x
+
+    # Not strictly monotonic
+    with pytest.raises(ValueError):
+        x[[1, 3, 2]] = x
+
+    # Repeated index
+    with pytest.raises(ValueError):
+        x[[1, 3, 3]] = x
 
 
 def test_zero_slice_dtypes():
