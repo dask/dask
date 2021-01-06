@@ -6,7 +6,7 @@ import pytest
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_117
+from dask.array.numpy_compat import _numpy_117, _numpy_120
 from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
 
 sparse = pytest.importorskip("sparse")
@@ -36,13 +36,13 @@ functions = [
     pytest.param(
         lambda x: x.std(),
         marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
+            not _numpy_120, reason="fixed in https://github.com/pydata/sparse/pull/243"
         ),
     ),
     pytest.param(
         lambda x: x.var(),
         marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
+            not _numpy_120, reason="fixed in https://github.com/pydata/sparse/pull/243"
         ),
     ),
     pytest.param(lambda x: x.dot(np.arange(x.shape[-1]))),
