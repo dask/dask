@@ -1575,10 +1575,10 @@ class Array(DaskMethodsMixin):
 
     def __index__(self):
         return self._scalarfunc(int)
-    
+
     def __setitem__(self, key, value):
         from .routines import where
-        
+
         def parse_indices(shape, indices):
             """Reformat the indices.
 

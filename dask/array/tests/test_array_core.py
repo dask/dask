@@ -3615,7 +3615,7 @@ def test_setitem_extended_API():
     x = np.arange(60).reshape((6, 10))
     dx = da.from_array(x.copy(), chunks=(2, 2))
 
-    x[::2, ::-1] = -1    
+    x[::2, ::-1] = -1
     x[1::2] = -2
     x[:, [3, 5, 6]] = -3
     x[[True, False, False, False, False, False], 2] = -4
@@ -3624,7 +3624,7 @@ def test_setitem_extended_API():
     x[x % 2 == 0] = -8
     x[[4, 3, 1]] = -9
     x[5, ...] = -10
-    
+
     dx[::2, ::-1] = -1
     dx[1::2] = -2
     dx[:, [3, 5, 6]] = -3
@@ -3634,7 +3634,7 @@ def test_setitem_extended_API():
     dx[dx % 2 == 0] = -8
     dx[[4, 3, 1]] = -9
     dx[5, ...] = -10
-    
+
     assert_eq(x, dx)
 
 
