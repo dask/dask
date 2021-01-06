@@ -1601,8 +1601,6 @@ class _GroupBy(object):
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
 
-        print(self.observed)
-
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
