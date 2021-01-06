@@ -3611,6 +3611,29 @@ def test_setitem_2d():
     assert_eq(x, dx)
 
 
+def test_setitem_extended_API():
+    x = np.arange(60).reshape((6, 10))
+    dx = da.from_array(x.copy(), chunks=(2, 2))
+
+    x[::2, ::-1] = -1    
+    x[1::2] = -2
+    x[:, [3, 5, 6]] = -3
+    x[[True, False, False, False, False, False], 2] = -4
+    x[2:4, x[0] > 3] = -5
+    x[2, x[0] < -2] = -7
+    x[x % 2 == 0] = -8
+
+    dx[::2, ::-1] = -1
+    dx[1::2] = -2
+    dx[:, [3, 5, 6]] = -3
+    dx[[True, False, False, False, False, False], 2] = -4
+    dx[2:4, dx[0] > 3] = -5
+    dx[2, dx[0] < -2] = -7
+    dx[dx % 2 == 0] = -8
+     
+    assert_eq(x, dx)
+
+
 def test_setitem_errs():
     x = da.ones((4, 4), chunks=(2, 2))
 

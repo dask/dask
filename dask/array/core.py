@@ -1573,7 +1573,12 @@ class Array(DaskMethodsMixin):
     def __complex__(self):
         return self._scalarfunc(complex)
 
+    def __index__(self):
+        return self._scalarfunc(int)
+    
     def __setitem__(self, key, value):
+        from .routines import where
+        
         def parse_indices(shape, indices):
             """Reformat the indices.
 
@@ -1694,18 +1699,17 @@ class Array(DaskMethodsMixin):
                         # assuming that anything with a dtype
                         # attribute also has a size attribute.
                         # --------------------------------------------
-                        if np.size(index) != size:
+                        if len(index) != size:
                             raise IndexError(
                                 "Incorrect number ({}) of boolean indices for "
                                 "dimension with size {}: {}".format(
-                                    np.size(index), size, index
+                                    len(index), size, index
                                 )
                             )
-
-                        index = np.where(index)[0]
+                        index = where(index)[0].compute_chunk_sizes()
                         convert2positve = False
 
-                    if not np.ndim(index):
+                    if not np.shape(index):
                         if index < 0:
                             index += size
 
@@ -1718,19 +1722,20 @@ class Array(DaskMethodsMixin):
                             if index < 0:
                                 index += size
 
+                            index = int(index)
                             index = slice(index, index + 1, 1)
                             is_slice = True
                         elif len_index:
                             if convert2positve:
-                                # Convert to non-negative integer
-                                # numpy array
-                                index = np.array(index)
-                                index = np.where(index < 0, index + size, index)
+                                # Convert to non-negative integer 1-d
+                                # array
+                                index = asanyarray(index)
+                                index = where(index < 0, index + size, index)
 
                             steps = index[1:] - index[:-1]
                             step = steps[0]
                             if step and not (steps - step).any():
-                                # Replace the numpy array index with a
+                                # Replace the 1-d array index with a
                                 # slice
                                 if step > 0:
                                     start, stop = index[0], index[-1] + 1
@@ -1757,17 +1762,15 @@ class Array(DaskMethodsMixin):
                                     # The array is strictly
                                     # monotonically decreasing, so
                                     # reverse it so that it's strictly
-                                    # monotonically increasing.  Make
+                                    # monotonically increasing. Make
                                     # a note that this dimension will
-                                    # need flipping later
+                                    # need reversing later.
                                     index = index[::-1]
                                     mirror.append(i)
                                     step = -step
                         else:
-                            raise IndexError(
-                                "Invalid indices {} for array "
-                                "with shape {}".format(parsed_indices, shape)
-                            )
+                            # This is an empty slice
+                            index = slice(0, 0, 1)
                 # --- End: if
 
                 if is_slice and index.step < 0:
@@ -2041,6 +2044,26 @@ class Array(DaskMethodsMixin):
         # ------------------------------------------------------------
         # Start of main __setitem__ code
         # ------------------------------------------------------------
+
+        #
+        if isinstance(key, Array):
+            if isinstance(value, Array) and value.ndim > 1:
+                raise ValueError("boolean index array should have 1 dimension")
+            try:
+                y = where(key, value, self)
+            except ValueError as e:
+                raise ValueError(
+                    "Boolean index assignment in Dask "
+                    "expects equally shaped arrays.\nExample: da1[da2] = da3 "
+                    "where da1.shape == (4,), da2.shape == (4,) "
+                    "and da3.shape == (4,)."
+                ) from e
+            self._meta = y._meta
+            self.dask = y.dask
+            self.name = y.name
+            self._chunks = y.chunks
+            return self
+
         self_shape = self.shape
 
         # Reformat input indices
