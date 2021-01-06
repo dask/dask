@@ -2045,7 +2045,7 @@ class Array(DaskMethodsMixin):
         # Start of main __setitem__ code
         # ------------------------------------------------------------
 
-        #
+        # Keep the "where" method for cases when key is an Array
         if isinstance(key, Array):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
@@ -2064,6 +2064,8 @@ class Array(DaskMethodsMixin):
             self._chunks = y.chunks
             return self
 
+        # Still here? Then parse the indices from 'key' and apply the
+        # assignment via map_blocks
         self_shape = self.shape
 
         # Reformat input indices
