@@ -1684,9 +1684,11 @@ class Array(DaskMethodsMixin):
                 else:
                     n_lists += 1
                     if n_lists > 1:
-                        raise ValueError(
-                            "Can provide at most one dimension's index as a "
-                            "list of integers or booleans. Got: {}".format(indices)
+                        raise NotImplementedError(
+                            "dask is currently limited to at most one "
+                            "dimension's assignment index being a "
+                            "1-d array of integers or booleans. "
+                            "Got: {}".format(indices)
                         )
 
                     convert2positve = True
@@ -1753,9 +1755,11 @@ class Array(DaskMethodsMixin):
                                     or (step < 0 and (steps >= 0).any())
                                     or not step
                                 ):
-                                    raise ValueError(
-                                        "Bad index (not strictly monotonic): "
-                                        "{}".format(index)
+                                    raise NotImplementedError(
+                                        "1-d integer array assignment indices "
+                                        "are currently limited to strictly "
+                                        "monotonic sequences. "
+                                        "Got: {!r}".format(indices)
                                     )
 
                                 if step < 0:

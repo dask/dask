@@ -3626,7 +3626,7 @@ def test_setitem_extended_API():
     x[5, ...] = -10
     x[:2, :3] = [[1, 2, 3]]
     x[1, 1:7:2] = np.ma.masked
-    #x[2:4, 5:1:-2] = -x[:2, :2]
+    # x[2:4, 5:1:-2] = -x[:2, :2]
 
     dx[::2, ::-1] = -1
     dx[1::2] = -2
@@ -3639,7 +3639,7 @@ def test_setitem_extended_API():
     dx[5, ...] = -10
     dx[:2, :3] = [[1, 2, 3]]
     dx[1, 1:7:2] = np.ma.masked
-    #dx[2:4, 5:1:-2] = -dx[:2, :2].copy()
+    # dx[2:4, 5:1:-2] = -dx[:2, :2].copy()
 
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx))
@@ -3665,21 +3665,21 @@ def test_setitem_errs():
         x[x > 1] = x
 
     # Multiple 1-d boolean/integer arrays
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         x[[1, 2], [2, 3]] = x
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         x[[True, True, False, False], [2, 3]] = x
 
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         x[[True, True, False, False], [False, True, False, False]] = x
 
     # Not strictly monotonic
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         x[[1, 3, 2]] = x
 
     # Repeated index
-    with pytest.raises(ValueError):
+    with pytest.raises(NotImplementedError):
         x[[1, 3, 3]] = x
 
 
