@@ -7,13 +7,13 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    conda uninstall --force pyarrow
+    #conda uninstall --force pyarrow
     # python -m pip install --no-deps --pre \
     #     -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
     #     numpy
 
     # Try nightly version of pyarrow
-    conda install -y -c arrow-nightlies pyarrow>2.0
+    conda update -y -c arrow-nightlies pyarrow
 
     python -m pip install \
         --upgrade \

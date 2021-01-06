@@ -7,7 +7,7 @@ dependencies:
   - python=3.8.*
   # For the dependencies. These will be re-installed later.
   - numpy
-  - pandas
+  - pandas=1.0.*
   # test dependencies
   - pytest
   - pytest-xdist
