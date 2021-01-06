@@ -946,14 +946,16 @@ def _compute_sum_of_squares(grouped, column):
     return df.groupby(keys).sum()
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False):
+def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwargs):
     # finish the final aggregation level
-    df = _groupby_apply_funcs(df, funcs=aggregate_funcs, level=level, sort=sort)
+    df = _groupby_apply_funcs(
+        df, funcs=aggregate_funcs, level=level, sort=sort, **kwargs
+    )
 
     # and finalize the result
     result = collections.OrderedDict()
-    for result_column, func, kwargs in finalize_funcs:
-        result[result_column] = func(df, **kwargs)
+    for result_column, func, finalize_kwargs in finalize_funcs:
+        result[result_column] = func(df, **finalize_kwargs)
 
     return type(df)(result)
 
@@ -1599,6 +1601,8 @@ class _GroupBy(object):
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
             )
 
+        print(self.observed)
+
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
@@ -1609,7 +1613,11 @@ class _GroupBy(object):
             ),
             aggregate=_agg_finalize,
             aggregate_kwargs=dict(
-                aggregate_funcs=aggregate_funcs, finalize_funcs=finalizers, level=levels
+                aggregate_funcs=aggregate_funcs,
+                finalize_funcs=finalizers,
+                level=levels,
+                **self.observed,
+                **self.dropna,
             ),
             token="aggregate",
             split_every=split_every,

@@ -2228,25 +2228,19 @@ def test_groupby_aggregate_categoricals(grouping, agg):
     assert_eq(agg(grouping(pdf)["value"]), agg(grouping(ddf)["value"]))
 
 
-@pytest.mark.xfail(reason="dropna kwarg not supported in pandas groupby.")
+@pytest.mark.xfail(
+    not dask.dataframe.utils.PANDAS_GT_110,
+    reason="dropna kwarg not supported in pandas < 1.1.0.",
+)
 @pytest.mark.parametrize("dropna", [False, True])
 def test_groupby_dropna_pandas(dropna):
-
-    # The `dropna` arg is not currently supported by pandas
-    # (See #https://github.com/pandas-dev/pandas/pull/21669)
-    # Dask supports the argument for the cudf backend,
-    # but passing it to the pandas backend will fail.
-
-    # TODO: Expand test when `dropna` is supported in pandas.
-    #       (See: `test_groupby_dropna_cudf`)
-
     df = pd.DataFrame(
         {"a": [1, 2, 3, 4, None, None, 7, 8], "e": [4, 5, 6, 3, 2, 1, 0, 0]}
     )
     ddf = dd.from_pandas(df, npartitions=3)
 
-    dask_result = ddf.groupby("a", dropna=dropna)
-    pd_result = df.groupby("a", dropna=dropna)
+    dask_result = ddf.groupby("a", dropna=dropna).e.sum()
+    pd_result = df.groupby("a", dropna=dropna).e.sum()
     assert_eq(dask_result, pd_result)
 
 
@@ -2298,6 +2292,21 @@ def test_groupby_dropna_with_agg():
 
     ddf = dd.from_pandas(df, 1, sort=False)
     actual = ddf.groupby(["id1", "id2"], dropna=False).agg("sum")
+    assert_eq(expected, actual)
+
+
+def test_groupby_observed_with_agg():
+    df = pd.DataFrame(
+        {
+            "cat_1": pd.Categorical(list("AB"), categories=list("ABCDE")),
+            "cat_2": pd.Categorical([1, 2], categories=[1, 2, 3]),
+            "value_1": np.random.uniform(size=2),
+        }
+    )
+    expected = df.groupby(["cat_1", "cat_2"], observed=True).agg("sum")
+
+    ddf = dd.from_pandas(df, 2)
+    actual = ddf.groupby(["cat_1", "cat_2"], observed=True).agg("sum")
     assert_eq(expected, actual)
 
 
