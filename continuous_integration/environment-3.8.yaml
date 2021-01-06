@@ -50,7 +50,7 @@ dependencies:
   - python-snappy
   - sparse
   - cachey
-  - python-graphviz
+  - python-graphviz=0.15
   - pandas-datareader
   - python-xxhash
   - mmh3
