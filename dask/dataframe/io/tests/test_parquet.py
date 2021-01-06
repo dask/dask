@@ -46,9 +46,20 @@ if pq and pa.__version__ < LooseVersion("0.13.1"):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = "pyarrow >= 0.13.1 required for parquet"
 else:
-    if sys.platform == "win32" and pa and pa.__version__ == LooseVersion("0.16.0"):
+    if (
+        sys.platform == "win32"
+        and pa
+        and (
+            (pa.__version__ == LooseVersion("0.16.0"))
+            or (pa.__version__ == LooseVersion("2.0.0"))
+        )
+    ):
         SKIP_PYARROW = True
-        SKIP_PYARROW_REASON = "https://github.com/dask/dask/issues/6093"
+        SKIP_PYARROW_REASON = (
+            "skipping pyarrow 0.16.0 and 2.0.0 on windows: "
+            "https://github.com/dask/dask/issues/6093"
+            "|https://github.com/dask/dask/issues/6754"
+        )
     else:
         SKIP_PYARROW = not pq
         SKIP_PYARROW_REASON = "pyarrow not found"
