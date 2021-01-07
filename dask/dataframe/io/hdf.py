@@ -419,7 +419,7 @@ def read_hdf(
     chunksize=1000000,
     sorted_index=False,
     lock=True,
-    mode="a",
+    mode="r",
 ):
     """
     Read HDF files into a Dask DataFrame
