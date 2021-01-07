@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
+from ast import literal_eval as make_tuple
 
 try:
     import psutil
@@ -26,15 +27,17 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from ...blockwise import Blockwise
+from ...blockwise import Blockwise, blockwise_token
 
 import fsspec.implementations.local
 from fsspec.compression import compr
 
 
-class CSVSubgraph(Mapping):
+class CSVFunctionWrapper:
     """
-    Subgraph for reading CSV files.
+    CSV Function-Wrapper Class
+
+     Reads CSV data from disk to produce a partition (given a key).
     """
 
     def __init__(
@@ -63,7 +66,13 @@ class CSVSubgraph(Mapping):
         self.enforce = enforce
         self.colname, self.paths = path or (None, None)
 
-    def __getitem__(self, key):
+    def __call__(self, key):
+
+        # De-stringify the key if this is executed
+        # on a distributed worker
+        if isinstance(key, str):
+            key = make_tuple(key)
+
         try:
             name, i = key
         except ValueError:
@@ -92,8 +101,11 @@ class CSVSubgraph(Mapping):
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
-        return (
-            pandas_read_text,
+        # Convert block tuple to bytes
+        if isinstance(block, tuple) and block and callable(block[0]):
+            block = block[0](*block[1:])
+
+        return pandas_read_text(
             self.reader,
             block,
             self.header,
@@ -104,13 +116,6 @@ class CSVSubgraph(Mapping):
             self.enforce,
             path_info,
         )
-
-    def __len__(self):
-        return len(self.blocks)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield (self.name, i)
 
 
 class BlockwiseReadCSV(Blockwise):
@@ -137,7 +142,7 @@ class BlockwiseReadCSV(Blockwise):
         self.name = name
         self.blocks = blocks
         self.io_name = "blockwise-io-" + name
-        dsk_io = CSVSubgraph(
+        io_func_wrapper = CSVFunctionWrapper(
             self.io_name,
             reader,
             blocks,
@@ -150,13 +155,18 @@ class BlockwiseReadCSV(Blockwise):
             enforce,
             path,
         )
+
+        dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
+
         super().__init__(
-            {self.io_name: dsk_io},
             self.name,
             "i",
-            None,
+            dsk,
             [(self.io_name, "i")],
             {self.io_name: (len(self.blocks),)},
+            io_deps={
+                self.io_name,
+            },
         )
 
     def __repr__(self):
