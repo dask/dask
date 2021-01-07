@@ -3664,6 +3664,10 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         x[x > 1] = x
 
+    # Too many indices
+    with pytest.raises(IndexError):
+        x[:, :, :] = 2
+
     # Multiple 1-d boolean/integer arrays
     with pytest.raises(NotImplementedError):
         x[[1, 2], [2, 3]] = x
@@ -3681,6 +3685,11 @@ def test_setitem_errs():
     # Repeated index
     with pytest.raises(NotImplementedError):
         x[[1, 3, 3]] = x
+
+    # Scalar arrays
+    y = da.from_array(np.array(1))
+    with pytest.raises(IndexError):
+        y[:] = 2
 
 
 def test_zero_slice_dtypes():
