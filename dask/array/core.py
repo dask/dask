@@ -1651,7 +1651,6 @@ class Array(DaskMethodsMixin):
                 raise IndexError(
                     f"Invalid indices {parsed_indices} for array with shape {shape}"
                 )
-                )
 
             if len_parsed_indices < ndim:
                 parsed_indices.extend([slice(None)] * (ndim - len_parsed_indices))
@@ -1704,10 +1703,9 @@ class Array(DaskMethodsMixin):
                         # --------------------------------------------
                         if len(index) != size:
                             raise IndexError(
-                                "Incorrect number ({}) of boolean indices for "
-                                "dimension with size {}: {}".format(
-                                    len(index), size, index
-                                )
+                                f"Incorrect number (len(index)) of boolean "
+                                f"indices for dimension with size {size}: "
+                                f"{index}"
                             )
                         index = where(index)[0].compute_chunk_sizes()
                         convert_to_positive = False
@@ -1760,7 +1758,7 @@ class Array(DaskMethodsMixin):
                                         "1-d integer array assignment indices "
                                         "are currently limited to strictly "
                                         "monotonic sequences. "
-                                        "Got: {!r}".format(indices)
+                                        f"Got: {indices}"
                                     )
 
                                 if step < 0:
@@ -2093,10 +2091,9 @@ class Array(DaskMethodsMixin):
             # Can only assign size 1 values (with any number of
             # dimensions) to empty slices
             raise ValueError(
-                "shape mismatch: value array of shape {} could not be "
-                "broadcast to indexing result of shape {}".format(
-                    value_shape, tuple(indices_shape)
-                )
+                f"shape mismatch: value array of shape {value_shape} "
+                "could not be broadcast to indexing result "
+                f"of shape {tuple(indices_shape)}"
             )
 
         # ------------------------------------------------------------
@@ -2142,9 +2139,7 @@ class Array(DaskMethodsMixin):
                 # self if the extra trailing dimensions all have size
                 # 1.
                 raise ValueError(
-                    "Can't broadcast shape {!r} across shape {!r}".format(
-                        value_shape, self_shape
-                    )
+                    f"Can't broadcast shape {value_shape} across " f"shape {self_shape}"
                 )
 
             offset = 0
@@ -2168,8 +2163,8 @@ class Array(DaskMethodsMixin):
                 non_broadcast_dimensions.append(i)
             else:
                 raise ValueError(
-                    "Can't broadcast data with shape {!r} across "
-                    "shape {!r}".format(value_common_shape, tuple(indices_shape))
+                    f"Can't broadcast data with shape {value_common_shape} "
+                    f"across shape {tuple(indices_shape)}"
                 )
 
         # ------------------------------------------------------------
