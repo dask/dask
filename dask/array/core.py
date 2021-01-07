@@ -1582,17 +1582,18 @@ class Array(DaskMethodsMixin):
         def parse_indices(shape, indices):
             """Reformat the indices.
 
-            The aim of this is is convert the indices to a standardised form
-            so that it is easier a) to check them for validity, and b) to
-            ascertain which chunks are touched by the indices.
+            The aim of this is is convert the indices to a
+            standardised form so that it is easier a) to check them
+            for validity, and b) to ascertain which chunks are touched
+            by the indices.
 
-            Note that when the indices are "decreasing" (such as as ``slice(7,
-            3, -1)`` and ``[6, 2, 1]``) are recast as *increasing* indices
-            (``slice(4, 8, 1)`` and ``[1, 2, 6]`` respectively) to facilitate
-            finding which chunks are touched by the indices. The make sure
-            that the correct values are still assigned, the *value* is
-            (effectively) reversed along the appropriate dimensions at compute
-            time.
+            Note that indices which are decreasing (such as as
+            ``slice(7, 3, -1)`` and ``[6, 2, 1]``) are recast as
+            increasing indices (``slice(4, 8, 1)`` and ``[1, 2, 6]``
+            respectively) to facilitate finding which chunks are
+            touched by the indices. The make sure that the correct
+            values are still assigned, the value is (effectively)
+            reversed along the appropriate dimensions at compute time.
 
             Parameters
             ----------
@@ -1604,11 +1605,11 @@ class Array(DaskMethodsMixin):
             Returns
             -------
             parsed_indices : list
-                The reformated indices that are equivalent to the input
-                indices.
+                The reformated indices that are equivalent to the
+                input indices.
             mirror : list
-                The dimensions that need to be reversed in the assigment value,
-                prior to assignment.
+                The dimensions that need to be reversed in the
+                assigment value, prior to assignment.
 
             Examples
             --------
@@ -1620,6 +1621,7 @@ class Array(DaskMethodsMixin):
             (slice(3, 8, 1)] [0])
             >>> parse_indices((8,), ([6, 4, 2, 1],))
             (array([1, 2, 4, 6]), [0])
+
             """
             parsed_indices = []
             mirror = []
@@ -1691,7 +1693,7 @@ class Array(DaskMethodsMixin):
                             "Got: {}".format(indices)
                         )
 
-                    convert2positve = True
+                    convert_to_positive = True
                     if getattr(
                         getattr(index, "dtype", None), "kind", None
                     ) == "b" or isinstance(index[0], bool):
@@ -1709,7 +1711,7 @@ class Array(DaskMethodsMixin):
                                 )
                             )
                         index = where(index)[0].compute_chunk_sizes()
-                        convert2positve = False
+                        convert_to_positive = False
 
                     if not np.shape(index):
                         if index < 0:
@@ -1728,7 +1730,7 @@ class Array(DaskMethodsMixin):
                             index = slice(index, index + 1, 1)
                             is_slice = True
                         elif len_index:
-                            if convert2positve:
+                            if convert_to_positive:
                                 # Convert to non-negative integer 1-d
                                 # array
                                 index = asanyarray(index)
@@ -1775,7 +1777,6 @@ class Array(DaskMethodsMixin):
                         else:
                             # This is an empty slice
                             index = slice(0, 0, 1)
-                # --- End: if
 
                 if is_slice and index.step < 0:
                     # If the slice step is negative, then transform
@@ -1806,31 +1807,28 @@ class Array(DaskMethodsMixin):
                     mirror.append(i)
 
                 parsed_indices[i] = index
-            # --- End: for
 
             return parsed_indices, mirror
 
         def size_of_index(index, size):
-            """Return the number of elements resulting in applying an index to a
-            dimension of given size.
+            """Return the number of elements resulting in applying an index to a dimension of given size.
 
-            :Parameters:
+            Parameters
+            ----------
+            index : slice or sequence of int
+                The index being applied to the sequence.
+            size : int, optional
+                The size of the dimension being indexed (ignored if
+                index is sequence of int).
 
-                index: `slice` or sequence of `int`
-                    The index being applied to the sequence.
+            Returns
+            -------
+            size : int
+                The length of the sequence resulting from applying the
+                index. May be zero.
 
-                size: `int`, optional
-                    The size of the dimension being indexed (ignored if
-                    *index* is sequence of `int`).
-
-            :Returns:
-
-                `int`
-                    The length of the sequence resulting from applying
-                    the index. May be zero.
-
-            **Examples:**
-
+            Examples
+            --------
             >>> size_of_index(slice(None, None, -2), 10)
             5
             >>> size_of_index([1, 4, 9], 10)
@@ -1867,44 +1865,46 @@ class Array(DaskMethodsMixin):
             offset=None,
             base_value_indices=None,
             mirror=None,
-            value_shape1=None,
+            value_common_shape=None,
         ):
-            """Function to be mapped across all blocks which assigns new values to
-            elements of each block.
+            """Function to be mapped across all blocks which assigns new values to elements of each block.
 
-            This function must not be used directly, instead, a new partial
-            function with *value* set must be used, e.g.::
+            This function should not be used directly, instead, a new
+            partial function with value set should be used, e.g.::
 
                 self.map_blocks(functools.partial(setitem, value=x), **kwargs)
 
-            :Parameters:
+            Parameters
+            ----------
+            value : array-like
+                The value from which to assign to the indices.
+            block_info:
+            indices : sequence of slice or int
+                A reformated version of the original indices that were
+                passed to __setitem__.
+            non_broadcast_dimensions : list of int
+                The dimensions of value which do not need to be
+                broadcast against the subspace defined by the indices.
+            offset: `int`
+                The difference in the relative positions of a
+                dimension in value and the corresponding dimension in
+                self. A positive value means the dimension position is
+                higher (further to the right) in self then value.
+            base_value_indices : list of slice or None
+                The indices used for initialising the selection from
+                value. slice(None) elements are unchanged, but an
+                element of None is replaced by an appropriate slice.
+            mirror: list of int
+                The dimensions that need to be reversed in the value,
+                prior to assignment.
+            value_common_shape: tuple of int
+                The shape of those dimensions of value which
+                correspond to dimensions of self.
 
-                value: array-like
-                    The value from which to assign to the indices.
-
-                block_info:
-
-                indices: sequence of `slice` or `int`
-                    A reformated version of the original indices passed to
-                    __setitem__.
-
-                non_broadcast_dimensions: `list` of `int` The dimensions of
-                    *value* which do not need to be broadcast against the
-                    subspace defined by the *indices*.
-
-                offset: `int`
-                    The difference in the relative positions of a dimension in
-                    'value' and the corresponding dimension in self. A
-                    positive value means the dimension position is higher
-                    (further to the right) in self then *value*.
-
-                base_value_indices: `list` of `slice` or `None`
-
-                mirror: `list` of `int`
-
-                value_shape1: `tuple` of `int`
-                    The shape of those dimensions of *value* which correspond
-                    to dimensions of self.
+            Returns
+            -------
+            array : numpy.ndarray
+                The array for the block with assigned elements.
 
             """
             array_location = block_info[None]["array-location"]
@@ -1986,12 +1986,10 @@ class Array(DaskMethodsMixin):
                     # monotonically increasing, as will be the case
                     # for reformatted indices.
                     n_preceeding = sum(1 for i in index if i < loc0)
-                # --- End: if
 
                 block_indices.append(block_index)
                 subset_shape.append(block_index_size)
                 preceeding_size.append(n_preceeding)
-            # --- End: for
 
             if not overlaps:
                 # This block does not overlap the indices, so return
@@ -2015,7 +2013,7 @@ class Array(DaskMethodsMixin):
             # Reverse the indices to 'value' if required as a
             # consequence of reformatting the original indices.
             for i in mirror:
-                size = value_shape1[i]
+                size = value_common_shape[i]
                 start, stop, step = value_indices[i].indices(size)
                 size -= 1
                 start = size - start
@@ -2111,17 +2109,29 @@ class Array(DaskMethodsMixin):
         #          dimension position is further to the right in self
         #          than 'value'.
         #
-        #  self_shape1: The shape of those dimensions of self which
-        #               correspond to dimensions of 'value'
+        #  self_common_shape: The shape of those dimensions of self
+        #                     which correspond to dimensions of
+        #                     'value'.
         #
-        #  value_shape1: The shape of those dimensions of 'value'
-        #                which correspond to dimensions of self
+        #  value_common_shape: The shape of those dimensions of
+        #                      'value' which correspond to dimensions
+        #                      of self.
+        #
+        #  base_value_indices: The indices used for initialising the
+        #                      selection from 'value'. slice(None)
+        #                      elements are unchanged, but an element
+        #                      of None will, inside a call to setitem,
+        #                      be replaced by an appropriate slice.
+        #
+        # Note that self_common_shape and value_common_shape may be
+        # different if there are any size 1 dimensions are being
+        # brodacast.
         # ------------------------------------------------------------
         offset = self.ndim - value.ndim
         if offset >= 0:
             # self has the same number or more dimensions than 'value'
-            self_shape1 = indices_shape[offset:]
-            value_shape1 = value_shape
+            self_common_shape = indices_shape[offset:]
+            value_common_shape = value_shape
 
             # Modify the mirror dimensions with the offset
             mirror = [i - offset for i in mirror if i >= offset]
@@ -2139,8 +2149,8 @@ class Array(DaskMethodsMixin):
                 )
 
             offset = 0
-            self_shape1 = indices_shape
-            value_shape1 = value_shape[value_offset:]
+            self_common_shape = indices_shape
+            value_common_shape = value_shape[value_offset:]
 
         # ------------------------------------------------------------
         # Find out which of the dimensions of 'value' are to be
@@ -2151,7 +2161,7 @@ class Array(DaskMethodsMixin):
         # ------------------------------------------------------------
         base_value_indices = []
         non_broadcast_dimensions = []
-        for i, (a, b) in enumerate(zip(self_shape1, value_shape1)):
+        for i, (a, b) in enumerate(zip(self_common_shape, value_common_shape)):
             if b == 1:
                 base_value_indices.append(slice(None))
             elif a == b and b != 1:
@@ -2160,9 +2170,8 @@ class Array(DaskMethodsMixin):
             else:
                 raise ValueError(
                     "Can't broadcast data with shape {!r} across "
-                    "shape {!r}".format(value_shape1, tuple(indices_shape))
+                    "shape {!r}".format(value_common_shape, tuple(indices_shape))
                 )
-        # --- End: for
 
         # ------------------------------------------------------------
         # Map the setitem function across all blocks
@@ -2175,7 +2184,7 @@ class Array(DaskMethodsMixin):
             offset=offset,
             base_value_indices=base_value_indices,
             mirror=mirror,
-            value_shape1=value_shape1,
+            value_common_shape=value_common_shape,
         )
 
         self._meta = y._meta
