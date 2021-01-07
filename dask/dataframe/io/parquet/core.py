@@ -55,11 +55,6 @@ class ParquetFunctionWrapper:
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
 
-    def __repr__(self):
-        return "ParquetFunctionWrapper<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
-        )
-
     def __call__(self, key):
 
         # De-stringify the key if this is executed

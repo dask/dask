@@ -149,9 +149,6 @@ class Blockwise(Layer):
 
     Parameters
     ----------
-    io_deps: set
-        Set of collection names that will be generated within this Blockwise
-        layer (and do not actually exist yet).
     output: str
         The name of the output collection.  Used in keynames
     output_indices: tuple
@@ -178,6 +175,11 @@ class Blockwise(Layer):
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
+    io_deps: set (optional)
+        Set of "place-holder" collection names that will be generated within
+        this Blockwise layer. Since these collections do not actually exist
+        yet, we must refer to this set when dependencies are calculaed (we do
+        not want "placeholder" keys to be treated as real dependencies).
 
     See Also
     --------
