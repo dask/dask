@@ -1594,23 +1594,24 @@ class Array(DaskMethodsMixin):
             (effectively) reversed along the appropriate dimensions at compute
             time.
 
-            :Parameters:
+            Parameters
+            ----------
+            shape : sequence of ints
+                The shape of the global array.
+            indices : tuple
+                The given indices for assignment.
 
-                shape: sequence of `ints`
-                    The shape of the global array.
+            Returns
+            -------
+            parsed_indices : list
+                The reformated indices that are equivalent to the input
+                indices.
+            mirror : list
+                The dimensions that need to be reversed in the assigment value,
+                prior to assignment.
 
-                indices: `tuple`
-                    The given indices for assignment.
-
-            :Returns:
-
-                (`list` , `list`)
-                    The reformated indices that are equivalent to the input
-                    indices; and the dimensions that need to be reversed in
-                    the assigment value, prior to assignment.
-
-            **Examples:**
-
+            Examples
+            --------
             >>> parse_indices((8,), (slice(1, -1),))
             (slice(1, 7, 1)] [])
             >>> parse_indices((8,), ([1, 2, 4, 6],))
@@ -1619,7 +1620,6 @@ class Array(DaskMethodsMixin):
             (slice(3, 8, 1)] [0])
             >>> parse_indices((8,), ([6, 4, 2, 1],))
             (array([1, 2, 4, 6]), [0])
-
             """
             parsed_indices = []
             mirror = []
