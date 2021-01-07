@@ -1649,9 +1649,8 @@ class Array(DaskMethodsMixin):
 
             if ndim and len_parsed_indices > ndim:
                 raise IndexError(
-                    "Invalid indices {} for array with shape {}".format(
-                        parsed_indices, shape
-                    )
+                    f"Invalid indices {parsed_indices} for array with shape {shape}"
+                )
                 )
 
             if len_parsed_indices < ndim:
