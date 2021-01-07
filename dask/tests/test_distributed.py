@@ -213,3 +213,16 @@ def test_local_scheduler():
         assert len(z.dask) == 1
 
     asyncio.get_event_loop().run_until_complete(f())
+
+
+def test_parquet_distributed_roundtrip():
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+    pytest.importorskip("pyarrow")
+    assert_eq = dd.utils.assert_eq
+
+    with tmpdir() as d:
+        ddf1 = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
+        ddf1.to_parquet(d)
+        ddf2 = dd.read_parquet(d)
+        assert_eq(ddf1, ddf2)
