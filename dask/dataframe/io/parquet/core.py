@@ -1,4 +1,5 @@
 from distutils.version import LooseVersion
+from ast import literal_eval as make_tuple
 import math
 
 import tlz as toolz
@@ -14,8 +15,10 @@ from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
-from ....highlevelgraph import Layer, HighLevelGraph
-from ....blockwise import BlockwiseIO
+from ....highlevelgraph import HighLevelGraph
+
+# from ....highlevelgraph import Layer, HighLevelGraph
+from ....blockwise import Blockwise, blockwise_token
 
 
 try:
@@ -34,7 +37,7 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ParquetSubgraph(Layer):
+class ParquetSubgraph:
     """
     Subgraph for reading Parquet files.
 
@@ -59,7 +62,13 @@ class ParquetSubgraph(Layer):
             self.name, len(self.part_ids), list(self.columns)
         )
 
-    def __getitem__(self, key):
+    def __call__(self, key):
+
+        # De-stringify the key if this is executed
+        # on a distributed worker
+        if isinstance(key, str):
+            key = make_tuple(key)
+
         try:
             name, i = key
         except ValueError:
@@ -76,8 +85,7 @@ class ParquetSubgraph(Layer):
         if not isinstance(part, list):
             part = [part]
 
-        return (
-            read_parquet_part,
+        return read_parquet_part(
             self.fs,
             self.engine.read_partition,
             self.meta,
@@ -87,18 +95,46 @@ class ParquetSubgraph(Layer):
             toolz.merge(part[0]["kwargs"], self.kwargs or {}),
         )
 
-    def __len__(self):
-        return len(self.part_ids)
+    # def __getitem__(self, key):
+    #     try:
+    #         name, i = key
+    #     except ValueError:
+    #         # too many / few values to unpack
+    #         raise KeyError(key) from None
 
-    def __iter__(self):
-        for i in self.part_ids:
-            yield (self.name, i)
+    #     if name != self.name:
+    #         raise KeyError(key)
 
-    def is_materialized(self):
-        return False  # Never materialized
+    #     if i not in self.part_ids:
+    #         raise KeyError(key)
 
-    def get_dependencies(self, all_hlg_keys):
-        return {k: set() for k in self}
+    #     part = self.parts[i]
+    #     if not isinstance(part, list):
+    #         part = [part]
+
+    #     return (
+    #         read_parquet_part,
+    #         self.fs,
+    #         self.engine.read_partition,
+    #         self.meta,
+    #         [p["piece"] for p in part],
+    #         self.columns,
+    #         self.index,
+    #         toolz.merge(part[0]["kwargs"], self.kwargs or {}),
+    #     )
+
+    # def __len__(self):
+    #     return len(self.part_ids)
+
+    # def __iter__(self):
+    #     for i in self.part_ids:
+    #         yield (self.name, i)
+
+    # def is_materialized(self):
+    #     return False  # Never materialized
+
+    # def get_dependencies(self, all_hlg_keys):
+    #     return {k: set() for k in self}
 
     def cull(self, keys, all_hlg_keys):
         ret = ParquetSubgraph(
@@ -115,7 +151,7 @@ class ParquetSubgraph(Layer):
         return ret, ret.get_dependencies(all_hlg_keys)
 
 
-class BlockwiseParquet(BlockwiseIO):
+class BlockwiseParquet(Blockwise):
     """
     Specialized BlockwiseIO Layer for read_parquet.
 
@@ -148,13 +184,18 @@ class BlockwiseParquet(BlockwiseIO):
             part_ids=self.part_ids,
         )
 
+        # Define the "blockwise" graph
+        dsk = {name: (dsk_io, blockwise_token(0))}
+
         super().__init__(
-            {self.io_name: dsk_io},
             self.name,
             "i",
-            None,
+            dsk,
             [(self.io_name, "i")],
             {self.io_name: (len(self.part_ids),)},
+            io_deps={
+                self.io_name,
+            },
         )
 
     def __repr__(self):

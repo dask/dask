@@ -13,11 +13,11 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
+from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
-from dask.dataframe.io.parquet.core import BlockwiseParquet, ParquetSubgraph
+from dask.dataframe.io.parquet.core import BlockwiseParquet
 from dask.utils import natural_sort_key, parse_bytes
 
 
@@ -2448,20 +2448,6 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
-def test_subgraph_getitem():
-    meta = pd.DataFrame(columns=["a"])
-    subgraph = ParquetSubgraph("name", "pyarrow", "fs", meta, [], [], [0, 1, 2], {})
-
-    with pytest.raises(KeyError):
-        subgraph["foo"]
-
-    with pytest.raises(KeyError):
-        subgraph[("name", -1)]
-
-    with pytest.raises(KeyError):
-        subgraph[("name", 3)]
-
-
 def test_blockwise_parquet_annotations(tmpdir):
     check_engine()
 
@@ -2475,7 +2461,7 @@ def test_blockwise_parquet_annotations(tmpdir):
     # `ddf` should now have ONE Blockwise layer
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 1
-    assert isinstance(list(layers.values())[0], BlockwiseIO)
+    assert isinstance(list(layers.values())[0], Blockwise)
     assert list(layers.values())[0].annotations == {"foo": "bar"}
 
 
@@ -2493,7 +2479,7 @@ def test_optimize_blockwise_parquet(tmpdir):
     # `ddf` should now have ONE Blockwise layer
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 1
-    assert isinstance(list(layers.values())[0], BlockwiseIO)
+    assert isinstance(list(layers.values())[0], Blockwise)
 
     # Check single-layer result
     assert_eq(ddf, expect)
@@ -2512,13 +2498,13 @@ def test_optimize_blockwise_parquet(tmpdir):
     assert all(isinstance(layer, Blockwise) for layer in layers.values())
 
     # Check that `optimize_blockwise` fuses all three
-    # `Blockwise` layers together into a singe `BlockwiseIO` layer
+    # `Blockwise` layers together into a singe `Blockwise` layer
     keys = [(ddf._name, i) for i in range(npartitions)]
     graph = optimize_blockwise(ddf.__dask_graph__(), keys)
     layers = graph.layers
     name = list(layers.keys())[0]
     assert len(layers) == 1
-    assert isinstance(layers[name], BlockwiseIO)
+    assert isinstance(layers[name], Blockwise)
 
     # Check final result
     assert_eq(ddf, expect)
