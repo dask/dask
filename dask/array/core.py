@@ -1690,7 +1690,7 @@ class Array(DaskMethodsMixin):
                             "dask is currently limited to at most one "
                             "dimension's assignment index being a "
                             "1-d array of integers or booleans. "
-                            "Got: {}".format(indices)
+                            f"Got: {indices}"
                         )
 
                     convert_to_positive = True
