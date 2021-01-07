@@ -37,11 +37,11 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ParquetSubgraph:
+class ParquetFunctionWrapper:
     """
-    Subgraph for reading Parquet files.
+    Parquet Function-Wrapper Class
 
-    Enables optimizations (see optimize_read_parquet_getitem).
+    Reads parquet data from disk to produce a partition (given a key).
     """
 
     def __init__(
@@ -58,7 +58,7 @@ class ParquetSubgraph:
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
 
     def __repr__(self):
-        return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
+        return "ParquetFunctionWrapper<name='{}', n_parts={}, columns={}>".format(
             self.name, len(self.part_ids), list(self.columns)
         )
 
@@ -95,67 +95,12 @@ class ParquetSubgraph:
             toolz.merge(part[0]["kwargs"], self.kwargs or {}),
         )
 
-    # def __getitem__(self, key):
-    #     try:
-    #         name, i = key
-    #     except ValueError:
-    #         # too many / few values to unpack
-    #         raise KeyError(key) from None
-
-    #     if name != self.name:
-    #         raise KeyError(key)
-
-    #     if i not in self.part_ids:
-    #         raise KeyError(key)
-
-    #     part = self.parts[i]
-    #     if not isinstance(part, list):
-    #         part = [part]
-
-    #     return (
-    #         read_parquet_part,
-    #         self.fs,
-    #         self.engine.read_partition,
-    #         self.meta,
-    #         [p["piece"] for p in part],
-    #         self.columns,
-    #         self.index,
-    #         toolz.merge(part[0]["kwargs"], self.kwargs or {}),
-    #     )
-
-    # def __len__(self):
-    #     return len(self.part_ids)
-
-    # def __iter__(self):
-    #     for i in self.part_ids:
-    #         yield (self.name, i)
-
-    # def is_materialized(self):
-    #     return False  # Never materialized
-
-    # def get_dependencies(self, all_hlg_keys):
-    #     return {k: set() for k in self}
-
-    def cull(self, keys, all_hlg_keys):
-        ret = ParquetSubgraph(
-            name=self.name,
-            engine=self.engine,
-            fs=self.fs,
-            meta=self.meta,
-            columns=self.columns,
-            index=self.index,
-            parts=self.parts,
-            kwargs=self.kwargs,
-            part_ids={i for i in self.part_ids if (self.name, i) in keys},
-        )
-        return ret, ret.get_dependencies(all_hlg_keys)
-
 
 class BlockwiseParquet(Blockwise):
     """
     Specialized BlockwiseIO Layer for read_parquet.
 
-    Enables HighLevelGraph optimizations.
+    Enables HighLevelGraph optimizations (e.g. optimize_read_parquet_getitem).
     """
 
     def __init__(
@@ -170,9 +115,8 @@ class BlockwiseParquet(Blockwise):
         self.parts = parts
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-
         self.io_name = "blockwise-io-" + name
-        dsk_io = ParquetSubgraph(
+        io_func_wrapper = ParquetFunctionWrapper(
             self.io_name,
             self.engine,
             self.fs,
@@ -185,7 +129,7 @@ class BlockwiseParquet(Blockwise):
         )
 
         # Define the "blockwise" graph
-        dsk = {name: (dsk_io, blockwise_token(0))}
+        dsk = {name: (io_func_wrapper, blockwise_token(0))}
 
         super().__init__(
             self.name,
