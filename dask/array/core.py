@@ -1254,6 +1254,7 @@ class Array(DaskMethodsMixin):
 
     @property
     def _chunks(self):
+        """Non-public chunks property. Allows setting a chunk value."""
         return self.__chunks
 
     @_chunks.setter
@@ -1266,20 +1267,20 @@ class Array(DaskMethodsMixin):
             if v in self.__dict__:
                 del self.__dict__[v]
 
-    def _get_chunks(self):
-        return self.__chunks
+    @property
+    def chunks(self):
+        """Chunks property."""
+        return self._chunks
 
-    def _set_chunks(self, chunks):
-        msg = (
+    @chunks.setter
+    def chunks(self, chunks):
+        raise TypeError(
             "Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
-            "  x.rechunk({})\n\n"
+            f"  x.rechunk({chunks})\n\n"
             "If trying to avoid unknown chunks, use\n"
             "  x.compute_chunk_sizes()"
         )
-        raise TypeError(msg.format(chunks))
-
-    chunks = property(_get_chunks, _set_chunks, "chunks property")
 
     def __len__(self):
         if not self.chunks:
