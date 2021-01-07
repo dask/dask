@@ -1663,9 +1663,7 @@ class Array(DaskMethodsMixin):
             for i, (index, size) in enumerate(zip(parsed_indices, shape)):
                 is_slice = isinstance(index, slice)
                 if is_slice:
-                    # ------------------------------------------------
                     # Index is a slice
-                    # ------------------------------------------------
                     start, stop, step = index.indices(size)
                     if step < 0 and stop == -1:
                         stop = None
@@ -1673,9 +1671,7 @@ class Array(DaskMethodsMixin):
                     index = slice(start, stop, step)
 
                 elif isinstance(index, (int, np.integer)):
-                    # ------------------------------------------------
                     # Index is an integer
-                    # ------------------------------------------------
                     if index < 0:
                         index += size
 
@@ -1695,12 +1691,10 @@ class Array(DaskMethodsMixin):
                     if getattr(
                         getattr(index, "dtype", None), "kind", None
                     ) == "b" or isinstance(index[0], bool):
-                        # --------------------------------------------
                         # Index is a sequence of booleans, so convert
                         # the booleans to non-negative integers. We're
                         # assuming that anything with a dtype
                         # attribute also has a size attribute.
-                        # --------------------------------------------
                         if len(index) != size:
                             raise IndexError(
                                 f"Incorrect number (len(index)) of boolean "
@@ -1906,9 +1900,7 @@ class Array(DaskMethodsMixin):
             """
             array_location = block_info[None]["array-location"]
 
-            # --------------------------------------------------------
             # See if this block overlaps the indices
-            # --------------------------------------------------------
             overlaps = True
             block_indices = []
             subset_shape = []
@@ -1993,10 +1985,8 @@ class Array(DaskMethodsMixin):
                 # the block unchanged.
                 return array
 
-            # --------------------------------------------------------
             # Still here? Then this block overlaps the indices and so
             # needs to have some of its elements assigned.
-            # --------------------------------------------------------
 
             # Initialise the indices of 'value' that define the parts
             # of it which are to be assigned to this block
@@ -2046,9 +2036,7 @@ class Array(DaskMethodsMixin):
 
             return array
 
-        # ------------------------------------------------------------
         # Start of main __setitem__ code
-        # ------------------------------------------------------------
 
         # Keep the "where" method for cases when key is an Array
         if isinstance(key, Array):
@@ -2096,8 +2084,7 @@ class Array(DaskMethodsMixin):
                 f"of shape {tuple(indices_shape)}"
             )
 
-        # ------------------------------------------------------------
-        # define:
+        # Define:
         #
         #  offset: The difference in the relative positions of a
         #          dimension in 'value' and the corresponding
@@ -2122,7 +2109,6 @@ class Array(DaskMethodsMixin):
         # Note that self_common_shape and value_common_shape may be
         # different if there are any size 1 dimensions are being
         # brodacast.
-        # ------------------------------------------------------------
         offset = self.ndim - value.ndim
         if offset >= 0:
             # self has the same number or more dimensions than 'value'
@@ -2146,13 +2132,11 @@ class Array(DaskMethodsMixin):
             self_common_shape = indices_shape
             value_common_shape = value_shape[value_offset:]
 
-        # ------------------------------------------------------------
         # Find out which of the dimensions of 'value' are to be
         # broadcast across self.
         #
         # Note that, as in numpy, it is not allowed for a dimension in
         # 'value' to be larger than a size 1 dimension in self
-        # ------------------------------------------------------------
         base_value_indices = []
         non_broadcast_dimensions = []
         for i, (a, b) in enumerate(zip(self_common_shape, value_common_shape)):
@@ -2167,9 +2151,7 @@ class Array(DaskMethodsMixin):
                     f"across shape {tuple(indices_shape)}"
                 )
 
-        # ------------------------------------------------------------
         # Map the setitem function across all blocks
-        # ------------------------------------------------------------
         y = self.map_blocks(
             partial(setitem, value=value),
             dtype=self.dtype,
