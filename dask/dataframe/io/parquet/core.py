@@ -16,8 +16,6 @@ from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import HighLevelGraph
-
-# from ....highlevelgraph import Layer, HighLevelGraph
 from ....blockwise import Blockwise, blockwise_token
 
 
@@ -129,7 +127,7 @@ class BlockwiseParquet(Blockwise):
         )
 
         # Define the "blockwise" graph
-        dsk = {name: (io_func_wrapper, blockwise_token(0))}
+        dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
 
         super().__init__(
             self.name,

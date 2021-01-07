@@ -1,14 +1,48 @@
 from distutils.version import LooseVersion
+from ast import literal_eval as make_tuple
 
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
-from ...blockwise import Blockwise
+from ...blockwise import Blockwise, blockwise_token
 from ...bytes.core import get_fs_token_paths
 from ...highlevelgraph import HighLevelGraph
 from ...utils import import_required
 
 __all__ = ("read_orc",)
+
+
+class ORCFunctionWrapper:
+    """
+    ORC Function-Wrapper Class
+
+     Reads ORC data from disk to produce a partition (given a key).
+    """
+
+    def __init__(self, name, fs, columns, stripe_map):
+        self.name = name
+        self.fs = fs
+        self.columns = columns
+        self.stripe_map = stripe_map
+
+    def __call__(self, key):
+
+        # De-stringify the key if this is executed
+        # on a distributed worker
+        if isinstance(key, str):
+            key = make_tuple(key)
+
+        try:
+            name, i = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
+
+        if name != self.name:
+            raise KeyError(key)
+
+        path, stripe = self.stripe_map.get(i, (None, None))
+        return _read_orc_stripe(self.fs, path, stripe, self.columns)
 
 
 def _read_orc_stripe(fs, path, stripe, columns=None):
@@ -85,25 +119,29 @@ def read_orc(path, columns=None, storage_options=None):
         columns = list(schema)
     meta = _meta_from_dtypes(columns, schema, [], [])
 
-    # Create IO subgraph
+    # Define the "blockwise" graph
+    N = 0
     output_name = "read-orc-" + tokenize(fs_token, path, columns)
     name = "blockwise-io-" + output_name
-    dsk_io = {}
-    N = 0
+    stripe_map = {}
     for path, n in zip(paths, nstripes_per_file):
         for stripe in range(n):
-            dsk_io[(name, N)] = (_read_orc_stripe, fs, path, stripe, columns)
+            stripe_map[N] = (path, stripe)
             N += 1
+    io_func_wrapper = ORCFunctionWrapper(name, fs, columns, stripe_map)
+    dsk = {output_name: (io_func_wrapper, blockwise_token(0))}
 
     # Create Blockwise layer
-    npartitions = len(dsk_io)
+    npartitions = N
     layer = Blockwise(
-        {name: dsk_io},
         output_name,
         "i",
-        None,
+        dsk,
         [(name, "i")],
         {name: (npartitions,)},
+        io_deps={
+            name,
+        },
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
