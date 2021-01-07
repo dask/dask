@@ -1,10 +1,9 @@
 from distutils.version import LooseVersion
-from ast import literal_eval as make_tuple
 
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
-from ...blockwise import Blockwise, blockwise_token
+from ...blockwise import Blockwise, blockwise_token, ensure_tuple_key
 from ...bytes.core import get_fs_token_paths
 from ...highlevelgraph import HighLevelGraph
 from ...utils import import_required
@@ -27,13 +26,8 @@ class ORCFunctionWrapper:
 
     def __call__(self, key):
 
-        # De-stringify the key if this is executed
-        # on a distributed worker
-        if isinstance(key, str):
-            key = make_tuple(key)
-
         try:
-            name, i = key
+            name, i = ensure_tuple_key(key)
         except ValueError:
             # too many / few values to unpack
             raise KeyError(key) from None

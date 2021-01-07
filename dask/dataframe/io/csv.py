@@ -1,7 +1,6 @@
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
-from ast import literal_eval as make_tuple
 
 try:
     import psutil
@@ -27,7 +26,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from ...blockwise import Blockwise, blockwise_token
+from ...blockwise import Blockwise, blockwise_token, ensure_tuple_key
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -68,13 +67,8 @@ class CSVFunctionWrapper:
 
     def __call__(self, key):
 
-        # De-stringify the key if this is executed
-        # on a distributed worker
-        if isinstance(key, str):
-            key = make_tuple(key)
-
         try:
-            name, i = key
+            name, i = ensure_tuple_key(key)
         except ValueError:
             # too many / few values to unpack
             raise KeyError(key) from None

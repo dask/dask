@@ -1,5 +1,4 @@
 from distutils.version import LooseVersion
-from ast import literal_eval as make_tuple
 import math
 
 import tlz as toolz
@@ -16,7 +15,7 @@ from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import HighLevelGraph
-from ....blockwise import Blockwise, blockwise_token
+from ....blockwise import Blockwise, blockwise_token, ensure_tuple_key
 
 
 try:
@@ -57,13 +56,8 @@ class ParquetFunctionWrapper:
 
     def __call__(self, key):
 
-        # De-stringify the key if this is executed
-        # on a distributed worker
-        if isinstance(key, str):
-            key = make_tuple(key)
-
         try:
-            name, i = key
+            name, i = ensure_tuple_key(key)
         except ValueError:
             # too many / few values to unpack
             raise KeyError(key) from None

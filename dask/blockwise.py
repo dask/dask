@@ -1,5 +1,6 @@
 import itertools
 import warnings
+from ast import literal_eval as make_tuple
 
 import numpy as np
 
@@ -44,6 +45,14 @@ def index_subs(ind, substitution):
 
 def blockwise_token(i, prefix="_"):
     return prefix + "%d" % i
+
+
+def ensure_tuple_key(key):
+    # De-stringify the key if this is executed
+    # on a distributed worker
+    if isinstance(key, str):
+        return make_tuple(key)
+    return tuple(key)
 
 
 def blockwise(
@@ -176,10 +185,10 @@ class Blockwise(Layer):
     annotations: dict (optional)
         Layer annotations
     io_deps: set (optional)
-        Set of "place-holder" collection names that will be generated within
+        Set of "placeholder" collection names that will be generated within
         this Blockwise layer. Since these collections do not actually exist
-        yet, we must refer to this set when dependencies are calculaed (we do
-        not want "placeholder" keys to be treated as real dependencies).
+        outside the layer, any key with a name in this set will be excluded
+        from the external dependencies.
 
     See Also
     --------
@@ -1018,7 +1027,7 @@ def rewrite_blockwise(inputs):
 
             changed = True
 
-            # Update IO-subgraph information
+            # Update IO-dependency information
             io_deps |= inputs[dep].io_deps
 
             # Replace _n with dep name in existing tasks
