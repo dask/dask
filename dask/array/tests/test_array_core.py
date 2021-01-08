@@ -1527,8 +1527,10 @@ def test_map_blocks_optimize_blockwise(func):
     c = b + base[3]
     dsk = c.__dask_graph__()
     optimized = optimize_blockwise(dsk)
-    # The two additions and the map_blocks should be fused together
-    assert len(optimized.layers) == len(dsk.layers) - 2
+
+    # Everything should be fused into a single layer.
+    # If the lambda includes block_info, there will be two layers.
+    assert len(optimized.layers) == len(dsk.layers) - 6
 
 
 def test_repr():
