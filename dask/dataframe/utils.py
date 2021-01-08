@@ -542,7 +542,10 @@ def _nonempty_series(s, idx=None):
     if idx is None:
         idx = _nonempty_index(s.index)
     dtype = s.dtype
-    if is_datetime64tz_dtype(dtype):
+    if len(s) > 0:
+        # use value from meta if provided
+        data = [s.iloc[0]] * 2
+    elif is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
         data = [entry, entry]
     elif is_categorical_dtype(dtype):
