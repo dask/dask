@@ -2031,6 +2031,10 @@ class Array(DaskMethodsMixin):
                 # (e.g. this might be the case if the dask array was
                 # created by da.empty)
                 array = array.copy()
+            elif sys.getrefcount(array) > 2:
+                # Copy the array if it is in use elsewhere, to avoid
+                # corrupting other objects.
+                array = array.copy()
 
             array[tuple(block_indices)] = v
 

@@ -3624,9 +3624,10 @@ def test_setitem_extended_API():
     x[x % 2 == 0] = -8
     x[[4, 3, 1]] = -9
     x[5, ...] = -10
+    x[2:4, 5:1:-2] = -x[:2, 4:1:-2]
     x[:2, :3] = [[1, 2, 3]]
     x[1, 1:7:2] = np.ma.masked
-    # x[2:4, 5:1:-2] = -x[:2, :2]
+    x[0, 1:3] = -x[0, 4:2:-1]
 
     dx[::2, ::-1] = -1
     dx[1::2] = -2
@@ -3637,9 +3638,10 @@ def test_setitem_extended_API():
     dx[dx % 2 == 0] = -8
     dx[[4, 3, 1]] = -9
     dx[5, ...] = -10
+    dx[2:4, 5:1:-2] = -dx[:2, 4:1:-2]
     dx[:2, :3] = [[1, 2, 3]]
     dx[1, 1:7:2] = np.ma.masked
-    # dx[2:4, 5:1:-2] = -dx[:2, :2].copy()
+    dx[0, 1:3] = -dx[0, 4:2:-1]
 
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx))
