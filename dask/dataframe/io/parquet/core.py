@@ -15,7 +15,6 @@ from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import Layer, HighLevelGraph
-from ....blockwise import BlockwiseIO
 
 
 try:
@@ -113,54 +112,6 @@ class ParquetSubgraph(Layer):
             part_ids={i for i in self.part_ids if (self.name, i) in keys},
         )
         return ret, ret.get_dependencies(all_hlg_keys)
-
-
-class BlockwiseParquet(BlockwiseIO):
-    """
-    Specialized BlockwiseIO Layer for read_parquet.
-
-    Enables HighLevelGraph optimizations.
-    """
-
-    def __init__(
-        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
-    ):
-        self.name = name
-        self.engine = engine
-        self.fs = fs
-        self.meta = meta
-        self.columns = columns
-        self.index = index
-        self.parts = parts
-        self.kwargs = kwargs
-        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-
-        self.io_name = "blockwise-io-" + name
-        dsk_io = ParquetSubgraph(
-            self.io_name,
-            self.engine,
-            self.fs,
-            self.meta,
-            self.columns,
-            self.index,
-            self.parts,
-            self.kwargs,
-            part_ids=self.part_ids,
-        )
-
-        super().__init__(
-            {self.io_name: dsk_io},
-            self.name,
-            "i",
-            None,
-            [(self.io_name, "i")],
-            {self.io_name: (len(self.part_ids),)},
-        )
-
-    def __repr__(self):
-        return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
-        )
 
 
 def read_parquet(
@@ -357,7 +308,7 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = BlockwiseParquet(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
 
     # Set the index that was previously treated as a column
     if index_in_columns:
