@@ -431,7 +431,7 @@ def test_getitem_timestamp_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    # TODO starting with pandas 1.2, __getitem__ with an implicit slice
+    # TODO(pandas) starting with pandas 1.2, __getitem__ with an implicit slice
     # is deprecated -> should we deprecate this in dask as well?
     assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
@@ -487,7 +487,7 @@ def test_getitem_period_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    # TODO starting with pandas 1.2, __getitem__ with an implicit slice
+    # TODO(pandas) starting with pandas 1.2, __getitem__ with an implicit slice
     # is deprecated -> should we deprecate this in dask as well?
     if not PANDAS_GT_120:
         assert_eq(df["2011-01-02"], ddf["2011-01-02"])

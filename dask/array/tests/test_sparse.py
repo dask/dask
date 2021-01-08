@@ -40,13 +40,13 @@ functions = [
     pytest.param(
         lambda x: x.std(),
         marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243",
+            reason="fixed in https://github.com/pydata/sparse/pull/243"
         ),
     ),
     pytest.param(
         lambda x: x.var(),
         marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243",
+            reason="fixed in https://github.com/pydata/sparse/pull/243"
         ),
     ),
     pytest.param(lambda x: x.dot(np.arange(x.shape[-1])), marks=numpy_120_xfail),

@@ -496,7 +496,7 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
         and ufunc in ["conj", "square", "negative", "absolute"]
         and isinstance(pandas, pd.DataFrame)
     ):
-        # TODO follow pandas behaviour?
+        # TODO(pandas) follow pandas behaviour?
         # starting with pandas 1.2.0, the ufunc is applied column-wise, and therefore
         # applied on the integer columns separately, overflowing for those columns
         # (instead of being applied on 2D ndarray that was converted to float)

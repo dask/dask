@@ -80,6 +80,8 @@ def test_map_overlap_names():
     assert res4._name != res._name
 
 
+# TODO(pandas) fix Index.is_all_dates deprecation
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 def test_map_overlap_errors():
     # Non-integer
     with pytest.raises(ValueError):
@@ -249,15 +251,17 @@ def test_rolling_repr():
     assert res == "Rolling [window=4,center=False,axis=0]"
 
 
-# TODO fix rolling to be compatible with pandas 1.3.0
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.skipif(PANDAS_GT_130, reason="win_type changed in pandas master")
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
     assert res == "Rolling [window=4000000000,center=False,win_type=freq,axis=0]"
 
 
-# TODO fix rolling to be compatible with pandas 1.3.0
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.skipif(PANDAS_GT_130, reason="win_type changed in pandas master")
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 def test_time_rolling_constructor():
     result = dts.rolling("4s")
     assert result.window == "4s"
@@ -269,8 +273,9 @@ def test_time_rolling_constructor():
     assert result._min_periods == 1
 
 
-# TODO fix rolling to be compatible with pandas 1.3.0
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 @pytest.mark.parametrize(
     "method,args,check_less_precise", rolling_method_args_check_less_precise
 )
@@ -307,8 +312,9 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
-# TODO fix rolling to be compatible with pandas 1.3.0
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
@@ -322,8 +328,9 @@ def test_time_rolling_cov(window):
     assert_eq(prolling.cov(), drolling.cov())
 
 
-# TODO fix rolling to be compatible with pandas 1.3.0
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 @pytest.mark.parametrize(
     "window,N",
     [("1s", 10), ("2s", 10), ("10s", 10), ("10h", 10), ("10s", 100), ("10h", 100)],
@@ -342,8 +349,9 @@ def test_time_rolling_large_window_fixed_chunks(window, N):
     assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
-# TODO fix rolling to be compatible with pandas 1.3.0
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 @pytest.mark.parametrize("window", ["2s", "5s", "20s", "10h"])
 def test_time_rolling_large_window_variable_chunks(window):
     df = pd.DataFrame(
@@ -361,6 +369,8 @@ def test_time_rolling_large_window_variable_chunks(window):
     assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
+@pytest.mark.filterwarnings(r"ignore:Index\.is_all_dates:FutureWarning")
 @pytest.mark.parametrize("before, after", [("6s", "6s"), ("2s", "2s"), ("6s", "2s")])
 def test_time_rolling(before, after):
     window = before
@@ -422,7 +432,7 @@ def test_rolling_numba_engine():
     )
 
 
-@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas<1.0.0")
+@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas>1.0.0")
 def test_rolling_apply_numba_raises():
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)
