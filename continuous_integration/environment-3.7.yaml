@@ -5,7 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7.*
-  - numpy=1.17.*
+  - numpy=1.15.*
   - pandas=0.25.*
   # test dependencies
   - pytest
@@ -19,7 +19,7 @@ dependencies:
   - tiledb-py
   - fsspec>=0.6.0
   - sqlalchemy
-  - pyarrow>=0.14.0,!=2.0.0
+  - pyarrow=0.14.*
   - coverage
   - jsonschema
   # other -- IO
