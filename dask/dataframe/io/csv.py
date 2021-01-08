@@ -135,6 +135,7 @@ class BlockwiseReadCSV(Blockwise):
     ):
         self.name = name
         self.blocks = blocks
+        self.columns = columns
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = CSVFunctionWrapper(
             self.io_name,
