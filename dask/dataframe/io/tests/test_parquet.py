@@ -14,7 +14,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_120, PANDAS_GT_121
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, PANDAS_GT_121
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -171,16 +171,25 @@ write_read_engines_xfail = write_read_engines(
     }
 )
 
-fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
-fp_pandas_xfail = write_read_engines(
-    **{
-        "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
-        "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
-        "xfail_fastparquet_fastparquet": fp_pandas_msg,
-        "xfail_fastparquet_pyarrow-dataset": fp_pandas_msg,
-        "xfail_fastparquet_pyarrow-legacy": fp_pandas_msg,
-    }
-)
+if not PANDAS_GT_110:
+    fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
+    fp_pandas_xfail = write_read_engines(
+        **{
+            "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
+            "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
+            "xfail_fastparquet_fastparquet": fp_pandas_msg,
+            "xfail_fastparquet_pyarrow-dataset": fp_pandas_msg,
+            "xfail_fastparquet_pyarrow-legacy": fp_pandas_msg,
+        }
+    )
+else:
+    fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
+    fp_pandas_xfail = write_read_engines(
+        **{
+            "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
+            "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
+        }
+    )
 
 
 @write_read_engines()
