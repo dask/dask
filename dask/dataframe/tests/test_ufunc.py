@@ -218,7 +218,7 @@ _UFUNCS_2ARG = [
     "hypot",
     "copysign",
     "nextafter",
-    "ldexp",
+    pytest.param("ldexp", marks=[pytest.mark.filterwarnings("ignore::RuntimeWarning")]),
     pytest.param("fmod", marks=[pytest.mark.filterwarnings("ignore::RuntimeWarning")]),
     "logical_and",
     "logical_or",
