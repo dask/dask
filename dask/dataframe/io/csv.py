@@ -26,7 +26,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from ...blockwise import Blockwise, blockwise_token, ensure_tuple_key
+from ...blockwise import Blockwise, blockwise_token, destringify_tuple
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -68,7 +68,7 @@ class CSVFunctionWrapper:
     def __call__(self, key):
 
         try:
-            name, i = ensure_tuple_key(key)
+            name, i = destringify_tuple(key)
         except ValueError:
             # too many / few values to unpack
             raise KeyError(key) from None

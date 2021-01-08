@@ -3,7 +3,7 @@ from distutils.version import LooseVersion
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
-from ...blockwise import Blockwise, blockwise_token, ensure_tuple_key
+from ...blockwise import Blockwise, blockwise_token, destringify_tuple
 from ...bytes.core import get_fs_token_paths
 from ...highlevelgraph import HighLevelGraph
 from ...utils import import_required
@@ -27,7 +27,7 @@ class ORCFunctionWrapper:
     def __call__(self, key):
 
         try:
-            name, i = ensure_tuple_key(key)
+            name, i = destringify_tuple(key)
         except ValueError:
             # too many / few values to unpack
             raise KeyError(key) from None

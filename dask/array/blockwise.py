@@ -11,7 +11,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..blockwise import (
     Blockwise,
     blockwise as core_blockwise,
-    ensure_tuple_key,
+    destringify_tuple,
     blockwise_token,
 )
 
@@ -52,7 +52,7 @@ class CreateArrayWrapper:
         Execute the underlying creation function for a given key.
         """
         try:
-            name, *idx = ensure_tuple_key(key)
+            name, *idx = destringify_tuple(key)
         except ValueError:
             # too many / few values to unpack
             raise KeyError(key) from None

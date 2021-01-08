@@ -46,12 +46,12 @@ def blockwise_token(i, prefix="_"):
     return prefix + "%d" % i
 
 
-def ensure_tuple_key(key):
+def destringify_tuple(key):
     # De-stringify the key if this is executed
     # on a distributed worker
     if isinstance(key, str):
         return make_tuple(key)
-    return tuple(key)
+    return key
 
 
 def blockwise(
@@ -229,7 +229,7 @@ class Blockwise(Layer):
         else:
             self.concatenate = concatenate
         self.new_axes = new_axes or {}
-        self.io_deps = io_deps or set()
+        self.io_deps = io_deps or {}
 
     @property
     def dims(self):
@@ -672,7 +672,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     deserializing = kwargs.pop("deserializing", False)
     func_future_args = kwargs.pop("func_future_args", None)
     return_key_deps = kwargs.pop("return_key_deps", False)
-    io_deps = kwargs.pop("io_deps", set())
+    io_deps = kwargs.pop("io_deps", {})
     if return_key_deps:
         key_deps = {}
 
@@ -733,7 +733,13 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                     tups = (arg,) + arg_coords
                     if arg not in io_deps:
                         deps.add(tups)
-                args.append(tups)
+                # print("---arg---",arg,"\n")
+                # print("---io_deps---",io_deps,"\n")
+                if io_deps and arg in io_deps:
+                    print("---io_deps[arg][tups]---", io_deps[arg][tups], "\n")
+                    args.append(io_deps[arg][tups])
+                else:
+                    args.append(tups)
         out_key = (output,) + out_coords
 
         if deserializing:
@@ -1080,9 +1086,9 @@ def rewrite_blockwise(inputs):
     numblocks = {k: v for k, v in numblocks.items() if v is None or k in indices_check}
 
     # Update IO-dependency information
-    io_deps = set()
+    io_deps = {}
     for v in inputs.values():
-        io_deps |= v.io_deps
+        io_deps.update(v.io_deps)
 
     return Blockwise(
         root,
