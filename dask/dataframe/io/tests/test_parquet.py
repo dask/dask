@@ -2461,6 +2461,23 @@ def test_subgraph_getitem():
         subgraph[("name", 3)]
 
 
+def test_blockwise_parquet_annotations(tmpdir):
+    check_engine()
+
+    df = pd.DataFrame({"a": np.arange(40, dtype=np.int32)})
+    expect = dd.from_pandas(df, npartitions=2)
+    expect.to_parquet(str(tmpdir))
+
+    with dask.annotate(foo="bar"):
+        ddf = dd.read_parquet(str(tmpdir))
+
+    # `ddf` should now have ONE Blockwise layer
+    layers = ddf.__dask_graph__().layers
+    assert len(layers) == 1
+    assert isinstance(list(layers.values())[0], ParquetSubgraph)
+    assert list(layers.values())[0].annotations == {"foo": "bar"}
+
+
 def test_split_row_groups_pyarrow(tmpdir):
     """Test split_row_groups read_parquet kwarg"""
     check_pyarrow()

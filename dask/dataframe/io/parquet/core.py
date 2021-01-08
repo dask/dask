@@ -41,8 +41,19 @@ class ParquetSubgraph(Layer):
     """
 
     def __init__(
-        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
+        self,
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        part_ids=None,
+        annotations=None,
     ):
+        super().__init__(annotations=annotations)
         self.name = name
         self.engine = engine
         self.fs = fs
