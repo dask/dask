@@ -14,7 +14,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
+from dask.dataframe._compat import PANDAS_GT_120, PANDAS_GT_121
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -159,7 +159,7 @@ def write_read_engines(**kwargs):
 
 
 pandas_110_xfail = pytest.mark.xfail(
-    PANDAS_GT_110 and not PANDAS_GT_121,
+    PANDAS_GT_120 and not PANDAS_GT_121,
     reason="https://github.com/pandas-dev/pandas/issues/38642",
 )
 
