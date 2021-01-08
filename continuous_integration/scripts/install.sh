@@ -16,8 +16,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         pandas
 
-    conda update -y -c arrow-nightlies pyarrow
-
     python -m pip install \
         --upgrade \
         locket \
