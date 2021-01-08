@@ -16,9 +16,9 @@ from ..blockwise import (
 )
 
 
-class CreateArraySubgraph:
+class CreateArrayWrapper:
     """
-    Subgraph for numpy array creation utilities
+    Function wrapper for numpy array creation utilities
 
     Parameters
     ----------
@@ -49,9 +49,7 @@ class CreateArraySubgraph:
 
     def __call__(self, key):
         """
-        Get a task for a given key.
-
-        The tasks are constructed on demand.
+        Execute the underlying creation function for a given key.
         """
         try:
             name, *idx = ensure_tuple_key(key)
@@ -105,7 +103,7 @@ class BlockwiseCreateArray(Blockwise):
         self.chunks = chunks
         self.io_name = "blockwise-create-" + name
 
-        io_func_wrapper = CreateArraySubgraph(
+        io_func_wrapper = CreateArrayWrapper(
             self.io_name,
             func,
             shape,
