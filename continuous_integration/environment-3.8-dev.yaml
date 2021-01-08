@@ -7,7 +7,7 @@ dependencies:
   - python=3.8.*
   # For the dependencies. These will be re-installed later.
   - numpy
-  - pandas
+  - pandas=1.0.*
   # test dependencies
   - pytest
   - pytest-xdist
@@ -19,7 +19,7 @@ dependencies:
   - zarr
   - tiledb-py
   - sqlalchemy
-  - pyarrow>=0.14.0,!=2.0.0
+  - pyarrow>=0.14.0
   - jsonschema
   # other -- IO
   - bcolz
@@ -49,10 +49,7 @@ dependencies:
   - toolz
   - python-snappy
   - cachey
-  # TODO: python-graphviz 0.16 is broken on windows so we're pinning to
-  # 0.15 as a temporary workaround. Remove pinning once
-  # https://github.com/conda-forge/python-graphviz-feedstock/issues/42 is resolved
-  - python-graphviz=0.15
+  - python-graphviz
   - python-xxhash
   - mmh3
   - pip

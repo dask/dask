@@ -11,6 +11,9 @@ if [[ ${UPSTREAM_DEV} ]]; then
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         pandas
+
+    conda update -y -c arrow-nightlies pyarrow
+
     python -m pip install \
         --upgrade \
         locket \

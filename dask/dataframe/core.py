@@ -3037,10 +3037,20 @@ Dask Name: {name}, {task} tasks""".format(
         return {None: 0, "index": 0}.get(axis, axis)
 
     @derived_from(pd.Series)
-    def groupby(self, by=None, **kwargs):
+    def groupby(
+        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+    ):
         from dask.dataframe.groupby import SeriesGroupBy
 
-        return SeriesGroupBy(self, by=by, **kwargs)
+        return SeriesGroupBy(
+            self,
+            by=by,
+            group_keys=group_keys,
+            sort=sort,
+            observed=observed,
+            dropna=dropna,
+            **kwargs,
+        )
 
     @derived_from(pd.Series)
     def count(self, split_every=False):
@@ -3916,10 +3926,20 @@ class DataFrame(_Frame):
         )
 
     @derived_from(pd.DataFrame)
-    def groupby(self, by=None, **kwargs):
+    def groupby(
+        self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
+    ):
         from dask.dataframe.groupby import DataFrameGroupBy
 
-        return DataFrameGroupBy(self, by=by, **kwargs)
+        return DataFrameGroupBy(
+            self,
+            by=by,
+            group_keys=group_keys,
+            sort=sort,
+            observed=observed,
+            dropna=dropna,
+            **kwargs,
+        )
 
     @wraps(categorize)
     def categorize(self, columns=None, index=None, split_every=None, **kwargs):

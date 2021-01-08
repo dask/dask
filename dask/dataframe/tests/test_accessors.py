@@ -233,7 +233,9 @@ def test_str_accessor_noexpand():
 
 
 def test_str_accessor_expand():
-    s = pd.Series(["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"])
+    s = pd.Series(
+        ["a b c d", "aa bb cc dd", "aaa bbb ccc dddd"], index=["row1", "row2", "row3"]
+    )
     ds = dd.from_pandas(s, npartitions=2)
 
     for n in [1, 2, 3]:

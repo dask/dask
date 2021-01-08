@@ -1,7 +1,5 @@
 numpydoc
-# TODO: Remove sphinx pinning once sphinx==3.4.1 is released
-# See https://github.com/dask/dask/issues/7001
-sphinx==3.3.1
+sphinx
 dask-sphinx-theme>=1.3.5
 sphinx-click
 toolz
