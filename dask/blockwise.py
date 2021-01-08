@@ -719,7 +719,10 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
         args = []
         for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, argpairs):
             if ind is None:
-                args.append(arg)
+                if deserializing:
+                    args.append(stringify_collection_keys(arg))
+                else:
+                    args.append(arg)
             else:
                 arg_coords = tuple(coords[c] for c in cmap)
                 if axes:
@@ -733,18 +736,21 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                     tups = (arg,) + arg_coords
                     if arg not in io_deps:
                         deps.add(tups)
-                # print("---arg---",arg,"\n")
-                # print("---io_deps---",io_deps,"\n")
+                # Replace "fake" IO keys with "real" args
                 if io_deps and arg in io_deps:
-                    print("---io_deps[arg][tups]---", io_deps[arg][tups], "\n")
+                    # We don't want to stringify keys for args
+                    # we are replacing here
                     args.append(io_deps[arg][tups])
                 else:
-                    args.append(tups)
+                    if deserializing:
+                        args.append(stringify_collection_keys(tups))
+                    else:
+                        args.append(tups)
         out_key = (output,) + out_coords
 
         if deserializing:
             deps.update(func_future_args)
-            args = stringify_collection_keys(args) + list(func_future_args)
+            args += list(func_future_args)
             if kwargs:
                 val = {
                     "function": dumps_function(apply),

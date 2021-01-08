@@ -201,6 +201,8 @@ def test_local(tmpdir, write_engine, read_engine):
     assert len(df2.divisions) > 1
 
     out = df2.compute(scheduler="sync").reset_index()
+    # import pdb; pdb.set_trace()
+    # pass
 
     for column in df.columns:
         assert (data[column] == out[column]).all()

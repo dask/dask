@@ -15,7 +15,7 @@ from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import HighLevelGraph
-from ....blockwise import Blockwise, blockwise_token, destringify_tuple
+from ....blockwise import Blockwise, blockwise_token
 
 
 try:
@@ -49,9 +49,7 @@ class ParquetFunctionWrapper:
         meta,
         columns,
         index,
-        part_kwargs,
         kwargs,
-        # self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
     ):
         self.name = name
         self.read_partition = engine.read_partition
@@ -59,40 +57,21 @@ class ParquetFunctionWrapper:
         self.meta = meta
         self.columns = columns
         self.index = index
-        # self.parts = parts
-        # self.part_kwargs = self.part_kwargs
-        # self.kwargs = kwargs
-        # self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-        self.kwargs = toolz.merge(part_kwargs, kwargs or {})
+        self.kwargs = kwargs
 
     def __call__(self, part):
 
-        # try:
-        #     name, i = ensure_tuple_key(key)
-        # except ValueError:
-        #     # too many / few values to unpack
-        #     raise KeyError(key) from None
-
-        # if name != self.name:
-        #     raise KeyError(key)
-
-        # if i not in self.part_ids:
-        #     raise KeyError(key)
-
-        # part = self.parts[i]
         if not isinstance(part, list):
             part = [part]
-
-        print("---part---", [destringify_tuple(p) for p in part], "\n")
 
         return read_parquet_part(
             self.fs,
             self.read_partition,
             self.meta,
-            [destringify_tuple(p) for p in part],
+            [p["piece"] for p in part],
             self.columns,
             self.index,
-            self.kwargs,
+            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
         )
 
 
@@ -123,13 +102,11 @@ class BlockwiseParquet(Blockwise):
             self.meta,
             self.columns,
             self.index,
-            self.parts[self.part_ids[0]]["kwargs"],
             self.kwargs,
-            # part_ids=self.part_ids,
         )
 
         # Define mapping between key index and "part"
-        io_arg_map = {(self.io_name, i): self.parts[i]["piece"] for i in self.part_ids}
+        io_arg_map = {(self.io_name, i): self.parts[i] for i in self.part_ids}
 
         # Define the "blockwise" graph
         dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
