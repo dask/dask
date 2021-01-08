@@ -7,6 +7,10 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
+    # update pyarrow first with conda, otherwise this would downgrade the
+    # nightly numpy/pandas again
+    conda update -y -c arrow-nightlies pyarrow
+
     conda uninstall --force pandas
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
