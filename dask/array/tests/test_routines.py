@@ -1914,13 +1914,16 @@ def test_tril_triu_non_square_arrays():
     assert_eq(da.tril(dA), np.tril(A))
 
 
-@pytest.mark.parametrize("n", [3, 3, 3, 4])
-@pytest.mark.parametrize("k", [0, 1, -1, 0])
-@pytest.mark.parametrize("m", [3, 3, 3, 5])
-def test_tril_triu_indices(n, k, m):
+@pytest.mark.parametrize(
+    "n, k, m, chunks",
+    [(3, 0, 3, "auto"), (3, 1, 3, "auto"), (3, -1, 3, "auto"), (5, 0, 5, 1)],
+)
+def test_tril_triu_indices(n, k, m, chunks):
     assert_eq(
-        da.tril_indices(n=n, k=k, m=m)[0].compute(), np.tril_indices(n=n, k=k, m=m)[0]
+        da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
+        np.tril_indices(n=n, k=k, m=m)[0],
     )
     assert_eq(
-        da.triu_indices(n=n, k=k, m=m)[0].compute(), np.triu_indices(n=n, k=k, m=m)[0]
+        da.triu_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
+        np.triu_indices(n=n, k=k, m=m)[0],
     )
