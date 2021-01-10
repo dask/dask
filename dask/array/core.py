@@ -2129,7 +2129,7 @@ class Array(DaskMethodsMixin):
                 # self if the extra trailing dimensions all have size
                 # 1.
                 raise ValueError(
-                    f"Can't broadcast shape {value_shape} across " f"shape {self_shape}"
+                    f"Can't broadcast shape {value_shape} across shape {self_shape}"
                 )
 
             offset = 0
