@@ -2076,6 +2076,11 @@ class Array(DaskMethodsMixin):
             # Convert masked to a scalar masked array
             value = np.ma.array(0, mask=True)
 
+        if value is self:
+            # Need to copy value if it is the same as self. This
+            # allows x[...] = x and x[...] = x[...], etc.
+            value = value.copy()
+
         value = asanyarray(value)
         value_shape = value.shape
 
