@@ -366,7 +366,6 @@ Store DataFrames
    to_hdf
    to_records
    to_sql
-   to_bag
    to_json
 
 Convert DataFrames
@@ -374,6 +373,7 @@ Convert DataFrames
 
 .. autosummary::
 
+   DataFrame.to_bag
    DataFrame.to_dask_array
    DataFrame.to_delayed
 

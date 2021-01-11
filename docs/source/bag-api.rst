@@ -52,6 +52,8 @@ Create Bags
    from_url
    read_avro
    range
+   dask.dataframe.DataFrame.to_bag
+   dask.dataframe.Series.to_bag
 
 Top-level functions
 -------------------
