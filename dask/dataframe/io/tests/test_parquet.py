@@ -14,7 +14,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, BlockwiseIO, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_120, PANDAS_GT_121
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -158,11 +158,6 @@ def write_read_engines(**kwargs):
     )
 
 
-pandas_110_xfail = pytest.mark.xfail(
-    PANDAS_GT_120 and not PANDAS_GT_121,
-    reason="https://github.com/pandas-dev/pandas/issues/38642",
-)
-
 pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
 write_read_engines_xfail = write_read_engines(
     **{
@@ -171,7 +166,15 @@ write_read_engines_xfail = write_read_engines(
     }
 )
 
-if not PANDAS_GT_110:
+if (
+    fastparquet
+    and fastparquet.__version__ < LooseVersion("0.5")
+    and PANDAS_GT_110
+    and not PANDAS_GT_121
+):
+    # a regression in pandas 1.1.x / 1.2.0 caused a failure in writing partitioned
+    # categorical columns when using fastparquet 0.4.x, but this was (accidentally)
+    # fixed in fastparquet 0.5.0
     fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
     fp_pandas_xfail = write_read_engines(
         **{
@@ -582,7 +585,6 @@ def test_roundtrip_from_pandas(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
-@pandas_110_xfail
 def test_categorical(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
     df = pd.DataFrame({"x": ["a", "b", "c"] * 100}, dtype="category")
