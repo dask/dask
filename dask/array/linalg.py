@@ -1393,9 +1393,9 @@ def lstsq(a, b):
         Singular values of `a`.
     """
     q, r = qr(a)
-    x = solve_triangular(r, q.T.dot(b))
+    x = solve_triangular(r, q.T.conj().dot(b))
     residuals = b - a.dot(x)
-    residuals = (residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
+    residuals = abs(residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
 
     token = tokenize(a, b)
 
@@ -1410,11 +1410,11 @@ def lstsq(a, b):
 
     # singular
     sname = "lstsq-singular-" + token
-    rt = r.T
+    rt = r.T.conj()
     sdsk = {
         (sname, 0): (
             _sort_decreasing,
-            (np.sqrt, (np.linalg.eigvals, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
+            (np.sqrt, (np.linalg.eigvalsh, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
         )
     }
     graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt, r])
@@ -1423,7 +1423,7 @@ def lstsq(a, b):
         np.array([0, 1], dtype=b.dtype),
         rcond=-1,
     )
-    meta = meta_from_array(r, 1, dtype=ss.dtype)
+    meta = meta_from_array(residuals, 1, dtype=ss.dtype)
     s = Array(graph, sname, shape=(r.shape[0],), chunks=r.shape[0], meta=meta)
 
     return x, residuals, rank, s
