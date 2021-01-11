@@ -26,7 +26,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from ...blockwise import Blockwise, blockwise_token, destringify_tuple
+from ...blockwise import Blockwise, blockwise_token
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -43,61 +43,37 @@ class CSVFunctionWrapper:
         self,
         name,
         reader,
-        blocks,
-        is_first,
-        head,
         header,
-        kwargs,
         dtypes,
         columns,
         enforce,
-        path,
+        read_block_func,
     ):
         self.name = name
         self.reader = reader
-        self.blocks = blocks
-        self.is_first = is_first
-        self.head = head  # example pandas DF for metadata
         self.header = header  # prepend to all blocks
-        self.kwargs = kwargs
         self.dtypes = dtypes
         self.columns = columns
         self.enforce = enforce
-        self.colname, self.paths = path or (None, None)
+        self.read_block_func = read_block_func
 
-    def __call__(self, key):
+    def __call__(self, args):
 
-        try:
-            name, i = destringify_tuple(key)
-        except ValueError:
-            # too many / few values to unpack
-            raise KeyError(key) from None
+        # Unpack args.
+        # These args can vary between partitions
+        # and could not be embedded in the object.
+        block = args["block"]
+        path_info = args["path_info"]
+        write_header = args["write_header"]
+        rest_kwargs = args["rest_kwargs"]
 
-        if name != self.name:
-            raise KeyError(key)
-
-        if i < 0 or i >= len(self.blocks):
-            raise KeyError(key)
-
-        block = self.blocks[i]
-        if self.paths is not None:
-            path_info = (
-                self.colname,
-                self.paths[i],
-                sorted(list(self.head[self.colname].cat.categories)),
-            )
-        else:
-            path_info = None
-
-        write_header = False
-        rest_kwargs = self.kwargs.copy()
-        if not self.is_first[i]:
-            write_header = True
-            rest_kwargs.pop("skiprows", None)
+        # # Convert block tuple to bytes
+        # if isinstance(block, tuple) and block and callable(block[0]):
+        #     block = block[0](*block[1:])
 
         # Convert block tuple to bytes
-        if isinstance(block, tuple) and block and callable(block[0]):
-            block = block[0](*block[1:])
+        if self.read_block_func:
+            block = self.read_block_func(*block)
 
         return pandas_read_text(
             self.reader,
@@ -123,6 +99,7 @@ class BlockwiseReadCSV(Blockwise):
         self,
         name,
         reader,
+        read_block_func,
         blocks,
         is_first,
         head,
@@ -140,17 +117,46 @@ class BlockwiseReadCSV(Blockwise):
         io_func_wrapper = CSVFunctionWrapper(
             self.io_name,
             reader,
-            blocks,
-            is_first,
-            head,
             header,
-            kwargs,
             dtypes,
             columns,
             enforce,
-            path,
+            read_block_func,
         )
 
+        colname, paths = path or (None, None)
+
+        # Define mapping between key index and args
+        io_arg_map = {}
+        for i in range(len(self.blocks)):
+            block = self.blocks[i]
+            if isinstance(block, tuple) and block and callable(block[0]):
+                block = block[1:]
+            if paths is not None:
+                path_info = (
+                    colname,
+                    paths[i],
+                    sorted(list(head[colname].cat.categories)),
+                )
+            else:
+                path_info = None
+
+            write_header = False
+            rest_kwargs = kwargs.copy()
+            if not is_first[i]:
+                write_header = True
+                rest_kwargs.pop("skiprows", None)
+
+            print("----block---", block, "\n")
+
+            io_arg_map[(self.io_name, i)] = {
+                "block": block,
+                "path_info": path_info,
+                "write_header": write_header,
+                "rest_kwargs": rest_kwargs,
+            }
+
+        # Define the "blockwise" graph
         dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
 
         super().__init__(
@@ -159,9 +165,7 @@ class BlockwiseReadCSV(Blockwise):
             dsk,
             [(self.io_name, "i")],
             {self.io_name: (len(self.blocks),)},
-            io_deps={
-                self.io_name,
-            },
+            io_deps={self.io_name: io_arg_map},
         )
 
     def __repr__(self):
@@ -407,9 +411,14 @@ def text_blocks_to_pandas(
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
+    read_block_func = None
+    if blocks and isinstance(blocks[0], tuple) and blocks[0] and callable(blocks[0][0]):
+        read_block_func = blocks[0][0]
+
     subgraph = BlockwiseReadCSV(
         name,
         reader,
+        read_block_func,
         blocks,
         is_first,
         head,
