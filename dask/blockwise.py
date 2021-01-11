@@ -1,5 +1,4 @@
 import itertools
-from ast import literal_eval as make_tuple
 
 import numpy as np
 
@@ -44,14 +43,6 @@ def index_subs(ind, substitution):
 
 def blockwise_token(i, prefix="_"):
     return prefix + "%d" % i
-
-
-def destringify_tuple(key):
-    # De-stringify the key if this is executed
-    # on a distributed worker
-    if isinstance(key, str):
-        return make_tuple(key)
-    return key
 
 
 def blockwise(

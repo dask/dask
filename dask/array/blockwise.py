@@ -1,9 +1,8 @@
 import numbers
+import itertools
 import warnings
 
 import tlz as toolz
-
-from functools import reduce
 
 from .. import base, utils
 from ..delayed import unpack_collections
@@ -11,64 +10,8 @@ from ..highlevelgraph import HighLevelGraph
 from ..blockwise import (
     Blockwise,
     blockwise as core_blockwise,
-    destringify_tuple,
     blockwise_token,
 )
-
-
-class CreateArrayWrapper:
-    """
-    Function wrapper for numpy array creation utilities
-
-    Parameters
-    ----------
-    name: string
-        The output name.
-    func : callable
-        Function to apply to populate individual blocks. This function should take
-        an iterable containing the dimensions of the given block.
-    shape: iterable
-        Iterable containing the overall shape of the array.
-    chunks: iterable
-        Iterable containing the chunk sizes along each dimension of array.
-    """
-
-    def __init__(
-        self,
-        name,
-        func,
-        shape,
-        chunks,
-    ):
-        self.name = name
-        self.func = func
-        self.shape = shape
-        self.chunks = chunks
-        # Compute total number of blocks
-        self._len = reduce(lambda acc, x: len(x) * acc, chunks, 1)
-
-    def __call__(self, key):
-        """
-        Execute the underlying creation function for a given key.
-        """
-        try:
-            name, *idx = destringify_tuple(key)
-        except ValueError:
-            # too many / few values to unpack
-            raise KeyError(key) from None
-
-        if name != self.name:
-            raise KeyError(key)
-
-        # Check for invalid indices
-        if any(i < 0 or i >= len(c) for i, c in zip(idx, self.chunks)):
-            raise KeyError(key)
-
-        # Get this chunk shape
-        ndim = len(self.chunks)
-        chunk = tuple(self.chunks[i][idx[i]] for i in range(ndim))
-
-        return self.func(chunk)
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -98,30 +41,33 @@ class BlockwiseCreateArray(Blockwise):
         chunks,
     ):
         self.name = name
-        self.func = func
-        self.shape = shape
-        self.chunks = chunks
-        self.io_name = "blockwise-create-" + name
+        io_name = "blockwise-create-" + name
 
-        io_func_wrapper = CreateArrayWrapper(
-            self.io_name,
-            func,
-            shape,
-            chunks,
-        )
-        dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
+        # Define "blockwise" graph
+        dsk = {self.name: (func, blockwise_token(0))}
+
+        # Define mapping between keys and chunks
+        chunk_key_map = {}
+        for idx in itertools.product(*[range(len(c)) for c in chunks]):
+            ndim = len(chunks)
+            chunk = tuple(chunks[i][idx[i]] for i in range(ndim))
+            chunk_key_map[(io_name, *idx)] = chunk
 
         out_ind = tuple(range(len(shape)))
-        nchunks = tuple(len(chunk) for chunk in self.chunks)
+        self.nchunks = tuple(len(chunk) for chunk in chunks)
         super().__init__(
             self.name,
             out_ind,
             dsk,
-            [(self.io_name, out_ind)],
-            {self.io_name: nchunks},
-            io_deps={
-                self.io_name,
-            },
+            [(io_name, out_ind)],
+            {io_name: self.nchunks},
+            io_deps={io_name: chunk_key_map},
+        )
+
+    def __repr__(self):
+        return "BlockwiseCreateArray<name='{}', nchunks={}>".format(
+            self.name,
+            self.nchunks,
         )
 
 

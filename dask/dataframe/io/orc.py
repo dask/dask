@@ -3,7 +3,7 @@ from distutils.version import LooseVersion
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
-from ...blockwise import Blockwise, blockwise_token, destringify_tuple
+from ...blockwise import Blockwise, blockwise_token
 from ...bytes.core import get_fs_token_paths
 from ...highlevelgraph import HighLevelGraph
 from ...utils import import_required
@@ -15,27 +15,16 @@ class ORCFunctionWrapper:
     """
     ORC Function-Wrapper Class
 
-     Reads ORC data from disk to produce a partition (given a key).
+    Reads ORC data from disk to produce a partition (given a key).
     """
 
-    def __init__(self, name, fs, columns, stripe_map):
+    def __init__(self, name, fs, columns):
         self.name = name
         self.fs = fs
         self.columns = columns
-        self.stripe_map = stripe_map
 
-    def __call__(self, key):
-
-        try:
-            name, i = destringify_tuple(key)
-        except ValueError:
-            # too many / few values to unpack
-            raise KeyError(key) from None
-
-        if name != self.name:
-            raise KeyError(key)
-
-        path, stripe = self.stripe_map.get(i, (None, None))
+    def __call__(self, stripe_info):
+        path, stripe = stripe_info
         return _read_orc_stripe(self.fs, path, stripe, self.columns)
 
 
@@ -120,9 +109,9 @@ def read_orc(path, columns=None, storage_options=None):
     stripe_map = {}
     for path, n in zip(paths, nstripes_per_file):
         for stripe in range(n):
-            stripe_map[N] = (path, stripe)
+            stripe_map[(name, N)] = (path, stripe)
             N += 1
-    io_func_wrapper = ORCFunctionWrapper(name, fs, columns, stripe_map)
+    io_func_wrapper = ORCFunctionWrapper(name, fs, columns)
     dsk = {output_name: (io_func_wrapper, blockwise_token(0))}
 
     # Create Blockwise layer
@@ -133,9 +122,7 @@ def read_orc(path, columns=None, storage_options=None):
         dsk,
         [(name, "i")],
         {name: (npartitions,)},
-        io_deps={
-            name,
-        },
+        io_deps={name: stripe_map},
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
