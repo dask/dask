@@ -6,7 +6,7 @@ dependencies:
   # required dependencies
   - python=3.8.*
   - numpy=1.17.*
-  - pandas=1.1.*
+  - pandas=1.2.*
   # test dependencies
   - pytest
   - pytest-xdist
