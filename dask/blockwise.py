@@ -174,11 +174,17 @@ class Blockwise(Layer):
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
-    io_deps: set (optional)
-        Set of "placeholder" collection names that will be generated within
-        this Blockwise layer. Since these collections do not actually exist
-        outside the layer, any key with a name in this set will be excluded
-        from the external dependencies.
+    io_deps: dict of dict (optional)
+        Dictionary containing the mapping between "place-holder" collection
+        keys and the arguments needed to generate those collections internally.
+        The outer-most dict keys are the names of place-holder collections
+        being generated within this Blockwise layer (e.g. "read-parquet").
+        Since these collections do not actually exist outside this layer, any
+        key with a name in this set will be excluded from the external
+        dependencies.  The outer-most elements of io_deps correspond to the
+        mapping between place-holder collection keys, e.g ("read-parquet", 0),
+        and any chunk/partition-specific arguments needed by the underlying
+        IO function.  See ``make_blockwise_graph`` for usage.
 
     See Also
     --------
@@ -727,7 +733,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                     tups = (arg,) + arg_coords
                     if arg not in io_deps:
                         deps.add(tups)
-                # Replace "fake" IO keys with "real" args
+                # Replace "place-holder" IO keys with "real" args
                 if io_deps and arg in io_deps:
                     # We don't want to stringify keys for args
                     # we are replacing here
