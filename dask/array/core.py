@@ -1582,48 +1582,52 @@ class Array(DaskMethodsMixin):
         def parse_indices(shape, indices):
             """Reformat the indices.
 
-            The aim of this is is convert the indices to a
-            standardised form so that it is easier a) to check them
-            for validity, and b) to ascertain which chunks are touched
-            by the indices.
+             The aim of this is is convert the indices to a
+             standardised form so that it is easier a) to check them
+             for validity, and b) to ascertain which chunks are touched
+             by the indices.
 
-            Note that indices which are decreasing (such as as
-            ``slice(7, 3, -1)`` and ``[6, 2, 1]``) are recast as
-            increasing indices (``slice(4, 8, 1)`` and ``[1, 2, 6]``
-            respectively) to facilitate finding which chunks are
-            touched by the indices. The make sure that the correct
-            values are still assigned, the value is (effectively)
-            reversed along the appropriate dimensions at compute time.
+             Note that indices which are decreasing (such as as
+             ``slice(7, 3, -1)`` and ``[6, 2, 1]``) are recast as
+             increasing indices (``slice(4, 8, 1)`` and ``[1, 2, 6]``
+             respectively) to facilitate finding which chunks are
+             touched by the indices. The make sure that the correct
+             values are still assigned, the value is (effectively)
+             reversed along the appropriate dimensions at compute time.
 
-            Parameters
-            ----------
-            shape : sequence of ints
-                The shape of the global array.
-            indices : tuple
-                The given indices for assignment.
+             Parameters
+             ----------
+             shape : sequence of ints
+                 The shape of the global array.
+             indices : tuple
+                 The given indices for assignment.
 
-            Returns
-            -------
-            parsed_indices : list
-                The reformated indices that are equivalent to the
-                input indices.
-            mirror : list
-                The dimensions that need to be reversed in the
-                assigment value, prior to assignment.
+             Returns
+             -------
+             parsed_indices : list
+                 The reformated indices that are equivalent to the
+                 input indices.
+            indices_shape : list
+                 The shape of the parsed indices. E.g. indices of
+                 ``(slice(0,2), 5, [4,2,1)`` will have shape ``[2,3]``.
+             mirror : list
+                 The dimensions that need to be reversed in the
+                 assigment value, prior to assignment.
 
-            Examples
-            --------
-            >>> parse_indices((8,), (slice(1, -1),))
-            (slice(1, 7, 1)] [])
-            >>> parse_indices((8,), ([1, 2, 4, 6],))
-            (array([1, 2, 4, 6]), [])
-            >>> parse_indices((8,), (slice(-1, 2, -1),))
-            (slice(3, 8, 1)] [0])
-            >>> parse_indices((8,), ([6, 4, 2, 1],))
-            (array([1, 2, 4, 6]), [0])
+             Examples
+             --------
+             >>> parse_indices((8,), (slice(1, -1),))
+             (slice(1, 7, 1)] [6], [])
+             >>> parse_indices((8,), ([1, 2, 4, 6],))
+             (array([1, 2, 4, 6]), [4], [])
+             >>> parse_indices((8,), (slice(-1, 2, -1),))
+             (slice(3, 8, 1), [5], [0])
+             >>> parse_indices((8,), ([6, 4, 2, 1],))
+             (array([1, 2, 4, 6]), [4], [0])
 
             """
             parsed_indices = []
+            indices_shape = []
             mirror = []
 
             if not isinstance(indices, tuple):
@@ -1656,7 +1660,7 @@ class Array(DaskMethodsMixin):
                 parsed_indices.extend([slice(None)] * (ndim - len_parsed_indices))
 
             if not ndim and parsed_indices:
-                raise IndexError("Scalar array can only be indexed with () or Ellipsis")
+                raise IndexError("too many indices for array")
 
             n_lists = 0
 
@@ -1672,11 +1676,7 @@ class Array(DaskMethodsMixin):
 
                 elif isinstance(index, (int, np.integer)):
                     # Index is an integer
-                    if index < 0:
-                        index += size
-
-                    index = slice(index, index + 1, 1)
-                    is_slice = True
+                    index = int(index)
                 else:
                     n_lists += 1
                     if n_lists > 1:
@@ -1799,53 +1799,26 @@ class Array(DaskMethodsMixin):
 
                 parsed_indices[i] = index
 
-            return parsed_indices, mirror
+            # Find the shape of the indices. E.g. indices of
+            # (slice(0,2), 5, [4,2,1) will have shape [2, 3]. Note
+            # that integer indices are not inclded in the shape.
+            for index in parsed_indices:
+                if isinstance(index, slice):
+                    # Index is a slice object
+                    start, stop, step = index.indices(size)
+                    div, mod = divmod(stop - start, step)
+                    if div <= 0:
+                        indices_shape.append(0)
+                    else:
+                        if mod != 0:
+                            div += 1
 
-        def size_of_index(index, size):
-            """Return the number of elements resulting in applying an index to a dimension of given size.
+                        indices_shape.append(div)
+                elif not isinstance(index, int):
+                    # Index is a sequence of integers
+                    indices_shape.append(len(index))
 
-            Parameters
-            ----------
-            index : slice or sequence of int
-                The index being applied to the sequence.
-            size : int, optional
-                The size of the dimension being indexed (ignored if
-                index is sequence of int).
-
-            Returns
-            -------
-            size : int
-                The length of the sequence resulting from applying the
-                index. May be zero.
-
-            Examples
-            --------
-            >>> size_of_index(slice(None, None, -2), 10)
-            5
-            >>> size_of_index([1, 4, 9], 10)
-            3
-            >>> size_of_index(slice(2, 2), 10)
-            0
-            >>> size_of_index(slice(4, 2), 10)
-            0
-            >>> size_of_index(slice(2, 4, -1), 10)
-            0
-
-            """
-            if isinstance(index, slice):
-                # Index is a slice object
-                start, stop, step = index.indices(size)
-                div, mod = divmod(stop - start, step)
-                if div <= 0:
-                    return 0
-
-                if mod != 0:
-                    div += 1
-
-                return div
-
-            # Index is a sequence of integers
-            return len(index)
+            return parsed_indices, indices_shape, mirror
 
         def setitem(
             array,
@@ -1909,6 +1882,7 @@ class Array(DaskMethodsMixin):
             for index, (loc0, loc1), size in zip(
                 indices, array_location, block_info[None]["chunk-shape"]
             ):
+                integer_index = isinstance(index, int)
                 if isinstance(index, slice):
                     # Index is a slice
                     stop = size
@@ -1941,6 +1915,14 @@ class Array(DaskMethodsMixin):
                     n_preceeding, rem = divmod(pre[1] - pre[0], step)
                     if rem:
                         n_preceeding += 1
+                elif integer_index:
+                    # Index is an integer
+                    if not loc0 <= index < loc1:
+                        # This block does not overlap the index
+                        overlaps = False
+                        break
+
+                    block_index = index - loc0
                 else:
                     # Index is a list of integers
                     block_index = [i - loc0 for i in index if loc0 <= i < loc1]
@@ -1977,8 +1959,9 @@ class Array(DaskMethodsMixin):
                     n_preceeding = sum(1 for i in index if i < loc0)
 
                 block_indices.append(block_index)
-                subset_shape.append(block_index_size)
-                preceeding_size.append(n_preceeding)
+                if not integer_index:
+                    preceeding_size.append(n_preceeding)
+                    subset_shape.append(block_index_size)
 
             if not overlaps:
                 # This block does not overlap the indices, so return
@@ -2063,13 +2046,9 @@ class Array(DaskMethodsMixin):
 
         # Still here? Then parse the indices from 'key' and apply the
         # assignment via map_blocks
-        self_shape = self.shape
 
         # Reformat input indices
-        indices, mirror = parse_indices(self_shape, key)
-
-        # Find the shape implied by the indices
-        indices_shape = list(map(size_of_index, indices, self_shape))
+        indices, indices_shape, mirror = parse_indices(self.shape, key)
 
         # Cast 'value' as a dask array
         if value is np.ma.masked:
@@ -2118,7 +2097,7 @@ class Array(DaskMethodsMixin):
         # Note that self_common_shape and value_common_shape may be
         # different if there are any size 1 dimensions are being
         # brodacast.
-        offset = self.ndim - value.ndim
+        offset = len(indices_shape) - value.ndim
         if offset >= 0:
             # self has the same number or more dimensions than 'value'
             self_common_shape = indices_shape[offset:]
@@ -2130,11 +2109,12 @@ class Array(DaskMethodsMixin):
             # 'value' has more dimensions than self
             value_offset = -offset
             if value_shape[:value_offset] != [1] * value_offset:
-                # Can only 'allow' value to have more dimensions then
-                # self if the extra trailing dimensions all have size
+                # Can only allow 'value' to have more dimensions then
+                # self if the extra leading dimensions all have size
                 # 1.
                 raise ValueError(
-                    f"Can't broadcast shape {value_shape} across shape {self_shape}"
+                    "could not broadcast input array from shape"
+                    f"{value_shape} into shape {tuple(indices_shape)}"
                 )
 
             offset = 0
