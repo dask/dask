@@ -697,7 +697,8 @@ def test_append_with_partition(tmpdir, engine):
     out = dd.read_parquet(
         tmp, engine=engine, index="index", gather_statistics=True
     ).compute()
-    out["lon"] = out.lon.astype("int")  # just to pass assert
+    # convert categorical to plain int just to pass assert
+    out["lon"] = out.lon.astype(df0.lon.dtype)
     # sort required since partitioning breaks index order
     assert_eq(
         out.sort_values("value"), pd.concat([df0, df1])[out.columns], check_index=False
