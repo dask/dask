@@ -3620,7 +3620,6 @@ def test_setitem_extended_API():
     x[::2, ::-1] = -1
     x[1::2] = -2
     x[:, [3, 5, 6]] = -3
-    x[[True, False, False, False, False, False], 2] = -4
     x[2:4, x[0] > 3] = -5
     x[2, x[0] < -2] = -7
     x[x % 2 == 0] = -8
@@ -3636,13 +3635,21 @@ def test_setitem_extended_API():
     x[0] = x[-1]
     x[0, :] = x[-2, :]
     x[:, 1] = x[:, -3]
+    x[[True, False, False, False, True, False], 2] = -4
+    x[3, [True, True, False, True, True, False, True, False, True, True]] = -5
+    x[
+        4,
+        da.from_array(
+            [False, False, True, True, False, False, True, False, False, True]
+        ),
+    ] = -55
+    x[np.array([False, False, True, True, False, False]), 5:7] = -66
 
     dx[:, 2] = range(6)
     dx[3, :] = range(10)
     dx[::2, ::-1] = -1
     dx[1::2] = -2
     dx[:, [3, 5, 6]] = -3
-    dx[[True, False, False, False, False, False], 2] = -4
     dx[2:4, dx[0] > 3] = -5
     dx[2, dx[0] < -2] = -7
     dx[dx % 2 == 0] = -8
@@ -3657,6 +3664,15 @@ def test_setitem_extended_API():
     dx[...] = dx[...]
     dx[0, :] = dx[-2, :]
     dx[:, 1] = dx[:, -3]
+    dx[[True, False, False, False, True, False], 2] = -4
+    dx[3, [True, True, False, True, True, False, True, False, True, True]] = -5
+    dx[
+        4,
+        da.from_array(
+            [False, False, True, True, False, False, True, False, False, True]
+        ),
+    ] = -55
+    dx[np.array([False, False, True, True, False, False]), 5:7] = -66
 
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx))
@@ -3681,27 +3697,76 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         x[x > 1] = x
 
+    # Shape mismatch
+    with pytest.raises(ValueError):
+        x[[True, True, False, False], 0] = [2, 3, 4]
+
+    with pytest.raises(ValueError):
+        x[[True, True, True, False], 0] = [2, 3]
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    x[0, da.from_array([True, False, False, True])] = [2, 3, 4]
+    with pytest.raises(ValueError):
+        x.compute()
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    x[0, da.from_array([True, True, False, False])] = [2, 3, 4]
+    with pytest.raises(ValueError):
+        x.compute()
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    x[da.from_array([True, True, True, False]), 0] = [2, 3]
+    with pytest.raises(ValueError):
+        x.compute()
+
+    x = da.ones((4, 4), chunks=(2, 2))
+
     # Too many indices
     with pytest.raises(IndexError):
         x[:, :, :] = 2
 
+    # 2-d boolean indexing a single dimension
+    with pytest.raises(IndexError):
+        x[[[True, True, False, False]], 0] = 5
+
+    # Too many/not enough booleans
+    with pytest.raises(IndexError):
+        x[[True, True, False]] = 5
+
+    with pytest.raises(IndexError):
+        x[[False, True, True, True, False]] = 5
+
+    # 2-d indexing a single dimension
+    with pytest.raises(IndexError):
+        x[[[1, 2, 3]], 0] = 5
+
     # Multiple 1-d boolean/integer arrays
     with pytest.raises(NotImplementedError):
-        x[[1, 2], [2, 3]] = x
+        x[[1, 2], [2, 3]] = 6
 
     with pytest.raises(NotImplementedError):
-        x[[True, True, False, False], [2, 3]] = x
+        x[[True, True, False, False], [2, 3]] = 5
 
     with pytest.raises(NotImplementedError):
-        x[[True, True, False, False], [False, True, False, False]] = x
+        x[[True, True, False, False], [False, True, False, False]] = 7
+
+    # scalar boolean indexing
+    with pytest.raises(NotImplementedError):
+        x[True] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[np.array(True)] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[0, da.from_array(True)] = 5
 
     # Not strictly monotonic
     with pytest.raises(NotImplementedError):
-        x[[1, 3, 2]] = x
+        x[[1, 3, 2]] = 7
 
     # Repeated index
     with pytest.raises(NotImplementedError):
-        x[[1, 3, 3]] = x
+        x[[1, 3, 3]] = 7
 
     # Scalar arrays
     y = da.from_array(np.array(1))
