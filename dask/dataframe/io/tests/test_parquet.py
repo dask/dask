@@ -668,17 +668,17 @@ def test_append_with_partition(tmpdir, engine):
     tmp = str(tmpdir)
     df0 = pd.DataFrame(
         {
-            "lat": np.arange(0, 10),
-            "lon": np.arange(10, 20),
-            "value": np.arange(100, 110),
+            "lat": np.arange(0, 10, dtype="int64"),
+            "lon": np.arange(10, 20, dtype="int64"),
+            "value": np.arange(100, 110, dtype="int64"),
         }
     )
     df0.index.name = "index"
     df1 = pd.DataFrame(
         {
-            "lat": np.arange(10, 20),
-            "lon": np.arange(10, 20),
-            "value": np.arange(120, 130),
+            "lat": np.arange(10, 20, dtype="int64"),
+            "lon": np.arange(10, 20, dtype="int64"),
+            "value": np.arange(120, 130, dtype="int64"),
         }
     )
     df1.index.name = "index"
@@ -698,7 +698,7 @@ def test_append_with_partition(tmpdir, engine):
         tmp, engine=engine, index="index", gather_statistics=True
     ).compute()
     # convert categorical to plain int just to pass assert
-    out["lon"] = out.lon.astype(df0.lon.dtype)
+    out["lon"] = out.lon.astype("int64")
     # sort required since partitioning breaks index order
     assert_eq(
         out.sort_values("value"), pd.concat([df0, df1])[out.columns], check_index=False
