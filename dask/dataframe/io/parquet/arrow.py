@@ -922,9 +922,21 @@ class ArrowDatasetEngine(Engine):
         # Use pyarrow.dataset API
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
-        default_partitioning = pa_ds.HivePartitioning.discover(
-            max_partition_dictionary_size=-1
+
+        # Discover Partitioning - Note that we need to avoid creating
+        # this factory until it is actually used.  The `partitioning`
+        # object can be overridden if a "partitioning" kwarg is passed
+        # in, containing a `dict` with a required "obj" argument and
+        # optional "arg" and "kwarg" elements.  Note that the "obj"
+        # value must support the "discover" attribute.
+        partitioning = dataset_kwargs.get(
+            "partitioning",
+            {
+                "obj": pa_ds.HivePartitioning,
+                "kwargs": {"max_partition_dictionary_size": -1},
+            },
         )
+
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # Use _analyze_paths to avoid relative-path
@@ -938,8 +950,9 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=fs,
-                    partitioning=dataset_kwargs.get(
-                        "partitioning", default_partitioning
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 if gather_statistics is None:
@@ -953,8 +966,9 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=fs,
-                    partitioning=dataset_kwargs.get(
-                        "partitioning", default_partitioning
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 if gather_statistics is None:
@@ -970,9 +984,10 @@ class ArrowDatasetEngine(Engine):
                 paths,
                 filesystem=fs,
                 format="parquet",
-                partitioning=dataset_kwargs.get(
-                    "partitioning", default_partitioning
-                ),  # Assume "hive" by default
+                partitioning=partitioning["obj"].discover(
+                    *partitioning.get("args", []),
+                    **partitioning.get("kwargs", {}),
+                ),
             )
         schema = ds.schema
         base = ""
@@ -1011,6 +1026,12 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             read_from_paths,
         )
+
+        # Store dict needed to produce a `partitioning`
+        # factory at IO time. This object is needed to
+        # reproduce a `fragment` (for row-wise filtering)
+        # on the worker.
+        partition_info["partitioning"] = partitioning
 
         return (
             schema,
@@ -1420,6 +1441,7 @@ class ArrowDatasetEngine(Engine):
                     stats.append(stat)
 
         kwargs_engine = {
+            "partitioning": partition_info["partitioning"],
             "partitions": partition_obj,
             "categories": categories,
             "filters": filters,
@@ -1510,7 +1532,28 @@ class ArrowDatasetEngine(Engine):
 
         This method is overridden in `ArrowLegacyEngine`.
         """
+        partitioning = kwargs.pop("partitioning", None)
+        # if partitioning and filters
         if isinstance(path_or_frag, pa_ds.ParquetFileFragment):
+
+            # Test that we can get the same fragment from the path
+            if partitioning:
+
+                path = path_or_frag.path
+                ds = pa_ds.dataset(
+                    path,
+                    filesystem=fs,
+                    format="parquet",
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
+                    ),
+                )
+                path_or_frags = list(ds.get_fragments())
+
+                assert len(path_or_frags) == 1
+                path_or_frag = path_or_frags[0]
+
             cols = []
             for name in columns:
                 if name is None:
