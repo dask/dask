@@ -38,7 +38,8 @@ class ParquetFunctionWrapper:
     """
     Parquet Function-Wrapper Class
 
-    Reads parquet data from disk to produce a partition (given a key).
+    Reads parquet data from disk to produce a partition
+    (given a `part` argument).
     """
 
     def __init__(
@@ -50,7 +51,7 @@ class ParquetFunctionWrapper:
         columns,
         index,
         kwargs,
-        kwargs_bcast,
+        kwargs_engine,
     ):
         self.name = name
         self.read_partition = engine.read_partition
@@ -58,14 +59,27 @@ class ParquetFunctionWrapper:
         self.meta = meta
         self.columns = columns
         self.index = index
+
+        # `kwargs` = user-defined kwargs to be passed
+        #            indetically for all partitions.
         self.kwargs = kwargs
-        self.kwargs_bcast = kwargs_bcast.copy()
+
+        # `kwargs_engine` = kwargs set by engine to be
+        #                   passed identically for all
+        #                   partitions.
+        self.kwargs_engine = kwargs_engine
 
     def __call__(self, part):
         if isinstance(part, bytes):
+            # If `part` is a byte string, we need to
+            # deserialize first.  This will be necessary in
+            # distributed execution if the elements could not
+            # be serialized with msgpack.
+            # (See: `Engine.serialize_io_deps`)
             from distributed.worker import _deserialize
 
-            part = _deserialize(part)[0]
+            part = _deserialize(args=part)[1]
+
         if not isinstance(part, list):
             part = [part]
 
@@ -76,8 +90,11 @@ class ParquetFunctionWrapper:
             [p["piece"] for p in part],
             self.columns,
             self.index,
+            # Merge all relevant kwarg structures
             toolz.merge(
-                self.kwargs_bcast, part[0].get("kwargs", {}), self.kwargs or {}
+                self.kwargs_engine,
+                part[0].get("kwargs", {}),
+                self.kwargs or {},
             ),
         )
 
@@ -100,7 +117,7 @@ class BlockwiseParquet(Blockwise):
         parts,
         kwargs,
         part_ids=None,
-        kwargs_bcast=None,
+        kwargs_engine=None,
     ):
         self.name = name
         self.engine = engine
@@ -111,7 +128,7 @@ class BlockwiseParquet(Blockwise):
         self.parts = parts
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-        self.kwargs_bcast = kwargs_bcast or {}
+        self.kwargs_engine = kwargs_engine or {}
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = ParquetFunctionWrapper(
             self.io_name,
@@ -121,12 +138,8 @@ class BlockwiseParquet(Blockwise):
             self.columns,
             self.index,
             self.kwargs,
-            self.kwargs_bcast,
+            self.kwargs_engine,
         )
-
-        # Determine whether io_Deps will need to be serialized.
-        # This is only used during distributed execution.
-        self.serialize_io_deps = self.engine in ()
 
         # Define mapping between key index and "part"
         io_arg_map = {(self.io_name, i): self.parts[i] for i in self.part_ids}
@@ -144,9 +157,11 @@ class BlockwiseParquet(Blockwise):
         )
 
     def __dask_distributed_pack_io_deps__(self):
-        # Some engines may have complex-enough objects in
-        # each element of `parts` to require something more
-        # than msgpack.
+        # Some engines may contain complex objects that
+        # cannot be serialized with msgpack. To be safe,
+        # we use pickle by default, but this behavior
+        # can be overridden to skip serialization (see
+        # `FastParquetEngine.serialize_io_deps`).
         return self.engine.serialize_io_deps(self.io_deps)
 
     def __repr__(self):
@@ -336,9 +351,11 @@ def read_parquet(
         **kwargs,
     )
 
-    # Handle backwards compatibility in `read_metadata` return
+    # Handle backwards compatibility if `read_metadata`
+    # does not return `kwargs_engine` (these kwargs are set
+    # by the engine, and passed for all partitions)
     meta, statistics, parts, index = read_metadata_result[:4]
-    kwargs_bcast = read_metadata_result[4] if len(read_metadata_result) > 4 else {}
+    kwargs_engine = read_metadata_result[4] if len(read_metadata_result) > 4 else {}
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -354,7 +371,15 @@ def read_parquet(
         meta.index.name = None
 
     subgraph = BlockwiseParquet(
-        name, engine, fs, meta, columns, index, parts, kwargs, kwargs_bcast=kwargs_bcast
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        kwargs_engine=kwargs_engine,
     )
 
     # Set the index that was previously treated as a column
