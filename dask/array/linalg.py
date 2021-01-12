@@ -1350,6 +1350,10 @@ def _cholesky(a):
     return lower, upper
 
 
+def _reverse(x):
+    return x[::-1]
+
+
 def lstsq(a, b):
     """
     Return the least-squares solution to a linear matrix equation using
@@ -1408,7 +1412,7 @@ def lstsq(a, b):
     rt = r.T.conj()
     sdsk = {
         (sname, 0): (
-            lambda x: x[::-1],
+            _reverse,
             (np.sqrt, (np.linalg.eigvalsh, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
         )
     }
