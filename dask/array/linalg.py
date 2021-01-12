@@ -1350,11 +1350,6 @@ def _cholesky(a):
     return lower, upper
 
 
-def _sort_decreasing(x):
-    x[::-1].sort()
-    return x
-
-
 def lstsq(a, b):
     """
     Return the least-squares solution to a linear matrix equation using
@@ -1413,17 +1408,12 @@ def lstsq(a, b):
     rt = r.T.conj()
     sdsk = {
         (sname, 0): (
-            _sort_decreasing,
+            lambda x: x[::-1],
             (np.sqrt, (np.linalg.eigvalsh, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
         )
     }
     graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt, r])
-    _, _, _, ss = np.linalg.lstsq(
-        np.array([[1, 0], [1, 2]], dtype=a.dtype),
-        np.array([0, 1], dtype=b.dtype),
-        rcond=-1,
-    )
-    meta = meta_from_array(residuals, 1, dtype=ss.dtype)
+    meta = meta_from_array(residuals, 1)
     s = Array(graph, sname, shape=(r.shape[0],), chunks=r.shape[0], meta=meta)
 
     return x, residuals, rank, s
