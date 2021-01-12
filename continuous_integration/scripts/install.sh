@@ -6,6 +6,9 @@ set -xe
 # make things harder for contributors that don't have a C++ compiler
 # python -m pip install --no-deps cityhash
 
+# TEMP install pyarrow nightly for all envs
+conda update -y -c arrow-nightlies pyarrow
+
 if [[ ${UPSTREAM_DEV} ]]; then
     # update pyarrow first with conda, otherwise this would downgrade the
     # nightly numpy/pandas again
@@ -27,6 +30,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/distributed \
         git+https://github.com/zarr-developers/zarr-python
 fi
+
 
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
