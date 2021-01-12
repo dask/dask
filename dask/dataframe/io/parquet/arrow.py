@@ -514,7 +514,7 @@ class ArrowDatasetEngine(Engine):
 
         # Finally, construct our list of `parts`
         # (and a corresponding list of statistics)
-        parts, stats = cls._construct_parts(
+        parts, stats, kwargs_bcast = cls._construct_parts(
             fs,
             metadata,
             schema,
@@ -528,7 +528,7 @@ class ArrowDatasetEngine(Engine):
             read_from_paths,
         )
 
-        return (meta, stats, parts, index)
+        return (meta, stats, parts, index, kwargs_bcast)
 
     @classmethod
     def read_partition(
@@ -1147,12 +1147,10 @@ class ArrowDatasetEngine(Engine):
             parts = []
             stats = []
             for full_path in metadata:
-                part = {
-                    "piece": (full_path, None, partition_keys.get(full_path, None)),
-                    "kwargs": {"partitions": partition_obj, "categories": categories},
-                }
+                part = {"piece": (full_path, None, partition_keys.get(full_path, None))}
                 parts.append(part)
-            return parts, stats
+            kwargs_bcast = {"partitions": partition_obj, "categories": categories}
+            return parts, stats, kwargs_bcast
 
         # Use final metadata info to update our options for
         # `parts`/`stats` construnction
@@ -1385,12 +1383,6 @@ class ArrowDatasetEngine(Engine):
                             rg_list,
                             pkeys,
                         ),
-                        "kwargs": {
-                            "partitions": partition_obj,
-                            "categories": categories,
-                            "filters": filters,
-                            "schema": schema,
-                        },
                     }
                     parts.append(part)
                     if gather_statistics:
@@ -1416,12 +1408,6 @@ class ArrowDatasetEngine(Engine):
                         row_groups,
                         pkeys,
                     ),
-                    "kwargs": {
-                        "partitions": partition_obj,
-                        "categories": categories,
-                        "filters": filters,
-                        "schema": schema,
-                    },
                 }
                 parts.append(part)
                 if gather_statistics:
@@ -1433,7 +1419,14 @@ class ArrowDatasetEngine(Engine):
                     )
                     stats.append(stat)
 
-        return parts, stats
+        kwargs_bcast = {
+            "partitions": partition_obj,
+            "categories": categories,
+            "filters": filters,
+            "schema": schema,
+        }
+
+        return parts, stats, kwargs_bcast
 
     @classmethod
     def _aggregate_stats(
@@ -1910,15 +1903,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     pkeys = partition_keys.get(full_path, None)
                     if partition_obj and pkeys is None:
                         continue  # This partition was filtered
-                    part = {
-                        "piece": (full_path, rg_list, pkeys),
-                        "kwargs": {
-                            "partitions": partition_obj,
-                            "categories": categories,
-                            "filters": filters,
-                            "schema": schema,
-                        },
-                    }
+                    part = {"piece": (full_path, rg_list, pkeys)}
                     parts.append(part)
                     if gather_statistics:
                         stat = cls._aggregate_stats(
@@ -1935,15 +1920,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                 pkeys = partition_keys.get(full_path, None)
                 if partition_obj and pkeys is None:
                     continue  # This partition was filtered
-                part = {
-                    "piece": (full_path, None, pkeys),
-                    "kwargs": {
-                        "partitions": partition_obj,
-                        "categories": categories,
-                        "filters": filters,
-                        "schema": schema,
-                    },
-                }
+                part = {"piece": (full_path, None, pkeys)}
                 parts.append(part)
                 if gather_statistics:
                     stat = cls._aggregate_stats(
@@ -1954,7 +1931,13 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     )
                     stats.append(stat)
 
-        return parts, stats
+        kwargs_bcast = {
+            "partitions": partition_obj,
+            "categories": categories,
+            "filters": filters,
+        }
+
+        return parts, stats, kwargs_bcast
 
     @classmethod
     def _read_table(

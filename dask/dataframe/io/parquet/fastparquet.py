@@ -433,7 +433,7 @@ class FastParquetEngine(Engine):
             pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
             part_item = {
                 "piece": piece,
-                "kwargs": {"pf": pf_piece, "categories": categories_dict or categories},
+                "kwargs": {"pf": pf_piece},
             }
             parts.append(part_item)
 
@@ -441,7 +441,10 @@ class FastParquetEngine(Engine):
         if index is False and None in meta.columns:
             meta.drop(columns=[None], inplace=True)
 
-        return (meta, stats, parts, index)
+        # Include kwargs that are identical for all partitions
+        kwargs_bcast = {"categories": categories_dict or categories}
+
+        return (meta, stats, parts, index, kwargs_bcast)
 
     @classmethod
     def read_partition(
@@ -652,3 +655,8 @@ class FastParquetEngine(Engine):
         # if appending, could skip this, but would need to check existence
         fn = fs.sep.join([path, "_common_metadata"])
         fastparquet.writer.write_common_metadata(fn, _meta, open_with=fs.open)
+
+    @classmethod
+    def serialize_io_deps(cls, io_deps):
+        # No need for serialization in fastparquet engine
+        return io_deps

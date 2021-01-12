@@ -121,7 +121,15 @@ def optimize_read_parquet_getitem(dsk, keys):
             columns = list(meta.columns)
 
         new = BlockwiseParquet(
-            name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
+            name,
+            old.engine,
+            old.fs,
+            meta,
+            columns,
+            old.index,
+            old.parts,
+            old.kwargs,
+            kwargs_bcast=old.kwargs_bcast,
         )
         layers[name] = new
         if name != old.name:

@@ -3026,6 +3026,7 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         engine="pyarrow",
         filters=[("b", "==", "a")] if test_filter else None,
     )
+    read_df.compute(scheduler="synchronous")
 
     if test_filter:
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())

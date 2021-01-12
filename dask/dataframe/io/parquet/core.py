@@ -50,6 +50,7 @@ class ParquetFunctionWrapper:
         columns,
         index,
         kwargs,
+        kwargs_bcast,
     ):
         self.name = name
         self.read_partition = engine.read_partition
@@ -58,9 +59,13 @@ class ParquetFunctionWrapper:
         self.columns = columns
         self.index = index
         self.kwargs = kwargs
+        self.kwargs_bcast = kwargs_bcast.copy()
 
     def __call__(self, part):
+        if isinstance(part, bytes):
+            from distributed.worker import _deserialize
 
+            part = _deserialize(part)[0]
         if not isinstance(part, list):
             part = [part]
 
@@ -71,7 +76,9 @@ class ParquetFunctionWrapper:
             [p["piece"] for p in part],
             self.columns,
             self.index,
-            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
+            toolz.merge(
+                self.kwargs_bcast, part[0].get("kwargs", {}), self.kwargs or {}
+            ),
         )
 
 
@@ -83,7 +90,17 @@ class BlockwiseParquet(Blockwise):
     """
 
     def __init__(
-        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
+        self,
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        part_ids=None,
+        kwargs_bcast=None,
     ):
         self.name = name
         self.engine = engine
@@ -94,6 +111,7 @@ class BlockwiseParquet(Blockwise):
         self.parts = parts
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
+        self.kwargs_bcast = kwargs_bcast or {}
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = ParquetFunctionWrapper(
             self.io_name,
@@ -103,7 +121,12 @@ class BlockwiseParquet(Blockwise):
             self.columns,
             self.index,
             self.kwargs,
+            self.kwargs_bcast,
         )
+
+        # Determine whether io_Deps will need to be serialized.
+        # This is only used during distributed execution.
+        self.serialize_io_deps = self.engine in ()
 
         # Define mapping between key index and "part"
         io_arg_map = {(self.io_name, i): self.parts[i] for i in self.part_ids}
@@ -119,6 +142,12 @@ class BlockwiseParquet(Blockwise):
             {self.io_name: (len(self.part_ids),)},
             io_deps={self.io_name: io_arg_map},
         )
+
+    def __dask_distributed_pack_io_deps__(self):
+        # Some engines may have complex-enough objects in
+        # each element of `parts` to require something more
+        # than msgpack.
+        return self.engine.serialize_io_deps(self.io_deps)
 
     def __repr__(self):
         return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
@@ -294,7 +323,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts, index = engine.read_metadata(
+    read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -306,6 +335,10 @@ def read_parquet(
         engine=engine,
         **kwargs,
     )
+
+    # Handle backwards compatibility in `read_metadata` return
+    meta, statistics, parts, index = read_metadata_result[:4]
+    kwargs_bcast = read_metadata_result[4] if len(read_metadata_result) > 4 else {}
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -320,7 +353,9 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = BlockwiseParquet(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = BlockwiseParquet(
+        name, engine, fs, meta, columns, index, parts, kwargs, kwargs_bcast=kwargs_bcast
+    )
 
     # Set the index that was previously treated as a column
     if index_in_columns:

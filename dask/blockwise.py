@@ -331,6 +331,12 @@ class Blockwise(Layer):
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
 
+        # Serialize io_deps if necessary
+        if hasattr(self, "__dask_distributed_pack_io_deps__"):
+            io_deps = self.__dask_distributed_pack_io_deps__()
+        else:
+            io_deps = self.io_deps
+
         ret = {
             "output": self.output,
             "output_indices": self.output_indices,
@@ -344,7 +350,7 @@ class Blockwise(Layer):
             "annotations": self.pack_annotations(),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
-            "io_deps": self.io_deps,
+            "io_deps": io_deps,
         }
 
         return ret
