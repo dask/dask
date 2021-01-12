@@ -442,9 +442,9 @@ class FastParquetEngine(Engine):
             meta.drop(columns=[None], inplace=True)
 
         # Include kwargs that are identical for all partitions
-        kwargs_bcast = {"categories": categories_dict or categories}
+        kwargs_engine = {"categories": categories_dict or categories}
 
-        return (meta, stats, parts, index, kwargs_bcast)
+        return (meta, stats, parts, index, kwargs_engine)
 
     @classmethod
     def read_partition(

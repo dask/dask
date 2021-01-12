@@ -129,7 +129,7 @@ def optimize_read_parquet_getitem(dsk, keys):
             old.index,
             old.parts,
             old.kwargs,
-            kwargs_bcast=old.kwargs_bcast,
+            kwargs_engine=old.kwargs_engine,
         )
         layers[name] = new
         if name != old.name:

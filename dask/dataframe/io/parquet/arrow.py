@@ -514,7 +514,7 @@ class ArrowDatasetEngine(Engine):
 
         # Finally, construct our list of `parts`
         # (and a corresponding list of statistics)
-        parts, stats, kwargs_bcast = cls._construct_parts(
+        parts, stats, kwargs_engine = cls._construct_parts(
             fs,
             metadata,
             schema,
@@ -528,7 +528,7 @@ class ArrowDatasetEngine(Engine):
             read_from_paths,
         )
 
-        return (meta, stats, parts, index, kwargs_bcast)
+        return (meta, stats, parts, index, kwargs_engine)
 
     @classmethod
     def read_partition(
@@ -1149,8 +1149,8 @@ class ArrowDatasetEngine(Engine):
             for full_path in metadata:
                 part = {"piece": (full_path, None, partition_keys.get(full_path, None))}
                 parts.append(part)
-            kwargs_bcast = {"partitions": partition_obj, "categories": categories}
-            return parts, stats, kwargs_bcast
+            kwargs_engine = {"partitions": partition_obj, "categories": categories}
+            return parts, stats, kwargs_engine
 
         # Use final metadata info to update our options for
         # `parts`/`stats` construnction
@@ -1419,14 +1419,14 @@ class ArrowDatasetEngine(Engine):
                     )
                     stats.append(stat)
 
-        kwargs_bcast = {
+        kwargs_engine = {
             "partitions": partition_obj,
             "categories": categories,
             "filters": filters,
             "schema": schema,
         }
 
-        return parts, stats, kwargs_bcast
+        return parts, stats, kwargs_engine
 
     @classmethod
     def _aggregate_stats(
@@ -1931,13 +1931,13 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     )
                     stats.append(stat)
 
-        kwargs_bcast = {
+        kwargs_engine = {
             "partitions": partition_obj,
             "categories": categories,
             "filters": filters,
         }
 
-        return parts, stats, kwargs_bcast
+        return parts, stats, kwargs_engine
 
     @classmethod
     def _read_table(
