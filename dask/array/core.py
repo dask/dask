@@ -58,7 +58,13 @@ from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
 from .numpy_compat import _Recurser, _make_sliced_dtype
-from .slicing import slice_array, replace_ellipsis, cached_cumsum
+from .slicing import (
+    slice_array,
+    replace_ellipsis,
+    cached_cumsum,
+    parse_assignment_indices,
+    setitem,
+)
 from .blockwise import blockwise
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
@@ -1577,13 +1583,13 @@ class Array(DaskMethodsMixin):
         return self._scalarfunc(int)
 
     def __setitem__(self, key, value):
-        from .routines import where  # , count_nonzero
-        from .slicing import parse_assignment_indices, setitem
-
-        # Keep the "where" method for cases when key is an Array
+        # Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
+
+            from .routines import where
+
             try:
                 y = where(key, value, self)
             except ValueError as e:
