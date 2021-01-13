@@ -109,6 +109,7 @@ class BlockwiseParquet(Blockwise):
         kwargs,
         part_ids=None,
         kwargs_engine=None,
+        annotations=None,
     ):
         self.name = name
         self.engine = engine
@@ -145,6 +146,7 @@ class BlockwiseParquet(Blockwise):
             [(self.io_name, "i")],
             {self.io_name: (len(self.part_ids),)},
             io_deps={self.io_name: io_arg_map},
+            annotations=annotations,
         )
 
     def __repr__(self):

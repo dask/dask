@@ -3,9 +3,9 @@ from distutils.version import LooseVersion
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
+from ...highlevelgraph import HighLevelGraph
 from ...blockwise import Blockwise, blockwise_token
 from ...bytes.core import get_fs_token_paths
-from ...highlevelgraph import HighLevelGraph
 from ...utils import import_required
 
 __all__ = ("read_orc",)
