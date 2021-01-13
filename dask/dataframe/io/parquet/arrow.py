@@ -243,7 +243,7 @@ def _collect_pyarrow_dataset_frags(
                 for name in partition_names
             ]
 
-        # Append fragements to our "metadata" list
+        # Append fragments to our "metadata" list
         if ds_filters or (split_row_groups and not read_from_paths):
             # If we have filters, we need to split the row groups to apply them.
             # If any row-groups are filtered out, we convert the remaining row-groups
@@ -1533,15 +1533,14 @@ class ArrowDatasetEngine(Engine):
         This method is overridden in `ArrowLegacyEngine`.
         """
         partitioning = kwargs.pop("partitioning", None)
-        # if partitioning and filters
+        print("+++path_or_frag+++", path_or_frag, "\n")
         if isinstance(path_or_frag, pa_ds.ParquetFileFragment):
 
-            # Test that we can get the same fragment from the path
-            if partitioning:
+            print("---path_or_frag---", path_or_frag.row_groups, "\n")
+            if partitioning:  # and filters:
 
-                path = path_or_frag.path
                 ds = pa_ds.dataset(
-                    path,
+                    path_or_frag.path,
                     filesystem=fs,
                     format="parquet",
                     partitioning=partitioning["obj"].discover(
