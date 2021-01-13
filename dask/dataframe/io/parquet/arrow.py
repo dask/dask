@@ -1286,6 +1286,10 @@ class ArrowDatasetEngine(Engine):
         partition_keys = partition_info["partition_keys"]
         partition_obj = partition_info["partitions"]
 
+        # HACK - TODO: Remove most read_from_paths logic
+        # since we should always be reading from a path now.
+        read_from_paths = True
+
         # Get the number of row groups per file
         frag_map = {}
         single_rg_parts = int(split_row_groups) == 1
@@ -1518,7 +1522,7 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _read_table(
         cls,
-        path_or_frag,
+        path,
         fs,
         row_groups,
         columns,
@@ -1532,26 +1536,28 @@ class ArrowDatasetEngine(Engine):
 
         This method is overridden in `ArrowLegacyEngine`.
         """
+
+        # Check if we have partitioning information.
+        # Will only have this if the engine="read_from_paths"
         partitioning = kwargs.pop("partitioning", None)
-        print("+++path_or_frag+++", path_or_frag, "\n")
-        if isinstance(path_or_frag, pa_ds.ParquetFileFragment):
 
-            print("---path_or_frag---", path_or_frag.row_groups, "\n")
-            if partitioning:  # and filters:
+        if partitioning and filters:
 
-                ds = pa_ds.dataset(
-                    path_or_frag.path,
-                    filesystem=fs,
-                    format="parquet",
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
-                )
-                path_or_frags = list(ds.get_fragments())
-
-                assert len(path_or_frags) == 1
-                path_or_frag = path_or_frags[0]
+            # We are filtering with "pyarrow-dataset".
+            # Need to convert the path and row-group IDs
+            # to a single "fragment" to read
+            ds = pa_ds.dataset(
+                path,
+                filesystem=fs,
+                format="parquet",
+                partitioning=partitioning["obj"].discover(
+                    *partitioning.get("args", []),
+                    **partitioning.get("kwargs", {}),
+                ),
+            )
+            frags = list(ds.get_fragments())
+            assert len(frags) == 1
+            frag = _frag_subset(frags[0], row_groups)
 
             cols = []
             for name in columns:
@@ -1561,7 +1567,7 @@ class ArrowDatasetEngine(Engine):
                 else:
                     cols.append(name)
 
-            return path_or_frag.to_table(
+            return frag.to_table(
                 use_threads=False,
                 schema=schema,
                 columns=cols,
@@ -1569,7 +1575,7 @@ class ArrowDatasetEngine(Engine):
             )
         else:
             return _read_table_from_path(
-                path_or_frag,
+                path,
                 fs,
                 row_groups,
                 columns,
