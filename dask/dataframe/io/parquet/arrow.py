@@ -1535,7 +1535,9 @@ class ArrowDatasetEngine(Engine):
             )
             frags = list(ds.get_fragments())
             assert len(frags) == 1
-            frag = _frag_subset(frags[0], row_groups)
+            frag = (
+                _frag_subset(frags[0], row_groups) if row_groups != [None] else frags[0]
+            )
 
             cols = []
             for name in columns:
