@@ -565,6 +565,10 @@ class ArrowDatasetEngine(Engine):
             # `piece` contains (path, row_group, partition_keys)
             (path_or_frag, row_group, partition_keys) = piece
 
+        # Convert row_group to a list and be sure to
+        # check if msgpack converted it to a tuple
+        if isinstance(row_group, tuple):
+            row_group = list(row_group)
         if not isinstance(row_group, list):
             row_group = [row_group]
 

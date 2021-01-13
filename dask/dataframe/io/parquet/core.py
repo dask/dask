@@ -70,15 +70,6 @@ class ParquetFunctionWrapper:
         self.kwargs_engine = kwargs_engine
 
     def __call__(self, part):
-        if isinstance(part, bytes):
-            # If `part` is a byte string, we need to
-            # deserialize first.  This will be necessary in
-            # distributed execution if the elements could not
-            # be serialized with msgpack.
-            # (See: `Engine.serialize_io_deps`)
-            from distributed.worker import _deserialize
-
-            part = _deserialize(args=part)[1]
 
         if not isinstance(part, list):
             part = [part]
@@ -155,14 +146,6 @@ class BlockwiseParquet(Blockwise):
             {self.io_name: (len(self.part_ids),)},
             io_deps={self.io_name: io_arg_map},
         )
-
-    def __dask_distributed_pack_io_deps__(self):
-        # Some engines may contain complex objects that
-        # cannot be serialized with msgpack. To be safe,
-        # we use pickle by default, but this behavior
-        # can be overridden to skip serialization (see
-        # `FastParquetEngine.serialize_io_deps`).
-        return self.engine.serialize_io_deps(self.io_deps)
 
     def __repr__(self):
         return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(

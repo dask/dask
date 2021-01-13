@@ -240,18 +240,6 @@ class Engine:
         """
         raise NotImplementedError()
 
-    @classmethod
-    def serialize_io_deps(cls, io_deps):
-        """
-        Default serialization for the arguments included in io_deps
-        """
-        from distributed.worker import warn_dumps
-
-        def _dumps_args(arg_map):
-            return {k: warn_dumps(v) for k, v in arg_map.items()}
-
-        return {k: _dumps_args(v) for k, v in io_deps.items()}
-
 
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section
