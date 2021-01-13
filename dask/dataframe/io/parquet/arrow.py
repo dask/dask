@@ -474,17 +474,9 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        read_from_paths=None,
         engine=None,
         **kwargs,
     ):
-        # Reading from fragments by default if we are filtering.
-        # Otherwise, we will read from (path, row-group) info
-        # to avoid passing large object in the task graph.
-        # (This does not affect `ArrowLegacyEngine` behavior)
-        if read_from_paths is None:
-            read_from_paths = filters is None
-
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
         # This may also set split_row_groups and gather_statistics,
@@ -503,7 +495,6 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             index,
-            read_from_paths,
             kwargs.get("dataset", {}),
         )
 
@@ -525,7 +516,6 @@ class ArrowDatasetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
-            read_from_paths,
         )
 
         return (meta, stats, parts, index, kwargs_engine)
@@ -909,7 +899,6 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         filters,
         index,
-        read_from_paths,
         dataset_kwargs,
     ):
         """pyarrow.dataset version of _gather_metadata
@@ -1142,7 +1131,6 @@ class ArrowDatasetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
-        read_from_paths,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1660,7 +1648,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         gather_statistics,
         filters,
         index,
-        read_from_paths,
         dataset_kwargs,
     ):
         """Gather parquet metadata into a single data structure.
