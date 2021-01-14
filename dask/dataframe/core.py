@@ -585,9 +585,9 @@ Dask Name: {name}, {task} tasks"""
         args, kwargs :
             Arguments and keywords to pass to the function. The partition will
             be the first argument, and these will be passed *after*. Arguments
-            and keywords may contain ``Scalar``, ``Delayed``, ``partition_info`` 
-            or regular python objects. DataFrame-like args (both dask and 
-            pandas) will be repartitioned to align (if necessary) before 
+            and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
+            or regular python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
             applying the function.
         $META
 
@@ -652,6 +652,23 @@ Dask Name: {name}, {task} tasks"""
         to clear them afterwards:
 
         >>> ddf.map_partitions(func).clear_divisions()  # doctest: +SKIP
+
+        Your map function gets information about where it is in the dataframe by
+        accepting a special ``partition_info`` keyword argument.
+
+        >>> def func(partition, partition_info=None):
+        ...     pass
+
+        This will receive the following information:
+
+        >>> partition_info  # doctest: +SKIP
+        {'number': 1, 'division': 3}
+
+        For each argument and keyword arguments that are dask dataframes you will
+        receive the number (n) which represents the nth partition of the dataframe
+        and the division (the first index value in the partition). If divisions
+        are not known (for instance if the index is not sorted) then you will get
+        None as the division.
         """
         return map_partitions(func, self, *args, **kwargs)
 
