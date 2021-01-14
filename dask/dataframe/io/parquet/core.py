@@ -51,6 +51,7 @@ class ParquetSubgraph(Layer):
         parts,
         kwargs,
         part_ids=None,
+        common_kwargs=None,
         annotations=None,
     ):
         super().__init__(annotations=annotations)
@@ -63,6 +64,12 @@ class ParquetSubgraph(Layer):
         self.parts = parts
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
+
+        # `kwargs` = user-defined kwargs to be passed for all parts
+        self.kwargs = kwargs
+
+        # `common_kwargs` = engine-gathered kwargs to be passed for all parts
+        self.common_kwargs = common_kwargs if common_kwargs else {}
 
     def __repr__(self):
         return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
@@ -94,7 +101,9 @@ class ParquetSubgraph(Layer):
             [p["piece"] for p in part],
             self.columns,
             self.index,
-            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
+            toolz.merge(
+                self.common_kwargs, part[0].get("kwargs", {}), self.kwargs or {}
+            ),
         )
 
     def __len__(self):
@@ -121,6 +130,8 @@ class ParquetSubgraph(Layer):
             parts=self.parts,
             kwargs=self.kwargs,
             part_ids={i for i in self.part_ids if (self.name, i) in keys},
+            common_kwargs=self.common_kwargs,
+            annotations=self.annotations,
         )
         return ret, ret.get_dependencies(all_hlg_keys)
 
@@ -135,7 +146,6 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=None,
-    read_from_paths=None,
     chunksize=None,
     **kwargs,
 ):
@@ -213,15 +223,6 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
-    read_from_paths : bool or None (default)
-        Only used by `ArrowDatasetEngine`. Determines whether the engine should
-        avoid inserting large pyarrow (`ParquetFileFragment`) objects in the
-        task graph.  If this option is `True`, `read_partition` will need to
-        depend on the file path and row-group ID list (rather than a fragment).
-        This option will reduce the size of the task graph, but will add minor
-        overhead to `read_partition`, and will disable row-wise filtering at
-        read time.  By default (None), `ArrowDatasetEngine` will set this
-        option to `False`.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -256,7 +257,6 @@ def read_parquet(
             engine,
             gather_statistics,
             split_row_groups,
-            read_from_paths,
             chunksize,
         )
         return df[columns]
@@ -273,7 +273,6 @@ def read_parquet(
         storage_options,
         engine,
         gather_statistics,
-        read_from_paths,
         chunksize,
     )
 
@@ -293,7 +292,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts, index = engine.read_metadata(
+    read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -301,10 +300,23 @@ def read_parquet(
         gather_statistics=True if chunksize else gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        read_from_paths=read_from_paths,
         engine=engine,
+        use_common_kwargs=kwargs.pop("use_common_kwargs", True),
         **kwargs,
     )
+
+    # Handle backwards compatibility if `read_metadata` does not
+    # return `common_kwargs`.  We used `use_common_kwargs` above
+    # to specify to the engine that we are expecting a fourth
+    # return value containing kwargs that we can avoid duplicating
+    # in every element of `parts`. However, since an older user-defined
+    # engine may not recognize/use this argument.  We still need to
+    # check that we have enough return values below.
+    #
+    # TODO: Remove `use_common_kwargs` once the four-value
+    # return can be considered "fully deprecated".
+    meta, statistics, parts, index = read_metadata_result[:4]
+    common_kwargs = read_metadata_result[4] if len(read_metadata_result) > 4 else {}
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -319,7 +331,17 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = ParquetSubgraph(
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        common_kwargs=common_kwargs,
+    )
 
     # Set the index that was previously treated as a column
     if index_in_columns:
