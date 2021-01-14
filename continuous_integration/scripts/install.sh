@@ -28,6 +28,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
 fi
 
 # Install dask
+python -m pip install pytest-timeout
 python -m pip install --quiet --no-deps -e .[complete]
 echo conda list
 conda list
