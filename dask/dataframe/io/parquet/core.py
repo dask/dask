@@ -313,8 +313,7 @@ def read_parquet(
     meta, statistics, parts, index = read_metadata_result[:4]
     common_kwargs = {}
     if len(read_metadata_result) > 4:
-        # Allow engine to return common_kwargs as a
-        # separate element
+        # Engine may return common_kwargs as a separate element
         common_kwargs = read_metadata_result[4]
     elif len(parts):
         # If the engine does not return a dedicated
