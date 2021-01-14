@@ -14,7 +14,7 @@ jobs:
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
-      PARALLEL: "true"
+      PARALLEL: "false"
       COVERAGE: "false"
 
     steps:
