@@ -476,7 +476,6 @@ class ArrowDatasetEngine(Engine):
         filters=None,
         split_row_groups=None,
         engine=None,
-        use_common_kwargs=False,  # For backward compatibility
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
@@ -520,24 +519,13 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
         )
 
-        # Use use_common_kwargs for backwards compatibility
-        if use_common_kwargs:
-            return (meta, stats, parts, index, common_kwargs)
+        # Add `common_kwargs` to the first element of `parts`.
+        # We can return as a separate element in the future, but
+        # should avoid breaking the API for now.
+        if len(parts):
+            parts[0]["common_kwargs"] = common_kwargs
 
-        else:
-            # Copy common_kwargs into every element of parts.
-            # This will avoid breaking older user code that is
-            # not expecting the extra common_kwargs return.
-            for part in parts:
-                part["kwargs"] = toolz.merge(part.get("kwargs", {}), common_kwargs)
-
-            # warnings.warn(
-            #     "Using read_metadata with use_common_kwargs=False. "
-            #     "Please upgrade to the latest API for better performance.",
-            #     DeprecationWarning
-            # )
-
-            return (meta, stats, parts, index)
+        return (meta, stats, parts, index)
 
     @classmethod
     def read_partition(

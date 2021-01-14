@@ -301,22 +301,26 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         engine=engine,
-        use_common_kwargs=kwargs.pop("use_common_kwargs", True),
         **kwargs,
     )
 
-    # Handle backwards compatibility if `read_metadata` does not
-    # return `common_kwargs`.  We used `use_common_kwargs` above
-    # to specify to the engine that we are expecting a fourth
-    # return value containing kwargs that we can avoid duplicating
-    # in every element of `parts`. However, since an older user-defined
-    # engine may not recognize/use this argument.  We still need to
-    # check that we have enough return values below.
-    #
-    # TODO: Remove `use_common_kwargs` once the four-value
-    # return can be considered "fully deprecated".
+    # In the future, we may want to give the engine the
+    # option to return a dedicated element for `common_kwargs`.
+    # However, to avoid breaking the API, we just embed this
+    # data in the first element of `parts` for now.
+    # The logic below is inteded to handle backward and forward
+    # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
-    common_kwargs = read_metadata_result[4] if len(read_metadata_result) > 4 else {}
+    common_kwargs = {}
+    if len(read_metadata_result) > 4:
+        # Allow engine to return common_kwargs as a
+        # separate element
+        common_kwargs = read_metadata_result[4]
+    elif len(parts):
+        # If the engine does not return a dedicated
+        # common_kwargs argument, it may be stored in
+        # the first element of `parts`
+        common_kwargs = parts[0].pop("common_kwargs", {})
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
