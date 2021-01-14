@@ -449,7 +449,7 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
-@pytest.mark.parametrize("iterator", [("none", 0), ("power", 1), ("QR", 1)])
+@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
     u, s, v = da.linalg.svd_compressed(
@@ -465,9 +465,6 @@ def test_svd_compressed_compute(iterator):
 
 @pytest.mark.parametrize("iterator", [("power", 2), ("QR", 2)])
 def test_svd_compressed(iterator):
-    # Note: iterator="none" is not tested due to its
-    # difficulty with respect to the stochastic process of sampling,
-    # leading to false positives and false negatives in this test.
     m, n = 100, 50
     r = 5
     a = da.random.random((m, n), chunks=(m, n))
@@ -535,7 +532,7 @@ def test_svd_compressed_shapes(m, n, k, chunks):
     assert v.shape == (r, n)
 
 
-@pytest.mark.parametrize("iterator", [("none", 0), ("power", 1), ("QR", 1)])
+@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
     u, s, v = da.linalg.svd_compressed(
