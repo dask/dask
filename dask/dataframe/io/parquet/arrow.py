@@ -4,7 +4,6 @@ from datetime import datetime
 import json
 import warnings
 from distutils.version import LooseVersion
-import toolz
 
 import numpy as np
 import pandas as pd
