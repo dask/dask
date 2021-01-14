@@ -10,7 +10,7 @@ jobs:
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         python-version: ["3.6", "3.7", "3.8"]
-    timeout-minutes: 30
+    timeout-minutes: 90
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
