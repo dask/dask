@@ -1931,7 +1931,7 @@ class SeriesGroupBy(_GroupBy):
     def value_counts(self, split_every=None, split_out=1):
         return self._aca_agg(
             token="value_counts",
-            func=M.value_counts,
+            func=_value_counts,
             aggfunc=_value_counts_aggregate,
             split_every=split_every,
             split_out=split_out,
@@ -1954,6 +1954,13 @@ def _unique_aggregate(series_gb, name=None):
     ret = pd.Series({k: v.explode().unique() for k, v in series_gb}, name=name)
     ret.index.names = series_gb.obj.index.names
     return ret
+
+
+def _value_counts(x, **kwargs):
+    if len(x):
+        return M.value_counts(x, **kwargs)
+    else:
+        return pd.Series()
 
 
 def _value_counts_aggregate(series_gb):
