@@ -815,11 +815,15 @@ def test_cholesky(shape, chunk):
     )
 
 
+@pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
-def test_lstsq(nrow, ncol, chunk):
+def test_lstsq(nrow, ncol, chunk, iscomplex):
     np.random.seed(1)
     A = np.random.randint(1, 20, (nrow, ncol))
     b = np.random.randint(1, 20, nrow)
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b = b + 1.0j * np.random.randint(1, 20, b.shape)
 
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
@@ -846,6 +850,9 @@ def test_lstsq(nrow, ncol, chunk):
     # 2D case
     A = np.random.randint(1, 20, (nrow, ncol))
     b2D = np.random.randint(1, 20, (nrow, ncol // 2))
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b2D = b2D + 1.0j * np.random.randint(1, 20, b2D.shape)
     dA = da.from_array(A, (chunk, ncol))
     db2D = da.from_array(b2D, (chunk, ncol // 2))
     x, r, rank, s = np.linalg.lstsq(A, b2D, rcond=-1)
