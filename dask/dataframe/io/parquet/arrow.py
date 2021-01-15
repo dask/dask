@@ -376,9 +376,9 @@ def _read_table_from_path(
     """Read arrow table from file path.
 
     Used in all cases by `ArrowLegacyEngine._read_table`.
-    Used by `ArrowDatasetEngine._read_table` when dataset is
-    not partitioned and no filters are specified (otherwise
-    fragments are converted directly into tables).
+    Used by `ArrowDatasetEngine._read_table` when no filters
+    are specified (otherwise fragments are converted directly
+    into tables).
     """
     if partition_keys or (not read_row_groups_supported and row_groups != [None]):
         tables = []
@@ -505,7 +505,7 @@ class ArrowDatasetEngine(Engine):
 
         # Finally, construct our list of `parts`
         # (and a corresponding list of statistics)
-        parts, stats, kwargs_engine = cls._construct_parts(
+        parts, stats, common_kwargs = cls._construct_parts(
             fs,
             metadata,
             schema,
@@ -518,7 +518,13 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
         )
 
-        return (meta, stats, parts, index, kwargs_engine)
+        # Add `common_kwargs` to the first element of `parts`.
+        # We can return as a separate element in the future, but
+        # should avoid breaking the API for now.
+        if len(parts):
+            parts[0]["common_kwargs"] = common_kwargs
+
+        return (meta, stats, parts, index)
 
     @classmethod
     def read_partition(
@@ -1161,8 +1167,8 @@ class ArrowDatasetEngine(Engine):
             for full_path in metadata:
                 part = {"piece": (full_path, None, partition_keys.get(full_path, None))}
                 parts.append(part)
-            kwargs_engine = {"partitions": partition_obj, "categories": categories}
-            return parts, stats, kwargs_engine
+            common_kwargs = {"partitions": partition_obj, "categories": categories}
+            return parts, stats, common_kwargs
 
         # Use final metadata info to update our options for
         # `parts`/`stats` construnction
@@ -1422,7 +1428,7 @@ class ArrowDatasetEngine(Engine):
                     )
                     stats.append(stat)
 
-        kwargs_engine = {
+        common_kwargs = {
             "partitioning": partition_info["partitioning"],
             "partitions": partition_obj,
             "categories": categories,
@@ -1430,7 +1436,7 @@ class ArrowDatasetEngine(Engine):
             "schema": schema,
         }
 
-        return parts, stats, kwargs_engine
+        return parts, stats, common_kwargs
 
     @classmethod
     def _aggregate_stats(
@@ -1957,13 +1963,13 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     )
                     stats.append(stat)
 
-        kwargs_engine = {
+        common_kwargs = {
             "partitions": partition_obj,
             "categories": categories,
             "filters": filters,
         }
 
-        return parts, stats, kwargs_engine
+        return parts, stats, common_kwargs
 
     @classmethod
     def _read_table(

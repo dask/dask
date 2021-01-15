@@ -51,7 +51,7 @@ class ParquetFunctionWrapper:
         columns,
         index,
         kwargs,
-        kwargs_engine,
+        common_kwargs,
     ):
         self.name = name
         self.read_partition = engine.read_partition
@@ -64,10 +64,10 @@ class ParquetFunctionWrapper:
         #            indetically for all partitions.
         self.kwargs = kwargs
 
-        # `kwargs_engine` = kwargs set by engine to be
+        # `common_kwargs` = kwargs set by engine to be
         #                   passed identically for all
         #                   partitions.
-        self.kwargs_engine = kwargs_engine
+        self.common_kwargs = common_kwargs
 
     def __call__(self, part):
 
@@ -83,7 +83,7 @@ class ParquetFunctionWrapper:
             self.index,
             # Merge all relevant kwarg structures
             toolz.merge(
-                self.kwargs_engine,
+                self.common_kwargs,
                 part[0].get("kwargs", {}),
                 self.kwargs or {},
             ),
@@ -108,7 +108,7 @@ class BlockwiseParquet(Blockwise):
         parts,
         kwargs,
         part_ids=None,
-        kwargs_engine=None,
+        common_kwargs=None,
         annotations=None,
     ):
         self.name = name
@@ -120,7 +120,7 @@ class BlockwiseParquet(Blockwise):
         self.parts = parts
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-        self.kwargs_engine = kwargs_engine or {}
+        self.common_kwargs = common_kwargs or {}
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = ParquetFunctionWrapper(
             self.io_name,
@@ -130,7 +130,7 @@ class BlockwiseParquet(Blockwise):
             self.columns,
             self.index,
             self.kwargs,
-            self.kwargs_engine,
+            self.common_kwargs,
         )
 
         # Define mapping between key index and "part"
@@ -323,11 +323,22 @@ def read_parquet(
         **kwargs,
     )
 
-    # Handle backwards compatibility if `read_metadata`
-    # does not return `kwargs_engine` (these kwargs are set
-    # by the engine, and passed for all partitions)
+    # In the future, we may want to give the engine the
+    # option to return a dedicated element for `common_kwargs`.
+    # However, to avoid breaking the API, we just embed this
+    # data in the first element of `parts` for now.
+    # The logic below is inteded to handle backward and forward
+    # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
-    kwargs_engine = read_metadata_result[4] if len(read_metadata_result) > 4 else {}
+    common_kwargs = {}
+    if len(read_metadata_result) > 4:
+        # Engine may return common_kwargs as a separate element
+        common_kwargs = read_metadata_result[4]
+    elif len(parts):
+        # If the engine does not return a dedicated
+        # common_kwargs argument, it may be stored in
+        # the first element of `parts`
+        common_kwargs = parts[0].pop("common_kwargs", {})
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -351,7 +362,7 @@ def read_parquet(
         index,
         parts,
         kwargs,
-        kwargs_engine=kwargs_engine,
+        common_kwargs=common_kwargs,
     )
 
     # Set the index that was previously treated as a column

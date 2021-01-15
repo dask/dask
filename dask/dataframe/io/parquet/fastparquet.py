@@ -441,10 +441,13 @@ class FastParquetEngine(Engine):
         if index is False and None in meta.columns:
             meta.drop(columns=[None], inplace=True)
 
-        # Include kwargs that are identical for all partitions
-        kwargs_engine = {"categories": categories_dict or categories}
+        # Add `common_kwargs` to the first element of `parts`.
+        # We can return as a separate element in the future, but
+        # should avoid breaking the API for now.
+        if len(parts):
+            parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
 
-        return (meta, stats, parts, index, kwargs_engine)
+        return (meta, stats, parts, index)
 
     @classmethod
     def read_partition(
