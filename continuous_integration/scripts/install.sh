@@ -33,4 +33,8 @@ python -m pip install --quiet --no-deps -e .[complete]
 echo conda list
 conda list
 
+# For debugging
+echo -e "--\n--Conda Environment (re-create this with \`conda env create --name <name> -f <output_file>\`)\n--"
+conda env export | grep -E -v '^prefix:.*$'
+
 set +xe
