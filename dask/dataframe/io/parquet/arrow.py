@@ -1525,8 +1525,25 @@ class ArrowDatasetEngine(Engine):
         # Will only have this if the engine="pyarrow-dataset"
         partitioning = kwargs.pop("partitioning", None)
 
+        # Check if we need to generate a fragment for filtering.
+        # We only need to do this if we are applying filters to
+        # columns that were not already filtered by "partition".
         if partitioning and filters:
+            partition_cols = (
+                set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
+                if partition_keys
+                else set()
+            )
+            filtered_cols = (
+                set([v[0] for v in flatten(filters, container=list) if len(v)])
+                if filters
+                else set()
+            )
+            need_fragment = bool(filtered_cols - partition_cols)
+        else:
+            need_fragment = False
 
+        if need_fragment:
             # We are filtering with "pyarrow-dataset".
             # Need to convert the path and row-group IDs
             # to a single "fragment" to read
