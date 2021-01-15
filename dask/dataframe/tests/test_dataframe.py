@@ -858,6 +858,19 @@ def test_map_partitions_type():
     assert all(x == pd.DataFrame for x in result)
 
 
+def test_map_partitions_partition_info():
+    def f(df, partition_info=None):
+        assert partition_info is not None
+        assert "number" in partition_info
+        assert "division" in partition_info
+        assert dsk[("x", partition_info["number"])].equals(df)
+        assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
+        return df
+
+    result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
+    assert type(result) == pd.DataFrame
+
+
 def test_map_partitions_names():
     func = lambda x: x
     assert sorted(dd.map_partitions(func, d, meta=d).dask) == sorted(
