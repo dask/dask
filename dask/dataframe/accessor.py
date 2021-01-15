@@ -127,7 +127,10 @@ class StringAccessor(Accessor):
                 )
             else:
                 delimiter = " " if pat is None else pat
-                meta = type(self._series._meta)([delimiter.join(["a"] * (n + 1))])
+                meta = self._series._meta._constructor(
+                    [delimiter.join(["a"] * (n + 1))],
+                    index=self._series._meta_nonempty[:1].index,
+                )
                 meta = meta.str.split(n=n, expand=expand, pat=pat)
         else:
             meta = (self._series.name, object)
@@ -152,10 +155,8 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def extractall(self, pat, flags=0):
-        # TODO: metadata inference here won't be necessary for pandas >= 0.23.0
-        meta = self._series._meta.str.extractall(pat, flags=flags)
         return self._series.map_partitions(
-            str_extractall, pat, flags, meta=meta, token="str-extractall"
+            str_extractall, pat, flags, token="str-extractall"
         )
 
     def __getitem__(self, index):

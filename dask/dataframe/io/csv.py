@@ -1,4 +1,3 @@
-from os.path import basename
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
@@ -30,6 +29,8 @@ from ..utils import clear_known_categories
 
 import fsspec.implementations.local
 from fsspec.compression import compr
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import infer_compression
 
 
 class CSVSubgraph(Mapping):
@@ -77,9 +78,12 @@ class CSVSubgraph(Mapping):
             raise KeyError(key)
 
         block = self.blocks[i]
-
         if self.paths is not None:
-            path_info = (self.colname, self.paths[i], self.paths)
+            path_info = (
+                self.colname,
+                self.paths[i],
+                sorted(list(self.head[self.colname].cat.categories)),
+            )
         else:
             path_info = None
 
@@ -136,7 +140,7 @@ def pandas_read_text(
     dtypes : dict
         DTypes to assign to columns
     path : tuple
-        A tuple containing path column name, path to file, and all paths.
+        A tuple containing path column name, path to file, and an ordered list of paths.
 
     See Also
     --------
@@ -265,6 +269,7 @@ def text_blocks_to_pandas(
     enforce=False,
     specified_dtypes=None,
     path=None,
+    blocksize=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -286,7 +291,7 @@ def text_blocks_to_pandas(
     kwargs : dict
         Keyword arguments to pass down to ``reader``
     path : tuple, optional
-        A tuple containing column name for path and list of all paths
+        A tuple containing column name for path and the path_converter if provided
 
     Returns
     -------
@@ -327,23 +332,22 @@ def text_blocks_to_pandas(
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
 
-    name = "read-csv-" + tokenize(reader, columns, enforce, head)
+    name = "read-csv-" + tokenize(reader, columns, enforce, head, blocksize)
 
     if path:
-        block_file_names = [basename(b[1].path) for b in blocks]
-        path = (
-            path[0],
-            [p for p in path[1] if basename(p) in block_file_names],
-        )
-
-        colname, paths = path
+        colname, path_converter = path
+        paths = [b[1].path for b in blocks]
+        if path_converter:
+            paths = [path_converter(p) for p in paths]
         head = head.assign(
             **{
                 colname: pd.Categorical.from_codes(
-                    np.zeros(len(head), dtype=int), paths
+                    np.zeros(len(head), dtype=int), set(paths)
                 )
             }
         )
+        path = (colname, paths)
+
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
@@ -401,7 +405,7 @@ def read_pandas(
     urlpath,
     blocksize="default",
     lineterminator=None,
-    compression=None,
+    compression="infer",
     sample=256000,
     enforce=False,
     assume_missing=False,
@@ -453,6 +457,17 @@ def read_pandas(
     else:
         path_converter = None
 
+    # If compression is "infer", inspect the (first) path suffix and
+    # set the proper compression option if the suffix is recongnized.
+    if compression == "infer":
+        # Translate the input urlpath to a simple path list
+        paths = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)[
+            2
+        ]
+
+        # Infer compression from first path
+        compression = infer_compression(paths[0])
+
     if blocksize == "default":
         blocksize = AUTO_BLOCKSIZE
     if isinstance(blocksize, str):
@@ -488,9 +503,7 @@ def read_pandas(
 
     if include_path_column:
         b_sample, values, paths = b_out
-        if path_converter:
-            paths = [path_converter(path) for path in paths]
-        path = (include_path_column, paths)
+        path = (include_path_column, path_converter)
     else:
         b_sample, values = b_out
         path = None
@@ -551,6 +564,7 @@ def read_pandas(
         enforce=enforce,
         specified_dtypes=specified_dtypes,
         path=path,
+        blocksize=blocksize,
     )
 
 
@@ -634,7 +648,7 @@ def make_reader(reader, reader_name, file_type):
         urlpath,
         blocksize="default",
         lineterminator=None,
-        compression=None,
+        compression="infer",
         sample=256000,
         enforce=False,
         assume_missing=False,

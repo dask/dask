@@ -1,8 +1,6 @@
 Opportunistic Caching
 =====================
 
-EXPERIMENTAL FEATURE added to Version 0.6.2 and above - see :ref:`disclaimer<disclaimer>`.
-
 Dask usually removes intermediate values as quickly as possible in order to
 make space for more data to flow through your computation.  However, in some
 cases, we may want to hold onto intermediate values, because they might be
@@ -153,12 +151,9 @@ caching.
 
 .. _cachey: https://github.com/blaze/cachey
 
-.. _disclaimer:
-
 Disclaimer
 ----------
-
-This feature is still experimental, and can cause your computation to fill up RAM.
+Opportunistic caching is not available when using the distributed scheduler.
 
 Restricting your cache to a fixed size like 2GB requires Dask to accurately count
 the size of each of our objects in memory.  This can be tricky, particularly

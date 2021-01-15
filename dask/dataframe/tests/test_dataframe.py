@@ -27,7 +27,7 @@ from dask.dataframe.core import (
     is_broadcastable,
 )
 from dask.dataframe import methods
-from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps, PANDAS_VERSION
+from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -387,10 +387,6 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-@pytest.mark.xfail(
-    PANDAS_VERSION == "0.24.2",
-    reason="Known bug in Pandas. See https://github.com/pandas-dev/pandas/issues/24011.",
-)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -1514,11 +1510,6 @@ def test_unknown_divisions():
     assert_eq(d.a + d.b + 1, full.a + full.b + 1)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.22.0",
-    reason="Parameter min_count not implemented in "
-    "DataFrame.sum() and DataFrame.prod()",
-)
 def test_with_min_count():
     dfs = [
         pd.DataFrame([[None, 2, 3], [None, 5, 6], [5, 4, 9]]),
@@ -2556,6 +2547,24 @@ def test_drop_axis_1():
         df.drop(["a", "x"], axis=1, errors="ignore"),
     )
     assert_eq(ddf.drop(columns=["y", "z"]), df.drop(columns=["y", "z"]))
+
+
+@pytest.mark.parametrize("columns", [["b"], []])
+def test_drop_columns(columns):
+    # Check both populated and empty list argument
+    # https://github.com/dask/dask/issues/6870
+
+    df = pd.DataFrame(
+        {
+            "a": [2, 4, 6, 8],
+            "b": ["1a", "2b", "3c", "4d"],
+        }
+    )
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf2 = ddf.drop(columns=columns)
+    ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
+
+    assert_eq(df.drop(columns=columns), ddf2)
 
 
 def test_gh580():
@@ -3893,7 +3902,6 @@ def test_to_timedelta():
     assert_eq(pd.to_timedelta(s, errors="coerce"), dd.to_timedelta(ds, errors="coerce"))
 
 
-@pytest.mark.skipif(PANDAS_VERSION < "0.22.0", reason="No isna method")
 @pytest.mark.parametrize("values", [[np.NaN, 0], [1, 1]])
 def test_isna(values):
     s = pd.Series(values)
@@ -4157,6 +4165,20 @@ def test_meta_raises():
     assert "meta=" not in str(info.value)
 
 
+def test_meta_nonempty_uses_meta_value_if_provided():
+    # https://github.com/dask/dask/issues/6958
+    base = pd.Series([1, 2, 3], dtype="datetime64[ns]")
+    offsets = pd.Series([pd.offsets.DateOffset(years=o) for o in range(3)])
+    dask_base = dd.from_pandas(base, npartitions=1)
+    dask_offsets = dd.from_pandas(offsets, npartitions=1)
+    dask_offsets._meta = offsets.head()
+
+    with pytest.warns(None):  # not vectorized performance warning
+        expected = base + offsets
+        actual = dask_base + dask_offsets
+        assert_eq(expected, actual)
+
+
 def test_dask_dataframe_holds_scipy_sparse_containers():
     sparse = pytest.importorskip("scipy.sparse")
     da = pytest.importorskip("dask.array")
@@ -4371,9 +4393,6 @@ def test_series_map(base_npart, map_npart, sorted_index, sorted_map_index):
     dd.utils.assert_eq(expected, result)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
-)
 def test_dataframe_explode():
     df = pd.DataFrame({"A": [[1, 2, 3], "foo", [3, 4]], "B": 1})
     exploded_df = df.explode("A")
@@ -4383,9 +4402,6 @@ def test_dataframe_explode():
     assert_eq(exploded_ddf.compute(), exploded_df)
 
 
-@pytest.mark.skipif(
-    PANDAS_VERSION < "0.25.0", reason="Explode not implemented in pandas < 0.25.0"
-)
 def test_series_explode():
     s = pd.Series([[1, 2, 3], "foo", [3, 4]])
     exploded_s = s.explode()
@@ -4476,3 +4492,11 @@ def test_attrs_series_in_dataframes():
     # when creating the _meta dataframe in make_meta_pandas(x, index=None).
     # Should start xpassing when df.iloc works. Remove the xfail then.
     assert df.A.attrs == ddf.A.attrs
+
+
+def test_join_series():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=1)
+    expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
+    actual_df = ddf.join(ddf["x"], lsuffix="_")
+    assert_eq(actual_df, expected_df)

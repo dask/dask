@@ -7,7 +7,6 @@ np = pytest.importorskip("numpy")
 import os
 import time
 from io import StringIO
-from distutils.version import LooseVersion
 import operator
 from operator import add, sub, getitem
 from threading import Lock
@@ -299,10 +298,6 @@ def test_Array_computation():
     assert float(a[0, 0]) == 1
 
 
-@pytest.mark.skipif(
-    LooseVersion(np.__version__) < "1.14.0",
-    reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
-)
 def test_Array_numpy_gufunc_call__array_ufunc__01():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -312,10 +307,6 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
     assert_eq(ny, vy)
 
 
-@pytest.mark.skipif(
-    LooseVersion(np.__version__) < "1.14.0",
-    reason="NumPy doesn't have `np.linalg._umath_linalg` yet",
-)
 def test_Array_numpy_gufunc_call__array_ufunc__02():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
@@ -1584,6 +1575,12 @@ def test_slicing_flexible_type():
     assert_eq(a[:, 0], b[:, 0])
 
 
+def test_slicing_with_object_dtype():
+    # https://github.com/dask/dask/issues/6892
+    d = da.from_array(np.array(["a", "b"], dtype=np.object), chunks=(1,))
+    assert d.dtype == d[(0,)].dtype
+
+
 def test_dtype():
     d = da.ones((4, 4), chunks=(2, 2))
 
@@ -2484,6 +2481,19 @@ def test_from_array_dask_collection_warns():
     # Ensure da.array warns too
     with pytest.warns(UserWarning):
         da.array(x)
+
+
+def test_from_array_inline():
+    class MyArray(np.ndarray):
+        pass
+
+    a = np.array([1, 2, 3]).view(MyArray)
+    dsk = dict(da.from_array(a, name="my-array").dask)
+    assert dsk["my-array"] is a
+
+    dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
+    assert "my-array" not in dsk
+    assert a is dsk[("my-array", 0)][1]
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
@@ -3903,6 +3913,14 @@ def test_to_zarr_delayed_creates_no_metadata():
         result.compute()
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
+
+
+def test_zarr_inline_array():
+    zarr = pytest.importorskip("zarr")
+    a = zarr.array([1, 2, 3])
+    dsk = dict(da.from_zarr(a, inline_array=True).dask)
+    assert len(dsk) == 1
+    assert a in list(dsk.values())[0]
 
 
 def test_zarr_existing_array():
