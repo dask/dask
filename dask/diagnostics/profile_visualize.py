@@ -146,7 +146,8 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
+def visualize(profilers, file_path=None, show=True, save=True,
+              mode=None, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     If multiple profilers are passed in, the plots are stacked vertically.
@@ -161,6 +162,8 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
         If True (default), the plot is opened in a browser.
     save : boolean, optional
         If True (default), the plot is saved to disk.
+    mode : str, optional
+        Mode passed to bokeh.output_file()
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by visualize.
@@ -183,7 +186,7 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
 
     if not in_notebook:
         file_path = file_path or "profile.html"
-        bp.output_file(file_path)
+        bp.output_file(file_path, mode=mode)
 
     if not isinstance(profilers, list):
         profilers = [profilers]
