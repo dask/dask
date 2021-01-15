@@ -1,3 +1,5 @@
+.. _array.assignment:
+
 Assignment
 ==========
 
@@ -17,7 +19,7 @@ However, it does not currently support the following:
 *  Indexing with non-strictly monotonic lists: ``x[[1, 3, 3, 2]] = y``
 *  Indexing  one :class:`~dask.array.Array` with a multi-dimensional :class:`~dask.array.Array` of ints
 
-.. _array.assignment.efficiency:
+.. _array.assignment.broadcasting:
 
 Broadcasting
 ------------
@@ -39,7 +41,7 @@ The normal numpy broadcasting rules apply:
    array([[-1., -2., -3., -5., -1., -6.],
           [ 0.,  2.,  4.,  5.,  0.,  6.]])
 
-.. _array.assignment.masking::
+.. _array.assignment.masking:
 
 Masking
 -------
