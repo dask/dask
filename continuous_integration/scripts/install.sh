@@ -7,11 +7,14 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    conda uninstall --force numpy pandas
-    python -m pip install --no-deps --pre \
-        -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
-        numpy
-    python -m pip install --pre pandas==1.1.0rc0
+    # conda uninstall --force numpy pandas
+    # python -m pip install --no-deps --pre \
+    #     -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
+    #     numpy
+    # python -m pip install --pre pandas==1.1.0rc0
+
+    conda update -y -c arrow-nightlies pyarrow
+
     python -m pip install \
         --upgrade \
         locket \
@@ -28,5 +31,14 @@ fi
 python -m pip install --quiet --no-deps -e .[complete]
 echo conda list
 conda list
+
+# For debugging
+echo -e "--\n--Conda Environment (re-create this with \`conda env create --name <name> -f <output_file>\`)\n--"
+conda env export | grep -E -v '^prefix:.*$'
+
+# Ensure cytoolz is not installed in the CI environment when tests are run
+# We can add cytoolz back in once
+# https://github.com/conda-forge/cytoolz-feedstock/issues/36 is resolved
+conda uninstall --force cytoolz
 
 set +xe

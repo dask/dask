@@ -449,7 +449,7 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
-@pytest.mark.parametrize("iterator", [("none", 0), ("power", 1), ("QR", 1)])
+@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
     u, s, v = da.linalg.svd_compressed(
@@ -465,9 +465,6 @@ def test_svd_compressed_compute(iterator):
 
 @pytest.mark.parametrize("iterator", [("power", 2), ("QR", 2)])
 def test_svd_compressed(iterator):
-    # Note: iterator="none" is not tested due to its
-    # difficulty with respect to the stochastic process of sampling,
-    # leading to false positives and false negatives in this test.
     m, n = 100, 50
     r = 5
     a = da.random.random((m, n), chunks=(m, n))
@@ -535,7 +532,7 @@ def test_svd_compressed_shapes(m, n, k, chunks):
     assert v.shape == (r, n)
 
 
-@pytest.mark.parametrize("iterator", [("none", 0), ("power", 1), ("QR", 1)])
+@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
 def test_svd_compressed_compute(iterator):
     x = da.ones((100, 100), chunks=(10, 10))
     u, s, v = da.linalg.svd_compressed(
@@ -818,11 +815,15 @@ def test_cholesky(shape, chunk):
     )
 
 
+@pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
-def test_lstsq(nrow, ncol, chunk):
+def test_lstsq(nrow, ncol, chunk, iscomplex):
     np.random.seed(1)
     A = np.random.randint(1, 20, (nrow, ncol))
     b = np.random.randint(1, 20, nrow)
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b = b + 1.0j * np.random.randint(1, 20, b.shape)
 
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
@@ -849,6 +850,9 @@ def test_lstsq(nrow, ncol, chunk):
     # 2D case
     A = np.random.randint(1, 20, (nrow, ncol))
     b2D = np.random.randint(1, 20, (nrow, ncol // 2))
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b2D = b2D + 1.0j * np.random.randint(1, 20, b2D.shape)
     dA = da.from_array(A, (chunk, ncol))
     db2D = da.from_array(b2D, (chunk, ncol // 2))
     x, r, rank, s = np.linalg.lstsq(A, b2D, rcond=-1)
