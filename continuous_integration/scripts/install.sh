@@ -37,4 +37,7 @@ conda list
 echo -e "--\n--Conda Environment (re-create this with \`conda env create --name <name> -f <output_file>\`)\n--"
 conda env export | grep -E -v '^prefix:.*$'
 
+# Uninstall cytoolz
+conda uninstall --force cytoolz
+
 set +xe
