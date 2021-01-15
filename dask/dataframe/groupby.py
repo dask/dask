@@ -1960,7 +1960,7 @@ def _value_counts(x, **kwargs):
     if len(x):
         return M.value_counts(x, **kwargs)
     else:
-        return pd.Series()
+        return pd.Series(dtype=int)
 
 
 def _value_counts_aggregate(series_gb):
