@@ -1,6 +1,58 @@
 Changelog
 =========
 
+2021.01.0
+---------
+
+Released on January 15, 2021
+
+- ``map_partitions`` with review comments (:pr:`6776`) `Kumar Bharath Prabhu`_
+- Make sure that ``population`` is a real list (:pr:`7027`) `Julia Signell`_
+- Propagate ``storage_options`` in ``read_csv`` (:pr:`7074`) `Richard (Rick) Zamora`_
+- Remove all ``BlockwiseIO`` code (:pr:`7067`) `Richard (Rick) Zamora`_
+- Fix CI (:pr:`7069`) `James Bourbeau`_
+- Add option to control rechunking in ``reshape`` (:pr:`6753`) `Tom Augspurger`_
+- Fix ``linalg.lstsq`` for complex inputs (:pr:`7056`) `Johnnie Gray`_
+- Add ``compression='infer'`` default to ``read_csv`` (:pr:`6960`) `Richard (Rick) Zamora`_
+- Revert parameter changes in ``svd_compressed`` #7003 (:pr:`7004`) `Eric Czech`_
+- Skip failing s3 test (:pr:`7064`) `Martin Durant`_
+- Revert ``BlockwiseIO`` (:pr:`7048`) `Richard (Rick) Zamora`_
+- Add some cross-references to ``DataFrame.to_bag()`` and ``Series.to_bag()`` (:pr:`7049`) `Rob Malouf`_
+- Rewrite ``matmul`` as ``blockwise`` without contraction/concatenate (:pr:`7000`) `Rafal Wojdyla`_
+- Use ``functools.cached_property`` in ``da.shape`` (:pr:`7023`) `Illviljan`_
+- Use meta value in series ``non_empty`` (:pr:`6976`) `Julia Signell`_
+- Revert "Temporarly pin sphinx version to 3.3.1 (:pr:`7002`)" (:pr:`7014`) `Rafal Wojdyla`_
+- Revert ``python-graphviz`` pinning (:pr:`7037`) `Julia Signell`_
+- Accidentally committed print statement (:pr:`7038`) `Julia Signell`_
+- Pass ``dropna`` and ``observed`` in ``agg`` (:pr:`6992`) `Julia Signell`_
+- Add index to ``meta`` after ``.str.split`` with expand (:pr:`7026`) `Ruben van de Geer`_
+- CI: test pyarrow 2.0 and nightly (:pr:`7030`) `Joris Van den Bossche`_
+- Temporarily pin ``python-graphviz`` in CI (:pr:`7031`) `James Bourbeau`_
+- Underline section in ``numpydoc`` (:pr:`7013`) `Matthias Bussonnier`_
+- Keep normal optimizations when adding custom optimizations (:pr:`7016`) `Matthew Rocklin`_
+- Temporarily pin sphinx version to 3.3.1 (:pr:`7002`) `Rafal Wojdyla`_
+- DOC: Misc formatting (:pr:`6998`) `Matthias Bussonnier`_
+- Add ``inline_array`` option to ``from_array`` (:pr:`6773`) `Tom Augspurger`_
+- Revert "Initial pass at blockwise array creation routines (:pr:`6931)" (:pr:`6995`) `James Bourbeau`_
+- Set ``npartitions`` in ``set_index`` (:pr:`6978`) `Julia Signell`_
+- Upstream ``config`` serialization and inheritance (:pr:`6987`) `Jacob Tomlinson`_
+- Bump the minimum time in ``test_minimum_time`` (:pr:`6988`) `Martin Durant`_
+- Fix pandas ``dtype`` inference for ``read_parquet`` (:pr:`6985`) `Richard (Rick) Zamora`_
+- Avoid data loss in ``set_index`` with ``sorted=True`` (:pr:`6980`) `Richard (Rick) Zamora`_
+- Bugfix in ``read_parquet`` for handling un-named indices with ``index=False`` (:pr:`6969`) `Richard (Rick) Zamora`_
+- Use ``__class__`` when comparing meta data (:pr:`6981`) `Mads R. B. Kristensen`_
+- Comparing string versions won't always work (:pr:`6979`) `Rafal Wojdyla`_
+- Fix :pr:`6925` (:pr:`6982`) `sdementen`_
+- Initial pass at blockwise array creation routines (:pr:`6931`) `Ian Rose`_
+- Simplify ``has_parallel_type()`` (:pr:`6927`) `Mads R. B. Kristensen`_
+- Handle annotation unpacking in ``BlockwiseIO`` (:pr:`6934`) `Simon Perkins`_
+- Avoid deprecated ``yield_fixture`` in ``test_sql.py`` (:pr:`6968`) `Richard (Rick) Zamora`_
+- Remove bad graph logic in ``BlockwiseIO`` (:pr:`6933`) `Richard (Rick) Zamora`_
+- Get config item if variable is ``None`` (:pr:`6862`) `Jacob Tomlinson`_
+- Update ``from_pandas`` docstring (:pr:`6957`) `Richard (Rick) Zamora`_
+- Prevent ``fuse_roots`` from clobbering annotations (:pr:`6955`) `Simon Perkins`_
+
+
 2020.12.0
 ---------
 
@@ -3864,3 +3916,6 @@ Other
 .. _`Pascal Bourgault`: https://github.com/aulemahal
 .. _`Joris Van den Bossche`: https://github.com/jorisvandenbossche
 .. _`Mark`: https://github.com/mchi
+.. _`Kumar Bharath Prabhu`: https://github.com/kumarprabhu1988
+.. _`Rob Malouf`: https://github.com/rmalouf
+.. _`sdementen`: https://github.com/sdementen
