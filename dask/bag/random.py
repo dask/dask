@@ -82,6 +82,7 @@ def _sample_map_partitions(population, k, replace):
     k: int
         Number of elements to sample.
     """
+    population = list(population)
     lx = len(population)
     real_k = k if k <= lx else lx
     sample_func = rnd.choices if replace else rnd.sample

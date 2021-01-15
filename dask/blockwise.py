@@ -411,7 +411,7 @@ class Blockwise(Layer):
             deps = set()
             coords = out_coords + dummies
             for cmap, axes, (arg, ind) in zip(coord_maps, concat_axes, self.indices):
-                if ind is not None and arg not in self.io_deps:
+                if ind is not None:
                     arg_coords = tuple(coords[c] for c in cmap)
                     if axes:
                         tups = lol_product((arg,), arg_coords)
@@ -884,7 +884,6 @@ def _optimize_blockwise(full_graph, keys=()):
     out = {}
     dependencies = {}
     seen = set()
-    io_names = set()
 
     while stack:
         layer = stack.pop()
@@ -896,7 +895,6 @@ def _optimize_blockwise(full_graph, keys=()):
         if isinstance(layers[layer], Blockwise):
             blockwise_layers = {layer}
             deps = set(blockwise_layers)
-            io_names |= set(layers[layer].io_deps)
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
 
@@ -952,7 +950,7 @@ def _optimize_blockwise(full_graph, keys=()):
             for k, v in new_layer.indices:
                 if v is None:
                     new_deps |= keys_in_tasks(full_graph.dependencies, [k])
-                elif k not in io_names:
+                else:
                     new_deps.add(k)
             dependencies[layer] = new_deps
         else:

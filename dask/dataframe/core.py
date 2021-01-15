@@ -1,3 +1,4 @@
+import copy
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
@@ -29,6 +30,7 @@ from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, appl
 from .. import threaded
 from ..context import globalmethod
 from ..utils import (
+    has_keyword,
     random_state_data,
     pseudorandom,
     derived_from,
@@ -44,7 +46,7 @@ from ..utils import (
 )
 from ..array.core import Array, normalize_arg
 from ..array.utils import zeros_like_safe
-from ..blockwise import blockwise, Blockwise
+from ..blockwise import blockwise, Blockwise, subs
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -582,9 +584,10 @@ Dask Name: {name}, {task} tasks"""
         args, kwargs :
             Arguments and keywords to pass to the function. The partition will
             be the first argument, and these will be passed *after*. Arguments
-            and keywords may contain ``Scalar``, ``Delayed`` or regular
-            python objects. DataFrame-like args (both dask and pandas) will be
-            repartitioned to align (if necessary) before applying the function.
+            and keywords may contain ``Scalar``, ``Delayed``, ``partition_info``
+            or regular python objects. DataFrame-like args (both dask and
+            pandas) will be repartitioned to align (if necessary) before
+            applying the function.
         $META
 
         Examples
@@ -648,6 +651,23 @@ Dask Name: {name}, {task} tasks"""
         to clear them afterwards:
 
         >>> ddf.map_partitions(func).clear_divisions()  # doctest: +SKIP
+
+        Your map function gets information about where it is in the dataframe by
+        accepting a special ``partition_info`` keyword argument.
+
+        >>> def func(partition, partition_info=None):
+        ...     pass
+
+        This will receive the following information:
+
+        >>> partition_info  # doctest: +SKIP
+        {'number': 1, 'division': 3}
+
+        For each argument and keyword arguments that are dask dataframes you will
+        receive the number (n) which represents the nth partition of the dataframe
+        and the division (the first index value in the partition). If divisions
+        are not known (for instance if the index is not sorted) then you will get
+        None as the division.
         """
         return map_partitions(func, self, *args, **kwargs)
 
@@ -5319,6 +5339,9 @@ def map_partitions(
     """
     name = kwargs.pop("token", None)
 
+    if has_keyword(func, "partition_info"):
+        kwargs["partition_info"] = {"number": -1, "divisions": None}
+
     assert callable(func)
     if name is not None:
         token = tokenize(meta, *args, **kwargs)
@@ -5340,6 +5363,9 @@ def map_partitions(
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
         meta = make_meta(meta, index=meta_index)
+
+    if has_keyword(func, "partition_info"):
+        kwargs["partition_info"] = "__dummy__"
 
     if all(isinstance(arg, Scalar) for arg in args):
         layer = {
@@ -5409,6 +5435,22 @@ def map_partitions(
         else:
             if not valid_divisions(divisions):
                 divisions = [None] * (dfs[0].npartitions + 1)
+
+    if has_keyword(func, "partition_info"):
+        dsk = dict(dsk)
+
+        for k, v in dsk.items():
+            vv = v
+            v = v[0]
+            number = k[-1]
+            assert isinstance(number, int)
+            info = {"number": number, "division": divisions[number]}
+            v = copy.copy(v)  # Need to copy and unpack subgraph callable
+            v.dsk = copy.copy(v.dsk)
+            [(key, task)] = v.dsk.items()
+            task = subs(task, {"__dummy__": info})
+            v.dsk[key] = task
+            dsk[k] = (v,) + vv[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)

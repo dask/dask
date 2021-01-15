@@ -29,6 +29,8 @@ from ..utils import clear_known_categories
 
 import fsspec.implementations.local
 from fsspec.compression import compr
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import infer_compression
 
 
 class CSVSubgraph(Mapping):
@@ -403,7 +405,7 @@ def read_pandas(
     urlpath,
     blocksize="default",
     lineterminator=None,
-    compression=None,
+    compression="infer",
     sample=256000,
     enforce=False,
     assume_missing=False,
@@ -454,6 +456,17 @@ def read_pandas(
         path_converter = kwargs.get("converters").get(include_path_column, None)
     else:
         path_converter = None
+
+    # If compression is "infer", inspect the (first) path suffix and
+    # set the proper compression option if the suffix is recongnized.
+    if compression == "infer":
+        # Translate the input urlpath to a simple path list
+        paths = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)[
+            2
+        ]
+
+        # Infer compression from first path
+        compression = infer_compression(paths[0])
 
     if blocksize == "default":
         blocksize = AUTO_BLOCKSIZE
@@ -635,7 +648,7 @@ def make_reader(reader, reader_name, file_type):
         urlpath,
         blocksize="default",
         lineterminator=None,
-        compression=None,
+        compression="infer",
         sample=256000,
         enforce=False,
         assume_missing=False,
