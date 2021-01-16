@@ -209,6 +209,45 @@ def test_attributes():
     pytest.raises(AttributeError, lambda: df.foo)
 
 
+def test_partition_sizes():
+    df = dd.from_pandas(
+        pd.DataFrame([{"i": f"{i}{i}"} for i in range(100)]), npartitions=3
+    )
+    assert df.partition_sizes == (34, 34, 32)
+    assert df.i.partition_sizes == (34, 34, 32)
+    assert df.i.map(len).partition_sizes == (34, 34, 32)
+    df["len"] = df.i.map(len)
+    assert df.partition_sizes == (34, 34, 32)
+    assert df["len"].partition_sizes == (34, 34, 32)
+    assert df["i"].partition_sizes == (34, 34, 32)
+    assert len(df.compute()) == 100
+    assert tuple(len(partition.compute()) for partition in df.partitions) == (
+        34,
+        34,
+        32,
+    )
+
+    for series in [
+        df.len + 2,
+        df.len - 2,
+        df.len * 2,
+        df.len / 2,
+        df.len % 2,
+        df.len % 2 == 0,
+    ]:
+        assert series.partition_sizes == (34, 34, 32)
+
+    # "dynamic" slice results in unknown `partition_sizes` (impossible to know "statically" how many elements are even
+    # vs. odd)
+    evens = df.len % 2 == 0
+    assert df[evens].partition_sizes is None
+    assert evens[evens].partition_sizes is None
+
+    a = np.array(range(1100)).reshape((100, 11))
+    d = da.from_array(a, chunks=(23, 4))
+    assert d.chunks == ((23, 23, 23, 23, 8), (4, 4, 3))
+
+
 def test_column_names():
     tm.assert_index_equal(d.columns, pd.Index(["a", "b"]))
     tm.assert_index_equal(d[["b", "a"]].columns, pd.Index(["b", "a"]))
@@ -2766,13 +2805,13 @@ def test_to_timestamp():
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
 
