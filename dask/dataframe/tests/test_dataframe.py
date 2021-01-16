@@ -249,6 +249,11 @@ def test_partition_sizes():
     d = da.from_array(a, chunks=(23, 4))
     assert d.chunks == ((23, 23, 23, 23, 8), (4, 4, 3))
 
+    # slice Array w/ Series[bool]
+    dask_sliced = d[evens]
+    np_sliced = a[evens.compute()]
+    np.testing.assert_array_equal(dask_sliced.compute(), np_sliced)
+
 
 class IlocChecks:
     df = pd.DataFrame([{"i": f"{i}{i}"} for i in range(100)])
