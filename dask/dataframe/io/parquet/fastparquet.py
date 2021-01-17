@@ -190,24 +190,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
 
 class FastParquetEngine(Engine):
     @classmethod
-    def read_metadata(
-        cls,
-        fs,
-        paths,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=None,
-        **kwargs
-    ):
-        # Define the parquet-file (pf) object to use for metadata,
-        # Also, initialize `parts`.  If `parts` is populated here,
-        # then each part will correspond to a file.  Otherwise, each part will
-        # correspond to a row group (populated below).
-        parts, pf, gather_statistics, fast_metadata, base_path = _determine_pf_parts(
-            fs, paths, gather_statistics, **kwargs
-        )
-
+    def _generate_dd_meta(cls, pf, index, categories):
         columns = None
         if pf.fmd.key_value_metadata:
             pandas_md = [
@@ -288,6 +271,38 @@ class FastParquetEngine(Engine):
                 meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
             elif meta.index.name == catcol:
                 meta.index = meta.index.set_categories(pf.cats[catcol])
+
+        return meta, dtypes, index_cols, categories_dict, categories, index
+
+    @classmethod
+    def read_metadata(
+        cls,
+        fs,
+        paths,
+        categories=None,
+        index=None,
+        gather_statistics=None,
+        filters=None,
+        **kwargs
+    ):
+        # Define the parquet-file (pf) object to use for metadata,
+        # Also, initialize `parts`.  If `parts` is populated here,
+        # then each part will correspond to a file.  Otherwise, each part will
+        # correspond to a row group (populated below).
+        parts, pf, gather_statistics, fast_metadata, base_path = _determine_pf_parts(
+            fs, paths, gather_statistics, **kwargs
+        )
+
+        # Process metadata to define `meta` and `index_cols`
+        (
+            meta,
+            dtypes,
+            index_cols,
+            categories_dict,
+            categories,
+            index,
+        ) = cls._generate_dd_meta(pf, index, categories)
+
         if gather_statistics and pf.row_groups:
             stats = []
             if filters is None:
