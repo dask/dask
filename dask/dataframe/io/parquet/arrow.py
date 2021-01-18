@@ -21,6 +21,7 @@ from .utils import (
     _normalize_index_columns,
     Engine,
     _analyze_paths,
+    _flatten_filters,
 )
 
 
@@ -350,15 +351,6 @@ def _get_pandas_metadata(schema):
         return json.loads(schema.metadata[b"pandas"].decode("utf8"))
     else:
         return {}
-
-
-def _flatten_filters(filters):
-    """Flatten DNF-formatted filters (list of tuples)"""
-    return (
-        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
-        if filters
-        else []
-    )
 
 
 def _read_table_from_path(

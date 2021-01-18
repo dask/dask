@@ -1,5 +1,7 @@
 import re
 
+from ....core import flatten
+
 
 class Engine:
     """ The API necessary to provide a new Parquet reader/writer """
@@ -476,3 +478,12 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
+
+
+def _flatten_filters(filters):
+    """Flatten DNF-formatted filters (list of tuples)"""
+    return (
+        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
+        if filters
+        else []
+    )

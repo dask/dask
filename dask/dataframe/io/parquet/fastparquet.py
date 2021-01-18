@@ -19,7 +19,12 @@ try:
 except ImportError:
     pass
 
-from .utils import _parse_pandas_metadata, _normalize_index_columns, _analyze_paths
+from .utils import (
+    _parse_pandas_metadata,
+    _normalize_index_columns,
+    _analyze_paths,
+    _flatten_filters,
+)
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
 
@@ -254,6 +259,8 @@ class FastParquetEngine(Engine):
 
         index_cols = index or ()
         meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
+        if isinstance(index_cols, str):
+            index_cols = [index_cols]
 
         # fastparquet doesn't handle multiindex
         if len(index_names) > 1:
@@ -275,6 +282,48 @@ class FastParquetEngine(Engine):
         return meta, dtypes, index_cols, categories_dict, categories, index
 
     @classmethod
+    def _update_metadata_options(
+        cls,
+        pf,
+        parts,
+        gather_statistics,
+        split_row_groups,
+        index_cols,
+        filters,
+    ):
+        # Cannot gather_statistics if our `parts` is alreadey a list
+        # of paths, or if we are building a multiindex (for now).
+        # We also don't "need" to gather statistics if we don't
+        # want to apply any filters or calculate divisions.
+        if (
+            isinstance(parts, list) and len(parts) and isinstance(parts[0], str)
+        ) or len(index_cols) > 1:
+            gather_statistics = False
+        elif filters is None and len(index_cols) == 0:
+            gather_statistics = False
+
+        # Determine which columns need statistics.
+        flat_filters = _flatten_filters(filters)
+        stat_col_indices = {}
+        for i, name in enumerate(pf.columns):
+            if name in index_cols or name in flat_filters:
+                stat_col_indices[name] = i
+
+        # If the user has not specified `gather_statistics`,
+        # we will only do so if there are specific columns in
+        # need of statistics.
+        if gather_statistics is None:
+            gather_statistics = len(stat_col_indices.keys()) > 0
+        if split_row_groups is None:
+            split_row_groups = False
+
+        return (
+            gather_statistics,
+            split_row_groups,
+            stat_col_indices,
+        )
+
+    @classmethod
     def _construct_parts(
         cls,
         fs,
@@ -290,6 +339,20 @@ class FastParquetEngine(Engine):
         split_row_groups,
         gather_statistics,
     ):
+        # Update `gather_statistics` and `split_row_groups`
+        # before constructing `parts`
+        (
+            gather_statistics,
+            split_row_groups,
+            stat_col_indices,
+        ) = cls._update_metadata_options(
+            pf,
+            parts,
+            gather_statistics,
+            split_row_groups,
+            index_cols,
+            filters,
+        )
 
         if gather_statistics and pf.row_groups:
             stats = []
