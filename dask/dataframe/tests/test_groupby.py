@@ -2496,5 +2496,5 @@ def test_empty_partitions_with_value_counts():
 
     expected = df.groupby("A")["B"].value_counts()
     ddf = dd.from_pandas(df, npartitions=3)
-    actual = ddf.groupby("A")["B"].value_counts().compute()
+    actual = ddf.groupby("A")["B"].value_counts()
     assert_eq(expected, actual)
