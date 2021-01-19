@@ -1165,12 +1165,14 @@ def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
     else:
         df = dd.from_pandas(df, npartitions=2)
 
-    df.to_parquet(tmpdir, engine="pyarrow", schema=schema, compute=False).compute(
-        scheduler="synchronous"
-    )
+    df.to_parquet(tmpdir, engine="pyarrow", schema=schema)
     df_out = dd.read_parquet(tmpdir, engine=engine)
+    df_out.compute()
 
     if index and engine == "fastparquet":
+        # Fastparquet fails to detect int64 from _metadata
+        df_out["amount"] = df_out["amount"].astype("int64")
+
         # Fastparquet not handling divisions for
         # pyarrow-written dataset with string index
         assert_eq(df, df_out, check_divisions=False)
@@ -2360,9 +2362,7 @@ def test_graph_size_pyarrow(tmpdir, engine):
     ddf1.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, engine=engine)
 
-    # pyarrow.dataset requires fragments to be passed in dict.
-    # This requires slightly more space than "legacy"
-    assert len(pickle.dumps(ddf2.__dask_graph__())) < 32000
+    assert len(pickle.dumps(ddf2.__dask_graph__())) < 25000
 
 
 @pytest.mark.parametrize("preserve_index", [True, False])

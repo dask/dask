@@ -98,12 +98,10 @@ class ParquetSubgraph(Layer):
             self.fs,
             self.engine.read_partition,
             self.meta,
-            [p["piece"] for p in part],
+            [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
             self.index,
-            toolz.merge(
-                self.common_kwargs, part[0].get("kwargs", {}), self.kwargs or {}
-            ),
+            toolz.merge(self.common_kwargs, self.kwargs or {}),
         )
 
     def __len__(self):
@@ -366,10 +364,16 @@ def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
     This function is used by `read_parquet`."""
 
     if isinstance(part, list):
-        dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
+        dfs = [
+            func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
+            for (rg, kw) in part
+        ]
         df = concat(dfs, axis=0)
     else:
-        df = func(fs, part, columns, index, **kwargs)
+        # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
+        #       be different for each part.
+        rg, part_kwargs = part
+        df = func(fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs))
 
     if meta.columns.name:
         df.columns.name = meta.columns.name

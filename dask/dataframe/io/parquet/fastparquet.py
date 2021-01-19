@@ -28,6 +28,13 @@ from .utils import (
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
 
+try:
+    # Required for distrubuted
+    import pickle
+except ImportError:
+    pickle = None
+
+
 #########################
 # Fastparquet interface #
 #########################
@@ -354,6 +361,15 @@ class FastParquetEngine(Engine):
             filters,
         )
 
+        ##
+        ## TODO: Follow approach used by pyarrow-legacy engine. The
+        ## idea is to use the approach in `_process_metadata`. We
+        ## can loop through `pf.row_groups` so that we ultimately
+        ## specify a path, row-group list, and partition information
+        ## for each task to produce a partition.  We will probably
+        ## need to add an object similar to `partition_keys` here.
+        ##
+
         if gather_statistics and pf.row_groups:
             stats = []
             if filters is None:
@@ -408,8 +424,8 @@ class FastParquetEngine(Engine):
         else:
             stats = None
 
-        pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
-        pf.fmd.row_groups = None
+        # pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
+        # pf.fmd.row_groups = None
 
         # Constructing "piece" and "pf" for each dask partition. We will
         # need to consider the following output scenarios:
@@ -494,12 +510,24 @@ class FastParquetEngine(Engine):
                     col.meta_data.statistics = None
                     col.meta_data.encoding_stats = None
 
+            row_groups = None
+            if not isinstance(part, str):
+                part.statistics = None
+                part.helper = None
+                for col in part.columns:
+                    col.meta_data.encoding_stats = None
+                    # col.meta_data.statistics = None
+                row_groups = pickle.dumps([part]) if pickle else [part]
+
             # Final definition of "piece" and "pf" for this output partition
             piece = i_path if pf_deps else part
             pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
             part_item = {
                 "piece": piece,
-                "kwargs": {"pf": pf_piece},
+                "kwargs": {
+                    "pf": pf_piece,
+                    "row_groups": row_groups,
+                },
             }
             parts.append(part_item)
 
@@ -559,7 +587,17 @@ class FastParquetEngine(Engine):
         # We can return as a separate element in the future, but
         # should avoid breaking the API for now.
         if len(parts):
-            parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
+
+            # Strip all partition-dependent or unnecessary
+            # data from the `ParquetFile` object
+            pf.row_groups = None
+            pf.fmd.row_groups = None
+            pf._statistics = None
+
+            parts[0]["common_kwargs"] = {
+                "parquet_file": pf,
+                "categories": categories_dict or categories,
+            }
 
         return (meta, stats, parts, index)
 
@@ -581,6 +619,34 @@ class FastParquetEngine(Engine):
                 index = []
                 null_index_name = True
             columns += index
+
+        # Use global `parquet_file` object.  Need to reattach
+        # the desired row_group
+        parquet_file = kwargs.pop("parquet_file", None)
+        row_groups = kwargs.pop("row_groups", None)
+        if parquet_file and row_groups:
+            if isinstance(row_groups, bytes):
+                row_groups = pickle.loads(row_groups)
+            parquet_file.row_groups = row_groups
+            if null_index_name:
+                if "__index_level_0__" in parquet_file.columns:
+                    # See "Handling a None-labeled index" comment above
+                    index = ["__index_level_0__"]
+                    columns += index
+                    parquet_file.fmd.key_value_metadata = None
+            else:
+                parquet_file.fmd.key_value_metadata = None
+            parquet_file._dtypes = (
+                lambda *args: parquet_file.dtypes
+            )  # ugly patch, could be fixed
+            df = parquet_file.read_row_group_file(
+                row_groups[0],
+                columns,
+                categories,
+                index=index,
+                **kwargs.get("read", {})
+            )
+            return df
 
         if pf is None:
             base, fns = _analyze_paths([piece], fs)
