@@ -277,32 +277,43 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
             if hasattr(a, "_meta") and hasattr(b, "_meta"):
                 assert_eq(a._meta, b._meta)
             if hasattr(a_original, "_meta"):
-                assert (
-                    a_original._meta.ndim == a.ndim
-                ), f"compute()-ing 'a' changes its number of dimensions (before: {a_original._meta.ndim}, after: {a.ndim})"
+                msg = (
+                    f"compute()-ing 'a' changes its number of dimensions "
+                    f"(before: {a_original._meta.ndim}, after: {a.ndim})"
+                )
+                assert a_original._meta.ndim == a.ndim, msg
                 if a_meta is not None:
-                    assert type(a_original._meta) == type(
-                        a_meta
-                    ), f"compute()-ing 'a' changes its type (before: {type(a_original._meta)}, after: {type(a_meta)})"
+                    msg = (
+                        f"compute()-ing 'a' changes its type "
+                        f"(before: {type(a_original._meta)}, after: {type(a_meta)})"
+                    )
+                    assert type(a_original._meta) == type(a_meta), msg
                     if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
-                        assert type(a_meta) == type(
-                            a_computed
-                        ), f"compute()-ing 'a' results in a different type than implied by its metadata (meta: {type(b_meta)}, computed: {type(b_computed)})"
+                        msg = (
+                            f"compute()-ing 'a' results in a different type than implied by its metadata "
+                            f"(meta: {type(b_meta)}, computed: {type(b_computed)})"
+                        )
+                        assert type(a_meta) == type(a_computed), msg
             if hasattr(b_original, "_meta"):
-                assert (
-                    b_original._meta.ndim == b.ndim
-                ), f"compute()-ing 'b' changes its number of dimensions (before: {b_original._meta.ndim}, after: {b.ndim})"
+                msg = (
+                    f"compute()-ing 'b' changes its number of dimensions "
+                    f"(before: {b_original._meta.ndim}, after: {b.ndim})"
+                )
+                assert b_original._meta.ndim == b.ndim, msg
                 if b_meta is not None:
-                    assert type(b_original._meta) == type(
-                        b_meta
-                    ), f"compute()-ing 'b' changes its type (before: {type(a_original._meta)}, after: {type(a_meta)})"
+                    msg = (
+                        f"compute()-ing 'b' changes its type "
+                        f"(before: {type(a_original._meta)}, after: {type(a_meta)})"
+                    )
+                    assert type(b_original._meta) == type(b_meta), msg
                     if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
-                        assert type(b_meta) == type(
-                            b_computed
-                        ), f"compute()-ing 'b' results in a different type than implied by its metadata (meta: {type(b_meta)}, computed: {type(b_computed)})"
-        assert allclose(
-            a, b, **kwargs
-        ), "found values in 'a' and 'b'' which differ by more than the allowed amount"
+                        msg = (
+                            f"compute()-ing 'b' results in a different type than implied by its metadata "
+                            f"(meta: {type(b_meta)}, computed: {type(b_computed)})"
+                        )
+                        assert type(b_meta) == type(b_computed), msg
+        msg = "found values in 'a' and 'b' which differ by more than the allowed amount"
+        assert allclose(a, b, **kwargs), msg
         return True
     except TypeError:
         pass
