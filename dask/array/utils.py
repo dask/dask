@@ -291,7 +291,7 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
                     if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
                         msg = (
                             f"compute()-ing 'a' results in a different type than implied by its metadata "
-                            f"(meta: {type(b_meta)}, computed: {type(b_computed)})"
+                            f"(meta: {type(a_meta)}, computed: {type(a_computed)})"
                         )
                         assert type(a_meta) == type(a_computed), msg
             if hasattr(b_original, "_meta"):
@@ -303,7 +303,7 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
                 if b_meta is not None:
                     msg = (
                         f"compute()-ing 'b' changes its type "
-                        f"(before: {type(a_original._meta)}, after: {type(a_meta)})"
+                        f"(before: {type(b_original._meta)}, after: {type(b_meta)})"
                     )
                     assert type(b_original._meta) == type(b_meta), msg
                     if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
