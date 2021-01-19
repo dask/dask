@@ -16,6 +16,7 @@ from typing import Iterable, Optional
 import uuid
 from weakref import WeakValueDictionary
 from functools import lru_cache
+from _thread import RLock
 
 from .core import get_deps
 
@@ -1639,3 +1640,67 @@ def stringify_collection_keys(obj):
     if typ is tuple:  # If the tuple itself isn't a key, check its elements
         return tuple(stringify_collection_keys(v) for v in obj)
     return obj
+
+
+try:
+    _cached_property = functools.cached_property
+except AttributeError:
+    # TODO: Copied from functools.cached_property in python 3.8. Remove when minimum
+    # supported python version is 3.8:
+    _NOT_FOUND = object()
+
+    class _cached_property:
+        def __init__(self, func):
+            self.func = func
+            self.attrname = None
+            self.__doc__ = func.__doc__
+            self.lock = RLock()
+
+        def __set_name__(self, owner, name):
+            if self.attrname is None:
+                self.attrname = name
+            elif name != self.attrname:
+                raise TypeError(
+                    "Cannot assign the same cached_property to two different names "
+                    f"({self.attrname!r} and {name!r})."
+                )
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            if self.attrname is None:
+                raise TypeError(
+                    "Cannot use cached_property instance without calling __set_name__ on it."
+                )
+            try:
+                cache = instance.__dict__
+            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots)
+                msg = (
+                    f"No '__dict__' attribute on {type(instance).__name__!r} "
+                    f"instance to cache {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+            val = cache.get(self.attrname, _NOT_FOUND)
+            if val is _NOT_FOUND:
+                with self.lock:
+                    # check if another thread filled cache while we awaited lock
+                    val = cache.get(self.attrname, _NOT_FOUND)
+                    if val is _NOT_FOUND:
+                        val = self.func(instance)
+                        try:
+                            cache[self.attrname] = val
+                        except TypeError:
+                            msg = (
+                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "
+                                f"does not support item assignment for caching {self.attrname!r} property."
+                            )
+                            raise TypeError(msg) from None
+            return val
+
+
+class cached_property(_cached_property):
+    """Read only version of functools.cached_property."""
+
+    def __set__(self, instance, val):
+        """Raise an error when attempting to set a cached property."""
+        raise AttributeError("Can't set attribute")

@@ -652,7 +652,13 @@ def compression_level(n, q, n_oversamples=10, min_subspace_size=20):
 
 
 def compression_matrix(
-    data, q, iterator="none", n_power_iter=0, n_oversamples=10, seed=None, compute=False
+    data,
+    q,
+    iterator="power",
+    n_power_iter=0,
+    n_oversamples=10,
+    seed=None,
+    compute=False,
 ):
     """Randomly sample matrix to find most active subspace
 
@@ -666,12 +672,13 @@ def compression_matrix(
     q: int
         Size of the desired subspace (the actual size will be bigger,
         because of oversampling, see ``da.linalg.compression_level``)
-    iterator: {'none', 'power', 'QR'}, default='none'
+    iterator: {'power', 'QR'}, default='power'
         Define the technique used for iterations to cope with flat
         singular spectra or when the input matrix is very large.
     n_power_iter: int
-        number of power iterations, useful when the singular values of
-        the input matrix decay very slowly.
+        Number of power iterations, useful when the singular values
+        decay slowly. Error decreases exponentially as `n_power_iter`
+        increases. In practice, set `n_power_iter` <= 4.
     n_oversamples: int, default=10
         Number of oversamples used for generating the sampling matrix.
         This value increases the size of the subspace computed, which is more
@@ -693,6 +700,10 @@ def compression_matrix(
     pp. 217-288, June 2011
     https://arxiv.org/abs/0909.4061
     """
+    if iterator not in ["power", "QR"]:
+        raise ValueError(
+            f"Iterator '{iterator}' not valid, must one one of ['power', 'QR']"
+        )
     m, n = data.shape
     comp_level = compression_level(min(m, n), q, n_oversamples=n_oversamples)
     if isinstance(seed, RandomState):
@@ -717,7 +728,7 @@ def compression_matrix(
                 wait(tmp)
             mat_h = data.dot(tmp)
         q, _ = tsqr(mat_h)
-    elif iterator == "QR":
+    else:
         q, _ = tsqr(mat_h)
         for i in range(n_power_iter):
             if compute:
@@ -728,16 +739,14 @@ def compression_matrix(
                 q = q.persist()
                 wait(q)
             q, _ = tsqr(data.dot(q))
-    else:
-        q, _ = tsqr(mat_h)
     return q.T
 
 
 def svd_compressed(
     a,
     k,
-    iterator="none",
-    n_power_iter=1,
+    iterator="power",
+    n_power_iter=0,
     n_oversamples=10,
     seed=None,
     compute=False,
@@ -756,15 +765,18 @@ def svd_compressed(
         Input array
     k: int
         Rank of the desired thin SVD decomposition.
-    iterator: {'none', 'power', 'QR'}, default='none'
+    iterator: {'power', 'QR'}, default='power'
         Define the technique used for iterations to cope with flat
         singular spectra or when the input matrix is very large.
-    n_power_iter: int, default=1
+    n_power_iter: int, default=0
         Number of power iterations, useful when the singular values
-        decay slowly. Error decreases exponentially as n_power_iter
-        increases. In practice, set n_power_iter <= 4.
+        decay slowly. Error decreases exponentially as `n_power_iter`
+        increases. In practice, set `n_power_iter` <= 4.
     n_oversamples: int, default=10
         Number of oversamples used for generating the sampling matrix.
+        This value increases the size of the subspace computed, which is more
+        accurate at the cost of efficiency.  Results are rarely sensitive to this choice
+        though and in practice a value of 10 is very commonly high enough.
     compute : bool
         Whether or not to compute data at each use.
         Recomputing the input while performing several passes reduces memory
@@ -795,8 +807,6 @@ def svd_compressed(
     pp. 217-288, June 2011
     https://arxiv.org/abs/0909.4061
     """
-    if iterator != "none" and n_power_iter == 0:
-        raise ValueError("Iterators require n_power_iter > 0.\n")
     comp = compression_matrix(
         a,
         k,
@@ -1350,9 +1360,8 @@ def _cholesky(a):
     return lower, upper
 
 
-def _sort_decreasing(x):
-    x[::-1].sort()
-    return x
+def _reverse(x):
+    return x[::-1]
 
 
 def lstsq(a, b):
@@ -1393,9 +1402,9 @@ def lstsq(a, b):
         Singular values of `a`.
     """
     q, r = qr(a)
-    x = solve_triangular(r, q.T.dot(b))
+    x = solve_triangular(r, q.T.conj().dot(b))
     residuals = b - a.dot(x)
-    residuals = (residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
+    residuals = abs(residuals ** 2).sum(axis=0, keepdims=b.ndim == 1)
 
     token = tokenize(a, b)
 
@@ -1410,20 +1419,15 @@ def lstsq(a, b):
 
     # singular
     sname = "lstsq-singular-" + token
-    rt = r.T
+    rt = r.T.conj()
     sdsk = {
         (sname, 0): (
-            _sort_decreasing,
-            (np.sqrt, (np.linalg.eigvals, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
+            _reverse,
+            (np.sqrt, (np.linalg.eigvalsh, (np.dot, (rt.name, 0, 0), (r.name, 0, 0)))),
         )
     }
     graph = HighLevelGraph.from_collections(sname, sdsk, dependencies=[rt, r])
-    _, _, _, ss = np.linalg.lstsq(
-        np.array([[1, 0], [1, 2]], dtype=a.dtype),
-        np.array([0, 1], dtype=b.dtype),
-        rcond=-1,
-    )
-    meta = meta_from_array(r, 1, dtype=ss.dtype)
+    meta = meta_from_array(residuals, 1)
     s = Array(graph, sname, shape=(r.shape[0],), chunks=r.shape[0], meta=meta)
 
     return x, residuals, rank, s
