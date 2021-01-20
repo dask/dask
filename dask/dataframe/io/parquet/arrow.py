@@ -22,6 +22,7 @@ from .utils import (
     Engine,
     _analyze_paths,
     _flatten_filters,
+    _row_groups_to_parts,
 )
 
 
@@ -1361,6 +1362,25 @@ class ArrowDatasetEngine(Engine):
         )
 
     @classmethod
+    def _make_part(
+        cls,
+        full_path,
+        partition_keys,
+        partition_obj,
+        rg_list,
+    ):
+        pkeys = partition_keys.get(full_path, None)
+        if partition_obj and pkeys is None:
+            return None  # This partition was filtered
+        return {
+            "piece": (
+                full_path,
+                rg_list,
+                pkeys,
+            ),
+        }
+
+    @classmethod
     def _process_metadata(
         cls,
         metadata,
@@ -1393,146 +1413,31 @@ class ArrowDatasetEngine(Engine):
             filters,
         )
 
-        partition_keys = partition_info["partition_keys"]
-        partition_obj = partition_info["partitions"]
+        # Convert organized row-groups to parts
+        parts, stats = _row_groups_to_parts(
+            fs,
+            gather_statistics,
+            split_row_groups,
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            stat_col_indices,
+            data_path,
+            partition_info,
+            cls._make_part,
+            cls._make_part,
+        )
 
-        # Construct `parts` and `stats`
-        parts = []
-        stats = []
-        if split_row_groups:
-            # Create parts from each file,
-            # limiting the number of row_groups in each piece
-            split_row_groups = int(split_row_groups)
-            for filename, row_groups in file_row_groups.items():
-                row_group_count = len(row_groups)
-                for i in range(0, row_group_count, split_row_groups):
-                    i_end = i + split_row_groups
-                    rg_list = row_groups[i:i_end]
-                    # Get full path (empty strings should be ignored)
-                    full_path = fs.sep.join(
-                        [p for p in [data_path, filename] if p != ""]
-                    )
-
-                    pkeys = partition_keys.get(full_path, None)
-                    if partition_obj and pkeys is None:
-                        continue  # This partition was filtered
-                    part = {
-                        "piece": (
-                            full_path,
-                            rg_list,
-                            pkeys,
-                        ),
-                    }
-
-                    parts.append(part)
-                    if gather_statistics:
-                        stat = cls._aggregate_stats(
-                            filename,
-                            file_row_group_stats[filename][i:i_end],
-                            file_row_group_column_stats[filename][i:i_end],
-                            stat_col_indices,
-                        )
-                        stats.append(stat)
-        else:
-            for filename, row_groups in file_row_groups.items():
-
-                # Get full path (empty strings should be ignored)
-                full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
-                pkeys = partition_keys.get(full_path, None)
-                if partition_obj and pkeys is None:
-                    continue  # This partition was filtered
-                part = {
-                    "piece": (
-                        full_path,
-                        row_groups,
-                        pkeys,
-                    ),
-                }
-
-                parts.append(part)
-                if gather_statistics:
-                    stat = cls._aggregate_stats(
-                        filename,
-                        file_row_group_stats[filename],
-                        file_row_group_column_stats[filename],
-                        stat_col_indices,
-                    )
-                    stats.append(stat)
-
+        # Add common kwargs
         common_kwargs = {
             "partitioning": partition_info["partitioning"],
-            "partitions": partition_obj,
+            "partitions": partition_info["partitions"],
             "categories": categories,
             "filters": filters,
             "schema": schema,
         }
 
         return parts, stats, common_kwargs
-
-    @classmethod
-    def _aggregate_stats(
-        cls,
-        file_path,
-        file_row_group_stats,
-        file_row_group_column_stats,
-        stat_col_indices,
-    ):
-        """Utility to aggregate the statistics for N row-groups
-        into a single dictionary.
-
-        Used by `_construct_parts`
-        """
-        if len(file_row_group_stats) < 1:
-            # Empty statistics
-            return {}
-        elif len(file_row_group_column_stats) == 0:
-            assert len(file_row_group_stats) == 1
-            return file_row_group_stats[0]
-        else:
-            # Note: It would be better to avoid df_rgs and df_cols
-            #       construction altogether. It makes it fast to aggregate
-            #       the statistics for many row groups, but isn't
-            #       worthwhile for a small number of row groups.
-            if len(file_row_group_stats) > 1:
-                df_rgs = pd.DataFrame(file_row_group_stats)
-                s = {
-                    "file_path_0": file_path,
-                    "num-rows": df_rgs["num-rows"].sum(),
-                    "total_byte_size": df_rgs["total_byte_size"].sum(),
-                    "columns": [],
-                }
-            else:
-                s = {
-                    "file_path_0": file_path,
-                    "num-rows": file_row_group_stats[0]["num-rows"],
-                    "total_byte_size": file_row_group_stats[0]["total_byte_size"],
-                    "columns": [],
-                }
-
-            df_cols = None
-            if len(file_row_group_column_stats) > 1:
-                df_cols = pd.DataFrame(file_row_group_column_stats)
-            for ind, name in enumerate(stat_col_indices):
-                i = ind * 3
-                if df_cols is None:
-                    s["columns"].append(
-                        {
-                            "name": name,
-                            "min": file_row_group_column_stats[0][i],
-                            "max": file_row_group_column_stats[0][i + 1],
-                            "null_count": file_row_group_column_stats[0][i + 2],
-                        }
-                    )
-                else:
-                    s["columns"].append(
-                        {
-                            "name": name,
-                            "min": df_cols.iloc[:, i].min(),
-                            "max": df_cols.iloc[:, i + 1].max(),
-                            "null_count": df_cols.iloc[:, i + 2].sum(),
-                        }
-                    )
-            return s
 
     @classmethod
     def _read_table(
@@ -1997,58 +1902,24 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             filters,
         )
 
-        partition_keys = partition_info["partition_keys"]
-        partition_obj = partition_info["partitions"]
+        # Convert organized row-groups to parts
+        parts, stats = _row_groups_to_parts(
+            fs,
+            gather_statistics,
+            split_row_groups,
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            stat_col_indices,
+            data_path,
+            partition_info,
+            cls._make_part,
+            cls._make_part,
+        )
 
-        # Construct `parts` and `stats`
-        parts = []
-        stats = []
-        if split_row_groups:
-            # Create parts from each file,
-            # limiting the number of row_groups in each piece
-            split_row_groups = int(split_row_groups)
-            for filename, row_groups in file_row_groups.items():
-                row_group_count = len(row_groups)
-                for i in range(0, row_group_count, split_row_groups):
-                    i_end = i + split_row_groups
-                    rg_list = row_groups[i:i_end]
-                    # Get full path (empty strings should be ignored)
-                    full_path = fs.sep.join(
-                        [p for p in [data_path, filename] if p != ""]
-                    )
-                    pkeys = partition_keys.get(full_path, None)
-                    if partition_obj and pkeys is None:
-                        continue  # This partition was filtered
-                    part = {"piece": (full_path, rg_list, pkeys)}
-                    parts.append(part)
-                    if gather_statistics:
-                        stat = cls._aggregate_stats(
-                            filename,
-                            file_row_group_stats[filename][i:i_end],
-                            file_row_group_column_stats[filename][i:i_end],
-                            stat_col_indices,
-                        )
-                        stats.append(stat)
-        else:
-            for filename, row_groups in file_row_groups.items():
-                # Get full path (empty strings should be ignored)
-                full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
-                pkeys = partition_keys.get(full_path, None)
-                if partition_obj and pkeys is None:
-                    continue  # This partition was filtered
-                part = {"piece": (full_path, None, pkeys)}
-                parts.append(part)
-                if gather_statistics:
-                    stat = cls._aggregate_stats(
-                        filename,
-                        file_row_group_stats[filename],
-                        file_row_group_column_stats[filename],
-                        stat_col_indices,
-                    )
-                    stats.append(stat)
-
+        # Add common kwargs
         common_kwargs = {
-            "partitions": partition_obj,
+            "partitions": partition_info["partitions"],
             "categories": categories,
             "filters": filters,
         }

@@ -25,6 +25,7 @@ from .utils import (
     _normalize_index_columns,
     _analyze_paths,
     _flatten_filters,
+    _aggregate_stats,
 )
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
@@ -344,71 +345,6 @@ class FastParquetEngine(Engine):
         )
 
     @classmethod
-    def _aggregate_stats(
-        cls,
-        file_path,
-        file_row_group_stats,
-        file_row_group_column_stats,
-        stat_col_indices,
-    ):
-        """Utility to aggregate the statistics for N row-groups
-        into a single dictionary.
-
-        Used by `_construct_parts`
-        """
-        if len(file_row_group_stats) < 1:
-            # Empty statistics
-            return {}
-        elif len(file_row_group_column_stats) == 0:
-            assert len(file_row_group_stats) == 1
-            return file_row_group_stats[0]
-        else:
-            # Note: It would be better to avoid df_rgs and df_cols
-            #       construction altogether. It makes it fast to aggregate
-            #       the statistics for many row groups, but isn't
-            #       worthwhile for a small number of row groups.
-            if len(file_row_group_stats) > 1:
-                df_rgs = pd.DataFrame(file_row_group_stats)
-                s = {
-                    "file_path_0": file_path,
-                    "num-rows": df_rgs["num-rows"].sum(),
-                    "total_byte_size": df_rgs["total_byte_size"].sum(),
-                    "columns": [],
-                }
-            else:
-                s = {
-                    "file_path_0": file_path,
-                    "num-rows": file_row_group_stats[0]["num-rows"],
-                    "total_byte_size": file_row_group_stats[0]["total_byte_size"],
-                    "columns": [],
-                }
-
-            df_cols = None
-            if len(file_row_group_column_stats) > 1:
-                df_cols = pd.DataFrame(file_row_group_column_stats)
-            for ind, name in enumerate(stat_col_indices):
-                i = ind * 3
-                if df_cols is None:
-                    s["columns"].append(
-                        {
-                            "name": name,
-                            "min": file_row_group_column_stats[0][i],
-                            "max": file_row_group_column_stats[0][i + 1],
-                            "null_count": file_row_group_column_stats[0][i + 2],
-                        }
-                    )
-                else:
-                    s["columns"].append(
-                        {
-                            "name": name,
-                            "min": df_cols.iloc[:, i].min(),
-                            "max": df_cols.iloc[:, i + 1].max(),
-                            "null_count": df_cols.iloc[:, i + 2].sum(),
-                        }
-                    )
-            return s
-
-    @classmethod
     def _organize_row_groups(
         cls,
         pf,
@@ -643,7 +579,7 @@ class FastParquetEngine(Engine):
 
                     parts.append(part)
                     if gather_statistics:
-                        stat = cls._aggregate_stats(
+                        stat = _aggregate_stats(
                             filename,
                             file_row_group_stats[filename][i:i_end],
                             file_row_group_column_stats[filename][i:i_end],
@@ -667,7 +603,7 @@ class FastParquetEngine(Engine):
 
                 parts.append(part)
                 if gather_statistics:
-                    stat = cls._aggregate_stats(
+                    stat = _aggregate_stats(
                         filename,
                         file_row_group_stats[filename],
                         file_row_group_column_stats[filename],
