@@ -7,7 +7,7 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 # TEMP install pyarrow nightly for all envs
-conda update -y -c arrow-nightlies pyarrow
+conda install -y -c arrow-nightlies pyarrow=2.1
 
 if [[ ${UPSTREAM_DEV} ]]; then
     # update pyarrow first with conda, otherwise this would downgrade the
