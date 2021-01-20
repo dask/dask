@@ -409,51 +409,20 @@ class FastParquetEngine(Engine):
             return s
 
     @classmethod
-    def _construct_parts(
+    def _process_metadata(
         cls,
-        fs,
         pf,
-        paths,
-        parts,
         dtypes,
-        base_path,
-        filters,
-        index_cols,
-        categories,
         split_row_groups,
         gather_statistics,
+        stat_col_indices,
+        filters,
+        categories,
+        base_path,
+        paths,
+        fs,
     ):
-
-        ##
-        ## TODO: Follow approach used by pyarrow-legacy engine. The
-        ## idea is to use the approach in `_process_metadata`. We
-        ## can loop through `pf.row_groups` so that we ultimately
-        ## specify a path, row-group list, and partition information
-        ## for each task to produce a partition.  We will probably
-        ## need to add an object similar to `partition_keys` here.
-        ##
-
-        # Check if `parts` is just a list of paths
-        # (not splitting by row-group or collecting statistics)
-        if isinstance(parts, list) and len(parts) and isinstance(parts[0], str):
-            stats = []
-            return [{"piece": (full_path, None)} for full_path in parts], stats
-
-        # Update `gather_statistics` and `split_row_groups`
-        # before constructing `parts`
-        (
-            gather_statistics,
-            split_row_groups,
-            stat_col_indices,
-        ) = cls._update_metadata_options(
-            pf,
-            parts,
-            gather_statistics,
-            split_row_groups,
-            index_cols,
-            filters,
-        )
-
+        # Get partitioning metadata
         pqpartitions = pf.info.get("partitions", None)
 
         # Get the number of row groups per file
@@ -463,10 +432,10 @@ class FastParquetEngine(Engine):
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
-
         for rg, row_group in enumerate(pf.row_groups):
 
-            # We can out partitions
+            # We can filter partition columns here without dealing
+            # with statistics
             if (
                 pqpartitions
                 and filters
@@ -487,6 +456,7 @@ class FastParquetEngine(Engine):
                         "If the dataset includes a _metadata file, that file may "
                         "have one or more missing file_path fields."
                     )
+
             if file_row_groups[fpath]:
                 file_row_groups[fpath].append(file_row_groups[fpath][-1] + 1)
             else:
@@ -626,7 +596,6 @@ class FastParquetEngine(Engine):
                         stats.append(stat)
         else:
             for filename, row_groups in file_row_groups.items():
-
                 if pqpartitions:
                     real_row_groups = []
                     for rg in row_groups:
@@ -665,163 +634,56 @@ class FastParquetEngine(Engine):
 
         return parts, stats
 
-        # if gather_statistics and pf.row_groups:
-        #     stats = []
-        #     if filters is None:
-        #         filters = []
+    @classmethod
+    def _construct_parts(
+        cls,
+        fs,
+        pf,
+        paths,
+        parts,
+        dtypes,
+        base_path,
+        filters,
+        index_cols,
+        categories,
+        split_row_groups,
+        gather_statistics,
+    ):
 
-        #     skip_cols = set()  # Columns with min/max = None detected
-        #     # make statistics conform in layout
-        #     for (i, row_group) in enumerate(pf.row_groups):
-        #         s = {"num-rows": row_group.num_rows, "columns": []}
-        #         for i_col, col in enumerate(pf.columns):
-        #             if col not in skip_cols:
-        #                 d = {"name": col}
-        #                 cs_min = None
-        #                 cs_max = None
-        #                 if pf.statistics["min"][col][0] is not None:
-        #                     cs_min = pf.statistics["min"][col][i]
-        #                     cs_max = pf.statistics["max"][col][i]
-        #                 elif (
-        #                     dtypes[col] == "object"
-        #                     and row_group.columns[i_col].meta_data.statistics
-        #                 ):
-        #                     cs_min = row_group.columns[
-        #                         i_col
-        #                     ].meta_data.statistics.min_value
-        #                     cs_max = row_group.columns[
-        #                         i_col
-        #                     ].meta_data.statistics.max_value
-        #                     if isinstance(cs_min, (bytes, bytearray)):
-        #                         cs_min = cs_min.decode("utf-8")
-        #                         cs_max = cs_max.decode("utf-8")
-        #                 if None in [cs_min, cs_max] and i == 0:
-        #                     skip_cols.add(col)
-        #                     continue
-        #                 if isinstance(cs_min, np.datetime64):
-        #                     tz = getattr(dtypes[col], "tz", None)
-        #                     cs_min = pd.Timestamp(cs_min, tz=tz)
-        #                     cs_max = pd.Timestamp(cs_max, tz=tz)
-        #                 d.update(
-        #                     {
-        #                         "min": cs_min,
-        #                         "max": cs_max,
-        #                         "null_count": pf.statistics["null_count"][col][i],
-        #                     }
-        #                 )
-        #                 s["columns"].append(d)
-        #         # Need this to filter out partitioned-on categorical columns
-        #         s["filter"] = fastparquet.api.filter_out_cats(row_group, filters)
-        #         s["total_byte_size"] = row_group.total_byte_size
-        #         s["file_path_0"] = row_group.columns[0].file_path  # 0th column only
-        #         stats.append(s)
+        # Check if `parts` is just a list of paths
+        # (not splitting by row-group or collecting statistics)
+        if isinstance(parts, list) and len(parts) and isinstance(parts[0], str):
+            stats = []
+            return [{"piece": (full_path, None)} for full_path in parts], stats
 
-        # else:
-        #     stats = None
+        # Update `gather_statistics` and `split_row_groups`
+        # before constructing `parts`
+        (
+            gather_statistics,
+            split_row_groups,
+            stat_col_indices,
+        ) = cls._update_metadata_options(
+            pf,
+            parts,
+            gather_statistics,
+            split_row_groups,
+            index_cols,
+            filters,
+        )
 
-        # # Constructing "piece" and "pf" for each dask partition. We will
-        # # need to consider the following output scenarios:
-        # #
-        # #  1) Each "piece" is a file path, and "pf" is `None`
-        # #      - `gather_statistics==False` and no "_metadata" available
-        # #  2) Each "piece" is a row-group index, and "pf" is ParquetFile object
-        # #      - We have parquet partitions and no "_metadata" available
-        # #  3) Each "piece" is a row-group index, and "pf" is a `tuple`
-        # #      - The value of the 0th tuple element depends on the following:
-        # #      A) Dataset is partitioned and "_metadata" exists
-        # #          - 0th tuple element will be the path to "_metadata"
-        # #      B) Dataset is not partitioned
-        # #          - 0th tuple element will be the path to the data
-        # #      C) Dataset is partitioned and "_metadata" does not exist
-        # #          - 0th tuple element will be the original `paths` argument
-        # #            (We will let the workers use `_determine_pf_parts`)
-
-        # # Create `parts`
-        # # This is a list of row-group-descriptor dicts, or file-paths
-        # # if we have a list of files and gather_statistics=False
-        # base_path = (base_path or "") + fs.sep
-        # if parts:
-        #     # Case (1)
-        #     # `parts` is just a list of path names.
-        #     pqpartitions = None
-        #     pf_deps = None
-        #     partsin = parts
-        # else:
-        #     # Populate `partsin` with dataset row-groups
-        #     partsin = pf.row_groups
-        #     pqpartitions = pf.info.get("partitions", None)
-        #     if pqpartitions:
-        #         # Case (2)
-        #         # We have parquet partitions, and do not have
-        #         # a "_metadata" file for the worker to read.
-        #         # Therefore, we need to pass the pf object in
-        #         # the task graph
-        #         pf_deps = pf
-        #     else:
-        #         # Case (3)
-        #         # We don't need to pass a pf object in the task graph.
-        #         # Instead, we can try to pass the path for each part.
-        #         pf_deps = "tuple"
-
-        # parts = []
-        # i_path = 0
-        # path_last = None
-
-        # # Loop over DataFrame partitions.
-        # # Each `part` will be a row-group or path ()
-        # for i, part in enumerate(partsin):
-        #     if pqpartitions:
-        #         # Case (3A)
-        #         # We can pass a "_metadata" path
-        #         file_path = base_path + "_metadata"
-        #         i_path = i
-        #     elif (
-        #         pf_deps
-        #         and isinstance(part.columns[0].file_path, str)
-        #         and not pqpartitions
-        #     ):
-        #         # Case (3B)
-        #         # We can pass a specific file/part path
-        #         path_curr = part.columns[0].file_path
-        #         if path_last and path_curr == path_last:
-        #             i_path += 1
-        #         else:
-        #             i_path = 0
-        #             path_last = path_curr
-        #         file_path = base_path + path_curr
-        #     else:
-        #         # Case (3C)
-        #         # We cannot pass a specific file/part path
-        #         file_path = paths
-        #         i_path = i
-
-        #     row_groups = None
-        #     if not isinstance(part, str):
-        #         part.statistics = None
-        #         part.helper = None
-        #         for c, col in enumerate(part.columns):
-        #             if c:
-        #                 col.file_path = None
-        #             col.meta_data.key_value_metadata = None
-        #             col.meta_data.statistics = None
-        #             col.meta_data.encodings = None
-        #             col.meta_data.total_uncompressed_size = None
-        #             col.meta_data.encoding_stats = None
-        #         row_groups = pickle.dumps([part]) if pickle else [part]
-
-        #     # Final definition of "piece" and "pf" for this output partition
-        #     piece = i_path if pf_deps else part
-        #     pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
-        #     part_item = {
-        #         "piece": piece,
-        #         "kwargs": {
-        #             "pf": pf_piece,
-        #             "row_groups": row_groups,
-        #         },
-        #     }
-        #     parts.append(part_item)
-
-        # return stats, parts
+        # Process row-groups and return `(parts, stats)`
+        return cls._process_metadata(
+            pf,
+            dtypes,
+            split_row_groups,
+            gather_statistics,
+            stat_col_indices,
+            filters,
+            categories,
+            base_path,
+            paths,
+            fs,
+        )
 
     @classmethod
     def read_metadata(
