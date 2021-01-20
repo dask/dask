@@ -826,6 +826,19 @@ def test_map_partitions_type():
     assert all(x == pd.DataFrame for x in result)
 
 
+def test_map_partitions_partition_info():
+    def f(df, partition_info=None):
+        assert partition_info is not None
+        assert "number" in partition_info
+        assert "division" in partition_info
+        assert dsk[("x", partition_info["number"])].equals(df)
+        assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
+        return df
+
+    result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
+    assert type(result) == pd.DataFrame
+
+
 def test_map_partitions_names():
     func = lambda x: x
     assert sorted(dd.map_partitions(func, d, meta=d).dask) == sorted(
@@ -4118,6 +4131,20 @@ def test_meta_raises():
         ddf.a + ddf.c
 
     assert "meta=" not in str(info.value)
+
+
+def test_meta_nonempty_uses_meta_value_if_provided():
+    # https://github.com/dask/dask/issues/6958
+    base = pd.Series([1, 2, 3], dtype="datetime64[ns]")
+    offsets = pd.Series([pd.offsets.DateOffset(years=o) for o in range(3)])
+    dask_base = dd.from_pandas(base, npartitions=1)
+    dask_offsets = dd.from_pandas(offsets, npartitions=1)
+    dask_offsets._meta = offsets.head()
+
+    with pytest.warns(None):  # not vectorized performance warning
+        expected = base + offsets
+        actual = dask_base + dask_offsets
+        assert_eq(expected, actual)
 
 
 def test_dask_dataframe_holds_scipy_sparse_containers():

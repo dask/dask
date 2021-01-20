@@ -51,6 +51,7 @@ from ..utils import (
     is_dataframe_like,
     is_series_like,
     is_index_like,
+    cached_property,
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
@@ -1103,7 +1104,7 @@ class Array(DaskMethodsMixin):
     dask.array.from_array
     """
 
-    __slots__ = "dask", "_name", "_cached_keys", "_chunks", "_meta"
+    __slots__ = "dask", "_name", "_cached_keys", "__chunks", "_meta", "__dict__"
 
     def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super(Array, cls).__new__(cls)
@@ -1124,7 +1125,7 @@ class Array(DaskMethodsMixin):
         else:
             dt = None
         self._chunks = normalize_chunks(chunks, shape, dtype=dt)
-        if self._chunks is None:
+        if self.chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
         self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
@@ -1235,7 +1236,7 @@ class Array(DaskMethodsMixin):
         )
         return x
 
-    @property
+    @cached_property
     def shape(self):
         return tuple(cached_cumsum(c, initial_zero=True)[-1] for c in self.chunks)
 
@@ -1247,20 +1248,35 @@ class Array(DaskMethodsMixin):
     def dtype(self):
         return self._meta.dtype
 
-    def _get_chunks(self):
+    @property
+    def _chunks(self):
+        """Non-public chunks property. Allows setting a chunk value."""
+        return self.__chunks
+
+    @_chunks.setter
+    def _chunks(self, chunks):
+        self.__chunks = chunks
+
+        # When the chunks changes the cached properties that was dependent
+        # on it needs to be deleted:
+        for v in ["shape"]:
+            if v in self.__dict__:
+                del self.__dict__[v]
+
+    @property
+    def chunks(self):
+        """Chunks property."""
         return self._chunks
 
-    def _set_chunks(self, chunks):
-        msg = (
+    @chunks.setter
+    def chunks(self, chunks):
+        raise TypeError(
             "Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
-            "  x.rechunk({})\n\n"
+            f"  x.rechunk({chunks})\n\n"
             "If trying to avoid unknown chunks, use\n"
             "  x.compute_chunk_sizes()"
         )
-        raise TypeError(msg.format(chunks))
-
-    chunks = property(_get_chunks, _set_chunks, "chunks property")
 
     def __len__(self):
         if not self.chunks:
@@ -1838,12 +1854,18 @@ class Array(DaskMethodsMixin):
         return choose(self, choices)
 
     @derived_from(np.ndarray)
-    def reshape(self, *shape):
+    def reshape(self, *shape, merge_chunks=True):
+        """
+        .. note::
+
+           See :meth:`dask.array.reshape` for an explanation of
+           the ``merge_chunks`` keyword.
+        """
         from .reshape import reshape
 
         if len(shape) == 1 and not isinstance(shape[0], Number):
             shape = shape[0]
-        return reshape(self, shape)
+        return reshape(self, shape, merge_chunks=merge_chunks)
 
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.

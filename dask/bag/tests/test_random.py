@@ -113,3 +113,14 @@ def test_sample_return_bag():
     seq = range(20)
     sut = db.from_sequence(seq, npartitions=3)
     assert isinstance(random.sample(sut, k=2), db.Bag)
+
+
+def test_partitions_are_coerced_to_lists():
+    # https://github.com/dask/dask/issues/6906
+    A = db.from_sequence([[1, 2], [3, 4, 5], [6], [7]])
+    B = db.from_sequence(["a", "b", "c", "d"])
+
+    a = random.choices(A.flatten(), k=B.count().compute()).repartition(4)
+
+    C = db.zip(B, a).compute()
+    assert len(C) == 4
