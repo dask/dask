@@ -42,6 +42,12 @@ from .utils import Engine
 
 
 class ParquetFile(FPParquetFile):
+    # Define our own `ParquetFile` as a subclass
+    # of `fastparquet.ParquetFile`.  This allows
+    # us to strip the `key_value_metadata` and
+    # `fmd` attributes before sending to the
+    # workers.
+
     @property
     def pandas_metadata(self):
         if hasattr(self, "_pandas_metadata"):
@@ -129,17 +135,8 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     because this also means we should avoid scanning every file in the
     dataset.  If _metadata is available, set `gather_statistics=True`
     (if `gather_statistics=None`).
-
-    The `fast_metadata` output specifies that ParquetFile metadata parsing
-    is fast enough for each worker to perform during `read_partition`. The
-    value will be set to True if: (1) The path is a directory containing
-    _metadta, (2) the path is a list of files containing _metadata, (3)
-    there is only one file to read, or (4) `gather_statistics` is False.
-    In other cases, the ParquetFile object will need to be stored in the
-    task graph, because metadata parsing is too expensive.
     """
     parts = []
-    fast_metadata = True
     if len(paths) > 1:
         base, fns = _analyze_paths(paths, fs)
         if gather_statistics is not False:
@@ -147,7 +144,6 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             # and filtering
             if "_metadata" not in fns:
                 paths_use = paths
-                fast_metadata = False
             else:
                 paths_use = base + fs.sep + "_metadata"
             pf = ParquetFile(
@@ -188,7 +184,6 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
         elif gather_statistics is not False:
             # Scan every file
             pf = ParquetFile(paths, open_with=fs.open, **kwargs.get("file", {}))
-            fast_metadata = False
         else:
             # Use _common_metadata file if it is available.
             # Otherwise, just use 0th file
@@ -211,7 +206,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
         )
 
-    return parts, pf, gather_statistics, fast_metadata, base
+    return parts, pf, gather_statistics, base
 
 
 class FastParquetEngine(Engine):
@@ -356,7 +351,6 @@ class FastParquetEngine(Engine):
         filters,
         index_cols,
         categories,
-        fast_metadata,
         split_row_groups,
         gather_statistics,
     ):
@@ -469,7 +463,7 @@ class FastParquetEngine(Engine):
             # Populate `partsin` with dataset row-groups
             partsin = pf.row_groups
             pqpartitions = pf.info.get("partitions", None)
-            if pqpartitions and not fast_metadata:
+            if pqpartitions:
                 # Case (2)
                 # We have parquet partitions, and do not have
                 # a "_metadata" file for the worker to read.
@@ -489,7 +483,7 @@ class FastParquetEngine(Engine):
         # Loop over DataFrame partitions.
         # Each `part` will be a row-group or path ()
         for i, part in enumerate(partsin):
-            if pqpartitions and fast_metadata:
+            if pqpartitions:
                 # Case (3A)
                 # We can pass a "_metadata" path
                 file_path = base_path + "_metadata"
@@ -565,7 +559,7 @@ class FastParquetEngine(Engine):
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
         # correspond to a row group (populated below).
-        parts, pf, gather_statistics, fast_metadata, base_path = _determine_pf_parts(
+        parts, pf, gather_statistics, base_path = _determine_pf_parts(
             fs, paths, gather_statistics, **kwargs
         )
 
@@ -590,7 +584,6 @@ class FastParquetEngine(Engine):
             filters,
             index_cols,
             categories,
-            fast_metadata,
             split_row_groups,
             gather_statistics,
         )
@@ -648,17 +641,15 @@ class FastParquetEngine(Engine):
             if isinstance(row_groups, bytes):
                 row_groups = pickle.loads(row_groups)
             parquet_file.row_groups = row_groups
+            parquet_file.key_value_metadata = {}
             if null_index_name:
                 if "__index_level_0__" in parquet_file.columns:
                     # See "Handling a None-labeled index" comment above
                     index = ["__index_level_0__"]
                     columns += index
-                    parquet_file.fmd.key_value_metadata = None
-            else:
-                parquet_file.fmd.key_value_metadata = None
-            # parquet_file._dtypes = (
-            #     lambda *args: parquet_file.dtypes
-            # )  # ugly patch, could be fixed
+            parquet_file._dtypes = (
+                lambda *args: parquet_file.dtypes
+            )  # ugly patch, could be fixed
             df = parquet_file.read_row_group_file(
                 row_groups[0],
                 columns,
