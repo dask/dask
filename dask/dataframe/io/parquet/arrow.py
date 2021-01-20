@@ -1412,6 +1412,7 @@ class ArrowDatasetEngine(Engine):
                     full_path = fs.sep.join(
                         [p for p in [data_path, filename] if p != ""]
                     )
+
                     pkeys = partition_keys.get(full_path, None)
                     if partition_obj and pkeys is None:
                         continue  # This partition was filtered
@@ -1422,6 +1423,7 @@ class ArrowDatasetEngine(Engine):
                             pkeys,
                         ),
                     }
+
                     parts.append(part)
                     if gather_statistics:
                         stat = cls._aggregate_stats(
@@ -1433,6 +1435,7 @@ class ArrowDatasetEngine(Engine):
                         stats.append(stat)
         else:
             for filename, row_groups in file_row_groups.items():
+
                 # Get full path (empty strings should be ignored)
                 full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
                 pkeys = partition_keys.get(full_path, None)
@@ -1445,6 +1448,7 @@ class ArrowDatasetEngine(Engine):
                         pkeys,
                     ),
                 }
+
                 parts.append(part)
                 if gather_statistics:
                     stat = cls._aggregate_stats(

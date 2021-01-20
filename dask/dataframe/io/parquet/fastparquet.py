@@ -556,6 +556,30 @@ class FastParquetEngine(Engine):
         )
 
     @classmethod
+    def _get_thrift_row_groups(
+        cls,
+        pf,
+        filename,
+        row_groups,
+        global_lookup,
+    ):
+        real_row_groups = []
+        for rg in row_groups:
+            row_group = pf.row_groups[global_lookup[(filename, rg)]]
+            row_group.statistics = None
+            row_group.helper = None
+            for c, col in enumerate(row_group.columns):
+                if c:
+                    col.file_path = None
+                col.meta_data.key_value_metadata = None
+                col.meta_data.statistics = None
+                col.meta_data.encodings = None
+                col.meta_data.total_uncompressed_size = None
+                col.meta_data.encoding_stats = None
+            real_row_groups.append(row_group)
+        return pickle.dumps(real_row_groups) if pickle else real_row_groups
+
+    @classmethod
     def _process_metadata(
         cls,
         pf,
@@ -606,22 +630,8 @@ class FastParquetEngine(Engine):
                     rg_list = row_groups[i:i_end]
 
                     if pqpartitions:
-                        real_row_groups = []
-                        for rg in range(i, i_end):
-                            row_group = pf.row_groups[global_lookup[(filename, rg)]]
-                            row_group.statistics = None
-                            row_group.helper = None
-                            for c, col in enumerate(row_group.columns):
-                                if c:
-                                    col.file_path = None
-                                col.meta_data.key_value_metadata = None
-                                col.meta_data.statistics = None
-                                col.meta_data.encodings = None
-                                col.meta_data.total_uncompressed_size = None
-                                col.meta_data.encoding_stats = None
-                            real_row_groups.append(row_group)
-                        real_row_groups = (
-                            pickle.dumps(real_row_groups) if pickle else real_row_groups
+                        real_row_groups = cls._get_thrift_row_groups(
+                            pf, filename, row_groups, global_lookup
                         )
                         part = {"piece": (real_row_groups)}
                     else:
@@ -642,23 +652,10 @@ class FastParquetEngine(Engine):
                         stats.append(stat)
         else:
             for filename, row_groups in file_row_groups.items():
+
                 if pqpartitions:
-                    real_row_groups = []
-                    for rg in row_groups:
-                        row_group = pf.row_groups[global_lookup[(filename, rg)]]
-                        row_group.statistics = None
-                        row_group.helper = None
-                        for c, col in enumerate(row_group.columns):
-                            if c:
-                                col.file_path = None
-                            col.meta_data.key_value_metadata = None
-                            col.meta_data.statistics = None
-                            col.meta_data.encodings = None
-                            col.meta_data.total_uncompressed_size = None
-                            col.meta_data.encoding_stats = None
-                        real_row_groups.append(row_group)
-                    real_row_groups = (
-                        pickle.dumps(real_row_groups) if pickle else real_row_groups
+                    real_row_groups = cls._get_thrift_row_groups(
+                        pf, filename, row_groups, global_lookup
                     )
                     part = {"piece": (real_row_groups,)}
                 else:
