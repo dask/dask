@@ -12,7 +12,7 @@ import pandas as pd
 
 try:
     import fastparquet
-    from fastparquet import ParquetFile
+    from fastparquet import ParquetFile as FPParquetFile
     from fastparquet.util import get_file_scheme
     from fastparquet.util import ex_from_sep, val_to_num, groupby_types
     from fastparquet.writer import partition_on_columns, make_part_file
@@ -39,6 +39,20 @@ except ImportError:
 # Fastparquet interface #
 #########################
 from .utils import Engine
+
+
+class ParquetFile(FPParquetFile):
+    @property
+    def pandas_metadata(self):
+        if hasattr(self, "_pandas_metadata"):
+            return self._pandas_metadata
+        return super().pandas_metadata
+
+    @property
+    def has_pandas_metadata(self):
+        if hasattr(self, "_has_pandas_metadata"):
+            return self._has_pandas_metadata
+        return super().has_pandas_metadata
 
 
 def _paths_to_cats(paths, file_scheme):
@@ -424,9 +438,6 @@ class FastParquetEngine(Engine):
         else:
             stats = None
 
-        # pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
-        # pf.fmd.row_groups = None
-
         # Constructing "piece" and "pf" for each dask partition. We will
         # need to consider the following output scenarios:
         #
@@ -514,9 +525,14 @@ class FastParquetEngine(Engine):
             if not isinstance(part, str):
                 part.statistics = None
                 part.helper = None
-                for col in part.columns:
+                for c, col in enumerate(part.columns):
+                    if c:
+                        col.file_path = None
+                    col.meta_data.key_value_metadata = None
+                    col.meta_data.statistics = None
+                    col.meta_data.encodings = None
+                    col.meta_data.total_uncompressed_size = None
                     col.meta_data.encoding_stats = None
-                    # col.meta_data.statistics = None
                 row_groups = pickle.dumps([part]) if pickle else [part]
 
             # Final definition of "piece" and "pf" for this output partition
@@ -593,6 +609,10 @@ class FastParquetEngine(Engine):
             pf.row_groups = None
             pf.fmd.row_groups = None
             pf._statistics = None
+            pf._pandas_metadata = pf.pandas_metadata
+            pf._has_pandas_metadata = pf.has_pandas_metadata
+            pf.fmd = None
+            pf.key_value_metadata = None
 
             parts[0]["common_kwargs"] = {
                 "parquet_file": pf,
@@ -636,9 +656,9 @@ class FastParquetEngine(Engine):
                     parquet_file.fmd.key_value_metadata = None
             else:
                 parquet_file.fmd.key_value_metadata = None
-            parquet_file._dtypes = (
-                lambda *args: parquet_file.dtypes
-            )  # ugly patch, could be fixed
+            # parquet_file._dtypes = (
+            #     lambda *args: parquet_file.dtypes
+            # )  # ugly patch, could be fixed
             df = parquet_file.read_row_group_file(
                 row_groups[0],
                 columns,
