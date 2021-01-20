@@ -13,7 +13,7 @@ import pandas as pd
 
 try:
     import fastparquet
-    from fastparquet import ParquetFile as FPParquetFile
+    from fastparquet import ParquetFile
     from fastparquet.util import get_file_scheme
     from fastparquet.util import ex_from_sep, val_to_num, groupby_types
     from fastparquet.writer import partition_on_columns, make_part_file
@@ -42,26 +42,6 @@ except ImportError:
 # Fastparquet interface #
 #########################
 from .utils import Engine
-
-
-class ParquetFile(FPParquetFile):
-    # Define our own `ParquetFile` as a subclass
-    # of `fastparquet.ParquetFile`.  This allows
-    # us to strip the `key_value_metadata` and
-    # `fmd` attributes before sending to the
-    # workers.
-
-    @property
-    def pandas_metadata(self):
-        if hasattr(self, "_pandas_metadata"):
-            return self._pandas_metadata
-        return super().pandas_metadata
-
-    @property
-    def has_pandas_metadata(self):
-        if hasattr(self, "_has_pandas_metadata"):
-            return self._has_pandas_metadata
-        return super().has_pandas_metadata
 
 
 def _paths_to_cats(paths, file_scheme):
@@ -705,10 +685,6 @@ class FastParquetEngine(Engine):
             pf.row_groups = None
             pf.fmd.row_groups = None
             pf._statistics = None
-            pf._pandas_metadata = pf.pandas_metadata
-            pf._has_pandas_metadata = pf.has_pandas_metadata
-            pf.fmd = None
-            pf.key_value_metadata = None
             parts[0]["common_kwargs"]["parquet_file"] = pf
 
         return (meta, stats, parts, index)
