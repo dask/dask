@@ -728,7 +728,6 @@ class FastParquetEngine(Engine):
                 if isinstance(row_groups, bytes):
                     row_groups = pickle.loads(row_groups)
                 parquet_file.row_groups = row_groups
-                parquet_file.key_value_metadata = {}
             else:
                 raise ValueError("Neither path nor ParquetFile detected!")
 
