@@ -556,21 +556,18 @@ def _aggregate_stats(
 
 
 def _row_groups_to_parts(
-    fs,
     gather_statistics,
     split_row_groups,
     file_row_groups,
     file_row_group_stats,
     file_row_group_column_stats,
     stat_col_indices,
-    data_path,
-    partition_info,
-    make_part_split_func,
-    make_part_full_func,
+    make_part_func,
+    make_part_kwargs,
 ):
 
-    partition_keys = partition_info.get("partition_keys", None)
-    partition_obj = partition_info.get("partitions", None)
+    # partition_keys = partition_info.get("partition_keys", None)
+    # partition_obj = partition_info.get("partitions", None)
 
     # Construct `parts` and `stats`
     parts = []
@@ -584,14 +581,11 @@ def _row_groups_to_parts(
             for i in range(0, row_group_count, split_row_groups):
                 i_end = i + split_row_groups
                 rg_list = row_groups[i:i_end]
-                # Get full path (empty strings should be ignored)
-                full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
 
-                part = make_part_split_func(
-                    full_path,
-                    partition_keys,
-                    partition_obj,
+                part = make_part_func(
+                    filename,
                     rg_list,
+                    **make_part_kwargs,
                 )
                 if part is None:
                     continue
@@ -607,14 +601,11 @@ def _row_groups_to_parts(
                     stats.append(stat)
     else:
         for filename, row_groups in file_row_groups.items():
-            # Get full path (empty strings should be ignored)
-            full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
 
-            part = make_part_full_func(
-                full_path,
-                partition_keys,
-                partition_obj,
+            part = make_part_func(
+                filename,
                 row_groups,
+                **make_part_kwargs,
             )
             if part is None:
                 continue

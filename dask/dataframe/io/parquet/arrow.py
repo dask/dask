@@ -1364,11 +1364,16 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _make_part(
         cls,
-        full_path,
-        partition_keys,
-        partition_obj,
+        filename,
         rg_list,
+        fs=None,
+        partition_keys=None,
+        partition_obj=None,
+        data_path=None,
     ):
+        # Get full path (empty strings should be ignored)
+        full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
+
         pkeys = partition_keys.get(full_path, None)
         if partition_obj and pkeys is None:
             return None  # This partition was filtered
@@ -1415,17 +1420,19 @@ class ArrowDatasetEngine(Engine):
 
         # Convert organized row-groups to parts
         parts, stats = _row_groups_to_parts(
-            fs,
             gather_statistics,
             split_row_groups,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
             stat_col_indices,
-            data_path,
-            partition_info,
             cls._make_part,
-            cls._make_part,
+            make_part_kwargs={
+                "fs": fs,
+                "partition_keys": partition_info.get("partition_keys", None),
+                "partition_obj": partition_info.get("partitions", None),
+                "data_path": data_path,
+            },
         )
 
         # Add common kwargs
@@ -1904,17 +1911,19 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
 
         # Convert organized row-groups to parts
         parts, stats = _row_groups_to_parts(
-            fs,
             gather_statistics,
             split_row_groups,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
             stat_col_indices,
-            data_path,
-            partition_info,
             cls._make_part,
-            cls._make_part,
+            make_part_kwargs={
+                "fs": fs,
+                "partition_keys": partition_info.get("partition_keys", None),
+                "partition_obj": partition_info.get("partitions", None),
+                "data_path": data_path,
+            },
         )
 
         # Add common kwargs

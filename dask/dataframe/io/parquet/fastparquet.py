@@ -25,7 +25,7 @@ from .utils import (
     _normalize_index_columns,
     _analyze_paths,
     _flatten_filters,
-    _aggregate_stats,
+    _row_groups_to_parts,
 )
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
@@ -516,6 +516,29 @@ class FastParquetEngine(Engine):
         return pickle.dumps(real_row_groups) if pickle else real_row_groups
 
     @classmethod
+    def _make_part(
+        cls,
+        filename,
+        rg_list,
+        fs=None,
+        pf=None,
+        base_path=None,
+        partitions=None,
+        global_lookup=None,
+    ):
+        if partitions:
+            real_row_groups = cls._get_thrift_row_groups(
+                pf, filename, rg_list, global_lookup
+            )
+            part = {"piece": (real_row_groups,)}
+        else:
+            # Get full path (empty strings should be ignored)
+            full_path = fs.sep.join([p for p in [base_path, filename] if p != ""])
+            part = {"piece": (full_path, rg_list)}
+
+        return part
+
+    @classmethod
     def _process_metadata(
         cls,
         pf,
@@ -549,67 +572,23 @@ class FastParquetEngine(Engine):
             paths,
         )
 
-        # Get partitioning metadata
-        pqpartitions = pf.info.get("partitions", None)
-
-        # Construct `parts` and `stats`
-        parts = []
-        stats = []
-        if split_row_groups:
-            # Create parts from each file,
-            # limiting the number of row_groups in each piece
-            split_row_groups = int(split_row_groups)
-            for filename, row_groups in file_row_groups.items():
-                row_group_count = len(row_groups)
-                for i in range(0, row_group_count, split_row_groups):
-                    i_end = i + split_row_groups
-                    rg_list = row_groups[i:i_end]
-
-                    if pqpartitions:
-                        real_row_groups = cls._get_thrift_row_groups(
-                            pf, filename, row_groups, global_lookup
-                        )
-                        part = {"piece": (real_row_groups)}
-                    else:
-                        # Get full path (empty strings should be ignored)
-                        full_path = fs.sep.join(
-                            [p for p in [base_path, filename] if p != ""]
-                        )
-                        part = {"piece": (full_path, rg_list)}
-
-                    parts.append(part)
-                    if gather_statistics:
-                        stat = _aggregate_stats(
-                            filename,
-                            file_row_group_stats[filename][i:i_end],
-                            file_row_group_column_stats[filename][i:i_end],
-                            stat_col_indices,
-                        )
-                        stats.append(stat)
-        else:
-            for filename, row_groups in file_row_groups.items():
-
-                if pqpartitions:
-                    real_row_groups = cls._get_thrift_row_groups(
-                        pf, filename, row_groups, global_lookup
-                    )
-                    part = {"piece": (real_row_groups,)}
-                else:
-                    # Get full path (empty strings should be ignored)
-                    full_path = fs.sep.join(
-                        [p for p in [base_path, filename] if p != ""]
-                    )
-                    part = {"piece": (full_path, None)}
-
-                parts.append(part)
-                if gather_statistics:
-                    stat = _aggregate_stats(
-                        filename,
-                        file_row_group_stats[filename],
-                        file_row_group_column_stats[filename],
-                        stat_col_indices,
-                    )
-                    stats.append(stat)
+        # Convert organized row-groups to parts
+        parts, stats = _row_groups_to_parts(
+            gather_statistics,
+            split_row_groups,
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            stat_col_indices,
+            cls._make_part,
+            make_part_kwargs={
+                "fs": fs,
+                "pf": pf,
+                "base_path": base_path,
+                "partitions": pf.info.get("partitions", None),
+                "global_lookup": global_lookup,
+            },
+        )
 
         return parts, stats
 
