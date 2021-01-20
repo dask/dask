@@ -1252,26 +1252,18 @@ class ArrowDatasetEngine(Engine):
         )
 
     @classmethod
-    def _process_metadata(
+    def _organize_row_groups(
         cls,
         metadata,
-        schema,
         split_row_groups,
         gather_statistics,
         stat_col_indices,
         filters,
-        categories,
-        partition_info,
-        data_path,
-        fs,
     ):
-        """Process row-groups and statistics.
+        """Organize row-groups by file.
 
-        This method is overridden in `ArrowLegacyEngine`.
+        This method is used by ArrowDatasetEngine._process_metadata
         """
-
-        partition_keys = partition_info["partition_keys"]
-        partition_obj = partition_info["partitions"]
 
         # Get the number of row groups per file
         single_rg_parts = int(split_row_groups) == 1
@@ -1360,6 +1352,49 @@ class ArrowDatasetEngine(Engine):
                         file_row_group_stats[fpath].append(s)
                         if not single_rg_parts:
                             file_row_group_column_stats[fpath].append(tuple(cstats))
+
+        return (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+        )
+
+    @classmethod
+    def _process_metadata(
+        cls,
+        metadata,
+        schema,
+        split_row_groups,
+        gather_statistics,
+        stat_col_indices,
+        filters,
+        categories,
+        partition_info,
+        data_path,
+        fs,
+    ):
+        """Process row-groups and statistics.
+
+        This method is overridden in `ArrowLegacyEngine`.
+        """
+
+        # Organize row-groups by file
+        (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+        ) = cls._organize_row_groups(
+            metadata,
+            split_row_groups,
+            gather_statistics,
+            stat_col_indices,
+            filters,
+        )
+
+        partition_keys = partition_info["partition_keys"]
+        partition_obj = partition_info["partitions"]
 
         # Construct `parts` and `stats`
         parts = []
@@ -1818,26 +1853,18 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             )
 
     @classmethod
-    def _process_metadata(
+    def _organize_row_groups(
         cls,
         metadata,
-        schema,
         split_row_groups,
         gather_statistics,
         stat_col_indices,
         filters,
-        categories,
-        partition_info,
-        data_path,
-        fs,
     ):
-        """Process row-groups and statistics.
+        """Organize row-groups by file.
 
-        This method is overrides the `ArrowDatasetEngine` implementation.
+        This method is used by ArrowLegacyEngine._process_metadata
         """
-
-        partition_keys = partition_info["partition_keys"]
-        partition_obj = partition_info["partitions"]
 
         # Get the number of row groups per file
         single_rg_parts = int(split_row_groups) == 1
@@ -1925,6 +1952,49 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     file_row_group_stats[fpath].append(s)
                     if not single_rg_parts:
                         file_row_group_column_stats[fpath].append(tuple(cstats))
+
+        return (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+        )
+
+    @classmethod
+    def _process_metadata(
+        cls,
+        metadata,
+        schema,
+        split_row_groups,
+        gather_statistics,
+        stat_col_indices,
+        filters,
+        categories,
+        partition_info,
+        data_path,
+        fs,
+    ):
+        """Process row-groups and statistics.
+
+        This method is overrides the `ArrowDatasetEngine` implementation.
+        """
+
+        # Organize row-groups by file
+        (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+        ) = cls._organize_row_groups(
+            metadata,
+            split_row_groups,
+            gather_statistics,
+            stat_col_indices,
+            filters,
+        )
+
+        partition_keys = partition_info["partition_keys"]
+        partition_obj = partition_info["partitions"]
 
         # Construct `parts` and `stats`
         parts = []

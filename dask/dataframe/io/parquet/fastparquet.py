@@ -409,19 +409,19 @@ class FastParquetEngine(Engine):
             return s
 
     @classmethod
-    def _process_metadata(
+    def _organize_row_groups(
         cls,
         pf,
-        dtypes,
         split_row_groups,
         gather_statistics,
         stat_col_indices,
         filters,
-        categories,
+        dtypes,
         base_path,
         paths,
-        fs,
     ):
+        """Organize row-groups by file."""
+
         # Get partitioning metadata
         pqpartitions = pf.info.get("partitions", None)
 
@@ -545,6 +545,52 @@ class FastParquetEngine(Engine):
                     file_row_group_stats[fpath].append(s)
                     if not single_rg_parts:
                         file_row_group_column_stats[fpath].append(tuple(cstats))
+
+        return (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+            global_lookup,
+            base_path,
+        )
+
+    @classmethod
+    def _process_metadata(
+        cls,
+        pf,
+        dtypes,
+        split_row_groups,
+        gather_statistics,
+        stat_col_indices,
+        filters,
+        categories,
+        base_path,
+        paths,
+        fs,
+    ):
+
+        # Organize row-groups by file
+        (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+            global_lookup,
+            base_path,
+        ) = cls._organize_row_groups(
+            pf,
+            split_row_groups,
+            gather_statistics,
+            stat_col_indices,
+            filters,
+            dtypes,
+            base_path,
+            paths,
+        )
+
+        # Get partitioning metadata
+        pqpartitions = pf.info.get("partitions", None)
 
         # Construct `parts` and `stats`
         parts = []
@@ -756,9 +802,7 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts, index)
 
     @classmethod
-    def read_partition(
-        cls, fs, piece, columns, index, categories=(), pf=None, **kwargs
-    ):
+    def read_partition(cls, fs, piece, columns, index, categories=(), **kwargs):
 
         null_index_name = False
         if isinstance(index, list):
@@ -779,7 +823,6 @@ class FastParquetEngine(Engine):
         parquet_file = kwargs.pop("parquet_file", None)
 
         if isinstance(piece, tuple):
-
             if isinstance(piece[0], str):
                 # We have a path to read from
                 assert parquet_file is None
@@ -811,6 +854,7 @@ class FastParquetEngine(Engine):
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
 
+            # Read necessary row-groups and concatenate
             dfs = []
             for row_group in row_groups:
                 dfs.append(
@@ -822,82 +866,11 @@ class FastParquetEngine(Engine):
                         **kwargs.get("read", {}),
                     )
                 )
-            df = concat(dfs, axis=0)
-            return df
+            return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
 
         else:
             # `piece` is NOT a tuple
             raise ValueError(f"Expected tuple, got {type(piece)}")
-
-        ##
-        ##
-        ##
-        ## TODO: Implement path and pf-based read_partition
-        ##
-        ##
-        ##
-
-        row_groups = kwargs.pop("row_groups", None)
-        if parquet_file and row_groups:
-            if isinstance(row_groups, bytes):
-                row_groups = pickle.loads(row_groups)
-            parquet_file.row_groups = row_groups
-            parquet_file.key_value_metadata = {}
-            if null_index_name:
-                if "__index_level_0__" in parquet_file.columns:
-                    # See "Handling a None-labeled index" comment above
-                    index = ["__index_level_0__"]
-                    columns += index
-            parquet_file._dtypes = (
-                lambda *args: parquet_file.dtypes
-            )  # ugly patch, could be fixed
-            df = parquet_file.read_row_group_file(
-                row_groups[0],
-                columns,
-                categories,
-                index=index,
-                **kwargs.get("read", {}),
-            )
-            return df
-
-        if pf is None:
-            base, fns = _analyze_paths([piece], fs)
-            scheme = get_file_scheme(fns)
-            pf = ParquetFile(piece, open_with=fs.open)
-            relpath = piece.replace(base, "").lstrip("/")
-            for rg in pf.row_groups:
-                for ch in rg.columns:
-                    ch.file_path = relpath
-            pf.file_scheme = scheme
-            pf.cats = paths_to_cats(fns, scheme)
-            pf.fn = base
-            if null_index_name and "__index_level_0__" in pf.columns:
-                # See "Handling a None-labeled index" comment above
-                index = ["__index_level_0__"]
-                columns += index
-            return pf.to_pandas(columns, categories, index=index)
-        else:
-            if isinstance(pf, tuple):
-                if isinstance(pf[0], list):
-                    pf = _determine_pf_parts(fs, pf[0], pf[1], **kwargs)[1]
-                else:
-                    pf = ParquetFile(
-                        pf[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
-                    )
-                pf._dtypes = lambda *args: pf.dtypes  # ugly patch, could be fixed
-                pf.fmd.row_groups = None
-            rg_piece = pf.row_groups[piece]
-            if null_index_name:
-                if "__index_level_0__" in pf.columns:
-                    # See "Handling a None-labeled index" comment above
-                    index = ["__index_level_0__"]
-                    columns += index
-                    pf.fmd.key_value_metadata = None
-            else:
-                pf.fmd.key_value_metadata = None
-            return pf.read_row_group_file(
-                rg_piece, columns, categories, index=index, **kwargs.get("read", {})
-            )
 
     @classmethod
     def initialize_write(
