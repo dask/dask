@@ -146,8 +146,7 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(profilers, file_path=None, show=True, save=True,
-              mode=None, **kwargs):
+def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     If multiple profilers are passed in, the plots are stacked vertically.
