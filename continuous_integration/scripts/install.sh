@@ -7,19 +7,17 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    # update pyarrow first with conda, otherwise this would downgrade the
-    # nightly numpy/pandas again
     conda update -y -c arrow-nightlies pyarrow
 
-    conda uninstall --force pandas
+    conda uninstall --force numpy pandas
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
-        pandas
+        numpy pandas
 
     python -m pip install \
         --upgrade \
         locket \
-        git+https://github.com/pydata/sparse \
+        # git+https://github.com/pydata/sparse \
         git+https://github.com/dask/s3fs \
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
