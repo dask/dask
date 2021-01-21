@@ -2223,3 +2223,14 @@ def test_categorical_merge_retains_category_dtype():
     if dd._compat.PANDAS_GT_100:
         actual = actual_dask.compute()
         assert actual.A.dtype == "category"
+
+
+def test_categorical_merge_does_not_raise_setting_with_copy_warning():
+    # https://github.com/dask/dask/issues/7087
+    df1 = pd.DataFrame(data={"A": ["a", "b", "c"]}, index=["s", "v", "w"])
+    df2 = pd.DataFrame(data={"B": ["t", "d", "i"]}, index=["v", "w", "r"])
+
+    ddf1 = dd.from_pandas(df1, npartitions=1)
+
+    df2 = df2.astype({"B": "category"})
+    assert_eq(df1.join(df2), ddf1.join(df2))
