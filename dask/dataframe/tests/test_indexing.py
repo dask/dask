@@ -6,7 +6,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
 
@@ -20,7 +20,7 @@ meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 CHECK_FREQ = {}
-if dd._compat.PANDAS_GT_110:
+if PANDAS_GT_110:
     CHECK_FREQ["check_freq"] = False
 
 
@@ -431,25 +431,51 @@ def test_getitem_timestamp_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    assert_eq(df["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], df["2011-01-02":"2011-01-10"])
+    # TODO(pandas) starting with pandas 1.2, __getitem__ with an implicit slice
+    # is deprecated -> should we deprecate this in dask as well?
+    assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
 
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df["2011-01"], ddf["2011-01"])
-    assert_eq(df["2011"], ddf["2011"])
+    assert_eq(df.loc["2011-01"], ddf["2011-01"])
+    assert_eq(df.loc["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
 
 
+@pytest.mark.xfail(
+    not PANDAS_GT_110, reason=".loc partial index with PeriodIndex not yet supported"
+)
 def test_loc_period_str():
     # .loc with PeriodIndex doesn't support partial string indexing
     # https://github.com/pydata/pandas/issues/13429
-    pass
+    # -> this started working in pandas 1.1
+    df = pd.DataFrame(
+        {"A": np.random.randn(100), "B": np.random.randn(100)},
+        index=pd.period_range("2011-01-01", freq="H", periods=100),
+    )
+    ddf = dd.from_pandas(df, 10)
+
+    # partial string slice
+    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
+    assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
+    # same reso, dask result is always DataFrame
+
+    df = pd.DataFrame(
+        {"A": np.random.randn(100), "B": np.random.randn(100)},
+        index=pd.period_range("2011-01-01", freq="D", periods=100),
+    )
+    ddf = dd.from_pandas(df, 50)
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
+    assert_eq(df.loc["2011"], ddf.loc["2011"])
+
+    assert_eq(df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"])
+    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"])
 
 
 def test_getitem_period_str():
@@ -461,8 +487,11 @@ def test_getitem_period_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    assert_eq(df["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], df["2011-01-02":"2011-01-10"])
+    # TODO(pandas) starting with pandas 1.2, __getitem__ with an implicit slice
+    # is deprecated -> should we deprecate this in dask as well?
+    if not PANDAS_GT_120:
+        assert_eq(df["2011-01-02"], ddf["2011-01-02"])
+    assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
 
     df = pd.DataFrame(
@@ -470,8 +499,9 @@ def test_getitem_period_str():
         index=pd.period_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df["2011-01"], ddf["2011-01"])
-    assert_eq(df["2011"], ddf["2011"])
+    if not PANDAS_GT_120:
+        assert_eq(df["2011-01"], ddf["2011-01"])
+        assert_eq(df["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])

@@ -17,6 +17,9 @@ from dask.dataframe.utils import (
     assert_max_deps,
 )
 
+# TODO(pandas) Categorical.set_levels(inplace=True) is deprecated
+pytestmark = pytest.mark.filterwarnings("ignore:inplace is deprecated:FutureWarning")
+
 AGG_FUNCS = [
     "sum",
     "mean",

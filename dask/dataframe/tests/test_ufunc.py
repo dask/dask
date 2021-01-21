@@ -7,6 +7,7 @@ import numpy as np
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
+from dask.dataframe._compat import PANDAS_GT_120
 
 
 _BASE_UFUNCS = [
@@ -217,7 +218,7 @@ _UFUNCS_2ARG = [
     "hypot",
     "copysign",
     "nextafter",
-    "ldexp",
+    pytest.param("ldexp", marks=[pytest.mark.filterwarnings("ignore::RuntimeWarning")]),
     pytest.param("fmod", marks=[pytest.mark.filterwarnings("ignore::RuntimeWarning")]),
     "logical_and",
     "logical_or",
@@ -488,6 +489,18 @@ def test_ufunc_with_reduction(redfunc, ufunc, pandas):
 
     np_redfunc = getattr(np, redfunc)
     np_ufunc = getattr(np, ufunc)
+
+    if (
+        PANDAS_GT_120
+        and (redfunc == "prod")
+        and ufunc in ["conj", "square", "negative", "absolute"]
+        and isinstance(pandas, pd.DataFrame)
+    ):
+        # TODO(pandas) follow pandas behaviour?
+        # starting with pandas 1.2.0, the ufunc is applied column-wise, and therefore
+        # applied on the integer columns separately, overflowing for those columns
+        # (instead of being applied on 2D ndarray that was converted to float)
+        pytest.xfail("'prod' overflowing with integer columns in pandas 1.2.0")
 
     with pytest.warns(None):
         assert isinstance(np_redfunc(dask), (dd.DataFrame, dd.Series, dd.core.Scalar))
