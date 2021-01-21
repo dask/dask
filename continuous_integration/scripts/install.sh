@@ -9,7 +9,8 @@ set -xe
 if [[ ${UPSTREAM_DEV} ]]; then
     conda update -y -c arrow-nightlies pyarrow
 
-    python -m pip install --upgrade --no-deps --pre \
+    conda uninstall --force numpy pandas
+    python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy pandas
 
