@@ -100,6 +100,6 @@ It is possible to manually load the categories:
     >>> ddf2 = dd.read_parquet('tmp')
     >>> ddf2.col.cat.known
     False
-    >>> ddf2 = ddf2.col.cat.set_categories(ddf2.col.head(1).cat.categories)
+    >>> ddf2.col = ddf2.col.cat.set_categories(ddf2.col.head(1).cat.categories)
     >>> ddf2.col.cat.known
     True
