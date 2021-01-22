@@ -1194,7 +1194,7 @@ def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
     dask array
     """
     if axis is None:
-        x = x.flatten()
+        x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
@@ -1340,7 +1340,7 @@ def cumreduction(
         )
 
     if axis is None:
-        x = x.flatten()
+        x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)

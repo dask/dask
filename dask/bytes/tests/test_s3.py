@@ -27,15 +27,6 @@ from fsspec.compression import compr
 
 compute = partial(compute, scheduler="sync")
 
-try:
-    import numpy as np
-
-    numpy_120_mark = pytest.mark.xfail(
-        LooseVersion(np.__version__) >= "1.20.0", reason="Upstream incompatibility"
-    )
-except ImportError:
-    numpy_120_mark = pytest.mark.skip(reason="numpy not installed")
-
 
 test_bucket_name = "test"
 files = {
@@ -437,7 +428,6 @@ def test_modification_time_read_bytes(s3, s3so):
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
-@numpy_120_mark
 def test_parquet(s3, engine, s3so):
     import s3fs
 
@@ -483,7 +473,6 @@ def test_parquet(s3, engine, s3so):
     tm.assert_frame_equal(data, df2.compute())
 
 
-@numpy_120_mark
 def test_parquet_wstoragepars(s3, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip("fastparquet")

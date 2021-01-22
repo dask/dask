@@ -4,7 +4,6 @@ import pandas as pd
 import pytest
 import numpy as np
 
-import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
 from dask.dataframe._compat import PANDAS_GT_130
@@ -413,7 +412,6 @@ def test_rolling_agg_aggregate():
 
 
 @pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
-@pytest.mark.xfail(da.numpy_compat._numpy_120, reason="sparse-383")
 def test_rolling_numba_engine():
     numba = pytest.importorskip("numba")
     if not dd._compat.PANDAS_GT_104 and LooseVersion(numba.__version__) >= "0.49":

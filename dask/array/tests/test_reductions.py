@@ -542,10 +542,14 @@ def test_array_cumreduction_axis(func, use_nan, axis, method):
     da_func = getattr(da, func)
 
     s = (10, 11, 12)
-    a = np.arange(np.prod(s)).reshape(s)
+    a = np.arange(np.prod(s), dtype=float).reshape(s)
     if use_nan:
         a[1] = np.nan
     d = da.from_array(a, chunks=(4, 5, 6))
+    if func in ["cumprod", "nancumprod"] and method == "blelloch" and axis is None:
+        with pytest.warns(RuntimeWarning):
+            da_func(d, axis=axis, method=method).compute()
+            return
 
     a_r = np_func(a, axis=axis)
     d_r = da_func(d, axis=axis, method=method)
