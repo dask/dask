@@ -130,6 +130,24 @@ class Layer(collections.abc.Mapping):
 
         return expanded
 
+    @staticmethod
+    def merge_annotations(
+        old: MutableMapping[str, Any], new: Mapping[str, Any]
+    ) -> None:
+        """
+        Merge a set of (expanded) annotations for the layer into an existing annotations
+        dictionary. This is not a simple shallow merge because some annotations like
+        retries, priority, workers, etc need to be able to retain keys from different
+        layers.
+        """
+        new_annotations = {}
+        for k, v in new.items():
+            if isinstance(v, dict) and k in old:
+                new_annotations[k] = {**old[k], **v}
+            else:
+                new_annotations[k] = v
+        old.update(new_annotations)
+
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, Set]]:
@@ -257,13 +275,7 @@ class Layer(collections.abc.Mapping):
 
         if state["annotations"]:
             expanded = cls.expand_annotations(state["annotations"], state["dsk"].keys())
-            new_annotations = {}
-            for k, v in expanded.items():
-                if isinstance(v, dict) and k in annotations:
-                    new_annotations[k] = {**annotations[k], **v}
-                else:
-                    new_annotations[k] = v
-            annotations.update(new_annotations)
+            cls.merge_annotations(annotations, expanded)
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer

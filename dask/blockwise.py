@@ -354,7 +354,8 @@ class Blockwise(Layer):
         global_dependencies = list(state["global_dependencies"])
 
         if state["annotations"]:
-            annotations.update(cls.expand_annotations(state["annotations"], raw.keys()))
+            expanded = cls.expand_annotations(state["annotations"], raw.keys())
+            cls.merge_annotations(annotations, expanded)
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
         dsk.update(raw)
