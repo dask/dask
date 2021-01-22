@@ -4,6 +4,7 @@ from typing import (
     Any,
     Dict,
     Hashable,
+    MutableMapping,
     Optional,
     Set,
     Mapping,
@@ -226,7 +227,7 @@ class Layer(collections.abc.Mapping):
         cls,
         state: Any,
         dsk: Dict[str, Any],
-        dependencies: Mapping[Hashable, Set],
+        dependencies: MutableMapping[Hashable, Set],
         annotations: Dict[str, Any],
     ) -> None:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
@@ -245,14 +246,24 @@ class Layer(collections.abc.Mapping):
             The state returned by Layer.__dask_distributed_pack__()
         dsk: dict
             The materialized low level graph of the already unpacked layers
-        dependencies: Mapping
+        dependencies: MutableMapping
             The dependencies of each key in `dsk`
         annotations: dict
             The materialized task annotations
         """
-        raise NotImplementedError(
-            f"{type(cls)} doesn't implement __dask_distributed_unpack__()"
-        )
+        dsk.update(state["dsk"])
+        for k, v in state["dependencies"].items():
+            dependencies[k] = set(dependencies.get(k, ())) | set(v)
+
+        if state["annotations"]:
+            expanded = cls.expand_annotations(state["annotations"], state["dsk"].keys())
+            new_annotations = {}
+            for k, v in expanded.items():
+                if isinstance(v, dict) and k in annotations:
+                    new_annotations[k] = {**annotations[k], **v}
+                else:
+                    new_annotations[k] = v
+            annotations.update(new_annotations)
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer
