@@ -1,6 +1,20 @@
 Changelog
 =========
 
+2021.01.1
+---------
+
+Released on January 22, 2021
+
+- Partially fix ``cumprod`` (:pr:`7089`) `Julia Signell`_
+- Test pandas 1.1.x / 1.2.0 releases and pandas nightly (:pr:`6996`) `Joris Van den Bossche`_
+- Use assign to avoid ``SettingWithCopyWarning`` (:pr:`7092`) `Julia Signell`_
+- ``'mode'`` argument passed to ``bokeh.output_file()`` (:pr:`7034`) (:pr:`7075`) `patquem`_
+- Skip empty partitions when doing ``groupby.value_counts`` (:pr:`7073`) `Julia Signell`_
+- Add error messages to ``assert_eq()`` (:pr:`7083`) `James Lamb`_
+- Make cached properties read-only (:pr:`7077`) `Illviljan`_
+
+
 2021.01.0
 ---------
 
@@ -3919,3 +3933,4 @@ Other
 .. _`Kumar Bharath Prabhu`: https://github.com/kumarprabhu1988
 .. _`Rob Malouf`: https://github.com/rmalouf
 .. _`sdementen`: https://github.com/sdementen
+.. _`patquem`: https://github.com/patquem
