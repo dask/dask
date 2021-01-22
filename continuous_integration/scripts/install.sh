@@ -12,11 +12,13 @@ if [[ ${UPSTREAM_DEV} ]]; then
     conda uninstall --force numpy pandas
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
-        numpy pandas
+        numpy \
+        pandas
 
     python -m pip install \
         --upgrade \
         locket \
+        git+https://github.com/pydate/sparse \
         git+https://github.com/dask/s3fs \
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
