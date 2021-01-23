@@ -36,9 +36,4 @@ conda list
 echo -e "--\n--Conda Environment (re-create this with \`conda env create --name <name> -f <output_file>\`)\n--"
 conda env export | grep -E -v '^prefix:.*$'
 
-# Ensure cytoolz is not installed in the CI environment when tests are run
-# We can add cytoolz back in once
-# https://github.com/conda-forge/cytoolz-feedstock/issues/36 is resolved
-conda uninstall --force cytoolz
-
 set +xe
