@@ -2718,7 +2718,7 @@ def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
     assert len(ddf_read.compute().group) == 6
 
 
-def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
+def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
     # https://github.com/dask/dask/issues/5893
     pdf = pd.DataFrame({"A": [1, 2, 3, 4, 5, 6], "B": ["a", "b", "c", "d", "e", "f"]})
     path = os.path.join(str(tmpdir), "data.parquet")
@@ -2727,6 +2727,14 @@ def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
 
     ddf = dd.read_parquet(path, engine=engine)
     a, b = dask.optimize(ddf["A"], ddf)
+
+    # Make sure we are still allowing the getitem optimization
+    ddf = ddf["A"]
+    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[(ddf._name, 0)])
+    read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
+    subgraph = dsk.layers[read]
+    assert isinstance(subgraph, ParquetSubgraph)
+    assert subgraph.columns == ["A"]
 
 
 @pytest.mark.parametrize("gather_statistics", [None, True])

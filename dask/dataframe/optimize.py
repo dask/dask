@@ -70,9 +70,9 @@ def optimize_read_parquet_getitem(dsk, keys):
                 # ... where this value is __getitem__...
                 return dsk
 
-            if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
-                # if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
-                # ... but bail on the optimization if the getitem is what's requested
+            if any(layers[k].name == x[0] for x in keys if isinstance(x, tuple)):
+                # ... but bail on the optimization if the read_parquet layer is in
+                # the requested keys, because we cannot change the name anymore.
                 # These keys are structured like [('getitem-<token>', 0), ...]
                 # so we check for the first item of the tuple.
                 # See https://github.com/dask/dask/issues/5893
@@ -125,5 +125,8 @@ def optimize_read_parquet_getitem(dsk, keys):
         if name != old.name:
             del layers[old.name]
 
+    # import pdb; pdb.set_trace()
+    # print("old.name",old.name,"\n")
+    # print("LAYERS",layers,"\n")
     new_hlg = HighLevelGraph(layers, dependencies)
     return new_hlg
