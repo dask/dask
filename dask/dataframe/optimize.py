@@ -125,8 +125,5 @@ def optimize_read_parquet_getitem(dsk, keys):
         if name != old.name:
             del layers[old.name]
 
-    # import pdb; pdb.set_trace()
-    # print("old.name",old.name,"\n")
-    # print("LAYERS",layers,"\n")
     new_hlg = HighLevelGraph(layers, dependencies)
     return new_hlg
