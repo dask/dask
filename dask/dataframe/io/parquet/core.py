@@ -225,13 +225,14 @@ def read_parquet(
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
     read_from_paths : bool or None (default)
-        Only used by `ArrowDatasetEngine`. Determines whether the engine should
-        avoid inserting large pyarrow (`ParquetFileFragment`) objects in the
-        task graph.  If this option is `True`, `read_partition` will need to
-        depend on the file path and row-group ID list (rather than a fragment).
-        This option will reduce the size of the task graph, but will add minor
-        overhead to `read_partition` if any filters are specified.  By default
-        (None), `ArrowDatasetEngine` will set this option to `False`.
+        Only used by `ArrowDatasetEngine` when `filters` are specified.
+        Determines whether the engine should avoid inserting large pyarrow
+        (`ParquetFileFragment`) objects in the task graph.  If this option is
+        `True`, `read_partition` will need to regenerate the appropriate
+        fragment object from the path and row-group IDs.  This will reduce the
+        size of the task graph, but will add minor overhead to `read_partition`.
+        By default (None), `ArrowDatasetEngine` will set this option to `False`
+        when there are filters.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
