@@ -62,7 +62,6 @@ class ParquetSubgraph(Layer):
         self.columns = columns
         self.index = index
         self.parts = parts
-        self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
 
         # `kwargs` = user-defined kwargs to be passed for all parts
@@ -172,7 +171,7 @@ def read_parquet(
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
         List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
         argument will NOT result in row-wise filtering of the final partitions
-        unless `engine="pyarrow-dataset"` is also specified.  For other engines,
+        unless ``engine="pyarrow-dataset"`` is also specified.  For other engines,
         filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
@@ -225,14 +224,14 @@ def read_parquet(
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
     read_from_paths : bool or None (default)
-        Only used by `ArrowDatasetEngine` when `filters` are specified.
+        Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
         Determines whether the engine should avoid inserting large pyarrow
-        (`ParquetFileFragment`) objects in the task graph.  If this option is
-        `True`, `read_partition` will need to regenerate the appropriate
+        (``ParquetFileFragment``) objects in the task graph.  If this option
+        is True, ``read_partition`` will need to regenerate the appropriate
         fragment object from the path and row-group IDs.  This will reduce the
-        size of the task graph, but will add minor overhead to `read_partition`.
-        By default (None), `ArrowDatasetEngine` will set this option to `False`
-        when there are filters.
+        size of the task graph, but will add minor overhead to ``read_partition``.
+        By default (None), ``ArrowDatasetEngine`` will set this option to
+        ``False`` when there are filters.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -241,11 +240,11 @@ def read_parquet(
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
         the second level corresponds to the kwargs that will be passed on to
-        the underlying `pyarrow` or `fastparquet` function.
-        Supported top-level keys: 'dataset' (for opening a `pyarrow` dataset),
-        'file' (for opening a `fastparquet` `ParquetFile`), 'read' (for the
+        the underlying ``pyarrow`` or ``fastparquet`` function.
+        Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
+        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
         backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a `pyarrow.Table.to_pandas()`)
+        passed to convert from a ``pyarrow.Table.to_pandas()``)
 
     Examples
     --------
