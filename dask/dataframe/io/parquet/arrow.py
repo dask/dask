@@ -15,6 +15,11 @@ from ...utils import clear_known_categories
 from ....core import flatten
 from dask import delayed
 
+try:
+    import pickle
+except ImportError:
+    pickle = None
+
 from .core import create_metadata_file
 from .utils import (
     _parse_pandas_metadata,
@@ -453,6 +458,10 @@ def _get_rg_statistics(row_group, col_indices):
         return row_group.statistics
 
 
+def _try_pickle(x):
+    return pickle.dumps(x) if pickle else x
+
+
 #
 #  ArrowDatasetEngine
 #
@@ -570,6 +579,10 @@ class ArrowDatasetEngine(Engine):
         else:
             # `piece` contains (path, row_group, partition_keys)
             (path_or_frag, row_group, partition_keys) = piece
+
+            # De-serialize if necessary
+            if isinstance(path_or_frag, bytes):
+                path_or_frag = pickle.loads(path_or_frag)
 
         # Convert row_group to a list and be sure to
         # check if msgpack converted it to a tuple
@@ -1281,7 +1294,24 @@ class ArrowDatasetEngine(Engine):
         partition_keys = partition_info["partition_keys"]
         partition_obj = partition_info["partitions"]
 
+        # Check if we need to pass a fragment for each output partition
+        pass_frags = filters
+        if pass_frags:
+            partition_cols = (
+                set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
+                if partition_keys
+                else set()
+            )
+            filtered_cols = (
+                set([v[0] for v in flatten(filters, container=list) if len(v)])
+                if filters
+                else set()
+            )
+            pass_frags = bool(filtered_cols - partition_cols)
+        pass_frags = False
+
         # Get the number of row groups per file
+        frag_map = {}
         single_rg_parts = int(split_row_groups) == 1
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
@@ -1302,8 +1332,10 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
+                frag_map[(fpath, row_group_info[0].id)] = frag
             else:
                 file_row_groups[fpath] = [None]
+                frag_map[(fpath, None)] = frag
                 continue
             for row_group in row_group_info:
                 file_row_groups[fpath].append(row_group.id)
@@ -1390,7 +1422,9 @@ class ArrowDatasetEngine(Engine):
                         continue  # This partition was filtered
                     part = {
                         "piece": (
-                            full_path,
+                            _try_pickle(frag_map[(full_path, rg_list[0])])
+                            if pass_frags
+                            else full_path,
                             rg_list,
                             pkeys,
                         ),
@@ -1413,7 +1447,9 @@ class ArrowDatasetEngine(Engine):
                     continue  # This partition was filtered
                 part = {
                     "piece": (
-                        full_path,
+                        _try_pickle(frag_map[(full_path, row_groups[0])])
+                        if pass_frags
+                        else full_path,
                         row_groups,
                         pkeys,
                     ),
@@ -1521,48 +1557,62 @@ class ArrowDatasetEngine(Engine):
         This method is overridden in `ArrowLegacyEngine`.
         """
 
-        # Check if we have partitioning information.
-        # Will only have this if the engine="pyarrow-dataset"
-        partitioning = kwargs.pop("partitioning", None)
-
-        # Check if we need to generate a fragment for filtering.
-        # We only need to do this if we are applying filters to
-        # columns that were not already filtered by "partition".
-        if partitioning and filters:
-            partition_cols = (
-                set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
-                if partition_keys
-                else set()
-            )
-            filtered_cols = (
-                set([v[0] for v in flatten(filters, container=list) if len(v)])
-                if filters
-                else set()
-            )
-            need_fragment = bool(filtered_cols - partition_cols)
+        if isinstance(path, pa_ds.ParquetFileFragment):
+            frag = path
         else:
-            need_fragment = False
+            frag = None
 
-        if need_fragment:
+            # Check if we have partitioning information.
+            # Will only have this if the engine="pyarrow-dataset"
+            partitioning = kwargs.pop("partitioning", None)
 
-            # We are filtering with "pyarrow-dataset".
-            # Need to convert the path and row-group IDs
-            # to a single "fragment" to read
-            ds = pa_ds.dataset(
-                path,
-                filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
-            )
-            frags = list(ds.get_fragments())
-            assert len(frags) == 1
-            frag = (
-                _frag_subset(frags[0], row_groups) if row_groups != [None] else frags[0]
-            )
+            # Check if we need to generate a fragment for filtering.
+            # We only need to do this if we are applying filters to
+            # columns that were not already filtered by "partition".
+            if partitioning and filters:
+                partition_cols = (
+                    set(
+                        [
+                            v[0]
+                            for v in flatten(partition_keys, container=list)
+                            if len(v)
+                        ]
+                    )
+                    if partition_keys
+                    else set()
+                )
+                filtered_cols = (
+                    set([v[0] for v in flatten(filters, container=list) if len(v)])
+                    if filters
+                    else set()
+                )
+                need_fragment = bool(filtered_cols - partition_cols)
+            else:
+                need_fragment = False
 
+            if need_fragment:
+
+                # We are filtering with "pyarrow-dataset".
+                # Need to convert the path and row-group IDs
+                # to a single "fragment" to read
+                ds = pa_ds.dataset(
+                    path,
+                    filesystem=fs,
+                    format="parquet",
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
+                    ),
+                )
+                frags = list(ds.get_fragments())
+                assert len(frags) == 1
+                frag = (
+                    _frag_subset(frags[0], row_groups)
+                    if row_groups != [None]
+                    else frags[0]
+                )
+
+        if frag:
             cols = []
             for name in columns:
                 if name is None:
