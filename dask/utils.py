@@ -1119,7 +1119,7 @@ def is_arraylike(x):
 
 def is_dataframe_like(df):
     """ Looks like a Pandas DataFrame """
-    typ = type(df)
+    typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
         and all(hasattr(df, name) for name in ("dtypes", "columns"))
@@ -1129,7 +1129,7 @@ def is_dataframe_like(df):
 
 def is_series_like(s):
     """ Looks like a Pandas Series """
-    typ = type(s)
+    typ = s.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
         and all(hasattr(s, name) for name in ("dtype", "name"))
@@ -1139,7 +1139,7 @@ def is_series_like(s):
 
 def is_index_like(s):
     """ Looks like a Pandas Index """
-    typ = type(s)
+    typ = s.__class__
     return (
         all(hasattr(s, name) for name in ("name", "dtype"))
         and "index" in typ.__name__.lower()
