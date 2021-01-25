@@ -15,11 +15,6 @@ from ...utils import clear_known_categories
 from ....core import flatten
 from dask import delayed
 
-try:
-    import pickle
-except ImportError:
-    pickle = None
-
 from .core import create_metadata_file
 from .utils import (
     _parse_pandas_metadata,
@@ -458,10 +453,6 @@ def _get_rg_statistics(row_group, col_indices):
         return row_group.statistics
 
 
-def _try_pickle(x):
-    return pickle.dumps(x) if pickle else x
-
-
 def _need_fragments(filters, partition_keys):
     # Check if we need to generate a fragment for filtering.
     # We only need to do this if we are applying filters to
@@ -599,10 +590,6 @@ class ArrowDatasetEngine(Engine):
         else:
             # `piece` contains (path, row_group, partition_keys)
             (path_or_frag, row_group, partition_keys) = piece
-
-            # De-serialize if necessary
-            if isinstance(path_or_frag, bytes):
-                path_or_frag = pickle.loads(path_or_frag)
 
         # Convert row_group to a list and be sure to
         # check if msgpack converted it to a tuple
@@ -1437,7 +1424,7 @@ class ArrowDatasetEngine(Engine):
                         continue  # This partition was filtered
                     part = {
                         "piece": (
-                            _try_pickle(frag_map[(full_path, rg_list[0])])
+                            frag_map[(full_path, rg_list[0])]
                             if pass_frags
                             else full_path,
                             rg_list,
@@ -1462,7 +1449,7 @@ class ArrowDatasetEngine(Engine):
                     continue  # This partition was filtered
                 part = {
                     "piece": (
-                        _try_pickle(frag_map[(full_path, row_groups[0])])
+                        frag_map[(full_path, row_groups[0])]
                         if pass_frags
                         else full_path,
                         row_groups,
