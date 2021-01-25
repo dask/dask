@@ -425,7 +425,7 @@ def test_is_dataframe_like(monkeypatch, frame_value_counts):
     assert not is_index_like(pd.Index)
 
     # The following checks support of class wrappers, which
-    # requires the comparions of `x__class__` instead of `type(x)`
+    # requires the comparions of `x.__class__` instead of `type(x)`
     class DataFrameWrapper:
         __class__ = pd.DataFrame
 
