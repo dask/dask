@@ -950,10 +950,7 @@ class ArrowDatasetEngine(Engine):
         # value must support the "discover" attribute.
         partitioning = dataset_kwargs.get(
             "partitioning",
-            {
-                "obj": pa_ds.HivePartitioning,
-                "kwargs": {},
-            },
+            {"obj": pa_ds.HivePartitioning},
         )
 
         if len(paths) == 1 and fs.isdir(paths[0]):
