@@ -1113,12 +1113,12 @@ class ArrowDatasetEngine(Engine):
                 if isinstance(index, list) and partition.name == index[0]:
                     # Index from directory structure
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=index[0]
+                        [], categories=partition.keys, name=index[0]
                     )
                 elif partition.name == meta.index.name:
                     # Index created from a categorical column
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=meta.index.name
+                        [], categories=partition.keys, name=meta.index.name
                     )
                 elif partition.name in meta.columns:
                     meta[partition.name] = pd.Series(
