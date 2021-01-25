@@ -15,11 +15,6 @@ from ...utils import clear_known_categories
 from ....core import flatten
 from dask import delayed
 
-try:
-    import pickle
-except ImportError:
-    pickle = None
-
 from .core import create_metadata_file
 from .utils import (
     _parse_pandas_metadata,
@@ -186,7 +181,7 @@ def _frag_subset(old_frag, row_groups):
 
 
 def _collect_pyarrow_dataset_frags(
-    ds, filters, valid_paths, fs, split_row_groups, gather_statistics
+    ds, filters, valid_paths, fs, split_row_groups, gather_statistics, read_from_paths
 ):
     """Collect all dataset fragments while applying filters.
 
@@ -249,7 +244,7 @@ def _collect_pyarrow_dataset_frags(
             ]
 
         # Append fragments to our "metadata" list
-        if ds_filters:
+        if ds_filters or (split_row_groups and not read_from_paths):
             # If we have filters, we need to split the row groups to apply them.
             # If any row-groups are filtered out, we convert the remaining row-groups
             # to a NEW (filtered) fragment, and append the filtered fragment to our
@@ -458,8 +453,22 @@ def _get_rg_statistics(row_group, col_indices):
         return row_group.statistics
 
 
-def _try_pickle(x):
-    return pickle.dumps(x) if pickle else x
+def _need_fragment(filters, partition_keys):
+    # For the pyarrow-dataset API, we only need a fragment
+    # object at IO time if we are actually filtering a column
+    # that is not "partitioned".
+    partition_cols = (
+        set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
+        if partition_keys
+        else set()
+    )
+    filtered_cols = (
+        set([v[0] for v in flatten(filters, container=list) if len(v)])
+        if filters
+        else set()
+    )
+
+    return bool(filtered_cols - partition_cols)
 
 
 #
@@ -483,9 +492,17 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
+        read_from_paths=None,
         engine=None,
         **kwargs,
     ):
+        # Reading from fragments by default if we are filtering.
+        # Otherwise, we will read from (path, row-group) info
+        # to avoid passing large objects in the task graph.
+        # (This does not affect `ArrowLegacyEngine` behavior)
+        if read_from_paths is None:
+            read_from_paths = filters is None
+
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
         # This may also set split_row_groups and gather_statistics,
@@ -504,6 +521,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             index,
+            read_from_paths,
             kwargs.get("dataset", {}),
         )
 
@@ -525,6 +543,7 @@ class ArrowDatasetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
+            read_from_paths,
         )
 
         # Add `common_kwargs` to the first element of `parts`.
@@ -579,10 +598,6 @@ class ArrowDatasetEngine(Engine):
         else:
             # `piece` contains (path, row_group, partition_keys)
             (path_or_frag, row_group, partition_keys) = piece
-
-            # De-serialize if necessary
-            if isinstance(path_or_frag, bytes):
-                path_or_frag = pickle.loads(path_or_frag)
 
         # Convert row_group to a list and be sure to
         # check if msgpack converted it to a tuple
@@ -922,6 +937,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         filters,
         index,
+        read_from_paths,
         dataset_kwargs,
     ):
         """pyarrow.dataset version of _gather_metadata
@@ -1036,6 +1052,7 @@ class ArrowDatasetEngine(Engine):
             fs,
             split_row_groups,
             gather_statistics,
+            read_from_paths,
         )
 
         # Store dict needed to produce a `partitioning`
@@ -1154,6 +1171,7 @@ class ArrowDatasetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
+        read_from_paths,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1211,6 +1229,7 @@ class ArrowDatasetEngine(Engine):
             partition_info,
             data_path,
             fs,
+            read_from_paths,
         )
 
     @classmethod
@@ -1285,6 +1304,7 @@ class ArrowDatasetEngine(Engine):
         partition_info,
         data_path,
         fs,
+        read_from_paths,
     ):
         """Process row-groups and statistics.
 
@@ -1294,21 +1314,10 @@ class ArrowDatasetEngine(Engine):
         partition_keys = partition_info["partition_keys"]
         partition_obj = partition_info["partitions"]
 
-        # Check if we need to pass a fragment for each output partition
-        pass_frags = filters
-        if pass_frags:
-            partition_cols = (
-                set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
-                if partition_keys
-                else set()
-            )
-            filtered_cols = (
-                set([v[0] for v in flatten(filters, container=list) if len(v)])
-                if filters
-                else set()
-            )
-            pass_frags = bool(filtered_cols - partition_cols)
-        pass_frags = False
+        # Check if we should pass fragment objects in the graph
+        pass_frags = (filters and not read_from_paths) and _need_fragment(
+            filters, partition_keys
+        )
 
         # Get the number of row groups per file
         frag_map = {}
@@ -1422,7 +1431,7 @@ class ArrowDatasetEngine(Engine):
                         continue  # This partition was filtered
                     part = {
                         "piece": (
-                            _try_pickle(frag_map[(full_path, rg_list[0])])
+                            frag_map[(full_path, rg_list[0])]
                             if pass_frags
                             else full_path,
                             rg_list,
@@ -1447,7 +1456,7 @@ class ArrowDatasetEngine(Engine):
                     continue  # This partition was filtered
                 part = {
                     "piece": (
-                        _try_pickle(frag_map[(full_path, row_groups[0])])
+                        frag_map[(full_path, row_groups[0])]
                         if pass_frags
                         else full_path,
                         row_groups,
@@ -1542,7 +1551,7 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _read_table(
         cls,
-        path,
+        frag_or_path,
         fs,
         row_groups,
         columns,
@@ -1557,10 +1566,13 @@ class ArrowDatasetEngine(Engine):
         This method is overridden in `ArrowLegacyEngine`.
         """
 
-        if isinstance(path, pa_ds.ParquetFileFragment):
-            frag = path
+        frag = None
+        if isinstance(frag_or_path, pa_ds.ParquetFileFragment):
+            # We already have a fragment - Use it.
+            frag = frag_or_path
         else:
-            frag = None
+            # We have a path (not a fragment) - We may need to
+            # generate a fragment if we need to filter.
 
             # Check if we have partitioning information.
             # Will only have this if the engine="pyarrow-dataset"
@@ -1569,26 +1581,9 @@ class ArrowDatasetEngine(Engine):
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            if partitioning and filters:
-                partition_cols = (
-                    set(
-                        [
-                            v[0]
-                            for v in flatten(partition_keys, container=list)
-                            if len(v)
-                        ]
-                    )
-                    if partition_keys
-                    else set()
-                )
-                filtered_cols = (
-                    set([v[0] for v in flatten(filters, container=list) if len(v)])
-                    if filters
-                    else set()
-                )
-                need_fragment = bool(filtered_cols - partition_cols)
-            else:
-                need_fragment = False
+            need_fragment = (
+                partitioning and filters and _need_fragment(filters, partition_keys)
+            )
 
             if need_fragment:
 
@@ -1596,7 +1591,7 @@ class ArrowDatasetEngine(Engine):
                 # Need to convert the path and row-group IDs
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
-                    path,
+                    frag_or_path,
                     filesystem=fs,
                     format="parquet",
                     partitioning=partitioning["obj"].discover(
@@ -1613,6 +1608,7 @@ class ArrowDatasetEngine(Engine):
                 )
 
         if frag:
+            # Read from `ParquetFileFragment` object
             cols = []
             for name in columns:
                 if name is None:
@@ -1628,8 +1624,9 @@ class ArrowDatasetEngine(Engine):
                 filter=pq._filters_to_expression(filters) if filters else None,
             )
         else:
+            # Read from path
             return _read_table_from_path(
-                path,
+                frag_or_path,
                 fs,
                 row_groups,
                 columns,
@@ -1728,6 +1725,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         gather_statistics,
         filters,
         index,
+        read_from_paths,
         dataset_kwargs,
     ):
         """Gather parquet metadata into a single data structure.
@@ -1888,6 +1886,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         partition_info,
         data_path,
         fs,
+        read_from_paths,
     ):
         """Process row-groups and statistics.
 
