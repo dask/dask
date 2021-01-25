@@ -146,6 +146,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=None,
+    read_from_paths=None,
     chunksize=None,
     **kwargs,
 ):
@@ -223,6 +224,14 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
+    read_from_paths : bool or None (default)
+        Only used by `ArrowDatasetEngine`. Determines whether the engine should
+        avoid inserting large pyarrow (`ParquetFileFragment`) objects in the
+        task graph.  If this option is `True`, `read_partition` will need to
+        depend on the file path and row-group ID list (rather than a fragment).
+        This option will reduce the size of the task graph, but will add minor
+        overhead to `read_partition` if any filters are specified.  By default
+        (None), `ArrowDatasetEngine` will set this option to `False`.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -249,15 +258,16 @@ def read_parquet(
     if isinstance(columns, str):
         df = read_parquet(
             path,
-            [columns],
-            filters,
-            categories,
-            index,
-            storage_options,
-            engine,
-            gather_statistics,
-            split_row_groups,
-            chunksize,
+            columns=[columns],
+            filters=filters,
+            categories=categories,
+            index=index,
+            storage_options=storage_options,
+            engine=engine,
+            gather_statistics=gather_statistics,
+            split_row_groups=split_row_groups,
+            read_from_paths=read_from_paths,
+            chunksize=chunksize,
         )
         return df[columns]
 
@@ -273,6 +283,8 @@ def read_parquet(
         storage_options,
         engine,
         gather_statistics,
+        split_row_groups,
+        read_from_paths,
         chunksize,
     )
 
@@ -300,7 +312,7 @@ def read_parquet(
         gather_statistics=True if chunksize else gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        engine=engine,
+        read_from_paths=read_from_paths,
         **kwargs,
     )
 
