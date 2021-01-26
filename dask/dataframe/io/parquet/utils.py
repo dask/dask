@@ -566,9 +566,6 @@ def _row_groups_to_parts(
     make_part_kwargs,
 ):
 
-    # partition_keys = partition_info.get("partition_keys", None)
-    # partition_obj = partition_info.get("partitions", None)
-
     # Construct `parts` and `stats`
     parts = []
     stats = []

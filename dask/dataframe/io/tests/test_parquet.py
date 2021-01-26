@@ -2973,8 +2973,11 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         assert_eq(ddf, read_df)
 
 
+@pytest.mark.parametrize("read_from_paths", [True, False])
 @pytest.mark.parametrize("test_filter_partitioned", [True, False])
-def test_pyarrow_dataset_read_from_paths(tmpdir, test_filter_partitioned):
+def test_pyarrow_dataset_read_from_paths(
+    tmpdir, read_from_paths, test_filter_partitioned
+):
     check_pyarrow()
 
     if pa.__version__ <= LooseVersion("0.17.1"):
@@ -2995,6 +2998,7 @@ def test_pyarrow_dataset_read_from_paths(tmpdir, test_filter_partitioned):
         fn,
         engine="pyarrow",
         filters=[("b", "==", "a")] if test_filter_partitioned else None,
+        read_from_paths=read_from_paths,
     )
 
     if test_filter_partitioned:

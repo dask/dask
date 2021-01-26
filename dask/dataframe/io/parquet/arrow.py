@@ -446,6 +446,25 @@ def _get_rg_statistics(row_group, col_indices):
         return row_group.statistics
 
 
+def _need_fragments(filters, partition_keys):
+    # Check if we need to generate a fragment for filtering.
+    # We only need to do this if we are applying filters to
+    # columns that were not already filtered by "partition".
+
+    partition_cols = (
+        set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
+        if partition_keys
+        else set()
+    )
+    filtered_cols = (
+        set([v[0] for v in flatten(filters, container=list) if len(v)])
+        if filters
+        else set()
+    )
+
+    return bool(filtered_cols - partition_cols)
+
+
 #
 #  ArrowDatasetEngine
 #
@@ -467,7 +486,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        engine=None,
+        read_from_paths=None,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
@@ -509,6 +528,7 @@ class ArrowDatasetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
+            read_from_paths,
         )
 
         # Add `common_kwargs` to the first element of `parts`.
@@ -923,10 +943,7 @@ class ArrowDatasetEngine(Engine):
         # value must support the "discover" attribute.
         partitioning = dataset_kwargs.get(
             "partitioning",
-            {
-                "obj": pa_ds.HivePartitioning,
-                "kwargs": {"max_partition_dictionary_size": -1},
-            },
+            {"obj": pa_ds.HivePartitioning},
         )
 
         if len(paths) == 1 and fs.isdir(paths[0]):
@@ -1134,6 +1151,7 @@ class ArrowDatasetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
+        read_from_paths,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1191,6 +1209,7 @@ class ArrowDatasetEngine(Engine):
             partition_info,
             data_path,
             fs,
+            read_from_paths,
         )
 
     @classmethod
@@ -1267,6 +1286,7 @@ class ArrowDatasetEngine(Engine):
         """
 
         # Get the number of row groups per file
+        frag_map = {}
         single_rg_parts = int(split_row_groups) == 1
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
@@ -1287,8 +1307,10 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
+                frag_map[(fpath, row_group_info[0].id)] = frag
             else:
                 file_row_groups[fpath] = [None]
+                frag_map[(fpath, None)] = frag
                 continue
             for row_group in row_group_info:
                 file_row_groups[fpath].append(row_group.id)
@@ -1359,6 +1381,7 @@ class ArrowDatasetEngine(Engine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
+            frag_map,
         )
 
     @classmethod
@@ -1370,6 +1393,7 @@ class ArrowDatasetEngine(Engine):
         partition_keys=None,
         partition_obj=None,
         data_path=None,
+        frag_map=None,
     ):
         # Get full path (empty strings should be ignored)
         full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
@@ -1379,7 +1403,7 @@ class ArrowDatasetEngine(Engine):
             return None  # This partition was filtered
         return {
             "piece": (
-                full_path,
+                frag_map[(full_path, rg_list[0])] if frag_map else full_path,
                 rg_list,
                 pkeys,
             ),
@@ -1398,6 +1422,7 @@ class ArrowDatasetEngine(Engine):
         partition_info,
         data_path,
         fs,
+        read_from_paths,
     ):
         """Process row-groups and statistics.
 
@@ -1410,12 +1435,21 @@ class ArrowDatasetEngine(Engine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
+            frag_map,
         ) = cls._organize_row_groups(
             metadata,
             split_row_groups,
             gather_statistics,
             stat_col_indices,
             filters,
+        )
+
+        # Check if we need to pass a fragment for each output partition
+        read_from_paths = read_from_paths or False
+        pass_frags = (
+            filters
+            and (not read_from_paths)
+            and _need_fragments(filters, partition_info.get("partition_keys", None))
         )
 
         # Convert organized row-groups to parts
@@ -1432,6 +1466,7 @@ class ArrowDatasetEngine(Engine):
                 "partition_keys": partition_info.get("partition_keys", None),
                 "partition_obj": partition_info.get("partitions", None),
                 "data_path": data_path,
+                "frag_map": frag_map if pass_frags else None,
             },
         )
 
@@ -1449,7 +1484,7 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _read_table(
         cls,
-        path,
+        path_or_frag,
         fs,
         row_groups,
         columns,
@@ -1464,48 +1499,42 @@ class ArrowDatasetEngine(Engine):
         This method is overridden in `ArrowLegacyEngine`.
         """
 
-        # Check if we have partitioning information.
-        # Will only have this if the engine="pyarrow-dataset"
-        partitioning = kwargs.pop("partitioning", None)
+        if isinstance(path_or_frag, pa_ds.ParquetFileFragment):
+            frag = path_or_frag
 
-        # Check if we need to generate a fragment for filtering.
-        # We only need to do this if we are applying filters to
-        # columns that were not already filtered by "partition".
-        if partitioning and filters:
-            partition_cols = (
-                set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
-                if partition_keys
-                else set()
-            )
-            filtered_cols = (
-                set([v[0] for v in flatten(filters, container=list) if len(v)])
-                if filters
-                else set()
-            )
-            need_fragment = bool(filtered_cols - partition_cols)
         else:
-            need_fragment = False
+            frag = None
 
-        if need_fragment:
+            # Check if we have partitioning information.
+            # Will only have this if the engine="pyarrow-dataset"
+            partitioning = kwargs.pop("partitioning", None)
 
-            # We are filtering with "pyarrow-dataset".
-            # Need to convert the path and row-group IDs
-            # to a single "fragment" to read
-            ds = pa_ds.dataset(
-                path,
-                filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
-            )
-            frags = list(ds.get_fragments())
-            assert len(frags) == 1
-            frag = (
-                _frag_subset(frags[0], row_groups) if row_groups != [None] else frags[0]
-            )
+            # Check if we need to generate a fragment for filtering.
+            # We only need to do this if we are applying filters to
+            # columns that were not already filtered by "partition".
+            if partitioning and _need_fragments(filters, partition_keys):
 
+                # We are filtering with "pyarrow-dataset".
+                # Need to convert the path and row-group IDs
+                # to a single "fragment" to read
+                ds = pa_ds.dataset(
+                    path_or_frag,
+                    filesystem=fs,
+                    format="parquet",
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
+                    ),
+                )
+                frags = list(ds.get_fragments())
+                assert len(frags) == 1
+                frag = (
+                    _frag_subset(frags[0], row_groups)
+                    if row_groups != [None]
+                    else frags[0]
+                )
+
+        if frag:
             cols = []
             for name in columns:
                 if name is None:
@@ -1522,7 +1551,7 @@ class ArrowDatasetEngine(Engine):
             )
         else:
             return _read_table_from_path(
-                path,
+                path_or_frag,
                 fs,
                 row_groups,
                 columns,
@@ -1889,6 +1918,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         partition_info,
         data_path,
         fs,
+        read_from_paths,
     ):
         """Process row-groups and statistics.
 
