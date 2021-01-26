@@ -929,8 +929,14 @@ def verify_divisions(ddf):
     results = get_sync(ddf.dask, ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
-            assert index(df).min() >= ddf.divisions[i]
-            assert index(df).max() < ddf.divisions[i + 1]
+            assert index(df).min() >= ddf.divisions[i], "%s < %s" % (
+                index(df).min(),
+                ddf.divisions[i],
+            )
+            assert index(df).max() < ddf.divisions[i + 1], "%s ≥ %s" % (
+                index(df).max(),
+                ddf.divisions[i + 1],
+            )
 
     if len(results[-1]):
         assert index(results[-1]).min() >= ddf.divisions[-2]
