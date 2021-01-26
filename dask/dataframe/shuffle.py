@@ -978,7 +978,8 @@ def compute_and_set_sorted_divisions(df, **kwargs):
         index.partitions[i].map_partitions(M.max, meta=index)
         for i in range(index.npartitions)
     )
-    mins, maxs = compute(mins, maxs, **kwargs)
+    lens = index.map_partitions(len, meta=index)
+    mins, maxs, lens = compute(mins, maxs, lens, **kwargs)
     mins = [m.iloc[0] for m in mins]
     maxs = [m.iloc[0] for m in maxs]
     mins = remove_nans(mins)

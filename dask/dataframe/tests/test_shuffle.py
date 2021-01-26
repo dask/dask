@@ -1097,10 +1097,12 @@ def test_set_index_overlap():
     a = dd.from_pandas(A, npartitions=2)
     S = A.set_index("key")
     s = a.set_index("key", sorted=True)
+    assert s.partition_sizes is None
     assert s.divisions == (1, 4, 7)
     assert_eq(s, S)
     b = s.repartition(divisions=s.divisions)
     assert_eq(s, b)
+    assert b.partition_sizes is None
     assert b.divisions == (1, 4, 7)
 
 
@@ -1186,12 +1188,14 @@ def test_shuffle_hlg_layer_serialize(npartitions):
 def test_set_index_nan_partition():
     a_gt3 = d[d.a > 3].set_index("a")  # Set index with 1 null partition
     assert a_gt3.divisions == (4, 5, 8, 9)
+    assert a_gt3.partition_sizes is None
     np.testing.assert_equal(a_gt3.compute().index.values, list(range(4, 10)))
 
     a_gt1 = d[d.a > 1].set_index(
         "a", sorted=True
     )  # Set sorted index with 0 null partitions
     assert a_gt1.divisions == (2, 4, 7, 9)
+    assert a_gt1.partition_sizes is None
     np.testing.assert_equal(a_gt1.compute().index.values, list(range(2, 10)))
 
     a_gt3_sorted = d[d.a > 3].set_index(
