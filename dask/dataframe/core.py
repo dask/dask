@@ -1661,6 +1661,14 @@ Dask Name: {name}, {task} tasks"""
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
+    def add_prefix(self, prefix):
+        return self.map_partitions(M.add_prefix, prefix)
+
+    @derived_from(pd.DataFrame)
+    def add_suffix(self, suffix):
+        return self.map_partitions(M.add_suffix, suffix)
+
+    @derived_from(pd.DataFrame)
     def abs(self):
         _raise_if_object_series(self, "abs")
         meta = self._meta_nonempty.abs()

@@ -2728,6 +2728,20 @@ def test_applymap():
     assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
 
 
+def test_add_prefix():
+    df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"))
+    assert_eq(ddf.x.add_prefix("abc").compute(), df.x.add_prefix("abc"))
+
+
+def test_add_suffix():
+    df = pd.DataFrame({"x": [1, 2], "y": [3, 4]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"))
+    assert_eq(ddf.x.add_suffix("abc").compute(), df.x.add_suffix("abc"))
+
+
 def test_abs():
     df = pd.DataFrame(
         {
