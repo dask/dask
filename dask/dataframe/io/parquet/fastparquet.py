@@ -327,7 +327,7 @@ class FastParquetEngine(Engine):
         # we will only do so if there are specific columns in
         # need of statistics.
         if gather_statistics is None:
-            gather_statistics = len(stat_col_indices.keys()) > 0
+            gather_statistics = bool(stat_col_indices)
         if split_row_groups is None:
             split_row_groups = False
 
@@ -372,11 +372,15 @@ class FastParquetEngine(Engine):
             ):
                 continue
 
+            # NOTE: Here we assume that all column chunks are stored
+            # in the same file. This is not strictly required by the
+            # parquet spec.
             fpath = row_group.columns[0].file_path
             if fpath is None:
                 if paths and pf.fn in paths:
-                    # There doesn't need to be a file_path
-                    # in all cases for Fastparquet
+                    # There doesn't need to be a file_path if the
+                    # row group is in the same file as the metadata.
+                    # Assume this is a single-file dataset.
                     fpath = pf.fn
                     base_path = base_path or ""
                 else:
@@ -410,21 +414,20 @@ class FastParquetEngine(Engine):
                 cstats = []
                 for name, i in stat_col_indices.items():
                     column = row_group.columns[i]
-                    col = column.meta_data.path_in_schema[0]
                     if column.meta_data.statistics:
                         cmin = None
                         cmax = None
-                        if pf.statistics["min"][col][0] is not None:
-                            cmin = pf.statistics["min"][col][rg]
-                            cmax = pf.statistics["max"][col][rg]
-                        elif dtypes[col] == "object":
+                        if pf.statistics["min"][name][0] is not None:
+                            cmin = pf.statistics["min"][name][rg]
+                            cmax = pf.statistics["max"][name][rg]
+                        elif dtypes[name] == "object":
                             cmin = column.meta_data.statistics.min_value
                             cmax = column.meta_data.statistics.max_value
                             if isinstance(cmin, (bytes, bytearray)):
                                 cmin = cmin.decode("utf-8")
                                 cmax = cmax.decode("utf-8")
                         if isinstance(cmin, np.datetime64):
-                            tz = getattr(dtypes[col], "tz", None)
+                            tz = getattr(dtypes[name], "tz", None)
                             cmin = pd.Timestamp(cmin, tz=tz)
                             cmax = pd.Timestamp(cmax, tz=tz)
                         cnull = column.meta_data.statistics.null_count
@@ -492,6 +495,10 @@ class FastParquetEngine(Engine):
         row_groups,
         global_lookup,
     ):
+        """Turn a set of row-groups into bytes-serialized form
+        using thrift via pickle.
+        """
+
         real_row_groups = []
         for rg in row_groups:
             row_group = pf.row_groups[global_lookup[(filename, rg)]]
@@ -519,6 +526,8 @@ class FastParquetEngine(Engine):
         partitions=None,
         global_lookup=None,
     ):
+        """Generate a partition-specific element of `parts`."""
+
         if partitions:
             real_row_groups = cls._get_thrift_row_groups(
                 pf, filename, rg_list, global_lookup

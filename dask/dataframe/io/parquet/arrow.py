@@ -1261,7 +1261,7 @@ class ArrowDatasetEngine(Engine):
         # we will only do so if there are specific columns in
         # need of statistics.
         if gather_statistics is None:
-            gather_statistics = len(stat_col_indices.keys()) > 0
+            gather_statistics = bool(stat_col_indices)
         if split_row_groups is None:
             split_row_groups = False
 
@@ -1825,6 +1825,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         cmax_last = {}
         for rg in range(metadata.num_row_groups):
             row_group = metadata.row_group(rg)
+
+            # NOTE: Here we assume that all column chunks are stored
+            # in the same file. This is not strictly required by the
+            # parquet spec.
             fpath = row_group.column(0).file_path
             if fpath is None:
                 raise ValueError(
