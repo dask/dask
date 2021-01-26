@@ -264,12 +264,12 @@ def merge_chunk(lhs, *args, **kwargs):
                 if isinstance(left, pd.Index):
                     lhs.index = left.astype(dtype)
                 else:
-                    lhs[col] = left.astype(dtype)
+                    lhs = lhs.assign(**{col: left.astype(dtype)})
             if right is not None:
                 if isinstance(right, pd.Index):
                     rhs.index = right.astype(dtype)
                 else:
-                    rhs[col] = right.astype(dtype)
+                    rhs = rhs.assign(**{col: right.astype(dtype)})
 
     out = lhs.merge(rhs, *args, **kwargs)
 

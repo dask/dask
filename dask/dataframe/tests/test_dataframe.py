@@ -387,6 +387,10 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
+# TODO(pandas) deal with this describe warning instead of ignoring
+@pytest.mark.filterwarnings(
+    "ignore:Treating datetime data as categorical|casting:FutureWarning"
+)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -395,48 +399,12 @@ def test_describe_numeric(method, test_values):
         (None, None, None, ["c", "d", "g"]),  # numeric + bool
         (None, None, None, ["c", "d", "f", "g"]),  # numeric + bool + timedelta
         (None, None, None, ["f", "g"]),  # bool + timedelta
-        pytest.param(
-            "all",
-            None,
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            ["number"],
-            None,
-            [0.25, 0.5],
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            [np.timedelta64],
-            None,
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            ["number", "object"],
-            None,
-            [0.25, 0.75],
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            None,
-            ["number", "object"],
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            ["object", "datetime", "bool"],
-            None,
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
+        ("all", None, None, None),
+        (["number"], None, [0.25, 0.5], None),
+        ([np.timedelta64], None, None, None),
+        (["number", "object"], None, [0.25, 0.75], None),
+        (None, ["number", "object"], None, None),
+        (["object", "datetime", "bool"], None, None, None),
     ],
 )
 def test_describe(include, exclude, percentiles, subset):
@@ -856,6 +824,19 @@ def test_map_partitions_type():
     result = d.map_partitions(type).compute(scheduler="single-threaded")
     assert isinstance(result, pd.Series)
     assert all(x == pd.DataFrame for x in result)
+
+
+def test_map_partitions_partition_info():
+    def f(df, partition_info=None):
+        assert partition_info is not None
+        assert "number" in partition_info
+        assert "division" in partition_info
+        assert dsk[("x", partition_info["number"])].equals(df)
+        assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
+        return df
+
+    result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
+    assert type(result) == pd.DataFrame
 
 
 def test_map_partitions_names():
