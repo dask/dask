@@ -144,8 +144,8 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=None,
-    chunksize=None,
     read_from_paths=None,
+    chunksize=None,
     **kwargs,
 ):
     """

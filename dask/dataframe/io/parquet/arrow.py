@@ -1395,6 +1395,12 @@ class ArrowDatasetEngine(Engine):
         data_path=None,
         frag_map=None,
     ):
+        """Generate a partition-specific element of `parts`.
+
+        This method is used by both `ArrowDatasetEngine`
+        and `ArrowLegacyEngine`.
+        """
+
         # Get full path (empty strings should be ignored)
         full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
 
