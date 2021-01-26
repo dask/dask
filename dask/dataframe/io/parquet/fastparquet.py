@@ -741,7 +741,8 @@ class FastParquetEngine(Engine):
                 if isinstance(row_groups, bytes):
                     row_groups = pickle.loads(row_groups)
                 parquet_file.fmd.row_groups = row_groups
-                parquet_file._set_attrs()
+                # TODO: Adding `parquet_file._set_attrs()` here seems to
+                # cause a failure in `test_append_with_partition[fastparquet]`
             else:
                 raise ValueError("Neither path nor ParquetFile detected!")
 
