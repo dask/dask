@@ -303,6 +303,20 @@ class FastParquetEngine(Engine):
         elif filters is None and len(index_cols) == 0:
             gather_statistics = False
 
+        # Make sure gather_statistics allows filtering
+        # (if filters are desired)
+        if filters:
+            # Filters may require us to gather statistics
+            if gather_statistics is False and pf.info.get("partitions", None):
+                warnings.warn(
+                    "Filtering with gather_statistics=False. "
+                    "Only partition columns will be filtered correctly."
+                )
+            elif gather_statistics is False:
+                raise ValueError("Cannot apply filters with gather_statistics=False")
+            elif not gather_statistics:
+                gather_statistics = True
+
         # Determine which columns need statistics.
         flat_filters = _flatten_filters(filters)
         stat_col_indices = {}
