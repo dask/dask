@@ -51,6 +51,7 @@ class ParquetSubgraph(Layer):
         parts,
         kwargs,
         part_ids=None,
+        common_kwargs=None,
         annotations=None,
     ):
         super().__init__(annotations=annotations)
@@ -61,8 +62,13 @@ class ParquetSubgraph(Layer):
         self.columns = columns
         self.index = index
         self.parts = parts
-        self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
+
+        # `kwargs` = user-defined kwargs to be passed for all parts
+        self.kwargs = kwargs
+
+        # `common_kwargs` = engine-gathered kwargs to be passed for all parts
+        self.common_kwargs = common_kwargs if common_kwargs else {}
 
     def __repr__(self):
         return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
@@ -94,7 +100,9 @@ class ParquetSubgraph(Layer):
             [p["piece"] for p in part],
             self.columns,
             self.index,
-            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
+            toolz.merge(
+                self.common_kwargs, part[0].get("kwargs", {}), self.kwargs or {}
+            ),
         )
 
     def __len__(self):
@@ -121,6 +129,8 @@ class ParquetSubgraph(Layer):
             parts=self.parts,
             kwargs=self.kwargs,
             part_ids={i for i in self.part_ids if (self.name, i) in keys},
+            common_kwargs=self.common_kwargs,
+            annotations=self.annotations,
         )
         return ret, ret.get_dependencies(all_hlg_keys)
 
@@ -161,7 +171,7 @@ def read_parquet(
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
         List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
         argument will NOT result in row-wise filtering of the final partitions
-        unless `engine="pyarrow-dataset"` is also specified.  For other engines,
+        unless ``engine="pyarrow-dataset"`` is also specified.  For other engines,
         filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
@@ -214,14 +224,14 @@ def read_parquet(
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
     read_from_paths : bool or None (default)
-        Only used by `ArrowDatasetEngine`. Determines whether the engine should
-        avoid inserting large pyarrow (`ParquetFileFragment`) objects in the
-        task graph.  If this option is `True`, `read_partition` will need to
-        depend on the file path and row-group ID list (rather than a fragment).
-        This option will reduce the size of the task graph, but will add minor
-        overhead to `read_partition`, and will disable row-wise filtering at
-        read time.  By default (None), `ArrowDatasetEngine` will set this
-        option to `False`.
+        Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
+        Determines whether the engine should avoid inserting large pyarrow
+        (``ParquetFileFragment``) objects in the task graph.  If this option
+        is True, ``read_partition`` will need to regenerate the appropriate
+        fragment object from the path and row-group IDs.  This will reduce the
+        size of the task graph, but will add minor overhead to ``read_partition``.
+        By default (None), ``ArrowDatasetEngine`` will set this option to
+        ``False`` when there are filters.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -230,11 +240,11 @@ def read_parquet(
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
         the second level corresponds to the kwargs that will be passed on to
-        the underlying `pyarrow` or `fastparquet` function.
-        Supported top-level keys: 'dataset' (for opening a `pyarrow` dataset),
-        'file' (for opening a `fastparquet` `ParquetFile`), 'read' (for the
+        the underlying ``pyarrow`` or ``fastparquet`` function.
+        Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
+        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
         backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a `pyarrow.Table.to_pandas()`)
+        passed to convert from a ``pyarrow.Table.to_pandas()``)
 
     Examples
     --------
@@ -248,16 +258,16 @@ def read_parquet(
     if isinstance(columns, str):
         df = read_parquet(
             path,
-            [columns],
-            filters,
-            categories,
-            index,
-            storage_options,
-            engine,
-            gather_statistics,
-            split_row_groups,
-            read_from_paths,
-            chunksize,
+            columns=[columns],
+            filters=filters,
+            categories=categories,
+            index=index,
+            storage_options=storage_options,
+            engine=engine,
+            gather_statistics=gather_statistics,
+            split_row_groups=split_row_groups,
+            read_from_paths=read_from_paths,
+            chunksize=chunksize,
         )
         return df[columns]
 
@@ -273,6 +283,7 @@ def read_parquet(
         storage_options,
         engine,
         gather_statistics,
+        split_row_groups,
         read_from_paths,
         chunksize,
     )
@@ -293,7 +304,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts, index = engine.read_metadata(
+    read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -302,9 +313,25 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
-        engine=engine,
         **kwargs,
     )
+
+    # In the future, we may want to give the engine the
+    # option to return a dedicated element for `common_kwargs`.
+    # However, to avoid breaking the API, we just embed this
+    # data in the first element of `parts` for now.
+    # The logic below is inteded to handle backward and forward
+    # compatibility with a user-defined engine.
+    meta, statistics, parts, index = read_metadata_result[:4]
+    common_kwargs = {}
+    if len(read_metadata_result) > 4:
+        # Engine may return common_kwargs as a separate element
+        common_kwargs = read_metadata_result[4]
+    elif len(parts):
+        # If the engine does not return a dedicated
+        # common_kwargs argument, it may be stored in
+        # the first element of `parts`
+        common_kwargs = parts[0].pop("common_kwargs", {})
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -319,7 +346,17 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = ParquetSubgraph(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = ParquetSubgraph(
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        common_kwargs=common_kwargs,
+    )
 
     # Set the index that was previously treated as a column
     if index_in_columns:
