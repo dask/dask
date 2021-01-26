@@ -1117,7 +1117,7 @@ def test_set_index_overlap_2():
     ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
 
     # TODO: partition-sizes should be 3?
-    assert_eq(ddf1, ddf2, partition_sizes=[(9, 4), None])
+    assert_eq(ddf1, ddf2, partition_sizes=(9, 4))
     assert ddf2.npartitions == 2
 
 
@@ -1196,14 +1196,14 @@ def test_set_index_nan_partition():
         "a", sorted=True
     )  # Set sorted index with 0 null partitions
     assert a_gt1.divisions == (2, 4, 7, 9)
-    assert a_gt1.partition_sizes is None
+    assert a_gt1.partition_sizes == (2, 3, 3)
     np.testing.assert_equal(a_gt1.compute().index.values, list(range(2, 10)))
 
     a_gt3_sorted = d[d.a > 3].set_index(
         "a", sorted=True
     )  # Set sorted index with 1 null partition
     assert a_gt3_sorted.divisions == (4, 7, 9)
-    assert_eq(a_gt3_sorted, a_gt3)
+    assert_eq(a_gt3_sorted, a_gt3, partition_sizes=[(3, 3), None])
 
 
 @pytest.mark.parametrize(

@@ -922,12 +922,14 @@ def fix_duplicate_divisions(df):
     """Remove duplicate `divisions` (which are not allowed generally, and correspond to empty partitions anyway) by
     concatenating runs of partitions with the same `min` division"""
     divisions = df.divisions
+    partition_sizes = df.partition_sizes
     if df.known_divisions and len(np.unique(divisions)) != len(divisions):
         dsk = {}
         name = "dedupe-divisions-%s" % tokenize(df)
         deduped_partition_idx = 0
         partition_idx = 0
         deduped_divisions = []
+        new_partition_sizes = None if partition_sizes is None else []
         found_dupes = False
         while partition_idx < df.npartitions:
             start_partition_idx = partition_idx
@@ -949,8 +951,14 @@ def fix_duplicate_divisions(df):
                         for idx in range(start_partition_idx, partition_idx)
                     ],
                 )
+                if partition_sizes is not None:
+                    new_partition_sizes.append(
+                        sum(partition_sizes[start_partition_idx:partition_idx])
+                    )
             else:
                 dsk[(name, deduped_partition_idx)] = (df._name, start_partition_idx)
+                if partition_sizes is not None:
+                    new_partition_sizes.append(partition_sizes[start_partition_idx])
 
             deduped_divisions.append(division)
             deduped_partition_idx += 1
@@ -958,7 +966,13 @@ def fix_duplicate_divisions(df):
         if found_dupes:
             deduped_divisions.append(divisions[-1])
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-            return new_dd_object(graph, name, df._meta, deduped_divisions)
+            return new_dd_object(
+                graph,
+                name,
+                df._meta,
+                deduped_divisions,
+                partition_sizes=new_partition_sizes,
+            )
 
     return df
 
@@ -995,6 +1009,7 @@ def compute_and_set_sorted_divisions(df, **kwargs):
         )
 
     df.divisions = tuple(mins) + (list(maxs)[-1],)
+    df.partition_sizes = tuple(lens)
 
     mins, maxs = tuple(
         zip(

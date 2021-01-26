@@ -375,6 +375,7 @@ def test_columns_index(tmpdir, write_engine, read_engine):
         ),
         ddf[[]].clear_divisions(),
         check_divisions=True,
+        partition_sizes=[None, None],
     )
 
     # ### Single column, specify index ###
@@ -433,8 +434,6 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
     ddf2 = ddf.reset_index()
-    if read_engine.startswith("pyarrow"):
-        ddf2 = ddf2.clear_divisions()
     ddf3 = dd.read_parquet(fn, index=False, engine=read_engine, gather_statistics=True)
 
     # No Index
@@ -444,7 +443,8 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
         ddf3,
         ddf2,
         check_index=False,
-        check_divisions=True,
+        divisions=[(None,) * 14, tuple(range(0, 42, 3))],
+        partition_sizes=[None, (3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4)],
     )
 
     # Two columns, none as index
@@ -458,7 +458,7 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
         ),
         ddf2[["x", "y"]],
         check_index=False,
-        check_divisions=True,
+        divisions=[(None,) * 14, tuple(range(0, 42, 3))],
     )
 
     # One column and one index, all as columns
@@ -472,7 +472,7 @@ def test_columns_no_index(tmpdir, write_engine, read_engine):
         ),
         ddf2[["myindex", "x"]],
         check_index=False,
-        check_divisions=True,
+        divisions=[(None,) * 14, tuple(range(0, 42, 3))],
     )
 
 
@@ -565,7 +565,12 @@ def test_no_index(tmpdir, write_engine, read_engine):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
     ddf2 = dd.read_parquet(fn, engine=read_engine)
-    assert_eq(df, ddf2, check_index=False)
+    assert_eq(
+        df,
+        ddf2,
+        check_index=False,
+        partition_sizes=[False, (3,)],
+    )
 
 
 def test_read_series(tmpdir, engine):
@@ -913,7 +918,7 @@ def test_ordering(tmpdir, write_engine, read_engine):
         assert pf.columns == ["myindex", "c", "a", "b"]
 
     ddf2 = dd.read_parquet(tmp, index="myindex", engine=read_engine)
-    assert_eq(ddf, ddf2, check_divisions=False)
+    assert_eq(ddf, ddf2, check_divisions=False, partition_sizes=(3,))
 
 
 def test_read_parquet_custom_columns(tmpdir, engine):
@@ -3124,7 +3129,9 @@ def test_multi_partition_none_index_false(tmpdir, engine):
     assert_eq(
         ddf1,
         ddf2,
-        partition_sizes=None,
+        check_index=False,
+        divisions=[tuple(range(0, 42, 3)), (None,) * 14],
+        partition_sizes=[(3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 4), None],
     )
 
 
