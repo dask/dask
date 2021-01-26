@@ -182,7 +182,6 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             scheme = get_file_scheme(fns)
             pf.file_scheme = scheme
             pf.cats = paths_to_cats(fns, scheme)
-            # parts = paths.copy()
             parts = [fs.sep.join([base, fn]) for fn in fns]
     else:
         # There is only one file to read
