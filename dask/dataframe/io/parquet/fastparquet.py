@@ -740,7 +740,7 @@ class FastParquetEngine(Engine):
                 row_groups = piece[0]
                 if isinstance(row_groups, bytes):
                     row_groups = pickle.loads(row_groups)
-                parquet_file.row_groups = row_groups
+                parquet_file.fmd.row_groups = row_groups
                 parquet_file._set_attrs()
             else:
                 raise ValueError("Neither path nor ParquetFile detected!")
