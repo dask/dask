@@ -362,7 +362,6 @@ class FastParquetEngine(Engine):
 
         # Get the number of row groups per file
         single_rg_parts = int(split_row_groups) == 1
-        global_lookup = {}
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
@@ -396,13 +395,12 @@ class FastParquetEngine(Engine):
                         "have one or more missing file_path fields."
                     )
 
+            # Append a tuple to file_row_groups. This tuple will
+            # be structured as: `(<local-row-group-id>, <global-row-group-id>)`
             if file_row_groups[fpath]:
-                file_row_groups[fpath].append(file_row_groups[fpath][-1] + 1)
+                file_row_groups[fpath].append((file_row_groups[fpath][-1][0] + 1, rg))
             else:
-                file_row_groups[fpath].append(0)
-
-            # Store mapping of local row-group to global row_group
-            global_lookup[(fpath, file_row_groups[fpath][-1])] = rg
+                file_row_groups[fpath].append((0, rg))
 
             if gather_statistics:
                 if single_rg_parts:
@@ -498,7 +496,6 @@ class FastParquetEngine(Engine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
-            global_lookup,
             base_path,
         )
 
@@ -508,15 +505,14 @@ class FastParquetEngine(Engine):
         pf,
         filename,
         row_groups,
-        global_lookup,
     ):
         """Turn a set of row-groups into bytes-serialized form
         using thrift via pickle.
         """
 
         real_row_groups = []
-        for rg in row_groups:
-            row_group = pf.row_groups[global_lookup[(filename, rg)]]
+        for rg, rg_global in row_groups:
+            row_group = pf.row_groups[rg_global]
             row_group.statistics = None
             row_group.helper = None
             for c, col in enumerate(row_group.columns):
@@ -547,19 +543,21 @@ class FastParquetEngine(Engine):
         pf=None,
         base_path=None,
         partitions=None,
-        global_lookup=None,
     ):
         """Generate a partition-specific element of `parts`."""
 
         if partitions:
             real_row_groups = cls._get_thrift_row_groups(
-                pf, filename, rg_list, global_lookup
+                pf,
+                filename,
+                rg_list,
             )
             part = {"piece": (real_row_groups,)}
         else:
             # Get full path (empty strings should be ignored)
             full_path = fs.sep.join([p for p in [base_path, filename] if p != ""])
-            part = {"piece": (full_path, rg_list)}
+            row_groups = [rg[0] for rg in rg_list]  # Don't need global IDs
+            part = {"piece": (full_path, row_groups)}
 
         return part
 
@@ -584,7 +582,6 @@ class FastParquetEngine(Engine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
-            global_lookup,
             base_path,
         ) = cls._organize_row_groups(
             pf,
@@ -611,7 +608,6 @@ class FastParquetEngine(Engine):
                 "pf": pf,
                 "base_path": base_path,
                 "partitions": pf.info.get("partitions", None),
-                "global_lookup": global_lookup,
             },
         )
 
