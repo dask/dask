@@ -442,7 +442,6 @@ class FastParquetEngine(Engine):
                             tz = getattr(dtypes[name], "tz", None)
                             cmin = pd.Timestamp(cmin, tz=tz)
                             cmax = pd.Timestamp(cmax, tz=tz)
-                        cnull = column.meta_data.statistics.null_count
                         last = cmax_last.get(name, None)
 
                         if not filters:
@@ -466,11 +465,10 @@ class FastParquetEngine(Engine):
                                     "name": name,
                                     "min": cmin,
                                     "max": cmax,
-                                    "null_count": cnull,
                                 }
                             )
                         else:
-                            cstats += [cmin, cmax, cnull]
+                            cstats += [cmin, cmax]
                         cmax_last[name] = cmax
                     else:
                         if not filters and column.meta_data.num_values > 0:

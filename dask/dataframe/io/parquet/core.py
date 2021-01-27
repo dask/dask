@@ -1143,8 +1143,6 @@ def aggregate_row_groups(parts, stats, chunksize):
             for col, col_add in zip(next_stat["columns"], stat["columns"]):
                 if col["name"] != col_add["name"]:
                     raise ValueError("Columns are different!!")
-                if "null_count" in col:
-                    col["null_count"] += col_add["null_count"]
                 if "min" in col:
                     col["min"] = min(col["min"], col_add["min"])
                 if "max" in col:

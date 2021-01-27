@@ -1337,7 +1337,6 @@ class ArrowDatasetEngine(Engine):
                         if name in statistics:
                             cmin = statistics[name]["min"]
                             cmax = statistics[name]["max"]
-                            cnull = 0  # Not yet available/needed
                             last = cmax_last.get(name, None)
                             if not filters:
                                 # Only think about bailing if we don't need
@@ -1364,11 +1363,10 @@ class ArrowDatasetEngine(Engine):
                                         "max": pd.Timestamp(cmax)
                                         if isinstance(cmax, datetime)
                                         else cmax,
-                                        "null_count": cnull,
                                     }
                                 )
                             else:
-                                cstats += [cmin, cmax, cnull]
+                                cstats += [cmin, cmax]
                             cmax_last[name] = cmax
                         else:
                             if single_rg_parts:
@@ -1863,7 +1861,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     if column.statistics:
                         cmin = column.statistics.min
                         cmax = column.statistics.max
-                        cnull = column.statistics.null_count
                         last = cmax_last.get(name, None)
                         if not filters:
                             # Only think about bailing if we don't need
@@ -1887,11 +1884,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                                     "name": name,
                                     "min": cmin if not to_ts else pd.Timestamp(cmin),
                                     "max": cmax if not to_ts else pd.Timestamp(cmax),
-                                    "null_count": cnull,
                                 }
                             )
                         else:
-                            cstats += [cmin, cmax, cnull]
+                            cstats += [cmin, cmax]
                         cmax_last[name] = cmax
                     else:
 
