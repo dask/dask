@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections import OrderedDict
 import copy
 import json
+import pickle
 import warnings
 
 import tlz as toolz
@@ -30,12 +31,6 @@ from .utils import (
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
 from ...methods import concat
-
-try:
-    # Required for distrubuted
-    import pickle
-except ImportError:
-    pickle = None
 
 
 #########################
@@ -326,6 +321,10 @@ class FastParquetEngine(Engine):
         # If the user has not specified `gather_statistics`,
         # we will only do so if there are specific columns in
         # need of statistics.
+        # NOTE: We cannot change `gather_statistics` from True
+        # to False (even if `stat_col_indices` is empty), in
+        # case a `chunksize` was specified, and the row-group
+        # statistics are needed for part aggregation.
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
         if split_row_groups is None:
@@ -353,6 +352,13 @@ class FastParquetEngine(Engine):
 
         # Get partitioning metadata
         pqpartitions = pf.info.get("partitions", None)
+
+        # Store types specified in pandas metadata
+        pandas_type = {}
+        if pf.row_groups and pf.pandas_metadata:
+            for c in pf.pandas_metadata.get("columns", []):
+                if "field_name" in c:
+                    pandas_type[c["field_name"]] = c.get("pandas_type", None)
 
         # Get the number of row groups per file
         single_rg_parts = int(split_row_groups) == 1
@@ -424,7 +430,12 @@ class FastParquetEngine(Engine):
                         elif dtypes[name] == "object":
                             cmin = column.meta_data.statistics.min_value
                             cmax = column.meta_data.statistics.max_value
-                            if isinstance(cmin, (bytes, bytearray)):
+                            # Decode bytes as long as "bytes" is not the
+                            # expected `pandas_type` for this column
+                            if (
+                                isinstance(cmin, (bytes, bytearray))
+                                and pandas_type.get(name, None) != "bytes"
+                            ):
                                 cmin = cmin.decode("utf-8")
                                 cmax = cmax.decode("utf-8")
                         if isinstance(cmin, np.datetime64):
@@ -522,7 +533,7 @@ class FastParquetEngine(Engine):
                 col.meta_data.total_uncompressed_size = None
                 col.meta_data.encoding_stats = None
             real_row_groups.append(row_group)
-        return pickle.dumps(real_row_groups) if pickle else real_row_groups
+        return pickle.dumps(real_row_groups)
 
     @classmethod
     def _make_part(

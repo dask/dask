@@ -1260,6 +1260,10 @@ class ArrowDatasetEngine(Engine):
         # If the user has not specified `gather_statistics`,
         # we will only do so if there are specific columns in
         # need of statistics.
+        # NOTE: We cannot change `gather_statistics` from True
+        # to False (even if `stat_col_indices` is empty), in
+        # case a `chunksize` was specified, and the row-group
+        # statistics are needed for part aggregation.
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
         if split_row_groups is None:

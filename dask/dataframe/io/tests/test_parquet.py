@@ -238,7 +238,10 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 @write_read_engines()
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
-    df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
+    if write_engine != "fastparquet":
+        df = pd.DataFrame({"a": [b"a", b"b", b"b"], "b": [4, 5, 6]})
+    else:
+        df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
