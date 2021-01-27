@@ -430,6 +430,11 @@ class FastParquetEngine(Engine):
                         elif dtypes[name] == "object":
                             cmin = column.meta_data.statistics.min_value
                             cmax = column.meta_data.statistics.max_value
+                            # Older versions may not have cmin/cmax_value
+                            if cmin is None:
+                                cmin = column.meta_data.statistics.min
+                            if cmax is None:
+                                cmax = column.meta_data.statistics.max
                             # Decode bytes as long as "bytes" is not the
                             # expected `pandas_type` for this column
                             if (
