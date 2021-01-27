@@ -221,7 +221,6 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
     from dask.array.utils import assert_eq
-    import numpy as np
 
     # A flaky doubling function -- need extra args because it is called before
     # application to establish dtype/meta.

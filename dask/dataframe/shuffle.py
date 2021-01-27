@@ -159,8 +159,7 @@ class SimpleShuffleLayer(Layer):
         )
 
         if state["annotations"]:
-            expanded = cls.expand_annotations(state["annotations"], raw.keys())
-            cls.merge_annotations(annotations, expanded)
+            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
