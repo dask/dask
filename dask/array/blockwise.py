@@ -58,7 +58,7 @@ def blockwise(
 
     Outer product multiplying x by y, two 1-d vectors
 
-    >>> z = blockwise(operator.mul, 'ij', x, 'i', y, 'j', dtype='f8')  # doctest: +SKIP
+    >>> z = blockwise(np.outer, 'ij', x, 'i', y, 'j', dtype='f8')  # doctest: +SKIP
 
     z = x.T
 
