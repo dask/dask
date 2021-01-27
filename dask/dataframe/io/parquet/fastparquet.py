@@ -512,7 +512,6 @@ class FastParquetEngine(Engine):
                 # NOTE: Fastparquet may need the null count in the
                 # statistics, so we cannot just set statistics
                 # to none.  Set attributes separately:
-                col.meta_data.statistics
                 if col.meta_data.statistics:
                     col.meta_data.statistics.distinct_count = None
                     col.meta_data.statistics.max = None
@@ -714,6 +713,7 @@ class FastParquetEngine(Engine):
 
             # Strip all partition-dependent or unnecessary
             # data from the `ParquetFile` object
+            pf.row_groups = None
             pf.fmd.row_groups = None
             pf._statistics = None
             parts[0]["common_kwargs"]["parquet_file"] = pf
