@@ -17,6 +17,9 @@ from dask.dataframe.utils import (
     assert_max_deps,
 )
 
+# TODO(pandas) Categorical.set_levels(inplace=True) is deprecated
+pytestmark = pytest.mark.filterwarnings("ignore:inplace is deprecated:FutureWarning")
+
 AGG_FUNCS = [
     "sum",
     "mean",
@@ -2475,3 +2478,26 @@ def test_groupby_aggregate_categorical_observed(
         agg(pdf.groupby(groupby, observed=observed)),
         agg(ddf.groupby(groupby, observed=observed)),
     )
+
+
+def test_empty_partitions_with_value_counts():
+    # https://github.com/dask/dask/issues/7065
+    df = pd.DataFrame(
+        data=[
+            ["a1", "b1"],
+            ["a1", None],
+            ["a1", "b1"],
+            [None, None],
+            [None, None],
+            [None, None],
+            ["a3", "b3"],
+            ["a3", "b3"],
+            ["a5", "b5"],
+        ],
+        columns=["A", "B"],
+    )
+
+    expected = df.groupby("A")["B"].value_counts()
+    ddf = dd.from_pandas(df, npartitions=3)
+    actual = ddf.groupby("A")["B"].value_counts()
+    assert_eq(expected, actual)

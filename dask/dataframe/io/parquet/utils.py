@@ -58,8 +58,8 @@ class Engine:
 
             [
                 {'num-rows': 1000, 'columns': [
-                    {'name': 'id', 'min': 0, 'max': 100, 'null-count': 0},
-                    {'name': 'x', 'min': 0.0, 'max': 1.0, 'null-count': 5},
+                    {'name': 'id', 'min': 0, 'max': 100},
+                    {'name': 'x', 'min': 0.0, 'max': 1.0},
                     ]},
                 ...
             ]
@@ -533,14 +533,13 @@ def _aggregate_stats(
         if len(file_row_group_column_stats) > 1:
             df_cols = pd.DataFrame(file_row_group_column_stats)
         for ind, name in enumerate(stat_col_indices):
-            i = ind * 3
+            i = ind * 2
             if df_cols is None:
                 s["columns"].append(
                     {
                         "name": name,
                         "min": file_row_group_column_stats[0][i],
                         "max": file_row_group_column_stats[0][i + 1],
-                        "null_count": file_row_group_column_stats[0][i + 2],
                     }
                 )
             else:
@@ -549,7 +548,6 @@ def _aggregate_stats(
                         "name": name,
                         "min": df_cols.iloc[:, i].min(),
                         "max": df_cols.iloc[:, i + 1].max(),
-                        "null_count": df_cols.iloc[:, i + 2].sum(),
                     }
                 )
         return s
@@ -565,9 +563,6 @@ def _row_groups_to_parts(
     make_part_func,
     make_part_kwargs,
 ):
-
-    # partition_keys = partition_info.get("partition_keys", None)
-    # partition_obj = partition_info.get("partitions", None)
 
     # Construct `parts` and `stats`
     parts = []

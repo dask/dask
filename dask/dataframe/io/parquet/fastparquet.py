@@ -4,6 +4,7 @@ from collections import defaultdict
 from collections import OrderedDict
 import copy
 import json
+import pickle
 import warnings
 
 import tlz as toolz
@@ -30,12 +31,6 @@ from .utils import (
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
 from ...methods import concat
-
-try:
-    # Required for distrubuted
-    import pickle
-except ImportError:
-    pickle = None
 
 
 #########################
@@ -182,7 +177,6 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             scheme = get_file_scheme(fns)
             pf.file_scheme = scheme
             pf.cats = paths_to_cats(fns, scheme)
-            # parts = paths.copy()
             parts = [fs.sep.join([base, fn]) for fn in fns]
     else:
         # There is only one file to read
@@ -303,6 +297,20 @@ class FastParquetEngine(Engine):
         elif filters is None and len(index_cols) == 0:
             gather_statistics = False
 
+        # Make sure gather_statistics allows filtering
+        # (if filters are desired)
+        if filters:
+            # Filters may require us to gather statistics
+            if gather_statistics is False and pf.info.get("partitions", None):
+                warnings.warn(
+                    "Filtering with gather_statistics=False. "
+                    "Only partition columns will be filtered correctly."
+                )
+            elif gather_statistics is False:
+                raise ValueError("Cannot apply filters with gather_statistics=False")
+            elif not gather_statistics:
+                gather_statistics = True
+
         # Determine which columns need statistics.
         flat_filters = _flatten_filters(filters)
         stat_col_indices = {}
@@ -313,8 +321,12 @@ class FastParquetEngine(Engine):
         # If the user has not specified `gather_statistics`,
         # we will only do so if there are specific columns in
         # need of statistics.
+        # NOTE: We cannot change `gather_statistics` from True
+        # to False (even if `stat_col_indices` is empty), in
+        # case a `chunksize` was specified, and the row-group
+        # statistics are needed for part aggregation.
         if gather_statistics is None:
-            gather_statistics = len(stat_col_indices.keys()) > 0
+            gather_statistics = bool(stat_col_indices)
         if split_row_groups is None:
             split_row_groups = False
 
@@ -341,9 +353,15 @@ class FastParquetEngine(Engine):
         # Get partitioning metadata
         pqpartitions = pf.info.get("partitions", None)
 
+        # Store types specified in pandas metadata
+        pandas_type = {}
+        if pf.row_groups and pf.pandas_metadata:
+            for c in pf.pandas_metadata.get("columns", []):
+                if "field_name" in c:
+                    pandas_type[c["field_name"]] = c.get("pandas_type", None)
+
         # Get the number of row groups per file
         single_rg_parts = int(split_row_groups) == 1
-        global_lookup = {}
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
@@ -359,11 +377,15 @@ class FastParquetEngine(Engine):
             ):
                 continue
 
+            # NOTE: Here we assume that all column chunks are stored
+            # in the same file. This is not strictly required by the
+            # parquet spec.
             fpath = row_group.columns[0].file_path
             if fpath is None:
                 if paths and pf.fn in paths:
-                    # There doesn't need to be a file_path
-                    # in all cases for Fastparquet
+                    # There doesn't need to be a file_path if the
+                    # row group is in the same file as the metadata.
+                    # Assume this is a single-file dataset.
                     fpath = pf.fn
                     base_path = base_path or ""
                 else:
@@ -373,13 +395,12 @@ class FastParquetEngine(Engine):
                         "have one or more missing file_path fields."
                     )
 
+            # Append a tuple to file_row_groups. This tuple will
+            # be structured as: `(<local-row-group-id>, <global-row-group-id>)`
             if file_row_groups[fpath]:
-                file_row_groups[fpath].append(file_row_groups[fpath][-1] + 1)
+                file_row_groups[fpath].append((file_row_groups[fpath][-1][0] + 1, rg))
             else:
-                file_row_groups[fpath].append(0)
-
-            # Store mapping of local row-group to global row_group
-            global_lookup[(fpath, file_row_groups[fpath][-1])] = rg
+                file_row_groups[fpath].append((0, rg))
 
             if gather_statistics:
                 if single_rg_parts:
@@ -397,24 +418,33 @@ class FastParquetEngine(Engine):
                 cstats = []
                 for name, i in stat_col_indices.items():
                     column = row_group.columns[i]
-                    col = column.meta_data.path_in_schema[0]
                     if column.meta_data.statistics:
                         cmin = None
                         cmax = None
-                        if pf.statistics["min"][col][0] is not None:
-                            cmin = pf.statistics["min"][col][rg]
-                            cmax = pf.statistics["max"][col][rg]
-                        elif dtypes[col] == "object":
+                        # TODO: Avoid use of `pf.statistics`
+                        if pf.statistics["min"][name][0] is not None:
+                            cmin = pf.statistics["min"][name][rg]
+                            cmax = pf.statistics["max"][name][rg]
+                        elif dtypes[name] == "object":
                             cmin = column.meta_data.statistics.min_value
                             cmax = column.meta_data.statistics.max_value
-                            if isinstance(cmin, (bytes, bytearray)):
+                            # Older versions may not have cmin/cmax_value
+                            if cmin is None:
+                                cmin = column.meta_data.statistics.min
+                            if cmax is None:
+                                cmax = column.meta_data.statistics.max
+                            # Decode bytes as long as "bytes" is not the
+                            # expected `pandas_type` for this column
+                            if (
+                                isinstance(cmin, (bytes, bytearray))
+                                and pandas_type.get(name, None) != "bytes"
+                            ):
                                 cmin = cmin.decode("utf-8")
                                 cmax = cmax.decode("utf-8")
                         if isinstance(cmin, np.datetime64):
-                            tz = getattr(dtypes[col], "tz", None)
+                            tz = getattr(dtypes[name], "tz", None)
                             cmin = pd.Timestamp(cmin, tz=tz)
                             cmax = pd.Timestamp(cmax, tz=tz)
-                        cnull = column.meta_data.statistics.null_count
                         last = cmax_last.get(name, None)
 
                         if not filters:
@@ -438,11 +468,10 @@ class FastParquetEngine(Engine):
                                     "name": name,
                                     "min": cmin,
                                     "max": cmax,
-                                    "null_count": cnull,
                                 }
                             )
                         else:
-                            cstats += [cmin, cmax, cnull]
+                            cstats += [cmin, cmax]
                         cmax_last[name] = cmax
                     else:
                         if not filters and column.meta_data.num_values > 0:
@@ -467,7 +496,6 @@ class FastParquetEngine(Engine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
-            global_lookup,
             base_path,
         )
 
@@ -477,23 +505,34 @@ class FastParquetEngine(Engine):
         pf,
         filename,
         row_groups,
-        global_lookup,
     ):
+        """Turn a set of row-groups into bytes-serialized form
+        using thrift via pickle.
+        """
+
         real_row_groups = []
-        for rg in row_groups:
-            row_group = pf.row_groups[global_lookup[(filename, rg)]]
+        for rg, rg_global in row_groups:
+            row_group = pf.row_groups[rg_global]
             row_group.statistics = None
             row_group.helper = None
             for c, col in enumerate(row_group.columns):
                 if c:
                     col.file_path = None
                 col.meta_data.key_value_metadata = None
-                col.meta_data.statistics = None
+                # NOTE: Fastparquet may need the null count in the
+                # statistics, so we cannot just set statistics
+                # to none.  Set attributes separately:
+                if col.meta_data.statistics:
+                    col.meta_data.statistics.distinct_count = None
+                    col.meta_data.statistics.max = None
+                    col.meta_data.statistics.min = None
+                    col.meta_data.statistics.max_value = None
+                    col.meta_data.statistics.min_value = None
                 col.meta_data.encodings = None
                 col.meta_data.total_uncompressed_size = None
                 col.meta_data.encoding_stats = None
             real_row_groups.append(row_group)
-        return pickle.dumps(real_row_groups) if pickle else real_row_groups
+        return pickle.dumps(real_row_groups)
 
     @classmethod
     def _make_part(
@@ -504,17 +543,21 @@ class FastParquetEngine(Engine):
         pf=None,
         base_path=None,
         partitions=None,
-        global_lookup=None,
     ):
+        """Generate a partition-specific element of `parts`."""
+
         if partitions:
             real_row_groups = cls._get_thrift_row_groups(
-                pf, filename, rg_list, global_lookup
+                pf,
+                filename,
+                rg_list,
             )
             part = {"piece": (real_row_groups,)}
         else:
             # Get full path (empty strings should be ignored)
             full_path = fs.sep.join([p for p in [base_path, filename] if p != ""])
-            part = {"piece": (full_path, rg_list)}
+            row_groups = [rg[0] for rg in rg_list]  # Don't need global IDs
+            part = {"piece": (full_path, row_groups)}
 
         return part
 
@@ -539,7 +582,6 @@ class FastParquetEngine(Engine):
             file_row_group_stats,
             file_row_group_column_stats,
             gather_statistics,
-            global_lookup,
             base_path,
         ) = cls._organize_row_groups(
             pf,
@@ -566,7 +608,6 @@ class FastParquetEngine(Engine):
                 "pf": pf,
                 "base_path": base_path,
                 "partitions": pf.info.get("partitions", None),
-                "global_lookup": global_lookup,
             },
         )
 
@@ -727,7 +768,11 @@ class FastParquetEngine(Engine):
                 row_groups = piece[0]
                 if isinstance(row_groups, bytes):
                     row_groups = pickle.loads(row_groups)
-                parquet_file.row_groups = row_groups
+                parquet_file.fmd.row_groups = row_groups
+                # NOTE: May lose cats after `_set_attrs` call
+                save_cats = parquet_file.cats
+                parquet_file._set_attrs()
+                parquet_file.cats = save_cats
             else:
                 raise ValueError("Neither path nor ParquetFile detected!")
 

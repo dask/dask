@@ -37,7 +37,6 @@ NONE_LABEL = "__null_dask_index__"
 class ParquetFunctionWrapper:
     """
     Parquet Function-Wrapper Class
-
     Reads parquet data from disk to produce a partition
     (given a `part` argument).
     """
@@ -88,7 +87,6 @@ class ParquetFunctionWrapper:
 class BlockwiseParquet(Blockwise):
     """
     Specialized BlockwiseIO Layer for read_parquet.
-
     Enables HighLevelGraph optimizations (e.g. optimize_read_parquet_getitem).
     """
 
@@ -160,6 +158,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=None,
+    read_from_paths=None,
     chunksize=None,
     **kwargs,
 ):
@@ -185,7 +184,7 @@ def read_parquet(
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
         List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
         argument will NOT result in row-wise filtering of the final partitions
-        unless `engine="pyarrow-dataset"` is also specified.  For other engines,
+        unless ``engine="pyarrow-dataset"`` is also specified.  For other engines,
         filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
@@ -237,6 +236,15 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
+    read_from_paths : bool or None (default)
+        Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
+        Determines whether the engine should avoid inserting large pyarrow
+        (``ParquetFileFragment``) objects in the task graph.  If this option
+        is True, ``read_partition`` will need to regenerate the appropriate
+        fragment object from the path and row-group IDs.  This will reduce the
+        size of the task graph, but will add minor overhead to ``read_partition``.
+        By default (None), ``ArrowDatasetEngine`` will set this option to
+        ``False`` when there are filters.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -245,11 +253,11 @@ def read_parquet(
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
         the second level corresponds to the kwargs that will be passed on to
-        the underlying `pyarrow` or `fastparquet` function.
-        Supported top-level keys: 'dataset' (for opening a `pyarrow` dataset),
-        'file' (for opening a `fastparquet` `ParquetFile`), 'read' (for the
+        the underlying ``pyarrow`` or ``fastparquet`` function.
+        Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
+        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
         backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a `pyarrow.Table.to_pandas()`)
+        passed to convert from a ``pyarrow.Table.to_pandas()``)
 
     Examples
     --------
@@ -263,15 +271,16 @@ def read_parquet(
     if isinstance(columns, str):
         df = read_parquet(
             path,
-            [columns],
-            filters,
-            categories,
-            index,
-            storage_options,
-            engine,
-            gather_statistics,
-            split_row_groups,
-            chunksize,
+            columns=[columns],
+            filters=filters,
+            categories=categories,
+            index=index,
+            storage_options=storage_options,
+            engine=engine,
+            gather_statistics=gather_statistics,
+            split_row_groups=split_row_groups,
+            read_from_paths=read_from_paths,
+            chunksize=chunksize,
         )
         return df[columns]
 
@@ -287,6 +296,8 @@ def read_parquet(
         storage_options,
         engine,
         gather_statistics,
+        split_row_groups,
+        read_from_paths,
         chunksize,
     )
 
@@ -314,7 +325,7 @@ def read_parquet(
         gather_statistics=True if chunksize else gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        engine=engine,
+        read_from_paths=read_from_paths,
         **kwargs,
     )
 
@@ -1146,8 +1157,6 @@ def aggregate_row_groups(parts, stats, chunksize):
             for col, col_add in zip(next_stat["columns"], stat["columns"]):
                 if col["name"] != col_add["name"]:
                     raise ValueError("Columns are different!!")
-                if "null_count" in col:
-                    col["null_count"] += col_add["null_count"]
                 if "min" in col:
                     col["min"] = min(col["min"], col_add["min"])
                 if "max" in col:

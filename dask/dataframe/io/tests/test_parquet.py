@@ -14,6 +14,7 @@ import dask
 import dask.multiprocessing
 import dask.dataframe as dd
 from dask.blockwise import Blockwise, optimize_blockwise
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -165,13 +166,28 @@ write_read_engines_xfail = write_read_engines(
     }
 )
 
-fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
-fp_pandas_xfail = write_read_engines(
-    **{
-        "xfail_fastparquet_pyarrow-dataset": fp_pandas_msg,
-        "xfail_fastparquet_pyarrow-legacy": fp_pandas_msg,
-    }
-)
+if (
+    fastparquet
+    and fastparquet.__version__ < LooseVersion("0.5")
+    and PANDAS_GT_110
+    and not PANDAS_GT_121
+):
+    # a regression in pandas 1.1.x / 1.2.0 caused a failure in writing partitioned
+    # categorical columns when using fastparquet 0.4.x, but this was (accidentally)
+    # fixed in fastparquet 0.5.0
+    fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
+    fp_pandas_xfail = write_read_engines(
+        **{
+            "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
+            "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
+            "xfail_fastparquet_fastparquet": fp_pandas_msg,
+            "xfail_fastparquet_pyarrow-dataset": fp_pandas_msg,
+            "xfail_fastparquet_pyarrow-legacy": fp_pandas_msg,
+        }
+    )
+else:
+    fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
+    fp_pandas_xfail = write_read_engines()
 
 
 @write_read_engines()
@@ -225,7 +241,10 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 @write_read_engines()
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
-    df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
+    if write_engine != "fastparquet":
+        df = pd.DataFrame({"a": [b"a", b"b", b"b"], "b": [4, 5, 6]})
+    else:
+        df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
@@ -590,7 +609,7 @@ def test_categorical(tmpdir, write_engine, read_engine):
     ddf2 = dd.read_parquet(tmp, categories=[], engine=read_engine)
 
     ddf2.loc[:1000].compute()
-    assert (df.x == ddf2.x).all()
+    assert (df.x == ddf2.x.compute()).all()
 
 
 def test_append(tmpdir, engine):
@@ -649,17 +668,17 @@ def test_append_with_partition(tmpdir, engine):
     tmp = str(tmpdir)
     df0 = pd.DataFrame(
         {
-            "lat": np.arange(0, 10),
-            "lon": np.arange(10, 20),
-            "value": np.arange(100, 110),
+            "lat": np.arange(0, 10, dtype="int64"),
+            "lon": np.arange(10, 20, dtype="int64"),
+            "value": np.arange(100, 110, dtype="int64"),
         }
     )
     df0.index.name = "index"
     df1 = pd.DataFrame(
         {
-            "lat": np.arange(10, 20),
-            "lon": np.arange(10, 20),
-            "value": np.arange(120, 130),
+            "lat": np.arange(10, 20, dtype="int64"),
+            "lon": np.arange(10, 20, dtype="int64"),
+            "value": np.arange(120, 130, dtype="int64"),
         }
     )
     df1.index.name = "index"
@@ -678,7 +697,8 @@ def test_append_with_partition(tmpdir, engine):
     out = dd.read_parquet(
         tmp, engine=engine, index="index", gather_statistics=True
     ).compute()
-    out["lon"] = out.lon.astype("int")  # just to pass assert
+    # convert categorical to plain int just to pass assert
+    out["lon"] = out.lon.astype("int64")
     # sort required since partitioning breaks index order
     assert_eq(
         out.sort_values("value"), pd.concat([df0, df1])[out.columns], check_index=False
@@ -1170,6 +1190,7 @@ def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
 
     df.to_parquet(tmpdir, engine="pyarrow", schema=schema)
     df_out = dd.read_parquet(tmpdir, engine=engine)
+    df_out.compute()
 
     if index and engine == "fastparquet":
         # Fastparquet fails to detect int64 from _metadata
@@ -2364,8 +2385,6 @@ def test_graph_size_pyarrow(tmpdir, engine):
     ddf1.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, engine=engine)
 
-    # pyarrow.dataset requires fragments to be passed in dict.
-    # This requires slightly more space than "legacy"
     assert len(pickle.dumps(ddf2.__dask_graph__())) < 25000
 
 
@@ -2727,7 +2746,7 @@ def test_read_pandas_fastparquet_partitioned(tmpdir, engine):
     assert len(ddf_read.compute().group) == 6
 
 
-def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
+def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
     # https://github.com/dask/dask/issues/5893
     pdf = pd.DataFrame({"A": [1, 2, 3, 4, 5, 6], "B": ["a", "b", "c", "d", "e", "f"]})
     path = os.path.join(str(tmpdir), "data.parquet")
@@ -2736,6 +2755,14 @@ def test_read_parquet_getitem_skip_when_getting_getitem(tmpdir, engine):
 
     ddf = dd.read_parquet(path, engine=engine)
     a, b = dask.optimize(ddf["A"], ddf)
+
+    # Make sure we are still allowing the getitem optimization
+    ddf = ddf["A"]
+    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[(ddf._name, 0)])
+    read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
+    subgraph = dsk.layers[read]
+    assert isinstance(subgraph, BlockwiseParquet)
+    assert subgraph.columns == ["A"]
 
 
 @pytest.mark.parametrize("gather_statistics", [None, True])
@@ -2865,7 +2892,7 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
 
 
-@write_read_engines_xfail
+@fp_pandas_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
 
     if write_engine.startswith("pyarrow") and pa.__version__ < LooseVersion("0.15.0"):

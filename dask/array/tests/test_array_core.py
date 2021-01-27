@@ -1579,7 +1579,7 @@ def test_slicing_flexible_type():
 
 def test_slicing_with_object_dtype():
     # https://github.com/dask/dask/issues/6892
-    d = da.from_array(np.array(["a", "b"], dtype=np.object), chunks=(1,))
+    d = da.from_array(np.array(["a", "b"], dtype=object), chunks=(1,))
     assert d.dtype == d[(0,)].dtype
 
 
