@@ -4,6 +4,7 @@ from typing import (
     Any,
     Dict,
     Hashable,
+    MutableMapping,
     Optional,
     Set,
     Mapping,
@@ -107,14 +108,25 @@ class Layer(collections.abc.Mapping):
         return packed
 
     @staticmethod
-    def expand_annotations(annotations, keys) -> Mapping[str, Any]:
-        if annotations is None:
+    def unpack_annotations(
+        annotations: MutableMapping[str, Any],
+        new_annotations: Mapping[str, Any],
+        keys: Iterable,
+    ) -> None:
+        """
+        Expand a set of layer annotations across a set of keys, then merge those
+        expanded annotations for the layer into an existing annotations mapping.
+        This is not a simple shallow merge because some annotations like retries,
+        priority, workers, etc need to be able to retain keys from different layers.
+        """
+        if new_annotations is None:
             return None
 
         expanded = {}
         keys_stringified = False
 
-        for a, v in annotations.items():
+        # Expand the new annotations across the keyset
+        for a, v in new_annotations.items():
             if type(v) is dict and "__expanded_annotations__" in v:
                 # Maybe do a destructive update for efficiency?
                 v = v.copy()
@@ -127,7 +139,14 @@ class Layer(collections.abc.Mapping):
 
                 expanded[a] = {k: v for k in keys}
 
-        return expanded
+        # Merge the expanded annotations with the existing annotations mapping
+        to_merge = {}
+        for k, v in expanded.items():
+            if isinstance(v, dict) and k in annotations:
+                to_merge[k] = {**annotations[k], **v}
+            else:
+                to_merge[k] = v
+        annotations.update(to_merge)
 
     def cull(
         self, keys: Set, all_hlg_keys: Iterable
@@ -226,7 +245,7 @@ class Layer(collections.abc.Mapping):
         cls,
         state: Any,
         dsk: Dict[str, Any],
-        dependencies: Mapping[Hashable, Set],
+        dependencies: MutableMapping[Hashable, Set],
         annotations: Dict[str, Any],
     ) -> None:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
@@ -245,14 +264,19 @@ class Layer(collections.abc.Mapping):
             The state returned by Layer.__dask_distributed_pack__()
         dsk: dict
             The materialized low level graph of the already unpacked layers
-        dependencies: Mapping
+        dependencies: MutableMapping
             The dependencies of each key in `dsk`
         annotations: dict
             The materialized task annotations
         """
-        raise NotImplementedError(
-            f"{type(cls)} doesn't implement __dask_distributed_unpack__()"
-        )
+        dsk.update(state["dsk"])
+        for k, v in state["dependencies"].items():
+            dependencies[k] = set(dependencies.get(k, ())) | set(v)
+
+        if state["annotations"]:
+            cls.unpack_annotations(
+                annotations, state["annotations"], state["dsk"].keys()
+            )
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer
