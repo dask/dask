@@ -417,6 +417,7 @@ class FastParquetEngine(Engine):
                     if column.meta_data.statistics:
                         cmin = None
                         cmax = None
+                        # TODO: Avoid use of `pf.statistics`
                         if pf.statistics["min"][name][0] is not None:
                             cmin = pf.statistics["min"][name][rg]
                             cmax = pf.statistics["max"][name][rg]
@@ -508,7 +509,16 @@ class FastParquetEngine(Engine):
                 if c:
                     col.file_path = None
                 col.meta_data.key_value_metadata = None
-                col.meta_data.statistics = None
+                # NOTE: Fastparquet may need the null count in the
+                # statistics, so we cannot just set statistics
+                # to none.  Set attributes separately:
+                col.meta_data.statistics
+                if col.meta_data.statistics:
+                    col.meta_data.statistics.distinct_count = None
+                    col.meta_data.statistics.max = None
+                    col.meta_data.statistics.min = None
+                    col.meta_data.statistics.max_value = None
+                    col.meta_data.statistics.min_value = None
                 col.meta_data.encodings = None
                 col.meta_data.total_uncompressed_size = None
                 col.meta_data.encoding_stats = None
@@ -704,7 +714,6 @@ class FastParquetEngine(Engine):
 
             # Strip all partition-dependent or unnecessary
             # data from the `ParquetFile` object
-            pf.row_groups = None
             pf.fmd.row_groups = None
             pf._statistics = None
             parts[0]["common_kwargs"]["parquet_file"] = pf
@@ -750,8 +759,10 @@ class FastParquetEngine(Engine):
                 if isinstance(row_groups, bytes):
                     row_groups = pickle.loads(row_groups)
                 parquet_file.fmd.row_groups = row_groups
-                # TODO: Adding `parquet_file._set_attrs()` here seems to
-                # cause a failure in `test_append_with_partition[fastparquet]`
+                # NOTE: May lose cats after `_set_attrs` call
+                save_cats = parquet_file.cats
+                parquet_file._set_attrs()
+                parquet_file.cats = save_cats
             else:
                 raise ValueError("Neither path nor ParquetFile detected!")
 

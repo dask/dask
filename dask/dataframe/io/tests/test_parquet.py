@@ -186,12 +186,7 @@ if (
     )
 else:
     fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
-    fp_pandas_xfail = write_read_engines(
-        **{
-            "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
-            "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
-        }
-    )
+    fp_pandas_xfail = write_read_engines()
 
 
 @write_read_engines()
