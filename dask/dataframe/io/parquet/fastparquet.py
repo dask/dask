@@ -116,7 +116,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     """
     parts = []
     if len(paths) > 1:
-        base, fns = _analyze_paths(paths, fs)
+        paths, base, fns = _analyze_paths(paths, fs)
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
@@ -147,7 +147,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     elif fs.isdir(paths[0]):
         # This is a directory, check for _metadata, then _common_metadata
         paths = fs.glob(paths[0] + fs.sep + "*")
-        base, fns = _analyze_paths(paths, fs)
+        paths, base, fns = _analyze_paths(paths, fs)
         if "_metadata" in fns:
             # Using _metadata file (best-case scenario)
             pf = ParquetFile(
