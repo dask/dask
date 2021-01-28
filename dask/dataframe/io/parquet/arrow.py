@@ -607,10 +607,7 @@ class ArrowDatasetEngine(Engine):
         # For pyarrow.dataset api, if we did not read directly from
         # fragments, we need to add the partitioned columns here.
         if partitions and isinstance(partitions, list):
-            if not isinstance(path_or_frag, pa_ds.ParquetFileFragment):
-                keys_dict = {k: v for (k, v) in partition_keys}
-            else:
-                keys_dict = {}
+            keys_dict = {k: v for (k, v) in partition_keys}
             for partition in partitions:
                 if partition.name not in arrow_table.schema.names:
                     # We read from file paths, so the partition
