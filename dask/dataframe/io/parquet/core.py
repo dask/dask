@@ -1,6 +1,5 @@
 from distutils.version import LooseVersion
 import math
-import msgpack
 import pickle
 
 import tlz as toolz
@@ -108,7 +107,6 @@ class BlockwiseParquet(Blockwise):
         part_ids=None,
         common_kwargs=None,
         annotations=None,
-        serialize_parts=None,
     ):
         self.name = name
         self.engine = engine
@@ -120,7 +118,6 @@ class BlockwiseParquet(Blockwise):
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
         self.common_kwargs = common_kwargs or {}
-        self.serialize_parts = serialize_parts
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = ParquetFunctionWrapper(
             self.io_name,
@@ -135,15 +132,6 @@ class BlockwiseParquet(Blockwise):
 
         # Define mapping between key index and "part"
         io_arg_map = {(self.io_name, i): self.parts[i] for i in self.part_ids}
-
-        # Check if we need to serialize the elements of `parts`
-        # with `pickle`.
-        if self.part_ids and self.serialize_parts is None:
-            try:
-                msgpack.packb(self.parts[self.part_ids[0]])
-                self.serialize_parts = False
-            except TypeError:
-                self.serialize_parts = True
 
         # Define the "blockwise" graph
         dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
@@ -162,17 +150,6 @@ class BlockwiseParquet(Blockwise):
         return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
             self.name, len(self.part_ids), list(self.columns)
         )
-
-    def __dask_distributed_pack__(self, client):
-        packed = super().__dask_distributed_pack__(client)
-
-        # Pickle input arguments if necessary
-        if self.serialize_parts:
-            for coll, input_map in packed["io_deps"].items():
-                for k in input_map:
-                    input_map[k] = pickle.dumps(input_map[k])
-
-        return packed
 
 
 def read_parquet(

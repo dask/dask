@@ -1,4 +1,6 @@
 import itertools
+import msgpack
+import pickle
 
 import numpy as np
 
@@ -329,6 +331,24 @@ class Blockwise(Layer):
 
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
+
+        # Check if we need to serialize the elements of `io_deps`
+        # with `pickle` (i.e. something in the required inputs is
+        # not msgpack serializable)
+        for _, input_map in self.io_deps.items():
+            check = True
+            for k in input_map:
+                if check:
+                    # Test msgpack on the very first element.
+                    # If this fails, we will pickle everything.
+                    # Note that we may want to skip cases where
+                    # the element is something like `None`.
+                    try:
+                        msgpack.packb(input_map[k])
+                        break  # No need to pickle - Bail
+                    except TypeError:
+                        check = False
+                input_map[k] = pickle.dumps(input_map[k])
 
         ret = {
             "output": self.output,
