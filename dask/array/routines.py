@@ -1605,6 +1605,45 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
+@derived_from(np)
+def delete(arr, obj, axis):
+    # axis is a required argument here to avoid needing to deal with the numpy
+    # default case (which reshapes the array to make it flat)
+    axis = validate_axis(axis, arr.ndim)
+
+    if isinstance(obj, slice):
+        obj = np.arange(*obj.indices(arr.shape[axis]))
+    obj = np.asarray(obj)
+    scalar_obj = obj.ndim == 0
+    if scalar_obj:
+        obj = np.atleast_1d(obj)
+
+    obj = np.where(obj < 0, obj + arr.shape[axis], obj)
+    if (np.diff(obj) < 0).any():
+        raise NotImplementedError(
+            "da.delete only implemented for monotonic ``obj`` argument"
+        )
+
+    target_arr = split_at_breaks(arr, np.unique(obj), axis)
+
+    target_arr = [
+        arr[
+            tuple(
+                slice(1, None)
+                if axis == n
+                else slice(
+                    None,
+                )
+                for n, s in enumerate(arr.shape)
+            )
+        ]
+        if i != 0
+        else arr
+        for i, arr in enumerate(target_arr)
+    ]
+    return concatenate(target_arr, axis=axis)
+
+
 def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
