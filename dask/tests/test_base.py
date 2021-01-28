@@ -573,6 +573,7 @@ class Tuple(DaskMethodsMixin):
 
     def __dask_postpersist__(self):
         return Tuple, (self._keys,)
+        # TODO
 
 
 def test_custom_collection():

@@ -1,6 +1,7 @@
 import abc
 import collections.abc
 from typing import (
+    AbstractSet,
     Any,
     Dict,
     Hashable,
@@ -17,7 +18,7 @@ import tlz as toolz
 
 from . import config
 from .utils import ignoring, stringify
-from .base import is_dask_collection
+from .base import clone_key, is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
 
@@ -66,7 +67,7 @@ class Layer(collections.abc.Mapping):
         """Return whether the layer is materialized or not"""
         return True
 
-    def get_output_keys(self) -> Set:
+    def get_output_keys(self) -> AbstractSet:
         """Return a set of all output keys
 
         Output keys are all keys in the layer that might be referenced by
@@ -209,6 +210,85 @@ class Layer(collections.abc.Mapping):
             A set of dependencies
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
+
+    def clone(
+        self,
+        keys: set,
+        seed: Hashable,
+        bind_to: Hashable = None,
+    ) -> "tuple[Layer, bool]":
+        """Clone selected keys in the layer, as well as references to keys in other
+        layers
+
+        Parameters
+        ----------
+        keys
+            Keys to be replaced. This never includes keys not listed by
+            :meth:`get_output_keys`. It must also include any keys that are outside
+            of this layer that may be referenced by it.
+        seed
+            Common hashable used to alter the keys; see :func:`dask.base.clone_key`
+        bind_to
+            Optional key to bind the callable leaf nodes to. A callable leaf node here
+            is one that starts with a callable and does not reference any replaced keys;
+            in other words it's a node where the replacement graph traversal stops; it
+            may still have dependencies on non-replaced nodes.
+            A bound node will not be computed until after ``bind_to`` has been computed.
+
+        Returns
+        -------
+        - New layer
+        - True if the ``bind_to`` key was injected anywhere; False otherwise
+
+        Notes
+        -----
+        This method should be overridden by subclasses to avoid materializing the layer.
+        """
+        from .graph_manipulation import chunks
+
+        is_callable: bool
+        is_leaf: bool
+
+        def clone_value(o):
+            """Variant of distributed.utils_comm.subs_multiple, which allows injecting
+            bind_to
+            """
+            nonlocal is_callable
+            nonlocal is_leaf
+
+            typ = type(o)
+            if typ is tuple and o and callable(o[0]):
+                is_callable = True
+                return (o[0],) + tuple(clone_value(i) for i in o[1:])
+            elif typ is list:
+                return [clone_value(i) for i in o]
+            elif typ is dict:
+                return {k: clone_value(v) for k, v in o.items()}
+            else:
+                try:
+                    if o not in keys:
+                        return o
+                except TypeError:
+                    return o
+                is_leaf = False
+                return clone_key(o, seed)
+
+        dsk_new = {}
+        bound = False
+
+        for key, value in self.items():
+            if key in keys:
+                key = clone_key(key, seed)
+                is_callable = False
+                is_leaf = True
+                value = clone_value(value)
+                if bind_to is not None and is_callable and is_leaf:
+                    value = (chunks.bind, value, bind_to)
+                    bound = True
+
+            dsk_new[key] = value
+
+        return BasicLayer(dsk_new), bound
 
     def __dask_distributed_pack__(self, client) -> Optional[Any]:
         """Pack the layer for scheduler communication in Distributed
@@ -394,22 +474,26 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
 
+    layers: Mapping[str, Layer]
+    dependencies: Mapping[str, Set]
+    key_dependencies: [Mapping[Hashable, Set]]
+    _keys: Optional[set]
+    _all_external_keys: Optional[set]
+
     def __init__(
         self,
-        layers: Mapping[str, Layer],
+        layers: Mapping[str, Mapping],
         dependencies: Mapping[str, Set],
         key_dependencies: Optional[Mapping[Hashable, Set]] = None,
     ):
         self._keys = None
         self._all_external_keys = None
-        self.layers = layers
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies if key_dependencies else {}
 
         # Makes sure that all layers are `Layer`
         self.layers = {
-            k: v if isinstance(v, Layer) else BasicLayer(v)
-            for k, v in self.layers.items()
+            k: v if isinstance(v, Layer) else BasicLayer(v) for k, v in layers.items()
         }
 
     @classmethod
@@ -496,9 +580,27 @@ class HighLevelGraph(Mapping):
         return cls(layers, deps)
 
     def __getitem__(self, key):
+        # Attempt O(1) direct access first, under the assumption that layer names match
+        # either the keys (Delayed, in most cases) or the first element of the key
+        # tuples (Array, Bag, DataFrame, Series). This assumption could be wrong for
+        # third-party collections and/or transforms, and is sometimes wrong for Delayed
+        # objects too.
+        try:
+            return self.layers[key][key]
+        except KeyError:
+            pass
+        try:
+            return self.layers[key[0]][key]
+        except (KeyError, IndexError, TypeError):
+            pass
+
+        # Fall back to O(n) access
         for d in self.layers.values():
-            if key in d:
+            try:
                 return d[key]
+            except KeyError:
+                pass
+
         raise KeyError(key)
 
     def __len__(self):
