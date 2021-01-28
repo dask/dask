@@ -1548,11 +1548,15 @@ def test_coarsen_with_excess():
         np.array([0 + 1 + 2, 3 + 4 + 5, 6 + 7 + 8]),
     )
 
-@pytest.mark.parametrize('chunks', [(x,) * 3 for x in range(16,32)])
+
+@pytest.mark.parametrize("chunks", [(x,) * 3 for x in range(16, 32)])
 def test_coarsen_bad_chunks(chunks):
     x1 = da.arange(np.sum(chunks), chunks=5)
     x2 = x1.rechunk(tuple(chunks))
-    assert_eq(da.coarsen(np.sum, x1, {0: 10}, trim_excess=True), da.coarsen(np.sum, x2, {0: 10}, trim_excess=True))
+    assert_eq(
+        da.coarsen(np.sum, x1, {0: 10}, trim_excess=True),
+        da.coarsen(np.sum, x2, {0: 10}, trim_excess=True),
+    )
 
 
 def test_aligned_coarsen_chunks():
