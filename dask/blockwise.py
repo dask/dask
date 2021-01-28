@@ -188,7 +188,6 @@ class Blockwise(Layer):
 
     See Also
     --------
-    dask.blockwise.BlockwiseIO
     dask.blockwise.blockwise
     dask.array.blockwise
     """
