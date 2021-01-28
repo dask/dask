@@ -627,7 +627,9 @@ class ArrowDatasetEngine(Engine):
         # to categorigal manually for integer types.
         if partitions and isinstance(partitions, list):
             for partition in partitions:
-                if df[partition.name].dtype != pd.Categorical:
+                # import pdb; pdb.set_trace()
+                # if df[partition.name].dtype != pd.Categorical:
+                if df[partition.name].dtype.name != "category":
                     # We read directly from fragments, so the partition
                     # columns are already in our dataframe.  We just
                     # need to convert non-categorical types.
