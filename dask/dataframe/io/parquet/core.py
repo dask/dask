@@ -3,6 +3,8 @@ import math
 import warnings
 from distutils.version import LooseVersion
 
+import numpy as np
+import pandas as pd
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
@@ -279,7 +281,7 @@ def read_parquet(
     # option to return a dedicated element for `common_kwargs`.
     # However, to avoid breaking the API, we just embed this
     # data in the first element of `parts` for now.
-    # The logic below is inteded to handle backward and forward
+    # The logic below is intended to handle backward and forward
     # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
     common_kwargs = {}
@@ -293,7 +295,7 @@ def read_parquet(
         common_kwargs = parts[0].pop("common_kwargs", {})
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
+    parts, divisions, index, index_in_columns, partition_sizes = process_statistics(
         parts, statistics, filters, index, chunksize
     )
 
@@ -305,6 +307,11 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
+    if partition_sizes and index is False:
+        partition_offsets = (0,) + tuple(np.cumsum(partition_sizes))
+    else:
+        partition_offsets = None
+
     # Set the index that was previously treated as a column
     if index_in_columns:
         meta = meta.set_index(index)
@@ -315,7 +322,14 @@ def read_parquet(
         # empty dataframe - just use meta
         graph = {(output_name, 0): meta}
         divisions = (None, None)
+        partition_sizes = (0,)
     else:
+        if partition_offsets:
+            for part, partition_offset in zip(parts, partition_offsets):
+                if not part["kwargs"]:
+                    part["kwargs"] = {}
+                part["kwargs"]["partition_offset"] = partition_offset
+
         # Create Blockwise layer
         layer = DataFrameIOLayer(
             output_name,
@@ -334,7 +348,7 @@ def read_parquet(
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(graph, output_name, meta, divisions)
+    return new_dd_object(graph, output_name, meta, divisions, partition_sizes)
 
 
 def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
@@ -343,16 +357,52 @@ def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
     This function is used by `read_parquet`."""
 
     if isinstance(part, list):
+        if part:
+            partition_offsets = [
+                part_kwargs.pop("partition_offset", None) for (rg, part_kwargs) in part
+            ]
+            if all(
+                partition_offset is not None for partition_offset in partition_offsets
+            ):
+                [partitions_start, *partition_starts] = [
+                    partition_offset[0] for partition_offset in partition_offsets
+                ]
+                [*partition_ends, partitions_end] = [
+                    partition_offset[1] for partition_offset in partition_offsets
+                ]
+                assert (
+                    partition_starts == partition_ends
+                ), "Partition starts don't match ends: %s vs %s" % (
+                    str(partition_starts),
+                    str(partition_ends),
+                )
+                partition_offset = (partitions_start, partitions_end)
+            else:
+                assert all(
+                    partition_offset is None for partition_offset in partition_offsets
+                ), "Partition offsets should be all None or all non-None: %s" % str(
+                    partition_offsets
+                )
+                partition_offset = None
+        else:
+            partition_offset = (0, 0)
+
         dfs = [
-            func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
-            for (rg, kw) in part
+            func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, part_kwargs))
+            for (rg, part_kwargs) in part
         ]
         df = concat(dfs, axis=0)
     else:
         # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
         #       be different for each part.
         rg, part_kwargs = part
+        partition_offset = part_kwargs.pop("partition_offset", None)
         df = func(fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs))
+
+    if partition_offset:
+        partition_start, partition_end = partition_offset
+        if isinstance(df.index, pd.RangeIndex):
+            df = df.set_index(pd.RangeIndex(partition_start, partition_end))
 
     if meta.columns.name:
         df.columns.name = meta.columns.name
@@ -1011,6 +1061,10 @@ def process_statistics(parts, statistics, filters, index, chunksize):
 
         out = sorted_columns(statistics)
 
+        if filters:
+            partition_sizes = None
+        else:
+            partition_sizes = tuple(part["num-rows"] for part in statistics)
         if index and isinstance(index, str):
             index = [index]
         if index and out:
@@ -1048,12 +1102,19 @@ def process_statistics(parts, statistics, filters, index, chunksize):
                 )
                 index = False
                 divisions = [None] * (len(parts) + 1)
+        elif index is False and partition_sizes:
+            # default RangeIndex
+            partition_starts = np.cumsum(partition_sizes)
+            divisions = (
+                (0,) + tuple(partition_starts[:-1]) + (partition_starts[-1] - 1,)
+            )
         else:
             divisions = [None] * (len(parts) + 1)
     else:
         divisions = [None] * (len(parts) + 1)
+        partition_sizes = None
 
-    return parts, divisions, index, index_in_columns
+    return parts, divisions, index, index_in_columns, partition_sizes
 
 
 def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
