@@ -22,6 +22,8 @@ from dask.config import (
     refresh,
     expand_environment_variables,
     canonical_name,
+    serialize,
+    deserialize,
 )
 
 from dask.utils import tmpfile
@@ -472,3 +474,39 @@ def test_deprecations():
             assert dask.config.get("optimization.fuse.ave-width") == 123
 
     assert "optimization.fuse.ave-width" in str(info[0].message)
+
+
+def test_get_override_with():
+    with dask.config.set({"foo": "bar"}):
+        # If override_with is None get the config key
+        assert dask.config.get("foo") == "bar"
+        assert dask.config.get("foo", override_with=None) == "bar"
+
+        # Otherwise pass the default straight through
+        assert dask.config.get("foo", override_with="baz") == "baz"
+        assert dask.config.get("foo", override_with=False) is False
+        assert dask.config.get("foo", override_with=True) is True
+        assert dask.config.get("foo", override_with=123) == 123
+        assert dask.config.get("foo", override_with={"hello": "world"}) == {
+            "hello": "world"
+        }
+        assert dask.config.get("foo", override_with=["one"]) == ["one"]
+
+
+def test_config_serialization():
+    # Use context manager without changing the value to ensure test side effects are restored
+    with dask.config.set({"array.svg.size": dask.config.get("array.svg.size")}):
+
+        # Take a round trip through the serialization
+        serialized = serialize({"array": {"svg": {"size": 150}}})
+        config = deserialize(serialized)
+
+        dask.config.update(dask.config.global_config, config)
+        assert dask.config.get("array.svg.size") == 150
+
+
+def test_config_inheritance():
+    config = collect_env(
+        {"DASK_INTERNAL_INHERIT_CONFIG": serialize({"array": {"svg": {"size": 150}}})}
+    )
+    assert dask.config.get("array.svg.size", config=config) == 150

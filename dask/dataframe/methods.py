@@ -9,7 +9,6 @@ from .utils import (
     is_series_like,
     is_index_like,
     is_dataframe_like,
-    PANDAS_GT_0250,
     hash_object_dispatch,
     group_split_dispatch,
 )
@@ -129,6 +128,13 @@ def wrap_var_reduction(array_var, index):
     return array_var
 
 
+def wrap_skew_reduction(array_skew, index):
+    if isinstance(array_skew, np.ndarray) or isinstance(array_skew, list):
+        return pd.Series(array_skew, index=index)
+
+    return array_skew
+
+
 def var_mixed_concat(numeric_var, timedelta_var, columns):
     vars = pd.concat([numeric_var, timedelta_var])
 
@@ -198,10 +204,9 @@ def describe_nonnumeric_aggregate(stats, name):
         data = [0, 0]
         index = ["count", "unique"]
         dtype = None
-        if PANDAS_GT_0250:
-            data.extend([None, None])
-            index.extend(["top", "freq"])
-            dtype = object
+        data.extend([None, None])
+        index.extend(["top", "freq"])
+        dtype = object
         result = pd.Series(data, index=index, dtype=dtype, name=name)
         return result
 

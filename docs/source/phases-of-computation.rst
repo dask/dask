@@ -1,3 +1,6 @@
+.. _phases-of-computation:
+
+
 Stages of Computation
 =====================
 

@@ -1,4 +1,5 @@
 import random
+from distutils.version import LooseVersion
 
 import numpy as np
 import pytest
@@ -91,7 +92,7 @@ def test_basic(func):
 
 
 @pytest.mark.skipif(
-    sparse.__version__ < "0.7.0+10",
+    sparse.__version__ < LooseVersion("0.7.0+10"),
     reason="fixed in https://github.com/pydata/sparse/pull/256",
 )
 def test_tensordot():

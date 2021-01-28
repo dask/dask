@@ -3,7 +3,7 @@ from collections import defaultdict
 import logging
 import math
 import shutil
-from operator import getitem
+import operator
 import uuid
 import tempfile
 
@@ -14,11 +14,11 @@ import pandas as pd
 from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
 
 from .. import base, config
+from ..core import keys_in_tasks
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
-from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph, Layer
 from ..sizeof import sizeof
-from ..utils import digit, insert, M
+from ..utils import digit, insert, M, stringify, stringify_collection_keys
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
 
@@ -50,6 +50,8 @@ class SimpleShuffleLayer(Layer):
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
+    annotations : dict (optional)
+        Layer annotations
     """
 
     def __init__(
@@ -62,7 +64,9 @@ class SimpleShuffleLayer(Layer):
         name_input,
         meta_input,
         parts_out=None,
+        annotations=None,
     ):
+        super().__init__(annotations=annotations)
         self.name = name
         self.column = column
         self.npartitions = npartitions
@@ -72,10 +76,16 @@ class SimpleShuffleLayer(Layer):
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
 
+    def get_output_keys(self):
+        return {(self.name, part) for part in self.parts_out}
+
     def __repr__(self):
         return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
             self.name, self.npartitions
         )
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
 
     @property
     def _dict(self):
@@ -106,8 +116,50 @@ class SimpleShuffleLayer(Layer):
             "name_input",
             "meta_input",
             "parts_out",
+            "annotations",
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
+    def __dask_distributed_pack__(self, client):
+        from distributed.protocol.serialize import to_serialize
+
+        return {
+            "name": self.name,
+            "column": self.column,
+            "npartitions": self.npartitions,
+            "npartitions_input": self.npartitions_input,
+            "ignore_index": self.ignore_index,
+            "name_input": self.name_input,
+            "meta_input": to_serialize(self.meta_input),
+            "parts_out": list(self.parts_out),
+            "annotations": self.pack_annotations(),
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
+        from distributed.worker import dumps_task
+
+        # msgpack will convert lists into tuples, here
+        # we convert them back to lists
+        if isinstance(state["column"], tuple):
+            state["column"] = list(state["column"])
+        if "inputs" in state:
+            state["inputs"] = list(state["inputs"])
+
+        # Materialize the layer
+        raw = dict(cls(**state))
+
+        # Convert all keys to strings and dump tasks
+        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        dsk.update(toolz.valmap(dumps_task, raw))
+
+        # TODO: use shuffle-knowledge to calculate dependencies more efficiently
+        dependencies.update(
+            {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
+        )
+
+        if state["annotations"]:
+            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -130,7 +182,7 @@ class SimpleShuffleLayer(Layer):
         materialization.
         """
         deps = defaultdict(set)
-        parts_out = self._keys_to_parts(keys)
+        parts_out = parts_out or self._keys_to_parts(keys)
         for part in parts_out:
             deps[(self.name, part)] |= {
                 (self.name_input, i) for i in range(self.npartitions_input)
@@ -180,7 +232,7 @@ class SimpleShuffleLayer(Layer):
             dsk[(self.name, part_out)] = (_concat, _concat_list, self.ignore_index)
             for _, _part_out, _part_in in _concat_list:
                 dsk[(shuffle_split_name, _part_out, _part_in)] = (
-                    getitem,
+                    operator.getitem,
                     (shuffle_group_name, _part_in),
                     _part_out,
                 )
@@ -232,6 +284,8 @@ class ShuffleLayer(SimpleShuffleLayer):
         Empty metadata of input collection.
     parts_out : list of int (optional)
         List of required output-partition indices.
+    annotations : dict (optional)
+        Layer annotations
     """
 
     def __init__(
@@ -247,18 +301,22 @@ class ShuffleLayer(SimpleShuffleLayer):
         name_input,
         meta_input,
         parts_out=None,
+        annotations=None,
     ):
-        self.column = column
-        self.name = name
+        super().__init__(
+            name,
+            column,
+            npartitions,
+            npartitions_input,
+            ignore_index,
+            name_input,
+            meta_input,
+            parts_out=parts_out or range(len(inputs)),
+            annotations=annotations,
+        )
         self.inputs = inputs
         self.stage = stage
-        self.npartitions = npartitions
-        self.npartitions_input = npartitions_input
         self.nsplits = nsplits
-        self.ignore_index = ignore_index
-        self.name_input = name_input
-        self.meta_input = meta_input
-        self.parts_out = parts_out or range(len(inputs))
 
     def __repr__(self):
         return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
@@ -278,8 +336,17 @@ class ShuffleLayer(SimpleShuffleLayer):
             "name_input",
             "meta_input",
             "parts_out",
+            "annotations",
         ]
+
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
+    def __dask_distributed_pack__(self, client):
+        ret = super().__dask_distributed_pack__(client)
+        ret["inputs"] = self.inputs
+        ret["stage"] = self.stage
+        ret["nsplits"] = self.nsplits
+        return ret
 
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
@@ -335,7 +402,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
             for _, _idx, _inp in _concat_list:
                 dsk[(shuffle_split_name, _idx, _inp)] = (
-                    getitem,
+                    operator.getitem,
                     (shuffle_group_name, _inp),
                     _idx,
                 )
@@ -345,11 +412,13 @@ class ShuffleLayer(SimpleShuffleLayer):
                     # Initial partitions (output of previous stage)
                     _part = inp_part_map[_inp]
                     if self.stage == 0:
-                        input_key = (
-                            (self.name_input, _part)
-                            if _part < self.npartitions_input
-                            else self.meta_input
-                        )
+                        if _part < self.npartitions_input:
+                            input_key = (self.name_input, _part)
+                        else:
+                            # In order to make sure that to_serialize() serialize the
+                            # empty dataframe input, we add it as a key.
+                            input_key = (shuffle_group_name, _inp, "empty")
+                            dsk[input_key] = self.meta_input
                     else:
                         input_key = (self.name_input, _part)
 
@@ -412,23 +481,16 @@ def set_index(
         index2 = index
 
     if divisions is None:
-        if repartition:
-            index2, df = base.optimize(index2, df)
-            parts = df.to_delayed(optimize_graph=False)
-            sizes = [delayed(sizeof)(part) for part in parts]
-        else:
-            (index2,) = base.optimize(index2)
-            sizes = []
-
+        sizes = df.map_partitions(sizeof) if repartition else []
         divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
-        iparts = index2.to_delayed(optimize_graph=False)
-        mins = [ipart.min() for ipart in iparts]
-        maxes = [ipart.max() for ipart in iparts]
-        sizes, mins, maxes = base.optimize(sizes, mins, maxes)
-        divisions, sizes, mins, maxes = base.compute(
-            divisions, sizes, mins, maxes, optimize_graph=False
-        )
+        mins = index2.map_partitions(M.min)
+        maxes = index2.map_partitions(M.max)
+        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
         divisions = methods.tolist(divisions)
+        if type(sizes) is not list:
+            sizes = methods.tolist(sizes)
+        mins = methods.tolist(mins)
+        maxes = methods.tolist(maxes)
 
         empty_dataframe_detected = pd.isnull(divisions).all()
         if repartition or empty_dataframe_detected:
@@ -457,6 +519,7 @@ def set_index(
             mins == sorted(mins)
             and maxes == sorted(maxes)
             and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+            and npartitions == df.npartitions
         ):
             divisions = mins + [maxes[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
@@ -1164,10 +1227,26 @@ def fix_overlap(ddf, overlap):
     n = len(ddf.divisions) - 1
     dsk = {(name, i): (ddf._name, i) for i in range(n)}
 
+    frames = []
     for i in overlap:
-        frames = [(get_overlap, (ddf._name, i - 1), ddf.divisions[i]), (ddf._name, i)]
-        dsk[(name, i)] = (methods.concat, frames)
+
+        # `frames` is a list of data from previous partitions that we may want to
+        # move to partition i.  Here, we add "overlap" from the previous partition
+        # (i-1) to this list.
+        frames.append((get_overlap, (ddf._name, i - 1), ddf.divisions[i]))
+
+        # Make sure that any data added from partition i-1 to `frames` is removed
+        # from partition i-1.
         dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
+
+        # We do not want to move "overlap" from the previous partition (i-1) into
+        # this partition (i) if the data from this partition will need to be moved
+        # to the next partitition (i+1) anyway.  If we concatenate data too early,
+        # we may loose rows (https://github.com/dask/dask/issues/6972).
+        if i == ddf.npartitions - 2 or ddf.divisions[i] != ddf.divisions[i + 1]:
+            frames.append((ddf._name, i))
+            dsk[(name, i)] = (methods.concat, frames)
+            frames = []
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, ddf._meta, ddf.divisions)
@@ -1177,6 +1256,8 @@ def compute_and_set_divisions(df, **kwargs):
     mins = df.index.map_partitions(M.min, meta=df.index)
     maxes = df.index.map_partitions(M.max, meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
+    mins = remove_nans(mins)
+    maxes = remove_nans(maxes)
 
     if (
         sorted(mins) != list(mins)

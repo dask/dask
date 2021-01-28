@@ -21,12 +21,8 @@ from pandas.api.types import (
 
 # include these here for compat
 from ._compat import (  # noqa: F401
-    PANDAS_VERSION,
-    PANDAS_GT_0240,
-    PANDAS_GT_0250,
     PANDAS_GT_100,
     PANDAS_GT_110,
-    HAS_INT_NA,
     tm,
 )
 
@@ -46,19 +42,16 @@ from . import methods
 
 def is_integer_na_dtype(t):
     dtype = getattr(t, "dtype", t)
-    if HAS_INT_NA:
-        types = (
-            pd.Int8Dtype,
-            pd.Int16Dtype,
-            pd.Int32Dtype,
-            pd.Int64Dtype,
-            pd.UInt8Dtype,
-            pd.UInt16Dtype,
-            pd.UInt32Dtype,
-            pd.UInt64Dtype,
-        )
-    else:
-        types = ()
+    types = (
+        pd.Int8Dtype,
+        pd.Int16Dtype,
+        pd.Int32Dtype,
+        pd.Int64Dtype,
+        pd.UInt8Dtype,
+        pd.UInt16Dtype,
+        pd.UInt32Dtype,
+        pd.UInt64Dtype,
+    )
     return isinstance(dtype, types)
 
 
@@ -549,7 +542,10 @@ def _nonempty_series(s, idx=None):
     if idx is None:
         idx = _nonempty_index(s.index)
     dtype = s.dtype
-    if is_datetime64tz_dtype(dtype):
+    if len(s) > 0:
+        # use value from meta if provided
+        data = [s.iloc[0]] * 2
+    elif is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
         data = [entry, entry]
     elif is_categorical_dtype(dtype):
@@ -567,22 +563,14 @@ def _nonempty_series(s, idx=None):
         freq = dtype.freq
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
     elif is_sparse(dtype):
-        # TODO: pandas <0.24
-        # Pandas <= 0.23.4:
-        if PANDAS_GT_0240:
-            entry = _scalar_from_dtype(dtype.subtype)
-        else:
-            entry = _scalar_from_dtype(dtype.subtype)
+        entry = _scalar_from_dtype(dtype.subtype)
         if PANDAS_GT_100:
             data = pd.array([entry, entry], dtype=dtype)
         else:
             data = pd.SparseArray([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
-        if PANDAS_GT_0240:
-            data = pd.array([entry, entry], dtype=dtype)
-        else:
-            data = np.array([entry, entry], dtype=dtype)
+        data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:
         data = make_array_nonempty(dtype)
     else:
@@ -648,7 +636,9 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             "Index, got `%s`" % typename(type(meta))
         )
 
-    if type(x) != type(meta):
+    # Notice, we use .__class__ as opposed to type() in order to support
+    # object proxies see <https://github.com/dask/dask/pull/6981>
+    if x.__class__ != meta.__class__:
         errmsg = "Expected partition of type `%s` but got `%s`" % (
             typename(type(meta)),
             typename(type(x)),

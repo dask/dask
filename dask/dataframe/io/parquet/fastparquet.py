@@ -322,8 +322,9 @@ class FastParquetEngine(Engine):
                             skip_cols.add(col)
                             continue
                         if isinstance(cs_min, np.datetime64):
-                            cs_min = pd.Timestamp(cs_min)
-                            cs_max = pd.Timestamp(cs_max)
+                            tz = getattr(dtypes[col], "tz", None)
+                            cs_min = pd.Timestamp(cs_min, tz=tz)
+                            cs_max = pd.Timestamp(cs_max, tz=tz)
                         d.update(
                             {
                                 "min": cs_min,
@@ -432,13 +433,19 @@ class FastParquetEngine(Engine):
             pf_piece = (file_path, gather_statistics) if pf_deps == "tuple" else pf_deps
             part_item = {
                 "piece": piece,
-                "kwargs": {"pf": pf_piece, "categories": categories_dict or categories},
+                "kwargs": {"pf": pf_piece},
             }
             parts.append(part_item)
 
         # Cannot allow `None` in columns if the user has specified index=False
         if index is False and None in meta.columns:
             meta.drop(columns=[None], inplace=True)
+
+        # Add `common_kwargs` to the first element of `parts`.
+        # We can return as a separate element in the future, but
+        # should avoid breaking the API for now.
+        if len(parts):
+            parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
 
         return (meta, stats, parts, index)
 

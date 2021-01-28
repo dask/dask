@@ -1,6 +1,8 @@
 import ast
+import base64
 import builtins
 from collections.abc import Mapping
+import json
 import os
 import sys
 import threading
@@ -176,10 +178,19 @@ def collect_env(env=None):
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
     -  Calls ``ast.literal_eval`` on the value
+
+    Any serialized config passed via ``DASK_INTERNAL_INHERIT_CONFIG`` is also set here.
+
     """
+
     if env is None:
         env = os.environ
-    d = {}
+
+    if "DASK_INTERNAL_INHERIT_CONFIG" in env:
+        d = deserialize(env["DASK_INTERNAL_INHERIT_CONFIG"])
+    else:
+        d = {}
+
     for name, value in env.items():
         if name.startswith("DASK_"):
             varname = name[5:].lower().replace("__", ".")
@@ -423,9 +434,12 @@ def refresh(config=config, defaults=defaults, **kwargs):
     update(config, collect(**kwargs))
 
 
-def get(key, default=no_default, config=config):
+def get(key, default=no_default, config=config, override_with=None):
     """
     Get elements from global config
+
+    If ``override_with`` is not None this value will be passed straight back.
+    Useful for getting kwarg defaults from Dask config.
 
     Use '.' for nested access
 
@@ -441,10 +455,18 @@ def get(key, default=no_default, config=config):
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
 
+    >>> config.get('foo.y', override_with=None)  # doctest: +SKIP
+    2
+
+    >>> config.get('foo.y', override_with=3)  # doctest: +SKIP
+    3
+
     See Also
     --------
     dask.config.set
     """
+    if override_with is not None:
+        return override_with
     keys = key.split(".")
     result = config
     for k in keys:
@@ -573,6 +595,44 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
             raise ValueError('Configuration value "{}" has been removed'.format(key))
     else:
         return key
+
+
+def serialize(data):
+    """Serialize config data into a string.
+
+    Typically used to pass config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+    Parameters
+    ----------
+    data: json-serializable object
+        The data to serialize
+
+    Returns
+    -------
+    serialized_data: str
+        The serialized data as a string
+
+    """
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).decode()
+
+
+def deserialize(data):
+    """De-serialize config data into the original object.
+
+    Typically when receiving config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+    Parameters
+    ----------
+    data: str
+        String serialied by :func:`dask.config.serialize`
+
+    Returns
+    -------
+    deserialized_data: obj
+        The de-serialized data
+
+    """
+    return json.loads(base64.urlsafe_b64decode(data.encode()).decode())
 
 
 def _initialize():

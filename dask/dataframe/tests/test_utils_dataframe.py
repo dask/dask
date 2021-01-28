@@ -16,7 +16,6 @@ from dask.dataframe.utils import (
     is_dataframe_like,
     is_series_like,
     is_index_like,
-    PANDAS_GT_0240,
     PANDAS_GT_100,
 )
 
@@ -242,11 +241,7 @@ def test_meta_nonempty_index():
 
     levels = [pd.Int64Index([1], name="a"), pd.Float64Index([1.0], name="b")]
     codes = [[0], [0]]
-    if PANDAS_GT_0240:
-        kwargs = {"codes": codes}
-    else:
-        kwargs = {"labels": codes}
-    idx = pd.MultiIndex(levels=levels, names=["a", "b"], **kwargs)
+    idx = pd.MultiIndex(levels=levels, names=["a", "b"], codes=codes)
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):
@@ -261,12 +256,8 @@ def test_meta_nonempty_index():
     ]
 
     codes = [[0], [0], [0]]
-    if PANDAS_GT_0240:
-        kwargs = {"codes": codes}
-    else:
-        kwargs = {"labels": codes}
 
-    idx = pd.MultiIndex(levels=levels, names=["a", "b", "timedelta"], **kwargs)
+    idx = pd.MultiIndex(levels=levels, names=["a", "b", "timedelta"], codes=codes)
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):
@@ -432,6 +423,32 @@ def test_is_dataframe_like(monkeypatch, frame_value_counts):
     assert is_index_like(df.index)
     assert is_index_like(ddf.index)
     assert not is_index_like(pd.Index)
+
+    # The following checks support of class wrappers, which
+    # requires the comparions of `x.__class__` instead of `type(x)`
+    class DataFrameWrapper:
+        __class__ = pd.DataFrame
+
+    wrap = DataFrameWrapper()
+    wrap.dtypes = None
+    wrap.columns = None
+    assert is_dataframe_like(wrap)
+
+    class SeriesWrapper:
+        __class__ = pd.Series
+
+    wrap = SeriesWrapper()
+    wrap.dtype = None
+    wrap.name = None
+    assert is_series_like(wrap)
+
+    class IndexWrapper:
+        __class__ = pd.Index
+
+    wrap = IndexWrapper()
+    wrap.dtype = None
+    wrap.name = None
+    assert is_index_like(wrap)
 
 
 def test_apply_and_enforce_message():

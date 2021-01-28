@@ -202,6 +202,20 @@ Note that the ``set`` function treats underscores and hyphens identically.
 For example, ``dask.config.set({'scheduler.work-stealing': True})`` is
 equivalent to ``dask.config.set({'scheduler.work_stealing': True})``.
 
+Distributing configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It may also be desirable to package up your whole Dask configuration for use on
+another machine. This is used in some Dask Distributed libraries to ensure remote components
+have the same configuration as your local system.
+
+This is typically handled by the downstream libraries which use base64 encoding to pass
+config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+.. autosummary::
+   dask.config.serialize
+   dask.config.deserialize
+
 Conversion Utility
 ~~~~~~~~~~~~~~~~~~
 

@@ -195,6 +195,51 @@ class Engine:
         """
         raise NotImplementedError()
 
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        """
+        Collect parquet metadata from a file and set the file_path.
+
+        Parameters
+        ----------
+        path: str
+            Parquet-file path to extract metadata from.
+        fs: FileSystem
+        file_path: str
+            Relative path to set as `file_path` in the metadata.
+
+        Returns
+        -------
+        A metadata object.  The specific type should be recognized
+        by the aggregate_metadata method.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        """
+        Aggregate a list of metadata objects and optionally
+        write out the final result as a _metadata file.
+
+        Parameters
+        ----------
+        meta_list: list
+            List of metadata objects to be aggregated into a single
+            metadata object, and optionally written to disk. The
+            specific element type can be engine specific.
+        fs: FileSystem
+        out_path: str or None
+            Directory to write the final _metadata file. If None
+            is specified, the aggregated metadata will be returned,
+            and nothing will be written to disk.
+
+        Returns
+        -------
+        If out_path is None, an aggregate metadata object is returned.
+        Otherwise, None is returned.
+        """
+        raise NotImplementedError()
+
 
 def _parse_pandas_metadata(pandas_metadata):
     """Get the set of names from the pandas metadata section

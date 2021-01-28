@@ -143,3 +143,11 @@ def test_skew_raises():
     a = da.ones((7,), chunks=(7,))
     with pytest.raises(ValueError, match="7 samples"):
         dask.array.stats.skewtest(a)
+
+
+def test_skew_single_return_type():
+    """This function tests the return type for the skew method for a 1d array."""
+    numpy_array = np.random.random(size=(30,))
+    dask_array = da.from_array(numpy_array, 3)
+    result = dask.array.stats.skew(dask_array).compute()
+    assert isinstance(result, np.float64)

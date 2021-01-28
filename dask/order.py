@@ -113,12 +113,23 @@ def order(dsk, dependencies=None):
     dependents = reverse_dict(dependencies)
     num_needed, total_dependencies = ndependencies(dependencies, dependents)
     metrics = graph_metrics(dependencies, dependents, total_dependencies)
+
     if len(metrics) != len(dsk):
         cycle = getcycle(dsk, None)
         raise RuntimeError(
             "Cycle detected between the following keys:\n  -> %s"
             % "\n  -> ".join(str(x) for x in cycle)
         )
+
+    # Single root nodes that depend on everything. These cause issues for
+    # the current ordering algorithm, since we often hit the root node
+    # and fell back to the key tie-breaker to choose which immediate dependency
+    # to finish next, rather than finishing off subtrees.
+    # So under the special case of a single root node that depends on the entire
+    # tree, we skip processing it normally.
+    # See https://github.com/dask/dask/issues/6745
+    root_nodes = {k for k, v in dependents.items() if not v}
+    skip_root_node = len(root_nodes) == 1 and len(dsk) > 1
 
     # Leaf nodes.  We choose one--the initial node--for each weakly connected subgraph.
     # Let's calculate the `initial_stack_key` as we determine `init_stack` set.
@@ -279,7 +290,11 @@ def order(dsk, dependencies=None):
                 item = inner_stack_pop()
                 if item in result:
                     continue
+
                 if num_needed[item]:
+                    if skip_root_node and item in root_nodes:
+                        continue
+
                     inner_stack.append(item)
                     deps = set_difference(dependencies[item], result)
                     if 1 < len(deps) < 1000:
@@ -484,7 +499,9 @@ def order(dsk, dependencies=None):
             init_stack_pop = init_stack.pop
             is_init_sorted = True
 
-        item = init_stack_pop()
+        if skip_root_node and item in root_nodes:
+            item = init_stack_pop()
+
         while item in result:
             item = init_stack_pop()
         inner_stacks_append([item])
@@ -504,8 +521,10 @@ def graph_metrics(dependencies, dependents, total_dependencies):
       a1
 
     For each key we return:
-    1.  The number of keys that can only be run after this key is run.  The
-        root nodes have value 1 while deep child nodes will have larger values.
+
+    1.  **total_dependents**: The number of keys that can only be run
+        after this key is run.  The root nodes have value 1 while deep child
+        nodes will have larger values.
 
         1
         |
@@ -513,8 +532,8 @@ def graph_metrics(dependencies, dependents, total_dependencies):
          \ /
           4
 
-    2.  The minimum value of the total number of dependencies of
-        all final dependents (see module-level comment for more).
+    2.  **min_dependencies**: The minimum value of the total number of
+        dependencies of all final dependents (see module-level comment for more).
         In other words, the minimum of ``ndependencies`` of root
         nodes connected to the current node.
 
@@ -524,8 +543,8 @@ def graph_metrics(dependencies, dependents, total_dependencies):
          \ /
           2
 
-    3.  The maximum value of the total number of dependencies of
-        all final dependents (see module-level comment for more).
+    3.  **max_dependencies**: The maximum value of the total number of
+        dependencies of all final dependents (see module-level comment for more).
         In other words, the maximum of ``ndependencies`` of root
         nodes connected to the current node.
 
@@ -535,7 +554,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
          \ /
           3
 
-    4.  The minimum height from a root node
+    4.  **min_height**: The minimum height from a root node
 
         0
         |
@@ -543,7 +562,7 @@ def graph_metrics(dependencies, dependents, total_dependencies):
          \ /
           1
 
-    5.  The maximum height from a root node
+    5.  **max_height**: The maximum height from a root node
 
         0
         |

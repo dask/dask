@@ -27,6 +27,7 @@ from dask.dataframe.shuffle import (
     remove_nans,
 )
 from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe._compat import PANDAS_GT_120
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
@@ -632,22 +633,59 @@ def test_set_index_timezone():
     df = pd.DataFrame({"tz": s_aware, "notz": s_naive})
     d = dd.from_pandas(df, 2)
 
-    d1 = d.set_index("notz", npartitions=2)
+    d1 = d.set_index("notz", npartitions=1)
     s1 = pd.DatetimeIndex(s_naive.values, dtype=s_naive.dtype)
     assert d1.divisions[0] == s_naive[0] == s1[0]
     assert d1.divisions[-1] == s_naive[2] == s1[2]
 
     # We currently lose "freq".  Converting data with pandas-defined dtypes
     # to numpy or pure Python can be lossy like this.
-    d2 = d.set_index("tz", npartitions=2)
+    d2 = d.set_index("tz", npartitions=1)
     s2 = pd.DatetimeIndex(s_aware, dtype=s_aware.dtype)
     assert d2.divisions[0] == s2[0]
     assert d2.divisions[-1] == s2[2]
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    with pytest.raises(TypeError):
-        d2.divisions[0] == s2badtype[0]
+    if PANDAS_GT_120:
+        # starting with pandas 1.2.0, comparing equality of timestamps with different
+        # timezones returns False instead of raising an error
+        assert not d2.divisions[0] == s2badtype[0]
+    else:
+        with pytest.raises(TypeError):
+            d2.divisions[0] == s2badtype[0]
+
+
+def test_set_index_npartitions():
+    # https://github.com/dask/dask/issues/6974
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"]
+        )
+    )
+    data = dd.from_pandas(data, npartitions=2)
+    output = data.reset_index().set_index("index", npartitions=1)
+    assert output.npartitions == 1
+
+
+@pytest.mark.parametrize("unit", ["ns", "us"])
+def test_set_index_datetime_precision(unit):
+    # https://github.com/dask/dask/issues/6864
+
+    df = pd.DataFrame(
+        [
+            [1567703791155681, 1],
+            [1567703792155681, 2],
+            [1567703790155681, 0],
+            [1567703793155681, 3],
+        ],
+        columns=["ts", "rank"],
+    )
+    df.ts = pd.to_datetime(df.ts, unit=unit)
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf = ddf.set_index("ts")
+
+    assert_eq(ddf, df.set_index("ts"))
 
 
 @pytest.mark.parametrize("drop", [True, False])
@@ -1010,6 +1048,20 @@ def test_set_index_overlap():
     assert_eq(a, b)
 
 
+def test_set_index_overlap_2():
+    data = pd.DataFrame(
+        index=pd.Index(
+            ["A", "A", "A", "A", "A", "A", "A", "A", "A", "B", "B", "B", "C"],
+            name="index",
+        )
+    )
+    ddf1 = dd.from_pandas(data, npartitions=2)
+    ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
+
+    assert_eq(ddf1, ddf2)
+    assert ddf2.npartitions == 8
+
+
 def test_shuffle_hlg_layer():
     # This test checks that the `ShuffleLayer` HLG Layer
     # is used (as expected) for a multi-stage shuffle.
@@ -1019,16 +1071,24 @@ def test_shuffle_hlg_layer():
     ddf_shuffled = ddf.shuffle("a", max_branch=3, shuffle="tasks")
     keys = [(ddf_shuffled._name, i) for i in range(ddf_shuffled.npartitions)]
 
-    # Make sure HLG culling reduces the graph size
+    # Cull the HLG
     dsk = ddf_shuffled.__dask_graph__()
     dsk_culled = dsk.cull(set(keys))
-    assert len(dsk_culled) < len(dsk)
     assert isinstance(dsk_culled, dask.highlevelgraph.HighLevelGraph)
 
     # Ensure we have ShuffleLayers
     assert any(
         isinstance(layer, dd.shuffle.ShuffleLayer) for layer in dsk.layers.values()
     )
+
+    # Check that the ShuffleLayers are non-materialized
+    for layer in dsk.layers.values():
+        if isinstance(layer, dd.shuffle.ShuffleLayer):
+            assert not hasattr(layer, "_cached_dict")
+
+    # Make sure HLG culling reduces the graph size
+    assert len(dsk_culled) < len(dsk)
+
     # Check ShuffleLayer names
     for name, layer in dsk.layers.items():
         if isinstance(layer, dd.shuffle.ShuffleLayer):
@@ -1065,3 +1125,10 @@ def test_shuffle_hlg_layer_serialize(npartitions):
         assert type(layer_roundtrip) == type(layer)
         assert not hasattr(layer_roundtrip, "_cached_dict")
         assert layer_roundtrip.keys() == layer.keys()
+
+
+def test_set_index_nan_partition():
+    d[d.a > 3].set_index("a")  # Set index with 1 null partition
+    d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
+    a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
+    assert_eq(a, a)

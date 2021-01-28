@@ -5,14 +5,13 @@ dependencies:
   # required dependencies
   - python=3.6.*
   - numpy=1.15.*
-  - pandas=0.23.*
+  - pandas=0.25.*
   # test dependencies
   - pytest
   - pytest-xdist
   - moto>=1.3.14
   - flask
   - coverage
-  - codecov
   - jsonschema
   # Issue with conda package for NumPy 1.15?
   # See fastparquet-444
@@ -23,13 +22,11 @@ dependencies:
   - zarr
   - tiledb-py
   - sqlalchemy
-  # Remove <2 version constraint once we've added pyarrow 2.0 compatibility
-  # xref https://github.com/dask/dask/issues/6754
-  - pyarrow>=0.14.0,<2
+  - pyarrow=0.14.*
   # other -- IO
   - bcolz
   - blosc
-  - s3fs
+  - s3fs=0.4
   - boto3
   - botocore
   - aiohttp

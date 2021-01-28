@@ -9,7 +9,6 @@ import sys
 import time
 
 import pytest
-import numpy as np
 
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
@@ -27,9 +26,6 @@ from fsspec.compression import compr
 
 
 compute = partial(compute, scheduler="sync")
-numpy_120_mark = pytest.mark.xfail(
-    LooseVersion(np.__version__) >= "1.20.0", reason="Upstream incompatibility"
-)
 
 
 test_bucket_name = "test"
@@ -143,6 +139,7 @@ def s3_with_yellow_tripdata(s3):
     * s3://test/nyc-taxi/2014/yellow_tripdata_2015-mm.csv
       for mm from 01 - 12.
     """
+    np = pytest.importorskip("numpy")
     pd = pytest.importorskip("pandas")
 
     data = {
@@ -431,16 +428,24 @@ def test_modification_time_read_bytes(s3, s3so):
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
-@numpy_120_mark
 def test_parquet(s3, engine, s3so):
+    import s3fs
+
     dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
     from dask.dataframe._compat import tm
 
     lib = pytest.importorskip(engine)
     if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
-    import pandas as pd
-    import numpy as np
+    if (
+        engine == "pyarrow"
+        and LooseVersion(lib.__version__) >= "2.0"
+        and LooseVersion(lib.__version__) < "3.0"
+        and LooseVersion(s3fs.__version__) > "0.5.0"
+    ):
+        pytest.skip("#7056 - new s3fs not supported before pyarrow 3.0")
 
     url = "s3://%s/test.parquet" % test_bucket_name
 
@@ -468,13 +473,11 @@ def test_parquet(s3, engine, s3so):
     tm.assert_frame_equal(data, df2.compute())
 
 
-@numpy_120_mark
 def test_parquet_wstoragepars(s3, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip("fastparquet")
-
-    import pandas as pd
-    import numpy as np
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
 
     url = "s3://%s/test.parquet" % test_bucket_name
 
@@ -497,5 +500,7 @@ def test_parquet_wstoragepars(s3, s3so):
 
 def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
+    if pa.__version__ >= LooseVersion("2.0.0"):
+        pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
     fs = DaskS3FileSystem(anon=True)
     assert isinstance(fs, pa.filesystem.FileSystem)

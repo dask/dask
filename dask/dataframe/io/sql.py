@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 import dask
-from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
@@ -364,15 +363,8 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
+        method=method,
     )
-
-    if method:
-        if not PANDAS_GT_0240:
-            raise NotImplementedError(
-                "'method' requires pandas>=0.24.0. You have version %s" % PANDAS_VERSION
-            )
-        else:
-            kwargs["method"] = method
 
     def make_meta(meta):
         return meta.to_sql(**kwargs)

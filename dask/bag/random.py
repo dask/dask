@@ -4,6 +4,8 @@ import math
 import random as rnd
 from functools import partial
 
+from .core import Bag
+
 
 def sample(population, k):
     """Chooses k unique random elements from a bag.
@@ -57,6 +59,7 @@ def _sample(population, k, replace=False):
     return population.reduction(
         partial(_sample_map_partitions, k=k, replace=replace),
         partial(_sample_reduce, k=k, replace=replace),
+        out_type=Bag,
     )
 
 
@@ -79,6 +82,7 @@ def _sample_map_partitions(population, k, replace):
     k: int
         Number of elements to sample.
     """
+    population = list(population)
     lx = len(population)
     real_k = k if k <= lx else lx
     sample_func = rnd.choices if replace else rnd.sample

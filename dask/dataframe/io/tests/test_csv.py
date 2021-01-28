@@ -28,7 +28,8 @@ from dask.bytes.utils import compress
 from dask.utils import filetexts, filetext, tmpfile, tmpdir
 from fsspec.compression import compr
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
+# List of available compression format for test_read_csv_compression
+compression_fmts = [fmt for fmt in compr] + [None]
 
 
 def normalize_text(s):
@@ -457,6 +458,23 @@ def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
         assert has_known_categories(result.path)
 
 
+@pytest.mark.parametrize(
+    "dd_read,files", [(dd.read_csv, csv_files), (dd.read_table, tsv_files)]
+)
+@read_table_mark
+def test_read_csv_include_path_column_with_multiple_partitions_per_file(dd_read, files):
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", blocksize="10B", include_path_column=True)
+        assert df.npartitions > 3
+        assert df.path.dtype == "category"
+        assert has_known_categories(df.path)
+
+        dfs = dd_read("2014-01-*.csv", blocksize="10B", include_path_column=True)
+        result = dfs.compute()
+        assert result.path.dtype == "category"
+        assert has_known_categories(result.path)
+
+
 # After this point, we test just using read_csv, as all functionality
 # for both is implemented using the same code.
 
@@ -662,7 +680,8 @@ def test_categorical_known():
 
 
 @pytest.mark.slow
-def test_compression_multiple_files():
+@pytest.mark.parametrize("compression", ["infer", "gzip"])
+def test_compression_multiple_files(compression):
     with tmpdir() as tdir:
         f = gzip.open(os.path.join(tdir, "a.csv.gz"), "wb")
         f.write(csv_text.encode())
@@ -673,7 +692,7 @@ def test_compression_multiple_files():
         f.close()
 
         with pytest.warns(UserWarning):
-            df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression="gzip")
+            df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression=compression)
 
         assert len(df.compute()) == (len(csv_text.split("\n")) - 1) * 2
 
@@ -698,17 +717,22 @@ def test_read_csv_sensitive_to_enforce():
         assert a._name != b._name
 
 
-@pytest.mark.parametrize("fmt,blocksize", fmt_bs)
+@pytest.mark.parametrize("blocksize", [None, 10])
+@pytest.mark.parametrize("fmt", compression_fmts)
 def test_read_csv_compression(fmt, blocksize):
-    if fmt not in compress:
+    if fmt and fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
-    files2 = valmap(compress[fmt], csv_files)
-    with filetexts(files2, mode="b"):
+    suffix = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}.get(fmt, "")
+    files2 = valmap(compress[fmt], csv_files) if fmt else csv_files
+    renamed_files = {k + suffix: v for k, v in files2.items()}
+    with filetexts(renamed_files, mode="b"):
+        # This test is using `compression="infer"` (the default) for
+        # read_csv.  The paths must have the appropriate extension.
         if fmt and blocksize:
             with pytest.warns(UserWarning):
-                df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+                df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
         else:
-            df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+            df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
         assert_eq(
             df.compute(scheduler="sync").reset_index(drop=True),
             expected.reset_index(drop=True),
@@ -825,6 +849,13 @@ def test_multiple_read_csv_has_deterministic_name():
         b = dd.read_csv("_foo.*.csv")
 
         assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
+
+
+def test_read_csv_has_different_names_based_on_blocksize():
+    with filetext(csv_text) as fn:
+        a = dd.read_csv(fn, blocksize="10kB")
+        b = dd.read_csv(fn, blocksize="20kB")
+        assert a._name != b._name
 
 
 def test_csv_with_integer_names():
@@ -1587,3 +1618,16 @@ def test_reading_empty_csv_files_with_path():
         )
         df["path"] = df["path"].astype("category")
         assert_eq(result, df, check_index=False)
+
+
+def test_read_csv_groupby_get_group(tmpdir):
+    # https://github.com/dask/dask/issues/7005
+
+    path = os.path.join(str(tmpdir), "test.csv")
+    df1 = pd.DataFrame([{"foo": 10, "bar": 4}])
+    df1.to_csv(path, index=False)
+
+    ddf1 = dd.read_csv(path)
+    ddfs = ddf1.groupby("foo")
+
+    assert_eq(df1, ddfs.get_group(10).compute())

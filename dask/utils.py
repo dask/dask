@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 import functools
 import inspect
 import os
@@ -12,9 +12,11 @@ from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
+from typing import Iterable, Optional
 import uuid
 from weakref import WeakValueDictionary
 from functools import lru_cache
+from _thread import RLock
 
 from .core import get_deps
 
@@ -193,7 +195,9 @@ class IndexCallable(object):
 def filetexts(d, open=open, mode="t", use_tmpdir=True):
     """Dumps a number of textfiles to disk
 
-    d - dict
+    Parameters
+    ----------
+    d : dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
 
     Since this is meant for use in tests, this context manager will
@@ -1115,7 +1119,7 @@ def is_arraylike(x):
 
 def is_dataframe_like(df):
     """ Looks like a Pandas DataFrame """
-    typ = type(df)
+    typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
         and all(hasattr(df, name) for name in ("dtypes", "columns"))
@@ -1125,7 +1129,7 @@ def is_dataframe_like(df):
 
 def is_series_like(s):
     """ Looks like a Pandas Series """
-    typ = type(s)
+    typ = s.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
         and all(hasattr(s, name) for name in ("dtype", "name"))
@@ -1135,7 +1139,7 @@ def is_series_like(s):
 
 def is_index_like(s):
     """ Looks like a Pandas Index """
-    typ = type(s)
+    typ = s.__class__
     return (
         all(hasattr(s, name) for name in ("name", "dtype"))
         and "index" in typ.__name__.lower()
@@ -1272,6 +1276,76 @@ def format_time(n):
     if n >= 1e-3:
         return "%.2f ms" % (n * 1e3)
     return "%.2f us" % (n * 1e6)
+
+
+def format_time_ago(n: datetime) -> str:
+    """Calculate a '3 hours ago' type string from a Python datetime.
+
+    Examples
+    --------
+    >>> from datetime import datetime, timedelta
+
+    >>> now = datetime.now()
+    >>> format_time_ago(now)
+    'Just now'
+
+    >>> past = datetime.now() - timedelta(minutes=1)
+    >>> format_time_ago(past)
+    '1 minute ago'
+
+    >>> past = datetime.now() - timedelta(minutes=2)
+    >>> format_time_ago(past)
+    '2 minutes ago'
+
+    >>> past = datetime.now() - timedelta(hours=1)
+    >>> format_time_ago(past)
+    '1 hour ago'
+
+    >>> past = datetime.now() - timedelta(hours=6)
+    >>> format_time_ago(past)
+    '6 hours ago'
+
+    >>> past = datetime.now() - timedelta(days=1)
+    >>> format_time_ago(past)
+    '1 day ago'
+
+    >>> past = datetime.now() - timedelta(days=5)
+    >>> format_time_ago(past)
+    '5 days ago'
+
+    >>> past = datetime.now() - timedelta(days=8)
+    >>> format_time_ago(past)
+    '1 week ago'
+
+    >>> past = datetime.now() - timedelta(days=16)
+    >>> format_time_ago(past)
+    '2 weeks ago'
+
+    >>> past = datetime.now() - timedelta(days=190)
+    >>> format_time_ago(past)
+    '6 months ago'
+
+    >>> past = datetime.now() - timedelta(days=800)
+    >>> format_time_ago(past)
+    '2 years ago'
+
+    """
+    units = {
+        "years": lambda diff: diff.days / 365,
+        "months": lambda diff: diff.days / 30.436875,  # Average days per month
+        "weeks": lambda diff: diff.days / 7,
+        "days": lambda diff: diff.days,
+        "hours": lambda diff: diff.seconds / 3600,
+        "minutes": lambda diff: diff.seconds % 3600 / 60,
+    }
+    diff = datetime.now() - n
+    for unit in units:
+        dur = int(units[unit](diff))
+        if dur > 0:
+            if dur == 1:  # De-pluralize
+                unit = unit[:-1]
+            return "%s %s ago" % (dur, unit)
+    return "Just now"
 
 
 def format_bytes(n):
@@ -1472,3 +1546,161 @@ def key_split(s):
             return result
     except Exception:
         return "Other"
+
+
+def stringify(obj, exclusive: Optional[Iterable] = None):
+    """Convert an object to a string
+
+    If ``exclusive`` is specified, search through `obj` and convert
+    values that are in ``exclusive``.
+
+    Note that when searching through dictionaries, only values are
+    converted, not the keys.
+
+    Parameters
+    ----------
+    obj : Any
+        Object (or values within) to convert to string
+    exclusive: Iterable, optional
+        Set of values to search for when converting values to strings
+
+    Returns
+    -------
+    result : type(obj)
+        Stringified copy of ``obj`` or ``obj`` itself if it is already a
+        string or bytes.
+
+    Examples
+    --------
+    >>> stringify(b'x')
+    b'x'
+    >>> stringify('x')
+    'x'
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)})
+    "{('a', 0): ('a', 0), ('a', 1): ('a', 1)}"
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)}, exclusive={('a',0)})
+    {('a', 0): "('a', 0)", ('a', 1): ('a', 1)}
+    """
+
+    typ = type(obj)
+    if typ is str or typ is bytes:
+        return obj
+    elif exclusive is None:
+        return str(obj)
+
+    if typ is tuple and obj:
+        from .optimization import SubgraphCallable
+
+        obj0 = obj[0]
+        if type(obj0) is SubgraphCallable:
+            obj0 = obj0
+            return (
+                SubgraphCallable(
+                    stringify(obj0.dsk, exclusive),
+                    obj0.outkey,
+                    stringify(obj0.inkeys, exclusive),
+                    obj0.name,
+                ),
+            ) + tuple(stringify(x, exclusive) for x in obj[1:])
+        elif callable(obj0):
+            return (obj0,) + tuple(stringify(x, exclusive) for x in obj[1:])
+
+    if typ is list:
+        return [stringify(v, exclusive) for v in obj]
+    if typ is dict:
+        return {k: stringify(v, exclusive) for k, v in obj.items()}
+    try:
+        if obj in exclusive:
+            return stringify(obj)
+    except TypeError:  # `obj` not hashable
+        pass
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify(v, exclusive) for v in obj)
+    return obj
+
+
+def stringify_collection_keys(obj):
+    """Convert all collection keys in ``obj`` to strings.
+
+    This is a specialized version of ``stringify()`` that only converts keys
+    of the form: ``("a string", ...)``
+    """
+
+    typ = type(obj)
+    if typ is tuple and obj:
+        obj0 = obj[0]
+        if type(obj0) is str or type(obj0) is bytes:
+            return stringify(obj)
+        if callable(obj0):
+            return (obj0,) + tuple(stringify_collection_keys(x) for x in obj[1:])
+    if typ is list:
+        return [stringify_collection_keys(v) for v in obj]
+    if typ is dict:
+        return {k: stringify_collection_keys(v) for k, v in obj.items()}
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify_collection_keys(v) for v in obj)
+    return obj
+
+
+try:
+    _cached_property = functools.cached_property
+except AttributeError:
+    # TODO: Copied from functools.cached_property in python 3.8. Remove when minimum
+    # supported python version is 3.8:
+    _NOT_FOUND = object()
+
+    class _cached_property:
+        def __init__(self, func):
+            self.func = func
+            self.attrname = None
+            self.__doc__ = func.__doc__
+            self.lock = RLock()
+
+        def __set_name__(self, owner, name):
+            if self.attrname is None:
+                self.attrname = name
+            elif name != self.attrname:
+                raise TypeError(
+                    "Cannot assign the same cached_property to two different names "
+                    f"({self.attrname!r} and {name!r})."
+                )
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            if self.attrname is None:
+                raise TypeError(
+                    "Cannot use cached_property instance without calling __set_name__ on it."
+                )
+            try:
+                cache = instance.__dict__
+            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots)
+                msg = (
+                    f"No '__dict__' attribute on {type(instance).__name__!r} "
+                    f"instance to cache {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+            val = cache.get(self.attrname, _NOT_FOUND)
+            if val is _NOT_FOUND:
+                with self.lock:
+                    # check if another thread filled cache while we awaited lock
+                    val = cache.get(self.attrname, _NOT_FOUND)
+                    if val is _NOT_FOUND:
+                        val = self.func(instance)
+                        try:
+                            cache[self.attrname] = val
+                        except TypeError:
+                            msg = (
+                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "
+                                f"does not support item assignment for caching {self.attrname!r} property."
+                            )
+                            raise TypeError(msg) from None
+            return val
+
+
+class cached_property(_cached_property):
+    """Read only version of functools.cached_property."""
+
+    def __set__(self, instance, val):
+        """Raise an error when attempting to set a cached property."""
+        raise AttributeError("Can't set attribute")
