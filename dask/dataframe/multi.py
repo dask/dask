@@ -55,6 +55,7 @@ We proceed with hash joins in the following stages:
 """
 from functools import wraps, partial
 import warnings
+import math
 
 from tlz import merge_sorted, unique, first
 import numpy as np
@@ -76,6 +77,7 @@ from .core import (
     is_broadcastable,
     prefix_reduction,
     suffix_reduction,
+    _concat,
 )
 from .io import from_pandas
 from . import methods
@@ -307,6 +309,104 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
 
 
+def _bcast_heuristic(n_l, n_r):
+    """Simple heuristic to decide if a broadcast join is likely
+    to outperform a shuffle-based merge.
+    """
+    ntasks_shuffle = n_r * math.log2(n_r) + n_l * math.log2(n_l)
+    ntasks_bcast = n_r * n_l + n_l
+    return ntasks_bcast < ntasks_shuffle * 0.75
+
+
+def bcast_join(
+    lhs,
+    left_on,
+    rhs,
+    right_on,
+    how="inner",
+    npartitions=None,
+    suffixes=("_x", "_y"),
+    shuffle=None,
+    indicator=False,
+    bcast_side="right",
+    part_ids=None,
+):
+    """Join two DataFrames on particular columns by broadcasting
+
+    This broadcasts the smaller DataFrame to each partition of the
+    larger DataFrame, and then performs an embarrassingly parallel
+    join partition-by-partition.
+    """
+
+    if npartitions:
+        raise ValueError("npartitions not yet supported.")
+
+    if how not in ("left", "inner"):
+        raise ValueError("Only 'left' and 'inner' bcast joins are supported.")
+
+    if bcast_side not in ("right",):
+        raise ValueError("Only bcast_side='right' currently supported.")
+
+    if isinstance(left_on, Index):
+        left_on = None
+        left_index = True
+    else:
+        left_index = False
+
+    if isinstance(right_on, Index):
+        right_on = None
+        right_index = True
+    else:
+        right_index = False
+
+    kwargs = dict(
+        how=how,
+        left_on=left_on,
+        right_on=right_on,
+        left_index=left_index,
+        right_index=right_index,
+        suffixes=suffixes,
+        indicator=indicator,
+    )
+
+    # dummy result
+    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
+
+    if isinstance(left_on, list):
+        left_on = (list, tuple(left_on))
+    if isinstance(right_on, list):
+        right_on = (list, tuple(right_on))
+
+    part_ids = part_ids or range(lhs.npartitions)
+    npartitions = len(part_ids)
+    token = tokenize(lhs, rhs, part_ids, **kwargs)
+    name = "bcast-join-" + token
+    inter_name = "inter-bcast-join-" + token
+
+    kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+
+    # Loop over output partitions
+    # Culling should allow us to avoid generating tasks
+    # any output partitions that are not requested (via `part_ids`)
+    dsk = {}
+    for i in part_ids:
+        _concat_list = []
+        for j in range(rhs.npartitions):
+            inter_key = (inter_name, i, j)
+            _concat_list.append(inter_key)
+            dsk[inter_key] = (
+                apply,
+                merge_chunk,
+                [(lhs._name, i), (rhs._name, j)],
+                kwargs,
+            )
+        dsk[(name, i)] = (_concat, _concat_list, False)
+
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs, rhs])
+    return new_dd_object(graph, name, meta, lhs.divisions)
+
+
 def hash_join(
     lhs,
     left_on,
@@ -317,6 +417,7 @@ def hash_join(
     suffixes=("_x", "_y"),
     shuffle=None,
     indicator=False,
+    max_branch=None,
 ):
     """Join two DataFrames on particular columns with hash join
 
@@ -328,8 +429,12 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle_func(lhs, left_on, npartitions=npartitions, shuffle=shuffle)
-    rhs2 = shuffle_func(rhs, right_on, npartitions=npartitions, shuffle=shuffle)
+    lhs2 = shuffle_func(
+        lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    )
+    rhs2 = shuffle_func(
+        rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    )
 
     if isinstance(left_on, Index):
         left_on = None
@@ -466,6 +571,7 @@ def merge(
     npartitions=None,
     shuffle=None,
     max_branch=None,
+    bcast=None,
 ):
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
@@ -610,6 +716,23 @@ def merge(
         if left_on and right_on:
             warn_dtype_mismatch(left, right, left_on, right_on)
 
+        # First, lets check if we should still try a bcast join
+        allow_bcast = bcast or (
+            bcast is not False and _bcast_heuristic(left.npartitions, right.npartitions)
+        )
+        if shuffle == "tasks" and how in ("left", "inner") and allow_bcast:
+            return bcast_join(
+                left,
+                left.index if left_index else left_on,
+                right,
+                right.index if right_index else right_on,
+                how,
+                npartitions,
+                suffixes,
+                bcast_side="right",
+                indicator=indicator,
+            )
+
         return hash_join(
             left,
             left.index if left_index else left_on,
@@ -620,6 +743,7 @@ def merge(
             suffixes,
             shuffle=shuffle,
             indicator=indicator,
+            max_branch=max_branch,
         )
 
 

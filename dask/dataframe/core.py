@@ -4162,6 +4162,7 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
+        bcast=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -4258,6 +4259,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             indicator=indicator,
             shuffle=shuffle,
+            bcast=bcast,
         )
 
     @derived_from(pd.DataFrame)  # doctest: +SKIP
