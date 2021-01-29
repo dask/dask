@@ -1652,7 +1652,7 @@ def test_append():
 
     # check ValueError if dimensions don't align
     with pytest.raises(ValueError):
-        da.append(a, ((0,) * 10,), axis=0)
+        da.append(a, (0,) * 10, axis=0)
 
 
 def test_multi_insert():
