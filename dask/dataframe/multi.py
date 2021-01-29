@@ -56,6 +56,7 @@ We proceed with hash joins in the following stages:
 from functools import wraps, partial
 import warnings
 import math
+import operator
 
 from tlz import merge_sorted, unique, first
 import numpy as np
@@ -81,13 +82,15 @@ from .core import (
 )
 from .io import from_pandas
 from . import methods
-from .shuffle import shuffle, rearrange_by_divisions
+from .shuffle import shuffle, rearrange_by_divisions, partitioning_index, shuffle_group
 from .utils import (
     strip_unknown_categories,
     is_series_like,
     asciitable,
     is_dataframe_like,
     make_meta,
+    hash_object_dispatch,
+    group_split_dispatch,
 )
 from ..utils import M
 
@@ -318,6 +321,78 @@ def _bcast_heuristic(n_l, n_r):
     return ntasks_bcast < ntasks_shuffle * 0.75
 
 
+def _contains_index_name(df, columns_or_index):
+    def _is_index_level_reference(x, key):
+        return (
+            x.index.name is not None
+            and (np.isscalar(key) or isinstance(key, tuple))
+            and key == x.index.name
+            and key not in getattr(x, "columns", ())
+        )
+
+    if isinstance(columns_or_index, list):
+        return any(_is_index_level_reference(df, n) for n in columns_or_index)
+    else:
+        return _is_index_level_reference(df, columns_or_index)
+
+
+def _is_column_label_reference(df, key):
+    return (np.isscalar(key) or isinstance(key, tuple)) and key in df.columns
+
+
+def _select_columns_or_index(df, columns_or_index):
+
+    # Ensure columns_or_index is a list
+    columns_or_index = (
+        columns_or_index if isinstance(columns_or_index, list) else [columns_or_index]
+    )
+
+    column_names = [n for n in columns_or_index if _is_column_label_reference(df, n)]
+
+    selected_df = df[column_names]
+    if _contains_index_name(df, columns_or_index):
+        # Index name was included
+        selected_df = selected_df.assign(_index=df.index)
+
+    return selected_df
+
+
+def _split_partition(df, on, nsplits):
+
+    if isinstance(on, str) or pd.api.types.is_list_like(on):
+        # If `on` is a column name or list of column names, we
+        # can hash/split by those columns.
+        on = [on] if isinstance(on, str) else list(on)
+        nset = set(on)
+        if nset.intersection(set(df.columns)) == nset:
+            ind = hash_object_dispatch(df[on], index=False)
+            ind = ind % nsplits
+            return group_split_dispatch(df, ind.values, nsplits, ignore_index=False)
+
+    # We are not joining (purely) on columns.  Need to
+    # add a "_partitions" column to perform the split.
+    if not isinstance(on, _Frame):
+        on = _select_columns_or_index(df, on)
+    partitions = partitioning_index(on, nsplits)
+    df2 = df.assign(_partitions=partitions)
+    return shuffle_group(
+        df2,
+        ["_partitions"],
+        0,
+        nsplits,
+        nsplits,
+        False,
+        nsplits,
+    )
+
+
+def _concat_wrapper(dfs):
+    df = _concat(dfs, False)
+    if "_partitions" in df.columns:
+        del df["_partitions"]
+    return df
+
+
 def bcast_join(
     lhs,
     left_on,
@@ -328,24 +403,39 @@ def bcast_join(
     suffixes=("_x", "_y"),
     shuffle=None,
     indicator=False,
-    bcast_side="right",
     part_ids=None,
 ):
     """Join two DataFrames on particular columns by broadcasting
 
-    This broadcasts the smaller DataFrame to each partition of the
-    larger DataFrame, and then performs an embarrassingly parallel
-    join partition-by-partition.
+    This broadcasts the partitions of the smaller DataFrame to each
+    partition of the larger DataFrame, joins each partition pair,
+    and then concatenates the new data for each output partition.
     """
 
     if npartitions:
+        # We currently require the output partition count
+        # to be equivalent to lhs.npartitions
         raise ValueError("npartitions not yet supported.")
 
-    if how not in ("left", "inner"):
-        raise ValueError("Only 'left' and 'inner' bcast joins are supported.")
+    if how not in ("inner", "left"):
+        # Since we are always broadcasting lhs (for now), we
+        # can only handle "inner" and "left"
+        raise ValueError("Only 'inner' and 'left' bcast joins are supported.")
 
-    if bcast_side not in ("right",):
-        raise ValueError("Only bcast_side='right' currently supported.")
+    # If we are doing a "left" merge,
+    # shuffle the rhs by hash
+    need_split = how == "left"
+    if need_split:
+        rhs2 = shuffle_func(
+            rhs,
+            right_on,
+            shuffle="tasks",
+        )
+        rhs_name = rhs2._name
+        rhs_dep = rhs2
+    else:
+        rhs_name = rhs._name
+        rhs_dep = rhs
 
     if isinstance(left_on, Index):
         left_on = None
@@ -382,6 +472,7 @@ def bcast_join(
     token = tokenize(lhs, rhs, part_ids, **kwargs)
     name = "bcast-join-" + token
     inter_name = "inter-bcast-join-" + token
+    split_name = "split-bcast-join-" + token
 
     kwargs["empty_index_dtype"] = meta.index.dtype
     kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
@@ -391,6 +482,16 @@ def bcast_join(
     # any output partitions that are not requested (via `part_ids`)
     dsk = {}
     for i in part_ids:
+
+        # Split each "left" partition by hash
+        if need_split:
+            dsk[(split_name, i)] = (
+                _split_partition,
+                (lhs._name, i),
+                left_on,
+                rhs.npartitions,
+            )
+
         _concat_list = []
         for j in range(rhs.npartitions):
             inter_key = (inter_name, i, j)
@@ -398,12 +499,21 @@ def bcast_join(
             dsk[inter_key] = (
                 apply,
                 merge_chunk,
-                [(lhs._name, i), (rhs._name, j)],
+                [
+                    (
+                        operator.getitem,
+                        (split_name, i),
+                        j,
+                    )
+                    if need_split
+                    else (lhs._name, i),
+                    (rhs_name, j),
+                ],
                 kwargs,
             )
-        dsk[(name, i)] = (_concat, _concat_list, False)
+        dsk[(name, i)] = (_concat_wrapper, _concat_list)
 
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs, rhs])
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs, rhs_dep])
     return new_dd_object(graph, name, meta, lhs.divisions)
 
 
@@ -716,22 +826,24 @@ def merge(
         if left_on and right_on:
             warn_dtype_mismatch(left, right, left_on, right_on)
 
-        # First, lets check if we should still try a bcast join
-        allow_bcast = bcast or (
-            bcast is not False and _bcast_heuristic(left.npartitions, right.npartitions)
-        )
-        if shuffle == "tasks" and how in ("left", "inner") and allow_bcast:
-            return bcast_join(
-                left,
-                left.index if left_index else left_on,
-                right,
-                right.index if right_index else right_on,
-                how,
-                npartitions,
-                suffixes,
-                bcast_side="right",
-                indicator=indicator,
-            )
+        # Check if we should use a bcast_join
+        if (
+            shuffle == "tasks"
+            and how in ("inner", "left")
+            and not npartitions
+            and bcast is not False
+        ):
+            if bcast or _bcast_heuristic(left.npartitions, right.npartitions):
+                return bcast_join(
+                    left,
+                    left.index if left_index else left_on,
+                    right,
+                    right.index if right_index else right_on,
+                    how,
+                    npartitions,
+                    suffixes,
+                    indicator=indicator,
+                )
 
         return hash_join(
             left,
