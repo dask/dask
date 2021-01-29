@@ -192,15 +192,18 @@ def read_parquet(
         filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
-        Predicates can be expressed in disjunctive normal form (DNF). This means
-        that the innermost tuple describes a single column predicate. These
-        inner predicates are combined with an AND conjunction into a larger
-        predicate. The outer-most list then combines all of the combined
-        filters with an OR disjunction.
+        For the "pyarrow" engines, predicates can be expressed in disjunctive
+        normal form (DNF). This means that the innermost tuple describes a single
+        column predicate. These inner predicates are combined with an AND
+        conjunction into a larger predicate. The outer-most list then combines all
+        of the combined filters with an OR disjunction.
 
         Predicates can also be expressed as a List[Tuple]. These are evaluated
         as an AND conjunction. To express OR in predictates, one must use the
-        (preferred) List[List[Tuple]] notation.
+        (preferred for "pyarrow") List[List[Tuple]] notation.
+
+        Note that the "fastparquet" engine does not currently support DNF for
+        the filtering of partitioned columns (List[Tuple] is required).
     index : string, list, False or None (default)
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
@@ -958,6 +961,8 @@ def apply_filters(parts, statistics, filters):
         as an AND conjunction. To express OR in predictates, one must use the
         (preferred) List[List[Tuple]] notation.
 
+        Note that the "fastparquet" engine does not currently support DNF for
+        the filtering of partitioned columns (List[Tuple] is required).
     Returns
     -------
     parts, statistics: the same as the input, but possibly a subset
