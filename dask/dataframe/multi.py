@@ -322,6 +322,14 @@ def _bcast_heuristic(n_l, n_r):
 
 
 def _contains_index_name(df, columns_or_index):
+    """
+    Test whether ``columns_or_index`` contains a reference
+    to the index of ``df
+
+    This is the local (non-collection) version of
+    ``dask.core.DataFrame._contains_index_name``.
+    """
+
     def _is_index_level_reference(x, key):
         return (
             x.index.name is not None
@@ -336,11 +344,18 @@ def _contains_index_name(df, columns_or_index):
         return _is_index_level_reference(df, columns_or_index)
 
 
-def _is_column_label_reference(df, key):
-    return (np.isscalar(key) or isinstance(key, tuple)) and key in df.columns
-
-
 def _select_columns_or_index(df, columns_or_index):
+    """
+    Returns a DataFrame with columns corresponding to each
+    column or index level in columns_or_index.  If included,
+    the column corresponding to the index level is named _index.
+
+    This is the local (non-collection) version of
+    ``dask.core.DataFrame._select_columns_or_index``.
+    """
+
+    def _is_column_label_reference(df, key):
+        return (np.isscalar(key) or isinstance(key, tuple)) and key in df.columns
 
     # Ensure columns_or_index is a list
     columns_or_index = (
@@ -358,6 +373,11 @@ def _select_columns_or_index(df, columns_or_index):
 
 
 def _split_partition(df, on, nsplits):
+    """
+    Split-by-hash a DataFrame into `nsplits` groups.
+
+    Hashing will be performed on the columns or index specified by `on`.
+    """
 
     if isinstance(on, str) or pd.api.types.is_list_like(on):
         # If `on` is a column name or list of column names, we
@@ -387,6 +407,7 @@ def _split_partition(df, on, nsplits):
 
 
 def _concat_wrapper(dfs):
+    """Concat and remove temporary "_partitions" column"""
     df = _concat(dfs, False)
     if "_partitions" in df.columns:
         del df["_partitions"]
@@ -422,10 +443,19 @@ def bcast_join(
         # can only handle "inner" and "left"
         raise ValueError("Only 'inner' and 'left' bcast joins are supported.")
 
-    # If we are doing a "left" merge,
-    # shuffle the rhs by hash
+    # If we are doing a "left" merge, shuffle rhs
     need_split = how == "left"
+    # TODO: It *may* be beneficial to perform the hash
+    # split for "inner" join as well (even if it is not
+    # technically needed for correctness).  More testing
+    # is needed here.
     if need_split:
+        # Shuffle rhs by hash. This means that we will
+        # need to perform a local shuffle and split on
+        # each partition of lhs (with the same hashing
+        # approach) to ensure the correct rows are
+        # joined by `merge_chunk`.  The local hash and
+        # split of lhs is in `_split_partition`.
         rhs2 = shuffle_func(
             rhs,
             right_on,
@@ -483,7 +513,7 @@ def bcast_join(
     dsk = {}
     for i in part_ids:
 
-        # Split each "left" partition by hash
+        # Split each lsh partition by hash
         if need_split:
             dsk[(split_name, i)] = (
                 _split_partition,
