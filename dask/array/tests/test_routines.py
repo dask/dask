@@ -975,6 +975,18 @@ def test_ravel():
 
     assert_eq(x.flatten(), a.flatten())
     assert_eq(np.ravel(x), da.ravel(a))
+    
+
+def test_ravel_array_like_transformation():
+
+    # int
+    assert_eq(np.ravel(0), da.ravel(0))
+    # list
+    assert_eq(np.ravel([0, 0]), da.ravel([0, 0]))
+    # tuple
+    assert_eq(np.ravel((0, 0)), da.ravel((0, 0)))
+    # nested -> tuples in list
+    assert_eq(np.ravel([(0,), (0,)]), da.ravel([(0,), (0,)]))
 
 
 def test_ravel_1D_no_op():
