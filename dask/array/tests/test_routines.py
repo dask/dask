@@ -980,9 +980,9 @@ def test_ravel_array_like():
     #int
     assert_eq(np.ravel(0), da.ravel(0))
     #list
-    assert_eq(np.ravel([0,0]), da.ravel([0,0])
+    assert_eq(np.ravel([0,0]), da.ravel([0,0]))
     #tuple
-    assert_eq(np.ravel((0,0)), da.ravel((0,0))
+    assert_eq(np.ravel((0,0)), da.ravel((0,0)))
     
 def test_ravel_1D_no_op():
     x = np.random.randint(10, size=100)
