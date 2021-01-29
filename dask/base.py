@@ -1207,10 +1207,10 @@ def get_collection_name(collection) -> str:
     >>> get_collection_name(b)
     "foo-123"
     """
+    if not is_dask_collection(collection):
+        raise TypeError(f"Expected Dask collection; got {type(collection)}")
     try:
         key = next(flatten(collection.__dask_keys__()))
-    except (AttributeError, TypeError):
-        raise TypeError(f"Expected Dask collection; got {type(collection)}")
     except StopIteration:
         # Collection with no keys; this is a legitimate use case but, at the moment of
         # writing, can only happen with third-party collections
