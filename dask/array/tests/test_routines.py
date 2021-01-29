@@ -978,7 +978,6 @@ def test_ravel():
     
 
 def test_ravel_array_like_transformation():
-
     # int
     assert_eq(np.ravel(0), da.ravel(0))
     # list
