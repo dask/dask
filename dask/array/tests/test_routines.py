@@ -1604,8 +1604,9 @@ def test_insert():
 
     with pytest.raises(AxisError):
         da.insert(a, [3], -1, axis=-3)
-        
-        def test_append():
+
+
+def test_append():
     x = np.random.randint(10, size=(10, 10))
     a = da.from_array(x, chunks=(5, 5))
 
