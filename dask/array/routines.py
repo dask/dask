@@ -1491,7 +1491,8 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
     # valid chunks are those that are already factorizable by `multiple`
     chunk_validity = new_chunks == chunks
     valid_inds, invalid_inds = np.where(chunk_validity)[0], np.where(~chunk_validity)[0]
-    # sort the invalid chunks by size (ascending), then concatenate the results of sorting the valid chunks by size (ascending)
+    # sort the invalid chunks by size (ascending), then concatenate the results of
+    # sorting the valid chunks by size (ascending)
     chunk_modification_order = [
         *invalid_inds[np.argsort(new_chunks[invalid_inds])],
         *valid_inds[np.argsort(new_chunks[valid_inds])],
