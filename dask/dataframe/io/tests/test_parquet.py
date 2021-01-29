@@ -186,12 +186,7 @@ if (
     )
 else:
     fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
-    fp_pandas_xfail = write_read_engines(
-        **{
-            "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
-            "xfail_pyarrow-legacy_fastparquet": pyarrow_fastparquet_msg,
-        }
-    )
+    fp_pandas_xfail = write_read_engines()
 
 
 @write_read_engines()
@@ -243,7 +238,10 @@ def test_empty(tmpdir, write_engine, read_engine, index):
 @write_read_engines()
 def test_simple(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
-    df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
+    if write_engine != "fastparquet":
+        df = pd.DataFrame({"a": [b"a", b"b", b"b"], "b": [4, 5, 6]})
+    else:
+        df = pd.DataFrame({"a": ["a", "b", "b"], "b": [4, 5, 6]})
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=write_engine)
@@ -1187,12 +1185,14 @@ def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
     else:
         df = dd.from_pandas(df, npartitions=2)
 
-    df.to_parquet(tmpdir, engine="pyarrow", schema=schema, compute=False).compute(
-        scheduler="synchronous"
-    )
+    df.to_parquet(tmpdir, engine="pyarrow", schema=schema)
     df_out = dd.read_parquet(tmpdir, engine=engine)
+    df_out.compute()
 
     if index and engine == "fastparquet":
+        # Fastparquet fails to detect int64 from _metadata
+        df_out["amount"] = df_out["amount"].astype("int64")
+
         # Fastparquet not handling divisions for
         # pyarrow-written dataset with string index
         assert_eq(df, df_out, check_divisions=False)
@@ -2094,29 +2094,6 @@ def test_arrow_partitioning(tmpdir):
     ddf.astype({"b": np.float32}).compute()
 
 
-def test_sorted_warnings(tmpdir, engine):
-
-    if engine.startswith("pyarrow"):
-        pytest.skip(
-            "ArrowEngine will only collect statistics for "
-            "known index columns and/or filtered columns."
-        )
-
-    tmpdir = str(tmpdir)
-    df = dd.from_pandas(
-        pd.DataFrame({"cola": range(10), "colb": range(10)}), npartitions=2
-    )
-    df.to_parquet(tmpdir, engine=engine, write_index=False)
-    with pytest.warns(RuntimeWarning) as record:
-        out = dd.read_parquet(tmpdir, engine=engine)
-    assert "['cola', 'colb']" in str(record[-1].message)
-    warnings = len(record)
-    assert out.columns.tolist() == ["cola", "colb"]
-    with pytest.warns(None) as record:
-        dd.read_parquet(tmpdir, engine=engine, index=False)
-    assert len(record) < warnings  # still may have some arrow warnings
-
-
 def test_informative_error_messages():
     with pytest.raises(ValueError) as info:
         dd.read_parquet("foo", engine="foo")
@@ -2405,9 +2382,7 @@ def test_graph_size_pyarrow(tmpdir, engine):
     ddf1.to_parquet(fn, engine=engine)
     ddf2 = dd.read_parquet(fn, engine=engine)
 
-    # pyarrow.dataset requires fragments to be passed in dict.
-    # This requires slightly more space than "legacy"
-    assert len(pickle.dumps(ddf2.__dask_graph__())) < 32000
+    assert len(pickle.dumps(ddf2.__dask_graph__())) < 25000
 
 
 @pytest.mark.parametrize("preserve_index", [True, False])
@@ -2500,7 +2475,7 @@ def test_blockwise_parquet_annotations(tmpdir):
     assert list(layers.values())[0].annotations == {"foo": "bar"}
 
 
-def test_split_row_groups_pyarrow(tmpdir):
+def test_split_row_groups(tmpdir, engine):
     """Test split_row_groups read_parquet kwarg"""
     check_pyarrow()
     tmp = str(tmpdir)
@@ -2514,11 +2489,11 @@ def test_split_row_groups_pyarrow(tmpdir):
         tmp, engine="pyarrow", row_group_size=100
     )
 
-    ddf3 = dd.read_parquet(tmp, engine="pyarrow", split_row_groups=True, chunksize=1)
+    ddf3 = dd.read_parquet(tmp, engine=engine, split_row_groups=True, chunksize=1)
     assert ddf3.npartitions == 4
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
+        tmp, engine=engine, gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 2
 
@@ -2528,7 +2503,7 @@ def test_split_row_groups_pyarrow(tmpdir):
 
     ddf3 = dd.read_parquet(
         tmp,
-        engine="pyarrow",
+        engine=engine,
         gather_statistics=True,
         split_row_groups=True,
         chunksize=1,
@@ -2536,18 +2511,17 @@ def test_split_row_groups_pyarrow(tmpdir):
     assert ddf3.npartitions == 12
 
     ddf3 = dd.read_parquet(
-        tmp, engine="pyarrow", gather_statistics=True, split_row_groups=False
+        tmp, engine=engine, gather_statistics=True, split_row_groups=False
     )
     assert ddf3.npartitions == 4
 
 
 @pytest.mark.parametrize("split_row_groups", [1, 12])
 @pytest.mark.parametrize("gather_statistics", [True, False])
-def test_split_row_groups_int_pyarrow(tmpdir, split_row_groups, gather_statistics):
+def test_split_row_groups_int(tmpdir, split_row_groups, gather_statistics, engine):
 
     check_pyarrow()
     tmp = str(tmpdir)
-    engine = "pyarrow"
     row_group_size = 10
     npartitions = 4
     half_size = 400
@@ -2560,10 +2534,10 @@ def test_split_row_groups_int_pyarrow(tmpdir, split_row_groups, gather_statistic
     half = len(df) // 2
 
     dd.from_pandas(df.iloc[:half], npartitions=npartitions).to_parquet(
-        tmp, engine=engine, row_group_size=row_group_size
+        tmp, engine="pyarrow", row_group_size=row_group_size
     )
     dd.from_pandas(df.iloc[half:], npartitions=npartitions).to_parquet(
-        tmp, append=True, engine=engine, row_group_size=row_group_size
+        tmp, append=True, engine="pyarrow", row_group_size=row_group_size
     )
 
     ddf2 = dd.read_parquet(
@@ -2576,7 +2550,7 @@ def test_split_row_groups_int_pyarrow(tmpdir, split_row_groups, gather_statistic
     assert ddf2.npartitions == 2 * math.ceil(expected_rg_cout / split_row_groups)
 
 
-def test_split_row_groups_filter_pyarrow(tmpdir):
+def test_split_row_groups_filter(tmpdir, engine):
     check_pyarrow()
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -2590,16 +2564,14 @@ def test_split_row_groups_filter_pyarrow(tmpdir):
         tmp, append=True, engine="pyarrow", row_group_size=50
     )
 
-    ddf2 = dd.read_parquet(tmp, engine="pyarrow")
+    ddf2 = dd.read_parquet(tmp, engine=engine)
     ddf3 = dd.read_parquet(
         tmp,
-        engine="pyarrow",
+        engine=engine,
         gather_statistics=True,
         split_row_groups=True,
         filters=filters,
     )
-
-    ddf2.compute(scheduler="sync")
 
     assert search_val in ddf3["i32"]
     assert_eq(
