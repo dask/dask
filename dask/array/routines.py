@@ -4,7 +4,7 @@ import warnings
 from collections.abc import Iterable
 from functools import wraps, partial
 from numbers import Real, Integral
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from tlz import concat, sliding_window, interleave
@@ -1457,8 +1457,20 @@ def piecewise(x, condlist, funclist, *args, **kw):
         func_kw=kw,
     )
 
+def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
+    """
+    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated 
+    the number of times it divides `total`, and length-1 tuple containing the remainder when
+    `total` is divided by `divisor`. 
+    """
+    multiples = (divisor,) * (total // divisor)
+    remainder = ()
+    if (total % divisor) > 0:
+        remainder = (total % divisor,)
+    return (multiples, remainder)
 
-def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
+
+def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
     """
     Returns a new chunking aligned with the coarsening multiple.
     Any excess is at the end of the array.
@@ -1470,45 +1482,21 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
     >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
     (20, 4, 4)
     >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
-    (20, 10, 20, 20, 20, 2)
+    (20, 20, 10, 20, 20, 2)
     """
-
-    def choose_new_size(multiple, q, left):
-        """
-        See if multiple * q is a good choice when 'left' elements are remaining.
-        Else return multiple * (q-1)
-        """
-        possible = multiple * q
-        if (left - possible) > 0:
-            return possible
-        else:
-            return multiple * (q - 1)
-
-    newchunks = []
-    left = sum(chunks) - sum(newchunks)
-    chunkgen = (c for c in chunks)
-    while left > 0:
-        if left < multiple:
-            newchunks.append(left)
-            break
-
-        chunk_size = next(chunkgen, 0)
-        if chunk_size == 0:
-            chunk_size = multiple
-
-        q, r = divmod(chunk_size, multiple)
-        if q == 0:
-            continue
-        elif r == 0:
-            newchunks.append(chunk_size)
-        elif r >= 5:
-            newchunks.append(choose_new_size(multiple, q + 1, left))
-        else:
-            newchunks.append(choose_new_size(multiple, q, left))
-
-        left = sum(chunks) - sum(newchunks)
-
-    return tuple(newchunks)
+    overflow = np.array(chunks) % multiple
+    new_chunks = np.array(chunks) - overflow
+    excess = overflow.sum()
+    new_chunks_sorted = np.argsort(new_chunks)
+    partitioned_excess, remainder = _partition(excess, multiple)
+    # add divisor to the samllest chunks
+    for idx,extra in enumerate(partitioned_excess):
+        new_chunks[new_chunks_sorted[idx]] += extra
+    # create excess chunk with remainder
+    new_chunks = np.array([*new_chunks, *remainder])
+    # remove empty chunks
+    new_chunks = new_chunks[new_chunks > 0]
+    return tuple(new_chunks)
 
 
 @wraps(chunk.coarsen)

@@ -1559,15 +1559,39 @@ def test_coarsen_bad_chunks(chunks):
     )
 
 
-def test_aligned_coarsen_chunks():
+@pytest.mark.parametrize(
+    "chunks, divisor",
+    [
+        ((1, 1), 1),
+        ((1, 1), 2),
+        ((1, 1, 1), 2),
+        ((10, 1), 10),
+        ((20, 10, 15, 23, 24), 10),
+        ((20, 10, 15, 23, 24), 8),
+        ((10, 20, 30, 40, 2), 10),
+        ((20, 10, 15, 42, 23, 24), 16),
+        ((20, 10, 15, 47, 23, 24), 10),
+        ((2, 10, 15, 47, 23, 24), 4),
+    ],
+)
+def test_aligned_coarsen_chunks(chunks, divisor):
 
     from ..routines import aligned_coarsen_chunks as acc
 
-    assert acc((20, 10, 15, 23, 24), 10) == (20, 10, 20, 20, 20, 2)
-    assert acc((20, 10, 15, 42, 23, 24), 10) == (20, 10, 20, 40, 20, 20, 4)
-    assert acc((20, 10, 15, 47, 23, 24), 10) == (20, 10, 20, 50, 20, 10, 9)
-    assert acc((2, 10, 15, 47, 23, 24), 10) == (10, 20, 50, 20, 20, 1)
-    assert acc((10, 20, 30, 40, 2), 10) == (10, 20, 30, 40, 2)
+    aligned_chunks = acc(chunks, divisor)
+    any_remainders = (np.array(aligned_chunks) % divisor) != 0
+
+    # check that total number of elements is conserved
+    assert sum(aligned_chunks) == sum(chunks)
+    # check that no chunks are 0
+    assert (np.array(aligned_chunks) > 0).all()
+    # check that at most one chunk was added
+    assert len(aligned_chunks) <= len(chunks) + 1
+    # check that either 0 or 1 chunks are not divisible by divisor
+    assert any_remainders.sum() in (0, 1)
+    # check that the only indivisible chunk is the last
+    if any_remainders.sum() == 1:
+        assert any_remainders[-1] == 1
 
 
 def test_insert():
