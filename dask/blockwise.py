@@ -861,9 +861,9 @@ def optimize_blockwise(graph, keys=()):
 
 def _optimize_blockwise(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
-    layers = full_graph.dicts
+    layers = full_graph.layers
     dependents = reverse_dict(full_graph.dependencies)
-    roots = {k for k in full_graph.dicts if not dependents.get(k)}
+    roots = {k for k in full_graph.layers if not dependents.get(k)}
     stack = list(roots)
 
     out = {}
