@@ -1,5 +1,9 @@
 import re
 
+import pandas as pd
+
+from ....core import flatten
+
 
 class Engine:
     """ The API necessary to provide a new Parquet reader/writer """
@@ -54,8 +58,8 @@ class Engine:
 
             [
                 {'num-rows': 1000, 'columns': [
-                    {'name': 'id', 'min': 0, 'max': 100, 'null-count': 0},
-                    {'name': 'x', 'min': 0.0, 'max': 1.0, 'null-count': 5},
+                    {'name': 'id', 'min': 0, 'max': 100},
+                    {'name': 'x', 'min': 0.0, 'max': 1.0},
                     ]},
                 ...
             ]
@@ -476,3 +480,139 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
+
+
+def _flatten_filters(filters):
+    """Flatten DNF-formatted filters (list of tuples)"""
+    return (
+        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
+        if filters
+        else []
+    )
+
+
+def _aggregate_stats(
+    file_path,
+    file_row_group_stats,
+    file_row_group_column_stats,
+    stat_col_indices,
+):
+    """Utility to aggregate the statistics for N row-groups
+    into a single dictionary.
+
+    Used by `Engine._construct_parts`
+    """
+    if len(file_row_group_stats) < 1:
+        # Empty statistics
+        return {}
+    elif len(file_row_group_column_stats) == 0:
+        assert len(file_row_group_stats) == 1
+        return file_row_group_stats[0]
+    else:
+        # Note: It would be better to avoid df_rgs and df_cols
+        #       construction altogether. It makes it fast to aggregate
+        #       the statistics for many row groups, but isn't
+        #       worthwhile for a small number of row groups.
+        if len(file_row_group_stats) > 1:
+            df_rgs = pd.DataFrame(file_row_group_stats)
+            s = {
+                "file_path_0": file_path,
+                "num-rows": df_rgs["num-rows"].sum(),
+                "total_byte_size": df_rgs["total_byte_size"].sum(),
+                "columns": [],
+            }
+        else:
+            s = {
+                "file_path_0": file_path,
+                "num-rows": file_row_group_stats[0]["num-rows"],
+                "total_byte_size": file_row_group_stats[0]["total_byte_size"],
+                "columns": [],
+            }
+
+        df_cols = None
+        if len(file_row_group_column_stats) > 1:
+            df_cols = pd.DataFrame(file_row_group_column_stats)
+        for ind, name in enumerate(stat_col_indices):
+            i = ind * 2
+            if df_cols is None:
+                s["columns"].append(
+                    {
+                        "name": name,
+                        "min": file_row_group_column_stats[0][i],
+                        "max": file_row_group_column_stats[0][i + 1],
+                    }
+                )
+            else:
+                s["columns"].append(
+                    {
+                        "name": name,
+                        "min": df_cols.iloc[:, i].min(),
+                        "max": df_cols.iloc[:, i + 1].max(),
+                    }
+                )
+        return s
+
+
+def _row_groups_to_parts(
+    gather_statistics,
+    split_row_groups,
+    file_row_groups,
+    file_row_group_stats,
+    file_row_group_column_stats,
+    stat_col_indices,
+    make_part_func,
+    make_part_kwargs,
+):
+
+    # Construct `parts` and `stats`
+    parts = []
+    stats = []
+    if split_row_groups:
+        # Create parts from each file,
+        # limiting the number of row_groups in each piece
+        split_row_groups = int(split_row_groups)
+        for filename, row_groups in file_row_groups.items():
+            row_group_count = len(row_groups)
+            for i in range(0, row_group_count, split_row_groups):
+                i_end = i + split_row_groups
+                rg_list = row_groups[i:i_end]
+
+                part = make_part_func(
+                    filename,
+                    rg_list,
+                    **make_part_kwargs,
+                )
+                if part is None:
+                    continue
+
+                parts.append(part)
+                if gather_statistics:
+                    stat = _aggregate_stats(
+                        filename,
+                        file_row_group_stats[filename][i:i_end],
+                        file_row_group_column_stats[filename][i:i_end],
+                        stat_col_indices,
+                    )
+                    stats.append(stat)
+    else:
+        for filename, row_groups in file_row_groups.items():
+
+            part = make_part_func(
+                filename,
+                row_groups,
+                **make_part_kwargs,
+            )
+            if part is None:
+                continue
+
+            parts.append(part)
+            if gather_statistics:
+                stat = _aggregate_stats(
+                    filename,
+                    file_row_group_stats[filename],
+                    file_row_group_column_stats[filename],
+                    stat_col_indices,
+                )
+                stats.append(stat)
+
+    return parts, stats
