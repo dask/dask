@@ -312,13 +312,13 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 shuffle_func = shuffle  # name sometimes conflicts with keyword argument
 
 
-def _bcast_heuristic(n_l, n_r):
+def _broadcast_heuristic(n_l, n_r):
     """Simple heuristic to decide if a broadcast join is likely
     to outperform a shuffle-based merge.
     """
     ntasks_shuffle = n_r * math.log2(n_r) + n_l * math.log2(n_l)
-    ntasks_bcast = n_r * n_l + n_l
-    return ntasks_bcast < ntasks_shuffle * 0.75
+    ntasks_broadcast = n_r * n_l + n_l
+    return ntasks_broadcast < ntasks_shuffle * 0.75
 
 
 def _contains_index_name(df, columns_or_index):
@@ -414,7 +414,7 @@ def _concat_wrapper(dfs):
     return df
 
 
-def bcast_join(
+def broadcast_join(
     lhs,
     left_on,
     rhs,
@@ -441,10 +441,10 @@ def bcast_join(
     if how not in ("inner", "left"):
         # Since we are always broadcasting lhs (for now), we
         # can only handle "inner" and "left"
-        raise ValueError("Only 'inner' and 'left' bcast joins are supported.")
+        raise ValueError("Only 'inner' and 'left' broadcast joins are supported.")
 
     # If we are doing a "left" merge, shuffle rhs
-    need_split = how == "left"
+    need_split = how != "inner"
     # TODO: It *may* be beneficial to perform the hash
     # split for "inner" join as well (even if it is not
     # technically needed for correctness).  More testing
@@ -711,7 +711,7 @@ def merge(
     npartitions=None,
     shuffle=None,
     max_branch=None,
-    bcast=None,
+    broadcast=None,
 ):
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
@@ -856,15 +856,15 @@ def merge(
         if left_on and right_on:
             warn_dtype_mismatch(left, right, left_on, right_on)
 
-        # Check if we should use a bcast_join
+        # Check if we should use a broadcast_join
         if (
             shuffle == "tasks"
             and how in ("inner", "left")
             and not npartitions
-            and bcast is not False
+            and broadcast is not False
         ):
-            if bcast or _bcast_heuristic(left.npartitions, right.npartitions):
-                return bcast_join(
+            if broadcast or _broadcast_heuristic(left.npartitions, right.npartitions):
+                return broadcast_join(
                     left,
                     left.index if left_index else left_on,
                     right,

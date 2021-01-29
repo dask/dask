@@ -4162,7 +4162,7 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
-        bcast=None,
+        broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -4218,6 +4218,11 @@ class DataFrame(_Frame):
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
+        broadcast: boolean, optional
+            Whether to use a broadcast-based join in lieu of a shuffle-based
+            join for supported cases.  By default, a simple heuristic will be
+            used to select the underlying algorithm. See ``broadcast_join``
+            for more information.
 
         Notes
         -----
@@ -4259,7 +4264,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             indicator=indicator,
             shuffle=shuffle,
-            bcast=bcast,
+            broadcast=broadcast,
         )
 
     @derived_from(pd.DataFrame)  # doctest: +SKIP
