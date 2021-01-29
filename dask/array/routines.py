@@ -1607,12 +1607,12 @@ def insert(arr, obj, values, axis):
 
 @derived_from(np)
 def append(arr, values, axis=None):
-    #based on numpy.append
+    # based on numpy.append
     arr = asanyarray(arr)
     if axis is None:
         if arr.ndim != 1:
-            arr = ravel2(arr)
-        values = ravel2(asanyarray(values))
+            arr = arr.ravel()
+        values = ravel(asanyarray(values))
         axis = arr.ndim-1
     return concatenate((arr, values), axis=axis)
 
