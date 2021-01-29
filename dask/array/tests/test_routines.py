@@ -1580,9 +1580,12 @@ def test_aligned_coarsen_chunks(chunks, divisor):
 
     aligned_chunks = acc(chunks, divisor)
     any_remainders = (np.array(aligned_chunks) % divisor) != 0
-
+    valid_chunks = np.where((np.array(chunks) % divisor) == 0)[0]
+    
     # check that total number of elements is conserved
     assert sum(aligned_chunks) == sum(chunks)
+    # check that valid chunks are not modified
+    assert [chunks[idx] for idx in valid_chunks] == [aligned_chunks[idx] for idx in valid_chunks]
     # check that no chunks are 0
     assert (np.array(aligned_chunks) > 0).all()
     # check that at most one chunk was added
