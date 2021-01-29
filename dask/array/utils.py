@@ -206,7 +206,7 @@ def _check_dsk(dsk):
 
     dsk.validate()
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
-    freqs = frequencies(concat(dsk.dicts.values()))
+    freqs = frequencies(concat(dsk.layers.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     assert not non_one, non_one
 

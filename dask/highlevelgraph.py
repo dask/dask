@@ -1,5 +1,6 @@
 import abc
 import collections.abc
+import warnings
 from typing import (
     Any,
     Dict,
@@ -568,6 +569,12 @@ class HighLevelGraph(Mapping):
     @property
     def dicts(self):
         # Backwards compatibility for now
+        warnings.warn(
+            "'dicts' property of HighLevelGraph is deprecated now and will be "
+            "removed in a future version. To silence this warning, "
+            "use '.layers' instead.",
+            FutureWarning,
+        )
         return self.layers
 
     def items(self):
