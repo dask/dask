@@ -44,10 +44,13 @@ interface is used inside Dask.
 
     Returns
     -------
-    dsk : MutableMapping, None
+    dsk : Mapping, None
         The Dask graph.  If ``None``, this instance will not be interpreted as a
         Dask collection, and none of the remaining interface methods will be
         called.
+
+    If the collection also specifies :meth:`__dask_layers__`, then dsk must be a
+    :class:`~dask.highlevelgraph.HighLevelGraph` or None.
 
 
 .. method:: __dask_keys__(self)
@@ -60,6 +63,29 @@ interface is used inside Dask.
         A possibly nested list of keys that represent the outputs of the graph.
         After computation, the results will be returned in the same layout,
         with the keys replaced with their corresponding outputs.
+
+    If more than one key is returned, all keys must be tuples sharing the same first
+    string element, which is known as the *collection name*, followed by 0+ arbitrary
+    hashables. If the output of the graph is represented by a single key, it *may* also
+    be a bare string.
+
+    These are all valid outputs:
+
+    - ``[]``
+    - ``["x"]``
+    - ``[[("y", "a", 0), ("y", "a", 1)], [("y", "b", 0), ("y", "b", 1)]``
+
+
+.. method:: __dask_layers__(self)
+
+    This method should only be implemented if the collection uses
+    :class:`~dask.highlevelgraph.HighLevelGraph` to implement its dask graph.
+
+    Returns
+    -------
+    names : tuple
+        Tuple of names of the HighLevelGraph layers which contain all keys returned by
+        :meth:`__dask_keys__`.
 
 
 .. staticmethod:: __dask_optimize__(dsk, keys, \*\*kwargs)
