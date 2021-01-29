@@ -1212,7 +1212,8 @@ def get_collection_name(collection) -> str:
     except (AttributeError, TypeError):
         raise TypeError(f"Expected Dask collection; got {type(collection)}")
     except StopIteration:
-        # e.g. Array of size 0
+        # Collection with no keys; this is a legitimate use case but, at the moment of
+        # writing, can only happen with third-party collections
         raise KeyError("Dask collection has no keys")
 
     if isinstance(key, tuple) and key and isinstance(key[0], str):

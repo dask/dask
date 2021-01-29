@@ -49,12 +49,18 @@ def drop(*collections) -> Delayed:
     name = "drop-" + tok
     map_name = "drop_map-" + tok
 
-    if _has_less_than_two_keys(collection):
-        # No need for a map step
+    keys_iter = flatten(collection.__dask_keys__())
+    try:
+        next(keys_iter)
+        next(keys_iter)
+    except StopIteration:
+        # Collection has 0 or 1 keys; no need for a map step
         layer = {name: (chunks.drop, collection.__dask_keys__())}
         dsk = HighLevelGraph.from_collections(name, layer, dependencies=(collection,))
     else:
-        # Two-step map->reduce to minimize RAM usage and data transfer over the network
+        # Collection has 2+ keys; apply a two-step map->reduce algorithm so that we
+        # transfer over the network and store in RAM only a handful of None's instead of
+        # the full computed collection's contents
         map_layer = _build_map_layer(chunks.drop, map_name, collection)
         map_dsk = HighLevelGraph.from_collections(
             map_name, map_layer, dependencies=(collection,)
@@ -66,17 +72,6 @@ def drop(*collections) -> Delayed:
         dsk = HighLevelGraph.merge(map_dsk, reduce_dsk)
 
     return Delayed(name, dsk)
-
-
-def _has_less_than_two_keys(collection) -> bool:
-    """Return True if collection has zero or one keys; False otherwise."""
-    keys_iter = flatten(collection.__dask_keys__())
-    try:
-        next(keys_iter)
-        next(keys_iter)
-        return False
-    except StopIteration:
-        return True
 
 
 def _build_map_layer(
@@ -106,13 +101,14 @@ def _build_map_layer(
         ndim = getattr(collection, "ndim", 1)
         indices = tuple(range(ndim))
         kwargs = {"_deps": dependencies} if dependencies else {}
+        prev_name = get_collection_name(collection)
         return blockwise(
             func,
             name,
             indices,
-            collection.name,
+            prev_name,
             indices,
-            numblocks={collection.name: numblocks},
+            numblocks={prev_name: numblocks},
             dependencies=dependencies,
             **kwargs,
         )
@@ -235,7 +231,9 @@ def _bind_one(
     try:
         prev_coll_name = get_collection_name(child)
     except KeyError:
-        return child  # Collection with no keys; e.g. Array of size 0
+        # Collection with no keys; this is a legitimate use case but, at the moment of
+        # writing, can only happen with third-party collections
+        return child
 
     dsk = child.__dask_graph__()
     new_layers = {}
