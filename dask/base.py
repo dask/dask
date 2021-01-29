@@ -18,7 +18,7 @@ from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict, apply, key_split
+from .utils import Dispatch, ensure_dict, apply
 from . import config, local, threaded
 
 
@@ -34,7 +34,6 @@ __all__ = (
     "normalize_token",
     "get_collection_name",
     "replace_name_in_key",
-    "clone_key",
 )
 
 
@@ -1239,27 +1238,4 @@ def replace_name_in_key(key, name: str):
         return (name,) + key[1:]
     if isinstance(key, str):
         return name
-    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
-
-
-def clone_key(key, seed):
-    """Clone a key from a Dask collection, producing a new key with the same prefix and
-    indices and a token which a deterministic function of the previous token and seed.
-
-    Examples
-    --------
-    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)
-    'inc-1d291de52f5045f8a969743daea271fd'
-    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)
-    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
-    """
-    prefix = key_split(key)
-    if isinstance(key, str):
-        old_token = key[len(prefix) + 1 :]
-        new_token = tokenize(old_token or key, seed)
-        return prefix + "-" + new_token
-    if isinstance(key, tuple) and key and isinstance(key[0], str):
-        old_token = key[0][len(prefix) + 1 :]
-        new_token = tokenize(old_token or key[0], seed)
-        return (prefix + "-" + new_token,) + key[1:]
     raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
