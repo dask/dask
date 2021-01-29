@@ -62,6 +62,7 @@ class ParquetSubgraph(Layer):
         self.columns = columns
         self.index = index
         self.parts = parts
+        self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
 
         # `kwargs` = user-defined kwargs to be passed for all parts
@@ -97,12 +98,10 @@ class ParquetSubgraph(Layer):
             self.fs,
             self.engine.read_partition,
             self.meta,
-            [p["piece"] for p in part],
+            [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
             self.index,
-            toolz.merge(
-                self.common_kwargs, part[0].get("kwargs", {}), self.kwargs or {}
-            ),
+            toolz.merge(self.common_kwargs, self.kwargs or {}),
         )
 
     def __len__(self):
@@ -175,15 +174,18 @@ def read_parquet(
         filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
-        Predicates can be expressed in disjunctive normal form (DNF). This means
-        that the innermost tuple describes a single column predicate. These
-        inner predicates are combined with an AND conjunction into a larger
-        predicate. The outer-most list then combines all of the combined
-        filters with an OR disjunction.
+        For the "pyarrow" engines, predicates can be expressed in disjunctive
+        normal form (DNF). This means that the innermost tuple describes a single
+        column predicate. These inner predicates are combined with an AND
+        conjunction into a larger predicate. The outer-most list then combines all
+        of the combined filters with an OR disjunction.
 
         Predicates can also be expressed as a List[Tuple]. These are evaluated
         as an AND conjunction. To express OR in predictates, one must use the
-        (preferred) List[List[Tuple]] notation.
+        (preferred for "pyarrow") List[List[Tuple]] notation.
+
+        Note that the "fastparquet" engine does not currently support DNF for
+        the filtering of partitioned columns (List[Tuple] is required).
     index : string, list, False or None (default)
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
@@ -378,10 +380,16 @@ def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
     This function is used by `read_parquet`."""
 
     if isinstance(part, list):
-        dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
+        dfs = [
+            func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
+            for (rg, kw) in part
+        ]
         df = concat(dfs, axis=0)
     else:
-        df = func(fs, part, columns, index, **kwargs)
+        # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
+        #       be different for each part.
+        rg, part_kwargs = part
+        df = func(fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs))
 
     if meta.columns.name:
         df.columns.name = meta.columns.name
@@ -935,6 +943,8 @@ def apply_filters(parts, statistics, filters):
         as an AND conjunction. To express OR in predictates, one must use the
         (preferred) List[List[Tuple]] notation.
 
+        Note that the "fastparquet" engine does not currently support DNF for
+        the filtering of partitioned columns (List[Tuple] is required).
     Returns
     -------
     parts, statistics: the same as the input, but possibly a subset
@@ -1138,8 +1148,6 @@ def aggregate_row_groups(parts, stats, chunksize):
             for col, col_add in zip(next_stat["columns"], stat["columns"]):
                 if col["name"] != col_add["name"]:
                     raise ValueError("Columns are different!!")
-                if "null_count" in col:
-                    col["null_count"] += col_add["null_count"]
                 if "min" in col:
                     col["min"] = min(col["min"], col_add["min"])
                 if "max" in col:
