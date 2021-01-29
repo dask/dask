@@ -31,8 +31,8 @@ The following packages may be of interest
   and Dask, for execution on CUDA/GPU-enabled hardware, including referencing
   externally-stored data
   
-- `dask-sql`_ adds a SQL query layer on top of Dask. It's API matches blazingSQL
-  but it uses CPU instead of GPU.
+- `dask-sql`_, a new project (started August 2020), adds a SQL query layer on top
+  of Dask. The API matches blazingSQL but it uses CPU instead of GPU.
   
 - `fugue`_ adds an abstract layer that makes code portable between across differing
   computing frameworks such as Pandas, Spark and Dask 
