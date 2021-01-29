@@ -1457,11 +1457,12 @@ def piecewise(x, condlist, funclist, *args, **kw):
         func_kw=kw,
     )
 
+
 def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
     """
-    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated 
+    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
     the number of times it divides `total`, and length-1 tuple containing the remainder when
-    `total` is divided by `divisor`. 
+    `total` is divided by `divisor`.
     """
     multiples = (divisor,) * (total // divisor)
     remainder = ()
@@ -1490,7 +1491,7 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
     new_chunks_sorted = np.argsort(new_chunks)
     partitioned_excess, remainder = _partition(excess, multiple)
     # add divisor to the samllest chunks
-    for idx,extra in enumerate(partitioned_excess):
+    for idx, extra in enumerate(partitioned_excess):
         new_chunks[new_chunks_sorted[idx]] += extra
     # create excess chunk with remainder
     new_chunks = np.array([*new_chunks, *remainder])
