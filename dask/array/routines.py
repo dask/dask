@@ -1543,17 +1543,69 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     return Array(graph, name, chunks, meta=meta)
 
 
-def split_at_breaks(array, breaks, axis=0):
-    """Split an array into a list of arrays (using slices) at the given breaks
-
-    >>> split_at_breaks(np.arange(6), [3, 5])
-    [array([0, 1, 2]), array([3, 4]), array([5])]
-    """
-    padded_breaks = concat([[None], breaks, [None]])
-    slices = [slice(i, j) for i, j in sliding_window(2, padded_breaks)]
-    preslice = (slice(None),) * axis
-    split_array = [array[preslice + (s,)] for s in slices]
+@derived_from(np)
+def array_split(arr, indices_or_sections, axis=0):
+    # modified from numpy.array_split
+    arr = asanyarray(arr)  # will do array_like
+    s_size = arr.shape[axis]
+    try:  # for array
+        steps = list(indices_or_sections) + [s_size]
+    except:  # for int
+        num_of_segs = int(indices_or_sections)
+        if num_of_segs <= 0:
+            raise ValueError("number sections must be larger than 0.")
+        steps = np.cumsum(
+            [
+                s_size // num_of_segs + 1
+                if i < s_size % num_of_segs
+                else s_size // num_of_segs
+                for i in range(0, num_of_segs)
+            ]
+        )
+    axis_slice = (
+        (slice(None),) * axis if axis >= 0 else (slice(None),) * (axis + arr.ndim)
+    )
+    slices = [
+        slice(steps[i - 1], s, None) if i != 0 else slice(None, s, None)
+        for i, s in enumerate(steps)
+    ]
+    split_array = [arr[axis_slice + (s,)] for s in slices]
     return split_array
+
+
+@derived_from(np)
+def split(arr, indices_or_sections, axis=0):
+    # modified from numpy.split
+    if (
+        np.issubdtype(type(indices_or_sections), np.integer)
+        and arr.shape[axis] % indices_or_sections != 0
+    ):
+        raise ValueError("array split does not result in an equal division")
+    return array_split(arr, indices_or_sections, axis=axis)
+
+@derived_from(np)
+def hsplit(arr, indices_or_sections):
+    # modified from numpy.hsplit
+    if arr.size == 1:
+        raise ValueError("hsplit only works on arrays of 1 or more dimensions")
+    if arr.ndim > 1:
+        return split(arr, indices_or_sections, 1)
+    else:
+        return split(arr, indices_or_sections, 0)
+
+@derived_from(np)
+def vsplit(arr, indices_or_sections):
+    # copied from numpy.vsplit
+    if arr.ndim < 2:
+        raise ValueError("vsplit only works on arrays of 2 or more dimensions")
+    return split(arr, indices_or_sections, 0)
+
+@derived_from(np)
+def dsplit(arr, indices_or_sections):
+    # copied from numpy.dsplit
+    if arr.ndim < 3:
+        raise ValueError("vsplit only works on arrays of 3 or more dimensions")
+    return split(arr, indices_or_sections, 2)
 
 
 @derived_from(np)
@@ -1575,7 +1627,7 @@ def insert(arr, obj, values, axis):
             "da.insert only implemented for monotonic ``obj`` argument"
         )
 
-    split_arr = split_at_breaks(arr, np.unique(obj), axis)
+    split_arr = split(arr, np.unique(obj), axis)
 
     if getattr(values, "ndim", 0) == 0:
         # we need to turn values into a dask array
@@ -1598,7 +1650,7 @@ def insert(arr, obj, values, axis):
 
     counts = np.bincount(obj)[:-1]
     values_breaks = np.cumsum(counts[counts > 0])
-    split_values = split_at_breaks(values, values_breaks, axis)
+    split_values = split(values, values_breaks, axis)
 
     interleaved = list(interleave([split_arr, split_values]))
     interleaved = [i for i in interleaved if i.nbytes]
