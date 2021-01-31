@@ -7,7 +7,7 @@ from numbers import Real, Integral
 from typing import List
 
 import numpy as np
-from tlz import concat, sliding_window, interleave
+from tlz import interleave
 
 from ..compatibility import apply
 from ..core import flatten
@@ -1550,7 +1550,7 @@ def array_split(arr, indices_or_sections, axis=0):
     s_size = arr.shape[axis]
     try:  # for array
         steps = list(indices_or_sections) + [s_size]
-    except:  # for int
+    except TypeError:  # for int
         num_of_segs = int(indices_or_sections)
         if num_of_segs <= 0:
             raise ValueError("number sections must be larger than 0.")
@@ -1583,6 +1583,7 @@ def split(arr, indices_or_sections, axis=0):
         raise ValueError("array split does not result in an equal division")
     return array_split(arr, indices_or_sections, axis=axis)
 
+
 @derived_from(np)
 def hsplit(arr, indices_or_sections):
     # modified from numpy.hsplit
@@ -1593,12 +1594,14 @@ def hsplit(arr, indices_or_sections):
     else:
         return split(arr, indices_or_sections, 0)
 
+
 @derived_from(np)
 def vsplit(arr, indices_or_sections):
     # copied from numpy.vsplit
     if arr.ndim < 2:
         raise ValueError("vsplit only works on arrays of 2 or more dimensions")
     return split(arr, indices_or_sections, 0)
+
 
 @derived_from(np)
 def dsplit(arr, indices_or_sections):
