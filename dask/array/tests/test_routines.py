@@ -1,5 +1,6 @@
 import itertools
 from numbers import Number
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -1565,6 +1566,131 @@ def test_aligned_coarsen_chunks():
     assert acc((20, 10, 15, 47, 23, 24), 10) == (20, 10, 20, 50, 20, 10, 9)
     assert acc((2, 10, 15, 47, 23, 24), 10) == (10, 20, 50, 20, 20, 1)
     assert acc((10, 20, 30, 40, 2), 10) == (10, 20, 30, 40, 2)
+
+
+def test_array_split():
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # Note: 'assert_eq' seems to expect a return type of array, #
+    # or at least something the allows for a .all() comparison  #
+    # hence the custom `assert_eq_split` function:              #
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    def assert_eq_split(split_a, split_b):  # kind of heavy
+        assert len(split_a) == len(split_b)
+        [assert_eq(*compare) for compare in zip(split_a, split_b)]
+
+    na = np.random.randint(10, size=(10, 10, 2))
+    dar = da.from_array(na, chunks=(3, 3, 1))
+
+    ## axis test ##
+    assert_eq_split(np.array_split(na, 1, axis=0), da.array_split(dar, 1, axis=0))
+    assert_eq_split(np.array_split(na, 3, axis=-3), da.array_split(dar, 3, axis=-3))
+    assert_eq_split(np.array_split(na, 2, axis=-2), da.array_split(dar, 2, axis=-2))
+    assert_eq_split(np.array_split(na, 5, axis=1), da.array_split(dar, 5, axis=1))
+    assert_eq_split(np.array_split(na, 4, axis=2), da.array_split(dar, 4, axis=2))
+    assert_eq_split(np.array_split(na, 2, axis=-1), da.array_split(dar, 2, axis=-1))
+
+    ## array_like arguments ##
+    assert_eq_split(np.array_split(na, [2, 3, 5, 10]), da.array_split(dar, [2, 3, 5, 10]))
+    assert_eq_split(np.array_split(na, (3, 4) * 4), da.array_split(dar, (3, 4) * 4))
+    assert_eq_split(
+        np.array_split(na, np.array([-2, -5, -6]), axis=-1),
+        da.array_split(dar, np.array([-2, -5, -6]), axis=-1),
+    )
+
+    # numpy.split_array will do some quirks contray to the docs i.e. force ints and accept array_like.
+    # for sake of bearing with the conduct tests to see if dask.array_split does the same
+    assert_eq_split(np.array_split(na, 3.4123), da.array_split(dar, 3.4123))
+    assert_eq_split(
+        np.array_split((1, 2, 3) * 10, bytes(123)),
+        da.array_split((1, 2, 3) * 10, bytes(123)),
+    )
+
+    # When exceeding dim
+    with pytest.raises(IndexError):
+        da.array_split(dar, 4, axis=3)
+    with pytest.raises(IndexError):
+        da.array_split(dar, 4, axis=-4)
+
+    # When an int argument is <= 0
+    with pytest.raises(ValueError):
+        da.array_split(dar, 0)
+    with pytest.raises(ValueError):
+        da.array_split(dar, -3)
+
+    # When arbitary types are passed (because lots of type forcing is going on)
+    with pytest.raises(TypeError):
+        da.array_split(dar, "3")
+    with pytest.raises(TypeError):
+        da.array_split(dar, None)
+
+
+def test_split():
+    d3 = da.random.randint(10, size=(10, 10, 10), chunks=(3, 3, 3))
+
+    # Test if split hinges on array_split --> no need for seperate tests
+    dh.array_split = MagicMock()
+    assert split(d3, 1)
+    assert dh.array_split.called
+
+    # When: non-equal sub-sections
+    with pytest.raises(ValueError):
+        da.split(d3, 4)
+    with pytest.raises(ValueError):
+        da.split(d3, 3, axis=1)
+    with pytest.raises(ValueError):
+        da.split(d3, 3, axis=2)
+
+    # ZeroDivisionError: specific to split
+    with pytest.raises(ZeroDivisionError):
+        da.split(d3, 0)
+
+
+def test_hsplit():
+    d0 = da.random.randint(10, size=(1,), chunks=(1))
+    d1 = da.random.randint(10, size=(10,), chunks=(3))
+
+    # Test if hsplit hinges on split --> no need for seperate tests
+    da.split = MagicMock()
+    assert hsplit(d1, 1)
+    assert da.split.called
+
+    # When dim too small
+    with pytest.raises(ValueError):
+        da.hsplit(d0, 1)
+
+
+def test_vsplit():
+    d0 = da.random.randint(10, size=(1,), chunks=(1))
+    d1 = da.random.randint(10, size=(10,), chunks=(3))
+    d2 = da.random.randint(10, size=(10, 10), chunks=(3, 3))
+
+    # Test if vsplit hinges on split --> no need for seperate tests
+    da.split = MagicMock()
+    assert da.vsplit(d2, 1)
+    assert da.split.called
+
+    # When dim is too small
+    with pytest.raises(ValueError):
+        vsplit(d0, 1)
+        vsplit(d1, 1)
+
+
+def test_dsplit():
+    d0 = da.random.randint(10, size=(1,), chunks=(1))
+    d1 = da.random.randint(10, size=(10,), chunks=(3))
+    d2 = da.random.randint(10, size=(10, 10), chunks=(3, 3))
+    d3 = da.random.randint(10, size=(10, 10, 10), chunks=(3, 3, 3))
+
+    # Test if vsplit hinges on split --> no need for seperate tests
+    da.split = MagicMock()
+    assert da.dsplit(d3, 1)
+    assert da.split.called
+
+    # When dim is too small
+    with pytest.raises(ValueError):
+        da.dsplit(d0, 1)
+        da.dsplit(d1, 1)
+        da.dsplit(d2, 1)
 
 
 def test_insert():
