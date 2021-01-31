@@ -1590,7 +1590,9 @@ def test_array_split():
     assert_eq_split(np.array_split(na, 2, axis=-1), da.array_split(dar, 2, axis=-1))
 
     ## array_like arguments ##
-    assert_eq_split(np.array_split(na, [2, 3, 5, 10]), da.array_split(dar, [2, 3, 5, 10]))
+    assert_eq_split(
+        np.array_split(na, [2, 3, 5, 10]), da.array_split(dar, [2, 3, 5, 10])
+    )
     assert_eq_split(np.array_split(na, (3, 4) * 4), da.array_split(dar, (3, 4) * 4))
     assert_eq_split(
         np.array_split(na, np.array([-2, -5, -6]), axis=-1),
@@ -1628,9 +1630,9 @@ def test_split():
     d3 = da.random.randint(10, size=(10, 10, 10), chunks=(3, 3, 3))
 
     # Test if split hinges on array_split --> no need for seperate tests
-    dh.array_split = MagicMock()
-    assert split(d3, 1)
-    assert dh.array_split.called
+    da.array_split = MagicMock()
+    assert da.split(d3, 1)
+    assert da.array_split.called
 
     # When: non-equal sub-sections
     with pytest.raises(ValueError):
@@ -1651,7 +1653,7 @@ def test_hsplit():
 
     # Test if hsplit hinges on split --> no need for seperate tests
     da.split = MagicMock()
-    assert hsplit(d1, 1)
+    assert da.hsplit(d1, 1)
     assert da.split.called
 
     # When dim too small
@@ -1671,8 +1673,8 @@ def test_vsplit():
 
     # When dim is too small
     with pytest.raises(ValueError):
-        vsplit(d0, 1)
-        vsplit(d1, 1)
+        da.vsplit(d0, 1)
+        da.vsplit(d1, 1)
 
 
 def test_dsplit():
