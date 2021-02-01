@@ -1616,9 +1616,6 @@ def test_multi_insert():
 
 
 def test_delete():
-    import numpy as np
-    import dask.array as da
-
     x = np.random.randint(10, size=(10, 10))
     a = da.from_array(x, chunks=(5, 5))
 
