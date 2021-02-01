@@ -1027,10 +1027,10 @@ def get_scheduler_lock(collection=None, scheduler=None):
 def ensure_dict(d):
     if type(d) is dict:
         return d
-    elif hasattr(d, "dicts"):
+    elif hasattr(d, "layers"):
         result = {}
         seen = set()
-        for dd in d.dicts.values():
+        for dd in d.layers.values():
             dd_id = id(dd)
             if dd_id not in seen:
                 result.update(dd)
