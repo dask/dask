@@ -188,6 +188,7 @@ def test_text_blocks_to_pandas_simple(reader, files):
     assert list(df.columns) == ["name", "amount", "id"]
 
     values = text_blocks_to_pandas(reader, blocks, header, head, kwargs)
+    values.compute(scheduler="synchronous")
     assert isinstance(values, dd.DataFrame)
     assert hasattr(values, "dask")
     assert len(values.dask) == 3

@@ -90,7 +90,7 @@ class ParquetFunctionWrapper:
 
 class BlockwiseParquet(Blockwise):
     """
-    Specialized BlockwiseIO Layer for read_parquet.
+    Specialized Blockwise Layer for read_parquet.
     Enables HighLevelGraph optimizations (e.g. optimize_read_parquet_getitem).
     """
 
