@@ -1454,9 +1454,10 @@ class ArrowDatasetEngine(Engine):
         # are more than ~32_000 column-chunks (this is a vague heuristic to
         # avoid an excessive graph size).
         partitions = partition_info.get("partitions", None)
-        read_from_paths = read_from_paths or (
-            len(metadata) * (len(schema.names) - len(partitions)) > 32_000
-        )
+        if read_from_paths is None:
+            read_from_paths = (
+                len(metadata) * (len(schema.names) - len(partitions)) > 32_000
+            )
         pass_frags = (
             filters
             and (not read_from_paths)
