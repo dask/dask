@@ -65,7 +65,7 @@ interface is used inside Dask.
         with the keys replaced with their corresponding outputs.
 
     If more than one key is returned, all keys must be tuples sharing the same first
-    string element, which is known as the *collection name*, followed by 0+ arbitrary
+    string element, which is known as the *collection name*, followed by zero or more arbitrary
     hashables. If the output of the graph is represented by a single key, it *may* also
     be a bare string.
 
