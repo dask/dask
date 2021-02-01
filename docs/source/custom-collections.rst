@@ -65,9 +65,9 @@ interface is used inside Dask.
         with the keys replaced with their corresponding outputs.
 
     If more than one key is returned, all keys must be tuples sharing the same first
-    string element, which is known as the *collection name*, followed by zero or more arbitrary
-    hashables. If the output of the graph is represented by a single key, it *may* also
-    be a bare string.
+    string element, which is known as the *collection name*, followed by zero or more
+    arbitrary hashables. If the output of the graph is represented by a single key, it
+    *may* also be a bare string.
 
     These are all valid outputs:
 
@@ -157,23 +157,27 @@ interface is used inside Dask.
 .. method:: __dask_postpersist__(self)
 
     Return the rebuilder and (optional) extra arguments to rebuild an equivalent
-    Dask collection from a persisted graph.
+    Dask collection from a persisted or rebuilt graph.
 
-    Used to implement ``dask.persist``.
+    Used to implement :func:`dask.persist`.
 
     Returns
     -------
     rebuild : callable
-        A function with the signature ``rebuild(dsk, *extra_args)``. Called
-        with a persisted graph containing only the keys and results from
-        ``__dask_keys__``, as well as any extra arguments as specified in
-        ``extra_args``. Should return an equivalent Dask collection with the
-        same keys as ``self``, but with the results already computed. For
-        example, the ``rebuild`` function for ``dask.array.Array`` is just the
-        ``__init__`` method called with the new graph but the same metadata.
+        A function with the signature ``rebuild(dsk, *extra_args, name : str = None)``.
+        ``dsk`` is a Mapping which contains at least the output keys returned by
+        :meth:`__dask_keys__`. The callable should return an equivalent Dask collection with the
+        same keys as ``self``, but with the results that are computed through a
+        different graph. In the case of :func:`dask.persist`, the new graph will have
+        just the output keys and the values already computed.
+
+        If the optional parameter ``name`` is specified, it indicates that all output
+        keys are changing too; e.g. if the previous output of :meth:`__dask_keys__` was
+        ``[("a", 0), ("a", 1)]``, after calling ``rebuild(dsk, *extra_args, name="b")``
+        it must become ``[("b", 0), ("b", 1)]``.
     extra_args : tuple
         Any extra arguments to pass to ``rebuild`` after ``dsk``. If no extra
-        arguments should be an empty tuple.
+        arguments are necessary, it must be an empty tuple.
 
 
 .. note:: It's also recommended to define ``__dask_tokenize__``,
