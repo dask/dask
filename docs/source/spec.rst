@@ -24,7 +24,7 @@ A **Dask graph** is a dictionary mapping **keys** to **computations**:
 A **key** is either:
 
 - a string, or
-- a tuple of 1+ elements, whose first element is a string and the remainder are
+- a tuple of one or more elements, whose first element is a string and the remainder are
   arbitrary hashables:
 
 .. code-block:: python
