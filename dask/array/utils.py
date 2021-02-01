@@ -328,6 +328,15 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
     return True
 
 
+def assert_eq_split(split_a, split_b):
+    """
+    Checks iterables of arrays, and asserts if they are equal
+    """
+    if len(split_a) == len(split_b):
+        return all([assert_eq(*compare) for compare in zip(split_a, split_b)])
+    return False
+
+
 def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
     """Like functools.wraps, but safe to use even if wrapped is not a function.
 
