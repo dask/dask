@@ -1194,8 +1194,8 @@ def union1d(ar1, ar2):
 
 
 @derived_from(np)
-def ravel(array):
-    return array.reshape((-1,))
+def ravel(array_like):
+    return asanyarray(array_like).reshape((-1,))
 
 
 @derived_from(np)
