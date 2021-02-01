@@ -1607,7 +1607,7 @@ def insert(arr, obj, values, axis):
 
 @derived_from(np)
 def append(arr, values, axis=None):
-    # based on numpy's append
+    # based on numpy.append
     arr = asanyarray(arr)
     if axis is None:
         if arr.ndim != 1:
