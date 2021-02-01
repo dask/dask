@@ -1630,7 +1630,7 @@ def test_delete():
     )
     assert_eq(np.delete(x, slice(1, 4), axis=1), da.delete(a, slice(1, 4), axis=1))
     assert_eq(
-        np.delete(x, slice(1, 10, -1), axis=1), da.delete(a, slice(1, -4), axis=1)
+        np.delete(x, slice(1, 10, -1), axis=1), da.delete(a, slice(1, 10, -1), axis=1)
     )
 
     assert_eq(np.delete(a, [4, 2], axis=0), da.delete(a, [4, 2], axis=0))
