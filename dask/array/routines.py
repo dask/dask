@@ -1623,10 +1623,7 @@ def delete(arr, obj, axis):
 
     target_arr = [
         arr[
-            tuple(
-                slice(1, None) if axis == n else slice(None)
-                for n in range(arr.ndim)
-            )
+            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
         ]
         if i != 0
         else arr
