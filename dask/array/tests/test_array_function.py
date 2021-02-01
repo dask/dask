@@ -16,6 +16,7 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 @pytest.mark.parametrize(
     "func",
     [
+        lambda x: np.append(x, x),
         lambda x: np.concatenate([x, x, x]),
         lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),

@@ -1605,6 +1605,18 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
+@derived_from(np)
+def append(arr, values, axis=None):
+    # based on numpy.append
+    arr = asanyarray(arr)
+    if axis is None:
+        if arr.ndim != 1:
+            arr = arr.ravel()
+        values = ravel(asanyarray(values))
+        axis = arr.ndim - 1
+    return concatenate((arr, values), axis=axis)
+
+
 def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
