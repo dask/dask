@@ -49,8 +49,8 @@ interface is used inside Dask.
         Dask collection, and none of the remaining interface methods will be
         called.
 
-    If the collection also specifies :meth:`__dask_layers__`, then dsk must be a
-    :class:`~dask.highlevelgraph.HighLevelGraph` or None.
+    If the collection also specifies :meth:`__dask_layers__`, then ``dsk`` must be a
+    :class:`~dask.highlevelgraph.HighLevelGraph` or ``None``.
 
 
 .. method:: __dask_keys__(self)
