@@ -1632,7 +1632,6 @@ def test_append():
     assert_eq(np.append(x, y1, axis=-1), da.append(a, b1, axis=-1))
 
     # test --> treat values as array_likes
-    print(((0,) * 10,) * 10)
     assert_eq(
         np.append(x, ((0,) * 10,) * 10, axis=None),
         da.append(a, ((0,) * 10,) * 10, axis=None),
