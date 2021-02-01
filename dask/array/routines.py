@@ -1607,6 +1607,10 @@ def insert(arr, obj, values, axis):
 
 @derived_from(np)
 def delete(arr, obj, axis):
+    """
+    NOTE: It ``obj`` is a dask array it is implicitly computed when this function
+    is called.
+    """
     # axis is a required argument here to avoid needing to deal with the numpy
     # default case (which reshapes the array to make it flat)
     axis = validate_axis(axis, arr.ndim)
