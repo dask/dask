@@ -9,7 +9,7 @@ import dask.array as da
 from dask.utils import ignoring
 from dask.array.utils import (
     assert_eq,
-    assert_eq_split,
+    assert_eq_iter,
     same_keys,
     AxisError,
     IS_NEP18_ACTIVE,
@@ -1635,17 +1635,17 @@ def test_split():
     d3 = da.from_array(n3, chunks=(3,) * 3)
 
     ## axis test ##
-    assert_eq_split(np.split(n3, 1, axis=0), da.split(d3, 1, axis=0))
-    assert_eq_split(np.split(n3, 2, axis=-3), da.split(d3, 2, axis=-3))
-    assert_eq_split(np.split(n3, 5, axis=-2), da.split(d3, 5, axis=-2))
-    assert_eq_split(np.split(n3, 5, axis=1), da.split(d3, 5, axis=1))
-    assert_eq_split(np.split(n3, 2, axis=2), da.split(d3, 2, axis=2))
-    assert_eq_split(np.split(n3, 1, axis=-1), da.split(d3, 1, axis=-1))
+    assert_eq_iter(np.split(n3, 1, axis=0), da.split(d3, 1, axis=0))
+    assert_eq_iter(np.split(n3, 2, axis=-3), da.split(d3, 2, axis=-3))
+    assert_eq_iter(np.split(n3, 5, axis=-2), da.split(d3, 5, axis=-2))
+    assert_eq_iter(np.split(n3, 5, axis=1), da.split(d3, 5, axis=1))
+    assert_eq_iter(np.split(n3, 2, axis=2), da.split(d3, 2, axis=2))
+    assert_eq_iter(np.split(n3, 1, axis=-1), da.split(d3, 1, axis=-1))
 
     ## array_like arguments ##
-    assert_eq_split(np.split(n3, [2, 3, 5, 10]), da.split(d3, [2, 3, 5, 10]))
-    assert_eq_split(np.split(n3, (3, 4) * 4), da.split(d3, (3, 4) * 4))
-    assert_eq_split(
+    assert_eq_iter(np.split(n3, [2, 3, 5, 10]), da.split(d3, [2, 3, 5, 10]))
+    assert_eq_iter(np.split(n3, (3, 4) * 4), da.split(d3, (3, 4) * 4))
+    assert_eq_iter(
         np.split(n3, np.array([-2, -5, -6]), axis=-1),
         da.split(d3, np.array([-2, -5, -6]), axis=-1),
     )
@@ -1688,13 +1688,13 @@ def test_hsplit():
     n3 = np.random.randint(10, size=(10,) * 3)
     d3 = da.from_array(n3, chunks=(3,) * 3)
 
-    assert_eq_split(np.hsplit(n1, 1), da.hsplit(d1, 1))
-    assert_eq_split(np.hsplit(n2, 2), da.hsplit(d2, 2))
-    assert_eq_split(np.hsplit(n3, 5), da.hsplit(d3, 5))
+    assert_eq_iter(np.hsplit(n1, 1), da.hsplit(d1, 1))
+    assert_eq_iter(np.hsplit(n2, 2), da.hsplit(d2, 2))
+    assert_eq_iter(np.hsplit(n3, 5), da.hsplit(d3, 5))
 
-    assert_eq_split(np.hsplit(n1, [2, 3, 5, 10]), da.hsplit(d1, [2, 3, 5, 10]))
-    assert_eq_split(np.hsplit(n2, (3, 4) * 4), da.hsplit(d2, (3, 4) * 4))
-    assert_eq_split(
+    assert_eq_iter(np.hsplit(n1, [2, 3, 5, 10]), da.hsplit(d1, [2, 3, 5, 10]))
+    assert_eq_iter(np.hsplit(n2, (3, 4) * 4), da.hsplit(d2, (3, 4) * 4))
+    assert_eq_iter(
         np.hsplit(n3, np.array([-2, -5, -6])),
         da.hsplit(d3, np.array([-2, -5, -6])),
     )
@@ -1734,13 +1734,13 @@ def test_vsplit():
     n3 = np.random.randint(10, size=(10,) * 3)
     d3 = da.from_array(n3, chunks=(3,) * 3)
 
-    assert_eq_split(np.vsplit(n2, 1), da.vsplit(d2, 1))
-    assert_eq_split(np.vsplit(n3, 2), da.vsplit(d3, 2))
-    assert_eq_split(np.vsplit(n2, 5), da.vsplit(d2, 5))
+    assert_eq_iter(np.vsplit(n2, 1), da.vsplit(d2, 1))
+    assert_eq_iter(np.vsplit(n3, 2), da.vsplit(d3, 2))
+    assert_eq_iter(np.vsplit(n2, 5), da.vsplit(d2, 5))
 
-    assert_eq_split(np.vsplit(n2, [2, 3, 5, 10]), da.vsplit(d2, [2, 3, 5, 10]))
-    assert_eq_split(np.vsplit(n2, (3, 4) * 4), da.vsplit(d2, (3, 4) * 4))
-    assert_eq_split(
+    assert_eq_iter(np.vsplit(n2, [2, 3, 5, 10]), da.vsplit(d2, [2, 3, 5, 10]))
+    assert_eq_iter(np.vsplit(n2, (3, 4) * 4), da.vsplit(d2, (3, 4) * 4))
+    assert_eq_iter(
         np.vsplit(n3, np.array([-2, -5, -6])),
         da.vsplit(d3, np.array([-2, -5, -6])),
     )
@@ -1780,13 +1780,13 @@ def test_dsplit():
     n3 = np.random.randint(10, size=(10, 10, 10))
     d3 = da.from_array(n3, chunks=(3, 3, 3))
 
-    assert_eq_split(np.dsplit(n3, 1), da.dsplit(d3, 1))
-    assert_eq_split(np.dsplit(n3, 2), da.dsplit(d3, 2))
-    assert_eq_split(np.dsplit(n3, 5), da.dsplit(d3, 5))
+    assert_eq_iter(np.dsplit(n3, 1), da.dsplit(d3, 1))
+    assert_eq_iter(np.dsplit(n3, 2), da.dsplit(d3, 2))
+    assert_eq_iter(np.dsplit(n3, 5), da.dsplit(d3, 5))
 
-    assert_eq_split(np.dsplit(n3, [2, 3, 5, 10]), da.dsplit(d3, [2, 3, 5, 10]))
-    assert_eq_split(np.dsplit(n3, (3, 4) * 4), da.dsplit(d3, (3, 4) * 4))
-    assert_eq_split(
+    assert_eq_iter(np.dsplit(n3, [2, 3, 5, 10]), da.dsplit(d3, [2, 3, 5, 10]))
+    assert_eq_iter(np.dsplit(n3, (3, 4) * 4), da.dsplit(d3, (3, 4) * 4))
+    assert_eq_iter(
         np.dsplit(n3, np.array([-2, -5, -6])),
         da.dsplit(d3, np.array([-2, -5, -6])),
     )
