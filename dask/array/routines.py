@@ -1587,7 +1587,7 @@ def split(arr, indices_or_sections, axis=0):
 @derived_from(np)
 def hsplit(arr, indices_or_sections):
     # modified from numpy.hsplit
-    if arr.size == 1:
+    if arr.size <= 1:
         raise ValueError("hsplit only works on arrays of 1 or more dimensions")
     if arr.ndim > 1:
         return split(arr, indices_or_sections, 1)
