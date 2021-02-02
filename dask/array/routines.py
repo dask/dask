@@ -1194,8 +1194,8 @@ def union1d(ar1, ar2):
 
 
 @derived_from(np)
-def ravel(array):
-    return array.reshape((-1,))
+def ravel(array_like):
+    return asanyarray(array_like).reshape((-1,))
 
 
 @derived_from(np)
@@ -1603,6 +1603,18 @@ def insert(arr, obj, values, axis):
     interleaved = list(interleave([split_arr, split_values]))
     interleaved = [i for i in interleaved if i.nbytes]
     return concatenate(interleaved, axis=axis)
+
+
+@derived_from(np)
+def append(arr, values, axis=None):
+    # based on numpy.append
+    arr = asanyarray(arr)
+    if axis is None:
+        if arr.ndim != 1:
+            arr = arr.ravel()
+        values = ravel(asanyarray(values))
+        axis = arr.ndim - 1
+    return concatenate((arr, values), axis=axis)
 
 
 def _average(a, axis=None, weights=None, returned=False, is_masked=False):
