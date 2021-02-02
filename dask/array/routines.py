@@ -1461,8 +1461,9 @@ def piecewise(x, condlist, funclist, *args, **kw):
 def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
     """
     Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
-    the number of times it divides `total`, and length-1 tuple containing the remainder when
-    `total` is divided by `divisor`.
+    the number of times it divides `total`, and length-1 or empty tuple containing the remainder when
+    `total` is divided by `divisor`. If `divisor` factors `total`, i.e. if the remainder is 0, then
+    `remainder` is empty.
     """
     multiples = (divisor,) * (total // divisor)
     remainder = ()
