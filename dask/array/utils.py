@@ -340,7 +340,7 @@ def assert_eq_iter(a, b):
     for x, y in zip(a, b):
         print(x, y)
         if isinstance(x, np.ndarray):
-            assert isinstance(y, da.Array)
+            assert isinstance(y, Array)
             assert_eq(x, y)
         elif type(x) is type(y):
             try:
