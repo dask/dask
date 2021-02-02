@@ -466,7 +466,8 @@ elements of ``dask.delayed``:
 .. code:: python
 
     # Saved as dask_tuple.py
-    from dask.base import DaskMethodsMixin, replace_name_in_keys
+    import dask
+    from dask.base import DaskMethodsMixin, replace_name_in_key
     from dask.optimization import cull
 
     # We subclass from DaskMethodsMixin to add common dask methods to our
@@ -504,7 +505,7 @@ elements of ``dask.delayed``:
         def __dask_postpersist__(self):
             # We need to return a callable with the signature
             # rebuild(dsk, *extra_args, name: str = None)
-            return Tuple._rebuild, (self._keys, )
+            return Tuple._rebuild, (self._keys,)
 
         @staticmethod
         def _rebuild(dsk, keys, name=None):
@@ -548,10 +549,7 @@ Demonstrating this class:
     >>> isinstance(x2, Tuple)
     True
     >>> x2.__dask_graph__()
-    {'b': 2,
-     'c': 3,
-     'd': 4,
-     'e': 5}
+    {('x', 'k1'): 2, ('x', 1): 3, ('x', 2): 4, ('x', 3): 5}
     >>> x2.compute()
     (2, 3, 4, 5)
 
