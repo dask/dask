@@ -338,7 +338,6 @@ def assert_eq_iter(a, b):
     """
     assert len(a) == len(b)
     for x, y in zip(a, b):
-        print(x, y)
         if isinstance(x, np.ndarray):
             assert isinstance(y, Array)
             assert_eq(x, y)
