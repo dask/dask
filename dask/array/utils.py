@@ -328,13 +328,30 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
     return True
 
 
-def assert_eq_split(split_a, split_b):
+def assert_eq_iter(a, b):
     """
-    Checks iterables of arrays, and asserts if they are equal
+    function to check if two iterables are equal in all respects
+    except that in locations where `a` contains a ndarray
+    `b` contains an equal Dask.core.Array instead. For potential use
+    on implementing dask iterators or on functions that don't
+    nessassarily return ndarrays.
     """
-    if len(split_a) == len(split_b):
-        return all([assert_eq(*compare) for compare in zip(split_a, split_b)])
-    return False
+    assert len(a) == len(b)
+    for x, y in zip(a, b):
+        print(x, y)
+        if isinstance(x, np.ndarray):
+            assert isinstance(y, da.Array)
+            assert_eq(x, y)
+        elif type(x) is type(y):
+            try:
+                if x == y:
+                    continue
+            except ValueError:
+                pass
+            assert_eq_iter(x, y)
+        else:
+            return False
+    return True
 
 
 def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
