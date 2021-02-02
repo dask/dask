@@ -330,11 +330,11 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
 
 def assert_eq_iter(a, b):
     """
+    For use on iterators containing ndarrays and dask.Arrays
+    
     function to check if two iterables are equal in all respects
     except that in locations where `a` contains a ndarray
-    `b` contains an equal Dask.core.Array instead. For potential use
-    on implementing dask iterators or on functions that don't
-    nessassarily return ndarrays.
+    `b` contains an equal Dask.core.Array instead. 
     """
     assert len(a) == len(b)
     for x, y in zip(a, b):
