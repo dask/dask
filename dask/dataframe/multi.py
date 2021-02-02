@@ -57,6 +57,7 @@ from functools import wraps, partial
 import warnings
 import math
 import operator
+from collections import defaultdict
 
 from tlz import merge_sorted, unique, first
 import numpy as np
@@ -64,7 +65,7 @@ import pandas as pd
 from pandas.api.types import is_dtype_equal, is_categorical_dtype, union_categoricals
 
 from ..base import tokenize, is_dask_collection
-from ..highlevelgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph, Layer
 from ..utils import apply
 from ._compat import PANDAS_GT_100
 from .core import (
@@ -93,6 +94,345 @@ from .utils import (
     group_split_dispatch,
 )
 from ..utils import M
+
+
+class BroadcastJoinLayer(Layer):
+    """Broadcast-based Join Layer
+
+    High-level graph layer for a join operation requiring the
+    smaller collection to be broadcasted to every partition of
+    the larger collection.
+
+    Parameters
+    ----------
+    name : str
+        Name of new (joined) output collection.
+    lhs_name: string
+        "Left" DataFrame collection to join.
+    lhs_npartitions: int
+        Number of partitions in "left" DataFrame collection.
+    left_on : label or list, or array-like
+        Column to join on in the left DataFrame.
+    rhs_name: string
+        "Right" DataFrame collection to join.
+    rhs_npartitions: int
+        Number of partitions in "right" DataFrame collection.
+    right_on : label or list, or array-like
+        Column to join on in the right DataFrame.
+    how : {'left', 'right', 'outer', 'inner'}
+        Kind of join operation to perform.
+    suffixes : 2-length sequence (tuple, list, ...)
+        Suffix to apply to overlapping column names in the left and
+        right side, respectively
+    indicator : boolean or string
+        If True, adds a column to output DataFrame called "_merge" with
+        information on the source of each row. If string, column with
+        information on source of each row will be added to output DataFrame,
+        and column will be named value of string. Information column is
+        Categorical-type and takes on a value of "left_only" for observations
+        whose merge key only appears in `left` DataFrame, "right_only" for
+        observations whose merge key only appears in `right` DataFrame,
+        and "both" if the observation’s merge key is found in both.
+    parts_out : list of int (optional)
+        List of required output-partition indices.
+    annotations : dict (optional)
+        Layer annotations.
+    """
+
+    def __init__(
+        self,
+        lhs_name,
+        lhs_npartitions,
+        lhs_meta,
+        left_on,
+        rhs_name,
+        rhs_npartitions,
+        rhs_meta,
+        right_on,
+        how,
+        broadcast_side,
+        suffixes,
+        indicator,
+        need_split,
+        parts_out=None,
+        annotations=None,
+    ):
+        super().__init__(annotations=annotations)
+        self.lhs_name = lhs_name
+        self.lhs_npartitions = lhs_npartitions
+        self.left_on = left_on
+        self.rhs_name = rhs_name
+        self.rhs_npartitions = rhs_npartitions
+        self.right_on = right_on
+        self.how = how
+        self.broadcast_side = broadcast_side
+        self.suffixes = suffixes
+        self.indicator = indicator
+        self.need_split = need_split
+        if self.how == "right":
+            self.npartitions = self.rhs_npartitions
+            self.divisions = self.rhs.divisions
+        else:
+            self.npartitions = self.lhs_npartitions
+            self.divisions = self.lhs.divisions
+        self.parts_out = parts_out or range(self.npartitions)
+
+        if isinstance(self.left_on, Index):
+            self.left_on = None
+            self.left_index = True
+        else:
+            self.left_index = False
+
+        if isinstance(self.right_on, Index):
+            self.right_on = None
+            self.right_index = True
+        else:
+            self.right_index = False
+
+        self.lhs_meta = lhs_meta
+        self.rhs_meta = rhs_meta
+        self.meta = self.lhs_meta.merge(
+            self.rhs_meta,
+            how=self.how,
+            left_on=self.left_on,
+            right_on=self.right_on,
+            left_index=self.left_index,
+            right_index=self.right_index,
+            suffixes=self.suffixes,
+            indicator=self.indicator,
+        )
+
+        self.token = tokenize(self.lhs_name, self.rhs_name, self.parts_out, self.meta)
+        self.name = "bcast-join-" + self.token
+
+    def get_output_keys(self):
+        return {(self.name, part) for part in self.parts_out}
+
+    def __repr__(self):
+        return "BroadcastJoinLayer<name='{}', how={}, lhs={}, rhs={}>".format(
+            self.name, self.how, self.lhs, self.rhs
+        )
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def __reduce__(self):
+        attrs = [
+            "lhs_name",
+            "lhs_npartitions",
+            "lhs_meta",
+            "left_on",
+            "rhs_name",
+            "rhs_npartitions",
+            "rhs_meta",
+            "right_on",
+            "how",
+            "broadcast_side",
+            "suffixes",
+            "indicator",
+            "parts_out",
+            "annotations",
+        ]
+        return (BroadcastJoinLayer, tuple(getattr(self, attr) for attr in attrs))
+
+    # def __dask_distributed_pack__(self, client):
+    #     from distributed.protocol.serialize import to_serialize
+
+    #     return {
+    #         "name": self.name,
+    #         "lhs_name": self.lhs_name,
+    #         "lhs_npartitions": self.lhs_npartitions,
+    #         "left_on": self.left_on,
+    #         "rhs_name": self.rhs_name,
+    #         "rhs_npartitions": self.rhs_npartitions,
+    #         "right_on": self.right_on,
+    #         "how": self.how,
+    #         "suffixes": self.suffixes,
+    #         "indicator": self.indicator,
+    #         "parts_out": self.parts_out,
+    #         "annotations": self.annotations,
+    #         "npartitions": self.npartitions,
+    #     }
+
+    # @classmethod
+    # def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
+    #     from distributed.worker import dumps_task
+
+    #     # msgpack will convert lists into tuples, here
+    #     # we convert them back to lists
+    #     if isinstance(state["column"], tuple):
+    #         state["column"] = list(state["column"])
+    #     if "inputs" in state:
+    #         state["inputs"] = list(state["inputs"])
+
+    #     # Materialize the layer
+    #     raw = dict(cls(**state))
+
+    #     # Convert all keys to strings and dump tasks
+    #     raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+    #     dsk.update(toolz.valmap(dumps_task, raw))
+
+    #     dependencies.update(
+    #         {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
+    #     )
+
+    #     if state["annotations"]:
+    #         cls.unpack_annotations(annotations, state["annotations"], raw.keys())
+
+    def _keys_to_parts(self, keys):
+        """Simple utility to convert keys to partition indices."""
+        parts = set()
+        for key in keys:
+            try:
+                _name, _part = key
+            except ValueError:
+                continue
+            if _name != self.name:
+                continue
+            parts.add(_part)
+        return parts
+
+    def _cull_dependencies(self, keys, parts_out=None):
+        """Determine the necessary dependencies to produce `keys`.
+
+        For a broadcast join, output partitions always depend on
+        all partitions of the broadcasted collection, but only one
+        partition of the "other" collecction.
+        """
+        if self.broadcast_side == "left":
+            bcast_name = self.lhs_name
+            other_name = self.rhs_name
+            bcast_size = self.lhs_npartitions
+        else:
+            bcast_name = self.rhs_name
+            other_name = self.lhs_name
+            bcast_size = self.rhs_npartitions
+
+        deps = defaultdict(set)
+        parts_out = parts_out or self._keys_to_parts(keys)
+        for part in parts_out:
+            deps[(self.name, part)] |= {(bcast_name, i) for i in range(bcast_size)}
+            deps[(self.name, part)] |= {
+                (other_name, part),
+            }
+        return deps
+
+    def _cull(self, parts_out):
+        return BroadcastJoinLayer(
+            self.lhs_name,
+            self.lhs_npartitions,
+            self.left_on,
+            self.rhs_name,
+            self.rhs_npartitions,
+            self.right_on,
+            self.how,
+            self.broadcast_side,
+            self.suffixes,
+            self.indicator,
+            need_split=self.need_split,
+            parts_out=parts_out,
+            annotations=self.annotations,
+        )
+
+    def cull(self, keys, all_keys):
+        """Cull a BroadcastJoinLayer HighLevelGraph layer.
+
+        The underlying graph will only include the necessary
+        tasks to produce the keys (indicies) included in `parts_out`.
+        Therefore, "culling" the layer only requires us to reset this
+        parameter.
+        """
+        parts_out = self._keys_to_parts(keys)
+        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
+        if parts_out != self.parts_out:
+            culled_layer = self._cull(parts_out)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
+
+    def _construct_graph(self):
+        """Construct graph for a broadcast join operation."""
+
+        kwargs = dict(
+            how=self.how,
+            left_on=self.left_on,
+            right_on=self.right_on,
+            left_index=self.left_index,
+            right_index=self.right_index,
+            suffixes=self.suffixes,
+            indicator=self.indicator,
+        )
+
+        left_on, right_on = self.left_on, self.right_on
+        if isinstance(left_on, list):
+            left_on = (list, tuple(left_on))
+        if isinstance(right_on, list):
+            right_on = (list, tuple(right_on))
+
+        inter_name = "inter-bcast-join-" + self.token
+        split_name = "split-bcast-join-" + self.token
+
+        kwargs["empty_index_dtype"] = self.meta.index.dtype
+        kwargs["categorical_columns"] = self.meta.select_dtypes(
+            include="category"
+        ).columns
+
+        # Loop over output partitions
+        # Culling should allow us to avoid generating tasks
+        # any output partitions that are not requested (via `parts_out`)
+        dsk = {}
+        for i in self.parts_out:
+
+            # Split each lsh partition by hash
+            if self.need_split:
+                dsk[(split_name, i)] = (
+                    _split_partition,
+                    (self.lhs_name, i),
+                    self.left_on,
+                    self.rhs_npartitions,
+                )
+
+            _concat_list = []
+            for j in range(self.rhs_npartitions):
+                inter_key = (inter_name, i, j)
+                _concat_list.append(inter_key)
+                dsk[inter_key] = (
+                    apply,
+                    merge_chunk,
+                    [
+                        (
+                            operator.getitem,
+                            (split_name, i),
+                            j,
+                        )
+                        if self.need_split
+                        else (self.lhs_name, i),
+                        (self.rhs_name, j),
+                    ],
+                    kwargs,
+                )
+            dsk[(self.name, i)] = (_concat_wrapper, _concat_list)
+
+        return dsk
 
 
 def align_partitions(*dfs):
@@ -424,7 +764,7 @@ def broadcast_join(
     suffixes=("_x", "_y"),
     shuffle=None,
     indicator=False,
-    part_ids=None,
+    parts_out=None,
 ):
     """Join two DataFrames on particular columns by broadcasting
 
@@ -467,84 +807,36 @@ def broadcast_join(
         rhs_name = rhs._name
         rhs_dep = rhs
 
-    if isinstance(left_on, Index):
-        left_on = None
-        left_index = True
-    else:
-        left_index = False
+    broadcast_side = "right"  # TODO: Support both sides
 
-    if isinstance(right_on, Index):
-        right_on = None
-        right_index = True
-    else:
-        right_index = False
-
-    kwargs = dict(
-        how=how,
-        left_on=left_on,
-        right_on=right_on,
-        left_index=left_index,
-        right_index=right_index,
-        suffixes=suffixes,
-        indicator=indicator,
+    broadcast_join_layer = BroadcastJoinLayer(
+        lhs._name,
+        lhs.npartitions,
+        lhs._meta_nonempty,
+        left_on,
+        rhs_name,
+        rhs.npartitions,
+        rhs._meta_nonempty,
+        right_on,
+        how,
+        broadcast_side,
+        suffixes,
+        indicator,
+        need_split,
+        parts_out=parts_out,
     )
 
-    # dummy result
-    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
-
-    if isinstance(left_on, list):
-        left_on = (list, tuple(left_on))
-    if isinstance(right_on, list):
-        right_on = (list, tuple(right_on))
-
-    part_ids = part_ids or range(lhs.npartitions)
-    npartitions = len(part_ids)
-    token = tokenize(lhs, rhs, part_ids, **kwargs)
-    name = "bcast-join-" + token
-    inter_name = "inter-bcast-join-" + token
-    split_name = "split-bcast-join-" + token
-
-    kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
-
-    # Loop over output partitions
-    # Culling should allow us to avoid generating tasks
-    # any output partitions that are not requested (via `part_ids`)
-    dsk = {}
-    for i in part_ids:
-
-        # Split each lsh partition by hash
-        if need_split:
-            dsk[(split_name, i)] = (
-                _split_partition,
-                (lhs._name, i),
-                left_on,
-                rhs.npartitions,
-            )
-
-        _concat_list = []
-        for j in range(rhs.npartitions):
-            inter_key = (inter_name, i, j)
-            _concat_list.append(inter_key)
-            dsk[inter_key] = (
-                apply,
-                merge_chunk,
-                [
-                    (
-                        operator.getitem,
-                        (split_name, i),
-                        j,
-                    )
-                    if need_split
-                    else (lhs._name, i),
-                    (rhs_name, j),
-                ],
-                kwargs,
-            )
-        dsk[(name, i)] = (_concat_wrapper, _concat_list)
-
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs, rhs_dep])
-    return new_dd_object(graph, name, meta, lhs.divisions)
+    graph = HighLevelGraph.from_collections(
+        broadcast_join_layer.name,
+        broadcast_join_layer,
+        dependencies=[lhs, rhs_dep],
+    )
+    return new_dd_object(
+        graph,
+        broadcast_join_layer.name,
+        broadcast_join_layer.meta,
+        broadcast_join_layer.divisions,
+    )
 
 
 def hash_join(
