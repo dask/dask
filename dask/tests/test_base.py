@@ -622,13 +622,13 @@ class Tuple(DaskMethodsMixin):
         return tuple, ()
 
     def __dask_postpersist__(self):
-        def rebuild(dsk, name=None):
-            keys = self._keys
-            if name is not None:
-                keys = [replace_name_in_key(key, name) for key in keys]
-            return Tuple(dsk, keys)
+        return Tuple._rebuild, (self._keys,)
 
-        return rebuild, ()
+    @staticmethod
+    def _rebuild(dsk, keys, name=None):
+        if name is not None:
+            keys = [replace_name_in_key(key, name) for key in keys]
+        return Tuple(dsk, keys)
 
 
 def test_custom_collection():
@@ -689,6 +689,7 @@ def test_custom_collection():
     t2 = t.persist()
     assert isinstance(t2, Tuple)
     assert t2._keys == t._keys
+    assert sorted(t2._dask.values()) == [1, 2, 3, 4, 7]
     assert t2.compute() == (1, 2, 3, 4, 7)
 
     w2, x2, y2, z2 = dask.persist(w, x, y, z)
@@ -768,14 +769,14 @@ def test_persist_array():
 
 @pytest.mark.skipif("not da")
 def test_persist_array_change_name():
-    a = da.zeros(4, chunks=2)
+    a = da.zeros(4, dtype=int, chunks=2)
     rebuild, args = a.__dask_postpersist__()
     dsk = {("b", 0): np.array([1, 2]), ("b", 1): np.array([3, 4])}
     b = rebuild(dsk, *args, name="b")
     assert isinstance(b, da.Array)
     assert b.name == "b"
     assert b.__dask_keys__() == [("b", 0), ("b", 1)]
-    np.testing.assert_array_equal(b.compute(), [1, 2, 3, 4])
+    da.utils.assert_eq(b, [1, 2, 3, 4])
 
 
 @pytest.mark.skipif("not dd")
@@ -785,8 +786,8 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    dd._compat.tm.assert_series_equal(out1, df.a + 1)
-    dd._compat.tm.assert_series_equal(out2, df.a + df.b)
+    dd.utils.assert_eq(out1, df.a + 1)
+    dd.utils.assert_eq(out2, df.a + df.b)
 
 
 @pytest.mark.skipif("not dd")
@@ -797,7 +798,7 @@ def test_persist_dataframe():
     ddf2 = ddf1.persist()
     assert isinstance(ddf2, dd.DataFrame)
     assert len(ddf2.__dask_graph__()) == 2
-    dd._compat.tm.assert_frame_equal(ddf2.compute(), ddf1.compute())
+    dd.utils.assert_eq(ddf2, ddf1)
 
 
 @pytest.mark.skipif("not dd")
@@ -808,7 +809,7 @@ def test_persist_series():
     dds2 = dds1.persist()
     assert isinstance(dds2, dd.Series)
     assert len(dds2.__dask_graph__()) == 2
-    dd._compat.tm.assert_series_equal(dds2.compute(), dds1.compute())
+    dd.utils.assert_eq(dds2, dds1)
 
 
 @pytest.mark.skipif("not dd")
@@ -819,7 +820,7 @@ def test_persist_scalar():
     dds2 = dds1.persist()
     assert isinstance(dds2, dd.core.Scalar)
     assert len(dds2.__dask_graph__()) == 1
-    assert dds2.compute() == dds1.compute()
+    dd.utils.assert_eq(dds2, dds1)
 
 
 @pytest.mark.skipif("not dd")
@@ -831,7 +832,7 @@ def test_persist_dataframe_change_name():
     dsk = {("x", 0): df2.iloc[:2], ("x", 1): df2.iloc[2:]}
     ddf2 = rebuild(dsk, *args, name="x")
     assert ddf2.__dask_keys__() == [("x", 0), ("x", 1)]
-    dd._compat.tm.assert_frame_equal(ddf2.compute(), df2)
+    dd.utils.assert_eq(ddf2, df2)
 
 
 @pytest.mark.skipif("not dd")
@@ -843,7 +844,7 @@ def test_persist_series_change_name():
     dsk = {("x", 0): ds2.iloc[:2], ("x", 1): ds2.iloc[2:]}
     dds2 = rebuild(dsk, *args, name="x")
     assert dds2.__dask_keys__() == [("x", 0), ("x", 1)]
-    dd._compat.tm.assert_series_equal(dds2.compute(), ds2)
+    dd.utils.assert_eq(dds2, ds2)
 
 
 @pytest.mark.skipif("not dd")
@@ -853,7 +854,7 @@ def test_persist_scalar_change_name():
     rebuild, args = dds1.__dask_postpersist__()
     dds2 = rebuild({("x", 0): 5}, *args, name="x")
     assert dds2.__dask_keys__() == [("x", 0)]
-    assert dds2.compute() == 5
+    dd.utils.assert_eq(dds2, 5)
 
 
 @pytest.mark.skipif("not dd or not da")
@@ -864,7 +865,7 @@ def test_compute_array_dataframe():
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    dd._compat.tm.assert_series_equal(df_out, df.a + 2)
+    dd.utils.assert_eq(df_out, df.a + 2)
 
 
 @pytest.mark.skipif("not dd")
@@ -1176,7 +1177,7 @@ def test_persist_bag():
     b = a.persist(scheduler="sync")
     assert isinstance(b, db.Bag)
     assert len(b.__dask_graph__()) == 2
-    assert b.compute(scheduler="sync") == a.compute(scheduler="sync")
+    db.utils.assert_eq(a, b)
 
 
 @pytest.mark.skipif("not db")
@@ -1186,7 +1187,7 @@ def test_persist_item():
     b = a.persist(scheduler="sync")
     assert isinstance(b, db.Item)
     assert len(b.__dask_graph__()) == 1
-    assert b.compute(scheduler="sync") == a.compute(scheduler="sync")
+    db.utils.assert_eq(a, b)
 
 
 @pytest.mark.skipif("not db")
@@ -1198,7 +1199,7 @@ def test_persist_bag_change_name():
     assert isinstance(b, db.Bag)
     assert b.name == "b"
     assert b.__dask_keys__() == [("b", 0), ("b", 1)]
-    assert b.compute(scheduler="sync") == [4, 5, 6]
+    db.utils.assert_eq(b, [4, 5, 6])
 
 
 @pytest.mark.skipif("not db")
@@ -1208,7 +1209,7 @@ def test_persist_item_change_name():
     b = rebuild({"x": 4}, *args, name="x")
     assert isinstance(b, db.Item)
     assert b.__dask_keys__() == ["x"]
-    assert b.compute(scheduler="sync") == 4
+    db.utils.assert_eq(b, 4)
 
 
 def test_normalize_function_limited_size():
