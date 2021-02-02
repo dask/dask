@@ -1578,7 +1578,7 @@ def test_array_split():
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
     # Note: 'assert_eq' seems to expect a return type of array, #
     # or at least something the allows for a .all() comparison  #
-    # hence the use of `assert_eq_split` function:              #
+    # hence the use of `assert_eq_siter` function:              #
     # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
 
     na = np.random.randint(10, size=(10, 10, 2))
@@ -1586,27 +1586,27 @@ def test_array_split():
     print("test")
 
     ## axis test ##
-    assert_eq_split(np.array_split(na, 1, axis=0), da.array_split(dar, 1, axis=0))
-    assert_eq_split(np.array_split(na, 3, axis=-3), da.array_split(dar, 3, axis=-3))
-    assert_eq_split(np.array_split(na, 2, axis=-2), da.array_split(dar, 2, axis=-2))
-    assert_eq_split(np.array_split(na, 5, axis=1), da.array_split(dar, 5, axis=1))
-    assert_eq_split(np.array_split(na, 4, axis=2), da.array_split(dar, 4, axis=2))
-    assert_eq_split(np.array_split(na, 2, axis=-1), da.array_split(dar, 2, axis=-1))
+    assert_eq_iter(np.array_split(na, 1, axis=0), da.array_split(dar, 1, axis=0))
+    assert_eq_iter(np.array_split(na, 3, axis=-3), da.array_split(dar, 3, axis=-3))
+    assert_eq_iter(np.array_split(na, 2, axis=-2), da.array_split(dar, 2, axis=-2))
+    assert_eq_iter(np.array_split(na, 5, axis=1), da.array_split(dar, 5, axis=1))
+    assert_eq_iter(np.array_split(na, 4, axis=2), da.array_split(dar, 4, axis=2))
+    assert_eq_iter(np.array_split(na, 2, axis=-1), da.array_split(dar, 2, axis=-1))
 
     ## array_like arguments ##
-    assert_eq_split(
+    assert_eq_iter(
         np.array_split(na, [2, 3, 5, 10]), da.array_split(dar, [2, 3, 5, 10])
     )
-    assert_eq_split(np.array_split(na, (3, 4) * 4), da.array_split(dar, (3, 4) * 4))
-    assert_eq_split(
+    assert_eq_iter(np.array_split(na, (3, 4) * 4), da.array_split(dar, (3, 4) * 4))
+    assert_eq_iter(
         np.array_split(na, np.array([-2, -5, -6]), axis=-1),
         da.array_split(dar, np.array([-2, -5, -6]), axis=-1),
     )
 
     # numpy.split_array will do some quirks contray to the docs i.e. force ints and accept array_like.
     # for sake of bearing with the conduct tests to see if dask.array_split does the same
-    assert_eq_split(np.array_split(na, 3.4123), da.array_split(dar, 3.4123))
-    assert_eq_split(
+    assert_eq_iter(np.array_split(na, 3.4123), da.array_split(dar, 3.4123))
+    assert_eq_iter(
         np.array_split((1, 2, 3) * 10, bytes(123)),
         da.array_split((1, 2, 3) * 10, bytes(123)),
     )
