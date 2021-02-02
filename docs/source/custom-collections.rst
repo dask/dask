@@ -466,7 +466,7 @@ elements of ``dask.delayed``:
 .. code:: python
 
     # Saved as dask_tuple.py
-    from dask.base import DaskMethodsMixin
+    from dask.base import DaskMethodsMixin, replace_name_in_keys
     from dask.optimization import cull
 
     # We subclass from DaskMethodsMixin to add common dask methods to our
@@ -502,16 +502,21 @@ elements of ``dask.delayed``:
             return tuple, ()
 
         def __dask_postpersist__(self):
-            # Since our __init__ takes a graph as its first argument, our
-            # rebuild function can just be the class itself. For extra
-            # arguments we also return a tuple containing just the keys.
-            return Tuple, (self._keys,)
+            # We need to return a callable with the signature
+            # rebuild(dsk, *extra_args, name: str = None)
+            return Tuple._rebuild, (self._keys, )
+
+        @staticmethod
+        def _rebuild(dsk, keys, name=None):
+            if name is not None:
+                keys = [replace_name_in_key(key, name) for key in keys]
+            return Tuple(dsk, keys)
 
         def __dask_tokenize__(self):
             # For tokenize to work we want to return a value that fully
             # represents this object. In this case it's the list of keys
             # to be computed.
-            return tuple(self._keys)
+            return self._keys
 
 Demonstrating this class:
 
@@ -521,14 +526,16 @@ Demonstrating this class:
     >>> from operator import add, mul
 
     # Define a dask graph
-    >>> dsk = {'a': 1,
-    ...        'b': 2,
-    ...        'c': (add, 'a', 'b'),
-    ...        'd': (mul, 'b', 2),
-    ...        'e': (add, 'b', 'c')}
+    >>> dsk = {"k0": 1,
+    ...        ("x", "k1"): 2,
+    ...        ("x", 1): (add, "k0", ("x", "k1")),
+    ...        ("x", 2): (mul, ("x", "k1"), 2),
+    ...        ("x", 3): (add, ("x", "k1"), ("x", 1))}
 
-    # The output keys for this graph
-    >>> keys = ['b', 'c', 'd', 'e']
+    # The output keys for this graph.
+    # The first element of each tuple must be the same across the whole collection;
+    # the remainder are arbitrary, unique hashables
+    >>> keys = [("x", "k1"), ("x", 1), ("x", 2), ("x", 3)]
 
     >>> x = Tuple(dsk, keys)
 
