@@ -986,6 +986,24 @@ def test_ravel_1D_no_op():
     assert_eq(dx[dx > 2].ravel(), x[x > 2].ravel())
 
 
+def test_ravel_with_array_like():
+    # int
+    assert_eq(np.ravel(0), da.ravel(0))
+    assert isinstance(da.ravel(0), da.core.Array)
+
+    # list
+    assert_eq(np.ravel([0, 0]), da.ravel([0, 0]))
+    assert isinstance(da.ravel([0, 0]), da.core.Array)
+
+    # tuple
+    assert_eq(np.ravel((0, 0)), da.ravel((0, 0)))
+    assert isinstance(da.ravel((0, 0)), da.core.Array)
+
+    # nested i.e. tuples in list
+    assert_eq(np.ravel([(0,), (0,)]), da.ravel([(0,), (0,)]))
+    assert isinstance(da.ravel([(0,), (0,)]), da.core.Array)
+
+
 @pytest.mark.parametrize("is_func", [True, False])
 @pytest.mark.parametrize("axis", [None, 0, -1, (0, -1)])
 def test_squeeze(is_func, axis):
@@ -1604,6 +1622,54 @@ def test_insert():
 
     with pytest.raises(AxisError):
         da.insert(a, [3], -1, axis=-3)
+
+
+def test_append():
+    x = np.random.randint(10, size=(10, 10))
+    a = da.from_array(x, chunks=(5, 5))
+
+    # appendage for axis 1 / -1
+    y1 = np.random.randint(10, size=(10, 5))
+    b1 = da.from_array(y1, chunks=(4, 4))
+
+    # appendage for axis 0 / -2
+    y0 = np.random.randint(10, size=(5, 10))
+    b0 = da.from_array(y0, chunks=(4, 4))
+
+    # test axis None
+    assert_eq(np.append(x, x, axis=None), da.append(a, a, axis=None))
+    assert_eq(np.append(x, y0, axis=None), da.append(a, b0, axis=None))
+    assert_eq(np.append(x, y1, axis=None), da.append(a, b1, axis=None))
+
+    # test axis 0 / -2
+    assert_eq(np.append(x, y0, axis=0), da.append(a, b0, axis=0))
+    assert_eq(np.append(x, y0, axis=-2), da.append(a, b0, axis=-2))
+
+    # test axis 1 / -1
+    assert_eq(np.append(x, y1, axis=1), da.append(a, b1, axis=1))
+    assert_eq(np.append(x, y1, axis=-1), da.append(a, b1, axis=-1))
+
+    # test --> treat values as array_likes
+    assert_eq(
+        np.append(x, ((0,) * 10,) * 10, axis=None),
+        da.append(a, ((0,) * 10,) * 10, axis=None),
+    )
+    assert_eq(
+        np.append(x, ((0,) * 10,) * 10, axis=0), da.append(a, ((0,) * 10,) * 10, axis=0)
+    )
+    assert_eq(
+        np.append(x, ((0,) * 10,) * 10, axis=1), da.append(a, ((0,) * 10,) * 10, axis=1)
+    )
+
+    # check AxisError
+    with pytest.raises(AxisError):
+        da.append(a, ((0,) * 10,) * 10, axis=2)
+    with pytest.raises(AxisError):
+        da.append(a, ((0,) * 10,) * 10, axis=-3)
+
+    # check ValueError if dimensions don't align
+    with pytest.raises(ValueError):
+        da.append(a, (0,) * 10, axis=0)
 
 
 def test_multi_insert():
