@@ -22,8 +22,7 @@ def optimize(dsk, keys, **kwargs):
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
-    # import pdb; pdb.set_trace()
-    if True:  # not config.get("optimization.fuse.active"):
+    if not config.get("optimization.fuse.active"):
         return dsk
 
     dependencies = dsk.get_all_dependencies()
