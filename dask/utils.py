@@ -12,13 +12,17 @@ from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
-from typing import Iterable, Optional
+from typing import Dict, Iterable, Mapping, Optional, TypeVar
 import uuid
 from weakref import WeakValueDictionary
 from functools import lru_cache
 from _thread import RLock
 
 from .core import get_deps
+
+
+K = TypeVar("K")
+V = TypeVar("V")
 
 
 system_encoding = sys.getdefaultencoding()
@@ -1024,10 +1028,20 @@ def get_scheduler_lock(collection=None, scheduler=None):
     return SerializableLock()
 
 
-def ensure_dict(d):
+def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
+    """Convert a generic Mapping into a dict.
+    Optimize use case of :class:`~dask.highlevelgraph.HighLevelGraph`.
+
+    Parameters
+    ----------
+    d : Mapping
+    copy : bool
+        If True, guarantee that the return value is always a shallow copy of d;
+        otherwise it may be the input itself.
+    """
     if type(d) is dict:
-        return d
-    elif hasattr(d, "layers"):
+        return d.copy() if copy else d  # type: ignore
+    if hasattr(d, "layers"):
         result = {}
         seen = set()
         for dd in d.layers.values():
