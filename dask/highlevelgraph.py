@@ -2,7 +2,6 @@ import abc
 import collections.abc
 import warnings
 from typing import (
-    AbstractSet,
     Any,
     Dict,
     Hashable,
@@ -68,7 +67,7 @@ class Layer(collections.abc.Mapping):
         """Return whether the layer is materialized or not"""
         return True
 
-    def get_output_keys(self) -> AbstractSet:
+    def get_output_keys(self) -> Set:
         """Return a set of all output keys
 
         Output keys are all keys in the layer that might be referenced by
@@ -475,26 +474,22 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
 
-    layers: Mapping[str, Layer]
-    dependencies: Mapping[str, Set]
-    key_dependencies: [Mapping[Hashable, Set]]
-    _keys: Optional[set]
-    _all_external_keys: Optional[set]
-
     def __init__(
         self,
-        layers: Mapping[str, Mapping],
+        layers: Mapping[str, Layer],
         dependencies: Mapping[str, Set],
         key_dependencies: Optional[Mapping[Hashable, Set]] = None,
     ):
         self._keys = None
         self._all_external_keys = None
+        self.layers = layers
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies if key_dependencies else {}
 
         # Makes sure that all layers are `Layer`
         self.layers = {
-            k: v if isinstance(v, Layer) else BasicLayer(v) for k, v in layers.items()
+            k: v if isinstance(v, Layer) else BasicLayer(v)
+            for k, v in self.layers.items()
         }
 
     @classmethod
@@ -581,27 +576,9 @@ class HighLevelGraph(Mapping):
         return cls(layers, deps)
 
     def __getitem__(self, key):
-        # Attempt O(1) direct access first, under the assumption that layer names match
-        # either the keys (Delayed, in most cases) or the first element of the key
-        # tuples (Array, Bag, DataFrame, Series). This assumption could be wrong for
-        # third-party collections and/or transforms, and is sometimes wrong for Delayed
-        # objects too.
-        try:
-            return self.layers[key][key]
-        except KeyError:
-            pass
-        try:
-            return self.layers[key[0]][key]
-        except (KeyError, IndexError, TypeError):
-            pass
-
-        # Fall back to O(n) access
         for d in self.layers.values():
-            try:
+            if key in d:
                 return d[key]
-            except KeyError:
-                pass
-
         raise KeyError(key)
 
     def __len__(self):
