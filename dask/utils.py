@@ -1041,16 +1041,16 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
     """
     if type(d) is dict:
         return d.copy() if copy else d  # type: ignore
-    if hasattr(d, "layers"):
-        result = {}
-        seen = set()
-        for dd in d.layers.values():
-            dd_id = id(dd)
-            if dd_id not in seen:
-                result.update(dd)
-                seen.add(dd_id)
-        return result
-    return dict(d)
+    try:
+        layers = d.layers  # type: ignore
+    except AttributeError:
+        return dict(d)
+
+    unique_layers = {id(layer): layer for layer in layers.values()}
+    result = {}
+    for layer in unique_layers.values():
+        result.update(layer)
+    return result
 
 
 class OperatorMethodMixin(object):
