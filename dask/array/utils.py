@@ -397,7 +397,10 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     elif isinstance(a, Array):
         a = a.compute(scheduler="sync")
 
-    return np_func(a, like=meta_from_array(like), **kwargs)
+    try:
+        return np_func(a, like=meta_from_array(like), **kwargs)
+    except TypeError:
+        return np_func(a, **kwargs)
 
 
 def array_safe(a, like, **kwargs):
