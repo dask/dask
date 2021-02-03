@@ -60,7 +60,7 @@ import operator
 from collections import defaultdict
 import pickle
 
-from tlz import merge_sorted, unique, first, valmap, merge as tlz_merge
+from tlz import merge_sorted, unique, first, valmap
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_dtype_equal, is_categorical_dtype, union_categoricals
@@ -1233,8 +1233,6 @@ class BroadcastJoinLayer(Layer):
         lhs_npartitions,
         rhs_name,
         rhs_npartitions,
-        empty_index_dtype=None,
-        categorical_columns=None,
         parts_out=None,
         annotations=None,
         **merge_kwargs,
@@ -1246,8 +1244,6 @@ class BroadcastJoinLayer(Layer):
         self.lhs_npartitions = lhs_npartitions
         self.rhs_name = rhs_name
         self.rhs_npartitions = rhs_npartitions
-        self.empty_index_dtype = empty_index_dtype
-        self.categorical_columns = categorical_columns
         self.parts_out = parts_out or set(range(self.npartitions))
         self.merge_kwargs = merge_kwargs
         self.how = self.merge_kwargs.get("how")
@@ -1289,6 +1285,15 @@ class BroadcastJoinLayer(Layer):
         return len(self._dict)
 
     def __dask_distributed_pack__(self, client):
+
+        # Pickle complex kwarg arguments
+        _merge_kwargs = {}
+        for k, v in self.merge_kwargs.items():
+            if not isinstance(v, (list, tuple, bool, str)):
+                _merge_kwargs[k] = pickle.dumps(v)
+            else:
+                _merge_kwargs[k] = v
+
         return {
             "name": self.name,
             "npartitions": self.npartitions,
@@ -1296,11 +1301,9 @@ class BroadcastJoinLayer(Layer):
             "lhs_npartitions": self.lhs_npartitions,
             "rhs_name": self.rhs_name,
             "rhs_npartitions": self.rhs_npartitions,
-            "empty_index_dtype": pickle.dumps(self.empty_index_dtype),
-            "categorical_columns": pickle.dumps(self.categorical_columns),
             "parts_out": self.parts_out,
             "annotations": self.pack_annotations(),
-            "merge_kwargs": self.merge_kwargs,
+            "merge_kwargs": _merge_kwargs,
         }
 
     @classmethod
@@ -1315,10 +1318,6 @@ class BroadcastJoinLayer(Layer):
         # a key if it is a `tuple`.  Convert to list
         if isinstance(state["suffixes"], tuple):
             state["suffixes"] = list(state["suffixes"])
-        if isinstance(state["left_on"], tuple):
-            state["left_on"] = list(state["left_on"])
-        if isinstance(state["right_on"], tuple):
-            state["right_on"] = list(state["right_on"])
 
         # Materialize the layer
         raw = dict(cls(**state))
@@ -1383,8 +1382,6 @@ class BroadcastJoinLayer(Layer):
             self.rhs_name,
             self.rhs_npartitions,
             self.merge_kwargs,
-            empty_index_dtype=self.empty_index_dtype,
-            categorical_columns=self.categorical_columns,
             annotations=self.annotations,
             parts_out=parts_out,
         )
@@ -1411,14 +1408,6 @@ class BroadcastJoinLayer(Layer):
         inter_name = "inter-" + self.name
         split_name = "split-" + self.name
 
-        kwargs = tlz_merge(
-            self.merge_kwargs,
-            {
-                "empty_index_dtype": self.empty_index_dtype,
-                "categorical_columns": self.categorical_columns,
-            },
-        )
-
         # Loop over output partitions
         # Culling should allow us to avoid generating tasks
         # any output partitions that are not requested (via `parts_out`)
@@ -1440,7 +1429,7 @@ class BroadcastJoinLayer(Layer):
                 _concat_list.append(inter_key)
                 dsk[inter_key] = (
                     apply,
-                    merge_chunk,
+                    _merge_chunk_wrapper,
                     [
                         (
                             operator.getitem,
@@ -1451,7 +1440,7 @@ class BroadcastJoinLayer(Layer):
                         else (self.lhs_name, i),
                         (self.rhs_name, j),
                     ],
-                    kwargs,
+                    self.merge_kwargs,
                 )
             dsk[(self.name, i)] = (_concat_wrapper, _concat_list)
 
@@ -1525,6 +1514,9 @@ def _split_partition(df, on, nsplits):
     Hashing will be performed on the columns or index specified by `on`.
     """
 
+    if isinstance(on, bytes):
+        on = pickle.loads(on)
+
     if isinstance(on, str) or pd.api.types.is_list_like(on):
         # If `on` is a column name or list of column names, we
         # can hash/split by those columns.
@@ -1561,16 +1553,12 @@ def _concat_wrapper(dfs):
 
 
 def _merge_chunk_wrapper(*args, **kwargs):
-
-    empty_index_dtype = kwargs.get("empty_index_dtype", None)
-    if isinstance(empty_index_dtype, bytes):
-        kwargs["empty_index_dtype"] = pickle.loads(kwargs["empty_index_dtype"])
-
-    categorical_columns = kwargs.get("categorical_columns", None)
-    if isinstance(categorical_columns, bytes):
-        kwargs["categorical_columns"] = pickle.loads(kwargs["categorical_columns"])
-
-    return merge_chunk(*args, **kwargs)
+    return merge_chunk(
+        *args,
+        **{
+            k: pickle.loads(v) if isinstance(v, bytes) else v for k, v in kwargs.items()
+        },
+    )
 
 
 def broadcast_join(
@@ -1648,6 +1636,8 @@ def broadcast_join(
 
     # dummy result
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **merge_kwargs)
+    merge_kwargs["empty_index_dtype"] = meta.index.dtype
+    merge_kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
     if how == "right":
         npartitions = rhs.npartitions
@@ -1665,8 +1655,6 @@ def broadcast_join(
         lhs.npartitions,
         rhs_name,
         rhs.npartitions,
-        empty_index_dtype=meta.index.dtype,
-        categorical_columns=meta.select_dtypes(include="category").columns,
         parts_out=parts_out,
         **merge_kwargs,
     )
