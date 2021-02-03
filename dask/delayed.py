@@ -8,7 +8,7 @@ from tlz import curry, concat, unique, merge
 
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
-from .base import tokenize as _tokenize
+from .base import replace_name_in_key, tokenize as _tokenize
 from .compatibility import is_dataclass, dataclass_fields
 
 from .core import quote
@@ -467,10 +467,6 @@ def optimize(dsk, keys, **kwargs):
     return dsk2
 
 
-def rebuild(dsk, key, length):
-    return Delayed(key, dsk, length)
-
-
 class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     """Represents a value to be computed by dask.
 
@@ -513,7 +509,11 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return single_key, ()
 
     def __dask_postpersist__(self):
-        return rebuild, (self._key, getattr(self, "_length", None))
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, name=None):
+        key = replace_name_in_key(self.key, name) if name else self.key
+        return Delayed(key, dsk, getattr(self, "_length", None))
 
     def __getstate__(self):
         return tuple(getattr(self, i) for i in self.__slots__)

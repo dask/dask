@@ -59,8 +59,8 @@ def blockwise(
 ):
     """Create a Blockwise symbolic mutable mapping
 
-    This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
-    returns a symbolic Blockwise object.
+    This is like the ``make_blockwise_graph`` function, but rather than construct a
+    dict, it returns a symbolic Blockwise object.
 
     See Also
     --------

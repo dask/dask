@@ -37,10 +37,16 @@ from tlz import (
 
 from .. import config
 from .avro import to_avro
-from ..base import tokenize, dont_optimize, DaskMethodsMixin
+from ..base import tokenize, dont_optimize, replace_name_in_key, DaskMethodsMixin
 from ..bytes import open_files
 from ..context import globalmethod
-from ..core import quote, istask, get_dependencies, reverse_dict, flatten
+from ..core import (
+    quote,
+    istask,
+    get_dependencies,
+    reverse_dict,
+    flatten,
+)
 from ..sizeof import sizeof
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -362,7 +368,11 @@ class Item(DaskMethodsMixin):
         return finalize_item, ()
 
     def __dask_postpersist__(self):
-        return Item, (self.key,)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, name=None):
+        key = replace_name_in_key(self.key, name) if name else self.key
+        return Item(dsk, key)
 
     @staticmethod
     def from_delayed(value):
@@ -468,7 +478,10 @@ class Bag(DaskMethodsMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return type(self), (self.name, self.npartitions)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, name=None):
+        return type(self)(dsk, name or self.name, self.npartitions)
 
     def __str__(self):
         return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
