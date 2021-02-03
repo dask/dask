@@ -974,17 +974,22 @@ def test_percentile():
     result = da.percentile(d, qs, interpolation="midpoint")
     assert_eq(result, np.array([0, 5, 20], dtype=result.dtype))
 
-    # Currently fails, tokenize(cupy.array(...)) is not deterministic.
-    # See https://github.com/dask/dask/issues/6718
-    # assert same_keys(
-    #     da.percentile(d, qs),
-    #     da.percentile(d, qs)
-    # )
-
     assert not same_keys(
         da.percentile(d, qs, interpolation="midpoint"),
         da.percentile(d, [0, 50], interpolation="midpoint"),
     )
+
+
+@pytest.mark.xfail(
+    reason="Non-deterministic tokenize(cupy.array(...)), "
+    "see https://github.com/dask/dask/issues/6718"
+)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
+def test_percentile_tokenize():
+    d = da.from_array(cupy.ones((16,)), chunks=(4,))
+    qs = np.array([0, 50, 100])
+
+    assert same_keys(da.percentile(d, qs), da.percentile(d, qs))
 
 
 @pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
