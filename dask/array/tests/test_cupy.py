@@ -931,13 +931,17 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
+@pytest.mark.parametrize(
+    "arr", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))]
 )
-@pytest.mark.parametrize("arr", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))])
-@pytest.mark.parametrize("like", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))])
+@pytest.mark.parametrize(
+    "like", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))]
+)
 def test_asanyarray(arr, like):
-    if isinstance(like, np.ndarray) and isinstance(da.utils.meta_from_array(arr), cupy.ndarray):
+    if isinstance(like, np.ndarray) and isinstance(
+        da.utils.meta_from_array(arr), cupy.ndarray
+    ):
         with pytest.raises(TypeError):
             a = da.utils.asanyarray_safe(arr, like=like)
     else:
@@ -945,9 +949,7 @@ def test_asanyarray(arr, like):
         assert type(a) is type(like)
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_compress():
     carr = cupy.random.randint(0, 3, size=(10, 10))
 
@@ -962,9 +964,7 @@ def test_compress():
     assert_eq(np.compress(c.tolist(), carr.tolist(), axis=0), res)
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -1014,9 +1014,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         assert_eq(np_r, da_r)
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 @pytest.mark.parametrize("bins_type", [np, cupy])
 def test_digitize(bins_type):
     x = cupy.array([2, 4, 5, 6, 1])
@@ -1026,7 +1024,8 @@ def test_digitize(bins_type):
             d = da.from_array(x, chunks=chunks)
             bins_cupy = cupy.array(bins)
             assert_eq(
-                da.digitize(d, bins, right=right), np.digitize(x, bins_cupy, right=right)
+                da.digitize(d, bins, right=right),
+                np.digitize(x, bins_cupy, right=right),
             )
 
     x = cupy.random.random(size=(100, 100))
@@ -1037,13 +1036,12 @@ def test_digitize(bins_type):
             d = da.from_array(x, chunks=chunks)
             bins_cupy = cupy.array(bins)
             assert_eq(
-                da.digitize(d, bins, right=right), np.digitize(x, bins_cupy, right=right)
+                da.digitize(d, bins, right=right),
+                np.digitize(x, bins_cupy, right=right),
             )
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_vindex():
     x_np = np.arange(56).reshape((7, 8))
     x_cp = cupy.arange(56).reshape((7, 8))
@@ -1060,14 +1058,15 @@ def test_vindex():
     assert_eq(res_np, res_cp)
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_percentile():
     d = da.from_array(cupy.ones((16,)), chunks=(4,))
     qs = np.array([0, 50, 100])
 
-    assert_eq(da.percentile(d, qs, interpolation="midpoint"), np.array([1, 1, 1], dtype=d.dtype))
+    assert_eq(
+        da.percentile(d, qs, interpolation="midpoint"),
+        np.array([1, 1, 1], dtype=d.dtype),
+    )
 
     x = cupy.array([0, 0, 5, 5, 5, 5, 20, 20])
     d = da.from_array(x, chunks=(3,))
@@ -1084,13 +1083,11 @@ def test_percentile():
 
     assert not same_keys(
         da.percentile(d, qs, interpolation="midpoint"),
-        da.percentile(d, [0, 50], interpolation="midpoint")
+        da.percentile(d, [0, 50], interpolation="midpoint"),
     )
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_percentiles_with_empty_arrays():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     res = da.percentile(x, [10, 50, 90], interpolation="midpoint")
@@ -1100,9 +1097,7 @@ def test_percentiles_with_empty_arrays():
     assert_eq(res, np.array([1, 1, 1], dtype=x.dtype))
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_percentiles_with_empty_q():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     result = da.percentile(x, [], interpolation="midpoint")
@@ -1112,9 +1107,7 @@ def test_percentiles_with_empty_q():
     assert_eq(result, np.array([], dtype=x.dtype))
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 @pytest.mark.parametrize("q", [5, 5.0, np.int64(5), np.float64(5)])
 def test_percentiles_with_scaler_percentile(q):
     # Regression test to ensure da.percentile works with scalar percentiles
@@ -1127,9 +1120,7 @@ def test_percentiles_with_scaler_percentile(q):
     assert_eq(result, np.array([1], dtype=d.dtype))
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_percentiles_with_unknown_chunk_sizes():
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
     x = rs.random(1000, chunks=(100,))
@@ -1147,9 +1138,7 @@ def test_percentiles_with_unknown_chunk_sizes():
     assert a < b
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_view():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(cupy.array(x), chunks=(2, 3))
@@ -1186,9 +1175,7 @@ def test_view():
         d.view("i4", order="asdf")
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_view_fortran():
     x = np.asfortranarray(np.arange(64).reshape((8, 8)))
     d = da.from_array(cupy.asfortranarray(cupy.array(x)), chunks=(2, 3))
@@ -1204,9 +1191,7 @@ def test_view_fortran():
     assert_eq(result, x.T.view("i2").T)
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_getter():
     result = da.core.getter(cupy.arange(5), (None, slice(None, None)))
 
@@ -1214,9 +1199,7 @@ def test_getter():
     assert_eq(result, np.arange(5)[None, :])
 
 
-@pytest.mark.skipif(
-    np.__version__ < "1.20", reason="NEP-35 is not available"
-)
+@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
 def test_store_kwargs():
     d = da.from_array(cupy.ones((10, 10)), chunks=(2, 2))
     a = d + 1
