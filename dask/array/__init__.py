@@ -31,6 +31,7 @@ try:
         where,
         coarsen,
         insert,
+        append,
         shape,
         union1d,
         ravel,
