@@ -385,15 +385,15 @@ Dataframe
 
 -   Bump up tolerance for rolling tests (:pr:`6502`) `Julia Signell`_
 -   Implement DatFrame.__len__ (:pr:`6515`) `Tom Augspurger`_
--   Infer arrow schema in to_parquet  (for ArrowEngine`) (:pr:`6490`) `Richard Zamora`_
+-   Infer arrow schema in to_parquet  (for ArrowEngine`) (:pr:`6490`) `Richard (Rick) Zamora`_
 -   Fix parquet test when no pyarrow (:pr:`6524`) `Martin Durant`_
--   Remove problematic ``filter`` arguments in ArrowEngine (:pr:`6527`) `Richard Zamora`_
--   Avoid schema validation by default in ArrowEngine (:pr:`6536`) `Richard Zamora`_
+-   Remove problematic ``filter`` arguments in ArrowEngine (:pr:`6527`) `Richard (Rick) Zamora`_
+-   Avoid schema validation by default in ArrowEngine (:pr:`6536`) `Richard (Rick) Zamora`_
 
 Core
 ++++
 
--   Use unpack_collections in make_blockwise_graph (:pr:`6517`) `Thomas Fan`_
+-   Use unpack_collections in make_blockwise_graph (:pr:`6517`) `Thomas J Fan`_
 -   Move key_split() from optimization.py to utils.py (:pr:`6529`) `Mads R. B. Kristensen`_
 -   Make tests run on moto server (:pr:`6528`) `Martin Durant`_
 
@@ -3724,7 +3724,6 @@ Other
 .. _`Stuart Berg`: https://github.com/stuarteberg
 .. _`Guillaume Eynard-Bontemps`: https://github.com/guillaumeeb
 .. _`Adam Beberg`: https://github.com/beberg
-.. _`Johnnie Gray`: https://github.com/jcmgray
 .. _`Roma Sokolov`: https://github.com/little-arhat
 .. _`Daniel Severo`: https://github.com/dsevero
 .. _`Michał Jastrzębski`: https://github.com/inc0

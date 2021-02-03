@@ -32,6 +32,8 @@ __all__ = (
     "visualize",
     "tokenize",
     "normalize_token",
+    "get_collection_name",
+    "replace_name_in_key",
 )
 
 
@@ -1186,3 +1188,54 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return wait(x, timeout=timeout, return_when=return_when)
     except (ImportError, ValueError):
         return x
+
+
+def get_collection_name(collection) -> str:
+    """Infer the collection name from the dask keys, under the assumption that all keys
+    are either tuples with matching first element, and that element is a string, or
+    there is exactly one key and it is a string.
+
+    Examples
+    --------
+    >>> a.__dask_keys__()
+    ["foo-123"]
+    >>> get_collection_name(a)
+    "foo"
+    >>> b.__dask_keys__()
+    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]
+    >>> get_collection_name(b)
+    "foo-123"
+    """
+    if not is_dask_collection(collection):
+        raise TypeError(f"Expected Dask collection; got {type(collection)}")
+    try:
+        key = next(flatten(collection.__dask_keys__()))
+    except StopIteration:
+        # Collection with no keys; this is a legitimate use case but, at the moment of
+        # writing, can only happen with third-party collections
+        raise KeyError("Dask collection has no keys")
+
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return key[0]
+    if isinstance(key, str):
+        return key
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+
+
+def replace_name_in_key(key, name: str):
+    """Given a dask key, which must be either a single string or a tuple whose first
+    element is a string (commonly referred to as a collection's 'name'), replace the
+    name with a new one.
+
+    Examples
+    --------
+    >>> replace_name_in_key("foo", "bar")
+    "bar"
+    >>> replace_name_in_key(("foo-123", 1, 2), "bar-456")
+    ("bar-456", 1, 2)
+    """
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return (name,) + key[1:]
+    if isinstance(key, str):
+        return name
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
