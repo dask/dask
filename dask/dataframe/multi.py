@@ -141,6 +141,8 @@ class BroadcastJoinLayer(Layer):
 
     def __init__(
         self,
+        name,
+        npartitions,
         lhs_name,
         lhs_npartitions,
         lhs_meta,
@@ -153,11 +155,12 @@ class BroadcastJoinLayer(Layer):
         broadcast_side,
         suffixes,
         indicator,
-        need_split,
         parts_out=None,
         annotations=None,
     ):
         super().__init__(annotations=annotations)
+        self.name = name
+        self.npartitions = npartitions
         self.lhs_name = lhs_name
         self.lhs_npartitions = lhs_npartitions
         self.left_on = left_on
@@ -168,49 +171,41 @@ class BroadcastJoinLayer(Layer):
         self.broadcast_side = broadcast_side
         self.suffixes = suffixes
         self.indicator = indicator
-        self.need_split = need_split
-        if self.how == "right":
-            self.npartitions = self.rhs_npartitions
-            self.divisions = self.rhs.divisions
-        else:
-            self.npartitions = self.lhs_npartitions
-            self.divisions = self.lhs.divisions
         self.parts_out = parts_out or range(self.npartitions)
 
         if isinstance(self.left_on, Index):
-            self.left_on = None
-            self.left_index = True
+            left_on = None
+            left_index = True
         else:
-            self.left_index = False
+            left_on = self.left_on
+            left_index = False
 
         if isinstance(self.right_on, Index):
-            self.right_on = None
-            self.right_index = True
+            right_on = None
+            right_index = True
         else:
-            self.right_index = False
+            right_on = self.right_on
+            right_index = False
 
         self.lhs_meta = lhs_meta
         self.rhs_meta = rhs_meta
         self.meta = self.lhs_meta.merge(
             self.rhs_meta,
             how=self.how,
-            left_on=self.left_on,
-            right_on=self.right_on,
-            left_index=self.left_index,
-            right_index=self.right_index,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
             suffixes=self.suffixes,
             indicator=self.indicator,
         )
-
-        self.token = tokenize(self.lhs_name, self.rhs_name, self.parts_out, self.meta)
-        self.name = "bcast-join-" + self.token
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
 
     def __repr__(self):
         return "BroadcastJoinLayer<name='{}', how={}, lhs={}, rhs={}>".format(
-            self.name, self.how, self.lhs, self.rhs
+            self.name, self.how, self.lhs_name, self.rhs_name
         )
 
     def is_materialized(self):
@@ -235,24 +230,25 @@ class BroadcastJoinLayer(Layer):
     def __len__(self):
         return len(self._dict)
 
-    def __reduce__(self):
-        attrs = [
-            "lhs_name",
-            "lhs_npartitions",
-            "lhs_meta",
-            "left_on",
-            "rhs_name",
-            "rhs_npartitions",
-            "rhs_meta",
-            "right_on",
-            "how",
-            "broadcast_side",
-            "suffixes",
-            "indicator",
-            "parts_out",
-            "annotations",
-        ]
-        return (BroadcastJoinLayer, tuple(getattr(self, attr) for attr in attrs))
+    # def __reduce__(self):
+    #     attrs = [
+    #         "npartitions",
+    #         "lhs_name",
+    #         "lhs_npartitions",
+    #         "lhs_meta",
+    #         "left_on",
+    #         "rhs_name",
+    #         "rhs_npartitions",
+    #         "rhs_meta",
+    #         "right_on",
+    #         "how",
+    #         "broadcast_side",
+    #         "suffixes",
+    #         "indicator",
+    #         "parts_out",
+    #         "annotations",
+    #     ]
+    #     return (BroadcastJoinLayer, tuple(getattr(self, attr) for attr in attrs))
 
     # def __dask_distributed_pack__(self, client):
     #     from distributed.protocol.serialize import to_serialize
@@ -338,17 +334,20 @@ class BroadcastJoinLayer(Layer):
 
     def _cull(self, parts_out):
         return BroadcastJoinLayer(
+            self.name,
+            self.npartitions,
             self.lhs_name,
             self.lhs_npartitions,
+            self.lhs_meta,
             self.left_on,
             self.rhs_name,
             self.rhs_npartitions,
+            self.rhs_meta,
             self.right_on,
             self.how,
             self.broadcast_side,
             self.suffixes,
             self.indicator,
-            need_split=self.need_split,
             parts_out=parts_out,
             annotations=self.annotations,
         )
@@ -363,7 +362,7 @@ class BroadcastJoinLayer(Layer):
         """
         parts_out = self._keys_to_parts(keys)
         culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != self.parts_out:
+        if parts_out != set(self.parts_out):
             culled_layer = self._cull(parts_out)
             return culled_layer, culled_deps
         else:
@@ -372,24 +371,37 @@ class BroadcastJoinLayer(Layer):
     def _construct_graph(self):
         """Construct graph for a broadcast join operation."""
 
+        if isinstance(self.left_on, Index):
+            left_on = None
+            left_index = True
+        else:
+            left_on = self.left_on
+            left_index = False
+
+        if isinstance(self.right_on, Index):
+            right_on = None
+            right_index = True
+        else:
+            right_on = self.right_on
+            right_index = False
+
         kwargs = dict(
             how=self.how,
-            left_on=self.left_on,
-            right_on=self.right_on,
-            left_index=self.left_index,
-            right_index=self.right_index,
+            left_on=left_on,
+            right_on=right_on,
+            left_index=left_index,
+            right_index=right_index,
             suffixes=self.suffixes,
             indicator=self.indicator,
         )
 
-        left_on, right_on = self.left_on, self.right_on
         if isinstance(left_on, list):
             left_on = (list, tuple(left_on))
         if isinstance(right_on, list):
             right_on = (list, tuple(right_on))
 
-        inter_name = "inter-bcast-join-" + self.token
-        split_name = "split-bcast-join-" + self.token
+        inter_name = "inter-" + self.name
+        split_name = "split-" + self.name
 
         kwargs["empty_index_dtype"] = self.meta.index.dtype
         kwargs["categorical_columns"] = self.meta.select_dtypes(
@@ -403,11 +415,11 @@ class BroadcastJoinLayer(Layer):
         for i in self.parts_out:
 
             # Split each lsh partition by hash
-            if self.need_split:
+            if self.how != "inner":
                 dsk[(split_name, i)] = (
                     _split_partition,
                     (self.lhs_name, i),
-                    self.left_on,
+                    left_on,
                     self.rhs_npartitions,
                 )
 
@@ -424,7 +436,7 @@ class BroadcastJoinLayer(Layer):
                             (split_name, i),
                             j,
                         )
-                        if self.need_split
+                        if self.how != "inner"
                         else (self.lhs_name, i),
                         (self.rhs_name, j),
                     ],
@@ -783,13 +795,11 @@ def broadcast_join(
         # can only handle "inner" and "left"
         raise ValueError("Only 'inner' and 'left' broadcast joins are supported.")
 
-    # If we are doing a "left" merge, shuffle rhs
-    need_split = how != "inner"
     # TODO: It *may* be beneficial to perform the hash
     # split for "inner" join as well (even if it is not
     # technically needed for correctness).  More testing
     # is needed here.
-    if need_split:
+    if how != "inner":
         # Shuffle rhs by hash. This means that we will
         # need to perform a local shuffle and split on
         # each partition of lhs (with the same hashing
@@ -808,8 +818,19 @@ def broadcast_join(
         rhs_dep = rhs
 
     broadcast_side = "right"  # TODO: Support both sides
+    if how == "right":
+        npartitions = rhs.npartitions
+        divisions = rhs.divisions
+    else:
+        npartitions = lhs.npartitions
+        divisions = lhs.divisions
+
+    token = tokenize(lhs._name, rhs_name, npartitions, left_on, right_on, how)
+    name = "bcast-join-" + token
 
     broadcast_join_layer = BroadcastJoinLayer(
+        name,
+        npartitions,
         lhs._name,
         lhs.npartitions,
         lhs._meta_nonempty,
@@ -822,7 +843,6 @@ def broadcast_join(
         broadcast_side,
         suffixes,
         indicator,
-        need_split,
         parts_out=parts_out,
     )
 
@@ -831,11 +851,12 @@ def broadcast_join(
         broadcast_join_layer,
         dependencies=[lhs, rhs_dep],
     )
+
     return new_dd_object(
         graph,
         broadcast_join_layer.name,
         broadcast_join_layer.meta,
-        broadcast_join_layer.divisions,
+        divisions,
     )
 
 
