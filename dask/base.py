@@ -1253,13 +1253,13 @@ def clone_key(key, seed):
     >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)
     ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
     """
-    prefix = key_split(key)
-    if isinstance(key, str):
-        old_token = key[len(prefix) + 1 :]
-        new_token = tokenize(old_token or key, seed)
-        return prefix + "-" + new_token
     if isinstance(key, tuple) and key and isinstance(key[0], str):
-        old_token = key[0][len(prefix) + 1 :]
-        new_token = tokenize(old_token or key[0], seed)
-        return (prefix + "-" + new_token,) + key[1:]
+        return (clone_key(key[0], seed),) + key[1:]
+    if isinstance(key, str):
+        prefix = key_split(key)
+        token = key[len(prefix) + 1 :]
+        if token:
+            return prefix + "-" + tokenize(token, seed)
+        else:
+            return tokenize(key, seed)
     raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
