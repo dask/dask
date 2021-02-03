@@ -625,9 +625,11 @@ def merge(
             warn_dtype_mismatch(left, right, left_on, right_on)
 
         # Check if we should use a broadcast_join
+        bcast_side = "left" if left.npartitions < right.npartitions else "right"
         if (
             shuffle == "tasks"
-            and how in ("inner", "left")
+            and how in ("inner", "left", "right")
+            and how != bcast_side
             and not npartitions
             and broadcast is not False
         ):
@@ -1286,10 +1288,11 @@ class BroadcastJoinLayer(Layer):
 
     def __dask_distributed_pack__(self, client):
 
-        # Pickle complex kwarg arguments
+        # Pickle complex merge_kwargs elements. Also
+        # tuples, which may be confused with keys.
         _merge_kwargs = {}
         for k, v in self.merge_kwargs.items():
-            if not isinstance(v, (list, tuple, bool, str)):
+            if not isinstance(v, (str, list, bool)):
                 _merge_kwargs[k] = pickle.dumps(v)
             else:
                 _merge_kwargs[k] = v
@@ -1313,11 +1316,6 @@ class BroadcastJoinLayer(Layer):
         # Expand merge_kwargs
         merge_kwargs = state.pop("merge_kwargs", {})
         state.update(merge_kwargs)
-
-        # stringify_collection_keys will treat `suffixes` as
-        # a key if it is a `tuple`.  Convert to list
-        if isinstance(state["suffixes"], tuple):
-            state["suffixes"] = list(state["suffixes"])
 
         # Materialize the layer
         raw = dict(cls(**state))
@@ -1346,6 +1344,32 @@ class BroadcastJoinLayer(Layer):
             parts.add(_part)
         return parts
 
+    @property
+    def _broadcast_plan(self):
+        # Return structure (tuple):
+        # (
+        #     <broadcasted-collection-name>,
+        #     <broadcasted-collection-npartitions>,
+        #     <other-collection-npartitions>,
+        #     <other-collection-on>,
+        # )
+        if self.lhs_npartitions < self.rhs_npartitions:
+            # Broadcasting the left
+            return (
+                self.lhs_name,
+                self.lhs_npartitions,
+                self.rhs_name,
+                self.right_on,
+            )
+        else:
+            # Broadcasting the right
+            return (
+                self.rhs_name,
+                self.rhs_npartitions,
+                self.lhs_name,
+                self.left_on,
+            )
+
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
 
@@ -1353,16 +1377,8 @@ class BroadcastJoinLayer(Layer):
         all partitions of the broadcasted collection, but only one
         partition of the "other" collecction.
         """
-        if self.lhs_npartitions > self.rhs_npartitions:
-            # Broadcasting the right
-            bcast_size = self.lhs_npartitions
-            bcast_name = self.lhs_name
-            other_name = self.rhs_name
-        else:
-            # Broadcasting the left
-            bcast_size = self.rhs_npartitions
-            bcast_name = self.rhs_name
-            other_name = self.lhs_name
+        # Get broadcast info
+        bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
 
         deps = defaultdict(set)
         parts_out = parts_out or self._keys_to_parts(keys)
@@ -1408,40 +1424,60 @@ class BroadcastJoinLayer(Layer):
         inter_name = "inter-" + self.name
         split_name = "split-" + self.name
 
-        # Loop over output partitions
-        # Culling should allow us to avoid generating tasks
+        # Get broadcast "plan"
+        bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
+        bcast_side = "left" if self.lhs_npartitions < self.rhs_npartitions else "right"
+
+        # Loop over output partitions, which should be a 1:1
+        # mapping with the input partitions of "other".
+        # Culling should allow us to avoid generating tasks for
         # any output partitions that are not requested (via `parts_out`)
         dsk = {}
         for i in self.parts_out:
 
-            # Split each lsh partition by hash
+            # Split each "other" partition by hash
             if self.how != "inner":
                 dsk[(split_name, i)] = (
                     _split_partition,
-                    (self.lhs_name, i),
-                    self.left_on,
-                    self.rhs_npartitions,
+                    (other_name, i),
+                    other_on,
+                    bcast_size,
                 )
 
+            # For each partition of "other", we need to join
+            # to each partition of "bcast". If it is a "left"
+            # or "right" join, there should be a unique mapping
+            # between the local splits of "other" and the
+            # partitions of "bcast" (which means we need an
+            # additional `getitem` operation to isolate the
+            # correct split of each "other" partition).
             _concat_list = []
-            for j in range(self.rhs_npartitions):
+            for j in range(bcast_size):
+                # Specify arg list for `merge_chunk`
+                _merge_args = [
+                    (
+                        operator.getitem,
+                        (split_name, i),
+                        j,
+                    )
+                    if self.how != "inner"
+                    else (other_name, i),
+                    (bcast_name, j),
+                ]
+                if bcast_side == "left":
+                    # If the left is broadcasted, the
+                    # arg list needs to be reversed
+                    _merge_args.reverse()
                 inter_key = (inter_name, i, j)
-                _concat_list.append(inter_key)
                 dsk[inter_key] = (
                     apply,
                     _merge_chunk_wrapper,
-                    [
-                        (
-                            operator.getitem,
-                            (split_name, i),
-                            j,
-                        )
-                        if self.how != "inner"
-                        else (self.lhs_name, i),
-                        (self.rhs_name, j),
-                    ],
+                    _merge_args,
                     self.merge_kwargs,
                 )
+                _concat_list.append(inter_key)
+
+            # Concatenate the merged results for each output partition
             dsk[(self.name, i)] = (_concat_wrapper, _concat_list)
 
         return dsk
@@ -1581,34 +1617,59 @@ def broadcast_join(
     """
 
     if npartitions:
-        # We currently require the output partition count
-        # to be equivalent to lhs.npartitions
+        # We currently require the output partition count to
+        # be equivalent to the non-broadcasted input collection
         raise ValueError("npartitions not yet supported.")
 
-    if how not in ("inner", "left"):
-        # Since we are always broadcasting lhs (for now), we
-        # can only handle "inner" and "left"
-        raise ValueError("Only 'inner' and 'left' broadcast joins are supported.")
+    if how not in ("inner", "left", "right"):
+        # Broadcast algorithm cannot handle an "outer" join
+        raise ValueError(
+            "Only 'inner', 'left' and 'right' broadcast joins are supported."
+        )
+
+    if how == "left" and lhs.npartitions < rhs.npartitions:
+        # Must broadcast rhs for a "left" broadcast join
+        raise ValueError("'left' broadcast join requires rhs broadcast.")
+
+    if how == "right" and rhs.npartitions <= lhs.npartitions:
+        # Must broadcast lhs for a "right" broadcast join
+        raise ValueError("'right' broadcast join requires lhs broadcast.")
 
     # TODO: It *may* be beneficial to perform the hash
     # split for "inner" join as well (even if it is not
     # technically needed for correctness).  More testing
     # is needed here.
     if how != "inner":
-        # Shuffle rhs by hash. This means that we will
-        # need to perform a local shuffle and split on
-        # each partition of lhs (with the same hashing
+        # Shuffle to-be-broadcasted side by hash. This
+        # means that we will need to perform a local
+        # shuffle and split on each partition of the
+        # "other" collection (with the same hashing
         # approach) to ensure the correct rows are
         # joined by `merge_chunk`.  The local hash and
         # split of lhs is in `_split_partition`.
-        rhs2 = shuffle_func(
-            rhs,
-            right_on,
-            shuffle="tasks",
-        )
-        rhs_name = rhs2._name
-        rhs_dep = rhs2
+        if lhs.npartitions < rhs.npartitions:
+            lhs2 = shuffle_func(
+                lhs,
+                left_on,
+                shuffle="tasks",
+            )
+            lhs_name = lhs2._name
+            lhs_dep = lhs2
+            rhs_name = rhs._name
+            rhs_dep = rhs
+        else:
+            rhs2 = shuffle_func(
+                rhs,
+                right_on,
+                shuffle="tasks",
+            )
+            lhs_name = lhs._name
+            lhs_dep = lhs
+            rhs_name = rhs2._name
+            rhs_dep = rhs2
     else:
+        lhs_name = lhs._name
+        lhs_dep = lhs
         rhs_name = rhs._name
         rhs_dep = rhs
 
@@ -1639,19 +1700,28 @@ def broadcast_join(
     merge_kwargs["empty_index_dtype"] = meta.index.dtype
     merge_kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
-    if how == "right":
+    # Assume the output partitions/divisions
+    # should correspond to the collection that
+    # is NOT broadcasted.
+    if lhs.npartitions < rhs.npartitions:
         npartitions = rhs.npartitions
         divisions = rhs.divisions
+        _index_names = set(rhs._meta_nonempty.index.names)
     else:
         npartitions = lhs.npartitions
         divisions = lhs.divisions
+        _index_names = set(lhs._meta_nonempty.index.names)
+
+    # Cannot preserve divisions if the index is lost
+    if _index_names != set(meta.index.names):
+        divisions = [None] * (npartitions + 1)
 
     token = tokenize(lhs, rhs, npartitions, **merge_kwargs)
     name = "bcast-join-" + token
     broadcast_join_layer = BroadcastJoinLayer(
         name,
         npartitions,
-        lhs._name,
+        lhs_name,
         lhs.npartitions,
         rhs_name,
         rhs.npartitions,
@@ -1662,7 +1732,7 @@ def broadcast_join(
     graph = HighLevelGraph.from_collections(
         name,
         broadcast_join_layer,
-        dependencies=[lhs, rhs_dep],
+        dependencies=[lhs_dep, rhs_dep],
     )
 
     return new_dd_object(graph, name, meta, divisions)

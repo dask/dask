@@ -71,6 +71,11 @@ def ddf_right_double(df_right):
     return dd.from_pandas(df_right, npartitions=2, sort=False)
 
 
+@pytest.fixture
+def ddf_left_double(df_left):
+    return dd.from_pandas(df_left, npartitions=2, sort=False)
+
+
 @pytest.fixture(params=["inner", "left", "right", "outer"])
 def how(request):
     return request.param
@@ -170,7 +175,7 @@ def test_merge_unknown_to_unknown(
 
 
 @pytest.mark.parametrize("how", ["inner", "left"])
-def test_merge_known_to_double_bcast(
+def test_merge_known_to_double_bcast_right(
     df_left, df_right, ddf_left, ddf_right_double, on, how
 ):
     # Compute expected
@@ -178,11 +183,28 @@ def test_merge_known_to_double_bcast(
 
     # Perform merge
     result = ddf_left.merge(
-        ddf_right_double, on=on, how=how, shuffle="tasks", bcast=True
+        ddf_right_double, on=on, how=how, shuffle="tasks", broadcast=True
     )
-    result.compute(scheduler="synchronous")
 
     # Assertions
     assert_eq(result, expected)
     assert_eq(result.divisions, ddf_left.divisions)
+    assert len(result.__dask_graph__()) < 90
+
+
+@pytest.mark.parametrize("how", ["inner", "right"])
+def test_merge_known_to_double_bcast_left(
+    df_left, df_right, ddf_left_double, ddf_right, on, how
+):
+    # Compute expected
+    expected = df_left.merge(df_right, on=on, how=how)
+
+    # Perform merge
+    result = ddf_left_double.merge(
+        ddf_right, on=on, how=how, shuffle="tasks", broadcast=True
+    )
+
+    # Assertions
+    assert_eq(result, expected)
+    assert_eq(result.divisions, ddf_right.divisions)
     assert len(result.__dask_graph__()) < 90
