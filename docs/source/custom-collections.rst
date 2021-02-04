@@ -57,6 +57,10 @@ interface is used inside Dask.
 
     The output keys for the Dask graph.
 
+    Note that there are additional constraints on keys for a Dask collection
+    than those described in the :doc:`task graph specification documentation <spec>`.
+    These additional constraints are described below.
+
     Returns
     -------
     keys : list
