@@ -31,15 +31,9 @@ from dask.base import (
 )
 from dask.core import literal
 from dask.delayed import Delayed
-from dask.utils import tmpdir, tmpfile, ignoring
-from dask.utils_test import inc, dec
+from dask.utils import tmpdir, tmpfile
+from dask.utils_test import dec, inc, import_or_none
 from dask.diagnostics import Profiler
-
-
-def import_or_none(path):
-    with ignoring(BaseException):
-        return pytest.importorskip(path)
-    return None
 
 
 tz = pytest.importorskip("tlz")

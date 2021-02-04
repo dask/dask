@@ -103,8 +103,7 @@ def _build_map_layer(
             numblocks = collection.numblocks
         else:
             numblocks = (collection.npartitions,)
-        ndim = getattr(collection, "ndim", 1)
-        indices = tuple(range(ndim))
+        indices = tuple(i for i, _ in enumerate(numblocks))
         kwargs = {"_deps": dependencies} if dependencies else {}
         prev_name = get_collection_name(collection)
         return blockwise(
