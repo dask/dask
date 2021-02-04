@@ -1,4 +1,5 @@
 import os
+from collections.abc import Set
 
 import pytest
 
@@ -30,7 +31,7 @@ def test_basic():
     assert all(isinstance(layer, Layer) for layer in hg.layers.values())
 
 
-def test_keys_values_items_methods():
+def test_keys_values_items_to_dict_methods():
     da = pytest.importorskip("dask.array")
     a = da.ones(10, chunks=(5,))
     b = a + 1
@@ -39,17 +40,56 @@ def test_keys_values_items_methods():
     hg = d.dask
 
     keys, values, items = hg.keys(), hg.values(), hg.items()
-    assert all(isinstance(i, list) for i in [keys, values, items])
-    assert keys == [i for i in hg]
-    assert values == [hg[i] for i in hg]
-    assert items == [(k, v) for k, v in zip(keys, values)]
+    assert isinstance(keys, Set)
+    assert list(keys) == list(hg)
+    assert list(values) == [hg[i] for i in hg]
+    assert list(items) == list(zip(keys, values))
+    assert hg.to_dict() == dict(hg)
+
+
+def test_getitem():
+    hg = HighLevelGraph(
+        {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}}, {"a": set(), "b": set()}
+    )
+    # Key is a string and it exists in a layer with the same name
+    assert hg["a"] == 1
+    # Key is a tuple and the name exists in a layer with the same name
+    assert hg["a", 0] == 2
+    # Key is in the wrong layer, while the right layer does not contain it
+    assert hg["b"] == 3
+    # Key is in the wrong layer, while the right layer does not exist
+    assert hg["c"] == 4
+
+    for k in ("d", "", 1, ()):
+        with pytest.raises(KeyError):
+            hg[k]
+
+    class Unhashable:
+        __hash__ = None
+
+    for k in (Unhashable(), (Unhashable(),)):
+        with pytest.raises(TypeError):
+            hg[k]
+
+
+def test_copy():
+    h1 = HighLevelGraph(
+        {"a": {"a": "b"}, "b": {"b": 1}},
+        {"a": {"b"}, "b": set()},
+    )
+    h1.get_all_dependencies()
+    assert h1.key_dependencies
+    h2 = h1.copy()
+    for k in ("layers", "dependencies", "key_dependencies"):
+        v1 = getattr(h1, k)
+        v2 = getattr(h2, k)
+        assert v1 is not v2
+        assert v1 == v2
 
 
 def test_cull():
     a = {"x": 1, "y": (inc, "x")}
-    layers = {"a": BasicLayer(a)}
-    dependencies = {"a": set()}
-    hg = HighLevelGraph(layers, dependencies)
+    hg = HighLevelGraph({"a": a}, {"a": set()})
 
     culled_by_x = hg.cull({"x"})
     assert dict(culled_by_x) == {"x": 1}
