@@ -237,9 +237,9 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
 
     # The later annotations should not override the earlier annotations
     with dask.annotate(retries=2):
-        y = x.map_blocks(flaky_double, meta=np.array((), dtype=np.float))
+        y = x.map_blocks(flaky_double, meta=np.array((), dtype=float))
     with dask.annotate(retries=0):
-        z = y.map_blocks(reliable_double, meta=np.array((), dtype=np.float))
+        z = y.map_blocks(reliable_double, meta=np.array((), dtype=float))
 
     with dask.config.set(optimization__fuse__active=False):
         z = await c.compute(z)
