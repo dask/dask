@@ -21,12 +21,12 @@ from .delayed import Delayed, delayed
 from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
 from .utils import ensure_dict
 
-__all__ = ("bind", "checkpoint", "clone", "drop")
+__all__ = ("bind", "block_until_done", "checkpoint", "clone")
 
 T = TypeVar("T")
 
 
-def drop(*collections) -> Delayed:
+def checkpoint(*collections) -> Delayed:
     """Build a :doc:`delayed` which waits until all chunks of the input collection(s)
     have been computed before returning None.
 
@@ -39,15 +39,20 @@ def drop(*collections) -> Delayed:
     Returns
     -------
     :doc:`delayed` yielding None
+
+    See Also
+    --------
+    - :func:`block_until_done`
+    - :func:`bind`
     """
     collections, _ = unpack_collections(*collections)
     if len(collections) != 1:
-        return delayed(chunks.drop)(*(drop(c) for c in collections))
+        return delayed(chunks.checkpoint)(*(checkpoint(c) for c in collections))
     (collection,) = collections
 
     tok = tokenize(collection)
-    name = "drop-" + tok
-    map_name = "drop_map-" + tok
+    name = "checkpoint-" + tok
+    map_name = "checkpoint_map-" + tok
 
     keys_iter = flatten(collection.__dask_keys__())
     try:
@@ -55,17 +60,17 @@ def drop(*collections) -> Delayed:
         next(keys_iter)
     except StopIteration:
         # Collection has 0 or 1 keys; no need for a map step
-        layer = {name: (chunks.drop, collection.__dask_keys__())}
+        layer = {name: (chunks.checkpoint, collection.__dask_keys__())}
         dsk = HighLevelGraph.from_collections(name, layer, dependencies=(collection,))
     else:
         # Collection has 2+ keys; apply a two-step map->reduce algorithm so that we
         # transfer over the network and store in RAM only a handful of None's instead of
         # the full computed collection's contents
-        map_layer = _build_map_layer(chunks.drop, map_name, collection)
+        map_layer = _build_map_layer(chunks.checkpoint, map_name, collection)
         map_dsk = HighLevelGraph.from_collections(
             map_name, map_layer, dependencies=(collection,)
         )
-        reduce_layer = {name: (chunks.drop, list(map_layer.get_output_keys()))}
+        reduce_layer = {name: (chunks.checkpoint, list(map_layer.get_output_keys()))}
         reduce_dsk = HighLevelGraph(
             {name: reduce_layer}, dependencies={name: {map_name}}
         )
@@ -195,12 +200,17 @@ def bind(
     ``omit``. Non-constant nodes immediately above ``omit``, or the leaf non-constant
     nodes if the collections in ``omit`` are not found, are prevented from computing
     until all collections in ``parents`` have been fully computed.
+
+    See Also
+    --------
+    - :func:`block_until_done`
+    - :func:`checkpoint`
     """
     if seed is None:
         seed = uuid.uuid4().bytes
 
     # parents=None is a special case invoked by the one-liner wrapper clone() below
-    blocker = drop(parents) if parents is not None else None
+    blocker = checkpoint(parents) if parents is not None else None
 
     omit, _ = unpack_collections(omit)
     if assume_layers:
@@ -363,6 +373,10 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     Dask collections of the same type as the inputs, which compute to the same value, or
     nested structures equivalent to the inputs, where the original collections have been
     replaced.
+
+    See Also
+    --------
+    - :func:`bind`
     """
     out = bind(
         collections, parents=None, omit=omit, seed=seed, assume_layers=assume_layers
@@ -370,9 +384,9 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     return out[0] if len(collections) == 1 else out
 
 
-def checkpoint(*collections):
+def block_until_done(*collections):
     """Ensure that all chunks of all input collections have been computed before
-    continuing.
+    computing the dependents of any of the chunks.
 
     The following example creates a dask array ``u`` that, when used in a computation,
     will only proceed when all chunks of the array ``x`` have been computed, but
@@ -380,7 +394,7 @@ def checkpoint(*collections):
 
     >>> from dask import array as da
     >>> x = da.ones(10, chunks=5)
-    >>> u = checkpoint(x)
+    >>> u = block_until_done(x)
 
     The following example will create two arrays ``u`` and ``v`` that, when used in a
     computation, will only proceed when all chunks of the arrays ``x`` and ``y`` have
@@ -388,7 +402,7 @@ def checkpoint(*collections):
 
     >>> x = da.ones(10, chunks=5)
     >>> y = da.zeros(10, chunks=5)
-    >>> u, v = checkpoint(x, y)
+    >>> u, v = block_until_done(x, y)
 
     Arguments
     ---------
@@ -400,18 +414,23 @@ def checkpoint(*collections):
     Dask collection of the same type as the input, which computes to the same value, or
     a nested structure equivalent to the input where the original collections have been
     replaced.
-    """
-    blocker = drop(*collections)
 
-    def _checkpoint_one(coll):
-        name = "checkpoint-" + tokenize(coll, blocker)
+    See Also
+    --------
+    - :func:`checkpoint`
+    - :func:`bind`
+    """
+    blocker = checkpoint(*collections)
+
+    def block_one(coll):
+        name = "block_until_done-" + tokenize(coll, blocker)
         layer = _build_map_layer(chunks.bind, name, coll, dependencies=(blocker,))
         dsk = HighLevelGraph.from_collections(name, layer, dependencies=(coll, blocker))
         rebuild, args = coll.__dask_postpersist__()
         return rebuild(dsk, *args, name=name)
 
     unpacked, repack = unpack_collections(*collections)
-    out = repack([_checkpoint_one(coll) for coll in unpacked])
+    out = repack([block_one(coll) for coll in unpacked])
     return out[0] if len(collections) == 1 else out
 
 
@@ -420,14 +439,14 @@ class chunks:
 
     @staticmethod
     def bind(node: T, *args, **kwargs) -> T:
-        """Dummy graph node of :func:`bind` and :func:`checkpoint`.
+        """Dummy graph node of :func:`bind` and :func:`block_until_done`.
         Wait for both node and all variadic args to complete; then return node.
         """
         return node
 
     @staticmethod
-    def drop(*args, **kwargs) -> None:
-        """Dummy graph node of :func:`drop`.
+    def checkpoint(*args, **kwargs) -> None:
+        """Dummy graph node of :func:`checkpoint`.
         Wait for all variadic args to complete; then return None.
         """
         pass
