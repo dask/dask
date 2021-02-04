@@ -50,7 +50,6 @@ from dask.blockwise import (
     optimize_blockwise,
 )
 from dask.array.utils import assert_eq, same_keys
-from dask.array.numpy_compat import _numpy_120
 
 from numpy import nancumsum, nancumprod
 
@@ -4313,7 +4312,6 @@ def test_no_warnings_from_blockwise():
     assert not record
 
 
-@pytest.mark.xfail(_numpy_120, reason="https://github.com/pydata/sparse/issues/383")
 def test_from_array_meta():
     sparse = pytest.importorskip("sparse")
     x = np.ones(10)
