@@ -1207,8 +1207,8 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
     Blockwise
     fuse
     """
-    layers = graph.layers.copy()
-    dependencies = graph.dependencies.copy()
+    layers = ensure_dict(graph.layers, copy=True)
+    dependencies = ensure_dict(graph.dependencies, copy=True)
     dependents = reverse_dict(dependencies)
 
     for name, layer in graph.layers.items():

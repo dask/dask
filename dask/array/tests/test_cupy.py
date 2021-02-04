@@ -206,11 +206,11 @@ def test_basic(func):
     ddc = func(dc)
     ddn = func(dn)
 
-    assert type(ddc._meta) == cupy.core.core.ndarray
+    assert type(ddc._meta) is cupy.core.core.ndarray
 
-    if ddc.dask.keys()[0][0].startswith("empty"):
+    if next(iter(ddc.dask.keys()))[0].startswith("empty"):
         # We can't verify for data correctness when testing empty_like
-        assert type(ddc._meta) == type(ddc.compute())
+        assert type(ddc._meta) is type(ddc.compute())
     else:
         assert_eq(ddc, ddc)  # Check that _meta and computed arrays match types
         assert_eq(ddc, ddn)
