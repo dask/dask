@@ -21,8 +21,13 @@ except AttributeError:
         AxisError = type(e)
 
 
+def _is_cupy_type(x):
+    # TODO: avoid explicit reference to CuPy
+    return "cupy" in str(type(x))
+
+
 def normalize_to_array(x):
-    if "cupy" in str(type(x)):  # TODO: avoid explicit reference to cupy
+    if _is_cupy_type(x):
         return x.get()
     else:
         return x
@@ -395,12 +400,8 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if isinstance(like, Array):
         return da_func(a, **kwargs)
     elif isinstance(a, Array):
-        try:
-            import cupy as cp
-            if isinstance(a._meta, cp.ndarray):
-                a = a.compute(scheduler="sync")
-        except ImportError:
-            pass
+        if _is_cupy_type(a._meta):
+            a = a.compute(scheduler="sync")
 
     try:
         return np_func(a, like=meta_from_array(like), **kwargs)
