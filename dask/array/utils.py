@@ -395,7 +395,12 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if isinstance(like, Array):
         return da_func(a, **kwargs)
     elif isinstance(a, Array):
-        a = a.compute(scheduler="sync")
+        try:
+            import cupy as cp
+            if isinstance(a._meta, cp.ndarray):
+                a = a.compute(scheduler="sync")
+        except ImportError:
+            pass
 
     try:
         return np_func(a, like=meta_from_array(like), **kwargs)
