@@ -18,6 +18,7 @@ from dask.dataframe.utils import (
     is_index_like,
     PANDAS_GT_100,
 )
+from dask.dataframe._compat import PANDAS_GT_120
 
 import pytest
 
@@ -470,3 +471,10 @@ def test_nonempty_series_sparse():
         dd.utils._nonempty_series(ser)
 
     assert len(w) == 0
+
+
+@pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
+def test_nonempty_series_nullable_float():
+    ser = pd.Series([], dtype="Float64")
+    non_empty = dd.utils._nonempty_series(ser)
+    assert non_empty.dtype == "Float64"
