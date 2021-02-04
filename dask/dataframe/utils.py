@@ -23,6 +23,7 @@ from pandas.api.types import (
 from ._compat import (  # noqa: F401
     PANDAS_GT_100,
     PANDAS_GT_110,
+    PANDAS_GT_120,
     tm,
 )
 
@@ -56,6 +57,9 @@ def is_integer_na_dtype(t):
 
 
 def is_float_na_dtype(t):
+    if not PANDAS_GT_120:
+        return False
+
     dtype = getattr(t, "dtype", t)
     types = (
         pd.Float32Dtype,

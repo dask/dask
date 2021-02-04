@@ -17,8 +17,8 @@ from dask.dataframe.utils import (
     is_series_like,
     is_index_like,
     PANDAS_GT_100,
+    PANDAS_GT_120,
 )
-from dask.dataframe._compat import PANDAS_GT_120
 
 import pytest
 
