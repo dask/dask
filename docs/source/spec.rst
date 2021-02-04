@@ -20,12 +20,7 @@ A **Dask graph** is a dictionary mapping **keys** to **computations**:
     'w': (sum, ['x', 'y', 'z']),
     'v': [(sum, ['w', 'z']), 2]}
 
-
-A **key** is either:
-
-- a string, or
-- a tuple of one or more elements, whose first element is a string and the remainder are
-  arbitrary hashables:
+A **key** is any hashable value that is not a **task**:
 
 .. code-block:: python
 
