@@ -677,3 +677,26 @@ def test_cloudpickle(f):
     d = f(2)
     d = cloudpickle.loads(cloudpickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
     assert d.compute() == 3
+
+
+def test_dask_layers():
+    d1 = delayed(1)
+    assert d1.dask.layers.keys() == {d1.key}
+    assert d1.dask.dependencies == {d1.key: set()}
+    assert d1.__dask_layers__() == (d1.key,)
+    d2 = modlevel_delayed1(d1)
+    assert d2.dask.layers.keys() == {d1.key, d2.key}
+    assert d2.dask.dependencies == {d1.key: set(), d2.key: {d1.key}}
+    assert d2.__dask_layers__() == (d2.key,)
+
+
+def test_dask_layers_to_delayed():
+    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
+    # match the key
+    da = pytest.importorskip("dask.array")
+    d = da.ones(1).to_delayed()[0]
+    name = "ones-faa3493518a0405cb3183468efb75d4e"
+    assert d.key == (name, 0)
+    assert d.dask.layers.keys() == {"delayed-" + name}
+    assert d.dask.dependencies == {"delayed-" + name: set()}
+    assert d.__dask_layers__() == ("delayed-" + name,)
