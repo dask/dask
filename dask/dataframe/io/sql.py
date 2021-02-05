@@ -2,6 +2,7 @@ import numpy as np
 import pandas as pd
 
 import dask
+from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
@@ -167,6 +168,12 @@ def read_sql_table(
             minmax = pd.read_sql(q, engine)
             maxi, mini = minmax.iloc[0]
             dtype = minmax.dtypes["max_1"]
+            if dtype == "O":
+                q = sql.select([sql.func.count(index),0]).select_from(
+                    table
+                )
+                minmax = pd.read_sql(q, engine)
+                maxi, mini = minmax.iloc[0]
         else:
             mini, maxi = limits
             dtype = pd.Series(limits).dtype
@@ -182,6 +189,7 @@ def read_sql_table(
                 )
                 or 1
             )
+
         if dtype.kind == "M":
             divisions = methods.tolist(
                 pd.date_range(
@@ -194,17 +202,22 @@ def read_sql_table(
             divisions[-1] = maxi
         elif dtype.kind in ["i", "u", "f"]:
             divisions = np.linspace(mini, maxi, npartitions + 1).tolist()
+        elif dtype.kind == "O":
+            divisions = np.linspace(mini, maxi, npartitions + 1, dtype=int).tolist()
         else:
             raise TypeError(
                 'Provided index column is of type "{}".  If divisions is not provided the '
-                "index column type must be numeric or datetime.".format(dtype)
+                "index column type must be numeric or datetime.".format(dtype.kind)
             )
 
     parts = []
     lowers, uppers = divisions[:-1], divisions[1:]
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
-        q = sql.select(columns).where(sql.and_(index >= lower, cond)).select_from(table)
+        if dtype.kind == "O":
+            q = sql.select(columns).order_by(index_col).offset(lower).limit(upper-lower).select_from(table)
+        else:
+            q = sql.select(columns).where(sql.and_(index >= lower, cond)).select_from(table)
         parts.append(
             delayed(_read_sql_chunk)(
                 q, uri, meta, engine_kwargs=engine_kwargs, **kwargs
@@ -341,13 +354,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine    # doctest: +SKIP
-    >>> with tmpfile() as f:                    # doctest: +SKIP
-    ...     db = 'sqlite:///%s' %f              # doctest: +SKIP
-    ...     ddf.to_sql('test', db)              # doctest: +SKIP
-    ...     engine = create_engine(db, echo=False) # doctest: +SKIP
-    ...     result = engine.execute("SELECT * FROM test").fetchall() # doctest: +SKIP
-    >>> result                                  # doctest: +SKIP
+    >>> from sqlalchemy import create_engine
+    >>> with tmpfile() as f:
+    ...     db = 'sqlite:///%s' % f
+    ...     ddf.to_sql('test', db)
+    ...     engine = create_engine(db, echo=False)
+    ...     result = engine.execute("SELECT * FROM test").fetchall()
+    >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):
@@ -363,8 +376,15 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
-        method=method,
     )
+
+    if method:
+        if not PANDAS_GT_0240:
+            raise NotImplementedError(
+                "'method' requires pandas>=0.24.0. You have version %s" % PANDAS_VERSION
+            )
+        else:
+            kwargs["method"] = method
 
     def make_meta(meta):
         return meta.to_sql(**kwargs)
