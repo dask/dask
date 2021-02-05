@@ -1583,7 +1583,7 @@ def test_dask_layers_to_delayed():
     da = pytest.importorskip("dask.array")
     i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
     name = i.key[0]
-    assert i.key[1:] == (0, )
+    assert i.key[1:] == (0,)
     assert i.dask.layers.keys() == {"delayed-" + name}
     assert i.dask.dependencies == {"delayed-" + name: set()}
     assert i.__dask_layers__() == ("delayed-" + name,)
