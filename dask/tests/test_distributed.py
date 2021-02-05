@@ -10,6 +10,7 @@ from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
+from dask.array.numpy_compat import _numpy_120
 from dask.delayed import Delayed
 from dask.utils import tmpdir, get_named_args
 from distributed import futures_of
@@ -68,6 +69,7 @@ def test_persist_nested(c):
     assert res[2:] == (4, [5])
 
 
+@pytest.mark.skipif(_numpy_120, reason="https://github.com/dask/dask/issues/7170")
 def test_futures_to_delayed_dataframe(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
@@ -237,9 +239,9 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
 
     # The later annotations should not override the earlier annotations
     with dask.annotate(retries=2):
-        y = x.map_blocks(flaky_double, meta=np.array((), dtype=np.float))
+        y = x.map_blocks(flaky_double, meta=np.array((), dtype=np.float_))
     with dask.annotate(retries=0):
-        z = y.map_blocks(reliable_double, meta=np.array((), dtype=np.float))
+        z = y.map_blocks(reliable_double, meta=np.array((), dtype=np.float_))
 
     with dask.config.set(optimization__fuse__active=False):
         z = await c.compute(z)
