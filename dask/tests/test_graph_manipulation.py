@@ -135,15 +135,19 @@ def test_block_until_done_collections():
 def test_clone(layers):
     dsk1 = {("a", h1): 1, ("a", h2): 2}
     dsk2 = {"b": (add, ("a", h1), ("a", h2))}
+    dsk3 = {"c": 1}
     if layers:
-        dsk1 = HighLevelGraph({"a": dsk1}, dependencies={"a": set()})
+        dsk1 = HighLevelGraph.from_collections("a", dsk1)
         dsk2 = HighLevelGraph(
             {"a": dsk1, "b": dsk2}, dependencies={"a": set(), "b": {"a"}}
         )
+        dsk3 = HighLevelGraph.from_collections("c", dsk3)
     else:
         dsk2.update(dsk1)
+
     t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
     t2 = Tuple(dsk2, ["b"])
+    t3 = Tuple(dsk3, ["c"])
 
     c1 = clone(t2, seed=1, assume_layers=layers)
     c2 = clone(t2, seed=1, assume_layers=layers)
@@ -164,3 +168,13 @@ def test_clone(layers):
     # No top-level keys of t2 are in c7
     assert not set(t2.__dask_keys__()) & c7.__dask_graph__().keys()
     assert dask.compute(t2, c1, c2, c3, c4, c5, c6, c7) == ((3,),) * 8
+
+    # Clone nested; some of the collections in omit are unrelated
+    out = clone({"x": [t2]}, omit={"y": [t1, t3]}, assume_layers=layers)
+    assert dask.compute(out) == ({"x": [(3,)]},)
+    c8 = out["x"][0]
+    assert_no_common_keys(t3, c8)
+    # All keys of t1 are in c8
+    assert not t1.__dask_graph__().keys() - c8.__dask_graph__().keys()
+    # No top-level keys of t2 are in c8
+    assert not set(t2.__dask_keys__()) & c8.__dask_graph__().keys()

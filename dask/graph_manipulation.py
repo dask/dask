@@ -19,7 +19,6 @@ from .core import flatten
 from .dataframe import DataFrame, Series
 from .delayed import Delayed, delayed
 from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
-from .utils import ensure_dict
 
 __all__ = ("bind", "block_until_done", "checkpoint", "clone")
 
