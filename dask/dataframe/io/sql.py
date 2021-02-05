@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 import dask
-from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
 from .io import from_delayed, from_pandas
 from ... import delayed
@@ -189,7 +188,6 @@ def read_sql_table(
                 )
                 or 1
             )
-
         if dtype.kind == "M":
             divisions = methods.tolist(
                 pd.date_range(
@@ -207,7 +205,7 @@ def read_sql_table(
         else:
             raise TypeError(
                 'Provided index column is of type "{}".  If divisions is not provided the '
-                "index column type must be numeric or datetime.".format(dtype.kind)
+                "index column type must be numeric or datetime.".format(dtype)
             )
 
     parts = []
@@ -353,14 +351,14 @@ def to_sql(
     3                ...     ...
     Dask Name: from_pandas, 2 tasks
 
-    >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine
-    >>> with tmpfile() as f:
-    ...     db = 'sqlite:///%s' % f
-    ...     ddf.to_sql('test', db)
-    ...     engine = create_engine(db, echo=False)
-    ...     result = engine.execute("SELECT * FROM test").fetchall()
-    >>> result
+    # >>> from dask.utils import tmpfile
+    # >>> from sqlalchemy import create_engine
+    # >>> with tmpfile() as f:
+    # ...     db = 'sqlite:///%s' % f
+    # ...     ddf.to_sql('test', db)
+    # ...     engine = create_engine(db, echo=False)
+    # ...     result = engine.execute("SELECT * FROM test").fetchall()
+    # >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):
@@ -376,6 +374,7 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
+        method=method,
     )
 
     if method:
