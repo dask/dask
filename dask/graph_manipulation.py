@@ -247,20 +247,13 @@ def _bind_one(
     dsk = child.__dask_graph__()
     new_layers = {}
     new_deps = {}
-    if isinstance(dsk, HighLevelGraph):
-        prev_layers = dsk.layers
-        prev_deps = dsk.dependencies
-        all_keys = dsk.get_all_external_keys()
-    else:
-        dsk = ensure_dict(dsk)
-        prev_layers = {prev_coll_name: dsk}
-        prev_deps = {prev_coll_name: set()}
-        all_keys = dsk.keys()
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(prev_coll_name, dsk)
 
-    clone_keys = all_keys - omit_keys
+    clone_keys = dsk.get_all_external_keys() - omit_keys
     for layer_name in omit_layers:
         try:
-            layer = prev_layers[layer_name]
+            layer = dsk.layers[layer_name]
         except KeyError:
             continue
         clone_keys -= layer.get_output_keys()
@@ -289,8 +282,8 @@ def _bind_one(
         if new_layer_name in new_layers:
             continue
 
-        layer = prev_layers[prev_layer_name]
-        layer_deps = prev_deps[prev_layer_name]
+        layer = dsk.layers[prev_layer_name]
+        layer_deps = dsk.dependencies[prev_layer_name]
         layer_deps_to_clone = layer_deps - omit_layers
         layer_deps_to_omit = layer_deps & omit_layers
         layers_to_clone |= layer_deps_to_clone
@@ -313,10 +306,10 @@ def _bind_one(
         layer_name = layers_to_copy_verbatim.pop()
         if layer_name in new_layers:
             continue
-        layer_deps = prev_deps[layer_name]
+        layer_deps = dsk.dependencies[layer_name]
         layers_to_copy_verbatim |= layer_deps
         new_deps[layer_name] = layer_deps
-        new_layers[layer_name] = prev_layers[layer_name]
+        new_layers[layer_name] = dsk.layers[layer_name]
 
     rebuild, args = child.__dask_postpersist__()
     return rebuild(

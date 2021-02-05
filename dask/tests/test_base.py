@@ -610,6 +610,9 @@ class Tuple(DaskMethodsMixin):
     def __dask_keys__(self):
         return self._keys
 
+    def __dask_layers__(self):
+        return (get_collection_name(self),)
+
     def __dask_tokenize__(self):
         return self._keys
 

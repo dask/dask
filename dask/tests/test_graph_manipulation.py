@@ -1,14 +1,15 @@
 import random
 import time
+from operator import add
 
 import pytest
 
 import dask
 from dask import delayed
-from dask.utils_test import import_or_none
 from dask.graph_manipulation import checkpoint, clone, bind, block_until_done
-
+from dask.highlevelgraph import HighLevelGraph
 from dask.tests.test_base import Tuple
+from dask.utils_test import import_or_none
 
 
 da = import_or_none("dask.array")
@@ -25,6 +26,15 @@ class NodeCounter:
         time.sleep(random.random() / 100)
         self.n += 1
         return x
+
+
+def assert_no_common_keys(a, b):
+    dsk1 = a.__dask_graph__()
+    dsk2 = b.__dask_graph__()
+    assert not dsk1.keys() & dsk2.keys()
+    if isinstance(dsk1, HighLevelGraph) and isinstance(dsk2, HighLevelGraph):
+        assert not dsk1.layers.keys() & dsk2.layers.keys()
+        assert not dsk1.dependencies.keys() & dsk2.dependencies.keys()
 
 
 # Generic hashables
@@ -119,3 +129,38 @@ def test_block_until_done_collections():
     dd.utils.assert_eq(colls2[7], colls[7])
     dd.utils.assert_eq(colls2[8], colls[8])
     dd.utils.assert_eq(colls2[9], colls[9])
+
+
+@pytest.mark.parametrize("layers", [False, True])
+def test_clone(layers):
+    dsk1 = {("a", h1): 1, ("a", h2): 2}
+    dsk2 = {"b": (add, ("a", h1), ("a", h2))}
+    if layers:
+        dsk1 = HighLevelGraph({"a": dsk1}, dependencies={"a": set()})
+        dsk2 = HighLevelGraph(
+            {"a": dsk1, "b": dsk2}, dependencies={"a": set(), "b": {"a"}}
+        )
+    else:
+        dsk2.update(dsk1)
+    t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
+    t2 = Tuple(dsk2, ["b"])
+
+    c1 = clone(t2, seed=1, assume_layers=layers)
+    c2 = clone(t2, seed=1, assume_layers=layers)
+    c3 = clone(t2, seed=2, assume_layers=layers)
+    c4 = clone(c1, seed=1, assume_layers=layers)  # Clone of a clone has different keys
+    c5 = clone(t2, assume_layers=layers)  # Random seed
+    c6 = clone(t2, assume_layers=layers)  # Random seed
+    c7 = clone(t2, omit=t1, seed=1, assume_layers=layers)
+
+    assert c1.__dask_graph__() == c2.__dask_graph__()
+    assert_no_common_keys(c1, t2)
+    assert_no_common_keys(c1, c3)
+    assert_no_common_keys(c1, c4)
+    assert_no_common_keys(c1, c5)
+    assert_no_common_keys(c5, c6)
+    # All keys of t1 are in c7
+    assert not t1.__dask_graph__().keys() - c7.__dask_graph__().keys()
+    # No top-level keys of t2 are in c7
+    assert not set(t2.__dask_keys__()) & c7.__dask_graph__().keys()
+    assert dask.compute(t2, c1, c2, c3, c4, c5, c6, c7) == ((3,),) * 8
