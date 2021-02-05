@@ -192,6 +192,38 @@ def test_clone(layers):
     assert_no_common_keys(c8, t3, layers=layers)
 
 
+@pytest.mark.parametrize("layers", [False, True])
+def test_bind(layers):
+    dsk1 = {("a", h1): 1, ("a", h2): 2}
+    dsk2 = {"b": (add, ("a", h1), ("a", h2))}
+    dsk3 = {"c": "b"}
+    cnt = NodeCounter()
+    dsk4 = {("d", h1): (cnt.f, 1), ("d", h2): (cnt.f, 2)}
+
+    if layers:
+        dsk1 = HighLevelGraph.from_collections("a", dsk1)
+        dsk2 = HighLevelGraph(
+            {"a": dsk1, "b": dsk2}, dependencies={"a": set(), "b": {"a"}}
+        )
+        dsk3 = HighLevelGraph(
+            {"a": dsk1, "b": dsk2, "c": dsk3},
+            dependencies={"a": set(), "b": {"a"}, "c": {"b"}},
+        )
+        dsk4 = HighLevelGraph.from_collections("d", dsk4)
+    else:
+        dsk2.update(dsk1)
+        dsk3.update(dsk2)
+
+    t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
+    t2 = Tuple(dsk2, ["b"])
+    t3 = Tuple(dsk3, ["c"])
+    t4 = Tuple(dsk4, ["d"])
+
+    # TODO
+    b3 = bind(t3, t4)
+    b3 = bind(t3, t4, omit=t2)
+
+
 @pytest.mark.skipif("not da or not db or not dd")
 @pytest.mark.parametrize("func", [bind, clone])
 def test_bind_clone_collections(func):
