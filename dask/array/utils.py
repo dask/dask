@@ -411,12 +411,14 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
 
 def array_safe(a, like, **kwargs):
     """
-    If a is dask.array, return dask.array.asarray(a, **kwargs),
-    otherwise return np.asarray(a, like=like, **kwargs), dispatching
+    If `a` is `dask.array`, return `dask.array.asarray(a, **kwargs)`,
+    otherwise return `np.asarray(a, like=like, **kwargs)`, dispatching
     the call to the library that implements the like array. Note that
-    when a is a dask.Array but like isn't, this function will call
-    a.compute(scheduler="sync") before np.asarray, as downstream
-    libraries are unlikely to know how to convert a dask.Array.
+    when `a` is a `dask.Array` backed by `cupy.ndarray` but `like`
+    isn't, this function will call `a.compute(scheduler="sync")`
+    before `np.array`, as downstream libraries are unlikely to know how
+    to convert a `dask.Array` and CuPy doesn't implement `__array__` to
+    prevent implicit copies to host.
     """
     from .routines import array
 
