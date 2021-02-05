@@ -56,6 +56,8 @@ class Layer(collections.abc.Mapping):
     implementations.
     """
 
+    annotations: Optional[MutableMapping[str, Any]]
+
     def __init__(self, annotations=None):
         if annotations:
             self.annotations = annotations
@@ -83,7 +85,7 @@ class Layer(collections.abc.Mapping):
         """
         return self.keys()
 
-    def pack_annotations(self) -> Mapping[str, Any]:
+    def pack_annotations(self) -> Optional[Mapping[str, Any]]:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
@@ -405,7 +407,7 @@ class HighLevelGraph(Mapping):
         self,
         layers: Mapping[str, Mapping],
         dependencies: Mapping[str, AbstractSet],
-        key_dependencies: Dict[Hashable, AbstractSet] = None,
+        key_dependencies: Optional[Dict[Hashable, AbstractSet]] = None,
     ):
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies or {}
