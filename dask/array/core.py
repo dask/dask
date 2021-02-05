@@ -375,7 +375,9 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     from .utils import ones_like_safe
 
     args = [
-        ones_like_safe(x, shape=x.shape, dtype=x.dtype) if is_arraylike(x) else x
+        ones_like_safe(x, shape=((1,) * x.ndim), dtype=x.dtype)
+        if is_arraylike(x)
+        else x
         for x in args
     ]
     try:
