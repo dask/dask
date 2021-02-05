@@ -44,9 +44,13 @@ from ..utils import (
     derived_from,
     factors,
     format_bytes,
+<<<<<<< HEAD
     funcname,
     has_keyword,
     ignoring,
+=======
+    typename,
+>>>>>>> Just change Array to is_arraylike
     is_arraylike,
     is_dataframe_like,
     is_index_like,
@@ -368,7 +372,9 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
-    args = [meta_nonempty(x) for x in args]
+    args = [
+        np.ones((1,) * x.ndim, dtype=x.dtype) if is_arraylike(x) else x for x in args
+    ]
     try:
         with np.errstate(all="ignore"):
             o = func(*args, **kwargs)
@@ -5235,4 +5241,4 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
 
 
 from .blockwise import blockwise
-from .utils import compute_meta, meta_from_array, meta_nonempty
+from .utils import compute_meta, meta_from_array

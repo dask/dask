@@ -29,22 +29,6 @@ def normalize_to_array(x):
         return x
 
 
-def meta_nonempty(x):
-    """Normalize an array to appropriate non-empty meta object
-
-    Parameters
-    ----------
-    x: array-like
-        An object that looks sufficiently like a Numpy array
-    Returns
-    -------
-    array-like with one element of the correct dtype and ndims
-    """
-    if not is_arraylike(x):
-        return x
-    return np.ones((1,) * x.ndim, dtype=x.dtype)
-
-
 def meta_from_array(x, ndim=None, dtype=None):
     """Normalize an array to appropriate meta object
 
