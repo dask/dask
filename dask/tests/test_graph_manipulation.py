@@ -28,13 +28,31 @@ class NodeCounter:
         return x
 
 
-def assert_no_common_keys(a, b):
+def assert_no_common_keys(a, b, omit=None, *, layers: bool) -> None:
     dsk1 = a.__dask_graph__()
     dsk2 = b.__dask_graph__()
-    assert not dsk1.keys() & dsk2.keys()
-    if isinstance(dsk1, HighLevelGraph) and isinstance(dsk2, HighLevelGraph):
-        assert not dsk1.layers.keys() & dsk2.layers.keys()
-        assert not dsk1.dependencies.keys() & dsk2.dependencies.keys()
+
+    if omit is not None:
+        dsko = omit.__dask_graph__()
+        assert not (dsk1.keys() - dsko.keys()) & dsk2.keys()
+        assert not dsko.keys() - dsk1.keys()
+        assert not dsko.keys() - dsk2.keys()
+        if layers:
+            assert not (dsk1.layers.keys() - dsko.layers.keys()) & dsk2.layers.keys()
+            assert (
+                not (dsk1.dependencies.keys() - dsko.dependencies.keys())
+                & dsk2.dependencies.keys()
+            )
+            assert not dsko.layers.keys() - dsk1.layers.keys()
+            assert not dsko.layers.keys() - dsk2.layers.keys()
+            assert not dsko.dependencies.keys() - dsk1.dependencies.keys()
+            assert not dsko.dependencies.keys() - dsk2.dependencies.keys()
+
+    else:
+        assert not dsk1.keys() & dsk2.keys()
+        if layers:
+            assert not dsk1.layers.keys() & dsk2.layers.keys()
+            assert not dsk1.dependencies.keys() & dsk2.dependencies.keys()
 
 
 # Generic hashables
@@ -158,23 +176,83 @@ def test_clone(layers):
     c7 = clone(t2, omit=t1, seed=1, assume_layers=layers)
 
     assert c1.__dask_graph__() == c2.__dask_graph__()
-    assert_no_common_keys(c1, t2)
-    assert_no_common_keys(c1, c3)
-    assert_no_common_keys(c1, c4)
-    assert_no_common_keys(c1, c5)
-    assert_no_common_keys(c5, c6)
-    # All keys of t1 are in c7
-    assert not t1.__dask_graph__().keys() - c7.__dask_graph__().keys()
-    # No top-level keys of t2 are in c7
-    assert not set(t2.__dask_keys__()) & c7.__dask_graph__().keys()
+    assert_no_common_keys(c1, t2, layers=layers)
+    assert_no_common_keys(c1, c3, layers=layers)
+    assert_no_common_keys(c1, c4, layers=layers)
+    assert_no_common_keys(c1, c5, layers=layers)
+    assert_no_common_keys(c5, c6, layers=layers)
+    assert_no_common_keys(c7, t2, omit=t1, layers=layers)
     assert dask.compute(t2, c1, c2, c3, c4, c5, c6, c7) == ((3,),) * 8
 
     # Clone nested; some of the collections in omit are unrelated
     out = clone({"x": [t2]}, omit={"y": [t1, t3]}, assume_layers=layers)
     assert dask.compute(out) == ({"x": [(3,)]},)
     c8 = out["x"][0]
-    assert_no_common_keys(t3, c8)
-    # All keys of t1 are in c8
-    assert not t1.__dask_graph__().keys() - c8.__dask_graph__().keys()
-    # No top-level keys of t2 are in c8
-    assert not set(t2.__dask_keys__()) & c8.__dask_graph__().keys()
+    assert_no_common_keys(c8, t2, omit=t1, layers=layers)
+    assert_no_common_keys(c8, t3, layers=layers)
+
+
+@pytest.mark.skipif("not da or not db or not dd")
+@pytest.mark.parametrize("func", [bind, clone])
+def test_bind_clone_collections(func):
+    @delayed
+    def double(x):
+        return x * 2
+
+    # dask.delayed
+    d1 = double(2)
+    d2 = double(d1)
+    # dask.array
+    a1 = da.ones((10, 10), chunks=5)
+    a2 = a1 + 1
+    a3 = a2.T
+    # dask.bag
+    b1 = db.from_sequence([1, 2], npartitions=2)
+    # b1's tasks are not callable, so we need an extra step to properly test bind
+    b2 = b1.map(lambda x: x * 2)
+    b3 = b2.map(lambda x: x + 1)
+    b4 = b3.min()
+    # dask.dataframe
+    df = pd.DataFrame({"x": list(range(10))})
+    ddf1 = dd.from_pandas(df, npartitions=2)
+    # ddf1's tasks are not callable, so we need an extra step to properly test bind
+    ddf2 = ddf1.map_partitions(lambda x: x * 2)
+    ddf3 = ddf2.map_partitions(lambda x: x + 1)
+    ddf4 = ddf3["x"]  # dd.Series
+    ddf5 = ddf4.min()  # dd.Scalar
+
+    cnt = NodeCounter()
+    if func is bind:
+        parent = da.ones((10, 10), chunks=5).map_blocks(cnt.f)
+        cnt.n = 0
+        d2c, a3c, b3c, b4c, ddf3c, ddf4c, ddf5c = bind(
+            children=(d2, a3, b3, b4, ddf3, ddf4, ddf5),
+            parents=parent,
+            omit=(d1, a1, b2, ddf2),
+        )
+    else:
+        d2c, a3c, b3c, b4c, ddf3c, ddf4c, ddf5c = clone(
+            d2, a3, b3, b4, ddf3, ddf4, ddf5, omit=(d1, a1, b2, ddf2)
+        )
+
+    assert d2.compute() == d2c.compute()
+    assert cnt.n == 4 or func is clone
+    da.utils.assert_eq(a3c, a3)
+    assert cnt.n == 8 or func is clone
+    db.utils.assert_eq(b3c, b3)
+    assert cnt.n == 12 or func is clone
+    db.utils.assert_eq(b4c, b4)
+    assert cnt.n == 16 or func is clone
+    dd.utils.assert_eq(ddf3c, ddf3)
+    assert cnt.n == 24 or func is clone  # dd.utils.assert_eq calls compute() twice
+    dd.utils.assert_eq(ddf4c, ddf4)
+    assert cnt.n == 32 or func is clone  # dd.utils.assert_eq calls compute() twice
+    dd.utils.assert_eq(ddf5c, ddf5)
+    assert cnt.n == 36 or func is clone
+
+    assert_no_common_keys(d2c, d2, omit=d1, layers=True)
+    assert_no_common_keys(a3c, a3, omit=a1, layers=True)
+    assert_no_common_keys(b3c, b3, omit=b2, layers=True)
+    assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
+    assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
+    assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
