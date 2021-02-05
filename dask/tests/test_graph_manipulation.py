@@ -42,7 +42,7 @@ h1 = object()
 h2 = object()
 
 
-def collections():
+def collections_with_node_counters():
     cnt = NodeCounter()
     df = pd.DataFrame({"x": list(range(10))})
 
@@ -79,7 +79,7 @@ def test_checkpoint():
 
 @pytest.mark.skipif("not da or not db or not dd")
 def test_checkpoint_collections():
-    colls, cnt = collections()
+    colls, cnt = collections_with_node_counters()
     cp = checkpoint(*colls)
     cp.compute(scheduler="sync")
     assert cnt.n == 16
@@ -104,7 +104,7 @@ def test_block_until_done_many():
 
 @pytest.mark.skipif("not da or not db or not dd")
 def test_block_until_done_collections():
-    colls, cnt = collections()
+    colls, cnt = collections_with_node_counters()
 
     # Create a delayed that depends on a single one among all collections
     @delayed
