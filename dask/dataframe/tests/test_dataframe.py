@@ -9,7 +9,7 @@ from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_118, _numpy_120
+from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat
@@ -4046,7 +4046,6 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
-@pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Avoid searchsorted failure.
@@ -4468,3 +4467,17 @@ def test_join_series():
     expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
     actual_df = ddf.join(ddf["x"], lsuffix="_")
     assert_eq(actual_df, expected_df)
+
+
+@pytest.mark.skipif(
+    not dd._compat.PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2"
+)
+def test_assign_na_float_columns():
+    # See https://github.com/dask/dask/issues/7156
+    df_pandas = pd.DataFrame({"a": [1.1]}, dtype="Float64")
+    df = dd.from_pandas(df_pandas, npartitions=1)
+
+    df = df.assign(new_col=df["a"])
+
+    assert df.compute()["a"].dtypes == "Float64"
+    assert df.compute()["new_col"].dtypes == "Float64"

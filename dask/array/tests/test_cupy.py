@@ -4,6 +4,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.gufunc import apply_gufunc
 from dask.sizeof import sizeof
@@ -958,7 +959,7 @@ def test_sparse_dot(sp_format):
     assert_eq(z, da_z.todense())
 
 
-@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_percentile():
     d = da.from_array(cupy.ones((16,)), chunks=(4,))
     qs = np.array([0, 50, 100])
@@ -974,20 +975,25 @@ def test_percentile():
     result = da.percentile(d, qs, interpolation="midpoint")
     assert_eq(result, np.array([0, 5, 20], dtype=result.dtype))
 
-    # Currently fails, tokenize(cupy.array(...)) is not deterministic.
-    # See https://github.com/dask/dask/issues/6718
-    # assert same_keys(
-    #     da.percentile(d, qs),
-    #     da.percentile(d, qs)
-    # )
-
     assert not same_keys(
         da.percentile(d, qs, interpolation="midpoint"),
         da.percentile(d, [0, 50], interpolation="midpoint"),
     )
 
 
-@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
+@pytest.mark.xfail(
+    reason="Non-deterministic tokenize(cupy.array(...)), "
+    "see https://github.com/dask/dask/issues/6718"
+)
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentile_tokenize():
+    d = da.from_array(cupy.ones((16,)), chunks=(4,))
+    qs = np.array([0, 50, 100])
+
+    assert same_keys(da.percentile(d, qs), da.percentile(d, qs))
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_percentiles_with_empty_arrays():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     res = da.percentile(x, [10, 50, 90], interpolation="midpoint")
@@ -997,7 +1003,7 @@ def test_percentiles_with_empty_arrays():
     assert_eq(res, np.array([1, 1, 1], dtype=x.dtype))
 
 
-@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_percentiles_with_empty_q():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     result = da.percentile(x, [], interpolation="midpoint")
@@ -1007,7 +1013,7 @@ def test_percentiles_with_empty_q():
     assert_eq(result, np.array([], dtype=x.dtype))
 
 
-@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("q", [5, 5.0, np.int64(5), np.float64(5)])
 def test_percentiles_with_scaler_percentile(q):
     # Regression test to ensure da.percentile works with scalar percentiles
@@ -1020,7 +1026,7 @@ def test_percentiles_with_scaler_percentile(q):
     assert_eq(result, np.array([1], dtype=d.dtype))
 
 
-@pytest.mark.skipif(np.__version__ < "1.20", reason="NEP-35 is not available")
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 def test_percentiles_with_unknown_chunk_sizes():
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
     x = rs.random(1000, chunks=(100,))
