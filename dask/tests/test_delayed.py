@@ -695,8 +695,8 @@ def test_dask_layers_to_delayed():
     # match the key
     da = pytest.importorskip("dask.array")
     d = da.ones(1).to_delayed()[0]
-    name = "ones-faa3493518a0405cb3183468efb75d4e"
-    assert d.key == (name, 0)
+    name = d.key[0]
+    assert d.key[1:] == (0, )
     assert d.dask.layers.keys() == {"delayed-" + name}
     assert d.dask.dependencies == {"delayed-" + name: set()}
     assert d.__dask_layers__() == ("delayed-" + name,)
