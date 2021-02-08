@@ -200,6 +200,7 @@ def test_optimize_graph_false():
     assert len(keys) == 2
 
 
+@requires_cloudpickle
 def test_works_with_highlevel_graph():
     """Previously `dask.multiprocessing.get` would accidentally forward
     `HighLevelGraph` graphs through the dask optimization/scheduling routines,
