@@ -195,33 +195,33 @@ def test_clone(layers):
 
 @pytest.mark.parametrize("layers", [False, True])
 def test_bind(layers):
-    dsk1 = {("a", h1): 1, ("a", h2): 2}
-    dsk2 = {"b": (add, ("a", h1), ("a", h2))}
-    dsk3 = {"c": "b"}
+    dsk1 = {("a-1", h1): 1, ("a-1", h2): 2}
+    dsk2 = {"b-1": (add, ("a-1", h1), ("a-1", h2))}
+    dsk3 = {"c-1": "b-1"}
     cnt = NodeCounter()
-    dsk4 = {("d", h1): (cnt.f, 1), ("d", h2): (cnt.f, 2)}
+    dsk4 = {("d-1", h1): (cnt.f, 1), ("d-1", h2): (cnt.f, 2)}
 
     if layers:
-        dsk1 = HighLevelGraph.from_collections("a", dsk1)
+        dsk1 = HighLevelGraph.from_collections("a-1", dsk1)
         dsk2 = HighLevelGraph(
-            {"a": dsk1, "b": dsk2}, dependencies={"a": set(), "b": {"a"}}
+            {"a-1": dsk1, "b-1": dsk2}, dependencies={"a-1": set(), "b-1": {"a-1"}}
         )
         dsk3 = HighLevelGraph(
-            {"a": dsk1, "b": dsk2, "c": dsk3},
-            dependencies={"a": set(), "b": {"a"}, "c": {"b"}},
+            {"a-1": dsk1, "b-1": dsk2, "c-1": dsk3},
+            dependencies={"a-1": set(), "b-1": {"a-1"}, "c-1": {"b-1"}},
         )
-        dsk4 = HighLevelGraph.from_collections("d", dsk4)
+        dsk4 = HighLevelGraph.from_collections("d-1", dsk4)
     else:
         dsk2.update(dsk1)
         dsk3.update(dsk2)
 
     # t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
-    t2 = Tuple(dsk2, ["b"])
-    t3 = Tuple(dsk3, ["c"])
-    t4 = Tuple(dsk4, [("d", h1), ("d", h2)])
+    t2 = Tuple(dsk2, ["b-1"])
+    t3 = Tuple(dsk3, ["c-1"])
+    t4 = Tuple(dsk4, [("d-1", h1), ("d-1", h2)])
 
     bound1 = bind(t3, t4, seed=1)
-    cloned_b_name = clone_key("b", seed=1)
+    cloned_b_name = clone_key("b-1", seed=1)
 
     # import pprint
     # print()
@@ -234,7 +234,7 @@ def test_bind(layers):
     bound2 = bind(t3, t4, omit=t2, seed=1)
     # pprint.pprint(dict(bound2.__dask_graph__()))
 
-    cloned_c_name = clone_key("c", seed=1)
+    cloned_c_name = clone_key("c-1", seed=1)
     assert bound2.__dask_graph__()[cloned_c_name] is chunks.bind
     assert bound2.compute() == (3, )
     assert cnt.n == 4
