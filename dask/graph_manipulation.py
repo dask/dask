@@ -29,8 +29,8 @@ def checkpoint(*collections) -> Delayed:
     """Build a :doc:`delayed` which waits until all chunks of the input collection(s)
     have been computed before returning None.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     collections
         Zero or more Dask collections or nested data structures containing zero or more
         collections
@@ -38,11 +38,6 @@ def checkpoint(*collections) -> Delayed:
     Returns
     -------
     :doc:`delayed` yielding None
-
-    See Also
-    --------
-    - :func:`block_until_done`
-    - :func:`bind`
     """
     collections, _ = unpack_collections(*collections)
     if len(collections) != 1:
@@ -84,8 +79,8 @@ def _build_map_layer(
     """Apply func to all keys of collection. Create a Blockwise layer whenever possible;
     fall back to BasicLayer otherwise.
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     func
         Callable to be invoked on the graph node
     name : str
@@ -163,8 +158,8 @@ def bind(
     >>> dask.compute(b3, c3)
     (array([2., 2., 2., 2.]), array([3., 3., 3., 3.]))
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     children
         Dask collection or nested structure of Dask collections
     parents
@@ -192,17 +187,12 @@ def bind(
 
     Returns
     -------
-    Dask collection or structure of dask collection equivalent as ``children``, which
-    compute to the same values.
-    All keys of ``children`` will be regenerated, up to and excluding the keys of
-    ``omit``. Non-constant nodes immediately above ``omit``, or the leaf non-constant
-    nodes if the collections in ``omit`` are not found, are prevented from computing
-    until all collections in ``parents`` have been fully computed.
-
-    See Also
-    --------
-    - :func:`block_until_done`
-    - :func:`checkpoint`
+    Same as ``children``
+        Dask collection or structure of dask collection equivalent to ``children``,
+        which compute to the same values. All keys of ``children`` will be regenerated,
+        up to and excluding the keys of ``omit``. Nodes immediately above ``omit``, or
+        the leaf nodes if the collections in ``omit`` are not found, are prevented from
+        computing until all collections in ``parents`` have been fully computed.
     """
     if seed is None:
         seed = uuid.uuid4().bytes
@@ -323,7 +313,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     independent calculations.
 
     Example
-    ------
+    -------
     (tokens have been simplified for the sake of brevity)
 
     >>> from dask import array as da
@@ -348,10 +338,10 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
      ('add-5', 0): (<function operator.add>, ('add-4', 0), 1),
      ('add-5', 1): (<function operator.add>, ('add-4', 1), 1)}
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     collections
-        One or more Dask collections or nested structures of Dask collections
+        Zero or more Dask collections or nested structures of Dask collections
     omit
         Dask collection or nested structure of Dask collections which will not be cloned
     seed
@@ -361,13 +351,10 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
 
     Returns
     -------
-    Dask collections of the same type as the inputs, which compute to the same value, or
-    nested structures equivalent to the inputs, where the original collections have been
-    replaced.
-
-    See Also
-    --------
-    - :func:`bind`
+    Same as ``collections``
+        Dask collections of the same type as the inputs, which compute to the same
+        value, or nested structures equivalent to the inputs, where the original
+        collections have been replaced.
     """
     out = bind(
         collections, parents=None, omit=omit, seed=seed, assume_layers=assume_layers
@@ -395,21 +382,17 @@ def block_until_done(*collections):
     >>> y = da.zeros(10, chunks=5)
     >>> u, v = block_until_done(x, y)
 
-    Arguments
-    ---------
+    Parameters
+    ----------
     collections
         Zero or more Dask collections or nested structures of Dask collections
 
     Returns
     -------
-    Dask collection of the same type as the input, which computes to the same value, or
-    a nested structure equivalent to the input where the original collections have been
-    replaced.
-
-    See Also
-    --------
-    - :func:`checkpoint`
-    - :func:`bind`
+    Same as ``collections``
+        Dask collection of the same type as the input, which computes to the same value,
+        or a nested structure equivalent to the input where the original collections
+        have been replaced.
     """
     blocker = checkpoint(*collections)
 

@@ -15,6 +15,7 @@ often a better choice. If you are a *core developer*, then you should start here
    spec.rst
    custom-graphs.rst
    optimize.rst
+   graph_manipulation.rst
    custom-collections.rst
    high-level-graphs.rst
 
