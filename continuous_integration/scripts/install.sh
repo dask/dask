@@ -23,9 +23,12 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/intake/filesystem_spec \
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
-        git+https://github.com/dask/distributed \
+        git+https://github.com/madsbk/distributed.git@hlg_pack_move_to_dask \
         git+https://github.com/zarr-developers/zarr-python
 fi
+
+# TODO: remove before PR merge!
+python -m pip install --quiet --no-deps git+https://github.com/madsbk/distributed.git@hlg_pack_move_to_dask
 
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
