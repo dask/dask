@@ -318,7 +318,7 @@ class Blockwise(Layer):
                 raise CancelledError(stringify(future.key))
 
         # All blockwise tasks will depend on the futures in `indices`
-        global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
+        global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
 
         return {
             "output": self.output,
@@ -351,16 +351,17 @@ class Blockwise(Layer):
             deserializing=True,
             func_future_args=state["func_future_args"],
         )
-        global_dependencies = list(state["global_dependencies"])
+        g_deps = state["global_dependencies"]
 
         if state["annotations"]:
             cls.unpack_annotations(annotations, state["annotations"], raw.keys())
 
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        dsk.update(raw)
-
-        for k, v in raw_deps.items():
-            dependencies[stringify(k)] = [stringify(d) for d in v] + global_dependencies
+        deps = {
+            stringify(k): {stringify(d) for d in v} | g_deps
+            for k, v in raw_deps.items()
+        }
+        return raw, deps
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.

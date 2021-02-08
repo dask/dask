@@ -290,7 +290,7 @@ class Layer(collections.abc.Mapping):
 
         # The scheduler expect all keys to be strings
         dependencies = {
-            stringify(k): [stringify(dep) for dep in deps]
+            stringify(k): {stringify(dep) for dep in deps}
             for k, deps in dependencies.items()
         }
 
@@ -306,10 +306,10 @@ class Layer(collections.abc.Mapping):
     def __dask_distributed_unpack__(
         cls,
         state: Any,
-        dsk: Dict[str, Any],
-        dependencies: MutableMapping[Hashable, set],
-        annotations: Dict[str, Any],
-    ) -> None:
+        dsk: Mapping[str, Any],
+        dependencies: Mapping[str, set],
+        annotations: Mapping[str, Any],
+    ) -> Tuple[Mapping[str, Any], Mapping[str, set]]:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
         This method is called by the scheduler in Distributed in order to unpack
@@ -324,21 +324,23 @@ class Layer(collections.abc.Mapping):
         ----------
         state: Any
             The state returned by Layer.__dask_distributed_pack__()
-        dsk: dict
+        dsk: Mapping, read-only
             The materialized low level graph of the already unpacked layers
-        dependencies: MutableMapping
+        dependencies: Mapping, read-only
             The dependencies of each key in `dsk`
-        annotations: dict
+        annotations: Mapping, read-only
             The materialized task annotations
+
+        Returns
+        -------
+        dsk:
         """
-        dsk.update(state["dsk"])
-        for k, v in state["dependencies"].items():
-            dependencies[k] = set(dependencies.get(k, ())) | set(v)
 
         if state["annotations"]:
             cls.unpack_annotations(
                 annotations, state["annotations"], state["dsk"].keys()
             )
+        return state["dsk"], state["dependencies"]
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer
@@ -840,7 +842,9 @@ class HighLevelGraph(Mapping):
         return dumps_msgpack({"layers": layers})
 
     @staticmethod
-    def __dask_distributed_unpack__(packed_hlg, annotations: dict):
+    def __dask_distributed_unpack__(
+        packed_hlg, annotations: Mapping[str, Any]
+    ) -> Tuple[Mapping[str, Any], Mapping[str, set], Mapping[str, Any]]:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         Parameters
@@ -854,20 +858,20 @@ class HighLevelGraph(Mapping):
 
         Returns
         -------
-        dsk: dict
-            Materialized graph of all nodes in the high level graph
-        deps: dict
+        dsk: Mapping[str, Any]
+            Materialized (stringified) graph of all nodes in the high level graph
+        deps: Mapping[str, set]
             Dependencies of each key in `dsk`
-        annotations: dict
+        anno: Mapping[str, Any]
             Annotations for `dsk`
         """
         from distributed.protocol.core import loads_msgpack
         from distributed.protocol.serialize import import_allowed_module
 
         hlg = loads_msgpack(*packed_hlg)
-        dsk = {}
-        deps = {}
-        out_annotations = {}
+        dsk: Mapping[str, Any] = {}
+        deps: Mapping[str, set] = {}
+        anno: Mapping[str, Any] = {}
         for layer in hlg["layers"]:
             if annotations:
                 if layer["state"]["annotations"] is None:
@@ -880,9 +884,12 @@ class HighLevelGraph(Mapping):
                 unpack_func = getattr(
                     mod, layer["__name__"]
                 ).__dask_distributed_unpack__
-            unpack_func(layer["state"], dsk, deps, out_annotations)
+            layer_dsk, layer_deps = unpack_func(layer["state"], dsk, deps, anno)
+            dsk.update(layer_dsk)
+            for k, v in layer_deps.items():
+                deps[k] = deps.get(k, set()) | v
 
-        return dsk, deps, out_annotations
+        return dsk, deps, anno
 
 
 def to_graphviz(

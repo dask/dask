@@ -153,15 +153,15 @@ class SimpleShuffleLayer(Layer):
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        dsk.update(toolz.valmap(dumps_task, raw))
+        keys = raw.keys() | dsk.keys()
 
         # TODO: use shuffle-knowledge to calculate dependencies more efficiently
-        dependencies.update(
-            {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
-        )
+        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
         if state["annotations"]:
             cls.unpack_annotations(annotations, state["annotations"], raw.keys())
+
+        return toolz.valmap(dumps_task, raw), deps
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
