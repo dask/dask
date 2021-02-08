@@ -229,10 +229,10 @@ class Layer(collections.abc.Mapping):
         seed
             Common hashable used to alter the keys; see :func:`dask.base.clone_key`
         bind_to
-            Optional key to bind the callable leaf nodes to. A callable leaf node here
-            is one that starts with a callable and does not reference any replaced keys;
-            in other words it's a node where the replacement graph traversal stops; it
-            may still have dependencies on non-replaced nodes.
+            Optional key to bind the leaf nodes to. A leaf node here is one that does
+            not reference any replaced keys; in other words it's a node where the
+            replacement graph traversal stops; it may still have dependencies on
+            non-replaced nodes.
             A bound node will not be computed until after ``bind_to`` has been computed.
 
         Returns
@@ -246,19 +246,16 @@ class Layer(collections.abc.Mapping):
         """
         from .graph_manipulation import chunks
 
-        is_callable: bool
         is_leaf: bool
 
         def clone_value(o):
             """Variant of distributed.utils_comm.subs_multiple, which allows injecting
             bind_to
             """
-            nonlocal is_callable
             nonlocal is_leaf
 
             typ = type(o)
             if typ is tuple and o and callable(o[0]):
-                is_callable = True
                 return (o[0],) + tuple(clone_value(i) for i in o[1:])
             elif typ is list:
                 return [clone_value(i) for i in o]
@@ -279,10 +276,9 @@ class Layer(collections.abc.Mapping):
         for key, value in self.items():
             if key in keys:
                 key = clone_key(key, seed)
-                is_callable = False
                 is_leaf = True
                 value = clone_value(value)
-                if bind_to is not None and is_callable and is_leaf:
+                if bind_to is not None and is_leaf:
                     value = (chunks.bind, value, bind_to)
                     bound = True
 

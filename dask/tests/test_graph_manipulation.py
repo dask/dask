@@ -220,23 +220,17 @@ def test_bind(layers):
     t3 = Tuple(dsk3, ["c-1"])
     t4 = Tuple(dsk4, [("d-1", h1), ("d-1", h2)])
 
-    bound1 = bind(t3, t4, seed=1)
-    cloned_b_name = clone_key("b-1", seed=1)
-
-    # import pprint
-    # print()
-    # pprint.pprint(dict(bound1.__dask_graph__()))
-
-    assert bound1.__dask_graph__()[cloned_b_name] is chunks.bind
-    assert bound1.compute() == (3, )
+    bound1 = bind(t3, t4, seed=1, assume_layers=layers)
+    cloned_a_name = clone_key("a-1", seed=1)
+    assert bound1.__dask_graph__()[cloned_a_name, h1][0] is chunks.bind
+    assert bound1.__dask_graph__()[cloned_a_name, h2][0] is chunks.bind
+    assert bound1.compute() == (3,)
     assert cnt.n == 2
 
-    bound2 = bind(t3, t4, omit=t2, seed=1)
-    # pprint.pprint(dict(bound2.__dask_graph__()))
-
+    bound2 = bind(t3, t4, omit=t2, seed=1, assume_layers=layers)
     cloned_c_name = clone_key("c-1", seed=1)
-    assert bound2.__dask_graph__()[cloned_c_name] is chunks.bind
-    assert bound2.compute() == (3, )
+    assert bound2.__dask_graph__()[cloned_c_name][0] is chunks.bind
+    assert bound2.compute() == (3,)
     assert cnt.n == 4
 
 

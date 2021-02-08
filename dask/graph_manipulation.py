@@ -133,7 +133,7 @@ def bind(
     *,
     omit=None,
     seed: Hashable = None,
-    assume_layers: bool = True
+    assume_layers: bool = True,
 ) -> T:
     """
     Make ``children`` collection(s), optionally omitting sub-collections, dependent on
