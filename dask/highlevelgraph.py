@@ -179,10 +179,19 @@ class Layer(collections.abc.Mapping):
         keys: Iterable,
     ) -> None:
         """
-        Expand a set of layer annotations across a set of keys, then merge those
+        Unpack a set of layer annotations across a set of keys, then merge those
         expanded annotations for the layer into an existing annotations mapping.
+
         This is not a simple shallow merge because some annotations like retries,
         priority, workers, etc need to be able to retain keys from different layers.
+
+        Parameters
+        ----------
+        annotations: MutableMapping[str, Any], output
+            Already unpacked annotations, which are to be updated with the new
+            unpacked annotations
+        keys: Iterable
+            All keys in the layer.
         """
         if new_annotations is None:
             return None
