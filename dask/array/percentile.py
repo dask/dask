@@ -191,8 +191,7 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
 
     if isinstance(finalq, Iterator):
         finalq = list(finalq)
-    if not is_arraylike(finalq):
-        finalq = np.array(finalq)
+    finalq = array_safe(finalq, like=finalq)
     qs = list(map(list, qs))
     vals = list(vals)
     if Ns is None:

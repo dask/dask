@@ -1,6 +1,33 @@
 Changelog
 =========
 
+2021.02.0
+---------
+
+Released on February 5, 2021
+
+- Add ``percentile`` support for NEP-35 (:pr:`7162`) `Peter Andreas Entschev`_
+- Added support for ``Float64`` in column assignment (:pr:`7173`) `Nils Braun`_
+- Coarsen rechunking error (:pr:`7127`) `Davis Bennett`_
+- Fix upstream CI tests (:pr:`6896`) `Julia Signell`_
+- Revise ``HighLevelGraph`` Mapping API (:pr:`7160`) `Guido Imperiale`_
+- Update low-level graph spec to use any hashable for keys (:pr:`7163`) `James Bourbeau`_
+- Generically rebuild a collection with different keys (:pr:`7142`) `Guido Imperiale`_
+- Make easier to link issues in PRs (:pr:`7130`) `Ray Bell`_
+- Add ``dask.array.append`` (:pr:`7146`) `D-Stacks`_
+- Allow ``dask.array.ravel`` to accept ``array_like`` argument (:pr:`7138`) `D-Stacks`_
+- Fixes link in array design doc (:pr:`7152`) `Thomas J. Fan`_
+- Fix example of using ``blockwise`` for an outer product (:pr:`7119`) `Bruce Merry`_
+- Deprecate ``HighlevelGraph.dicts`` in favor of ``.layers`` (:pr:`7145`) `Amit Kumar`_
+- Align ``FastParquetEngine`` with pyarrow engines (:pr:`7091`) `Richard (Rick) Zamora`_
+- Merge annotations (:pr:`7102`) `Ian Rose`_
+- Simplify contents of parts list in ``read_parquet`` (:pr:`7066`) `Richard (Rick) Zamora`_
+- ``check_meta(``): use ``__class__`` when checking DataFrame types (:pr:`7099`) `Mads R. B. Kristensen`_
+- Cache several properties (:pr:`7104`) `Illviljan`_
+- Fix parquet ``getitem`` optimization (:pr:`7106`) `Richard (Rick) Zamora`_
+- Add cytoolz back to CI environment (:pr:`7103`) `James Bourbeau`_
+
+
 2021.01.1
 ---------
 
@@ -211,7 +238,7 @@ Array
 +++++
 
 - ``_repr_html_``: color sides darker instead of drawing all the lines (:pr:`6683`) `Julia Signell`_
-- Removes warning from ``nanstd`` and ``nanvar`` (:pr:`6667`) `Thomas J Fan`_
+- Removes warning from ``nanstd`` and ``nanvar`` (:pr:`6667`) `Thomas J. Fan`_
 - Get shape of output from original array - ``map_overlap`` (:pr:`6682`) `Julia Signell`_
 - Replace ``np.searchsorted`` with ``bisect`` in indexing (:pr:`6669`) `Joachim B Haga`_
 
@@ -385,15 +412,15 @@ Dataframe
 
 -   Bump up tolerance for rolling tests (:pr:`6502`) `Julia Signell`_
 -   Implement DatFrame.__len__ (:pr:`6515`) `Tom Augspurger`_
--   Infer arrow schema in to_parquet  (for ArrowEngine`) (:pr:`6490`) `Richard Zamora`_
+-   Infer arrow schema in to_parquet  (for ArrowEngine`) (:pr:`6490`) `Richard (Rick) Zamora`_
 -   Fix parquet test when no pyarrow (:pr:`6524`) `Martin Durant`_
--   Remove problematic ``filter`` arguments in ArrowEngine (:pr:`6527`) `Richard Zamora`_
--   Avoid schema validation by default in ArrowEngine (:pr:`6536`) `Richard Zamora`_
+-   Remove problematic ``filter`` arguments in ArrowEngine (:pr:`6527`) `Richard (Rick) Zamora`_
+-   Avoid schema validation by default in ArrowEngine (:pr:`6536`) `Richard (Rick) Zamora`_
 
 Core
 ++++
 
--   Use unpack_collections in make_blockwise_graph (:pr:`6517`) `Thomas Fan`_
+-   Use unpack_collections in make_blockwise_graph (:pr:`6517`) `Thomas J. Fan`_
 -   Move key_split() from optimization.py to utils.py (:pr:`6529`) `Mads R. B. Kristensen`_
 -   Make tests run on moto server (:pr:`6528`) `Martin Durant`_
 
@@ -422,7 +449,7 @@ Core
 DataFrame
 +++++++++
 
-- Adds ``items`` to dataframe (:pr:`6503`) `Thomas J Fan`_
+- Adds ``items`` to dataframe (:pr:`6503`) `Thomas J. Fan`_
 - Include compression in ``write_table`` call (:pr:`6499`) `Julia Signell`_
 - Fixed warning in ``nonempty_series`` (:pr:`6485`) `Tom Augspurger`_
 - Intelligently determine partitions based on type of first arg (:pr:`6479`) `Matthew Rocklin`_
@@ -869,7 +896,7 @@ Array
 - Make ``map_blocks`` with ``block_info`` produce a ``Blockwise`` (:pr:`5896`) `Bruce Merry`_
 - Optimize ``make_blockwise_graph`` (:pr:`5940`) `Bruce Merry`_
 - Fix axes ordering in ``da.tensordot`` (:pr:`5975`) `Gil Forsyth`_
-- Adds empty mode to ``array.pad`` (:pr:`5931`) `Thomas J Fan`_
+- Adds empty mode to ``array.pad`` (:pr:`5931`) `Thomas J. Fan`_
 
 Core
 ++++
@@ -3724,7 +3751,6 @@ Other
 .. _`Stuart Berg`: https://github.com/stuarteberg
 .. _`Guillaume Eynard-Bontemps`: https://github.com/guillaumeeb
 .. _`Adam Beberg`: https://github.com/beberg
-.. _`Johnnie Gray`: https://github.com/jcmgray
 .. _`Roma Sokolov`: https://github.com/little-arhat
 .. _`Daniel Severo`: https://github.com/dsevero
 .. _`Michał Jastrzębski`: https://github.com/inc0
@@ -3852,7 +3878,7 @@ Other
 .. _`Andrew Thomas`: https://github.com/amcnicho
 .. _`rockwellw`: https://github.com/rockwellw
 .. _`Gil Forsyth`: https://github.com/gforsyth
-.. _`Thomas J Fan`: https://github.com/thomasjpfan
+.. _`Thomas J. Fan`: https://github.com/thomasjpfan
 .. _`Henrik Andersson`: https://github.com/hnra
 .. _`James Lamb`: https://github.com/jameslamb
 .. _`Corey J. Nolet`: https://github.com/cjnolet
@@ -3934,3 +3960,5 @@ Other
 .. _`Rob Malouf`: https://github.com/rmalouf
 .. _`sdementen`: https://github.com/sdementen
 .. _`patquem`: https://github.com/patquem
+.. _`Amit Kumar`: https://github.com/aktech
+.. _`D-Stacks`: https://github.com/D-Stacks
