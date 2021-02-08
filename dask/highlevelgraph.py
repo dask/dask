@@ -85,72 +85,6 @@ class Layer(collections.abc.Mapping):
         """
         return self.keys()
 
-    def pack_annotations(self) -> Optional[Mapping[str, Any]]:
-        """Packs Layer annotations for transmission to scheduler
-
-        Callables annotations are fully expanded over Layer keys, while
-        other values are simply transmitted as is
-
-        Returns
-        -------
-        packed_annotations : dict
-            Packed annotations.
-        """
-        if self.annotations is None:
-            return None
-
-        packed = {}
-
-        for a, v in self.annotations.items():
-            if callable(v):
-                packed[a] = {stringify(k): v(k) for k in self}
-                packed[a]["__expanded_annotations__"] = True
-            else:
-                packed[a] = v
-
-        return packed
-
-    @staticmethod
-    def unpack_annotations(
-        annotations: MutableMapping[str, Any],
-        new_annotations: Mapping[str, Any],
-        keys: Iterable,
-    ) -> None:
-        """
-        Expand a set of layer annotations across a set of keys, then merge those
-        expanded annotations for the layer into an existing annotations mapping.
-        This is not a simple shallow merge because some annotations like retries,
-        priority, workers, etc need to be able to retain keys from different layers.
-        """
-        if new_annotations is None:
-            return None
-
-        expanded = {}
-        keys_stringified = False
-
-        # Expand the new annotations across the keyset
-        for a, v in new_annotations.items():
-            if type(v) is dict and "__expanded_annotations__" in v:
-                # Maybe do a destructive update for efficiency?
-                v = v.copy()
-                del v["__expanded_annotations__"]
-                expanded[a] = v
-            else:
-                if not keys_stringified:
-                    keys = [stringify(k) for k in keys]
-                    keys_stringified = True
-
-                expanded[a] = {k: v for k in keys}
-
-        # Merge the expanded annotations with the existing annotations mapping
-        to_merge = {}
-        for k, v in expanded.items():
-            if isinstance(v, dict) and k in annotations:
-                to_merge[k] = {**annotations[k], **v}
-            else:
-                to_merge[k] = v
-        annotations.update(to_merge)
-
     def cull(
         self, keys: set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, set]]:
@@ -212,6 +146,72 @@ class Layer(collections.abc.Mapping):
             A set of dependencies
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
+
+    def pack_annotations(self) -> Optional[Mapping[str, Any]]:
+        """Packs Layer annotations for transmission to scheduler
+
+        Callables annotations are fully expanded over Layer keys, while
+        other values are simply transmitted as is
+
+        Returns
+        -------
+        packed_annotations : dict
+            Packed annotations.
+        """
+        if self.annotations is None:
+            return None
+
+        packed = {}
+
+        for a, v in self.annotations.items():
+            if callable(v):
+                packed[a] = {stringify(k): v(k) for k in self}
+                packed[a]["__expanded_annotations__"] = True
+            else:
+                packed[a] = v
+
+        return packed
+
+    @staticmethod
+    def unpack_annotations(
+        annotations: MutableMapping[str, Any],
+        new_annotations: Optional[Mapping[str, Any]],
+        keys: Iterable,
+    ) -> None:
+        """
+        Expand a set of layer annotations across a set of keys, then merge those
+        expanded annotations for the layer into an existing annotations mapping.
+        This is not a simple shallow merge because some annotations like retries,
+        priority, workers, etc need to be able to retain keys from different layers.
+        """
+        if new_annotations is None:
+            return None
+
+        expanded = {}
+        keys_stringified = False
+
+        # Expand the new annotations across the keyset
+        for a, v in new_annotations.items():
+            if type(v) is dict and "__expanded_annotations__" in v:
+                # Maybe do a destructive update for efficiency?
+                v = v.copy()
+                del v["__expanded_annotations__"]
+                expanded[a] = v
+            else:
+                if not keys_stringified:
+                    keys = [stringify(k) for k in keys]
+                    keys_stringified = True
+
+                expanded[a] = {k: v for k in keys}
+
+        # Merge the expanded annotations with the existing annotations mapping
+        to_merge = {}
+        for k, v in expanded.items():
+            if isinstance(v, dict) and k in annotations:
+                to_merge[k] = {**annotations[k], **v}
+            else:
+                to_merge[k] = v
+        annotations.update(to_merge)
 
     def __dask_distributed_pack__(
         self, all_hlg_keys: Iterable, known_key_dependencies, client, client_keys
@@ -294,13 +294,12 @@ class Layer(collections.abc.Mapping):
             for k, deps in dependencies.items()
         }
 
-        annotations = self.pack_annotations()
         all_hlg_keys = all_hlg_keys.union(dsk)
         dsk = {
             stringify(k): stringify(v, exclusive=all_hlg_keys) for k, v in dsk.items()
         }
         dsk = toolz.valmap(dumps_task, dsk)
-        return {"dsk": dsk, "dependencies": dependencies, "annotations": annotations}
+        return {"dsk": dsk, "dependencies": dependencies}
 
     @classmethod
     def __dask_distributed_unpack__(
@@ -308,7 +307,6 @@ class Layer(collections.abc.Mapping):
         state: Any,
         dsk: Mapping[str, Any],
         dependencies: Mapping[str, set],
-        annotations: Mapping[str, Any],
     ) -> Tuple[Mapping[str, Any], Mapping[str, set]]:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
@@ -328,18 +326,14 @@ class Layer(collections.abc.Mapping):
             The materialized low level graph of the already unpacked layers
         dependencies: Mapping, read-only
             The dependencies of each key in `dsk`
-        annotations: Mapping, read-only
-            The materialized task annotations
 
         Returns
         -------
-        dsk:
+        layer_dsk: Mapping[str, Any]
+            Materialized (stringified) graph of the layer
+        layer_deps: Mapping[str, set]
+            Dependencies of each key in `layer_dsk`
         """
-
-        if state["annotations"]:
-            cls.unpack_annotations(
-                annotations, state["annotations"], state["dsk"].keys()
-            )
         return state["dsk"], state["dependencies"]
 
     def __reduce__(self):
@@ -806,9 +800,9 @@ class HighLevelGraph(Mapping):
         """Pack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the packaging to each layer in the high
-        level graph by calling .__dask_distributed_pack__() on each layer.
-        If the layer doesn't implement packaging, we materialize the layer
-        and pack it.
+        level graph by calling .__dask_distributed_pack__() and .pack_annotations()
+        on each layer. If the layer doesn't implement packaging, we materialize the
+        layer and pack it.
 
         Parameters
         ----------
@@ -837,6 +831,7 @@ class HighLevelGraph(Mapping):
                         client,
                         client_keys,
                     ),
+                    "annotations": layer.pack_annotations(),
                 }
             )
         return dumps_msgpack({"layers": layers})
@@ -872,22 +867,28 @@ class HighLevelGraph(Mapping):
         dsk: Mapping[str, Any] = {}
         deps: Mapping[str, set] = {}
         anno: Mapping[str, Any] = {}
+        if annotations:
+            anno.update(annotations)
+
         for layer in hlg["layers"]:
-            if annotations:
-                if layer["state"]["annotations"] is None:
-                    layer["state"]["annotations"] = {}
-                layer["state"]["annotations"].update(annotations)
+            # Find the unpack functions
             if layer["__module__"] is None:  # Default implementation
-                unpack_func = Layer.__dask_distributed_unpack__
+                unpack_state = Layer.__dask_distributed_unpack__
+                unpack_anno = Layer.unpack_annotations
             else:
                 mod = import_allowed_module(layer["__module__"])
-                unpack_func = getattr(
-                    mod, layer["__name__"]
-                ).__dask_distributed_unpack__
-            layer_dsk, layer_deps = unpack_func(layer["state"], dsk, deps, anno)
+                cls = getattr(mod, layer["__name__"])
+                unpack_state = cls.__dask_distributed_unpack__
+                unpack_anno = cls.unpack_annotations
+
+            # Unpack state into a graph and key dependencies
+            layer_dsk, layer_deps = unpack_state(layer["state"], dsk, deps)
             dsk.update(layer_dsk)
             for k, v in layer_deps.items():
                 deps[k] = deps.get(k, set()) | v
+
+            # Unpack the annotations
+            unpack_anno(anno, layer["annotations"], layer_dsk.keys())
 
         return dsk, deps, anno
 

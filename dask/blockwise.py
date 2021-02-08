@@ -330,14 +330,13 @@ class Blockwise(Layer):
             "numblocks": self.numblocks,
             "concatenate": self.concatenate,
             "new_axes": self.new_axes,
-            "annotations": self.pack_annotations(),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
-        raw, raw_deps = make_blockwise_graph(
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        layer_dsk, layer_deps = make_blockwise_graph(
             state["func"],
             state["output"],
             state["output_indices"],
@@ -353,15 +352,15 @@ class Blockwise(Layer):
         )
         g_deps = state["global_dependencies"]
 
-        if state["annotations"]:
-            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
-
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
+        # Stringify layer graph and dependencies
+        layer_dsk = {
+            stringify(k): stringify_collection_keys(v) for k, v in layer_dsk.items()
+        }
         deps = {
             stringify(k): {stringify(d) for d in v} | g_deps
-            for k, v in raw_deps.items()
+            for k, v in layer_deps.items()
         }
-        return raw, deps
+        return layer_dsk, deps
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
