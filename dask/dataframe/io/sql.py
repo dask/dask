@@ -1,27 +1,27 @@
+import dask
 import numpy as np
 import pandas as pd
-
-import dask
 from dask.delayed import tokenize
+
 from .io import from_delayed, from_pandas
-from ... import delayed
 from .. import methods
+from ... import delayed
 
 
 def read_sql_table(
-    table,
-    uri,
-    index_col,
-    divisions=None,
-    npartitions=None,
-    limits=None,
-    columns=None,
-    bytes_per_chunk="256 MiB",
-    head_rows=5,
-    schema=None,
-    meta=None,
-    engine_kwargs=None,
-    **kwargs,
+        table,
+        uri,
+        index_col,
+        divisions=None,
+        npartitions=None,
+        limits=None,
+        columns=None,
+        bytes_per_chunk="256 MiB",
+        head_rows=5,
+        schema=None,
+        meta=None,
+        engine_kwargs=None,
+        **kwargs,
 ):
     """
     Create dataframe from an SQL table.
@@ -168,7 +168,7 @@ def read_sql_table(
             maxi, mini = minmax.iloc[0]
             dtype = minmax.dtypes["max_1"]
             if dtype == "O":
-                q = sql.select([sql.func.count(index),0]).select_from(
+                q = sql.select([sql.func.count(index), 0]).select_from(
                     table
                 )
                 minmax = pd.read_sql(q, engine)
@@ -181,12 +181,12 @@ def read_sql_table(
             q = sql.select([sql.func.count(index)]).select_from(table)
             count = pd.read_sql(q, engine)["count_1"][0]
             npartitions = (
-                int(
-                    round(
-                        count * bytes_per_row / dask.utils.parse_bytes(bytes_per_chunk)
+                    int(
+                        round(
+                            count * bytes_per_row / dask.utils.parse_bytes(bytes_per_chunk)
+                        )
                     )
-                )
-                or 1
+                    or 1
             )
         if dtype.kind == "M":
             divisions = methods.tolist(
@@ -214,7 +214,7 @@ def read_sql_table(
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         if divisions is None:
             if dtype.kind == "O":
-                q = sql.select(columns).offset(lower).limit(upper-lower).select_from(table)
+                q = sql.select(columns).offset(lower).limit(upper - lower).select_from(table)
             else:
                 q = sql.select(columns).where(sql.and_(index >= lower, cond)).select_from(table)
         else:
@@ -244,18 +244,18 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
 
 
 def to_sql(
-    df,
-    name: str,
-    uri: str,
-    schema=None,
-    if_exists: str = "fail",
-    index: bool = True,
-    index_label=None,
-    chunksize=None,
-    dtype=None,
-    method=None,
-    compute=True,
-    parallel=False,
+        df,
+        name: str,
+        uri: str,
+        schema=None,
+        if_exists: str = "fail",
+        index: bool = True,
+        index_label=None,
+        chunksize=None,
+        dtype=None,
+        method=None,
+        compute=True,
+        parallel=False,
 ):
     """Store Dask Dataframe to a SQL table
 
