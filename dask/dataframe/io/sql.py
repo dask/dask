@@ -213,7 +213,7 @@ def read_sql_table(
     for i, (lower, upper) in enumerate(zip(lowers, uppers)):
         cond = index <= upper if i == len(lowers) - 1 else index < upper
         if dtype.kind == "O":
-            q = sql.select(columns).order_by(index_col).offset(lower).limit(upper-lower).select_from(table)
+            q = sql.select(columns).offset(lower).limit(upper-lower).select_from(table)
         else:
             q = sql.select(columns).where(sql.and_(index >= lower, cond)).select_from(table)
         parts.append(
