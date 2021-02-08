@@ -147,7 +147,7 @@ class Layer(collections.abc.Mapping):
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
-    def pack_annotations(self) -> Optional[Mapping[str, Any]]:
+    def __dask_distributed_anno_pack__(self) -> Optional[Mapping[str, Any]]:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
@@ -173,7 +173,7 @@ class Layer(collections.abc.Mapping):
         return packed
 
     @staticmethod
-    def unpack_annotations(
+    def __dask_distributed_anno_unpack__(
         annotations: MutableMapping[str, Any],
         new_annotations: Optional[Mapping[str, Any]],
         keys: Iterable,
@@ -799,8 +799,8 @@ class HighLevelGraph(Mapping):
     def __dask_distributed_pack__(self, client, client_keys) -> Any:
         """Pack the high level graph for Scheduler -> Worker communication
 
-        The approach is to delegate the packaging to each layer in the high
-        level graph by calling .__dask_distributed_pack__() and .pack_annotations()
+        The approach is to delegate the packaging to each layer in the high level graph
+        by calling .__dask_distributed_pack__() and .__dask_distributed_anno_pack__()
         on each layer. If the layer doesn't implement packaging, we materialize the
         layer and pack it.
 
@@ -831,7 +831,7 @@ class HighLevelGraph(Mapping):
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.pack_annotations(),
+                    "annotations": layer.__dask_distributed_anno_pack__(),
                 }
             )
         return dumps_msgpack({"layers": layers})
@@ -841,6 +841,10 @@ class HighLevelGraph(Mapping):
         packed_hlg, annotations: Mapping[str, Any]
     ) -> Tuple[Mapping[str, Any], Mapping[str, set], Mapping[str, Any]]:
         """Unpack the high level graph for Scheduler -> Worker communication
+
+        The approach is to delegate the unpackaging to each layer in the high level graph
+        by calling .__dask_distributed_unpack__() and .__dask_distributed_anno_unpack__()
+        on each layer.
 
         Parameters
         ----------
@@ -870,16 +874,17 @@ class HighLevelGraph(Mapping):
         if annotations:
             anno.update(annotations)
 
+        # Unpack each layer (in topological order)
         for layer in hlg["layers"]:
             # Find the unpack functions
             if layer["__module__"] is None:  # Default implementation
                 unpack_state = Layer.__dask_distributed_unpack__
-                unpack_anno = Layer.unpack_annotations
+                unpack_anno = Layer.__dask_distributed_anno_unpack__
             else:
                 mod = import_allowed_module(layer["__module__"])
                 cls = getattr(mod, layer["__name__"])
                 unpack_state = cls.__dask_distributed_unpack__
-                unpack_anno = cls.unpack_annotations
+                unpack_anno = cls.__dask_distributed_anno_unpack__
 
             # Unpack state into a graph and key dependencies
             layer_dsk, layer_deps = unpack_state(layer["state"], dsk, deps)
