@@ -6,7 +6,8 @@ import pytest
 
 import dask
 from dask import delayed
-from dask.graph_manipulation import checkpoint, clone, bind, block_until_done
+from dask.base import clone_key
+from dask.graph_manipulation import checkpoint, clone, bind, block_until_done, chunks
 from dask.highlevelgraph import HighLevelGraph
 from dask.tests.test_base import Tuple
 from dask.utils_test import import_or_none
@@ -214,14 +215,29 @@ def test_bind(layers):
         dsk2.update(dsk1)
         dsk3.update(dsk2)
 
-    t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
+    # t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
     t2 = Tuple(dsk2, ["b"])
     t3 = Tuple(dsk3, ["c"])
-    t4 = Tuple(dsk4, ["d"])
+    t4 = Tuple(dsk4, [("d", h1), ("d", h2)])
 
-    # TODO
-    b3 = bind(t3, t4)
-    b3 = bind(t3, t4, omit=t2)
+    bound1 = bind(t3, t4, seed=1)
+    cloned_b_name = clone_key("b", seed=1)
+
+    # import pprint
+    # print()
+    # pprint.pprint(dict(bound1.__dask_graph__()))
+
+    assert bound1.__dask_graph__()[cloned_b_name] is chunks.bind
+    assert bound1.compute() == (3, )
+    assert cnt.n == 2
+
+    bound2 = bind(t3, t4, omit=t2, seed=1)
+    # pprint.pprint(dict(bound2.__dask_graph__()))
+
+    cloned_c_name = clone_key("c", seed=1)
+    assert bound2.__dask_graph__()[cloned_c_name] is chunks.bind
+    assert bound2.compute() == (3, )
+    assert cnt.n == 4
 
 
 @pytest.mark.skipif("not da or not db or not dd")
