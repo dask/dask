@@ -380,14 +380,6 @@ def to_sql(
         method=method,
     )
 
-    if method:
-        if not PANDAS_GT_0240:
-            raise NotImplementedError(
-                "'method' requires pandas>=0.24.0. You have version %s" % PANDAS_VERSION
-            )
-        else:
-            kwargs["method"] = method
-
     def make_meta(meta):
         return meta.to_sql(**kwargs)
 
