@@ -1293,7 +1293,7 @@ class ArrowDatasetEngine(Engine):
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
-        for (frag, row_group_info) in metadata:
+        for i, (frag, row_group_info) in enumerate(metadata):
             fpath = frag.path
             # Note that we include an optional `row_group_info` list
             # in each element of `metadata` to avoid the need to
@@ -1308,7 +1308,11 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
-                frag_map[(fpath, row_group_info[0].id)] = frag
+                if len(row_group_info):
+                    frag_map[(fpath, row_group_info[0].id)] = frag
+                else:
+                    # All row-groups were filtered.
+                    continue
             else:
                 file_row_groups[fpath] = [None]
                 frag_map[(fpath, None)] = frag
