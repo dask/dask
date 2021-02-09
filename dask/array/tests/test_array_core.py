@@ -1845,7 +1845,7 @@ class ThreadSafetyError(Exception):
     pass
 
 
-class NonthreadSafeStore(object):
+class NonthreadSafeStore:
     def __init__(self):
         self.in_use = False
 
@@ -1857,7 +1857,7 @@ class NonthreadSafeStore(object):
         self.in_use = False
 
 
-class ThreadSafeStore(object):
+class ThreadSafeStore:
     def __init__(self):
         self.concurrent_uses = 0
         self.max_concurrent_uses = 0
@@ -1869,7 +1869,7 @@ class ThreadSafeStore(object):
         self.concurrent_uses -= 1
 
 
-class CounterLock(object):
+class CounterLock:
     def __init__(self, *args, **kwargs):
         self.lock = Lock(*args, **kwargs)
 
@@ -2263,7 +2263,7 @@ def test_optimize():
 
 
 def test_slicing_with_non_ndarrays():
-    class ARangeSlice(object):
+    class ARangeSlice:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2274,7 +2274,7 @@ def test_slicing_with_non_ndarrays():
         def __array__(self):
             return np.arange(self.start, self.stop)
 
-    class ARangeSlicable(object):
+    class ARangeSlicable:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2341,7 +2341,7 @@ def test_from_array_with_lock():
     assert_eq(e + f, x + x)
 
 
-class MyArray(object):
+class MyArray:
     def __init__(self, x):
         self.x = x
         self.dtype = x.dtype

@@ -503,7 +503,7 @@ significantly.".format(
     return (*leaf_arrs,) if nout else leaf_arrs[0]  # Undo *) from above
 
 
-class gufunc(object):
+class gufunc:
     """
     Binds `pyfunc` into ``dask.array.apply_gufunc`` when called.
 
