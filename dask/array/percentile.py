@@ -8,7 +8,6 @@ from tlz import merge, merge_sorted
 from .core import Array
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import is_arraylike
 
 
 @wraps(np.percentile)
