@@ -1148,6 +1148,23 @@ def test_persist_delayed_change_name(key, new_name, new_key):
     assert dict(dp.dask) == {new_key: 2}
 
 
+def test_persist_delayedleaf():
+    x = delayed(1)
+    (xx,) = persist(x)
+    assert isinstance(xx, Delayed)
+    assert xx.compute() == 1
+
+
+def test_persist_delayedattr():
+    class C:
+        x = 1
+
+    x = delayed(C).x
+    (xx,) = persist(x)
+    assert isinstance(xx, Delayed)
+    assert xx.compute() == 1
+
+
 @pytest.mark.skipif("not da or not db")
 def test_persist_array_bag():
     x = da.arange(5, chunks=2) + 1

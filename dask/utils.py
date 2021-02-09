@@ -1055,6 +1055,7 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
 
 class OperatorMethodMixin(object):
     """A mixin for dynamically implementing operators"""
+    __slots__ = ()
 
     @classmethod
     def _bind_operator(cls, op):
