@@ -5017,6 +5017,8 @@ def _vindex_merge(locations, values):
            [40, 50, 60],
            [10, 20, 30]])
     """
+    from .utils import empty_like_safe
+
     locations = list(map(list, locations))
     values = list(values)
 
@@ -5026,7 +5028,7 @@ def _vindex_merge(locations, values):
     shape[0] = n
     shape = tuple(shape)
 
-    x = np.empty_like(values[0], shape=shape)
+    x = empty_like_safe(values[0], shape=shape)
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):
