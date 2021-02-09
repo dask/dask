@@ -1311,7 +1311,7 @@ class ArrowDatasetEngine(Engine):
                 if len(row_group_info):
                     frag_map[(fpath, row_group_info[0].id)] = frag
                 else:
-                    # All row-groups were filtered.
+                    # All row-groups were filtered
                     continue
             else:
                 file_row_groups[fpath] = [None]
