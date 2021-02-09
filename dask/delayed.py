@@ -541,6 +541,20 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
         return DelayedAttr(self, attr)
 
+    def __setattr__(self, attr, val):
+        try:
+            object.__setattr__(self, attr, val)
+        except AttributeError:
+            # attr is neither in type(self).__slots__ nor in the __slots__ of any of its
+            # parent classes, and all the parent classes define __slots__ too.
+            # This last bit needs to be unit tested: if any of the parent classes omit
+            # the __slots__ declaration, self will gain a __dict__ and this branch will
+            # become unreachable.
+            raise TypeError("Delayed objects are immutable")
+
+    def __setitem__(self, index, val):
+        raise TypeError("Delayed objects are immutable")
+
     def __iter__(self):
         if self._length is None:
             raise TypeError("Delayed objects of unspecified length are not iterable")
