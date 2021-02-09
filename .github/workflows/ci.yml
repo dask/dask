@@ -8,11 +8,11 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: ["macos-latest"]
-        python-version: ["3.8"]
+        os: ["windows-latest", "ubuntu-latest", "macos-latest"]
+        npy-version: ["np117", "np118", "np119", "np120"]
 
     env:
-      PYTHON_VERSION: ${{ matrix.python-version }}
+      PYTHON_VERSION: "3.8"
       PARALLEL: "true"
       COVERAGE: "false"
 
@@ -24,8 +24,8 @@ jobs:
         uses: conda-incubator/setup-miniconda@v2
         with:
           miniconda-version: "latest"
-          python-version: ${{ matrix.python-version }}
-          environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
+          python-version: "3.8"
+          environment-file: continuous_integration/environment-${{ matrix.npy-version }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
@@ -36,8 +36,3 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
-      # TODO: Add coverage back
-      # - name: Coverage
-      #   shell: bash -l {0}
-      #   if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
-      #   run: source continuous_integration/scripts/coverage.sh

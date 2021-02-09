@@ -1,13 +1,12 @@
-# This job tests against upstream dev
+# This job includes coverage
 name: test-environment
 channels:
   - conda-forge
 dependencies:
   # required dependencies
   - python=3.8.*
-  # For the dependencies. These will be re-installed later.
-  - numpy
-  - pandas
+  - numpy=1.19.*
+  - pandas=1.2.*
   # test dependencies
   - pytest
   - pytest-xdist
@@ -18,20 +17,21 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - fsspec>=0.6.0
   - sqlalchemy
   - pyarrow>=0.14.0
+  - coverage
   - jsonschema
   # other -- IO
   - bcolz
   - blosc
-  - s3fs
-  - fsspec>=0.6.0
   - boto3
   - botocore
-  - aiohttp
   - bokeh
   - httpretty
+  - aiohttp
   - chest
+  - s3fs
   - cloudpickle
   - crick
   - cytoolz
@@ -39,7 +39,7 @@ dependencies:
   - graphviz
   - ipython
   - lz4
-  - numba>=0.49
+  - numba
   - partd
   - psutil
   - requests
@@ -48,8 +48,10 @@ dependencies:
   - scipy
   - toolz
   - python-snappy
+  - sparse
   - cachey
   - python-graphviz
+  - pandas-datareader
   - python-xxhash
   - mmh3
   - pip

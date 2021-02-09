@@ -4,9 +4,9 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.7.*
-  - numpy=1.17.*
-  - pandas=1.1.*
+  - python=3.8.*
+  - numpy=1.18.*
+  - pandas=1.2.*
   # test dependencies
   - pytest
   - pytest-xdist
@@ -19,7 +19,7 @@ dependencies:
   - tiledb-py
   - fsspec>=0.6.0
   - sqlalchemy
-  - pyarrow=1.0.*
+  - pyarrow>=0.14.0
   - coverage
   - jsonschema
   # other -- IO
@@ -27,9 +27,9 @@ dependencies:
   - blosc
   - boto3
   - botocore
-  - aiohttp
   - bokeh
   - httpretty
+  - aiohttp
   - chest
   - s3fs
   - cloudpickle
@@ -41,7 +41,6 @@ dependencies:
   - lz4
   - numba
   - partd
-  - pickle5
   - psutil
   - requests
   - scikit-image
