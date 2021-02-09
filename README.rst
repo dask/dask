@@ -10,10 +10,10 @@ documentation_ for more information.
 LICENSE
 -------
 
-New BSD. See `License File <https://github.com/dask/dask/blob/master/LICENSE.txt>`__.
+New BSD. See `License File <https://github.com/dask/dask/blob/main/LICENSE.txt>`__.
 
 .. _documentation: https://dask.org
-.. |Build Status| image:: https://github.com/dask/dask/workflows/CI/badge.svg?branch=master
+.. |Build Status| image:: https://github.com/dask/dask/workflows/CI/badge.svg?branch=main
    :target: https://github.com/dask/dask/actions?query=workflow%3A%22CI%22
 .. |Coverage| image:: https://codecov.io/gh/dask/dask/branch/master/graph/badge.svg
    :target: https://codecov.io/gh/dask/dask/branch/master
