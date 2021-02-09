@@ -4469,6 +4469,27 @@ def test_join_series():
     assert_eq(actual_df, expected_df)
 
 
+def test_dask_layers():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.dask.layers.keys() == {ddf._name}
+    assert ddf.dask.dependencies == {ddf._name: set()}
+    assert ddf.__dask_layers__() == (ddf._name,)
+    dds = ddf["x"]
+    assert dds.dask.layers.keys() == {ddf._name, dds._name}
+    assert dds.dask.dependencies == {ddf._name: set(), dds._name: {ddf._name}}
+    assert dds.__dask_layers__() == (dds._name,)
+    ddi = dds.min()
+    assert ddi.key[1:] == (0,)
+    assert ddi.dask.layers.keys() == {ddf._name, dds._name, ddi.key[0]}
+    assert ddi.dask.dependencies == {
+        ddf._name: set(),
+        dds._name: {ddf._name},
+        ddi.key[0]: {dds._name},
+    }
+    assert ddi.__dask_layers__() == (ddi.key[0],)
+
+
 @pytest.mark.skipif(
     not dd._compat.PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2"
 )

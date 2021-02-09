@@ -473,19 +473,12 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "dask", "_length", "_dask_layers")
+    __slots__ = ("_key", "dask", "_length")
 
     def __init__(self, key, dsk, length=None):
         self._key = key
         self.dask = dsk
         self._length = length
-
-        # `__dask_layers__` of an one-layered HLG is the layer name
-        # TODO: what is the name of a multi-layered HLG?
-        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
-            self._dask_layers = set(iter(dsk.layers))
-        else:
-            self._dask_layers = (self.key,)
 
     def __dask_graph__(self):
         return self.dask
@@ -494,8 +487,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         return [self.key]
 
     def __dask_layers__(self):
-        if hasattr(self, "_dask_layers"):
-            return self._dask_layers
+        # Delayed objects created with .to_delayed() have exactly
+        # one layer which may have a non-canonical name "delayed-<original name>"
+        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
+            return tuple(self.dask.layers)
         else:
             return (self.key,)
 
@@ -513,7 +508,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def _rebuild(self, dsk, name=None):
         key = replace_name_in_key(self.key, name) if name else self.key
-        return Delayed(key, dsk, getattr(self, "_length", None))
+        return Delayed(key, dsk, self._length)
 
     def __getstate__(self):
         return tuple(getattr(self, i) for i in self.__slots__)
@@ -558,13 +553,13 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         raise TypeError("Delayed objects are immutable")
 
     def __iter__(self):
-        if getattr(self, "_length", None) is None:
+        if self._length is None:
             raise TypeError("Delayed objects of unspecified length are not iterable")
         for i in range(self._length):
             yield self[i]
 
     def __len__(self):
-        if getattr(self, "_length", None) is None:
+        if self._length is None:
             raise TypeError("Delayed objects of unspecified length have no len()")
         return self._length
 
