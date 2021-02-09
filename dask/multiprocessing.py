@@ -11,6 +11,7 @@ from . import config
 from .system import CPU_COUNT
 from .local import reraise, get_async  # TODO: get better get
 from .optimization import fuse, cull
+from .utils import ensure_dict
 
 
 def _reduce_method_descriptor(m):
@@ -199,6 +200,7 @@ def get(
         cleanup = False
 
     # Optimize Dask
+    dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     if optimize_graph:
         dsk3, dependencies = fuse(dsk2, keys, dependencies)
