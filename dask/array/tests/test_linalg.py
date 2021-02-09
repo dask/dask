@@ -161,7 +161,8 @@ a = np.array(
 @pytest.mark.parametrize("secondaxis", list(range(5)))
 @pytest.mark.parametrize("firstaxis", list(range(5)))
 @pytest.mark.parametrize("run", list(range(20)))
-def test1(run, firstaxis, secondaxis):
+@pytest.mark.parametrize("scheduler", ["sync", "threads"])
+def test1(scheduler, run, firstaxis, secondaxis):
     d = da.from_array(a, chunks=(2, 2, 2, 2, 2))
     if firstaxis != secondaxis:
         axis = (firstaxis, secondaxis)
@@ -169,4 +170,4 @@ def test1(run, firstaxis, secondaxis):
         axis = firstaxis
     a_r = np.linalg.norm(a, ord=-1, axis=axis, keepdims=True)
     d_r = da.linalg.norm(d, ord=-1, axis=axis, keepdims=True)
-    assert_eq(a_r, d_r)
+    d_r.compute(scheduler=scheduler)
