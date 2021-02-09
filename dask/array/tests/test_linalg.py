@@ -986,21 +986,25 @@ def test_norm_any_ndim(shape, chunks, axis, norm, keepdims):
     assert_eq(a_r, d_r)
 
 
-@pytest.mark.slow
+#@pytest.mark.slow
+@pytest.mark.parametrize("i", list(range(1000)))
 @pytest.mark.parametrize(
     "shape, chunks",
     [
-        [(5,), (2,)],
-        [(5, 3), (2, 2)],
-        [(4, 5, 3), (2, 2, 2)],
+        #[(5,), (2,)],
+        #[(5, 3), (2, 2)],
+        #[(4, 5, 3), (2, 2, 2)],
         [(4, 5, 2, 3), (2, 2, 2, 2)],
-        [(2, 5, 2, 4, 3), (2, 2, 2, 2, 2)],
+        #[(2, 5, 2, 4, 3), (2, 2, 2, 2, 2)],
     ],
 )
-@pytest.mark.parametrize("norm", [None, 1, -1, np.inf, -np.inf])
-@pytest.mark.parametrize("keepdims", [False, True])
-def test_norm_any_slice(shape, chunks, norm, keepdims):
+#@pytest.mark.parametrize("norm", [None, 1, -1, np.inf, -np.inf])
+@pytest.mark.parametrize("norm", [-1])
+#@pytest.mark.parametrize("keepdims", [False, True])
+@pytest.mark.parametrize("keepdims", [True])
+def test_norm_any_slice(shape, chunks, norm, keepdims, i):
     a = np.random.random(shape)
+    print(a.tolist())
     d = da.from_array(a, chunks=chunks)
 
     for firstaxis in range(len(shape)):
