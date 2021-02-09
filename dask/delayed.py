@@ -508,7 +508,7 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def _rebuild(self, dsk, name=None):
         key = replace_name_in_key(self.key, name) if name else self.key
-        return Delayed(key, dsk, self._length)
+        return Delayed(key, dsk, self.length)
 
     def __getstate__(self):
         return tuple(getattr(self, i) for i in self.__slots__)
@@ -520,6 +520,10 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def key(self):
         return self._key
+
+    @property
+    def length(self):
+        return self._length
 
     def __repr__(self):
         return "Delayed({0})".format(repr(self.key))
@@ -553,15 +557,15 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         raise TypeError("Delayed objects are immutable")
 
     def __iter__(self):
-        if self._length is None:
+        if self.length is None:
             raise TypeError("Delayed objects of unspecified length are not iterable")
-        for i in range(self._length):
+        for i in range(self.length):
             yield self[i]
 
     def __len__(self):
-        if self._length is None:
+        if self.length is None:
             raise TypeError("Delayed objects of unspecified length have no len()")
-        return self._length
+        return self.length
 
     def __call__(self, *args, **kwargs):
         pure = kwargs.pop("pure", None)
