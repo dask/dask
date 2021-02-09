@@ -75,7 +75,7 @@ class Accessor(object):
 
     @property
     def _delegates(self):
-        return set(dir(self._meta)).difference(self._not_implemented)
+        return set(dir(self._meta)) - self._not_implemented
 
     def __dir__(self):
         o = self._delegates
