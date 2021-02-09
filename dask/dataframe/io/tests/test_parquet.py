@@ -3034,7 +3034,7 @@ def test_pyarrow_dataset_read_from_paths(
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
     else:
         assert_eq(ddf, read_df)
-    
+
 
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
@@ -3063,7 +3063,6 @@ def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
         split_row_groups=split_row_groups,
         filters=[("a", "==", 5)],
     )
-
     assert_eq(
         read_df.compute()[["a"]],
         df[df["a"] == 5][["a"]],
