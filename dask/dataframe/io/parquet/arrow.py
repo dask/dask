@@ -1293,7 +1293,7 @@ class ArrowDatasetEngine(Engine):
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
-        for i, (frag, row_group_info) in enumerate(metadata):
+        for (frag, row_group_info) in metadata:
             fpath = frag.path
             # Note that we include an optional `row_group_info` list
             # in each element of `metadata` to avoid the need to
