@@ -999,6 +999,7 @@ def pad_edge(array, pad_width, mode, **kwargs):
 
         if mode == "constant":
             from .utils import asarray_safe
+
             constant_values = kwargs["constant_values"][d]
             constant_values = [
                 asarray_safe(c, like=meta_from_array(array), dtype=result.dtype)
