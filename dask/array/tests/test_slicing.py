@@ -460,7 +460,7 @@ def test_slice_list_then_None():
     assert_eq(y, np.zeros((1, 2, 5)))
 
 
-class ReturnItem(object):
+class ReturnItem:
     def __getitem__(self, key):
         return key
 

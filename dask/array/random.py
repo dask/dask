@@ -35,7 +35,7 @@ def doc_wraps(func):
     return _
 
 
-class RandomState(object):
+class RandomState:
     """
     Mersenne Twister pseudo-random number generator
 

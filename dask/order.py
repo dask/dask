@@ -684,7 +684,7 @@ def ndependencies(dependencies, dependents):
     return num_dependencies, result
 
 
-class StrComparable(object):
+class StrComparable:
     """Wrap object so that it defaults to string comparison
 
     When comparing two objects of different types Python fails

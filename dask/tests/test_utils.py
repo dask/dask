@@ -53,7 +53,7 @@ def test_getargspec():
     wrapper.__wrapped__ = func
     assert getargspec(wrapper).args == ["x", "y"]
 
-    class MyType(object):
+    class MyType:
         def __init__(self, x, y):
             pass
 
@@ -67,11 +67,11 @@ def test_takes_multiple_arguments():
     def multi(a, b, c):
         return a, b, c
 
-    class Singular(object):
+    class Singular:
         def __init__(self, a):
             pass
 
-    class Multi(object):
+    class Multi:
         def __init__(self, a, b):
             pass
 
@@ -103,7 +103,7 @@ def test_dispatch():
 
     foo.register(object, f)
 
-    class Bar(object):
+    class Bar:
         pass
 
     b = Bar()
@@ -344,7 +344,7 @@ def test_funcname():
     assert funcname(M.sum) == "sum"
     assert funcname(lambda: 1) == "lambda"
 
-    class Foo(object):
+    class Foo:
         pass
 
     assert funcname(Foo) == "Foo"

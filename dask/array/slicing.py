@@ -1252,7 +1252,7 @@ def shuffle_slice(x, index):
         return x[index2].rechunk(chunks2)[index3]
 
 
-class _HashIdWrapper(object):
+class _HashIdWrapper:
     """Hash and compare a wrapped object by identity instead of value"""
 
     def __init__(self, wrapped):

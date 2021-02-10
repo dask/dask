@@ -615,7 +615,7 @@ def _compute_rechunk(x, chunks):
     return Array(graph, merge_name, chunks, meta=x)
 
 
-class _PrettyBlocks(object):
+class _PrettyBlocks:
     def __init__(self, blocks):
         self.blocks = blocks
 

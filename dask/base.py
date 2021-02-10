@@ -155,7 +155,7 @@ def is_dask_collection(x):
         return False
 
 
-class DaskMethodsMixin(object):
+class DaskMethodsMixin:
     """A mixin adding standard dask collection methods"""
 
     __slots__ = ()

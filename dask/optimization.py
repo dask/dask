@@ -920,7 +920,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
             fused_trees[outkey] = chain2
 
 
-class SubgraphCallable(object):
+class SubgraphCallable:
     """Create a callable object from a dask graph.
 
     Parameters

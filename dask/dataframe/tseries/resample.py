@@ -90,7 +90,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 
-class Resampler(object):
+class Resampler:
     """Class for resampling timeseries data.
 
     This class is commonly encountered when using ``obj.resample(...)`` which

@@ -13,7 +13,7 @@ def maybe_wrap_pandas(obj, x):
     return x
 
 
-class Accessor(object):
+class Accessor:
     """
     Base class for pandas Accessor objects cat, dt, and str.
 

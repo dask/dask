@@ -279,7 +279,7 @@ def finalize_item(results):
     return results[0]
 
 
-class StringAccessor(object):
+class StringAccessor:
     """String processing functions
 
     Examples

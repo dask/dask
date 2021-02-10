@@ -25,7 +25,7 @@ def args(task):
         return ()
 
 
-class Traverser(object):
+class Traverser:
     """Traverser interface for tasks.
 
     Class for storing the state while performing a preorder-traversal of a
@@ -85,7 +85,7 @@ class Traverser(object):
         self.term = self._stack.pop()
 
 
-class Token(object):
+class Token:
     """A token object.
 
     Used to express certain objects in the traversal of a task or pattern."""
@@ -125,7 +125,7 @@ class Node(tuple):
         return self[1]
 
 
-class RewriteRule(object):
+class RewriteRule:
     """A rewrite rule.
 
     Expresses `lhs` -> `rhs`, for variables `vars`.
@@ -197,7 +197,7 @@ class RewriteRule(object):
         return str(self)
 
 
-class RuleSet(object):
+class RuleSet:
     """A set of rewrite rules.
 
     Forms a structure for fast rewriting over a set of rewrite rules. This

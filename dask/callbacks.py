@@ -3,7 +3,7 @@ from contextlib import contextmanager
 __all__ = ["Callback", "add_callbacks"]
 
 
-class Callback(object):
+class Callback:
     """Base class for using the callback mechanism
 
     Create a callback with functions of the following signatures:
@@ -113,7 +113,7 @@ def normalize_callback(cb):
         raise TypeError("Callbacks must be either `Callback` or `tuple`")
 
 
-class add_callbacks(object):
+class add_callbacks:
     """Context manager for callbacks.
 
     Takes several callbacks and applies them only in the enclosed context.

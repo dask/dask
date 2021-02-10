@@ -214,7 +214,7 @@ class _Tracker(Process):
     """Background process for tracking resource usage"""
 
     def __init__(self, dt=1):
-        Process.__init__(self)
+        super().__init__()
         self.daemon = True
         self.dt = dt
         self.parent_pid = current_process().pid
