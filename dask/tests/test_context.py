@@ -34,7 +34,7 @@ def bar():
     return "bar"
 
 
-class Foo(object):
+class Foo:
     @globalmethod(key="f")
     def f():
         return 1

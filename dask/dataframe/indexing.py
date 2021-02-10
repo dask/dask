@@ -13,7 +13,7 @@ from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 
 
-class _IndexerBase(object):
+class _IndexerBase:
     def __init__(self, obj):
         self.obj = obj
 

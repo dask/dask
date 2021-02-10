@@ -390,7 +390,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     To invoke an impure attribute or operator, you'd need to use it in a
     delayed function with ``pure=False``:
 
-    >>> class Incrementer(object):
+    >>> class Incrementer:
     ...     def __init__(self):
     ...         self._n = 0
     ...     @property
