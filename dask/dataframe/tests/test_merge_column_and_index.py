@@ -193,15 +193,16 @@ def test_merge_known_to_double_bcast_right(
 
 
 @pytest.mark.parametrize("how", ["inner", "right"])
+@pytest.mark.parametrize("broadcast", [True, 0.75])
 def test_merge_known_to_double_bcast_left(
-    df_left, df_right, ddf_left_double, ddf_right, on, how
+    df_left, df_right, ddf_left_double, ddf_right, on, how, broadcast
 ):
     # Compute expected
     expected = df_left.merge(df_right, on=on, how=how)
 
     # Perform merge
     result = ddf_left_double.merge(
-        ddf_right, on=on, how=how, shuffle="tasks", broadcast=True
+        ddf_right, on=on, how=how, shuffle="tasks", broadcast=broadcast
     )
 
     # Assertions

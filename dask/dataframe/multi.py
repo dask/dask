@@ -625,7 +625,14 @@ def merge(
             warn_dtype_mismatch(left, right, left_on, right_on)
 
         # Check if we should use a broadcast_join
+        # See note on `broadcast_bias` below.
+        broadcast_bias = 0.5
+        if isinstance(broadcast, float):
+            broadcast_bias = broadcast
+            broadcast = None
         bcast_side = "left" if left.npartitions < right.npartitions else "right"
+        n_small = min(left.npartitions, right.npartitions)
+        n_big = max(left.npartitions, right.npartitions)
         if (
             shuffle == "tasks"
             and how in ("inner", "left", "right")
@@ -633,7 +640,18 @@ def merge(
             and not npartitions
             and broadcast is not False
         ):
-            if broadcast or _broadcast_heuristic(left.npartitions, right.npartitions):
+            # Note on `broadcast_bias`:
+            # We can expect the broadcast merge to be competitive with
+            # the shuffle merge when the number of partitions in the
+            # smaller collection is less than the logarithm of the number
+            # of partitions in the larger collection.  By default, we add
+            # a small preference for the shuffle-based merge by multiplying
+            # the log result by a 0.5 scaling factor.  We call this factor
+            # the `broadcast_bias`, because a larger number will make Dask
+            # more likely to select the `broadcast_join` code path.  If
+            # the user specifies a floating-point value for the `broadcast`
+            # kwarg, that value will be used as the `broadcast_bias`.
+            if broadcast or (n_small < math.log2(n_big) * broadcast_bias):
                 return broadcast_join(
                     left,
                     left.index if left_index else left_on,
@@ -1481,15 +1499,6 @@ class BroadcastJoinLayer(Layer):
             dsk[(self.name, i)] = (_concat_wrapper, _concat_list)
 
         return dsk
-
-
-def _broadcast_heuristic(n_l, n_r):
-    """Simple heuristic to decide if a broadcast join is likely
-    to outperform a shuffle-based merge.
-    """
-    ntasks_shuffle = n_r * math.log2(n_r) + n_l * math.log2(n_l)
-    ntasks_broadcast = n_r * n_l + n_l
-    return ntasks_broadcast < ntasks_shuffle * 0.75
 
 
 def _contains_index_name(df, columns_or_index):
