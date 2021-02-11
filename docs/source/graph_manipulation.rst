@@ -19,9 +19,9 @@ Consider the following example:
 .. code-block:: python
 
    >>> import dask.array as da
-   >>> x = da.random.normal(size=5e9, chunks=1e7)
-   >>> x_avg = x.avg()
-   >>> y = (x - x_avg).topk(50000)[-1]
+   >>> x = da.random.normal(size=1_000, chunks=100)
+   >>> x_mean = x.mean()
+   >>> y = (x - x_mean).max().compute()
 
 The above example computes the largest value of a distribution after removing
 its bias. This involves loading the chunks of ``x`` into memory in order to compute
