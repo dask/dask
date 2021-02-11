@@ -38,12 +38,17 @@ rewrite the last line as follows:
    >>> xb = bind(x, x_mean)
    >>> y = (xb - x_mean).max().compute()
 
-``xb`` produces exactly the same output as ``x``, but it is rebuilt from zero, and only
-after ``x_avg`` has been calculated. The chunks of ``x`` are computed and immediately
-individually reduced by ``avg``; then recomputed and again immediately pipelined into
-the subtraction followed by reduction with :func:`~dask.array.topk`. The peak RAM usage
-has dropped drastically (measured: 5.5 GiB); the tradeoff is that the CPU time required
-to compute ``x`` has doubled.
+Here we use :func:`~dask.graph_manipulation.bind` to create a new Dask Array, ``xb``,
+which produces exactly the same output as ``x``, but whose underlying Dask graph
+has different keys than ``x``, and will only be computed after ``x_mean`` has been
+calculated.
+
+This results in the chunks of ``x`` being computed and immediately individually
+reduced by ``mean``; then recomputed and again immediately pipelined into
+the subtraction followed by reduction with ``max``. This results in a much smaller
+peak memory usage as the full ``x`` array is no longer loaded into memory.
+However, the tradeoff is that the compute time increases as ``x`` is computed
+twice.
 
 
 API
