@@ -23,13 +23,14 @@ Consider the following example:
    >>> x_avg = x.avg()
    >>> y = (x - x_avg).topk(50000)[-1]
 
-The above finds the 99.999% highest value of a distribution after removing the bias.
-In the above code, ``x`` is cheaply calculated at the beginning of the graph resolution;
-then its whole output is kept in memory while the RAM could be better used for something
-else, and finally reused on the last line.
+The above example computes the largest value of a distribution after removing
+its bias. This involves loading the chunks of ``x`` into memory in order to compute
+``x_mean``. However, since the ``x`` array is needed later in the computation
+to compute ``y``, the entire ``x`` array is kept in memory. For large Dask Arrays
+this can be very problematic.
 
-The computation above features a peak memory usage of (5e9 * 8) ~= 37 GiB of RAM
-(measured: 40.8 GiB). This is suboptimal. One could rewrite the last line as follows:
+To alleviate the need for the entire ``x`` array to be kept in memory, one could
+rewrite the last line as follows:
 
 .. code-block:: python
 
