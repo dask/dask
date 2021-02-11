@@ -3810,6 +3810,28 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
+    def sort_values(
+        self,
+        other,
+        npartitions=None,
+        divisions=None,
+        ascending=True,
+        **kwargs
+    ):
+        if divisions is not None:
+            check_divisions(divisions)
+
+        from .shuffle import sort_values
+
+        return sort_values(
+            self,
+            other,
+            ascending=True,
+            npartitions=npartitions,
+            divisions=divisions,
+            **kwargs,
+        )
+
     def set_index(
         self,
         other,
