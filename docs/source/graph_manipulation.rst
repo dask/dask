@@ -35,8 +35,8 @@ rewrite the last line as follows:
 .. code-block:: python
 
    >>> from dask.graph_manipulation import bind
-   >>> xb = bind(x, x_avg)
-   >>> y = (xb - x_avg).topk(50000)[-1]
+   >>> xb = bind(x, x_mean)
+   >>> y = (xb - x_mean).max().compute()
 
 ``xb`` produces exactly the same output as ``x``, but it is rebuilt from zero, and only
 after ``x_avg`` has been calculated. The chunks of ``x`` are computed and immediately
