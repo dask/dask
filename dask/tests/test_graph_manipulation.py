@@ -7,11 +7,10 @@ import pytest
 import dask
 from dask import delayed
 from dask.base import clone_key
-from dask.graph_manipulation import checkpoint, clone, bind, block_until_done, chunks
+from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on
 from dask.highlevelgraph import HighLevelGraph
 from dask.tests.test_base import Tuple
 from dask.utils_test import import_or_none
-
 
 da = import_or_none("dask.array")
 db = import_or_none("dask.bag")
@@ -104,25 +103,25 @@ def test_checkpoint_collections():
     assert cnt.n == 16
 
 
-def test_block_until_done_one():
+def test_wait_on_one():
     cnt = NodeCounter()
     dsk = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
-    t = block_until_done(Tuple(dsk, list(dsk)))
+    t = wait_on(Tuple(dsk, list(dsk)))
     assert t.compute(scheduler="sync") == (1, 2)
     assert cnt.n == 2
 
 
-def test_block_until_done_many():
+def test_wait_on_many():
     cnt = NodeCounter()
     dsk1 = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
     dsk2 = {"b": (cnt.f, 3)}
-    out = block_until_done(Tuple(dsk1, list(dsk1)), {"x": [Tuple(dsk2, list(dsk2))]})
+    out = wait_on(Tuple(dsk1, list(dsk1)), {"x": [Tuple(dsk2, list(dsk2))]})
     assert dask.compute(*out, scheduler="sync") == ((1, 2), {"x": [(3,)]})
     assert cnt.n == 3
 
 
 @pytest.mark.skipif("not da or not db or not dd")
-def test_block_until_done_collections():
+def test_wait_on_collections():
     colls, cnt = collections_with_node_counters()
 
     # Create a delayed that depends on a single one among all collections
@@ -130,7 +129,7 @@ def test_block_until_done_collections():
     def f(x):
         pass
 
-    colls2 = block_until_done(*colls)
+    colls2 = wait_on(*colls)
     f(colls2[0]).compute()
     assert cnt.n == 16
 

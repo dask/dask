@@ -58,7 +58,7 @@ API
 .. autosummary::
 
    checkpoint
-   block_until_done
+   wait_on
    bind
    clone
 
@@ -67,6 +67,6 @@ Definitions
 ~~~~~~~~~~~
 
 .. autofunction:: checkpoint
-.. autofunction:: block_until_done
+.. autofunction:: wait_on
 .. autofunction:: bind
 .. autofunction:: clone

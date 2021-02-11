@@ -20,7 +20,7 @@ from .dataframe import DataFrame, Series
 from .delayed import Delayed, delayed
 from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
 
-__all__ = ("bind", "block_until_done", "checkpoint", "clone")
+__all__ = ("bind", "checkpoint", "clone", "wait_on")
 
 T = TypeVar("T")
 
@@ -362,7 +362,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     return out[0] if len(collections) == 1 else out
 
 
-def block_until_done(*collections):
+def wait_on(*collections):
     """Ensure that all chunks of all input collections have been computed before
     computing the dependents of any of the chunks.
 
@@ -372,7 +372,7 @@ def block_until_done(*collections):
 
     >>> from dask import array as da
     >>> x = da.ones(10, chunks=5)
-    >>> u = block_until_done(x)
+    >>> u = wait_on(x)
 
     The following example will create two arrays ``u`` and ``v`` that, when used in a
     computation, will only proceed when all chunks of the arrays ``x`` and ``y`` have
@@ -380,7 +380,7 @@ def block_until_done(*collections):
 
     >>> x = da.ones(10, chunks=5)
     >>> y = da.zeros(10, chunks=5)
-    >>> u, v = block_until_done(x, y)
+    >>> u, v = wait_on(x, y)
 
     Parameters
     ----------
@@ -397,7 +397,7 @@ def block_until_done(*collections):
     blocker = checkpoint(*collections)
 
     def block_one(coll):
-        name = "block_until_done-" + tokenize(coll, blocker)
+        name = "wait_on-" + tokenize(coll, blocker)
         layer = _build_map_layer(chunks.bind, name, coll, dependencies=(blocker,))
         dsk = HighLevelGraph.from_collections(name, layer, dependencies=(coll, blocker))
         rebuild, args = coll.__dask_postpersist__()
@@ -413,7 +413,7 @@ class chunks:
 
     @staticmethod
     def bind(node: T, *args, **kwargs) -> T:
-        """Dummy graph node of :func:`bind` and :func:`block_until_done`.
+        """Dummy graph node of :func:`bind` and :func:`wait_on`.
         Wait for both node and all variadic args to complete; then return node.
         """
         return node
