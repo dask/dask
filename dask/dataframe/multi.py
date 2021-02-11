@@ -628,8 +628,15 @@ def merge(
         # See note on `broadcast_bias` below.
         broadcast_bias = 0.5
         if isinstance(broadcast, float):
-            broadcast_bias = broadcast
+            broadcast_bias = float(broadcast)
             broadcast = None
+        elif not isinstance(broadcast, bool) and broadcast is not None:
+            # Let's be strict about the `broadcast` type to
+            # avoid arbitrarily casting int to float or bool.
+            raise ValueError(
+                f"Optional `broadcast` argument must be float or bool."
+                f"Type={type(broadcast)} is not supported."
+            )
         bcast_side = "left" if left.npartitions < right.npartitions else "right"
         n_small = min(left.npartitions, right.npartitions)
         n_big = max(left.npartitions, right.npartitions)
