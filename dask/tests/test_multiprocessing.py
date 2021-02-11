@@ -151,7 +151,7 @@ def test_lambda_results_without_cloudpickle():
     assert "cloudpickle" in str(e.value)
 
 
-class NotUnpickleable(object):
+class NotUnpickleable:
     def __getstate__(self):
         return ()
 

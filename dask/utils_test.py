@@ -13,7 +13,7 @@ def add(x, y):
     return x + y
 
 
-class GetFunctionTestMixin(object):
+class GetFunctionTestMixin:
     """
     The GetFunctionTestCase class can be imported and used to test foreign
     implementations of the `get` function specification. It aims to enforce all

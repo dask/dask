@@ -130,7 +130,7 @@ interface is used inside Dask.
     Usually attached to the class as a staticmethod, e.g.:
 
     >>> import dask.threaded
-    >>> class MyCollection(object):
+    >>> class MyCollection:
     ...     # Use the threaded scheduler by default
     ...     __dask_scheduler__ = staticmethod(dask.threaded.get)
 
@@ -621,7 +621,7 @@ Example
     >>> from dask.base import tokenize, normalize_token
 
     # Define a tokenize implementation using a method.
-    >>> class Foo(object):
+    >>> class Foo:
     ...     def __init__(self, a, b):
     ...         self.a = a
     ...         self.b = b
@@ -637,7 +637,7 @@ Example
     True
 
     # Register an implementation with normalize_token
-    >>> class Bar(object):
+    >>> class Bar:
     ...     def __init__(self, x, y):
     ...         self.x = x
     ...         self.y = y

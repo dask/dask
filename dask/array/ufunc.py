@@ -44,7 +44,7 @@ def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
     return derived_from(source)(wrapped)
 
 
-class da_frompyfunc(object):
+class da_frompyfunc:
     """A serializable `frompyfunc` object"""
 
     def __init__(self, func, nin, nout):
@@ -86,7 +86,7 @@ def frompyfunc(func, nin, nout):
     return ufunc(da_frompyfunc(func, nin, nout))
 
 
-class ufunc(object):
+class ufunc:
     _forward_attrs = {
         "nin",
         "nargs",
