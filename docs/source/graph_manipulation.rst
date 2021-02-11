@@ -2,11 +2,17 @@
 
 Advanced graph manipulation
 ===========================
-These functions rewrite the dask graph underlying dask collections, producing equivalent
-collections with different sets of keys. They are intended to be used whenever the dask
-scheduler can't automatically figure out that the computation of a node should be
-delayed to avoid occupying RAM with its output for prolonged periods of time, and/or
-that recalculating a node is much cheaper than holding its output in memory.
+There are some situations where computations with Dask collections will result in
+suboptimal memory usage (e.g. an entire Dask DataFrame is loaded into memory).
+This may happen when Dask’s scheduler doesn’t automatically delay the computation of
+nodes in a task graph to avoid occupying memory with their output for prolonged
+periods of time, or in scenarios where recalculating nodes is much cheaper
+than holding their output in memory.
+
+This page highlights a set of graph manipulation utilities which can be used to
+help avoid these scenarios. In particular, the utilities described below rewrite the
+underlying Dask graph for Dask collections, producing equivalent collections with
+different sets of keys.
 
 Consider the following example:
 
