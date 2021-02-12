@@ -44,7 +44,6 @@ class ParquetFunctionWrapper:
 
     def __init__(
         self,
-        name,
         engine,
         fs,
         meta,
@@ -53,7 +52,6 @@ class ParquetFunctionWrapper:
         kwargs,
         common_kwargs,
     ):
-        self.name = name
         self.read_partition = engine.read_partition
         self.fs = fs
         self.meta = meta
@@ -120,7 +118,6 @@ class BlockwiseParquet(Blockwise):
         self.common_kwargs = common_kwargs or {}
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = ParquetFunctionWrapper(
-            self.io_name,
             self.engine,
             self.fs,
             self.meta,
