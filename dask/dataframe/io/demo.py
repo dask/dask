@@ -2,8 +2,6 @@ import pandas as pd
 import numpy as np
 
 from ..core import tokenize, DataFrame
-from .io import from_delayed
-from ...delayed import delayed
 from ...utils import random_state_data
 from ...highlevelgraph import HighLevelGraph
 from ...blockwise import Blockwise, blockwise_token
@@ -234,6 +232,32 @@ def generate_day(
     )
 
 
+class GenerateDay:
+    """
+    Wrapper Class for ``generate_day``
+
+    Generates daily-stock data for a day.
+    """
+
+    def __init__(self, freq):
+        self.freq = freq
+
+    def __call__(self, part):
+        s, seed = part
+        if isinstance(seed, int):
+            seed = random_state_data(1, seed)
+        return generate_day(
+            s.name,
+            s.loc["Open"],
+            s.loc["High"],
+            s.loc["Low"],
+            s.loc["Close"],
+            s.loc["Volume"],
+            freq=self.freq,
+            random_state=seed,
+        )
+
+
 def daily_stock(
     symbol,
     start,
@@ -291,28 +315,39 @@ def daily_stock(
     from pandas_datareader import data
 
     df = data.DataReader(symbol, data_source, start, stop)
-    seeds = random_state_data(len(df), random_state=random_state)
-    parts = []
+    npartitions = len(df)
+    if random_state is None:
+        # Get random integer seed for each partition. We can
+        # call `random_state_data` in `MakeTimeseriesPart`
+        seeds = np.random.randint(2e9, size=npartitions)
+    else:
+        seeds = random_state_data(npartitions, random_state=random_state)
+    output_name = "daily-stock-" + tokenize(
+        symbol, start, stop, freq, data_source, seeds
+    )
+    name = "blockwise-io-" + output_name
+
     divisions = []
-    for i, seed in zip(range(len(df)), seeds):
+    part_inputs = {}
+    for i, seed in zip(range(npartitions), seeds):
         s = df.iloc[i]
         if s.isnull().any():
             continue
-        part = delayed(generate_day)(
-            s.name,
-            s.loc["Open"],
-            s.loc["High"],
-            s.loc["Low"],
-            s.loc["Close"],
-            s.loc["Volume"],
-            freq=freq,
-            random_state=seed,
-        )
-        parts.append(part)
+        part_inputs[(name, i)] = (s, seed)
         divisions.append(s.name + pd.Timedelta(hours=9))
-
     divisions.append(s.name + pd.Timedelta(hours=12 + 4))
 
-    meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
+    generate_day_wrapper = GenerateDay(freq)
+    dsk = {output_name: (generate_day_wrapper, blockwise_token(0))}
+    layer = Blockwise(
+        output_name,
+        "i",
+        dsk,
+        [(name, "i")],
+        {name: (npartitions,)},
+        io_deps={name: part_inputs},
+    )
+    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return from_delayed(parts, meta=meta, divisions=divisions)
+    meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
+    return DataFrame(graph, output_name, meta, divisions)
