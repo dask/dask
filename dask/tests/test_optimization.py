@@ -257,7 +257,7 @@ def test_inline_ignores_curries_and_partials():
 
 
 def test_inline_functions_non_hashable():
-    class NonHashableCallable(object):
+    class NonHashableCallable:
         def __call__(self, a):
             return a + 1
 

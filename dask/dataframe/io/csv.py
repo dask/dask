@@ -622,7 +622,7 @@ def read_pandas(
             if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
                 head[c] = head[c].astype(float)
 
-    values = [[dsk.dask.values() for dsk in block] for block in values]
+    values = [[list(dsk.dask.values()) for dsk in block] for block in values]
 
     return text_blocks_to_pandas(
         reader,

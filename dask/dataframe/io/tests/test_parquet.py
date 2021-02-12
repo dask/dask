@@ -2422,7 +2422,7 @@ def test_getitem_optimization_empty(tmpdir, engine):
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
     dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
 
-    subgraph = list(dsk.layers.values())[0]
+    subgraph = next(iter((dsk.layers.values())))
     assert isinstance(subgraph, BlockwiseParquet)
     assert subgraph.columns == []
 
@@ -2458,8 +2458,9 @@ def test_blockwise_parquet_annotations(tmpdir):
     # `ddf` should now have ONE Blockwise layer
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 1
-    assert isinstance(list(layers.values())[0], Blockwise)
-    assert list(layers.values())[0].annotations == {"foo": "bar"}
+    layer = next(iter((layers.values())))
+    assert isinstance(layer, Blockwise)
+    assert layer.annotations == {"foo": "bar"}
 
 
 def test_optimize_blockwise_parquet(tmpdir):

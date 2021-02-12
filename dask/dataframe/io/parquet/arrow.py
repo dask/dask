@@ -246,7 +246,7 @@ def _collect_pyarrow_dataset_frags(
             ]
 
         # Append fragments to our "metadata" list
-        if ds_filters:
+        if ds_filters is not None:
             # If we have filters, we need to split the row groups to apply them.
             # If any row-groups are filtered out, we convert the remaining row-groups
             # to a NEW (filtered) fragment, and append the filtered fragment to our
