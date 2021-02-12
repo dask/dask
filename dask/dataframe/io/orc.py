@@ -18,8 +18,7 @@ class ORCFunctionWrapper:
     Reads ORC data from disk to produce a partition (given a key).
     """
 
-    def __init__(self, name, fs, columns):
-        self.name = name
+    def __init__(self, fs, columns):
         self.fs = fs
         self.columns = columns
 
@@ -111,7 +110,7 @@ def read_orc(path, columns=None, storage_options=None):
         for stripe in range(n):
             stripe_map[(name, N)] = (path, stripe)
             N += 1
-    io_func_wrapper = ORCFunctionWrapper(name, fs, columns)
+    io_func_wrapper = ORCFunctionWrapper(fs, columns)
     dsk = {output_name: (io_func_wrapper, blockwise_token(0))}
 
     # Create Blockwise layer

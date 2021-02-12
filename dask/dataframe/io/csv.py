@@ -44,7 +44,6 @@ class CSVFunctionWrapper:
 
     def __init__(
         self,
-        name,
         columns,
         colname,
         head,
@@ -54,7 +53,6 @@ class CSVFunctionWrapper:
         enforce,
         kwargs,
     ):
-        self.name = name
         self.columns = columns
         self.colname = colname
         self.head = head
@@ -144,7 +142,6 @@ class BlockwiseCSV(Blockwise):
         self.part_ids = list(range(len(blocks))) if part_ids is None else part_ids
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = CSVFunctionWrapper(
-            self.io_name,
             self.columns,
             self.colname,
             self.head,
