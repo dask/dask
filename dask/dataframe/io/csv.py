@@ -155,7 +155,7 @@ class BlockwiseCSV(Blockwise):
         # Define mapping between key index and "part"
         io_arg_map = {}
         for i in self.part_ids:
-            io_arg_map[(self.io_name, i)] = (
+            io_arg_map[(i,)] = (
                 self.blocks[i],
                 self.paths[i] if self.paths else None,
                 self.is_first[i],

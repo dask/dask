@@ -4,7 +4,7 @@ from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
 from ...highlevelgraph import HighLevelGraph
-from ...blockwise import Blockwise, blockwise_token
+from .utils import blockwise_io_layer
 from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
 
@@ -101,28 +101,18 @@ def read_orc(path, columns=None, storage_options=None):
         columns = list(schema)
     meta = _meta_from_dtypes(columns, schema, [], [])
 
-    # Define the "blockwise" graph
+    # Define the "blockwise" function inputs
     N = 0
     output_name = "read-orc-" + tokenize(fs_token, path, columns)
-    name = "blockwise-io-" + output_name
     stripe_map = {}
     for path, n in zip(paths, nstripes_per_file):
         for stripe in range(n):
-            stripe_map[(name, N)] = (path, stripe)
+            stripe_map[(N,)] = (path, stripe)
             N += 1
+    npartitions = N
     io_func_wrapper = ORCFunctionWrapper(fs, columns)
-    dsk = {output_name: (io_func_wrapper, blockwise_token(0))}
 
     # Create Blockwise layer
-    npartitions = N
-    layer = Blockwise(
-        output_name,
-        "i",
-        dsk,
-        [(name, "i")],
-        {name: (npartitions,)},
-        io_deps={name: stripe_map},
-    )
+    layer = blockwise_io_layer(io_func_wrapper, stripe_map, output_name, npartitions)
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-
     return DataFrame(graph, output_name, meta, [None] * (npartitions + 1))

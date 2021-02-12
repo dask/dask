@@ -51,7 +51,7 @@ class BlockwiseCreateArray(Blockwise):
         for idx in itertools.product(*[range(len(c)) for c in chunks]):
             ndim = len(chunks)
             chunk = tuple(chunks[i][idx[i]] for i in range(ndim))
-            chunk_key_map[(io_name, *idx)] = chunk
+            chunk_key_map[tuple(idx)] = chunk
 
         out_ind = tuple(range(len(shape)))
         self.nchunks = tuple(len(chunk) for chunk in chunks)

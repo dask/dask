@@ -4,8 +4,7 @@ import numpy as np
 from ..core import tokenize, DataFrame
 from ...utils import random_state_data
 from ...highlevelgraph import HighLevelGraph
-from ...blockwise import Blockwise, blockwise_token
-
+from .utils import blockwise_io_layer
 
 __all__ = ["make_timeseries"]
 
@@ -158,24 +157,15 @@ def make_timeseries(
     output_name = "make-timeseries-" + tokenize(
         start, end, dtypes, freq, partition_freq, state_data
     )
-    name = "blockwise-io-" + output_name
 
     # Create Blockwise layer
     part_inputs = {}
     for i in range(npartitions):
-        part_inputs[(name, i)] = (divisions[i : i + 2], state_data[i])
+        part_inputs[(i,)] = (divisions[i : i + 2], state_data[i])
     make_ts_wrapper = MakeTimeseriesPart(dtypes, freq, kwargs)
-    dsk = {output_name: (make_ts_wrapper, blockwise_token(0))}
-    layer = Blockwise(
-        output_name,
-        "i",
-        dsk,
-        [(name, "i")],
-        {name: (npartitions,)},
-        io_deps={name: part_inputs},
-    )
-    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
+    layer = blockwise_io_layer(make_ts_wrapper, part_inputs, output_name, npartitions)
 
+    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
     return DataFrame(graph, output_name, head, divisions)
 
@@ -325,7 +315,6 @@ def daily_stock(
     output_name = "daily-stock-" + tokenize(
         symbol, start, stop, freq, data_source, seeds
     )
-    name = "blockwise-io-" + output_name
 
     divisions = []
     part_inputs = {}
@@ -333,21 +322,15 @@ def daily_stock(
         s = df.iloc[i]
         if s.isnull().any():
             continue
-        part_inputs[(name, i)] = (s, seed)
+        part_inputs[(i,)] = (s, seed)
         divisions.append(s.name + pd.Timedelta(hours=9))
     divisions.append(s.name + pd.Timedelta(hours=12 + 4))
 
     generate_day_wrapper = GenerateDay(freq)
-    dsk = {output_name: (generate_day_wrapper, blockwise_token(0))}
-    layer = Blockwise(
-        output_name,
-        "i",
-        dsk,
-        [(name, "i")],
-        {name: (npartitions,)},
-        io_deps={name: part_inputs},
+    layer = blockwise_io_layer(
+        generate_day_wrapper, part_inputs, output_name, npartitions
     )
-    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
+    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
     return DataFrame(graph, output_name, meta, divisions)

@@ -128,7 +128,7 @@ class BlockwiseParquet(Blockwise):
         )
 
         # Define mapping between key index and "part"
-        io_arg_map = {(self.io_name, i): self.parts[i] for i in self.part_ids}
+        io_arg_map = {(i,): self.parts[i] for i in self.part_ids}
 
         # Define the "blockwise" graph
         dsk = {self.name: (io_func_wrapper, blockwise_token(0))}

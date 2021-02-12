@@ -2,6 +2,34 @@ import pandas as pd
 import json
 from uuid import uuid4
 
+from ...blockwise import Blockwise, blockwise_token
+
+
+def blockwise_io_layer(io_func, part_inputs, output_name, npartitions):
+    """Construct an IO Blockwise layer for a dataframe collection
+
+    Parameters
+    ----------
+    io_func: callable
+        The function needed to generate data for each output partition.
+    part_inputs: dict
+        Mapping between collection keys and inputs to ``io_func``.  Each
+        element in ``part_inputs`` should be a tuple.
+    output_name: str
+        Name of the output ``Blockwise`` layer.
+    """
+
+    name = "blockwise-io-" + output_name
+    dsk = {output_name: (io_func, blockwise_token(0))}
+    return Blockwise(
+        output_name,
+        "i",
+        dsk,
+        [(name, "i")],
+        {name: (npartitions,)},
+        io_deps={name: part_inputs},
+    )
+
 
 def _get_pyarrow_dtypes(schema, categories):
     """Convert a pyarrow.Schema object to pandas dtype dict"""

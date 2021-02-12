@@ -768,7 +768,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                 if io_deps and arg in io_deps:
                     # We don't want to stringify keys for args
                     # we are replacing here
-                    args.append(io_deps[arg][tups])
+                    args.append(io_deps[arg][tups[1:]])
                 else:
                     if deserializing:
                         args.append(stringify_collection_keys(tups))
