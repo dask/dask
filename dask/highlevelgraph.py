@@ -176,7 +176,7 @@ class Layer(collections.abc.Mapping):
     def __dask_distributed_anno_unpack__(
         annotations: MutableMapping[str, Any],
         new_annotations: Optional[Mapping[str, Any]],
-        keys: Iterable,
+        keys: Iterable[Hashable],
     ) -> None:
         """
         Unpack a set of layer annotations across a set of keys, then merge those
@@ -194,7 +194,7 @@ class Layer(collections.abc.Mapping):
             All keys in the layer.
         """
         if new_annotations is None:
-            return None
+            return
 
         expanded = {}
         keys_stringified = False
@@ -211,15 +211,13 @@ class Layer(collections.abc.Mapping):
                     keys = [stringify(k) for k in keys]
                     keys_stringified = True
 
-                expanded[a] = {k: v for k in keys}
+                expanded[a] = dict.fromkeys(keys, v)
 
         # Merge the expanded annotations with the existing annotations mapping
         to_merge = {}
         for k, v in expanded.items():
-            if isinstance(v, dict) and k in annotations:
-                to_merge[k] = {**annotations[k], **v}
-            else:
-                to_merge[k] = v
+            v.update(annotations.get(k, {}))
+            to_merge[k] = v
         annotations.update(to_merge)
 
     def clone(
@@ -298,7 +296,7 @@ class Layer(collections.abc.Mapping):
         return BasicLayer(dsk_new), bound
 
     def __dask_distributed_pack__(
-        self, all_hlg_keys: Iterable, known_key_dependencies, client, client_keys
+        self, all_hlg_keys: Iterable[Hashable], known_key_dependencies, client, client_keys: Iterable[Hashable]
     ) -> Any:
         """Pack the layer for scheduler communication in Distributed
 
@@ -364,7 +362,7 @@ class Layer(collections.abc.Mapping):
         dsk = {k: v[0] for k, v in dsk.items()}
 
         # Calculate dependencies without re-calculating already known dependencies
-        missing_keys = set(dsk.keys()).difference(known_key_dependencies.keys())
+        missing_keys = dsk.keys() - known_key_dependencies.keys()
         dependencies = {
             k: keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False)
             for k in missing_keys
@@ -378,9 +376,9 @@ class Layer(collections.abc.Mapping):
             for k, deps in dependencies.items()
         }
 
-        all_hlg_keys = all_hlg_keys.union(dsk)
+        merged_hlg_keys = all_hlg_keys | dsk.keys()
         dsk = {
-            stringify(k): stringify(v, exclusive=all_hlg_keys) for k, v in dsk.items()
+            stringify(k): stringify(v, exclusive=merged_hlg_keys) for k, v in dsk.items()
         }
         dsk = toolz.valmap(dumps_task, dsk)
         return {"dsk": dsk, "dependencies": dependencies}
@@ -880,7 +878,7 @@ class HighLevelGraph(Mapping):
                     f"expected {repr(dependencies[k])}"
                 )
 
-    def __dask_distributed_pack__(self, client, client_keys) -> Any:
+    def __dask_distributed_pack__(self, client, client_keys: Iterable[Hashable]) -> Any:
         """Pack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the packaging to each layer in the high level graph
@@ -923,9 +921,7 @@ class HighLevelGraph(Mapping):
     @staticmethod
     def __dask_distributed_unpack__(
         packed_hlg, annotations: Mapping[str, Any]
-    ) -> Tuple[
-        MutableMapping[str, Any], MutableMapping[str, set], MutableMapping[str, Any]
-    ]:
+    ) -> Tuple[Dict[str, Any], Dict[str, set], Dict[str, Any]]:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -943,20 +939,20 @@ class HighLevelGraph(Mapping):
 
         Returns
         -------
-        dsk: Mapping[str, Any]
+        dsk: Dict[str, Any]
             Materialized (stringified) graph of all nodes in the high level graph
-        deps: Mapping[str, set]
+        deps: Dict[str, set]
             Dependencies of each key in `dsk`
-        anno: Mapping[str, Any]
+        anno: Dict[str, Any]
             Annotations for `dsk`
         """
         from distributed.protocol.core import loads_msgpack
         from distributed.protocol.serialize import import_allowed_module
 
         hlg = loads_msgpack(*packed_hlg)
-        dsk: MutableMapping[str, Any] = {}
-        deps: MutableMapping[str, set] = {}
-        anno: MutableMapping[str, Any] = {}
+        dsk = {}
+        deps = {}
+        anno = {}
         if annotations:
             anno.update(annotations)
 
