@@ -343,11 +343,18 @@ class Blockwise(Layer):
             for _, input_map in self.io_deps.items():
                 check = True
                 for k in input_map:
+                    # Test msgpack on the very first element.
+                    # If this fails, we will pickle everything.
+                    # If this succeeds, we will assume all other
+                    # elelments are also msgpack serializable.
+                    #
+                    # The risk here is that only a subset of
+                    # elements requires pickling, and that subset
+                    # does not include the first element.  For
+                    # now, it is the responsibility of the
+                    # Blockwise layer to pickling/unpickle
+                    # offending elements in cases like this.
                     if check:
-                        # Test msgpack on the very first element.
-                        # If this fails, we will pickle everything.
-                        # Note that we may want to skip cases where
-                        # the element is something like `None`.
                         try:
                             msgpack.packb(input_map[k])
                             break  # No need to pickle - Bail
