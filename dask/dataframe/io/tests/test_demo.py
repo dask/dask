@@ -5,6 +5,7 @@ import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq
+from dask.blockwise import Blockwise, optimize_blockwise
 
 
 def test_make_timeseries():
@@ -77,6 +78,20 @@ def test_make_timeseries_no_args():
     assert 1 < df.npartitions < 1000
     assert len(df.columns) > 1
     assert len(set(df.dtypes)) > 1
+
+
+def test_make_timeseries_blockwise():
+    df = dd.demo.make_timeseries()
+    df = df[["x", "y"]]
+
+    # Check that `optimize_blockwise` fuses both
+    # `Blockwise` layers together into a singe `Blockwise` layer
+    keys = [(df._name, i) for i in range(df.npartitions)]
+    graph = optimize_blockwise(df.__dask_graph__(), keys)
+    layers = graph.layers
+    name = list(layers.keys())[0]
+    assert len(layers) == 1
+    assert isinstance(layers[name], Blockwise)
 
 
 def test_no_overlaps():
