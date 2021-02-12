@@ -5,6 +5,9 @@ from ..core import tokenize, DataFrame
 from .io import from_delayed
 from ...delayed import delayed
 from ...utils import random_state_data
+from ...highlevelgraph import HighLevelGraph
+from ...blockwise import Blockwise, blockwise_token
+
 
 __all__ = ["make_timeseries"]
 
@@ -62,6 +65,27 @@ make = {
     object: make_string,
     "category": make_categorical,
 }
+
+
+class MakeTimeseriesPart:
+    """
+    Wrapper Class for ``make_timeseries_part``
+
+    Makes a timeseries partition.
+    """
+
+    def __init__(self, dtypes, freq, kwargs):
+        self.dtypes = dtypes
+        self.freq = freq
+        self.kwargs = kwargs
+
+    def __call__(self, part):
+        divisions, state_data = part
+        if isinstance(state_data, int):
+            state_data = random_state_data(1, state_data)
+        return make_timeseries_part(
+            divisions[0], divisions[1], self.dtypes, self.freq, state_data, self.kwargs
+        )
 
 
 def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
@@ -126,24 +150,36 @@ def make_timeseries(
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
     divisions = list(pd.date_range(start=start, end=end, freq=partition_freq))
-    state_data = random_state_data(len(divisions) - 1, seed)
-    name = "make-timeseries-" + tokenize(
+    npartitions = len(divisions) - 1
+    if seed is None:
+        # Get random integer seed for each partition. We can
+        # call `random_state_data` in `MakeTimeseriesPart`
+        state_data = np.random.randint(2e9, size=npartitions)
+    else:
+        state_data = random_state_data(npartitions, seed)
+    output_name = "make-timeseries-" + tokenize(
         start, end, dtypes, freq, partition_freq, state_data
     )
-    dsk = {
-        (name, i): (
-            make_timeseries_part,
-            divisions[i],
-            divisions[i + 1],
-            dtypes,
-            freq,
-            state_data[i],
-            kwargs,
-        )
-        for i in range(len(divisions) - 1)
-    }
+    name = "blockwise-io-" + output_name
+
+    # Create Blockwise layer
+    part_inputs = {}
+    for i in range(npartitions):
+        part_inputs[(name, i)] = (divisions[i : i + 2], state_data[i])
+    make_ts_wrapper = MakeTimeseriesPart(dtypes, freq, kwargs)
+    dsk = {output_name: (make_ts_wrapper, blockwise_token(0))}
+    layer = Blockwise(
+        output_name,
+        "i",
+        dsk,
+        [(name, "i")],
+        {name: (npartitions,)},
+        io_deps={name: part_inputs},
+    )
+    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
+
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(dsk, name, head, divisions)
+    return DataFrame(graph, output_name, head, divisions)
 
 
 def generate_day(
