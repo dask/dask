@@ -296,7 +296,11 @@ class Layer(collections.abc.Mapping):
         return BasicLayer(dsk_new), bound
 
     def __dask_distributed_pack__(
-        self, all_hlg_keys: Iterable[Hashable], known_key_dependencies, client, client_keys: Iterable[Hashable]
+        self,
+        all_hlg_keys: Iterable[Hashable],
+        known_key_dependencies,
+        client,
+        client_keys: Iterable[Hashable],
     ) -> Any:
         """Pack the layer for scheduler communication in Distributed
 
@@ -378,7 +382,8 @@ class Layer(collections.abc.Mapping):
 
         merged_hlg_keys = all_hlg_keys | dsk.keys()
         dsk = {
-            stringify(k): stringify(v, exclusive=merged_hlg_keys) for k, v in dsk.items()
+            stringify(k): stringify(v, exclusive=merged_hlg_keys)
+            for k, v in dsk.items()
         }
         dsk = toolz.valmap(dumps_task, dsk)
         return {"dsk": dsk, "dependencies": dependencies}
