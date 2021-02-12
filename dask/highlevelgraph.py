@@ -923,7 +923,9 @@ class HighLevelGraph(Mapping):
     @staticmethod
     def __dask_distributed_unpack__(
         packed_hlg, annotations: Mapping[str, Any]
-    ) -> Tuple[Mapping[str, Any], Mapping[str, set], Mapping[str, Any]]:
+    ) -> Tuple[
+        MutableMapping[str, Any], MutableMapping[str, set], MutableMapping[str, Any]
+    ]:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -952,9 +954,9 @@ class HighLevelGraph(Mapping):
         from distributed.protocol.serialize import import_allowed_module
 
         hlg = loads_msgpack(*packed_hlg)
-        dsk: Mapping[str, Any] = {}
-        deps: Mapping[str, set] = {}
-        anno: Mapping[str, Any] = {}
+        dsk: MutableMapping[str, Any] = {}
+        deps: MutableMapping[str, set] = {}
+        anno: MutableMapping[str, Any] = {}
         if annotations:
             anno.update(annotations)
 
