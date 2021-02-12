@@ -214,11 +214,9 @@ class Layer(collections.abc.Mapping):
                 expanded[a] = dict.fromkeys(keys, v)
 
         # Merge the expanded annotations with the existing annotations mapping
-        to_merge = {}
         for k, v in expanded.items():
             v.update(annotations.get(k, {}))
-            to_merge[k] = v
-        annotations.update(to_merge)
+        annotations.update(expanded)
 
     def clone(
         self,
