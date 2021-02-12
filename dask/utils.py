@@ -175,7 +175,7 @@ def noop_context():
     yield
 
 
-class IndexCallable(object):
+class IndexCallable:
     """Provide getitem syntax for functions
 
     >>> def inc(x):
@@ -407,7 +407,7 @@ def takes_multiple_arguments(func, varargs=True):
     >>> takes_multiple_arguments(f)
     True
 
-    >>> class Thing(object):
+    >>> class Thing:
     ...     def __init__(self, a): pass
     >>> takes_multiple_arguments(Thing)
     False
@@ -445,7 +445,7 @@ def get_named_args(func):
     ]
 
 
-class Dispatch(object):
+class Dispatch:
     """Simple single dispatch."""
 
     def __init__(self, name=None):
@@ -878,7 +878,7 @@ def put_lines(buf, lines):
 _method_cache = {}
 
 
-class methodcaller(object):
+class methodcaller:
     """
     Return a callable object that calls the given method on its operand.
 
@@ -909,7 +909,7 @@ class methodcaller(object):
     __repr__ = __str__
 
 
-class itemgetter(object):
+class itemgetter:
     """
     Return a callable object that gets an item from the operand
 
@@ -932,7 +932,7 @@ class itemgetter(object):
         return type(self) is type(other) and self.index == other.index
 
 
-class MethodCache(object):
+class MethodCache:
     """Attribute access on this object returns a methodcaller for that
     attribute.
 
@@ -950,7 +950,7 @@ class MethodCache(object):
 M = MethodCache()
 
 
-class SerializableLock(object):
+class SerializableLock:
     _locks = WeakValueDictionary()
     """ A Serializable per-process Lock
 
@@ -1053,8 +1053,10 @@ def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
     return result
 
 
-class OperatorMethodMixin(object):
+class OperatorMethodMixin:
     """A mixin for dynamically implementing operators"""
+
+    __slots__ = ()
 
     @classmethod
     def _bind_operator(cls, op):

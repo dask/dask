@@ -19,7 +19,7 @@ except ImportError:
     matmul = None
 
 
-class Tuple(object):
+class Tuple:
     __dask_scheduler__ = staticmethod(dask.threaded.get)
 
     def __init__(self, dsk, keys):
@@ -505,7 +505,7 @@ def test_delayed_name_on_call():
 
 
 def test_callable_obj():
-    class Foo(object):
+    class Foo:
         def __init__(self, a):
             self.a = a
 
@@ -579,7 +579,7 @@ def test_keys_from_array():
 
 # Mostly copied from https://github.com/pytoolz/toolz/pull/220
 def test_delayed_decorator_on_method():
-    class A(object):
+    class A:
         BASE = 10
 
         def __init__(self, base):
@@ -677,3 +677,26 @@ def test_cloudpickle(f):
     d = f(2)
     d = cloudpickle.loads(cloudpickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
     assert d.compute() == 3
+
+
+def test_dask_layers():
+    d1 = delayed(1)
+    assert d1.dask.layers.keys() == {d1.key}
+    assert d1.dask.dependencies == {d1.key: set()}
+    assert d1.__dask_layers__() == (d1.key,)
+    d2 = modlevel_delayed1(d1)
+    assert d2.dask.layers.keys() == {d1.key, d2.key}
+    assert d2.dask.dependencies == {d1.key: set(), d2.key: {d1.key}}
+    assert d2.__dask_layers__() == (d2.key,)
+
+
+def test_dask_layers_to_delayed():
+    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
+    # match the key
+    da = pytest.importorskip("dask.array")
+    d = da.ones(1).to_delayed()[0]
+    name = d.key[0]
+    assert d.key[1:] == (0,)
+    assert d.dask.layers.keys() == {"delayed-" + name}
+    assert d.dask.dependencies == {"delayed-" + name: set()}
+    assert d.__dask_layers__() == ("delayed-" + name,)

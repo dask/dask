@@ -279,7 +279,7 @@ def finalize_item(results):
     return results[0]
 
 
-class StringAccessor(object):
+class StringAccessor:
     """String processing functions
 
     Examples
@@ -358,6 +358,15 @@ class Item(DaskMethodsMixin):
     def __dask_keys__(self):
         return [self.key]
 
+    def __dask_layers__(self):
+        # Deal with instances created with Item.from_delayed()
+        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
+        # See Delayed.__dask_layers__
+        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
+            return tuple(self.dask.layers)
+        else:
+            return (self.key,)
+
     def __dask_tokenize__(self):
         return self.key
 
@@ -385,7 +394,7 @@ class Item(DaskMethodsMixin):
         if not isinstance(value, Delayed) and hasattr(value, "key"):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(ensure_dict(value.dask), value.key)
+        return Item(value.dask, value.key)
 
     @property
     def _args(self):
