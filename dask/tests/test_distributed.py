@@ -83,6 +83,25 @@ def test_futures_to_delayed_dataframe(c):
         ddf = dd.from_delayed([1, 2])
 
 
+@pytest.mark.parametrize("fuse", [True, False])
+def test_fused_blockwise_dataframe_merge(c, fuse):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df1 = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
+    df2 = pd.DataFrame({"x": [1, 2, 3, 4], "z": [100, 200, 300, 400]})
+    ddf1 = dd.from_pandas(df1, npartitions=2) + 10
+    ddf2 = dd.from_pandas(df2, npartitions=2) + 100
+    df1 += 10
+    df2 += 100
+
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        dfm = ddf1.merge(ddf2, on=["x"], how="left").compute().sort_values("x")
+    dd.utils.assert_eq(
+        dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
+    )
+
+
 def test_futures_to_delayed_bag(c):
     db = pytest.importorskip("dask.bag")
     L = [1, 2, 3]
