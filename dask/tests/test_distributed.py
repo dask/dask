@@ -88,15 +88,21 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    df1 = pd.DataFrame({"x": [1, 2, 3, 4], "y": [10, 20, 30, 40]})
-    df2 = pd.DataFrame({"x": [1, 2, 3, 4], "z": [100, 200, 300, 400]})
-    ddf1 = dd.from_pandas(df1, npartitions=2) + 10
-    ddf2 = dd.from_pandas(df2, npartitions=2) + 100
+    # Generate two DataFrames with more partitions than
+    # the `max_branch` default used for shuffling (32).
+    # We need a multi-stage shuffle to cover #7178 fix.
+    size = 35
+    df1 = pd.DataFrame({"x": range(size), "y": range(size)})
+    df2 = pd.DataFrame({"x": range(size), "z": range(size)})
+    ddf1 = dd.from_pandas(df1, npartitions=size) + 10
+    ddf2 = dd.from_pandas(df2, npartitions=5) + 10
     df1 += 10
-    df2 += 100
+    df2 += 10
 
     with dask.config.set({"optimization.fuse.active": fuse}):
-        dfm = ddf1.merge(ddf2, on=["x"], how="left").compute().sort_values("x")
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left")
+        ddfm.head()  # https://github.com/dask/dask/issues/7178
+        dfm = ddfm.compute().sort_values("x")
     dd.utils.assert_eq(
         dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
     )

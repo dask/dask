@@ -354,13 +354,18 @@ class ShuffleLayer(SimpleShuffleLayer):
         Does not require graph materialization.
         """
         deps = defaultdict(set)
+        shuffle_group_name = "group-" + self.name
         parts_out = parts_out or self._keys_to_parts(keys)
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
         for part in parts_out:
             out = self.inputs[part]
             for k in range(self.nsplits):
-                _part = inp_part_map[insert(out, self.stage, k)]
-                deps[(self.name, part)].add((self.name_input, _part))
+                _inp = insert(out, self.stage, k)
+                _part = inp_part_map[_inp]
+                if self.stage == 0 and _part >= self.npartitions_input:
+                    deps[(self.name, part)].add((shuffle_group_name, _inp, "empty"))
+                else:
+                    deps[(self.name, part)].add((self.name_input, _part))
         return deps
 
     def _cull(self, parts_out):
@@ -421,6 +426,8 @@ class ShuffleLayer(SimpleShuffleLayer):
                             dsk[input_key] = self.meta_input
                     else:
                         input_key = (self.name_input, _part)
+                    with open("debug.txt", "a") as f:
+                        f.write("self.name " + str(input_key) + "\n")
 
                     # Convert partition into dict of dataframe pieces
                     dsk[(shuffle_group_name, _inp)] = (
