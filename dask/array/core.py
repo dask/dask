@@ -298,7 +298,7 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
 
 
 def _concatenate2(arrays, axes=[]):
-    """Recursively Concatenate nested lists of arrays along axes
+    """Recursively concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
     length of axes should correspond to the level of nesting of arrays.
@@ -3464,7 +3464,7 @@ def common_blockdim(blockdims):
 
     if np.isnan(sum(map(sum, blockdims))):
         raise ValueError(
-            "Arrays chunk sizes (%s) are unknown.\n\n"
+            "Arrays' chunk sizes (%s) are unknown.\n\n"
             "A possible solution:\n"
             "  x.compute_chunk_sizes()" % blockdims
         )

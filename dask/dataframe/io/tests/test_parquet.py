@@ -313,8 +313,8 @@ def test_columns_auto_index(tmpdir, write_engine, read_engine):
     fn = str(tmpdir)
     ddf.to_parquet(fn, engine=write_engine)
 
-    # XFAIL, auto index selection not longer supported (for simplicity)
-    # ### Emtpy columns ###
+    # XFAIL, auto index selection no longer supported (for simplicity)
+    # ### Empty columns ###
     # With divisions if supported
     assert_eq(dd.read_parquet(fn, columns=[], engine=read_engine), ddf[[]])
 
@@ -344,7 +344,7 @@ def test_columns_index(tmpdir, write_engine, read_engine):
 
     # With Index
     # ----------
-    # ### Emtpy columns, specify index ###
+    # ### Empty columns, specify index ###
     # With divisions if supported
     assert_eq(
         dd.read_parquet(fn, columns=[], engine=read_engine, index="myindex"), ddf[[]]
@@ -2912,7 +2912,7 @@ def test_multi_partition_none_index_false(tmpdir, engine):
         assert engine == "fastparquet"
         write_engine = "fastparquet"
 
-    # Write dataset without dast.to_parquet
+    # Write dataset without dask.to_parquet
     ddf1 = ddf.reset_index(drop=True)
     for i, part in enumerate(ddf1.partitions):
         path = tmpdir.join(f"test.{i}.parquet")

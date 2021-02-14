@@ -3707,7 +3707,6 @@ class DataFrame(_Frame):
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
-            #
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
 

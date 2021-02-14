@@ -1218,7 +1218,7 @@ def get_overlap(df, index):
 
 
 def fix_overlap(ddf, overlap):
-    """ Ensures that the upper bound on each partition of ddf is exclusive """
+    """ Ensures that the upper bound on each partition of ddf (except the last) is exclusive """
     name = "fix-overlap-" + tokenize(ddf, overlap)
     n = len(ddf.divisions) - 1
     dsk = {(name, i): (ddf._name, i) for i in range(n)}
@@ -1237,8 +1237,8 @@ def fix_overlap(ddf, overlap):
 
         # We do not want to move "overlap" from the previous partition (i-1) into
         # this partition (i) if the data from this partition will need to be moved
-        # to the next partitition (i+1) anyway.  If we concatenate data too early,
-        # we may loose rows (https://github.com/dask/dask/issues/6972).
+        # to the next partition (i+1) anyway.  If we concatenate data too early,
+        # we may lose rows (https://github.com/dask/dask/issues/6972).
         if i == ddf.npartitions - 2 or ddf.divisions[i] != ddf.divisions[i + 1]:
             frames.append((ddf._name, i))
             dsk[(name, i)] = (methods.concat, frames)

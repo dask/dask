@@ -4460,7 +4460,7 @@ def test_attrs_series_in_dataframes():
     ddf = dd.from_pandas(df, 2)
 
     # Fails because the pandas iloc method doesn't currently persist
-    # the attrs dict for series in a dataframee. Dask uses df.iloc[:0]
+    # the attrs dict for series in a dataframe. Dask uses df.iloc[:0]
     # when creating the _meta dataframe in make_meta_pandas(x, index=None).
     # Should start xpassing when df.iloc works. Remove the xfail then.
     assert df.A.attrs == ddf.A.attrs
