@@ -500,37 +500,6 @@ class Blockwise(Layer):
             return self, culled_deps
 
 
-class BlockwiseColumnar(Blockwise):
-    """Columnar Blockwise operation
-
-    This is a `Blockwise` layer that supports column-wise
-    culling.  This means that, given a set of required output
-    columns, the layer can be optimized by culling any
-    unnecessary columns.
-    """
-
-    def __init__(self, *args, **kwargs):
-        super().__init__(*args, **kwargs)
-        if not hasattr(self, "columns"):
-            self.columns = None
-
-    def cull_columns(self, output_columns):
-        """Cull unnecessary columns from this layer
-
-        Given a list of required output columns, this method
-        returns a culled (by column) layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be culled by column. This
-        method should be overridden by specialized DataFrame
-        layers to enable column culling.
-        """
-
-        # Default behavior.
-        # Return: `culled_layer`, `dep_columns`
-        return self, None
-
-
 def _get_coord_mapping(
     dims,
     output,

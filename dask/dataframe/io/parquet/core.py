@@ -10,13 +10,13 @@ from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
 from .utils import _analyze_paths
-from ...core import DataFrame, new_dd_object
+from ...core import DataFrame, new_dd_object, DataFrameLayer
 from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import HighLevelGraph
-from ....blockwise import BlockwiseColumnar, blockwise_token
+from ....blockwise import Blockwise, blockwise_token
 
 
 try:
@@ -86,10 +86,11 @@ class ParquetFunctionWrapper:
         )
 
 
-class BlockwiseParquet(BlockwiseColumnar):
+class BlockwiseParquet(Blockwise, DataFrameLayer):
     """
-    Specialized BlockwiseColumnar Layer for read_parquet.
-    Enables HighLevelGraph optimizations (e.g. optimize_blockwise_columnar_getitem).
+    Specialized Blockwise Layer for read_parquet.
+    Enables HighLevelGraph optimizations
+    (e.g. optimize_dataframe_getitem).
     """
 
     def __init__(

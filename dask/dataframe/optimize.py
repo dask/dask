@@ -16,7 +16,7 @@ def optimize(dsk, keys, **kwargs):
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
 
-    dsk = optimize_blockwise_columnar_getitem(dsk, keys=keys)
+    dsk = optimize_dataframe_getitem(dsk, keys=keys)
     dsk = optimize_blockwise(dsk, keys=keys)
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
@@ -40,13 +40,13 @@ def optimize(dsk, keys, **kwargs):
     return dsk
 
 
-def optimize_blockwise_columnar_getitem(dsk, keys):
+def optimize_dataframe_getitem(dsk, keys):
     # find the keys to optimize
 
-    from ..blockwise import BlockwiseColumnar
+    from .core import DataFrameLayer
 
     blockwise_columnars = [
-        k for k, v in dsk.layers.items() if isinstance(v, BlockwiseColumnar)
+        k for k, v in dsk.layers.items() if isinstance(v, DataFrameLayer)
     ]
 
     layers = dsk.layers.copy()
