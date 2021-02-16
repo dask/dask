@@ -23,7 +23,8 @@ jobs:
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2
         with:
-          miniconda-version: "latest"
+          mamba-version: "*"
+          channels: conda-forge
           python-version: ${{ matrix.python-version }}
           environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
           activate-environment: test-environment
