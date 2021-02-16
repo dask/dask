@@ -56,9 +56,9 @@ class Layer(collections.abc.Mapping):
     implementations.
     """
 
-    annotations: Optional[MutableMapping[str, Any]]
+    annotations: Optional[Mapping[str, Any]]
 
-    def __init__(self, annotations=None):
+    def __init__(self, annotations: Mapping[str, Any] = None):
         if annotations:
             self.annotations = annotations
         else:
