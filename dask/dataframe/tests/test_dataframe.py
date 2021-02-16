@@ -4545,3 +4545,38 @@ def test_assign_na_float_columns():
 
     assert df.compute()["a"].dtypes == "Float64"
     assert df.compute()["new_col"].dtypes == "Float64"
+
+
+def test_dot():
+    s1 = pd.Series([1, 2, 3, 4])
+    s2 = pd.Series([4, 5, 6, 6])
+    df = pd.DataFrame({"one": s1, "two": s2})
+
+    dask_s1 = dd.from_pandas(s1, npartitions=1)
+    dask_df = dd.from_pandas(df, npartitions=1)
+    dask_s2 = dd.from_pandas(s2, npartitions=1)
+
+    assert_eq(s1.dot(s2), dask_s1.dot(dask_s2).compute())
+    assert_eq((s1.dot(df) == dask_s1.dot(dask_df).compute()).all(), True)
+
+    # With partitions
+    partitioned_s1 = dd.from_pandas(s1, npartitions=2)
+    partitioned_df = dd.from_pandas(df, npartitions=2)
+    partitioned_s2 = dd.from_pandas(s2, npartitions=2)
+
+    assert_eq(s1.dot(s2), partitioned_s1.dot(partitioned_s2).compute())
+    assert_eq((s1.dot(df) == partitioned_s1.dot(partitioned_df).compute()).all(), True)
+
+
+def test_dot_nan():
+    s1 = pd.Series([1, 2, 3, 4])
+    dask_s1 = dd.from_pandas(s1, npartitions=1)
+
+    s2 = pd.Series([np.nan, np.nan, np.nan, np.nan])
+    dask_s2 = dd.from_pandas(s2, npartitions=1)
+
+    df = pd.DataFrame({"one": s1, "two": s2})
+    dask_df = dd.from_pandas(df, npartitions=1)
+
+    assert_eq(np.isnan(dask_s1.dot(dask_s2).compute()), True)
+    assert_eq(dask_s2.dot(dask_df).isnull().all().compute(), True)

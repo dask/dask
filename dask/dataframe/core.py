@@ -2579,6 +2579,22 @@ Dask Name: {name}, {task} tasks"""
             [self, other], join="outer", interleave_partitions=interleave_partitions
         )
 
+    @derived_from(pd.Series)
+    def dot(self, other):
+        def _dot_series(*args, **kwargs):
+            # The return type will be a series in case `other` is a dataframe
+            # but a scalar value in case `other` is a series. Casting to a pandas series
+            # will normalize the expected return type's value for both cases
+            return pd.Series(M.dot(*args, **kwargs))
+
+        if isinstance(other, DataFrame):
+            s = self.map_partitions(M.dot, other, token="dot")
+            return s.groupby(by=s.index).apply(
+                lambda x: x.sum(skipna=False), meta=s._meta_nonempty
+            )
+
+        return self.map_partitions(_dot_series, other, token="dot").sum(skipna=False)
+
     @derived_from(pd.DataFrame)
     def align(self, other, join="outer", axis=None, fill_value=None):
         meta1, meta2 = _emulate(
@@ -5230,6 +5246,7 @@ def apply_concat_apply(
     npartitions = set(arg.npartitions for arg in dfs)
     if len(npartitions) > 1:
         raise ValueError("All arguments must have same number of partitions")
+
     npartitions = npartitions.pop()
 
     if split_every is None:
