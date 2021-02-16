@@ -5,7 +5,9 @@ from uuid import uuid4
 from ...blockwise import Blockwise, blockwise_token
 
 
-def blockwise_io_layer(io_func, part_inputs, output_name, npartitions):
+def blockwise_io_layer(
+    io_func, part_inputs, output_name, npartitions, constructor=None
+):
     """Construct an IO Blockwise layer for a dataframe collection
 
     Parameters
@@ -21,7 +23,8 @@ def blockwise_io_layer(io_func, part_inputs, output_name, npartitions):
 
     name = "blockwise-io-" + output_name
     dsk = {output_name: (io_func, blockwise_token(0))}
-    return Blockwise(
+    constructor = constructor or Blockwise
+    return constructor(
         output_name,
         "i",
         dsk,

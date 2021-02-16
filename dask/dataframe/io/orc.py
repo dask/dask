@@ -1,12 +1,13 @@
 from distutils.version import LooseVersion
 
-from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
-from ..core import DataFrame
+from .utils import _get_pyarrow_dtypes, _meta_from_dtypes, blockwise_io_layer
+from ..core import DataFrame, DataFrameLayer
 from ...base import tokenize
 from ...highlevelgraph import HighLevelGraph
 from .utils import blockwise_io_layer
 from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
+from ...blockwise import Blockwise
 
 __all__ = ("read_orc",)
 
@@ -25,6 +26,52 @@ class ORCFunctionWrapper:
     def __call__(self, stripe_info):
         path, stripe = stripe_info
         return _read_orc_stripe(self.fs, path, stripe, self.columns)
+
+
+class BlockwiseORC(Blockwise, DataFrameLayer):
+    def __init__(self, name, fs, columns, paths, nstripes_per_file):
+
+        self.name = name
+        self.fs = fs
+        self.columns = columns
+        self.paths = paths
+        self.nstripes_per_file = nstripes_per_file
+
+        N = 0
+        stripe_map = {}
+        for path, n in zip(paths, nstripes_per_file):
+            for stripe in range(n):
+                stripe_map[(N,)] = (path, stripe)
+                N += 1
+        self.npartitions = N
+        io_func_wrapper = ORCFunctionWrapper(fs, columns)
+
+        # Create Blockwise layer
+        blockwise_io_layer(
+            io_func_wrapper,
+            stripe_map,
+            name,
+            self.npartitions,
+            constructor=super().__init__,
+        )
+
+    def cull_columns(self, columns):
+        # Method inherited from `DataFrameLayer.cull_columns`
+        if columns and columns < set(self.columns):
+            columns = list(columns)
+            name = "read-orc-" + tokenize(self.name, columns)
+            return (
+                BlockwiseORC(
+                    name,
+                    self.fs,
+                    columns,
+                    self.paths,
+                    self.nstripes_per_file,
+                ),
+                None,
+            )
+        else:
+            return self, None
 
 
 def _read_orc_stripe(fs, path, stripe, columns=None):
@@ -99,20 +146,11 @@ def read_orc(path, columns=None, storage_options=None):
             )
     else:
         columns = list(schema)
-    meta = _meta_from_dtypes(columns, schema, [], [])
-
-    # Define the "blockwise" function inputs
-    N = 0
-    output_name = "read-orc-" + tokenize(fs_token, path, columns)
-    stripe_map = {}
-    for path, n in zip(paths, nstripes_per_file):
-        for stripe in range(n):
-            stripe_map[(N,)] = (path, stripe)
-            N += 1
-    npartitions = N
-    io_func_wrapper = ORCFunctionWrapper(fs, columns)
 
     # Create Blockwise layer
-    layer = blockwise_io_layer(io_func_wrapper, stripe_map, output_name, npartitions)
+    output_name = "read-orc-" + tokenize(fs_token, path, columns)
+    layer = BlockwiseORC(output_name, fs, columns, paths, nstripes_per_file)
+
+    meta = _meta_from_dtypes(columns, schema, [], [])
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-    return DataFrame(graph, output_name, meta, [None] * (npartitions + 1))
+    return DataFrame(graph, output_name, meta, [None] * (layer.npartitions + 1))

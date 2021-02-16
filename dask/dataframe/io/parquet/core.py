@@ -10,13 +10,14 @@ from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
 from .utils import _analyze_paths
+from ..utils import blockwise_io_layer
 from ...core import DataFrame, new_dd_object, DataFrameLayer
 from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import HighLevelGraph
-from ....blockwise import Blockwise, blockwise_token
+from ....blockwise import Blockwise
 
 
 try:
@@ -117,7 +118,6 @@ class BlockwiseParquet(Blockwise, DataFrameLayer):
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
         self.common_kwargs = common_kwargs or {}
-        self.io_name = "blockwise-io-" + name
         io_func_wrapper = ParquetFunctionWrapper(
             self.engine,
             self.fs,
@@ -131,20 +131,17 @@ class BlockwiseParquet(Blockwise, DataFrameLayer):
         # Define mapping between key index and "part"
         io_arg_map = {(i,): self.parts[i] for i in self.part_ids}
 
-        # Define the "blockwise" graph
-        dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
-
-        super().__init__(
+        # Initialize Blockwise-based Layer
+        blockwise_io_layer(
+            io_func_wrapper,
+            io_arg_map,
             self.name,
-            "i",
-            dsk,
-            [(self.io_name, "i")],
-            {self.io_name: (len(self.part_ids),)},
-            io_deps={self.io_name: io_arg_map},
-            annotations=annotations,
+            len(self.part_ids),
+            constructor=super().__init__,
         )
 
     def cull_columns(self, columns):
+        # Method inherited from `DataFrameLayer.cull_columns`
         if columns and columns < set(self.meta.columns):
             columns = list(columns)
             name = "read-parquet-" + tokenize(self.name, columns)
