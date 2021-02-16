@@ -36,7 +36,7 @@ dependencies:
   - crick
   - cytoolz
   - distributed
-  - graphviz
+  - graphviz=2.38.0  # pinned to avoid https://github.com/dask/dask/issues/7231
   - ipython
   - lz4
   - numba>=0.49
