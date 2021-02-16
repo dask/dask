@@ -16,7 +16,7 @@ from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import HighLevelGraph
-from ....blockwise import Blockwise, blockwise_token
+from ....blockwise import BlockwiseColumnar, blockwise_token
 
 
 try:
@@ -86,10 +86,10 @@ class ParquetFunctionWrapper:
         )
 
 
-class BlockwiseParquet(Blockwise):
+class BlockwiseParquet(BlockwiseColumnar):
     """
-    Specialized Blockwise Layer for read_parquet.
-    Enables HighLevelGraph optimizations (e.g. optimize_read_parquet_getitem).
+    Specialized BlockwiseColumnar Layer for read_parquet.
+    Enables HighLevelGraph optimizations (e.g. optimize_blockwise_columnar_getitem).
     """
 
     def __init__(
@@ -142,6 +142,28 @@ class BlockwiseParquet(Blockwise):
             io_deps={self.io_name: io_arg_map},
             annotations=annotations,
         )
+
+    def cull_columns(self, columns):
+        if columns and columns < set(self.meta.columns):
+            columns = list(columns)
+            name = "read-parquet-" + tokenize(self.name, columns)
+            return (
+                BlockwiseParquet(
+                    name,
+                    self.engine,
+                    self.fs,
+                    self.meta[columns],
+                    columns,
+                    self.index,
+                    self.parts,
+                    self.kwargs,
+                    common_kwargs=self.common_kwargs,
+                ),
+                None,
+            )
+        else:
+            # Default behavior
+            return self, None
 
     def __repr__(self):
         return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
