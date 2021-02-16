@@ -32,6 +32,7 @@ try:
         coarsen,
         insert,
         delete,
+        append,
         shape,
         union1d,
         ravel,

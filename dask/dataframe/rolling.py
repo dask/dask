@@ -253,7 +253,7 @@ def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
     return getattr(rolling, name)(*args, **kwargs)
 
 
-class Rolling(object):
+class Rolling:
     """Provides rolling window calculations."""
 
     def __init__(

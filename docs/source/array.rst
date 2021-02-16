@@ -15,6 +15,7 @@ Array
    array-stats.rst
    array-linear-operator.rst
    array-slicing.rst
+   array-assignment.rst
    array-stack.rst
    array-gufunc.rst
 
@@ -51,7 +52,7 @@ sufficiently NumPy-like in API such as CuPy or Spare arrays) arranged into a
 grid. These arrays may live on disk or on other machines.
 
 New duck array chunk types (types below Dask on
-`NEP-13's type-casting heirarchy`_) can be registered via
+`NEP-13's type-casting hierarchy`_) can be registered via
 :func:`~dask.array.register_chunk_type`. Any other duck array types that are
 not registered will be deferred to in binary operations and NumPy
 ufuncs/functions (that is, Dask will return ``NotImplemented``). Note, however,

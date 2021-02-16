@@ -76,7 +76,7 @@ else:
     _make_sliced_dtype = _make_sliced_dtype_np_lt_14
 
 
-class _Recurser(object):
+class _Recurser:
     """
     Utility class for recursing over nested iterables
     """

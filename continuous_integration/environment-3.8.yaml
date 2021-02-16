@@ -5,7 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.8.*
-  - numpy=1.17.*
+  - numpy=1.20.*
   - pandas=1.2.*
   # test dependencies
   - pytest
@@ -36,7 +36,7 @@ dependencies:
   - crick
   - cytoolz
   - distributed
-  - graphviz
+  - graphviz=2.38.0  # pinned to avoid https://github.com/dask/dask/issues/7231
   - ipython
   - lz4
   - numba

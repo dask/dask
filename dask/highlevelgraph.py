@@ -1,12 +1,13 @@
 import abc
 import collections.abc
+import warnings
 from typing import (
+    AbstractSet,
     Any,
     Dict,
     Hashable,
     MutableMapping,
     Optional,
-    Set,
     Mapping,
     Iterable,
     Tuple,
@@ -16,8 +17,8 @@ import copy
 import tlz as toolz
 
 from . import config
-from .utils import ignoring, stringify
-from .base import is_dask_collection
+from .utils import ensure_dict, ignoring, stringify
+from .base import clone_key, is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
 
@@ -34,7 +35,7 @@ def compute_layer_dependencies(layers):
     all_keys = set(key for layer in layers.values() for key in layer)
     ret = {k: set() for k in layers.keys()}
     for k, v in layers.items():
-        for key in keys_in_tasks(all_keys.difference(v.keys()), v.values()):
+        for key in keys_in_tasks(all_keys - v.keys(), v.values()):
             ret[k].add(_find_layer_containing_key(key))
     return ret
 
@@ -66,7 +67,7 @@ class Layer(collections.abc.Mapping):
         """Return whether the layer is materialized or not"""
         return True
 
-    def get_output_keys(self) -> Set:
+    def get_output_keys(self) -> AbstractSet:
         """Return a set of all output keys
 
         Output keys are all keys in the layer that might be referenced by
@@ -77,7 +78,7 @@ class Layer(collections.abc.Mapping):
 
         Returns
         -------
-        keys: Set
+        keys: AbstractSet
             All output keys
         """
         return self.keys()
@@ -149,8 +150,8 @@ class Layer(collections.abc.Mapping):
         annotations.update(to_merge)
 
     def cull(
-        self, keys: Set, all_hlg_keys: Iterable
-    ) -> Tuple["Layer", Mapping[Hashable, Set]]:
+        self, keys: set, all_hlg_keys: Iterable
+    ) -> Tuple["Layer", Mapping[Hashable, set]]:
         """Return a new Layer with only the tasks required to calculate `keys` and
         a map of external key dependencies.
 
@@ -193,7 +194,7 @@ class Layer(collections.abc.Mapping):
 
         return BasicLayer(out), ret_deps
 
-    def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> Set:
+    def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
         """Get dependencies of `key` in the layer
 
         Parameters
@@ -209,6 +210,81 @@ class Layer(collections.abc.Mapping):
             A set of dependencies
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
+
+    def clone(
+        self,
+        keys: set,
+        seed: Hashable,
+        bind_to: Hashable = None,
+    ) -> "tuple[Layer, bool]":
+        """Clone selected keys in the layer, as well as references to keys in other
+        layers
+
+        Parameters
+        ----------
+        keys
+            Keys to be replaced. This never includes keys not listed by
+            :meth:`get_output_keys`. It must also include any keys that are outside
+            of this layer that may be referenced by it.
+        seed
+            Common hashable used to alter the keys; see :func:`dask.base.clone_key`
+        bind_to
+            Optional key to bind the leaf nodes to. A leaf node here is one that does
+            not reference any replaced keys; in other words it's a node where the
+            replacement graph traversal stops; it may still have dependencies on
+            non-replaced nodes.
+            A bound node will not be computed until after ``bind_to`` has been computed.
+
+        Returns
+        -------
+        - New layer
+        - True if the ``bind_to`` key was injected anywhere; False otherwise
+
+        Notes
+        -----
+        This method should be overridden by subclasses to avoid materializing the layer.
+        """
+        from .graph_manipulation import chunks
+
+        is_leaf: bool
+
+        def clone_value(o):
+            """Variant of distributed.utils_comm.subs_multiple, which allows injecting
+            bind_to
+            """
+            nonlocal is_leaf
+
+            typ = type(o)
+            if typ is tuple and o and callable(o[0]):
+                return (o[0],) + tuple(clone_value(i) for i in o[1:])
+            elif typ is list:
+                return [clone_value(i) for i in o]
+            elif typ is dict:
+                return {k: clone_value(v) for k, v in o.items()}
+            else:
+                try:
+                    if o not in keys:
+                        return o
+                except TypeError:
+                    return o
+                is_leaf = False
+                return clone_key(o, seed)
+
+        dsk_new = {}
+        bound = False
+
+        for key, value in self.items():
+            if key in keys:
+                key = clone_key(key, seed)
+                is_leaf = True
+                value = clone_value(value)
+                if bind_to is not None and is_leaf:
+                    value = (chunks.bind, value, bind_to)
+                    bound = True
+
+            dsk_new[key] = value
+
+        return BasicLayer(dsk_new), bound
 
     def __dask_distributed_pack__(self, client) -> Optional[Any]:
         """Pack the layer for scheduler communication in Distributed
@@ -245,7 +321,7 @@ class Layer(collections.abc.Mapping):
         cls,
         state: Any,
         dsk: Dict[str, Any],
-        dependencies: MutableMapping[Hashable, Set],
+        dependencies: MutableMapping[Hashable, set],
         annotations: Dict[str, Any],
     ) -> None:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
@@ -347,9 +423,9 @@ class HighLevelGraph(Mapping):
     ----------
     layers : Mapping[str, Mapping]
         The subgraph layers, keyed by a unique name
-    dependencies : Mapping[str, Set[str]]
+    dependencies : Mapping[str, set[str]]
         The set of layers on which each layer depends
-    key_dependencies : Mapping[Hashable, Set], optional
+    key_dependencies : Mapping[Hashable, set], optional
         Mapping (some) keys in the high level graph to their dependencies. If
         a key is missing, its dependencies will be calculated on-the-fly.
 
@@ -394,22 +470,23 @@ class HighLevelGraph(Mapping):
         typically used by developers to make new HighLevelGraphs
     """
 
+    layers: Mapping[str, Layer]
+    dependencies: Mapping[str, AbstractSet]
+    key_dependencies: Dict[Hashable, AbstractSet]
+    _to_dict: dict
+    _all_external_keys: set
+
     def __init__(
         self,
-        layers: Mapping[str, Layer],
-        dependencies: Mapping[str, Set],
-        key_dependencies: Optional[Mapping[Hashable, Set]] = None,
+        layers: Mapping[str, Mapping],
+        dependencies: Mapping[str, AbstractSet],
+        key_dependencies: Dict[Hashable, AbstractSet] = None,
     ):
-        self._keys = None
-        self._all_external_keys = None
-        self.layers = layers
         self.dependencies = dependencies
-        self.key_dependencies = key_dependencies if key_dependencies else {}
-
+        self.key_dependencies = key_dependencies or {}
         # Makes sure that all layers are `Layer`
         self.layers = {
-            k: v if isinstance(v, Layer) else BasicLayer(v)
-            for k, v in self.layers.items()
+            k: v if isinstance(v, Layer) else BasicLayer(v) for k, v in layers.items()
         }
 
     @classmethod
@@ -418,9 +495,9 @@ class HighLevelGraph(Mapping):
         if is_dask_collection(collection):
             graph = collection.__dask_graph__()
             if isinstance(graph, HighLevelGraph):
-                layers = graph.layers.copy()
+                layers = ensure_dict(graph.layers, copy=True)
                 layers.update({name: layer})
-                deps = graph.dependencies.copy()
+                deps = ensure_dict(graph.dependencies, copy=True)
                 with ignoring(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
@@ -496,36 +573,59 @@ class HighLevelGraph(Mapping):
         return cls(layers, deps)
 
     def __getitem__(self, key):
+        # Attempt O(1) direct access first, under the assumption that layer names match
+        # either the keys (Scalar, Item, Delayed) or the first element of the key tuples
+        # (Array, Bag, DataFrame, Series). This assumption is not always true.
+        try:
+            return self.layers[key][key]
+        except KeyError:
+            pass
+        try:
+            return self.layers[key[0]][key]
+        except (KeyError, IndexError, TypeError):
+            pass
+
+        # Fall back to O(n) access
         for d in self.layers.values():
-            if key in d:
+            try:
                 return d[key]
+            except KeyError:
+                pass
+
         raise KeyError(key)
 
     def __len__(self):
-        return len(self.keyset())
+        return len(self.to_dict())
 
     def __iter__(self):
-        return toolz.unique(toolz.concat(self.layers.values()))
+        return iter(self.to_dict())
 
-    def keyset(self) -> Set:
-        """Get all keys of all the layers
+    def to_dict(self) -> dict:
+        """Efficiently convert to plain dict. This method is faster than dict(self)."""
+        try:
+            return self._to_dict
+        except AttributeError:
+            out = self._to_dict = ensure_dict(self)
+            return out
 
-        This will in many cases materialize layers, which makes it
-        a relative cheap operation. See `get_all_external_keys()`
-        for a faster alternative.
+    def keys(self) -> AbstractSet:
+        """Get all keys of all the layers.
 
-        Returns
-        -------
-        keys: Set
-            A set of all keys
+        This will in many cases materialize layers, which makes it a relatively
+        expensive operation. See :meth:`get_all_external_keys` for a faster alternative.
         """
-        if self._keys is None:
-            self._keys = set()
-            for layer in self.layers.values():
-                self._keys.update(layer.keys())
-        return self._keys
+        return self.to_dict().keys()
 
-    def get_all_external_keys(self) -> Set:
+    def keyset(self) -> AbstractSet:
+        # Backwards compatibility for now
+        warnings.warn(
+            "'keyset' method of HighLevelGraph is deprecated now and will be removed "
+            "in a future version. To silence this warning, use '.keys' instead.",
+            FutureWarning,
+        )
+        return self.keys()
+
+    def get_all_external_keys(self) -> set:
         """Get all output keys of all layers
 
         This will in most cases _not_ materialize any layers, which makes
@@ -533,16 +633,25 @@ class HighLevelGraph(Mapping):
 
         Returns
         -------
-        keys: Set
+        keys: set
             A set of all external keys
         """
-        if self._all_external_keys is None:
-            self._all_external_keys = set()
+        try:
+            return self._all_external_keys
+        except AttributeError:
+            keys: set = set()
             for layer in self.layers.values():
-                self._all_external_keys.update(layer.get_output_keys())
-        return self._all_external_keys
+                keys |= layer.get_output_keys()
+            self._all_external_keys = keys
+            return keys
 
-    def get_all_dependencies(self) -> Mapping[Hashable, Set]:
+    def items(self):
+        return self.to_dict().items()
+
+    def values(self):
+        return self.to_dict().values()
+
+    def get_all_dependencies(self) -> Dict[Hashable, AbstractSet]:
         """Get dependencies of all keys
 
         This will in most cases materialize all layers, which makes
@@ -553,11 +662,11 @@ class HighLevelGraph(Mapping):
         map: Mapping
             A map that maps each key to its dependencies
         """
-        all_keys = self.keyset()
-        missing_keys = all_keys.difference(self.key_dependencies.keys())
+        all_keys = self.keys()
+        missing_keys = all_keys - self.key_dependencies.keys()
         if missing_keys:
             for layer in self.layers.values():
-                for k in missing_keys.intersection(layer.keys()):
+                for k in missing_keys & layer.keys():
                     self.key_dependencies[k] = layer.get_dependencies(k, all_keys)
         return self.key_dependencies
 
@@ -568,26 +677,20 @@ class HighLevelGraph(Mapping):
     @property
     def dicts(self):
         # Backwards compatibility for now
+        warnings.warn(
+            "'dicts' property of HighLevelGraph is deprecated now and will be "
+            "removed in a future version. To silence this warning, "
+            "use '.layers' instead.",
+            FutureWarning,
+        )
         return self.layers
 
-    def items(self):
-        items = []
-        seen = set()
-        for d in self.layers.values():
-            for key in d:
-                if key not in seen:
-                    seen.add(key)
-                    items.append((key, d[key]))
-        return items
-
-    def keys(self):
-        return [key for key, _ in self.items()]
-
-    def values(self):
-        return [value for _, value in self.items()]
-
     def copy(self):
-        return HighLevelGraph(self.layers.copy(), self.dependencies.copy())
+        return HighLevelGraph(
+            ensure_dict(self.layers, copy=True),
+            ensure_dict(self.dependencies, copy=True),
+            self.key_dependencies.copy(),
+        )
 
     @classmethod
     def merge(cls, *graphs):
@@ -636,8 +739,8 @@ class HighLevelGraph(Mapping):
                     ready.add(k)
         return ret
 
-    def cull(self, keys: Set) -> "HighLevelGraph":
-        """Return new high level graph with only the tasks required to calculate keys.
+    def cull(self, keys: set) -> "HighLevelGraph":
+        """Return new HighLevelGraph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
         ``keys`` may be a single key or list of keys.
@@ -654,8 +757,8 @@ class HighLevelGraph(Mapping):
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
             # Let's cull the layer to produce its part of `keys`
-            output_keys = keys.intersection(layer.get_output_keys())
-            if len(output_keys) > 0:
+            output_keys = keys & layer.get_output_keys()
+            if output_keys:
                 culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
                 # Update `keys` with all layer's external key dependencies, which
                 # are all the layer's dependencies (`culled_deps`) excluding
@@ -663,18 +766,17 @@ class HighLevelGraph(Mapping):
                 external_deps = set()
                 for d in culled_deps.values():
                     external_deps |= d
-                external_deps.difference_update(culled_layer.get_output_keys())
-                keys.update(external_deps)
+                external_deps -= culled_layer.get_output_keys()
+                keys |= external_deps
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
                 ret_key_deps.update(culled_deps)
 
-        ret_dependencies = {}
-        for layer_name in ret_layers:
-            ret_dependencies[layer_name] = {
-                d for d in self.dependencies[layer_name] if d in ret_layers
-            }
+        ret_dependencies = {
+            layer_name: self.dependencies[layer_name] & ret_layers.keys()
+            for layer_name in ret_layers
+        }
 
         return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
 

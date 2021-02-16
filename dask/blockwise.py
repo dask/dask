@@ -59,8 +59,8 @@ def blockwise(
 ):
     """Create a Blockwise symbolic mutable mapping
 
-    This is like the ``make_blockwise_graph`` function, but rather than construct a dict, it
-    returns a symbolic Blockwise object.
+    This is like the ``make_blockwise_graph`` function, but rather than construct a
+    dict, it returns a symbolic Blockwise object.
 
     See Also
     --------
@@ -861,9 +861,9 @@ def optimize_blockwise(graph, keys=()):
 
 def _optimize_blockwise(full_graph, keys=()):
     keep = {k[0] if type(k) is tuple else k for k in keys}
-    layers = full_graph.dicts
+    layers = full_graph.layers
     dependents = reverse_dict(full_graph.dependencies)
-    roots = {k for k in full_graph.dicts if not dependents.get(k)}
+    roots = {k for k in full_graph.layers if not dependents.get(k)}
     stack = list(roots)
 
     out = {}
@@ -1207,8 +1207,8 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
     Blockwise
     fuse
     """
-    layers = graph.layers.copy()
-    dependencies = graph.dependencies.copy()
+    layers = ensure_dict(graph.layers, copy=True)
+    dependencies = ensure_dict(graph.dependencies, copy=True)
     dependents = reverse_dict(dependencies)
 
     for name, layer in graph.layers.items():

@@ -216,7 +216,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
 ###############################################################
 
 
-class Aggregation(object):
+class Aggregation:
     """User defined groupby-aggregation.
 
     This class allows users to define their own custom aggregation in terms of
@@ -1022,7 +1022,7 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-class _GroupBy(object):
+class _GroupBy:
     """Superclass for DataFrameGroupBy and SeriesGroupBy
 
     Parameters
