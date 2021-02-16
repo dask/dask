@@ -355,6 +355,7 @@ Slightly Overlapping Computations
 .. autosummary::
    overlap.overlap
    overlap.map_overlap
+   overlap.sliding_window_view
    overlap.trim_internal
    overlap.trim_overlap
 
