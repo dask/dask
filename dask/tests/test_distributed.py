@@ -103,6 +103,8 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
         ddfm = ddf1.merge(ddf2, on=["x"], how="left")
         ddfm.head()  # https://github.com/dask/dask/issues/7178
         dfm = ddfm.compute().sort_values("x")
+        # We call compute above since `sort_values` is not
+        # supported in `dask.dataframe`
     dd.utils.assert_eq(
         dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
     )
