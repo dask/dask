@@ -784,3 +784,14 @@ def test_ensure_minimum_chunksize_raises_error():
     chunks = (5, 2, 1, 1)
     with pytest.raises(ValueError, match="overlapping depth 10 is larger than"):
         ensure_minimum_chunksize(10, chunks)
+
+
+@pytest.mark.parametrize("window_shape, axis", [((3, 2), (1, 2))])
+def test_sliding_window_view(window_shape, axis):
+    from ..numpy_compat import sliding_window_view as np_sliding_window_view
+    from ..overlap import sliding_window_view
+
+    arr = da.from_array(np.arange(60.0).reshape(3, 4, 5), chunks=(2, 3, 4))
+    actual = sliding_window_view(arr, window_shape, axis)
+    expected = np_sliding_window_view(arr.compute(), window_shape, axis)
+    assert_array_equal(expected, actual)
