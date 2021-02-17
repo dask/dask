@@ -281,9 +281,12 @@ class HDFFunctionWrapper:
     Reads HDF5 data from disk to produce a partition (given a key).
     """
 
-    def __init__(self, lock, common_kwargs):
+    def __init__(self, columns, dim, lock, common_kwargs):
+        self.columns = columns
         self.lock = lock
         self.common_kwargs = common_kwargs
+        if columns and dim > 1:
+            self.common_kwargs = merge(common_kwargs, {"columns": columns})
 
     def __call__(self, part):
         """ Read from hdf5 file with a lock """
@@ -411,7 +414,7 @@ def read_hdf(
     if meta.ndim == 1:
         common_kwargs = {"name": meta.name, "mode": mode}
     else:
-        common_kwargs = {"columns": meta.columns, "mode": mode}
+        common_kwargs = {"mode": mode}
 
     # Build parts
     parts, divisions = build_parts(
@@ -428,7 +431,7 @@ def read_hdf(
         output_name,
         columns,
         parts,
-        HDFFunctionWrapper(lock, common_kwargs),
+        HDFFunctionWrapper(columns, meta.ndim, lock, common_kwargs),
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     return new_dd_object(graph, output_name, meta, divisions)

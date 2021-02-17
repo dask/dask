@@ -15,6 +15,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.columns = columns
         self.inputs = inputs
         self.io_func = io_func
+        if hasattr(io_func, "columns"):
+            io_func.columns = columns
         self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
         self.annotations = annotations
 
