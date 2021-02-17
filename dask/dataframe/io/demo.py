@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
 
-from ..core import tokenize, DataFrame, DataFrameLayer
+from ..core import tokenize, DataFrame
 from ...utils import random_state_data
 from ...highlevelgraph import HighLevelGraph
 from .utils import blockwise_io_layer
-from ...blockwise import Blockwise
+from .utils import DataFrameIOLayer
 
 __all__ = ["make_timeseries"]
 
@@ -76,79 +76,19 @@ class MakeTimeseriesPart:
         self.dtypes = dtypes
         self.freq = freq
         self.kwargs = kwargs
+        self.columns = None
 
     def __call__(self, part):
         divisions, state_data = part
         if isinstance(state_data, int):
             state_data = random_state_data(1, state_data)
-        return make_timeseries_part(
-            divisions[0], divisions[1], self.dtypes, self.freq, state_data, self.kwargs
-        )
-
-
-class BlockwiseTimeseries(Blockwise, DataFrameLayer):
-    def __init__(
-        self,
-        name,
-        columns,
-        divisions,
-        state_data,
-        dtypes,
-        freq,
-        kwargs,
-        annotations=None,
-    ):
-
-        self.name = name
-        self.columns = columns
-        self.divisions = divisions
-        self.state_data = state_data
-        self.dtypes = dtypes
-        self.freq = freq
-        self.kwargs = kwargs
-        self.annotations = annotations
-
         if self.columns:
-            self.dtypes = {k: v for k, v in self.dtypes.items() if k in self.columns}
+            dtypes = {k: v for k, v in self.dtypes.items() if k in self.columns}
         else:
-            self.columns = list(self.dtypes.keys())
-
-        part_inputs = {}
-        npartitions = len(self.divisions) - 1
-        for i in range(npartitions):
-            part_inputs[(i,)] = (self.divisions[i : i + 2], self.state_data[i])
-        make_ts_wrapper = MakeTimeseriesPart(self.dtypes, self.freq, self.kwargs)
-
-        # Create Blockwise layer
-        blockwise_io_layer(
-            make_ts_wrapper,
-            part_inputs,
-            self.name,
-            npartitions,
-            constructor=super().__init__,
-            annotations=self.annotations,
+            dtypes = self.dtypes
+        return make_timeseries_part(
+            divisions[0], divisions[1], dtypes, self.freq, state_data, self.kwargs
         )
-
-    def cull_columns(self, columns):
-        # Method inherited from `DataFrameLayer.cull_columns`
-        if columns and columns < set(self.columns):
-            columns = list(columns)
-            name = "make-timeseries-" + tokenize(self.name, columns)
-            return (
-                BlockwiseTimeseries(
-                    name,
-                    columns,
-                    self.divisions,
-                    self.state_data,
-                    self.dtypes,
-                    self.freq,
-                    self.kwargs,
-                    annotations=self.annotations,
-                ),
-                None,
-            )
-        else:
-            return self, None
 
 
 def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
@@ -224,17 +164,18 @@ def make_timeseries(
         start, end, dtypes, freq, partition_freq, state_data
     )
 
-    # Create Blockwise layer
-    layer = BlockwiseTimeseries(
-        output_name,
-        None,  # columns=None
-        divisions,
-        state_data,
-        dtypes,
-        freq,
-        kwargs,
-    )
+    # Build parts
+    parts = []
+    for i in range(len(divisions) - 1):
+        parts.append((divisions[i : i + 2], state_data[i]))
 
+    # Construct Layer and Collection
+    layer = DataFrameIOLayer(
+        output_name,
+        None,
+        parts,
+        MakeTimeseriesPart(dtypes, freq, kwargs),
+    )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
     return DataFrame(graph, output_name, head, divisions)
