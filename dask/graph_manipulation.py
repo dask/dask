@@ -138,12 +138,13 @@ def bind(
     ``a`` completely and then computes ``b`` completely, recomputing ``a`` in the
     process:
 
-    >>> from dask import array as da
+    >>> import dask
+    >>> import dask.array as da
     >>> a = da.ones(4, chunks=2)
     >>> b = a + 1
     >>> b2 = bind(b, a)
     >>> len(b2.dask)
-    11
+    9
     >>> b2.compute()
     array([2., 2., 2., 2.])
 
@@ -154,7 +155,7 @@ def bind(
     >>> c = a + 2
     >>> b3, c3 = bind((b, c), a, omit=a)
     >>> len(b3.dask), len(c3.dask)
-    (9, 9)
+    (7, 7)
     >>> dask.compute(b3, c3)
     (array([2., 2., 2., 2.]), array([3., 3., 3., 3.]))
 
@@ -320,7 +321,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     >>> x_i = da.asarray([1, 1, 1, 1], chunks=2)
     >>> y_i = x_i + 1
     >>> z_i = y_i + 2
-    >>> dict(z_i.dask)
+    >>> dict(z_i.dask)  # doctest: +SKIP
     {('array-1', 0): array([1, 1]),
      ('array-1', 1): array([1, 1]),
      ('add-2', 0): (<function operator.add>, ('array-1', 0), 1),
@@ -329,8 +330,8 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
      ('add-3', 1): (<function operator.add>, ('add-2', 1), 1)}
     >>> w_i = clone(z_i, omit=x_i)
     >>> w_i.compute()
-    array([4., 4., 4., 4.])
-    >>> dict(w_i.dask)
+    array([4, 4, 4, 4])
+    >>> dict(w_i.dask)  # doctest: +SKIP
     {('array-1', 0): array([1, 1]),
      ('array-1', 1): array([1, 1]),
      ('add-4', 0): (<function operator.add>, ('array-1', 0), 1),

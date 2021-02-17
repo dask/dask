@@ -238,7 +238,7 @@ def create_merge_tree(func, keys, token):
 def percentiles_to_weights(qs, vals, length):
     """Weigh percentile values by length and the difference between percentiles
 
-    >>> percentiles = np.array([0, 25, 50, 90, 100])
+    >>> percentiles = np.array([0., 25., 50., 90., 100.])
     >>> values = np.array([2, 3, 5, 8, 13])
     >>> length = 10
     >>> percentiles_to_weights(percentiles, values, length)

@@ -1351,13 +1351,13 @@ def parse_assignment_indices(indices, shape):
     Examples
     --------
     >>> parse_assignment_indices((slice(1, -1),), (8,))
-    (slice(1, 7, 1)] [6], [])
+    ([slice(1, 7, 1)], [6], [])
     >>> parse_assignment_indices(([1, 2, 4, 6],), (8,))
-    (array([1, 2, 4, 6]), [4], [])
+    ([array([1, 2, 4, 6])], [4], [])
     >>> parse_assignment_indices((slice(-1, 2, -1),), (8,))
-    (slice(3, 8, 1), [5], [0])
+    ([slice(3, 8, 1)], [5], [0])
     >>> parse_assignment_indices(([6, 4, 2, 1],), (8,))
-    (array([1, 2, 4, 6]), [4], [0])
+    ([array([1, 2, 4, 6])], [4], [0])
 
     """
     indices_shape = []
