@@ -9,7 +9,22 @@ from ...base import tokenize
 
 
 class DataFrameIOLayer(Blockwise, DataFrameLayer):
-    """DataFrame-based Blockwise Layer with IO"""
+    """DataFrame-based Blockwise Layer with IO
+
+    Parameters
+    ----------
+    name : string
+        Name to use for the constructed layer.
+    columns : string, list or None
+        Field name(s) to read in as columns in the output.
+    inputs : list[tuple]
+        List of input-argument tuples. Each element will be
+        passed to ``io_func`` to construct a single output
+        partition.
+    io_func : callable
+        A callable function that takes in a single tuple
+        of arguments, and outputs a DataFrame partition.
+    """
 
     def __init__(
         self,
