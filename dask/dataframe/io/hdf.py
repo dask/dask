@@ -12,14 +12,13 @@ from ...bytes import read_bytes  # noqa
 from fsspec.utils import build_name_function, stringify_path
 
 from .io import _link
-from .utils import blockwise_io_layer
+from .utils import DataFrameIOLayer
 from ...base import get_scheduler
-from ..core import DataFrame, new_dd_object, DataFrameLayer
+from ..core import DataFrame, new_dd_object
 from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
-from ...blockwise import Blockwise
 from ...highlevelgraph import HighLevelGraph
 
 
@@ -300,57 +299,6 @@ class HDFFunctionWrapper:
         return result
 
 
-class BlockwiseHDF(Blockwise, DataFrameLayer):
-    def __init__(
-        self, name, columns, parts, lock, common_kwargs, part_ids=None, annotations=None
-    ):
-        self.name = name
-        self.columns = columns
-        self.parts = parts
-        self.lock = lock
-        self.common_kwargs = common_kwargs
-        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-        self.annotations = annotations
-        io_func_wrapper = HDFFunctionWrapper(lock, common_kwargs)
-
-        # Define mapping between key index and "part"
-        io_arg_map = {(i,): self.parts[i] for i in self.part_ids}
-
-        # Create Blockwise layer
-        blockwise_io_layer(
-            io_func_wrapper,
-            io_arg_map,
-            self.name,
-            len(self.part_ids),
-            constructor=super().__init__,
-            annotations=self.annotations,
-        )
-
-    def cull_columns(self, columns):
-        # Method inherited from `DataFrameLayer.cull_columns`
-        if columns and (self.columns is None or columns < set(self.columns)):
-            return (
-                BlockwiseHDF(
-                    "read-hdf-" + tokenize(self.name, columns),
-                    list(columns),
-                    self.parts,
-                    self.lock,
-                    self.common_kwargs,
-                    part_ids=self.part_ids,
-                    annotations=self.annotations,
-                ),
-                None,
-            )
-        else:
-            # Default behavior
-            return self, None
-
-    def __repr__(self):
-        return "BlockwiseHDF<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
-        )
-
-
 def read_hdf(
     pattern,
     key,
@@ -476,7 +424,12 @@ def read_hdf(
     )
     if len(divisions) != len(parts) + 1:
         divisions = [None] * (len(parts) + 1)
-    layer = BlockwiseHDF(output_name, columns, parts, lock, common_kwargs)
+    layer = DataFrameIOLayer(
+        output_name,
+        columns,
+        parts,
+        HDFFunctionWrapper(lock, common_kwargs),
+    )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     return new_dd_object(graph, output_name, meta, divisions)
 

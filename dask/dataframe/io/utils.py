@@ -3,6 +3,56 @@ import json
 from uuid import uuid4
 
 from ...blockwise import Blockwise, blockwise_token
+from ..core import DataFrameLayer
+from ...base import tokenize
+
+
+class DataFrameIOLayer(Blockwise, DataFrameLayer):
+    """DataFrame-based Blockwise Layer with IO"""
+
+    def __init__(self, name, columns, inputs, io_func, part_ids=None, annotations=None):
+        self.name = name
+        self.columns = columns
+        self.inputs = inputs
+        self.io_func = io_func
+        self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
+        self.annotations = annotations
+
+        # Define mapping between key index and "part"
+        io_arg_map = {(i,): self.inputs[i] for i in self.part_ids}
+
+        # Create Blockwise layer
+        blockwise_io_layer(
+            io_func,
+            io_arg_map,
+            self.name,
+            len(self.part_ids),
+            constructor=super().__init__,
+            annotations=self.annotations,
+        )
+
+    def cull_columns(self, columns):
+        # Method inherited from `DataFrameLayer.cull_columns`
+        if columns and (self.columns is None or columns < set(self.columns)):
+            return (
+                DataFrameIOLayer(
+                    "subset-" + self.name + tokenize(columns),
+                    list(columns),
+                    self.inputs,
+                    self.io_func,
+                    part_ids=self.part_ids,
+                    annotations=self.annotations,
+                ),
+                None,
+            )
+        else:
+            # Default behavior
+            return self, None
+
+    def __repr__(self):
+        return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.part_ids), list(self.columns)
+        )
 
 
 def blockwise_io_layer(
