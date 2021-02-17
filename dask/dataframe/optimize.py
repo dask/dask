@@ -41,25 +41,31 @@ def optimize(dsk, keys, **kwargs):
 
 
 def optimize_dataframe_getitem(dsk, keys):
-    # find the keys to optimize
+    # This optimization looks for all `DataFrameLayer` instances,
+    # and calls `cull_columns` on any layers that directly precede
+    # a (qualified) `getitem` operation. In the future, we can
+    # search for `getitem` operations instead, and work backwards
+    # through multiple adjacent `DataFrameLayer`s. This approach
+    # may become beneficial once `DataFrameLayer` is made a base
+    # type for all relevant DataFrame operations.
 
     from .core import DataFrameLayer
 
-    blockwise_columnars = [
+    dataframe_blockwise = [
         k for k, v in dsk.layers.items() if isinstance(v, DataFrameLayer)
     ]
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
 
-    for k in blockwise_columnars:
+    for k in dataframe_blockwise:
         columns = set()
         update_blocks = {}
 
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
 
-            # Check if we're a blockwise_columnar followed by a getitem
+            # Check if we're a dataframe_blockwise followed by a getitem
             if not isinstance(block, Blockwise):
                 # getitem are Blockwise...
                 return dsk
@@ -73,7 +79,7 @@ def optimize_dataframe_getitem(dsk, keys):
                 return dsk
 
             if any(layers[k].name == x[0] for x in keys if isinstance(x, tuple)):
-                # ... but bail on the optimization if the blockwise_columnar layer is in
+                # ... but bail on the optimization if the dataframe_blockwise layer is in
                 # the requested keys, because we cannot change the name anymore.
                 # These keys are structured like [('getitem-<token>', 0), ...]
                 # so we check for the first item of the tuple.
