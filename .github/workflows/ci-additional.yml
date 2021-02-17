@@ -52,6 +52,32 @@ jobs:
         shell: bash -l {0}
         run: source continuous_integration/hdfs/run_tests.sh
 
+  doctest:
+    runs-on: "ubuntu-latest"
+    if: "contains(github.event.head_commit.message, 'test-doctest') || github.event_name != 'pull_request'"
+    env:
+      XTRATESTARGS: "--doctest-modules"
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v2
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          python-version: "3.8"
+          environment-file: continuous_integration/environment-latest.yaml
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Install
+        shell: bash -l {0}
+        run: source continuous_integration/scripts/install.sh
+
+      - name: Run tests
+        shell: bash -l {0}
+        run: source continuous_integration/scripts/run_tests.sh
+
   imports:
     runs-on: "ubuntu-latest"
     strategy:
