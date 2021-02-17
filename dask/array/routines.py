@@ -1634,7 +1634,7 @@ def delete(arr, obj, axis):
     ]
     return concatenate(target_arr, axis=axis)
 
-  
+
 @derived_from(np)
 def append(arr, values, axis=None):
     # based on numpy.append
