@@ -70,7 +70,7 @@ def test_orc_single(orc_files):
     d3 = d[columns]
     keys = [(d3._name, i) for i in range(d3.npartitions)]
     graph = optimize_dataframe_getitem(d3.__dask_graph__(), keys)
-    key = [k for k in graph.layers.keys() if k.startswith("read-orc-")][0]
+    key = [k for k in graph.layers.keys() if k.startswith("subset-read-orc-")][0]
     assert set(graph.layers[key].columns) == set(columns)
 
 

@@ -1,13 +1,12 @@
 from distutils.version import LooseVersion
 
-from .utils import _get_pyarrow_dtypes, _meta_from_dtypes, blockwise_io_layer
-from ..core import DataFrame, DataFrameLayer
+from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
+from ..core import DataFrame
 from ...base import tokenize
 from ...highlevelgraph import HighLevelGraph
-from .utils import blockwise_io_layer
 from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
-from ...blockwise import Blockwise
+from .utils import DataFrameIOLayer
 
 __all__ = ("read_orc",)
 
@@ -16,65 +15,22 @@ class ORCFunctionWrapper:
     """
     ORC Function-Wrapper Class
 
-    Reads ORC data from disk to produce a partition (given a key).
+    Reads ORC data from disk to produce a partition.
     """
 
-    def __init__(self, fs, columns):
+    def __init__(self, fs, columns, schema):
         self.fs = fs
         self.columns = columns
+        self.schema = schema
 
     def __call__(self, stripe_info):
         path, stripe = stripe_info
-        return _read_orc_stripe(self.fs, path, stripe, self.columns)
-
-
-class BlockwiseORC(Blockwise, DataFrameLayer):
-    def __init__(self, name, fs, columns, paths, nstripes_per_file, annotations=None):
-
-        self.name = name
-        self.fs = fs
-        self.columns = columns
-        self.paths = paths
-        self.nstripes_per_file = nstripes_per_file
-        self.annotations = annotations
-
-        N = 0
-        stripe_map = {}
-        for path, n in zip(paths, nstripes_per_file):
-            for stripe in range(n):
-                stripe_map[(N,)] = (path, stripe)
-                N += 1
-        self.npartitions = N
-        io_func_wrapper = ORCFunctionWrapper(fs, columns)
-
-        # Create Blockwise layer
-        blockwise_io_layer(
-            io_func_wrapper,
-            stripe_map,
-            name,
-            self.npartitions,
-            constructor=super().__init__,
-            annotations=self.annotations,
+        return _read_orc_stripe(
+            self.fs,
+            path,
+            stripe,
+            list(self.schema) if self.columns is None else self.columns,
         )
-
-    def cull_columns(self, columns):
-        # Method inherited from `DataFrameLayer.cull_columns`
-        if columns and columns < set(self.columns):
-            columns = list(columns)
-            name = "read-orc-" + tokenize(self.name, columns)
-            return (
-                BlockwiseORC(
-                    name,
-                    self.fs,
-                    columns,
-                    self.paths,
-                    self.nstripes_per_file,
-                    annotations=self.annotations,
-                ),
-                None,
-            )
-        else:
-            return self, None
 
 
 def _read_orc_stripe(fs, path, stripe, columns=None):
@@ -130,8 +86,9 @@ def read_orc(path, columns=None, storage_options=None):
     fs, fs_token, paths = get_fs_token_paths(
         path, mode="rb", storage_options=storage_options
     )
+    npartitions = 0
     schema = None
-    nstripes_per_file = []
+    parts = []
     for path in paths:
         with fs.open(path, "rb") as f:
             o = orc.ORCFile(f)
@@ -139,7 +96,9 @@ def read_orc(path, columns=None, storage_options=None):
                 schema = o.schema
             elif schema != o.schema:
                 raise ValueError("Incompatible schemas while parsing ORC files")
-            nstripes_per_file.append(o.nstripes)
+        for stripe in range(o.nstripes):
+            parts.append((path, stripe))
+            npartitions += 1
     schema = _get_pyarrow_dtypes(schema, categories=None)
     if columns is not None:
         ex = set(columns) - set(schema)
@@ -147,13 +106,17 @@ def read_orc(path, columns=None, storage_options=None):
             raise ValueError(
                 "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
             )
-    else:
-        columns = list(schema)
 
     # Create Blockwise layer
     output_name = "read-orc-" + tokenize(fs_token, path, columns)
-    layer = BlockwiseORC(output_name, fs, columns, paths, nstripes_per_file)
+    layer = DataFrameIOLayer(
+        output_name,
+        columns,
+        parts,
+        ORCFunctionWrapper(fs, columns, schema),
+    )
 
+    columns = list(schema) if columns is None else columns
     meta = _meta_from_dtypes(columns, schema, [], [])
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-    return DataFrame(graph, output_name, meta, [None] * (layer.npartitions + 1))
+    return DataFrame(graph, output_name, meta, [None] * (npartitions + 1))
