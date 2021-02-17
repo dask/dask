@@ -470,7 +470,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     # when index is None we probably have selected a particular column
     # df.groupby('a')[['b']].cov()
     if len(idx_vals) == 1 and all(n is None for n in idx_vals):
-        idx_vals = list(set(inv_col_mapping.keys()) - set(total_sums.columns))
+        idx_vals = list(inv_col_mapping.keys() - set(total_sums.columns))
 
     for idx, val in enumerate(idx_vals):
         idx_name = inv_col_mapping.get(val, val)

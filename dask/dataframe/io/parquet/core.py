@@ -576,7 +576,7 @@ def to_parquet(
             df.columns = [
                 c if c not in reserved_names else NONE_LABEL for c in df.columns
             ]
-        index_cols = [c for c in set(df.columns).difference(real_cols)]
+        index_cols = [c for c in set(df.columns) - real_cols]
     else:
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)

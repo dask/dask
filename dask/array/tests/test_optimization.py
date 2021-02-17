@@ -293,7 +293,7 @@ def test_fuse_slices_with_alias():
     keys = [("dx2", 0)]
     dsk2 = optimize(dsk, keys)
     assert len(dsk2) == 3
-    fused_key = set(dsk2).difference(["x", ("dx2", 0)]).pop()
+    fused_key = (dsk2.keys() - {"x", ("dx2", 0)}).pop()
     assert dsk2[fused_key] == (getter, "x", (slice(0, 4), 0))
 
 

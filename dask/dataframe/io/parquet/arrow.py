@@ -661,9 +661,7 @@ class ArrowDatasetEngine(Engine):
             elif index_in_columns_and_parts:
                 # The correct index has already been set
                 index = False
-                columns_and_parts = list(
-                    set(columns_and_parts).difference(set(df.index.names))
-                )
+                columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
         df = df[list(columns_and_parts)]
 
         if index:
