@@ -1,7 +1,7 @@
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
-from ...blockwise import Blockwise, blockwise_token
+from ...blockwise import Blockwise
 import pickle
 
 try:
@@ -28,6 +28,7 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
+from .utils import blockwise_io_layer
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -138,7 +139,8 @@ class BlockwiseCSV(Blockwise):
         self.dtypes = dtypes
         self.columns = columns
         self.enforce = enforce
-        self.colname, self.paths = path or (None, None)
+        self.path = path
+        self.colname, self.paths = self.path or (None, None)
         self.part_ids = list(range(len(blocks))) if part_ids is None else part_ids
         self.io_name = "blockwise-io-" + name
         io_func_wrapper = CSVFunctionWrapper(
@@ -151,6 +153,7 @@ class BlockwiseCSV(Blockwise):
             self.enforce,
             self.kwargs,
         )
+        self.annotations = annotations
 
         # Define mapping between key index and "part"
         io_arg_map = {}
@@ -161,17 +164,14 @@ class BlockwiseCSV(Blockwise):
                 self.is_first[i],
             )
 
-        # Define the "blockwise" graph
-        dsk = {self.name: (io_func_wrapper, blockwise_token(0))}
-
-        super().__init__(
+        # Initialize Blockwise-based Layer
+        blockwise_io_layer(
+            io_func_wrapper,
+            io_arg_map,
             self.name,
-            "i",
-            dsk,
-            [(self.io_name, "i")],
-            {self.io_name: (len(self.part_ids),)},
-            io_deps={self.io_name: io_arg_map},
-            annotations=annotations,
+            len(self.part_ids),
+            constructor=super().__init__,
+            annotations=self.annotations,
         )
 
     def __repr__(self):

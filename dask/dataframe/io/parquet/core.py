@@ -127,6 +127,7 @@ class BlockwiseParquet(Blockwise, DataFrameLayer):
             self.kwargs,
             self.common_kwargs,
         )
+        self.annotations = annotations
 
         # Define mapping between key index and "part"
         io_arg_map = {(i,): self.parts[i] for i in self.part_ids}
@@ -138,6 +139,7 @@ class BlockwiseParquet(Blockwise, DataFrameLayer):
             self.name,
             len(self.part_ids),
             constructor=super().__init__,
+            annotations=self.annotations,
         )
 
     def cull_columns(self, columns):
@@ -156,6 +158,7 @@ class BlockwiseParquet(Blockwise, DataFrameLayer):
                     self.parts,
                     self.kwargs,
                     common_kwargs=self.common_kwargs,
+                    annotations=self.annotations,
                 ),
                 None,
             )

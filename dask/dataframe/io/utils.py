@@ -6,7 +6,7 @@ from ...blockwise import Blockwise, blockwise_token
 
 
 def blockwise_io_layer(
-    io_func, part_inputs, output_name, npartitions, constructor=None
+    io_func, part_inputs, output_name, npartitions, constructor=None, annotations=None
 ):
     """Construct an IO Blockwise layer for a dataframe collection
 
@@ -31,6 +31,7 @@ def blockwise_io_layer(
         [(name, "i")],
         {name: (npartitions,)},
         io_deps={name: part_inputs},
+        annotations=annotations,
     )
 
 

@@ -29,13 +29,14 @@ class ORCFunctionWrapper:
 
 
 class BlockwiseORC(Blockwise, DataFrameLayer):
-    def __init__(self, name, fs, columns, paths, nstripes_per_file):
+    def __init__(self, name, fs, columns, paths, nstripes_per_file, annotations=None):
 
         self.name = name
         self.fs = fs
         self.columns = columns
         self.paths = paths
         self.nstripes_per_file = nstripes_per_file
+        self.annotations = annotations
 
         N = 0
         stripe_map = {}
@@ -53,6 +54,7 @@ class BlockwiseORC(Blockwise, DataFrameLayer):
             name,
             self.npartitions,
             constructor=super().__init__,
+            annotations=self.annotations,
         )
 
     def cull_columns(self, columns):
@@ -67,6 +69,7 @@ class BlockwiseORC(Blockwise, DataFrameLayer):
                     columns,
                     self.paths,
                     self.nstripes_per_file,
+                    annotations=self.annotations,
                 ),
                 None,
             )
