@@ -157,6 +157,7 @@ class BlockwiseParquet(Blockwise, DataFrameLayer):
                     self.index,
                     self.parts,
                     self.kwargs,
+                    part_ids=self.part_ids,
                     common_kwargs=self.common_kwargs,
                     annotations=self.annotations,
                 ),

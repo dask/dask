@@ -87,7 +87,8 @@ def optimize_dataframe_getitem(dsk, keys):
                 return dsk
 
             block_columns = block.indices[1][0]
-            if isinstance(block_columns, str):
+            if not isinstance(block_columns, (list, tuple)):
+                # Targeting single str/int/np.int column names
                 block_columns = [block_columns]
 
             columns |= set(block_columns)

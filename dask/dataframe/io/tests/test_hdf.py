@@ -808,11 +808,14 @@ def test_to_hdf_path_pathlike():
         assert_eq(res, ddf)
 
 
-def test_read_hdf_doesnt_segfault():
+@pytest.mark.parametrize("string_names", [True, False])
+def test_read_hdf_doesnt_segfault(string_names):
     pytest.importorskip("tables")
     with tmpfile("h5") as fn:
         N = 40
         df = pd.DataFrame(np.random.randn(N, 3))
+        if string_names:
+            df.columns = ["aa", "bb", "cc"]
         with pd.HDFStore(fn, mode="w") as store:
             store.append("/x", df)
 

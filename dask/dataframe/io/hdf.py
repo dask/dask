@@ -12,12 +12,15 @@ from ...bytes import read_bytes  # noqa
 from fsspec.utils import build_name_function, stringify_path
 
 from .io import _link
+from .utils import blockwise_io_layer
 from ...base import get_scheduler
-from ..core import DataFrame, new_dd_object
+from ..core import DataFrame, new_dd_object, DataFrameLayer
 from ... import config, multiprocessing
 from ...base import tokenize, compute_as_if_collection
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
+from ...blockwise import Blockwise
+from ...highlevelgraph import HighLevelGraph
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
@@ -272,16 +275,80 @@ and stopping index per file, or starting and stopping index of the global
 dataset."""
 
 
-def _pd_read_hdf(path, key, lock, kwargs):
-    """ Read from hdf5 file with a lock """
-    if lock:
-        lock.acquire()
-    try:
-        result = pd.read_hdf(path, key, **kwargs)
-    finally:
-        if lock:
-            lock.release()
-    return result
+class HDFFunctionWrapper:
+    """
+    HDF5 Function-Wrapper Class
+
+    Reads HDF5 data from disk to produce a partition (given a key).
+    """
+
+    def __init__(self, lock, common_kwargs):
+        self.lock = lock
+        self.common_kwargs = common_kwargs
+
+    def __call__(self, part):
+        """ Read from hdf5 file with a lock """
+
+        path, key, kwargs = part
+        if self.lock:
+            self.lock.acquire()
+        try:
+            result = pd.read_hdf(path, key, **merge(self.common_kwargs, kwargs))
+        finally:
+            if self.lock:
+                self.lock.release()
+        return result
+
+
+class BlockwiseHDF(Blockwise, DataFrameLayer):
+    def __init__(
+        self, name, columns, parts, lock, common_kwargs, part_ids=None, annotations=None
+    ):
+        self.name = name
+        self.columns = columns
+        self.parts = parts
+        self.lock = lock
+        self.common_kwargs = common_kwargs
+        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
+        self.annotations = annotations
+        io_func_wrapper = HDFFunctionWrapper(lock, common_kwargs)
+
+        # Define mapping between key index and "part"
+        io_arg_map = {(i,): self.parts[i] for i in self.part_ids}
+
+        # Create Blockwise layer
+        blockwise_io_layer(
+            io_func_wrapper,
+            io_arg_map,
+            self.name,
+            len(self.part_ids),
+            constructor=super().__init__,
+            annotations=self.annotations,
+        )
+
+    def cull_columns(self, columns):
+        # Method inherited from `DataFrameLayer.cull_columns`
+        if columns and (self.columns is None or columns < set(self.columns)):
+            return (
+                BlockwiseHDF(
+                    "read-hdf-" + tokenize(self.name, columns),
+                    list(columns),
+                    self.parts,
+                    self.lock,
+                    self.common_kwargs,
+                    part_ids=self.part_ids,
+                    annotations=self.annotations,
+                ),
+                None,
+            )
+        else:
+            # Default behavior
+            return self, None
+
+    def __repr__(self):
+        return "BlockwiseHDF<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.part_ids), list(self.columns)
+        )
 
 
 def read_hdf(
@@ -385,40 +452,36 @@ def read_hdf(
             "read in its entirety using the same chunksizes"
         )
 
-    name = "read-hdf-" + tokenize(
-        paths, key, start, stop, sorted_index, chunksize, mode
-    )
-
     # Build metadata
     with pd.HDFStore(paths[0], mode=mode) as hdf:
         meta_key = _expand_key(key, hdf)[0]
-
     meta = pd.read_hdf(paths[0], meta_key, mode=mode, stop=0)
     if columns is not None:
         meta = meta[columns]
+
+    # Common kwargs
     if meta.ndim == 1:
-        base = {"name": meta.name, "mode": mode}
+        common_kwargs = {"name": meta.name, "mode": mode}
     else:
-        base = {"columns": meta.columns, "mode": mode}
+        common_kwargs = {"columns": meta.columns, "mode": mode}
 
     # Build parts
     parts, global_divisions = build_parts(
-        paths, key, start, stop, columns, chunksize, lock, sorted_index, mode, base
+        paths, key, start, stop, chunksize, sorted_index, mode
     )
 
-    dsk = dict()
-    for i, part in enumerate(parts):
-        dsk[(name, i)] = (_pd_read_hdf, *part)
+    # Construct Layer and Collection
+    output_name = "read-hdf-" + tokenize(
+        paths, key, start, stop, sorted_index, chunksize, mode
+    )
+    if len(global_divisions) != len(parts) + 1:
+        global_divisions = [None] * (len(parts) + 1)
+    layer = BlockwiseHDF(output_name, columns, parts, lock, common_kwargs)
+    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
+    return new_dd_object(graph, output_name, meta, global_divisions)
 
-    if len(global_divisions) != len(dsk) + 1:
-        global_divisions = [None] * (len(dsk) + 1)
 
-    return new_dd_object(dsk, name, meta, global_divisions)
-
-
-def build_parts(
-    paths, key, start, stop, columns, chunksize, lock, sorted_index, mode, base
-):
+def build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
     """
     Build the list of partition inputs for read_hdf
     """
@@ -437,14 +500,12 @@ def build_parts(
             elif division:
                 global_divisions = division
 
-            parts.extend(
-                one_path_one_key(path, k, start, stop, columns, chunksize, lock, base)
-            )
+            parts.extend(one_path_one_key(path, k, start, stop, chunksize))
 
     return parts, global_divisions
 
 
-def one_path_one_key(path, key, start, stop, columns, chunksize, lock, base):
+def one_path_one_key(path, key, start, stop, chunksize):
     """
     Get the data frame corresponding to one path and one key (which should
     not contain any wildcards).
@@ -456,13 +517,8 @@ def one_path_one_key(path, key, start, stop, columns, chunksize, lock, base):
             "row number ({})".format(start, stop)
         )
 
-    def update(s):
-        new = base.copy()
-        new.update({"start": s, "stop": s + chunksize})
-        return new
-
     return [
-        (path, key, lock, update(s))
+        (path, key, {"start": s, "stop": s + chunksize})
         for i, s in enumerate(range(start, stop, chunksize))
     ]
 
