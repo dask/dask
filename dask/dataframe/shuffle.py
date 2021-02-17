@@ -685,7 +685,7 @@ def shuffle(
         else:
             index = list(index)
         nset = set(index)
-        if nset.intersection(set(df.columns)) == nset:
+        if nset & set(df.columns) == nset:
             return rearrange_by_column(
                 df,
                 index,
