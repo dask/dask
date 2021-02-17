@@ -67,7 +67,9 @@ jobs:
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v2
         with:
-          miniconda-version: "latest"
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
           python-version: "3.7"
           activate-environment: test-environment
           auto-activate-base: false
