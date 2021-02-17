@@ -6,6 +6,7 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq
 from dask.blockwise import Blockwise, optimize_blockwise
+from dask.dataframe.optimize import optimize_dataframe_getitem
 
 
 def test_make_timeseries():
@@ -83,10 +84,16 @@ def test_make_timeseries_no_args():
 def test_make_timeseries_blockwise():
     df = dd.demo.make_timeseries()
     df = df[["x", "y"]]
+    keys = [(df._name, i) for i in range(df.npartitions)]
+
+    # Check that `optimize_dataframe_getitem` changes the
+    # `columns` attribute of the "make-timeseries" layer
+    graph = optimize_dataframe_getitem(df.__dask_graph__(), keys)
+    key = [k for k in graph.layers.keys() if k.startswith("make-timeseries-")][0]
+    assert set(graph.layers[key].columns) == {"x", "y"}
 
     # Check that `optimize_blockwise` fuses both
     # `Blockwise` layers together into a singe `Blockwise` layer
-    keys = [(df._name, i) for i in range(df.npartitions)]
     graph = optimize_blockwise(df.__dask_graph__(), keys)
     layers = graph.layers
     name = list(layers.keys())[0]
