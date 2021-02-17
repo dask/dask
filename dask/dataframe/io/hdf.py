@@ -385,11 +385,30 @@ def read_hdf(
             "read in its entirety using the same chunksizes"
         )
 
-    token = tokenize((paths, key, start, stop, sorted_index, chunksize, mode))
-    name = "read-hdf-" + token
+    name = "read-hdf-" + tokenize(
+        paths, key, start, stop, sorted_index, chunksize, mode
+    )
 
+    parts, global_divisions, meta = build_parts(
+        paths, key, start, stop, columns, chunksize, lock, sorted_index, mode
+    )
+
+    dsk = dict()
+    for i, part in enumerate(parts):
+        dsk[(name, i)] = (_pd_read_hdf, *part)
+
+    if len(global_divisions) != len(dsk) + 1:
+        global_divisions = [None] * (len(dsk) + 1)
+
+    return new_dd_object(dsk, name, meta, global_divisions)
+
+
+def build_parts(paths, key, start, stop, columns, chunksize, lock, sorted_index, mode):
+    """
+    Build the list of partition inputs for read_hdf
+    """
     parts = []
-    empty = None
+    meta = None
     global_divisions = []
     for path in paths:
 
@@ -400,14 +419,14 @@ def read_hdf(
         for k, stop, division in zip(keys, stops, divisions):
 
             # Generate metadata
-            if empty is None:
-                empty = pd.read_hdf(path, k, mode=mode, stop=0)
+            if meta is None:
+                meta = pd.read_hdf(path, k, mode=mode, stop=0)
                 if columns is not None:
-                    empty = empty[columns]
-                if empty.ndim == 1:
-                    base = {"name": empty.name, "mode": mode}
+                    meta = meta[columns]
+                if meta.ndim == 1:
+                    base = {"name": meta.name, "mode": mode}
                 else:
-                    base = {"columns": empty.columns, "mode": mode}
+                    base = {"columns": meta.columns, "mode": mode}
 
             if division and global_divisions:
                 global_divisions = global_divisions[:-1] + division
@@ -418,14 +437,7 @@ def read_hdf(
                 one_path_one_key(path, k, start, stop, columns, chunksize, lock, base)
             )
 
-    dsk = dict()
-    for i, part in enumerate(parts):
-        dsk[(name, i)] = (_pd_read_hdf, *part)
-
-    if len(global_divisions) != len(dsk) + 1:
-        global_divisions = [None] * (len(dsk) + 1)
-
-    return new_dd_object(dsk, name, empty, global_divisions)
+    return parts, global_divisions, meta
 
 
 def one_path_one_key(path, key, start, stop, columns, chunksize, lock, base):
