@@ -72,7 +72,7 @@ def test_map_overlap_names():
     res3 = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=3)
     assert res3._name != res._name
     # Difference is just the final map
-    diff = set(res3.dask).difference(res.dask)
+    diff = res3.dask.keys() - res.dask.keys()
     assert len(diff) == npartitions
 
     res4 = ddf.map_overlap(shifted_sum, 3, 0, 0, 3, c=2)
