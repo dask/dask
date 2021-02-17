@@ -389,8 +389,21 @@ def read_hdf(
         paths, key, start, stop, sorted_index, chunksize, mode
     )
 
-    parts, global_divisions, meta = build_parts(
-        paths, key, start, stop, columns, chunksize, lock, sorted_index, mode
+    # Build metadata
+    with pd.HDFStore(paths[0], mode=mode) as hdf:
+        meta_key = _expand_key(key, hdf)[0]
+
+    meta = pd.read_hdf(paths[0], meta_key, mode=mode, stop=0)
+    if columns is not None:
+        meta = meta[columns]
+    if meta.ndim == 1:
+        base = {"name": meta.name, "mode": mode}
+    else:
+        base = {"columns": meta.columns, "mode": mode}
+
+    # Build parts
+    parts, global_divisions = build_parts(
+        paths, key, start, stop, columns, chunksize, lock, sorted_index, mode, base
     )
 
     dsk = dict()
@@ -403,12 +416,13 @@ def read_hdf(
     return new_dd_object(dsk, name, meta, global_divisions)
 
 
-def build_parts(paths, key, start, stop, columns, chunksize, lock, sorted_index, mode):
+def build_parts(
+    paths, key, start, stop, columns, chunksize, lock, sorted_index, mode, base
+):
     """
     Build the list of partition inputs for read_hdf
     """
     parts = []
-    meta = None
     global_divisions = []
     for path in paths:
 
@@ -417,16 +431,6 @@ def build_parts(paths, key, start, stop, columns, chunksize, lock, sorted_index,
         )
 
         for k, stop, division in zip(keys, stops, divisions):
-
-            # Generate metadata
-            if meta is None:
-                meta = pd.read_hdf(path, k, mode=mode, stop=0)
-                if columns is not None:
-                    meta = meta[columns]
-                if meta.ndim == 1:
-                    base = {"name": meta.name, "mode": mode}
-                else:
-                    base = {"columns": meta.columns, "mode": mode}
 
             if division and global_divisions:
                 global_divisions = global_divisions[:-1] + division
@@ -437,7 +441,7 @@ def build_parts(paths, key, start, stop, columns, chunksize, lock, sorted_index,
                 one_path_one_key(path, k, start, stop, columns, chunksize, lock, base)
             )
 
-    return parts, global_divisions, meta
+    return parts, global_divisions
 
 
 def one_path_one_key(path, key, start, stop, columns, chunksize, lock, base):
@@ -463,6 +467,25 @@ def one_path_one_key(path, key, start, stop, columns, chunksize, lock, base):
     ]
 
 
+def _expand_key(key, hdf):
+    import glob
+
+    if not glob.has_magic(key):
+        keys = [key]
+    else:
+        keys = [k for k in hdf.keys() if fnmatch(k, key)]
+        # https://github.com/dask/dask/issues/5934
+        # TODO: remove this part if/when pandas copes with all keys
+        keys.extend(
+            n._v_pathname
+            for n in hdf._handle.walk_nodes("/", classname="Table")
+            if fnmatch(n._v_pathname, key)
+            and n._v_name != "table"
+            and n._v_pathname not in keys
+        )
+    return keys
+
+
 def get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
     """
     Get the "keys" or group identifiers which match the given key, which
@@ -471,23 +494,9 @@ def get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
     key.
     """
     with pd.HDFStore(path, mode=mode) as hdf:
-        import glob
-
-        if not glob.has_magic(key):
-            keys = [key]
-        else:
-            keys = [k for k in hdf.keys() if fnmatch(k, key)]
-            # https://github.com/dask/dask/issues/5934
-            # TODO: remove this part if/when pandas copes with all keys
-            keys.extend(
-                n._v_pathname
-                for n in hdf._handle.walk_nodes("/", classname="Table")
-                if fnmatch(n._v_pathname, key)
-                and n._v_name != "table"
-                and n._v_pathname not in keys
-            )
         stops = []
         divisions = []
+        keys = _expand_key(key, hdf)
         for k in keys:
             storer = hdf.get_storer(k)
             if storer.format_type != "table":
