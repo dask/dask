@@ -35,7 +35,9 @@ jobs:
         shell: bash -l {0}
         if: ${{ matrix.os == 'macos-latest' && matrix.python-version == '3.8' }}
         run: |
-          mamba uninstall --force numpy
+          # FIXME https://github.com/mamba-org/mamba/issues/412
+          # mamba uninstall --force numpy
+          conda uninstall --force numpy
           python -m pip install --no-deps numpy==1.20
 
       - name: Install
