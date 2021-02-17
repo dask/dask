@@ -160,9 +160,8 @@ def make_timeseries(
         state_data = np.random.randint(2e9, size=npartitions)
     else:
         state_data = random_state_data(npartitions, seed)
-    output_name = "make-timeseries-" + tokenize(
-        start, end, dtypes, freq, partition_freq, state_data
-    )
+    label = "make-timeseries-"
+    output_name = label + tokenize(start, end, dtypes, freq, partition_freq, state_data)
 
     # Build parts
     parts = []
@@ -175,6 +174,7 @@ def make_timeseries(
         None,
         parts,
         MakeTimeseriesPart(dtypes, freq, kwargs),
+        label=label,
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)

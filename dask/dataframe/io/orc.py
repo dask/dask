@@ -108,12 +108,14 @@ def read_orc(path, columns=None, storage_options=None):
             )
 
     # Create Blockwise layer
-    output_name = "read-orc-" + tokenize(fs_token, path, columns)
+    label = "read-orc-"
+    output_name = label + tokenize(fs_token, path, columns)
     layer = DataFrameIOLayer(
         output_name,
         columns,
         parts,
         ORCFunctionWrapper(fs, columns, schema),
+        label=label,
     )
 
     columns = list(schema) if columns is None else columns

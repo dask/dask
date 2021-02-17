@@ -89,7 +89,7 @@ def test_make_timeseries_blockwise():
     # Check that `optimize_dataframe_getitem` changes the
     # `columns` attribute of the "make-timeseries" layer
     graph = optimize_dataframe_getitem(df.__dask_graph__(), keys)
-    key = [k for k in graph.layers.keys() if k.startswith("subset-make-timeseries-")][0]
+    key = [k for k in graph.layers.keys() if k.startswith("make-timeseries-")][0]
     assert set(graph.layers[key].columns) == {"x", "y"}
 
     # Check that `optimize_blockwise` fuses both

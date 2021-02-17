@@ -1,6 +1,7 @@
 import pandas as pd
 import json
 from uuid import uuid4
+import copy
 
 from ...blockwise import Blockwise, blockwise_token
 from ..core import DataFrameLayer
@@ -10,14 +11,26 @@ from ...base import tokenize
 class DataFrameIOLayer(Blockwise, DataFrameLayer):
     """DataFrame-based Blockwise Layer with IO"""
 
-    def __init__(self, name, columns, inputs, io_func, part_ids=None, annotations=None):
+    def __init__(
+        self,
+        name,
+        columns,
+        inputs,
+        io_func,
+        part_ids=None,
+        label=None,
+        annotations=None,
+    ):
         self.name = name
         self.columns = columns
         self.inputs = inputs
         self.io_func = io_func
         if hasattr(io_func, "columns"):
+            # Apply column-selection culling
+            io_func = copy.deepcopy(self.io_func)
             io_func.columns = columns
         self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
+        self.label = label
         self.annotations = annotations
 
         # Define mapping between key index and "part"
@@ -38,7 +51,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         if columns and (self.columns is None or columns < set(self.columns)):
             return (
                 DataFrameIOLayer(
-                    "subset-" + self.name + tokenize(columns),
+                    (self.label or "subset-") + tokenize(self.name, columns),
                     list(columns),
                     self.inputs,
                     self.io_func,

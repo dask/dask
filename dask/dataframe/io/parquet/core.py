@@ -10,14 +10,13 @@ from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
 from .utils import _analyze_paths
-from ..utils import blockwise_io_layer
-from ...core import DataFrame, new_dd_object, DataFrameLayer
+from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import HighLevelGraph
-from ....blockwise import Blockwise
+from ..utils import DataFrameIOLayer
 
 
 try:
@@ -84,92 +83,6 @@ class ParquetFunctionWrapper:
             self.columns,
             self.index,
             toolz.merge(self.common_kwargs, self.kwargs or {}),
-        )
-
-
-class BlockwiseParquet(Blockwise, DataFrameLayer):
-    """
-    Specialized Blockwise Layer for read_parquet.
-    Enables HighLevelGraph optimizations
-    (e.g. optimize_dataframe_getitem).
-    """
-
-    def __init__(
-        self,
-        name,
-        engine,
-        fs,
-        meta,
-        columns,
-        index,
-        parts,
-        kwargs,
-        part_ids=None,
-        common_kwargs=None,
-        annotations=None,
-    ):
-        self.name = name
-        self.engine = engine
-        self.fs = fs
-        self.meta = meta
-        self.columns = columns
-        self.index = index
-        self.parts = parts
-        self.kwargs = kwargs
-        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-        self.common_kwargs = common_kwargs or {}
-        io_func_wrapper = ParquetFunctionWrapper(
-            self.engine,
-            self.fs,
-            self.meta,
-            self.columns,
-            self.index,
-            self.kwargs,
-            self.common_kwargs,
-        )
-        self.annotations = annotations
-
-        # Define mapping between key index and "part"
-        io_arg_map = {(i,): self.parts[i] for i in self.part_ids}
-
-        # Initialize Blockwise-based Layer
-        blockwise_io_layer(
-            io_func_wrapper,
-            io_arg_map,
-            self.name,
-            len(self.part_ids),
-            constructor=super().__init__,
-            annotations=self.annotations,
-        )
-
-    def cull_columns(self, columns):
-        # Method inherited from `DataFrameLayer.cull_columns`
-        if columns and columns < set(self.meta.columns):
-            columns = list(columns)
-            name = "read-parquet-" + tokenize(self.name, columns)
-            return (
-                BlockwiseParquet(
-                    name,
-                    self.engine,
-                    self.fs,
-                    self.meta[columns],
-                    columns,
-                    self.index,
-                    self.parts,
-                    self.kwargs,
-                    part_ids=self.part_ids,
-                    common_kwargs=self.common_kwargs,
-                    annotations=self.annotations,
-                ),
-                None,
-            )
-        else:
-            # Default behavior
-            return self, None
-
-    def __repr__(self):
-        return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
         )
 
 
@@ -315,7 +228,8 @@ def read_parquet(
     if columns is not None:
         columns = list(columns)
 
-    name = "read-parquet-" + tokenize(
+    label = "read-parquet-"
+    output_name = label + tokenize(
         path,
         columns,
         filters,
@@ -387,18 +301,6 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = BlockwiseParquet(
-        name,
-        engine,
-        fs,
-        meta,
-        columns,
-        index,
-        parts,
-        kwargs,
-        common_kwargs=common_kwargs,
-    )
-
     # Set the index that was previously treated as a column
     if index_in_columns:
         meta = meta.set_index(index)
@@ -407,10 +309,28 @@ def read_parquet(
 
     if len(divisions) < 2:
         # empty dataframe - just use meta
-        subgraph = {(name, 0): meta}
+        graph = {(output_name, 0): meta}
         divisions = (None, None)
+    else:
+        # Create Blockwise layer
+        layer = DataFrameIOLayer(
+            output_name,
+            columns,
+            parts,
+            ParquetFunctionWrapper(
+                engine,
+                fs,
+                meta,
+                columns,
+                index,
+                kwargs,
+                common_kwargs,
+            ),
+            label=label,
+        )
+        graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(subgraph, name, meta, divisions)
+    return new_dd_object(graph, output_name, meta, divisions)
 
 
 def read_parquet_part(fs, func, meta, part, columns, index, kwargs):

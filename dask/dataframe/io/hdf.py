@@ -422,7 +422,8 @@ def read_hdf(
     )
 
     # Construct Layer and Collection
-    output_name = "read-hdf-" + tokenize(
+    label = "read-hdf-"
+    output_name = label + tokenize(
         paths, key, start, stop, sorted_index, chunksize, mode
     )
     if len(divisions) != len(parts) + 1:
@@ -432,6 +433,7 @@ def read_hdf(
         columns,
         parts,
         HDFFunctionWrapper(columns, meta.ndim, lock, common_kwargs),
+        label=label,
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     return new_dd_object(graph, output_name, meta, divisions)
