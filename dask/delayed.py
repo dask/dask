@@ -390,7 +390,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     To invoke an impure attribute or operator, you'd need to use it in a
     delayed function with ``pure=False``:
 
-    >>> class Incrementer(object):
+    >>> class Incrementer:
     ...     def __init__(self):
     ...         self._n = 0
     ...     @property
@@ -473,12 +473,20 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     Equivalent to the output from a single key in a dask graph.
     """
 
-    __slots__ = ("_key", "dask", "_length")
+    __slots__ = ("_key", "_dask", "_length")
 
     def __init__(self, key, dsk, length=None):
         self._key = key
-        self.dask = dsk
+        self._dask = dsk
         self._length = length
+
+    @property
+    def key(self):
+        return self._key
+
+    @property
+    def dask(self):
+        return self._dask
 
     def __dask_graph__(self):
         return self.dask
@@ -510,17 +518,6 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
         key = replace_name_in_key(self.key, name) if name else self.key
         return Delayed(key, dsk, self._length)
 
-    def __getstate__(self):
-        return tuple(getattr(self, i) for i in self.__slots__)
-
-    def __setstate__(self, state):
-        for k, v in zip(self.__slots__, state):
-            setattr(self, k, v)
-
-    @property
-    def key(self):
-        return self._key
-
     def __repr__(self):
         return "Delayed({0})".format(repr(self.key))
 
@@ -532,21 +529,27 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
 
     def __getattr__(self, attr):
         if attr.startswith("_"):
-            raise AttributeError("Attribute {0} not found".format(attr))
+            raise AttributeError(f"Attribute {attr} not found")
 
         if attr == "visualise":
             # added to warn users in case of spelling error
             # for more details: https://github.com/dask/dask/issues/5721
             warnings.warn(
-                "dask.delayed objects have no `visualise` method. Perhaps you meant `visualize`?"
+                "dask.delayed objects have no `visualise` method. "
+                "Perhaps you meant `visualize`?"
             )
 
         return DelayedAttr(self, attr)
 
     def __setattr__(self, attr, val):
-        if attr in self.__slots__:
+        try:
             object.__setattr__(self, attr, val)
-        else:
+        except AttributeError:
+            # attr is neither in type(self).__slots__ nor in the __slots__ of any of its
+            # parent classes, and all the parent classes define __slots__ too.
+            # This last bit needs to be unit tested: if any of the parent classes omit
+            # the __slots__ declaration, self will gain a __dict__ and this branch will
+            # become unreachable.
             raise TypeError("Delayed objects are immutable")
 
     def __setitem__(self, index, val):
@@ -619,11 +622,11 @@ def call_function(func, func_token, args, kwargs, pure=None, nout=None):
 
 
 class DelayedLeaf(Delayed):
-    __slots__ = ("_obj", "_key", "_pure", "_nout")
+    __slots__ = ("_obj", "_pure", "_nout")
 
     def __init__(self, obj, key, pure=None, nout=None):
+        super().__init__(key, None)
         self._obj = obj
-        self._key = key
         self._pure = pure
         self._nout = nout
 
@@ -640,12 +643,13 @@ class DelayedLeaf(Delayed):
 
 
 class DelayedAttr(Delayed):
-    __slots__ = ("_obj", "_attr", "_key")
+    __slots__ = ("_obj", "_attr")
 
     def __init__(self, obj, attr):
+        key = "getattr-%s" % tokenize(obj, attr, pure=True)
+        super().__init__(key, None)
         self._obj = obj
         self._attr = attr
-        self._key = "getattr-%s" % tokenize(obj, attr, pure=True)
 
     def __getattr__(self, attr):
         # Calling np.dtype(dask.delayed(...)) used to result in a segfault, as
@@ -654,7 +658,7 @@ class DelayedAttr(Delayed):
         # `x.dtype().dtype()` is called (which shouldn't ever show up in real
         # code). See https://github.com/dask/dask/pull/4374#issuecomment-454381465
         if attr == "dtype" and self._attr == "dtype":
-            raise AttributeError("Attribute %s not found" % attr)
+            raise AttributeError("Attribute dtype not found")
         return super().__getattr__(attr)
 
     @property

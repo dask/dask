@@ -817,9 +817,7 @@ def coerce_depth(ndim, depth):
     if isinstance(depth, tuple):
         depth = dict(zip(range(ndim), depth))
     if isinstance(depth, dict):
-        for i in range(ndim):
-            if i not in depth:
-                depth[i] = 0
+        depth = {ax: depth.get(ax, default) for ax in range(ndim)}
     return coerce_depth_type(ndim, depth)
 
 
@@ -841,7 +839,5 @@ def coerce_boundary(ndim, boundary):
     if isinstance(boundary, tuple):
         boundary = dict(zip(range(ndim), boundary))
     if isinstance(boundary, dict):
-        for i in range(ndim):
-            if i not in boundary:
-                boundary[i] = default
+        boundary = {ax: boundary.get(ax, default) for ax in range(ndim)}
     return boundary

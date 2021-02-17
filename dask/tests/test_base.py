@@ -27,18 +27,13 @@ from dask.base import (
     collections_to_dsk,
     get_collection_name,
     replace_name_in_key,
+    clone_key,
 )
 from dask.core import literal
 from dask.delayed import Delayed
-from dask.utils import tmpdir, tmpfile, ignoring
-from dask.utils_test import inc, dec
+from dask.utils import tmpdir, tmpfile
+from dask.utils_test import dec, inc, import_or_none
 from dask.diagnostics import Profiler
-
-
-def import_or_none(path):
-    with ignoring(BaseException):
-        return pytest.importorskip(path)
-    return None
 
 
 tz = pytest.importorskip("tlz")
@@ -615,6 +610,9 @@ class Tuple(DaskMethodsMixin):
     def __dask_keys__(self):
         return self._keys
 
+    def __dask_layers__(self):
+        return (get_collection_name(self),)
+
     def __dask_tokenize__(self):
         return self._keys
 
@@ -1148,6 +1146,23 @@ def test_persist_delayed_change_name(key, new_name, new_key):
     assert dict(dp.dask) == {new_key: 2}
 
 
+def test_persist_delayedleaf():
+    x = delayed(1)
+    (xx,) = persist(x)
+    assert isinstance(xx, Delayed)
+    assert xx.compute() == 1
+
+
+def test_persist_delayedattr():
+    class C:
+        x = 1
+
+    x = delayed(C).x
+    (xx,) = persist(x)
+    assert isinstance(xx, Delayed)
+    assert xx.compute() == 1
+
+
 @pytest.mark.skipif("not da or not db")
 def test_persist_array_bag():
     x = da.arange(5, chunks=2) + 1
@@ -1337,3 +1352,17 @@ def test_optimizations_ctd():
         dsk2 = collections_to_dsk([x])
 
     assert dsk1 == dsk2
+
+
+def test_clone_key():
+    h = object()  # arbitrary hashable
+    assert clone_key("inc-1-2-3", 123) == "inc-27b6e15b795fcaff169e0e0df14af97a"
+    assert clone_key("x", 123) == "dc2b8d1c184c72c19faa81c797f8c6b0"
+    assert clone_key("x", 456) == "b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key(("sum-1-2-3", h, 1), 123) == (
+        "sum-27b6e15b795fcaff169e0e0df14af97a",
+        h,
+        1,
+    )
+    with pytest.raises(TypeError):
+        clone_key(1, 2)

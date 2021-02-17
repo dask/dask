@@ -19,7 +19,7 @@ except ImportError:
     matmul = None
 
 
-class Tuple(object):
+class Tuple:
     __dask_scheduler__ = staticmethod(dask.threaded.get)
 
     def __init__(self, dsk, keys):
@@ -503,7 +503,7 @@ def test_delayed_name_on_call():
 
 
 def test_callable_obj():
-    class Foo(object):
+    class Foo:
         def __init__(self, a):
             self.a = a
 
@@ -577,7 +577,7 @@ def test_keys_from_array():
 
 # Mostly copied from https://github.com/pytoolz/toolz/pull/220
 def test_delayed_decorator_on_method():
-    class A(object):
+    class A:
         BASE = 10
 
         def __init__(self, base):
