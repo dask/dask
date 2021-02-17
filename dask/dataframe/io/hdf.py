@@ -466,7 +466,7 @@ def read_hdf(
         common_kwargs = {"columns": meta.columns, "mode": mode}
 
     # Build parts
-    parts, global_divisions = build_parts(
+    parts, divisions = build_parts(
         paths, key, start, stop, chunksize, sorted_index, mode
     )
 
@@ -474,16 +474,16 @@ def read_hdf(
     output_name = "read-hdf-" + tokenize(
         paths, key, start, stop, sorted_index, chunksize, mode
     )
-    if len(global_divisions) != len(parts) + 1:
-        global_divisions = [None] * (len(parts) + 1)
+    if len(divisions) != len(parts) + 1:
+        divisions = [None] * (len(parts) + 1)
     layer = BlockwiseHDF(output_name, columns, parts, lock, common_kwargs)
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-    return new_dd_object(graph, output_name, meta, global_divisions)
+    return new_dd_object(graph, output_name, meta, divisions)
 
 
 def build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
     """
-    Build the list of partition inputs for read_hdf
+    Build the list of partition inputs and divisions for read_hdf
     """
     parts = []
     global_divisions = []
@@ -507,8 +507,8 @@ def build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
 
 def one_path_one_key(path, key, start, stop, chunksize):
     """
-    Get the data frame corresponding to one path and one key (which should
-    not contain any wildcards).
+    Get the DataFrame corresponding to one path and one key (which
+    should not contain any wildcards).
     """
 
     if start >= stop:
@@ -545,9 +545,9 @@ def _expand_key(key, hdf):
 def get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
     """
     Get the "keys" or group identifiers which match the given key, which
-    can contain wildcards. This uses the hdf file identified by the
-    given path. Also get the index of the last row of data for each matched
-    key.
+    can contain wildcards (see _expand_path). This uses the hdf file
+    identified by the given path. Also get the index of the last row of
+    data for each matched key.
     """
     with pd.HDFStore(path, mode=mode) as hdf:
         stops = []
