@@ -7,9 +7,9 @@ set -xe
 # python -m pip install --no-deps cityhash
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    conda update -y -c arrow-nightlies pyarrow
+    mamba update -y -c arrow-nightlies pyarrow
 
-    conda uninstall --force numpy pandas
+    mamba uninstall --force numpy pandas
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
         numpy \
@@ -29,11 +29,11 @@ fi
 
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
-echo conda list
-conda list
+echo mamba list
+mamba list
 
 # For debugging
 echo -e "--\n--Conda Environment (re-create this with \`conda env create --name <name> -f <output_file>\`)\n--"
-conda env export | grep -E -v '^prefix:.*$'
+mamba env export | grep -E -v '^prefix:.*$'
 
 set +xe
