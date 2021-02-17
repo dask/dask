@@ -25,10 +25,6 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.columns = columns
         self.inputs = inputs
         self.io_func = io_func
-        if hasattr(io_func, "columns"):
-            # Apply column-selection culling
-            io_func = copy.deepcopy(self.io_func)
-            io_func.columns = columns
         self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
         self.label = label
         self.annotations = annotations
@@ -49,17 +45,19 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
     def cull_columns(self, columns):
         # Method inherited from `DataFrameLayer.cull_columns`
         if columns and (self.columns is None or columns < set(self.columns)):
-            return (
-                DataFrameIOLayer(
-                    (self.label or "subset-") + tokenize(self.name, columns),
-                    list(columns),
-                    self.inputs,
-                    self.io_func,
-                    part_ids=self.part_ids,
-                    annotations=self.annotations,
-                ),
-                None,
+            layer = DataFrameIOLayer(
+                (self.label or "subset-") + tokenize(self.name, columns),
+                list(columns),
+                self.inputs,
+                self.io_func,
+                part_ids=self.part_ids,
+                annotations=self.annotations,
             )
+            if hasattr(layer.io_func, "columns"):
+                # Apply column-selection culling
+                layer.io_func = copy.deepcopy(layer.io_func)
+                layer.io_func.columns = columns
+            return layer, None
         else:
             # Default behavior
             return self, None

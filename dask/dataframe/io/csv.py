@@ -1,7 +1,8 @@
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
-from ...blockwise import Blockwise
+from .utils import DataFrameIOLayer
+from ...highlevelgraph import HighLevelGraph
 import pickle
 
 try:
@@ -28,7 +29,6 @@ from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from .utils import blockwise_io_layer
 
 import fsspec.implementations.local
 from fsspec.compression import compr
@@ -54,7 +54,7 @@ class CSVFunctionWrapper:
         enforce,
         kwargs,
     ):
-        self.columns = columns
+        self.full_columns = columns
         self.colname = colname
         self.head = head
         self.header = header
@@ -62,6 +62,7 @@ class CSVFunctionWrapper:
         self.dtypes = dtypes
         self.enforce = enforce
         self.kwargs = kwargs
+        self.columns = None
 
     def __call__(self, part):
 
@@ -95,89 +96,20 @@ class CSVFunctionWrapper:
             block = block[0](*block[1:])
 
         # Call `pandas_read_text`
-        return pandas_read_text(
+        out = pandas_read_text(
             self.reader,
             block,
             self.header,
             rest_kwargs,
             self.dtypes,
-            self.columns,
+            self.full_columns,
             write_header,
             self.enforce,
             path_info,
         )
-
-
-class BlockwiseCSV(Blockwise):
-    """
-    Specialized Blockwise Layer for read_csv.
-    """
-
-    def __init__(
-        self,
-        name,
-        reader,
-        blocks,
-        is_first,
-        head,
-        header,
-        kwargs,
-        dtypes,
-        columns,
-        enforce,
-        path,
-        part_ids=None,
-        annotations=None,
-    ):
-        self.name = name
-        self.reader = reader
-        self.blocks = blocks
-        self.is_first = is_first
-        self.head = head  # example pandas DF for metadata
-        self.header = header  # prepend to all blocks
-        self.kwargs = kwargs
-        self.dtypes = dtypes
-        self.columns = columns
-        self.enforce = enforce
-        self.path = path
-        self.colname, self.paths = self.path or (None, None)
-        self.part_ids = list(range(len(blocks))) if part_ids is None else part_ids
-        self.io_name = "blockwise-io-" + name
-        io_func_wrapper = CSVFunctionWrapper(
-            self.columns,
-            self.colname,
-            self.head,
-            self.header,
-            self.reader,
-            self.dtypes,
-            self.enforce,
-            self.kwargs,
-        )
-        self.annotations = annotations
-
-        # Define mapping between key index and "part"
-        io_arg_map = {}
-        for i in self.part_ids:
-            io_arg_map[(i,)] = (
-                self.blocks[i],
-                self.paths[i] if self.paths else None,
-                self.is_first[i],
-            )
-
-        # Initialize Blockwise-based Layer
-        blockwise_io_layer(
-            io_func_wrapper,
-            io_arg_map,
-            self.name,
-            len(self.part_ids),
-            constructor=super().__init__,
-            annotations=self.annotations,
-        )
-
-    def __repr__(self):
-        return "BlockwiseCSV<name='{}', n_blocks={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
-        )
+        if self.columns is None:
+            return out
+        return out[self.columns]
 
 
 def pandas_read_text(
@@ -398,8 +330,6 @@ def text_blocks_to_pandas(
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
 
-    name = "read-csv-" + tokenize(reader, columns, enforce, head, blocksize)
-
     if path:
         colname, path_converter = path
         paths = [b[1].path for b in blocks]
@@ -417,21 +347,39 @@ def text_blocks_to_pandas(
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
-    subgraph = BlockwiseCSV(
-        name,
-        reader,
-        blocks,
-        is_first,
-        head,
-        header,
-        kwargs,
-        dtypes,
-        columns,
-        enforce,
-        path,
-    )
+    # Define parts
+    parts = []
+    colname, paths = path or (None, None)
+    for i in range(len(blocks)):
+        parts.append(
+            (
+                blocks[i],
+                paths[i] if paths else None,
+                is_first[i],
+            )
+        )
 
-    return new_dd_object(subgraph, name, head, (None,) * (len(blocks) + 1))
+    # Create Blockwise layer
+    label = "read-csv-"
+    name = label + tokenize(reader, columns, enforce, head, blocksize)
+    layer = DataFrameIOLayer(
+        name,
+        columns,
+        parts,
+        CSVFunctionWrapper(
+            columns,
+            colname,
+            head,
+            header,
+            reader,
+            dtypes,
+            enforce,
+            kwargs,
+        ),
+        label=label,
+    )
+    graph = HighLevelGraph({name: layer}, {name: set()})
+    return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
 
 
 def block_mask(block_lists):
