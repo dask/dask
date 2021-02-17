@@ -55,7 +55,7 @@ jobs:
   doctest:
     runs-on: "ubuntu-latest"
     env:
-      XTRATESTARGS: "--doctest-modules"
+      XTRATESTARGS: "--doctest-modules --ignore-glob='*test_*.py'"
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
