@@ -54,8 +54,6 @@ jobs:
 
   doctest:
     runs-on: "ubuntu-latest"
-    env:
-      XTRATESTARGS: "--doctest-modules --ignore-glob='*test_*.py'"
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -75,7 +73,7 @@ jobs:
 
       - name: Run tests
         shell: bash -l {0}
-        run: source continuous_integration/scripts/run_tests.sh
+        run: pytest -v --doctest-modules --ignore-glob='*/test_*.py' dask
 
   imports:
     runs-on: "ubuntu-latest"
