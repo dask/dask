@@ -1,6 +1,116 @@
 import pandas as pd
 import json
 from uuid import uuid4
+import copy
+
+from ...blockwise import Blockwise, blockwise_token
+from ..core import DataFrameLayer
+from ...base import tokenize
+
+
+class DataFrameIOLayer(Blockwise, DataFrameLayer):
+    """DataFrame-based Blockwise Layer with IO
+
+    Parameters
+    ----------
+    name : string
+        Name to use for the constructed layer.
+    columns : string, list or None
+        Field name(s) to read in as columns in the output.
+    inputs : list[tuple]
+        List of input-argument tuples. Each element will be
+        passed to ``io_func`` to construct a single output
+        partition.
+    io_func : callable
+        A callable function that takes in a single tuple
+        of arguments, and outputs a DataFrame partition.
+    """
+
+    def __init__(
+        self,
+        name,
+        columns,
+        inputs,
+        io_func,
+        part_ids=None,
+        label=None,
+        annotations=None,
+    ):
+        self.name = name
+        self.columns = columns
+        self.inputs = inputs
+        self.io_func = io_func
+        self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
+        self.label = label
+        self.annotations = annotations
+
+        # Define mapping between key index and "part"
+        io_arg_map = {(i,): self.inputs[i] for i in self.part_ids}
+
+        # Create Blockwise layer
+        blockwise_io_layer(
+            io_func,
+            io_arg_map,
+            self.name,
+            len(self.part_ids),
+            constructor=super().__init__,
+            annotations=self.annotations,
+        )
+
+    def cull_columns(self, columns):
+        # Method inherited from `DataFrameLayer.cull_columns`
+        if columns and (self.columns is None or columns < set(self.columns)):
+            layer = DataFrameIOLayer(
+                (self.label or "subset-") + tokenize(self.name, columns),
+                list(columns),
+                self.inputs,
+                self.io_func,
+                part_ids=self.part_ids,
+                annotations=self.annotations,
+            )
+            if hasattr(layer.io_func, "columns"):
+                # Apply column-selection culling
+                layer.io_func = copy.deepcopy(layer.io_func)
+                layer.io_func.columns = columns
+            return layer, None
+        else:
+            # Default behavior
+            return self, None
+
+    def __repr__(self):
+        return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.part_ids), list(self.columns)
+        )
+
+
+def blockwise_io_layer(
+    io_func, part_inputs, output_name, npartitions, constructor=None, annotations=None
+):
+    """Construct an IO Blockwise layer for a dataframe collection
+
+    Parameters
+    ----------
+    io_func: callable
+        The function needed to generate data for each output partition.
+    part_inputs: dict
+        Mapping between collection keys and inputs to ``io_func``.  Each
+        element in ``part_inputs`` should be a tuple.
+    output_name: str
+        Name of the output ``Blockwise`` layer.
+    """
+
+    name = "blockwise-io-" + output_name
+    dsk = {output_name: (io_func, blockwise_token(0))}
+    constructor = constructor or Blockwise
+    return constructor(
+        output_name,
+        "i",
+        dsk,
+        [(name, "i")],
+        {name: (npartitions,)},
+        io_deps={name: part_inputs},
+        annotations=annotations,
+    )
 
 
 def _get_pyarrow_dtypes(schema, categories):

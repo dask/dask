@@ -17,10 +17,9 @@ from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
-from dask.dataframe.optimize import optimize_read_parquet_getitem
-from dask.dataframe.io.parquet.core import BlockwiseParquet
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.utils import natural_sort_key, parse_bytes
-
+from dask.dataframe.io.utils import DataFrameIOLayer
 
 try:
     import fastparquet
@@ -2403,11 +2402,11 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     # Write ddf back to disk to check that the round trip
     # preserves the getitem optimization
     out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
-    dsk = optimize_read_parquet_getitem(out.dask, keys=[out.key])
+    dsk = optimize_dataframe_getitem(out.dask, keys=[out.key])
 
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, BlockwiseParquet)
+    assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
@@ -2420,10 +2419,10 @@ def test_getitem_optimization_empty(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
 
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
-    dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
+    dsk = optimize_dataframe_getitem(df2.dask, keys=[df2._name])
 
     subgraph = next(iter((dsk.layers.values())))
-    assert isinstance(subgraph, BlockwiseParquet)
+    assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == []
 
 
@@ -2757,10 +2756,10 @@ def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
 
     # Make sure we are still allowing the getitem optimization
     ddf = ddf["A"]
-    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[(ddf._name, 0)])
+    dsk = optimize_dataframe_getitem(ddf.dask, keys=[(ddf._name, 0)])
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, BlockwiseParquet)
+    assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == ["A"]
 
 
