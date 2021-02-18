@@ -14,7 +14,7 @@ jobs:
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       PARALLEL: "true"
-      COVERAGE: "false"
+      COVERAGE: "true"
 
     steps:
       - name: Checkout source
@@ -43,8 +43,6 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
-      # TODO: Add coverage back
-      # - name: Coverage
-      #   shell: bash -l {0}
-      #   if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
-      #   run: source continuous_integration/scripts/coverage.sh
+
+      - name: Coverage
+        uses: codecov/codecov-action@v1
