@@ -2,6 +2,7 @@ import pytest
 
 distributed = pytest.importorskip("distributed")
 
+import os
 import asyncio
 from functools import partial
 from operator import add
@@ -272,3 +273,70 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
         z = await c.compute(z)
 
     assert_eq(z, np.ones(10) * 4.0)
+
+
+@pytest.mark.parametrize(
+    "io",
+    [
+        "parquet-pyarrow",
+        "parquet-fastparquet",
+        "csv",
+    ],
+)
+@pytest.mark.parametrize("fuse", [True, False])
+def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": ["a", "b", "c"] * 5, "y": range(15)})
+    ddf0 = dd.from_pandas(df, npartitions=3)
+
+    if io.startswith("parquet"):
+        if io == "parquet-pyarrow":
+            pytest.importorskip("pyarrow.parquet")
+            engine = "pyarrow"
+        else:
+            pytest.importorskip("fastparquet")
+            engine = "fastparquet"
+        ddf0.to_parquet(str(tmpdir), engine=engine)
+        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    elif io == "csv":
+        ddf0.to_csv(str(tmpdir), index=False)
+        ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
+
+    df = df[["x"]] + 10
+    ddf = ddf[["x"]] + 10
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        dd.assert_eq(ddf, df, check_index=False)
+
+
+@pytest.mark.parametrize(
+    "io",
+    [
+        "ones",
+        "zeros",
+        "full",
+    ],
+)
+@pytest.mark.parametrize("fuse", [True, False])
+def test_blockwise_array_creation(c, io, fuse):
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    chunks = (5, 2)
+    shape = (10, 4)
+
+    if io == "ones":
+        darr = da.ones(shape, chunks=chunks)
+        narr = np.ones(shape)
+    elif io == "zeros":
+        darr = da.zeros(shape, chunks=chunks)
+        narr = np.zeros(shape)
+    elif io == "full":
+        darr = da.full(shape, 10, chunks=chunks)
+        narr = np.full(shape, 10)
+
+    darr += 2
+    narr += 2
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        da.assert_eq(darr, narr)
