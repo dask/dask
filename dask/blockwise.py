@@ -187,10 +187,12 @@ class Blockwise(Layer):
         being generated within this Blockwise layer (e.g. "read-parquet").
         Since these collections do not actually exist outside this layer, any
         key with a name in this set will be excluded from the external
-        dependencies.  The outer-most elements of io_deps correspond to the
-        mapping between place-holder collection keys, e.g ("read-parquet", 0),
+        dependencies.  The inner-most elements of io_deps correspond to the
+        mapping between place-holder collection indices, e.g ``(1,)``,
         and any chunk/partition-specific arguments needed by the underlying
-        IO function.  See ``make_blockwise_graph`` for usage.
+        IO function.  If the inner-most element includes a "func" key, the
+        corresponding (callable) element will used to generate the arguments
+        at graph-materialization time. See ``make_blockwise_graph`` for usage.
 
     See Also
     --------
@@ -341,6 +343,8 @@ class Blockwise(Layer):
         # not msgpack serializable)
         if msgpack:
             for _, input_map in self.io_deps.items():
+                if "func" in input_map:
+                    input_map["func"] = pickle.dumps(input_map["func"])
                 check = True
                 for k in input_map:
                     # Test msgpack on the very first element.
@@ -354,13 +358,14 @@ class Blockwise(Layer):
                     # now, it is the responsibility of the
                     # Blockwise layer to pickling/unpickle
                     # offending elements in cases like this.
-                    if check:
-                        try:
-                            msgpack.packb(input_map[k])
-                            break  # No need to pickle - Bail
-                        except TypeError:
-                            check = False
-                    input_map[k] = pickle.dumps(input_map[k])
+                    if k != "func":
+                        if check:
+                            try:
+                                msgpack.packb(input_map[k])
+                                break  # No need to pickle - Bail
+                            except TypeError:
+                                check = False
+                        input_map[k] = pickle.dumps(input_map[k])
 
         ret = {
             "output": self.output,
@@ -718,6 +723,11 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     if deserializing:
         from distributed.worker import warn_dumps, dumps_function
 
+        # Deserialize "func" in `io_deps`
+        for arg, val in io_deps.items():
+            if val and "func" in val:
+                val["func"] = pickle.loads(val["func"])
+
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
@@ -780,7 +790,20 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                     # We don't want to stringify keys for args
                     # we are replacing here
                     idx = tups[1:]
-                    args.append(io_deps[arg].get(idx, idx))
+                    if "func" in io_deps[arg]:
+                        # A "func" function exists to convert
+                        # the index (and optional args) into the
+                        # required inputs for the IO function.
+                        args.append(
+                            io_deps[arg]["func"](
+                                idx,
+                                *io_deps[arg].get(idx, []),
+                            )
+                        )
+                    else:
+                        # The required inputs for the IO function
+                        # are specified explicitly in `io_deps`
+                        args.append(io_deps[arg].get(idx, idx))
                 else:
                     if deserializing:
                         args.append(stringify_collection_keys(tups))
