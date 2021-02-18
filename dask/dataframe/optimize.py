@@ -1,6 +1,8 @@
 """ Dataframe optimizations """
 import operator
 
+import numpy as np
+
 from ..optimization import cull, fuse
 from .. import config, core
 from ..highlevelgraph import HighLevelGraph
@@ -87,10 +89,10 @@ def optimize_dataframe_getitem(dsk, keys):
                 return dsk
 
             block_columns = block.indices[1][0]
-            if not isinstance(block_columns, (list, tuple)):
-                # Targeting single str/int/np.int column names
+            if isinstance(block_columns, str) or np.issubdtype(
+                type(block_columns), np.integer
+            ):
                 block_columns = [block_columns]
-
             columns |= set(block_columns)
             update_blocks[dep] = block
 
