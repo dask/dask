@@ -1,5 +1,4 @@
 import numbers
-import itertools
 import warnings
 
 import tlz as toolz
@@ -12,6 +11,19 @@ from ..blockwise import (
     blockwise as core_blockwise,
     blockwise_token,
 )
+
+
+class CreateArrayFunction:
+    def __init__(self, func, chunks):
+        self.func = func
+        self.chunks = chunks
+
+    def __call__(self, idx):
+        # Get this chunk shape
+        ndim = len(self.chunks)
+        chunk = tuple(self.chunks[i][idx[i]] for i in range(ndim))
+
+        return self.func(chunk)
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -44,15 +56,7 @@ class BlockwiseCreateArray(Blockwise):
         io_name = "blockwise-create-" + name
 
         # Define "blockwise" graph
-        dsk = {self.name: (func, blockwise_token(0))}
-
-        # Define mapping between keys and chunks
-        chunk_key_map = {}
-        for idx in itertools.product(*[range(len(c)) for c in chunks]):
-            ndim = len(chunks)
-            chunk = tuple(chunks[i][idx[i]] for i in range(ndim))
-            chunk_key_map[tuple(idx)] = chunk
-
+        dsk = {self.name: (CreateArrayFunction(func, chunks), blockwise_token(0))}
         out_ind = tuple(range(len(shape)))
         self.nchunks = tuple(len(chunk) for chunk in chunks)
         super().__init__(
@@ -61,7 +65,7 @@ class BlockwiseCreateArray(Blockwise):
             dsk,
             [(io_name, out_ind)],
             {io_name: self.nchunks},
-            io_deps={io_name: chunk_key_map},
+            io_deps={io_name: {}},
         )
 
     def __repr__(self):
