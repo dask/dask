@@ -5,8 +5,6 @@ their inputs.
 import uuid
 from typing import Callable, Hashable, Optional, Set, Tuple, TypeVar
 
-from .array import Array
-from .bag import Bag
 from .base import (
     clone_key,
     get_collection_name,
@@ -16,7 +14,6 @@ from .base import (
 )
 from .blockwise import blockwise
 from .core import flatten
-from .dataframe import DataFrame, Series
 from .delayed import Delayed, delayed
 from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
 
@@ -73,6 +70,35 @@ def checkpoint(*collections) -> Delayed:
     return Delayed(name, dsk)
 
 
+def _can_apply_blockwise(collection):
+    """Return True if _map_blocks can be sped up via blockwise operations; False
+    otherwise.
+
+    FIXME this returns False for collections that wrap around around da.Array, such as
+          pint.Quantity, xarray DataArray, Dataset, and Variable.
+    """
+    try:
+        from .bag import Bag
+
+        if isinstance(collection, Bag):
+            return True
+    except ImportError:
+        pass
+    try:
+        from .array import Array
+
+        if isinstance(collection, Array):
+            return True
+    except ImportError:
+        pass
+    try:
+        from .dataframe import DataFrame, Series
+
+        return isinstance(collection, (DataFrame, Series))
+    except ImportError:
+        return False
+
+
 def _build_map_layer(
     func: Callable, name: str, collection, dependencies: Tuple[Delayed, ...] = ()
 ) -> Layer:
@@ -91,11 +117,11 @@ def _build_map_layer(
         Zero or more Delayed objects, which will be passed as arbitrary variadic args to
         func after the collection's chunk
     """
-    if isinstance(collection, (Array, DataFrame, Series, Bag)):
+    if _can_apply_blockwise(collection):
         # Use a Blockwise layer
-        if isinstance(collection, Array):
+        try:
             numblocks = collection.numblocks
-        else:
+        except AttributeError:
             numblocks = (collection.npartitions,)
         indices = tuple(i for i, _ in enumerate(numblocks))
         kwargs = {"_deps": dependencies} if dependencies else {}
