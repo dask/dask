@@ -1,6 +1,3 @@
-import importlib
-
-
 def inc(x):
     return x + 1
 
@@ -115,11 +112,3 @@ class GetFunctionTestMixin:
         dependencies = {"a": (), "b": {"a"}}
         graph = HighLevelGraph(layers, dependencies)
         assert self.get(graph, "z") == 4
-
-
-def import_or_none(name):
-    """Import a module and return it; in case of failure; return None"""
-    try:
-        return importlib.import_module(name)
-    except (ImportError, AttributeError):
-        return None

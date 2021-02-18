@@ -5,8 +5,6 @@ their inputs.
 import uuid
 from typing import Callable, Hashable, Optional, Set, Tuple, TypeVar
 
-from .array import Array
-from .bag import Bag
 from .base import (
     clone_key,
     get_collection_name,
@@ -14,11 +12,25 @@ from .base import (
     tokenize,
     unpack_collections,
 )
-from .blockwise import blockwise
 from .core import flatten
-from .dataframe import DataFrame, Series
 from .delayed import Delayed, delayed
 from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
+from .utils import import_or_none
+
+
+dask_imports = {
+    "dask.array": ("Array",),
+    "dask.bag": ("Bag",),
+    "dask.dataframe": ("DataFrame", "Series"),
+}
+dask_classes = {}
+for path, names in dask_imports.items():
+    module = import_or_none(path)
+    if module:
+        for name in names:
+            cls = getattr(module, name)
+            dask_classes["%s.%s" % (path, name)] = cls
+
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
@@ -91,15 +103,18 @@ def _build_map_layer(
         Zero or more Delayed objects, which will be passed as arbitrary variadic args to
         func after the collection's chunk
     """
-    if isinstance(collection, (Array, DataFrame, Series, Bag)):
+    if isinstance(collection, tuple(dask_classes.values())):
         # Use a Blockwise layer
-        if isinstance(collection, Array):
+        Array = dask_classes.get("dask.array.Array")
+        if Array and isinstance(collection, Array):
             numblocks = collection.numblocks
         else:
             numblocks = (collection.npartitions,)
         indices = tuple(i for i, _ in enumerate(numblocks))
         kwargs = {"_deps": dependencies} if dependencies else {}
         prev_name = get_collection_name(collection)
+        from dask.blockwise import blockwise
+
         return blockwise(
             func,
             name,

@@ -31,8 +31,8 @@ from dask.base import (
 )
 from dask.core import literal
 from dask.delayed import Delayed
-from dask.utils import tmpdir, tmpfile
-from dask.utils_test import dec, inc, import_or_none
+from dask.utils import import_or_none, tmpdir, tmpfile
+from dask.utils_test import dec, inc
 from dask.diagnostics import Profiler
 
 

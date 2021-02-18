@@ -10,7 +10,7 @@ from dask.base import clone_key
 from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on
 from dask.highlevelgraph import HighLevelGraph
 from dask.tests.test_base import Tuple
-from dask.utils_test import import_or_none
+from dask.utils import import_or_none
 
 da = import_or_none("dask.array")
 db = import_or_none("dask.bag")
