@@ -10,8 +10,8 @@ if [[ $PARALLEL == 'true' ]]; then
 fi
 
 if [[ $COVERAGE == 'true' ]]; then
-    echo "coverage run -m pytest dask --runslow --doctest-modules $XTRATESTARGS"
-    coverage run -m pytest dask --runslow --doctest-modules $XTRATESTARGS
+    echo "coverage run -m pytest dask --runslow $XTRATESTARGS"
+    coverage run -m pytest dask --runslow $XTRATESTARGS
 else
     echo "py.test dask --runslow $XTRATESTARGS"
     py.test dask --runslow $XTRATESTARGS
