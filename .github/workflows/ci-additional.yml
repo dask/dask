@@ -64,7 +64,7 @@ jobs:
         with:
           miniconda-version: "latest"
           python-version: "3.8"
-          environment-file: continuous_integration/environment-latest.yaml
+          environment-file: continuous_integration/environment-3.8.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
