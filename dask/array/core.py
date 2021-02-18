@@ -48,6 +48,7 @@ from ..utils import (
     ndimlist,
     format_bytes,
     typename,
+    is_arraylike,
     is_dataframe_like,
     is_series_like,
     is_index_like,
@@ -108,7 +109,11 @@ def getter(a, b, asarray=True, lock=None):
         lock.acquire()
     try:
         c = a[b]
-        if asarray:
+        # Below we special-case `np.matrix` to force a conversion to
+        # `np.ndarray` and preserve original Dask behavior for `getter`,
+        # as for all purposes `np.matrix` is array-like and thus
+        # `is_arraylike` evaluates to `True` in that case.
+        if asarray and (not is_arraylike(c) or isinstance(c, np.matrix)):
             c = np.asarray(c)
     finally:
         if lock:
@@ -4036,7 +4041,10 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
         lock.acquire()
     try:
         if x is not None:
-            out[index] = np.asanyarray(x)
+            if is_arraylike(x):
+                out[index] = x
+            else:
+                out[index] = np.asanyarray(x)
         if return_stored and load_stored:
             result = out[index]
     finally:
@@ -4452,7 +4460,7 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
-def broadcast_to(x, shape, chunks=None):
+def broadcast_to(x, shape, chunks=None, meta=None):
     """Broadcast an array to a new shape.
 
     Parameters
@@ -4467,6 +4475,9 @@ def broadcast_to(x, shape, chunks=None):
         broadcast_to is more efficient than rechunking afterwards. Chunks are
         only allowed to differ from the original shape along dimensions that
         are new on the result or have size 1 the input array.
+    meta : empty ndarray
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
 
     Returns
     -------
@@ -4478,6 +4489,9 @@ def broadcast_to(x, shape, chunks=None):
     """
     x = asarray(x)
     shape = tuple(shape)
+
+    if meta is None:
+        meta = meta_from_array(x)
 
     if x.shape == shape and (chunks is None or chunks == x.chunks):
         return x
@@ -4518,7 +4532,7 @@ def broadcast_to(x, shape, chunks=None):
         dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    return Array(graph, name, chunks, dtype=x.dtype)
+    return Array(graph, name, chunks, dtype=x.dtype, meta=meta)
 
 
 @derived_from(np)
@@ -5072,6 +5086,7 @@ def _vindex_array(x, dict_indexes):
             out_name,
             chunks,
             x.dtype,
+            meta=x._meta,
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
@@ -5129,6 +5144,8 @@ def _vindex_merge(locations, values):
            [40, 50, 60],
            [10, 20, 30]])
     """
+    from .utils import empty_like_safe
+
     locations = list(map(list, locations))
     values = list(values)
 
@@ -5140,7 +5157,7 @@ def _vindex_merge(locations, values):
 
     dtype = values[0].dtype
 
-    x = np.empty(shape, dtype=dtype)
+    x = empty_like_safe(values[0], dtype=dtype, shape=shape)
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):
