@@ -9,6 +9,7 @@ dependencies:
   - pandas=1.2.*
   # test dependencies
   - pytest
+  - pytest-cov
   - pytest-xdist
   - moto>=1.3.14
   - flask
@@ -20,7 +21,6 @@ dependencies:
   - fsspec>=0.6.0
   - sqlalchemy
   - pyarrow>=0.14.0
-  - coverage
   - jsonschema
   # other -- IO
   - bcolz
