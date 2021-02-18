@@ -288,7 +288,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    df = pd.DataFrame({"x": ["a", "b", "c"] * 5, "y": range(15)})
+    df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
     ddf0 = dd.from_pandas(df, npartitions=3)
 
     if io.startswith("parquet"):
