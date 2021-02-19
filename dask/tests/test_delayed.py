@@ -433,10 +433,8 @@ def test_array_delayed():
     assert val[0, 0].compute() == (arr + arr + 1)[0, 0]
 
     task, dsk = to_task_dask(darr)
-    orig = set(darr.dask)
-    final = set(dsk)
-    assert orig.issubset(final)
-    diff = final.difference(orig)
+    assert not darr.dask.keys() - dsk.keys()
+    diff = dsk.keys() - darr.dask.keys()
     assert len(diff) == 1
 
     delayed_arr = delayed(darr)

@@ -2348,13 +2348,13 @@ def test_aca_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 * (2 + 1) + 7 * (2 + 1) + (3 + 2)
@@ -2446,13 +2446,13 @@ def test_reduction_method_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 + 7 * (2 + 1) + (3 + 2)

@@ -425,6 +425,34 @@ def array_safe(a, like, **kwargs):
     return _array_like_safe(np.array, array, a, like, **kwargs)
 
 
+def asarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asarray(a, **kwargs),
+    otherwise return np.asarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asarray
+
+    return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
+
+
+def asanyarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asanyarray(a, **kwargs),
+    otherwise return np.asanyarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asanyarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asanyarray
+
+    return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
+
+
 def validate_axis(axis, ndim):
     """ Validate an input to axis= keywords """
     if isinstance(axis, (tuple, list)):

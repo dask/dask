@@ -33,7 +33,7 @@ def compute_layer_dependencies(layers):
         raise RuntimeError(f"{repr(key)} not found")
 
     all_keys = set(key for layer in layers.values() for key in layer)
-    ret = {k: set() for k in layers.keys()}
+    ret = {k: set() for k in layers}
     for k, v in layers.items():
         for key in keys_in_tasks(all_keys - v.keys(), v.values()):
             ret[k].add(_find_layer_containing_key(key))
@@ -865,12 +865,12 @@ class HighLevelGraph(Mapping):
         dependencies = compute_layer_dependencies(self.layers)
 
         # Check keys
-        dep_key1 = set(self.dependencies.keys())
-        dep_key2 = set(dependencies.keys())
+        dep_key1 = self.dependencies.keys()
+        dep_key2 = dependencies.keys()
         if dep_key1 != dep_key2:
             raise ValueError(
-                f"incorrect dependencies keys {repr(dep_key1)} "
-                f"expected {repr(dep_key2)}"
+                f"incorrect dependencies keys {set(dep_key1)!r} "
+                f"expected {set(dep_key2)!r}"
             )
 
         # Check values
