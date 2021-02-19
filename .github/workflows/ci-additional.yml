@@ -9,7 +9,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        environment: ["mindeps-array-dataframe", "mindeps-bag-delayed"]
+        environment: ["mindeps-array-dataframe", "mindeps-bag-delayed", "mindeps-distributed"]
 
     steps:
       - name: Checkout source
