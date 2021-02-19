@@ -13,6 +13,7 @@ log
 .pytest_cache/
 .coverage
 .coverage.*
+coverage.xml
 .DS_Store
 *.sqlite
 *.swp
