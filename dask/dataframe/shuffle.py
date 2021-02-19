@@ -159,7 +159,7 @@ class SimpleShuffleLayer(Layer):
         # TODO: use shuffle-knowledge to calculate dependencies more efficiently
         deps = {k: keys_in_tasks(keys, [v]) for k, v in layer_dsk.items()}
 
-        return toolz.valmap(dumps_task, layer_dsk), deps
+        return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""

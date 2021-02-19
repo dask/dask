@@ -392,7 +392,7 @@ class Layer(collections.abc.Mapping):
         state: Any,
         dsk: Mapping[str, Any],
         dependencies: Mapping[str, set],
-    ) -> Tuple[Mapping[str, Any], Mapping[str, set]]:
+    ) -> Dict:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
         This method is called by the scheduler in Distributed in order to unpack
@@ -414,12 +414,13 @@ class Layer(collections.abc.Mapping):
 
         Returns
         -------
-        layer_dsk: Mapping[str, Any]
-            Materialized (stringified) graph of the layer
-        layer_deps: Mapping[str, set]
-            Dependencies of each key in `layer_dsk`
+        unpacked-layer: dict
+            layer_dsk: Mapping[str, Any]
+                Materialized (stringified) graph of the layer
+            layer_deps: Mapping[str, set]
+                Dependencies of each key in `layer_dsk`
         """
-        return state["dsk"], state["dependencies"]
+        return {"dsk": state["dsk"], "deps": state["dependencies"]}
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer
@@ -972,13 +973,13 @@ class HighLevelGraph(Mapping):
                 unpack_anno = cls.__dask_distributed_anno_unpack__
 
             # Unpack state into a graph and key dependencies
-            layer_dsk, layer_deps = unpack_state(layer["state"], dsk, deps)
-            dsk.update(layer_dsk)
-            for k, v in layer_deps.items():
+            unpacked_layer = unpack_state(layer["state"], dsk, deps)
+            dsk.update(unpacked_layer["dsk"])
+            for k, v in unpacked_layer["deps"].items():
                 deps[k] = deps.get(k, set()) | v
 
             # Unpack the annotations
-            unpack_anno(anno, layer["annotations"], layer_dsk.keys())
+            unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
 
         return dsk, deps, anno
 

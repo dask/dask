@@ -359,7 +359,7 @@ class Blockwise(Layer):
             stringify(k): {stringify(d) for d in v} | g_deps
             for k, v in layer_deps.items()
         }
-        return layer_dsk, deps
+        return {"dsk": layer_dsk, "deps": deps}
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
