@@ -26,6 +26,11 @@ try:
 except ImportError:
     collect_ignore_glob.append("dask/dataframe/*")
 
+try:
+    import fsspec  # noqa: F401
+except ImportError:
+    collect_ignore_glob.extend(["dask/bag/*", "dask/bytes/*"])
+
 
 def pytest_addoption(parser):
     parser.addoption("--runslow", action="store_true", help="run slow tests")
