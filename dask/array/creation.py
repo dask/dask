@@ -962,6 +962,8 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     Helper function to find the linear ramp for a chunk.
     """
 
+    from .utils import empty_like_safe
+
     num1 = num + 1
 
     shape = list(start.shape)
@@ -970,7 +972,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = np.empty(shape, dtype=dtype)
+    result = empty_like_safe(start, shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)
@@ -996,8 +998,13 @@ def pad_edge(array, pad_width, mode, **kwargs):
         pad_arrays = [result, result]
 
         if mode == "constant":
+            from .utils import asarray_safe
+
             constant_values = kwargs["constant_values"][d]
-            constant_values = [asarray(c).astype(result.dtype) for c in constant_values]
+            constant_values = [
+                asarray_safe(c, like=meta_from_array(array), dtype=result.dtype)
+                for c in constant_values
+            ]
 
             pad_arrays = [
                 broadcast_to(v, s, c)
@@ -1035,7 +1042,7 @@ def pad_edge(array, pad_width, mode, **kwargs):
                 ]
         elif mode == "empty":
             pad_arrays = [
-                empty(s, dtype=array.dtype, chunks=c)
+                empty_like(array, shape=s, dtype=array.dtype, chunks=c)
                 for s, c in zip(pad_shapes, pad_chunks)
             ]
 
