@@ -914,9 +914,7 @@ class HighLevelGraph(Mapping):
         return dumps_msgpack({"layers": layers})
 
     @staticmethod
-    def __dask_distributed_unpack__(
-        packed_hlg, annotations: Mapping[str, Any]
-    ) -> Tuple[Dict[str, Any], Dict[str, set], Dict[str, Any]]:
+    def __dask_distributed_unpack__(packed_hlg, annotations: Mapping[str, Any]) -> Dict:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -934,12 +932,13 @@ class HighLevelGraph(Mapping):
 
         Returns
         -------
-        dsk: Dict[str, Any]
-            Materialized (stringified) graph of all nodes in the high level graph
-        deps: Dict[str, set]
-            Dependencies of each key in `dsk`
-        anno: Dict[str, Any]
-            Annotations for `dsk`
+        unpacked-graph: dict
+            dsk: Dict[str, Any]
+                Materialized (stringified) graph of all nodes in the high level graph
+            deps: Dict[str, set]
+                Dependencies of each key in `dsk`
+            anno: Dict[str, Any]
+                Annotations for `dsk`
         """
         from distributed.protocol.core import loads_msgpack
         from distributed.protocol.serialize import import_allowed_module
@@ -972,7 +971,7 @@ class HighLevelGraph(Mapping):
             # Unpack the annotations
             unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
 
-        return dsk, deps, anno
+        return {"dsk": dsk, "deps": deps, "anno": anno}
 
 
 def to_graphviz(
