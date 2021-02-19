@@ -12,6 +12,7 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
+  - coverage
   - jsonschema
   # Issue with conda package for NumPy 1.15?
   # See fastparquet-444

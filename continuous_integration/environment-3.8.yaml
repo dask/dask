@@ -21,6 +21,7 @@ dependencies:
   - fsspec
   - sqlalchemy
   - pyarrow
+  - coverage
   - jsonschema
   # other -- IO
   - bcolz
