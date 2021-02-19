@@ -5,7 +5,7 @@ import pytest
 
 import dask
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer, Layer
 
 
 def test_visualize(tmpdir):
@@ -174,6 +174,6 @@ def test_blockwise_cull(flat):
 
 def test_highlevelgraph_dicts_deprecation():
     with pytest.warns(FutureWarning):
-        layers = {"a": BasicLayer({"x": 1, "y": (inc, "x")})}
+        layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
         hg = HighLevelGraph(layers, {"a": set()})
         assert hg.dicts == layers

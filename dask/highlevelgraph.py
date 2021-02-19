@@ -128,7 +128,7 @@ class Layer(collections.abc.Mapping):
                         seen.add(d)
                         work.add(d)
 
-        return BasicLayer(out), ret_deps
+        return MaterializedLayer(out), ret_deps
 
     def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
         """Get dependencies of `key` in the layer
@@ -291,7 +291,7 @@ class Layer(collections.abc.Mapping):
 
             dsk_new[key] = value
 
-        return BasicLayer(dsk_new), bound
+        return MaterializedLayer(dsk_new), bound
 
     def __dask_distributed_pack__(
         self,
@@ -424,7 +424,7 @@ class Layer(collections.abc.Mapping):
 
     def __reduce__(self):
         """Default serialization implementation, which materializes the Layer"""
-        return (BasicLayer, (dict(self),))
+        return (MaterializedLayer, (dict(self),))
 
     def __copy__(self):
         """Default shallow copy implementation"""
@@ -433,10 +433,8 @@ class Layer(collections.abc.Mapping):
         return obj
 
 
-class BasicLayer(Layer):
-    """Basic implementation of `Layer`
-
-    Fully materialized layer implemented by a mapping
+class MaterializedLayer(Layer):
+    """Fully materialized layer of `Layer`
 
     Parameters
     ----------
@@ -546,7 +544,8 @@ class HighLevelGraph(Mapping):
         self.key_dependencies = key_dependencies or {}
         # Makes sure that all layers are `Layer`
         self.layers = {
-            k: v if isinstance(v, Layer) else BasicLayer(v) for k, v in layers.items()
+            k: v if isinstance(v, Layer) else MaterializedLayer(v)
+            for k, v in layers.items()
         }
 
     @classmethod
