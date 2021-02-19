@@ -20,7 +20,7 @@ jobs:
       - name: Checkout source
         uses: actions/checkout@v2
         with:
-          fetch-depth: 2  # Needed by codecov.io
+          fetch-depth: 0  # Needed by codecov.io
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2
