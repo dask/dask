@@ -324,6 +324,7 @@ class Blockwise(Layer):
             "func_future_args": func_future_args,
             "global_dependencies": global_dependencies,
             "indices": indices,
+            "is_list": [isinstance(x, list) for x in indices],
             "numblocks": self.numblocks,
             "concatenate": self.concatenate,
             "new_axes": self.new_axes,
@@ -336,11 +337,21 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
+
+        # Make sure we convert list items back from tuples in `indices`.
+        # The msgpack serialization will have converted lists into
+        # tuples, and tuples may be stringified during graph
+        # materialization (bad if the item was not a key).
+        indices = [
+            list(ind) if is_list else ind
+            for ind, is_list in zip(state["indices"], state["is_list"])
+        ]
+
         raw, raw_deps = make_blockwise_graph(
             state["func"],
             state["output"],
             state["output_indices"],
-            *state["indices"],
+            *indices,
             new_axes=state["new_axes"],
             numblocks=state["numblocks"],
             concatenate=state["concatenate"],
