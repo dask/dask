@@ -794,4 +794,5 @@ def test_sliding_window_view(window_shape, axis):
     arr = da.from_array(np.arange(60.0).reshape(3, 4, 5), chunks=(2, 3, 4))
     actual = sliding_window_view(arr, window_shape, axis)
     expected = np_sliding_window_view(arr.compute(), window_shape, axis)
+    assert expected.shape == actual.shape
     assert_array_equal(expected, actual)
