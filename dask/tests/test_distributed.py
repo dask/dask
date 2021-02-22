@@ -83,6 +83,33 @@ def test_futures_to_delayed_dataframe(c):
         ddf = dd.from_delayed([1, 2])
 
 
+@pytest.mark.parametrize("fuse", [True, False])
+def test_fused_blockwise_dataframe_merge(c, fuse):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Generate two DataFrames with more partitions than
+    # the `max_branch` default used for shuffling (32).
+    # We need a multi-stage shuffle to cover #7178 fix.
+    size = 35
+    df1 = pd.DataFrame({"x": range(size), "y": range(size)})
+    df2 = pd.DataFrame({"x": range(size), "z": range(size)})
+    ddf1 = dd.from_pandas(df1, npartitions=size) + 10
+    ddf2 = dd.from_pandas(df2, npartitions=5) + 10
+    df1 += 10
+    df2 += 10
+
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left")
+        ddfm.head()  # https://github.com/dask/dask/issues/7178
+        dfm = ddfm.compute().sort_values("x")
+        # We call compute above since `sort_values` is not
+        # supported in `dask.dataframe`
+    dd.utils.assert_eq(
+        dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
+    )
+
+
 def test_futures_to_delayed_bag(c):
     db = pytest.importorskip("dask.bag")
     L = [1, 2, 3]
