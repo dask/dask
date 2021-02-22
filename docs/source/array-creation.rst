@@ -147,7 +147,8 @@ Often it is substantially faster to use ``da.map_blocks`` rather than ``da.stack
         image = skimage.io.imread(path)
         return np.expand_dims(image, axis=axis)
 
-    sample = skimage.io.imread(filenames[0]) # load the first image (assume rest are same shape/dtype)
+    # load the first image (assume rest are same shape/dtype)
+    sample = skimage.io.imread(filenames[0])
 
     stack = da.map_blocks(
         read_one_image,
