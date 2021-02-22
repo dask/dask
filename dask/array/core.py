@@ -613,9 +613,9 @@ def map_blocks(
     >>> _.compute()
     array([0, 1, 2, 3, 4, 5, 6, 7])
 
-    ``block_id`` is similar to ``block_info`` but contains only the `chunk_location`:
+    ``block_id`` is similar to ``block_info`` but contains only the ``chunk_location``:
 
-    >>> def func(block, block_id=None):
+    >>> def func(block_id=None):
     ...     pass
 
     This will receive the following information:
