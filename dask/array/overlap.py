@@ -1,3 +1,4 @@
+import numpy as np
 import warnings
 from operator import getitem
 from itertools import product
@@ -880,14 +881,48 @@ def _window_view(arr, window_shape, axis, fix_first_block, block_info):
     return view
 
 
+def trim_chunks(chunks, trims):
+    """Trim chunk sizes at the end.
+
+    Examples
+    --------
+    >>> trim_chunks(((2, 1), (3, 2), (4, 1)), (0, 3, 2))
+    ((2, 1), (2,), (3,))
+    >>> trim_chunks(((5, 5), (4, 4)), (5, 4))
+    ((5,), (4,))
+    """
+    assert len(chunks) == len(trims)
+    newchunks = list(chunks)
+    for ax, trim in zip(range(len(chunks)), trims):
+        if trim == 0:
+            continue
+        c0 = np.cumsum(chunks[ax][::-1])[::-1]
+        idx = c0 >= (trim)
+        lastidx = np.nonzero(idx)[0][-1]
+        newchunks[ax] = chunks[ax][:lastidx]
+        if c0[lastidx] > trim:
+            newchunks[ax] += (c0[lastidx] - trim,)
+    return tuple(newchunks)
+
+
 def sliding_window_view(arr, window_shape, axis):
     """ Dask wrapper for numpy.lib.stride_tricks.sliding_window_view."""
 
-    depths = {ax: (window, 0) for ax, window in zip(axis, window_shape)}
+    ax_wind = {ax: (window, 0) for ax, window in zip(axis, window_shape)}
+    depths = {ax: ax_wind[ax] if ax in ax_wind else (0, 0) for ax in range(arr.ndim)}
 
     # The only way (that I've found) to set chunks in the map_overlap call
     # is to do the rechunking that overlap would do in any case.
     arr = rechunk_for_overlap(arr, depths)
+
+    # result.shape = arr_shape_trimmed + window_shape,
+    # where arr_shape_trimmed is arr.shape with every entry
+    # reduced by one less than the corresponding window size.
+    # trim chunks to match x_shape_trimmed
+    trims = [w[0] - 1 if w[0] > 0 else 0 for w in depths.values()]
+    newchunks = trim_chunks(arr.chunks, trims) + tuple(
+        (window,) for window in window_shape
+    )
 
     return map_overlap(
         _window_view,
@@ -896,7 +931,7 @@ def sliding_window_view(arr, window_shape, axis):
         boundary="none",
         meta=arr._meta,
         new_axis=range(arr.ndim, arr.ndim + len(axis)),
-        chunks=arr.chunks + tuple((window,) for window in window_shape),
+        chunks=newchunks,
         trim=False,
         align_arrays=False,
         window_shape=window_shape,
