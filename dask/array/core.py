@@ -619,6 +619,7 @@ def map_blocks(
     ...     pass
 
     This will receive the following information:
+
     >>> block_id  # doctest: +SKIP
     (4, 3)
 
