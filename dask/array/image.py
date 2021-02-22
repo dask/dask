@@ -20,8 +20,8 @@ def imread(filename, imread=None, preprocess=None):
     Parameters
     ----------
 
-    filename: string
-        A globstring like 'myfile.*.png'
+    filename: string or list of string
+        A globstring like 'myfile.*.png' or list of filenames
     imread: function (optional)
         Optionally provide custom imread function.
         Function should expect a filename and produce a numpy array.
@@ -45,9 +45,14 @@ def imread(filename, imread=None, preprocess=None):
     will be treated as individual chunks
     """
     imread = imread or sk_imread
-    filenames = sorted(glob(filename))
-    if not filenames:
-        raise ValueError("No files found under name %s" % filename)
+    if isinstance(filename, str):
+        filenames = sorted(glob(filename))
+        if not filenames:
+            raise ValueError("No files found under name %s" % filename)
+    elif isinstance(filename, str):
+        filenames = filename
+    else:
+        IOError("filename is neither a 'str' nor a 'list'")
 
     name = "imread-%s" % tokenize(filenames, map(os.path.getmtime, filenames))
 
