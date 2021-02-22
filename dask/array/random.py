@@ -1,6 +1,6 @@
 import numbers
 import warnings
-from itertools import product
+from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
@@ -35,7 +35,7 @@ def doc_wraps(func):
     return _
 
 
-class RandomState(object):
+class RandomState:
     """
     Mersenne Twister pseudo-random number generator
 
@@ -85,14 +85,15 @@ class RandomState(object):
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        args_shapes = {ar.shape for ar in args if isinstance(ar, (Array, np.ndarray))}
-        args_shapes.union(
-            {ar.shape for ar in kwargs.values() if isinstance(ar, (Array, np.ndarray))}
+        shapes = list(
+            {
+                ar.shape
+                for ar in chain(args, kwargs.values())
+                if isinstance(ar, (Array, np.ndarray))
+            }
         )
-
-        shapes = list(args_shapes)
         if size is not None:
-            shapes.extend([size])
+            shapes.append(size)
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
         chunks = normalize_chunks(

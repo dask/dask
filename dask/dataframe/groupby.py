@@ -216,7 +216,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
 ###############################################################
 
 
-class Aggregation(object):
+class Aggregation:
     """User defined groupby-aggregation.
 
     This class allows users to define their own custom aggregation in terms of
@@ -470,7 +470,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     # when index is None we probably have selected a particular column
     # df.groupby('a')[['b']].cov()
     if len(idx_vals) == 1 and all(n is None for n in idx_vals):
-        idx_vals = list(set(inv_col_mapping.keys()) - set(total_sums.columns))
+        idx_vals = list(inv_col_mapping.keys() - set(total_sums.columns))
 
     for idx, val in enumerate(idx_vals):
         idx_name = inv_col_mapping.get(val, val)
@@ -1022,7 +1022,7 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-class _GroupBy(object):
+class _GroupBy:
     """Superclass for DataFrameGroupBy and SeriesGroupBy
 
     Parameters

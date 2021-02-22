@@ -18,7 +18,7 @@ import tlz as toolz
 
 from . import config
 from .utils import ensure_dict, ignoring, stringify
-from .base import is_dask_collection
+from .base import clone_key, is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
 
@@ -33,7 +33,7 @@ def compute_layer_dependencies(layers):
         raise RuntimeError(f"{repr(key)} not found")
 
     all_keys = set(key for layer in layers.values() for key in layer)
-    ret = {k: set() for k in layers.keys()}
+    ret = {k: set() for k in layers}
     for k, v in layers.items():
         for key in keys_in_tasks(all_keys - v.keys(), v.values()):
             ret[k].add(_find_layer_containing_key(key))
@@ -210,6 +210,81 @@ class Layer(collections.abc.Mapping):
             A set of dependencies
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
+
+    def clone(
+        self,
+        keys: set,
+        seed: Hashable,
+        bind_to: Hashable = None,
+    ) -> "tuple[Layer, bool]":
+        """Clone selected keys in the layer, as well as references to keys in other
+        layers
+
+        Parameters
+        ----------
+        keys
+            Keys to be replaced. This never includes keys not listed by
+            :meth:`get_output_keys`. It must also include any keys that are outside
+            of this layer that may be referenced by it.
+        seed
+            Common hashable used to alter the keys; see :func:`dask.base.clone_key`
+        bind_to
+            Optional key to bind the leaf nodes to. A leaf node here is one that does
+            not reference any replaced keys; in other words it's a node where the
+            replacement graph traversal stops; it may still have dependencies on
+            non-replaced nodes.
+            A bound node will not be computed until after ``bind_to`` has been computed.
+
+        Returns
+        -------
+        - New layer
+        - True if the ``bind_to`` key was injected anywhere; False otherwise
+
+        Notes
+        -----
+        This method should be overridden by subclasses to avoid materializing the layer.
+        """
+        from .graph_manipulation import chunks
+
+        is_leaf: bool
+
+        def clone_value(o):
+            """Variant of distributed.utils_comm.subs_multiple, which allows injecting
+            bind_to
+            """
+            nonlocal is_leaf
+
+            typ = type(o)
+            if typ is tuple and o and callable(o[0]):
+                return (o[0],) + tuple(clone_value(i) for i in o[1:])
+            elif typ is list:
+                return [clone_value(i) for i in o]
+            elif typ is dict:
+                return {k: clone_value(v) for k, v in o.items()}
+            else:
+                try:
+                    if o not in keys:
+                        return o
+                except TypeError:
+                    return o
+                is_leaf = False
+                return clone_key(o, seed)
+
+        dsk_new = {}
+        bound = False
+
+        for key, value in self.items():
+            if key in keys:
+                key = clone_key(key, seed)
+                is_leaf = True
+                value = clone_value(value)
+                if bind_to is not None and is_leaf:
+                    value = (chunks.bind, value, bind_to)
+                    bound = True
+
+            dsk_new[key] = value
+
+        return BasicLayer(dsk_new), bound
 
     def __dask_distributed_pack__(self, client) -> Optional[Any]:
         """Pack the layer for scheduler communication in Distributed
@@ -723,12 +798,12 @@ class HighLevelGraph(Mapping):
         dependencies = compute_layer_dependencies(self.layers)
 
         # Check keys
-        dep_key1 = set(self.dependencies.keys())
-        dep_key2 = set(dependencies.keys())
+        dep_key1 = self.dependencies.keys()
+        dep_key2 = dependencies.keys()
         if dep_key1 != dep_key2:
             raise ValueError(
-                f"incorrect dependencies keys {repr(dep_key1)} "
-                f"expected {repr(dep_key2)}"
+                f"incorrect dependencies keys {set(dep_key1)!r} "
+                f"expected {set(dep_key2)!r}"
             )
 
         # Check values

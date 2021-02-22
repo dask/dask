@@ -282,7 +282,7 @@ block. There's no way to line up the input blocks with the output shape. We
 need to somehow rechunk the input to be compatible with the output shape. We
 have two options
 
-1. Merge chunks using the logic in :meth:`dask.arary.rechunk`. This avoids
+1. Merge chunks using the logic in :meth:`dask.array.rechunk`. This avoids
    making two many tasks / blocks, at the cost of some communication and
    larger intermediates. This is the default behavior.
 2. Use ``da.reshape(x, shape, merge_chunks=False)`` to avoid merging chunks

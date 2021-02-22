@@ -6,7 +6,7 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
         python-version: ["3.6", "3.7", "3.8"]
@@ -28,6 +28,13 @@ jobs:
           environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
+
+      - name: Hack around https://github.com/dask/dask/issues/7189
+        shell: bash -l {0}
+        if: ${{ matrix.os == 'macos-latest' && matrix.python-version == '3.8' }}
+        run: |
+          conda uninstall --force numpy
+          python -m pip install --no-deps numpy==1.20
 
       - name: Install
         shell: bash -l {0}

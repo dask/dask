@@ -137,11 +137,7 @@ def write_read_engines(**kwargs):
     for kw, val in kwargs.items():
         kind, rest = kw.split("_", 1)
         key = tuple(rest.split("_"))
-        if (
-            kind not in ("xfail", "skip")
-            or len(key) > 2
-            or set(key).difference(backends)
-        ):
+        if kind not in ("xfail", "skip") or len(key) > 2 or set(key) - backends:
             raise ValueError("unknown keyword %r" % kw)
         val = getattr(pytest.mark, kind)(reason=val)
         if len(key) == 2:
@@ -3034,6 +3030,40 @@ def test_pyarrow_dataset_read_from_paths(
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
     else:
         assert_eq(ddf, read_df)
+
+
+@pytest.mark.parametrize("split_row_groups", [True, False])
+def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
+    check_pyarrow()
+
+    if pa.__version__ < LooseVersion("1.0.0"):
+        # pyarrow.dataset API required.
+        pytest.skip("PyArrow>=1.0.0 Required.")
+
+    fn = str(tmpdir)
+    df = pd.DataFrame(
+        {
+            "a": [4, 5, 6],
+            "b": ["a", "b", "b"],
+            "c": ["A", "B", "B"],
+        }
+    )
+    df["b"] = df["b"].astype("category")
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine="pyarrow", partition_on=["b", "c"])
+
+    # Filter on a a non-partition column
+    read_df = dd.read_parquet(
+        fn,
+        engine="pyarrow-dataset",
+        split_row_groups=split_row_groups,
+        filters=[("a", "==", 5)],
+    )
+    assert_eq(
+        read_df.compute()[["a"]],
+        df[df["a"] == 5][["a"]],
+        check_index=False,
+    )
 
 
 def test_parquet_pyarrow_write_empty_metadata(tmpdir):

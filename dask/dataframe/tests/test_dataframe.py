@@ -2348,13 +2348,13 @@ def test_aca_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 * (2 + 1) + 7 * (2 + 1) + (3 + 2)
@@ -2446,13 +2446,13 @@ def test_reduction_method_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 + 7 * (2 + 1) + (3 + 2)
@@ -4467,6 +4467,27 @@ def test_join_series():
     expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
     actual_df = ddf.join(ddf["x"], lsuffix="_")
     assert_eq(actual_df, expected_df)
+
+
+def test_dask_layers():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.dask.layers.keys() == {ddf._name}
+    assert ddf.dask.dependencies == {ddf._name: set()}
+    assert ddf.__dask_layers__() == (ddf._name,)
+    dds = ddf["x"]
+    assert dds.dask.layers.keys() == {ddf._name, dds._name}
+    assert dds.dask.dependencies == {ddf._name: set(), dds._name: {ddf._name}}
+    assert dds.__dask_layers__() == (dds._name,)
+    ddi = dds.min()
+    assert ddi.key[1:] == (0,)
+    assert ddi.dask.layers.keys() == {ddf._name, dds._name, ddi.key[0]}
+    assert ddi.dask.dependencies == {
+        ddf._name: set(),
+        dds._name: {ddf._name},
+        ddi.key[0]: {dds._name},
+    }
+    assert ddi.__dask_layers__() == (ddi.key[0],)
 
 
 @pytest.mark.skipif(

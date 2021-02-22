@@ -670,8 +670,10 @@ def bincount(x, weights=None, minlength=0):
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    bins = np.asarray(bins)
-    dtype = np.digitize([0], bins, right=False).dtype
+    from .utils import asarray_safe
+
+    bins = asarray_safe(bins, like=meta_from_array(a))
+    dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
@@ -1602,6 +1604,37 @@ def insert(arr, obj, values, axis):
     interleaved = list(interleave([split_arr, split_values]))
     interleaved = [i for i in interleaved if i.nbytes]
     return concatenate(interleaved, axis=axis)
+
+
+@derived_from(np)
+def delete(arr, obj, axis):
+    """
+    NOTE: If ``obj`` is a dask array it is implicitly computed when this function
+    is called.
+    """
+    # axis is a required argument here to avoid needing to deal with the numpy
+    # default case (which reshapes the array to make it flat)
+    axis = validate_axis(axis, arr.ndim)
+
+    if isinstance(obj, slice):
+        tmp = np.arange(*obj.indices(arr.shape[axis]))
+        obj = tmp[::-1] if obj.step and obj.step < 0 else tmp
+    else:
+        obj = np.asarray(obj)
+        obj = np.where(obj < 0, obj + arr.shape[axis], obj)
+        obj = np.unique(obj)
+
+    target_arr = split_at_breaks(arr, obj, axis)
+
+    target_arr = [
+        arr[
+            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
+        ]
+        if i != 0
+        else arr
+        for i, arr in enumerate(target_arr)
+    ]
+    return concatenate(target_arr, axis=axis)
 
 
 @derived_from(np)
