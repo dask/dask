@@ -219,7 +219,7 @@ try:
     from .percentile import percentile
     from . import ma
     from . import random, linalg, overlap, fft, backends
-    from .overlap import map_overlap, sliding_window_view
+    from .overlap import map_overlap
     from .wrap import ones, zeros, empty, full
     from .creation import ones_like, zeros_like, empty_like, full_like
     from .rechunk import rechunk
