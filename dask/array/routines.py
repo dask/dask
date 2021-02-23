@@ -17,7 +17,7 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
 from .creation import arange, diag, empty, indices
-from .utils import safe_wraps, validate_axis, zeros_like_safe
+from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
 
