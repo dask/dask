@@ -578,9 +578,9 @@ def map_blocks(
             69, 799,  79, 899,  89, 999,  99])
 
     Your block function get information about where it is in the array by
-    accepting a special ``block_info`` keyword argument.
+    accepting a special ``block_info`` or ``block_id`` keyword argument.
 
-    >>> def func(block, block_info=None):
+    >>> def func(block_info=None):
     ...     pass
 
     This will receive the following information:
@@ -617,6 +617,16 @@ def map_blocks(
 
     >>> _.compute()
     array([0, 1, 2, 3, 4, 5, 6, 7])
+
+    ``block_id`` is similar to ``block_info`` but contains only the ``chunk_location``:
+
+    >>> def func(block_id=None):
+    ...     pass
+
+    This will receive the following information:
+
+    >>> block_id  # doctest: +SKIP
+    (4, 3)
 
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
