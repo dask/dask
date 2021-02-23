@@ -786,12 +786,19 @@ def test_ensure_minimum_chunksize_raises_error():
         ensure_minimum_chunksize(10, chunks)
 
 
-@pytest.mark.parametrize("window_shape, axis", [((3, 2), (1, 2))])
-def test_sliding_window_view(window_shape, axis):
+@pytest.mark.parametrize(
+    "shape, chunks, window_shape, axis",
+    [
+        ((3, 4, 5), (2, 3, 4), (3, 2), (1, 2)),
+        ((40, 30, 2), 5, (3,), (0,)),  # window < chunk
+        ((21,), 3, (7,), (0,)),  # window > chunk
+    ],
+)
+def test_sliding_window_view(shape, chunks, window_shape, axis):
     from ..numpy_compat import sliding_window_view as np_sliding_window_view
     from ..lib.stride_tricks import sliding_window_view
 
-    arr = da.from_array(np.arange(60.0).reshape(3, 4, 5), chunks=(2, 3, 4))
+    arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)
     expected = np_sliding_window_view(arr.compute(), window_shape, axis)
     assert expected.shape == actual.shape

@@ -16,7 +16,7 @@ def _window_view(arr, window_shape, axis, fix_first_block, block_info):
         locs = block_info["array-location"][ax]
         size = locs[1] - locs[0]
         if not is_last_chunk:
-            stop = -1 * max(window // 2 - 1, 1)
+            stop = -1
 
         # when depth == chunk size of first chunk along some axis
         # we need to make some confusing empirical adjustments.
