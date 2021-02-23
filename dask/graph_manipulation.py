@@ -124,7 +124,7 @@ def _build_map_layer(
         except AttributeError:
             numblocks = (collection.npartitions,)
         indices = tuple(i for i, _ in enumerate(numblocks))
-        kwargs = {"_deps": dependencies} if dependencies else {}
+        kwargs = {"_deps": [d.key for d in dependencies]} if dependencies else {}
         prev_name = get_collection_name(collection)
         return blockwise(
             func,
