@@ -909,7 +909,7 @@ def sliding_window_view(arr, window_shape, axis):
     """ Dask wrapper for numpy.lib.stride_tricks.sliding_window_view."""
 
     ax_wind = {ax: (window, 0) for ax, window in zip(axis, window_shape)}
-    depths = {ax: ax_wind[ax] if ax in ax_wind else (0, 0) for ax in range(arr.ndim)}
+    depths = {ax: ax_wind.get(ax, (0, 0)) for ax in range(arr.ndim)}
 
     # The only way (that I've found) to set chunks in the map_overlap call
     # is to do the rechunking that overlap would do in any case.
