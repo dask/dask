@@ -1573,22 +1573,54 @@ def test_coarsen_with_excess():
     )
 
 
-def test_coarsen_bad_chunks():
+@pytest.mark.parametrize("chunks", [(x,) * 3 for x in range(16, 32)])
+def test_coarsen_bad_chunks(chunks):
+    x1 = da.arange(np.sum(chunks), chunks=5)
+    x2 = x1.rechunk(tuple(chunks))
+    assert_eq(
+        da.coarsen(np.sum, x1, {0: 10}, trim_excess=True),
+        da.coarsen(np.sum, x2, {0: 10}, trim_excess=True),
+    )
 
-    x1 = da.arange(10, chunks=5)
-    x2 = x1.rechunk((1, 2, 3, 4))
-    assert_eq(da.coarsen(np.sum, x1, {0: 5}), da.coarsen(np.sum, x2, {0: 5}))
 
-
-def test_aligned_coarsen_chunks():
+@pytest.mark.parametrize(
+    "chunks, divisor",
+    [
+        ((1, 1), 1),
+        ((1, 1), 2),
+        ((1, 1, 1), 2),
+        ((10, 1), 10),
+        ((20, 10, 15, 23, 24), 10),
+        ((20, 10, 15, 23, 24), 8),
+        ((10, 20, 30, 40, 2), 10),
+        ((20, 10, 15, 42, 23, 24), 16),
+        ((20, 10, 15, 47, 23, 24), 10),
+        ((2, 10, 15, 47, 23, 24), 4),
+    ],
+)
+def test_aligned_coarsen_chunks(chunks, divisor):
 
     from ..routines import aligned_coarsen_chunks as acc
 
-    assert acc((20, 10, 15, 23, 24), 10) == (20, 10, 20, 20, 20, 2)
-    assert acc((20, 10, 15, 42, 23, 24), 10) == (20, 10, 20, 40, 20, 20, 4)
-    assert acc((20, 10, 15, 47, 23, 24), 10) == (20, 10, 20, 50, 20, 10, 9)
-    assert acc((2, 10, 15, 47, 23, 24), 10) == (10, 20, 50, 20, 20, 1)
-    assert acc((10, 20, 30, 40, 2), 10) == (10, 20, 30, 40, 2)
+    aligned_chunks = acc(chunks, divisor)
+    any_remainders = (np.array(aligned_chunks) % divisor) != 0
+    valid_chunks = np.where((np.array(chunks) % divisor) == 0)[0]
+
+    # check that total number of elements is conserved
+    assert sum(aligned_chunks) == sum(chunks)
+    # check that valid chunks are not modified
+    assert [chunks[idx] for idx in valid_chunks] == [
+        aligned_chunks[idx] for idx in valid_chunks
+    ]
+    # check that no chunks are 0
+    assert (np.array(aligned_chunks) > 0).all()
+    # check that at most one chunk was added
+    assert len(aligned_chunks) <= len(chunks) + 1
+    # check that either 0 or 1 chunks are not divisible by divisor
+    assert any_remainders.sum() in (0, 1)
+    # check that the only indivisible chunk is the last
+    if any_remainders.sum() == 1:
+        assert any_remainders[-1] == 1
 
 
 def test_insert():
@@ -1685,6 +1717,33 @@ def test_multi_insert():
         np.insert(np.insert(z, [0, 1], -1, axis=0), [1], -1, axis=1),
         da.insert(da.insert(c, [0, 1], -1, axis=0), [1], -1, axis=1),
     )
+
+
+def test_delete():
+    x = np.random.randint(10, size=(10, 10))
+    a = da.from_array(x, chunks=(5, 5))
+
+    assert_eq(np.delete(x, 0, axis=0), da.delete(a, 0, axis=0))
+    assert_eq(np.delete(x, 3, axis=-1), da.delete(a, 3, axis=-1))
+    assert_eq(np.delete(x, 5, axis=1), da.delete(a, 5, axis=1))
+    assert_eq(np.delete(x, -1, axis=-2), da.delete(a, -1, axis=-2))
+    assert_eq(np.delete(x, [2, 3, 3], axis=1), da.delete(a, [2, 3, 3], axis=1))
+    assert_eq(
+        np.delete(x, [2, 3, 8, 8], axis=0),
+        da.delete(a, [2, 3, 8, 8], axis=0),
+    )
+    assert_eq(np.delete(x, slice(1, 4), axis=1), da.delete(a, slice(1, 4), axis=1))
+    assert_eq(
+        np.delete(x, slice(1, 10, -1), axis=1), da.delete(a, slice(1, 10, -1), axis=1)
+    )
+
+    assert_eq(np.delete(a, [4, 2], axis=0), da.delete(a, [4, 2], axis=0))
+
+    with pytest.raises(AxisError):
+        da.delete(a, [3], axis=2)
+
+    with pytest.raises(AxisError):
+        da.delete(a, [3], axis=-3)
 
 
 def test_result_type():

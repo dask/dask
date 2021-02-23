@@ -359,8 +359,12 @@ class ShuffleLayer(SimpleShuffleLayer):
         for part in parts_out:
             out = self.inputs[part]
             for k in range(self.nsplits):
-                _part = inp_part_map[insert(out, self.stage, k)]
-                deps[(self.name, part)].add((self.name_input, _part))
+                _inp = insert(out, self.stage, k)
+                _part = inp_part_map[_inp]
+                if self.stage == 0 and _part >= self.npartitions_input:
+                    deps[(self.name, part)].add(("group-" + self.name, _inp, "empty"))
+                else:
+                    deps[(self.name, part)].add((self.name_input, _part))
         return deps
 
     def _cull(self, parts_out):
@@ -685,7 +689,7 @@ def shuffle(
         else:
             index = list(index)
         nset = set(index)
-        if nset.intersection(set(df.columns)) == nset:
+        if nset & set(df.columns) == nset:
             return rearrange_by_column(
                 df,
                 index,
@@ -765,7 +769,7 @@ def rearrange_by_column(
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
 
-class maybe_buffered_partd(object):
+class maybe_buffered_partd:
     """
     If serialized, will return non-buffered partd. Otherwise returns a buffered partd
     """

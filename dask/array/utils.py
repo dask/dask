@@ -21,8 +21,13 @@ except AttributeError:
         AxisError = type(e)
 
 
+def _is_cupy_type(x):
+    # TODO: avoid explicit reference to CuPy
+    return "cupy" in str(type(x))
+
+
 def normalize_to_array(x):
-    if "cupy" in str(type(x)):  # TODO: avoid explicit reference to cupy
+    if _is_cupy_type(x):
         return x.get()
     else:
         return x
@@ -386,6 +391,66 @@ def zeros_like_safe(a, shape, **kwargs):
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
         return np.zeros(shape, **kwargs)
+
+
+def _array_like_safe(np_func, da_func, a, like, **kwargs):
+    if like is a and hasattr(a, "__array_function__"):
+        return a
+
+    if isinstance(like, Array):
+        return da_func(a, **kwargs)
+    elif isinstance(a, Array):
+        if _is_cupy_type(a._meta):
+            a = a.compute(scheduler="sync")
+
+    try:
+        return np_func(a, like=meta_from_array(like), **kwargs)
+    except TypeError:
+        return np_func(a, **kwargs)
+
+
+def array_safe(a, like, **kwargs):
+    """
+    If `a` is `dask.array`, return `dask.array.asarray(a, **kwargs)`,
+    otherwise return `np.asarray(a, like=like, **kwargs)`, dispatching
+    the call to the library that implements the like array. Note that
+    when `a` is a `dask.Array` backed by `cupy.ndarray` but `like`
+    isn't, this function will call `a.compute(scheduler="sync")`
+    before `np.array`, as downstream libraries are unlikely to know how
+    to convert a `dask.Array` and CuPy doesn't implement `__array__` to
+    prevent implicit copies to host.
+    """
+    from .routines import array
+
+    return _array_like_safe(np.array, array, a, like, **kwargs)
+
+
+def asarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asarray(a, **kwargs),
+    otherwise return np.asarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asarray
+
+    return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
+
+
+def asanyarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asanyarray(a, **kwargs),
+    otherwise return np.asanyarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asanyarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asanyarray
+
+    return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
 
 
 def validate_axis(axis, ndim):

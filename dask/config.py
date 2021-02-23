@@ -266,7 +266,7 @@ def ensure_file(source, destination=None, comment=True):
         pass
 
 
-class set(object):
+class set:
     """Temporarily set configuration values within a context manager
 
     Parameters
