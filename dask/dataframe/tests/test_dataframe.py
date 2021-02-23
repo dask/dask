@@ -4408,10 +4408,18 @@ def test_iter():
         assert col == expected
 
 
-def test_dataframe_groupby_agg_empty_partitions():
+def test_dataframe_groupby_cumsum_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum())
+    assert_eq(ddf[ddf.x > 5].x.cumsum(), df[df.x > 5].x.cumsum())
+
+
+def test_dataframe_groupby_cumprod_agg_empty_partitions():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=4)
+    assert_eq(ddf[ddf.x < 5].x.cumprod(), df[df.x < 5].x.cumprod())
+    assert_eq(ddf[ddf.x > 5].x.cumprod(), df[df.x > 5].x.cumprod())
 
 
 def test_fuse_roots():
