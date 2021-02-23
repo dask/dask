@@ -83,7 +83,7 @@ data directly into *known* categoricals by specifying instances of
     >>> ddf = dd.read_csv(..., dtype=dtype)
 
 If you write and read to parquet, Dask will forget known categories.
-This happens because due to performance concerns all the categories are
+This happens because, due to performance concerns, all the categories are
 saved in every partition rather than in the parquet metadata.
 It is possible to manually load the categories:
 
