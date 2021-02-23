@@ -130,6 +130,32 @@ As an example, consider loading a stack of images using ``skimage.io.imread``:
 
 See :doc:`documentation on using dask.delayed with collections<delayed-collections>`.
 
+Often it is substantially faster to use ``da.map_blocks`` rather than ``da.stack``
+
+.. code-block:: python
+
+    import glob
+    import skimage.io
+    import numpy as np
+    import dask.array as da
+
+    filenames = sorted(glob.glob('*.jpg'))
+
+    def read_one_image(block_id, filenames=filenames, axis=0):
+        # a function that reads in one chunk of data
+        path = filenames[block_id[axis]]
+        image = skimage.io.imread(path)
+        return np.expand_dims(image, axis=axis)
+
+    # load the first image (assume rest are same shape/dtype)
+    sample = skimage.io.imread(filenames[0])
+
+    stack = da.map_blocks(
+        read_one_image,
+        dtype=sample.dtype,
+        chunks=((1,) * len(filenames),  *sample.shape)
+    )
+
 
 From Dask DataFrame
 -------------------
@@ -373,7 +399,7 @@ be useful as a checkpoint for long running or error-prone computations.
 The intermediate storage use case differs from the typical storage use case as
 a Dask Array is returned to the user that represents the result of that
 storage operation. This is typically done by setting the ``store`` function's
-``return_stored`` flag to ``True``. 
+``return_stored`` flag to ``True``.
 
 .. code-block:: python
 
