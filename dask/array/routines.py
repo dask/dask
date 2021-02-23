@@ -622,7 +622,7 @@ def gradient(f, *varargs, **kwargs):
 
 def _bincount_agg(bincounts, dtype, **kwargs):
     if not isinstance(bincounts, list):
-        bincounts = [bincounts]
+        return bincounts
 
     n = max(map(len, bincounts))
     out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
