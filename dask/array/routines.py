@@ -620,7 +620,10 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-def _bincount_sum(bincounts, dtype=int):
+def _bincount_agg(bincounts, dtype, **kwargs):
+    if not isinstance(bincounts, list):
+        return bincounts
+
     n = max(map(len, bincounts))
     out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
@@ -629,7 +632,7 @@ def _bincount_sum(bincounts, dtype=int):
 
 
 @derived_from(np)
-def bincount(x, weights=None, minlength=0):
+def bincount(x, weights=None, minlength=0, split_every=None):
     if x.ndim != 1:
         raise ValueError("Input array must be one dimensional. Try using x.ravel()")
     if weights is not None:
@@ -637,35 +640,30 @@ def bincount(x, weights=None, minlength=0):
             raise ValueError("Chunks of input array x and weights must match.")
 
     token = tokenize(x, weights, minlength)
-    name = "bincount-" + token
-    final_name = "bincount-sum" + token
-    # Call np.bincount on each block, possibly with weights
+    args = [x, "i"]
     if weights is not None:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([1], weights=[1]).dtype
+        meta = np.bincount([1], weights=[1])
+        args.extend([weights, "i"])
     else:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), None, minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([]).dtype
+        meta = np.bincount([])
 
-    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
-    graph = HighLevelGraph.from_collections(
-        final_name, dsk, dependencies=[x] if weights is None else [x, weights]
+    chunked_counts = blockwise(
+        partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
     )
 
-    if minlength == 0:
-        chunks = ((np.nan,),)
-    else:
-        chunks = ((minlength,),)
+    from .reductions import _tree_reduce
 
-    meta = meta_from_array(x, 1, dtype=dtype)
-
-    return Array(graph, final_name, chunks, meta=meta)
+    output = _tree_reduce(
+        chunked_counts,
+        aggregate=partial(_bincount_agg, dtype=meta.dtype),
+        axis=(0,),
+        keepdims=False,
+        dtype=meta.dtype,
+        split_every=split_every,
+        concatenate=False,
+    )
+    output._meta = meta
+    return output
 
 
 @derived_from(np)
