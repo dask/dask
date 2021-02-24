@@ -501,10 +501,7 @@ class HighLevelGraph(Mapping):
                 with ignoring(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
-                try:
-                    [key] = collection.__dask_layers__()
-                except AttributeError:
-                    key = id(graph)
+                key = _get_some_layer_name(collection)
                 layers = {name: layer, key: graph}
                 deps = {name: {key}, key: set()}
         else:
@@ -560,10 +557,7 @@ class HighLevelGraph(Mapping):
                     with ignoring(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
-                    try:
-                        [key] = collection.__dask_layers__()
-                    except AttributeError:
-                        key = id(graph)
+                    key = _get_some_layer_name(collection)
                     layers[key] = graph
                     deps[name].add(key)
                     deps[key] = set()
@@ -854,3 +848,14 @@ def to_graphviz(
             dep_name = name(dep)
             g.edge(dep_name, k_name)
     return g
+
+
+def _get_some_layer_name(collection) -> str:
+    """Somehow get a unique name for a Layer from a non-HighLevelGraph dask mapping"""
+    try:
+        (name,) = collection.__dask_layers__()
+        return name
+    except (AttributeError, ValueError):
+        # collection does not define the optional __dask_layers__ method
+        # or it spuriously returns more than one layer
+        return str(id(collection))

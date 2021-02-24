@@ -514,8 +514,8 @@ class Delayed(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        key = replace_name_in_key(self.key, name) if name else self.key
+    def _rebuild(self, dsk, *, rename=None):
+        key = replace_name_in_key(self.key, rename) if rename else self.key
         return Delayed(key, dsk, self._length)
 
     def __repr__(self):
