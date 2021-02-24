@@ -535,10 +535,16 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
 
-def test_bincount_with_weights():
+@pytest.mark.parametrize(
+    "weights",
+    [
+        np.array([1, 2, 1, 0.5, 1], dtype=np.float32),
+        np.array([1, 2, 1, 0, 1], dtype=np.int32),
+    ],
+)
+def test_bincount_with_weights(weights):
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
-    weights = np.array([1, 2, 1, 0.5, 1])
 
     dweights = da.from_array(weights, chunks=2)
     e = da.bincount(d, weights=dweights, minlength=6)
