@@ -74,7 +74,16 @@ def checkpoint(*collections) -> Delayed:
                 )
             )
 
-        reduce_layer = {name: (chunks.checkpoint, map_keys)}
+        # recursive aggregation
+        # TODO needs polishing
+        split_every = 4
+        reduce_layer = {}
+        while len(map_keys) > split_every:
+            k = (name, len(reduce_layer))
+            reduce_layer[k] = (chunks.checkpoint, map_keys[:split_every])
+            map_keys = map_keys[split_every:] + [k]
+        reduce_layer[name] = (chunks.checkpoint, map_keys)
+
         dsks.append(
             HighLevelGraph({name: reduce_layer}, dependencies={name: map_names})
         )
