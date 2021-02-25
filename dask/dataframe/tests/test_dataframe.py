@@ -4571,6 +4571,10 @@ def test_dot():
     res = dask_s1.dot(dask_df, meta=pd.Series([1], name="test_series")).compute()
     assert_eq(res.name, "test_series")
 
+    # Test validation of second operand
+    with pytest.raises(TypeError):
+        dask_s1.dot(da.array([1, 2, 3, 4]))
+
 
 def test_dot_nan():
     s1 = pd.Series([1, 2, 3, 4])

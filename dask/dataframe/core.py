@@ -2581,6 +2581,9 @@ Dask Name: {name}, {task} tasks"""
 
     @derived_from(pd.Series)
     def dot(self, other, meta=no_default):
+        if not isinstance(other, _Frame):
+            raise TypeError("The second operand must be dask array / dask dataframe")
+
         if isinstance(other, DataFrame):
             s = self.map_partitions(M.dot, other, token="dot", meta=meta)
             return s.groupby(by=s.index).apply(
