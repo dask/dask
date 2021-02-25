@@ -659,8 +659,8 @@ class HighLevelGraph(Mapping):
 
         raise KeyError(key)
 
-    def __len__(self):
-        return len(self.to_dict())
+    def __len__(self) -> int:
+        return sum(len(layer) for layer in self.layers.values())
 
     def __iter__(self):
         return iter(self.to_dict())
