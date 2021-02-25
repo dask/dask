@@ -1,4 +1,3 @@
-import numpy as np
 import warnings
 from operator import getitem
 from itertools import product
@@ -846,27 +845,3 @@ def coerce_boundary(ndim, boundary):
     if isinstance(boundary, dict):
         boundary = {ax: boundary.get(ax, default) for ax in range(ndim)}
     return boundary
-
-
-def trim_chunks(chunks, trims):
-    """Trim chunk sizes at the end.
-
-    Examples
-    --------
-    >>> trim_chunks(((2, 1), (3, 2), (4, 1)), (0, 3, 2))
-    ((2, 1), (2,), (3,))
-    >>> trim_chunks(((5, 5), (4, 4)), (5, 4))
-    ((5,), (4,))
-    """
-    assert len(chunks) == len(trims)
-    newchunks = list(chunks)
-    for ax, trim in zip(range(len(chunks)), trims):
-        if trim == 0:
-            continue
-        c0 = np.cumsum(chunks[ax][::-1])[::-1]
-        idx = c0 >= (trim)
-        lastidx = np.nonzero(idx)[0][-1]
-        newchunks[ax] = chunks[ax][:lastidx]
-        if c0[lastidx] > trim:
-            newchunks[ax] += (c0[lastidx] - trim,)
-    return tuple(newchunks)
