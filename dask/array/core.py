@@ -578,9 +578,9 @@ def map_blocks(
             69, 799,  79, 899,  89, 999,  99])
 
     Your block function get information about where it is in the array by
-    accepting a special ``block_info`` keyword argument.
+    accepting a special ``block_info`` or ``block_id`` keyword argument.
 
-    >>> def func(block, block_info=None):
+    >>> def func(block_info=None):
     ...     pass
 
     This will receive the following information:
@@ -617,6 +617,16 @@ def map_blocks(
 
     >>> _.compute()
     array([0, 1, 2, 3, 4, 5, 6, 7])
+
+    ``block_id`` is similar to ``block_info`` but contains only the ``chunk_location``:
+
+    >>> def func(block_id=None):
+    ...     pass
+
+    This will receive the following information:
+
+    >>> block_id  # doctest: +SKIP
+    (4, 3)
 
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
@@ -3038,7 +3048,7 @@ def from_array(
     meta=None,
     inline_array=False,
 ):
-    """Create dask array from something that looks like an array
+    """Create dask array from something that looks like an array.
 
     Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
 
@@ -3059,12 +3069,25 @@ def from_array(
 
         -1 or None as a blocksize indicate the size of the corresponding
         dimension.
-    name : str, optional
+    name : str or bool, optional
         The key name to use for the array. Defaults to a hash of ``x``.
-        By default, hash uses python's standard sha1. This behaviour can be
+
+        Hashing is useful if the same value of ``x`` is used to create multiple
+        arrays, as Dask can then recognise that they're the same and
+        avoid duplicate computations. However, it can also be slow, and if the
+        array is not contiguous it is copied for hashing. If the array uses
+        stride tricks (such as ``np.broadcast_to`` or
+        ``skimage.util.view_as_windows``) to have a larger logical
+        than physical size, this copy can cause excessive memory usage.
+
+        If you don't need the deduplication provided by hashing, use
+        ``name=False`` to generate a random name instead of hashing, which
+        avoids the pitfalls described above. Using ``name=True`` is
+        equivalent to the default.
+
+        By default, hashing uses python's standard sha1. This behaviour can be
         changed by installing cityhash, xxhash or murmurhash. If installed,
         a large-factor speedup can be obtained in the tokenisation step.
-        Use ``name=False`` to generate a random name instead of hashing (fast)
 
         .. note::
 
@@ -3120,10 +3143,10 @@ def from_array(
         Note that there's no key in the task graph with just the array `x`
         anymore. Instead it's placed directly in the values.
 
-        The right choice for ``inline_arary`` depends on several factors,
+        The right choice for ``inline_array`` depends on several factors,
         including the size of ``x``, how expensive it is to create, which
         scheduler you're using, and the pattern of downstream computations.
-        As a hueristic, ``inline_array=True`` may be the right choice when
+        As a heuristic, ``inline_array=True`` may be the right choice when
         the array ``x`` is cheap to serialize and deserialize (since it's
         included in the graph many times) and if you're experiencing ordering
         issues (see :ref:`order` for more).

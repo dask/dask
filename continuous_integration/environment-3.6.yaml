@@ -8,6 +8,7 @@ dependencies:
   - pandas=0.25
   # test dependencies
   - pytest
+  - pytest-cov
   - pytest-xdist
   - moto
   - flask
