@@ -321,5 +321,5 @@ async def test_annotation_pack_unpack(c, s, a, b):
 
     annotations = {"workers": ("alice",)}
     unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
-    annotations = unpacked_hlg["anno"]
+    annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}

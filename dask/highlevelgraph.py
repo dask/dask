@@ -173,7 +173,7 @@ class Layer(collections.abc.Mapping):
         return packed
 
     @staticmethod
-    def __dask_distributed_anno_unpack__(
+    def __dask_distributed_annotations_unpack__(
         annotations: MutableMapping[str, Any],
         new_annotations: Optional[Mapping[str, Any]],
         keys: Iterable[Hashable],
@@ -924,7 +924,7 @@ class HighLevelGraph(Mapping):
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
-        by calling .__dask_distributed_unpack__() and .__dask_distributed_anno_unpack__()
+        by calling ..._unpack__() and ..._annotations_unpack__()
         on each layer.
 
         Parameters
@@ -943,7 +943,7 @@ class HighLevelGraph(Mapping):
                 Materialized (stringified) graph of all nodes in the high level graph
             deps: Dict[str, set]
                 Dependencies of each key in `dsk`
-            anno: Dict[str, Any]
+            annotations: Dict[str, Any]
                 Annotations for `dsk`
         """
         from distributed.protocol.core import loads_msgpack
@@ -959,12 +959,12 @@ class HighLevelGraph(Mapping):
             # Find the unpack functions
             if layer["__module__"] is None:  # Default implementation
                 unpack_state = Layer.__dask_distributed_unpack__
-                unpack_anno = Layer.__dask_distributed_anno_unpack__
+                unpack_anno = Layer.__dask_distributed_annotations_unpack__
             else:
                 mod = import_allowed_module(layer["__module__"])
                 cls = getattr(mod, layer["__name__"])
                 unpack_state = cls.__dask_distributed_unpack__
-                unpack_anno = cls.__dask_distributed_anno_unpack__
+                unpack_anno = cls.__dask_distributed_annotations_unpack__
 
             # Unpack state into a graph and key dependencies
             unpacked_layer = unpack_state(layer["state"], dsk, deps)
@@ -979,7 +979,7 @@ class HighLevelGraph(Mapping):
                 layer_annotations = annotations or layer["annotations"] or None
             unpack_anno(anno, layer_annotations, unpacked_layer["dsk"].keys())
 
-        return {"dsk": dsk, "deps": deps, "anno": anno}
+        return {"dsk": dsk, "deps": deps, "annotations": anno}
 
 
 def to_graphviz(
