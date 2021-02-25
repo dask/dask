@@ -139,6 +139,14 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
+def test_annotation_pack_unpack():
+    layer = MaterializedLayer({"n": 42}, annotations={"workers": ("alice",)})
+    packed_anno = layer.__dask_distributed_anno_pack__()
+    anno = {}
+    Layer.__dask_distributed_anno_unpack__(anno, packed_anno, layer.keys())
+    assert anno == {"workers": {"n": ("alice",)}}
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     da = pytest.importorskip("dask.array")

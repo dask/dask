@@ -1,3 +1,4 @@
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 import pytest
 
 distributed = pytest.importorskip("distributed")
@@ -311,3 +312,14 @@ async def test_combo_of_layer_types(c, s, a, b):
     res = x.sum() + df.sum()
     res = await c.compute(res, optimize_graph=False)
     assert res == 21
+
+
+@gen_cluster(client=True)
+async def test_annotation_pack_unpack(c, s, a, b):
+    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
+
+    annotations = {"workers": ("alice",)}
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
+    annotations = unpacked_hlg["anno"]
+    assert annotations == {"workers": {"n": ("alice",)}}

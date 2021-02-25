@@ -187,9 +187,11 @@ class Layer(collections.abc.Mapping):
 
         Parameters
         ----------
-        annotations: MutableMapping[str, Any], output
+        annotations: MutableMapping[str, Any], input/output
             Already unpacked annotations, which are to be updated with the new
             unpacked annotations
+        new_annotations: Mapping[str, Any], optional
+            New annotations to be unpacked into `annotations`
         keys: Iterable
             All keys in the layer.
         """
@@ -296,7 +298,7 @@ class Layer(collections.abc.Mapping):
     def __dask_distributed_pack__(
         self,
         all_hlg_keys: Iterable[Hashable],
-        known_key_dependencies,
+        known_key_dependencies: Mapping[Hashable, set],
         client,
         client_keys: Iterable[Hashable],
     ) -> Any:
@@ -320,9 +322,13 @@ class Layer(collections.abc.Mapping):
 
         Parameters
         ----------
+        all_hlg_keys: Iterable[Hashable]
+            All keys in the high level graph
+        known_key_dependencies: Mapping[Hashable, set]
+            Already known dependencies
         client: distributed.Client
             The client calling this function.
-        client_keys : Iterable
+        client_keys : Iterable[Hashable]
             List of keys requested by the client.
 
         Returns
@@ -947,8 +953,6 @@ class HighLevelGraph(Mapping):
         dsk = {}
         deps = {}
         anno = {}
-        if annotations:
-            anno.update(annotations)
 
         # Unpack each layer (in topological order)
         for layer in hlg["layers"]:
@@ -969,7 +973,11 @@ class HighLevelGraph(Mapping):
                 deps[k] = deps.get(k, set()) | v
 
             # Unpack the annotations
-            unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
+            if annotations and layer["annotations"]:
+                layer_annotations = {**layer["annotations"], **annotations}
+            else:
+                layer_annotations = annotations or layer["annotations"] or None
+            unpack_anno(anno, layer_annotations, unpacked_layer["dsk"].keys())
 
         return {"dsk": dsk, "deps": deps, "anno": anno}
 
