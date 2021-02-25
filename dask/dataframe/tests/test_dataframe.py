@@ -4567,6 +4567,10 @@ def test_dot():
     assert_eq(s1.dot(s2), partitioned_s1.dot(partitioned_s2).compute())
     assert_eq((s1.dot(df) == partitioned_s1.dot(partitioned_df).compute()).all(), True)
 
+    # Test passing meta kwarg
+    res = dask_s1.dot(dask_df, meta=pd.Series([1], name="test_series")).compute()
+    assert_eq(res.name, "test_series")
+
 
 def test_dot_nan():
     s1 = pd.Series([1, 2, 3, 4])
