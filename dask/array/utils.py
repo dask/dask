@@ -235,6 +235,7 @@ def _check_chunks(x):
         expected_shape = tuple(c[i] for c, i in zip(x.chunks, idx))
         assert_eq_shape(expected_shape, chunk.shape, check_nan=False)
         assert chunk.dtype == x.dtype
+    return x
 
 
 def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=True):
@@ -248,6 +249,9 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=Tr
         if check_graph:
             _check_dsk(x.dask)
         x_meta = getattr(x, "_meta", None)
+        if check_chunks:
+            # Replace x with persisted version to avoid computing it twice.
+            x = _check_chunks(x)
         x = x.compute(scheduler="sync")
         x_computed = x
         if hasattr(x, "todense"):
@@ -258,8 +262,6 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=Tr
             assert x.dtype == x_original.dtype
         if check_shape:
             assert_eq_shape(x_original.shape, x.shape, check_nan=False)
-        if check_chunks:
-            _check_chunks(x_original)
     else:
         if not hasattr(x, "dtype"):
             x = np.array(x, dtype="O")
