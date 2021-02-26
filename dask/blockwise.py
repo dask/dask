@@ -275,7 +275,7 @@ class Blockwise(Layer):
         return (
             len(self.output_blocks)
             if self.output_blocks
-            else int(prod(self.dims[i] for i in self.output_indices))
+            else prod(self.dims[i] for i in self.output_indices)
         )
 
     def is_materialized(self):
