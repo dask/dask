@@ -56,7 +56,9 @@ class Layer(collections.abc.Mapping):
     implementations.
     """
 
-    def __init__(self, annotations=None):
+    annotations: Optional[Mapping[str, Any]]
+
+    def __init__(self, annotations: Mapping[str, Any] = None):
         if annotations:
             self.annotations = annotations
         else:
@@ -82,72 +84,6 @@ class Layer(collections.abc.Mapping):
             All output keys
         """
         return self.keys()
-
-    def pack_annotations(self) -> Mapping[str, Any]:
-        """Packs Layer annotations for transmission to scheduler
-
-        Callables annotations are fully expanded over Layer keys, while
-        other values are simply transmitted as is
-
-        Returns
-        -------
-        packed_annotations : dict
-            Packed annotations.
-        """
-        if self.annotations is None:
-            return None
-
-        packed = {}
-
-        for a, v in self.annotations.items():
-            if callable(v):
-                packed[a] = {stringify(k): v(k) for k in self}
-                packed[a]["__expanded_annotations__"] = True
-            else:
-                packed[a] = v
-
-        return packed
-
-    @staticmethod
-    def unpack_annotations(
-        annotations: MutableMapping[str, Any],
-        new_annotations: Mapping[str, Any],
-        keys: Iterable,
-    ) -> None:
-        """
-        Expand a set of layer annotations across a set of keys, then merge those
-        expanded annotations for the layer into an existing annotations mapping.
-        This is not a simple shallow merge because some annotations like retries,
-        priority, workers, etc need to be able to retain keys from different layers.
-        """
-        if new_annotations is None:
-            return None
-
-        expanded = {}
-        keys_stringified = False
-
-        # Expand the new annotations across the keyset
-        for a, v in new_annotations.items():
-            if type(v) is dict and "__expanded_annotations__" in v:
-                # Maybe do a destructive update for efficiency?
-                v = v.copy()
-                del v["__expanded_annotations__"]
-                expanded[a] = v
-            else:
-                if not keys_stringified:
-                    keys = [stringify(k) for k in keys]
-                    keys_stringified = True
-
-                expanded[a] = {k: v for k in keys}
-
-        # Merge the expanded annotations with the existing annotations mapping
-        to_merge = {}
-        for k, v in expanded.items():
-            if isinstance(v, dict) and k in annotations:
-                to_merge[k] = {**annotations[k], **v}
-            else:
-                to_merge[k] = v
-        annotations.update(to_merge)
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
@@ -192,7 +128,7 @@ class Layer(collections.abc.Mapping):
                         seen.add(d)
                         work.add(d)
 
-        return BasicLayer(out), ret_deps
+        return MaterializedLayer(out), ret_deps
 
     def get_dependencies(self, key: Hashable, all_hlg_keys: Iterable) -> set:
         """Get dependencies of `key` in the layer
@@ -210,6 +146,79 @@ class Layer(collections.abc.Mapping):
             A set of dependencies
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
+
+    def __dask_distributed_anno_pack__(self) -> Optional[Mapping[str, Any]]:
+        """Packs Layer annotations for transmission to scheduler
+
+        Callables annotations are fully expanded over Layer keys, while
+        other values are simply transmitted as is
+
+        Returns
+        -------
+        packed_annotations : dict
+            Packed annotations.
+        """
+        if self.annotations is None:
+            return None
+
+        packed = {}
+
+        for a, v in self.annotations.items():
+            if callable(v):
+                packed[a] = {stringify(k): v(k) for k in self}
+                packed[a]["__expanded_annotations__"] = True
+            else:
+                packed[a] = v
+
+        return packed
+
+    @staticmethod
+    def __dask_distributed_annotations_unpack__(
+        annotations: MutableMapping[str, Any],
+        new_annotations: Optional[Mapping[str, Any]],
+        keys: Iterable[Hashable],
+    ) -> None:
+        """
+        Unpack a set of layer annotations across a set of keys, then merge those
+        expanded annotations for the layer into an existing annotations mapping.
+
+        This is not a simple shallow merge because some annotations like retries,
+        priority, workers, etc need to be able to retain keys from different layers.
+
+        Parameters
+        ----------
+        annotations: MutableMapping[str, Any], input/output
+            Already unpacked annotations, which are to be updated with the new
+            unpacked annotations
+        new_annotations: Mapping[str, Any], optional
+            New annotations to be unpacked into `annotations`
+        keys: Iterable
+            All keys in the layer.
+        """
+        if new_annotations is None:
+            return
+
+        expanded = {}
+        keys_stringified = False
+
+        # Expand the new annotations across the keyset
+        for a, v in new_annotations.items():
+            if type(v) is dict and "__expanded_annotations__" in v:
+                # Maybe do a destructive update for efficiency?
+                v = v.copy()
+                del v["__expanded_annotations__"]
+                expanded[a] = v
+            else:
+                if not keys_stringified:
+                    keys = [stringify(k) for k in keys]
+                    keys_stringified = True
+
+                expanded[a] = dict.fromkeys(keys, v)
+
+        # Merge the expanded annotations with the existing annotations mapping
+        for k, v in expanded.items():
+            v.update(annotations.get(k, {}))
+        annotations.update(expanded)
 
     def clone(
         self,
@@ -284,9 +293,15 @@ class Layer(collections.abc.Mapping):
 
             dsk_new[key] = value
 
-        return BasicLayer(dsk_new), bound
+        return MaterializedLayer(dsk_new), bound
 
-    def __dask_distributed_pack__(self, client) -> Optional[Any]:
+    def __dask_distributed_pack__(
+        self,
+        all_hlg_keys: Iterable[Hashable],
+        known_key_dependencies: Mapping[Hashable, set],
+        client,
+        client_keys: Iterable[Hashable],
+    ) -> Any:
         """Pack the layer for scheduler communication in Distributed
 
         This method should pack its current state and is called by the Client when
@@ -301,29 +316,89 @@ class Layer(collections.abc.Mapping):
           - All keys must be converted to strings now or when unpacking
           - All tasks must be serialized (see dumps_task())
 
-        Alternatively, the method can return None, which will make Distributed
-        materialize the layer and use a default packing method.
+        The default implementation materialize the layer thus layers such as Blockwise
+        and ShuffleLayer should implement a specialized pack and unpack function in
+        order to avoid materialization.
 
         Parameters
         ----------
+        all_hlg_keys: Iterable[Hashable]
+            All keys in the high level graph
+        known_key_dependencies: Mapping[Hashable, set]
+            Already known dependencies
         client: distributed.Client
             The client calling this function.
+        client_keys : Iterable[Hashable]
+            List of keys requested by the client.
 
         Returns
         -------
         state: Object serializable by msgpack
-            Scheduler compatible state of the layer or None
+            Scheduler compatible state of the layer
         """
-        return None
+        from distributed.client import Future
+        from distributed.utils_comm import unpack_remotedata, subs_multiple
+        from distributed.worker import dumps_task
+        from distributed.utils import CancelledError
+
+        dsk = dict(self)
+
+        # Find aliases not in `client_keys` and substitute all matching keys
+        # with its Future
+        values = {
+            k: v
+            for k, v in dsk.items()
+            if isinstance(v, Future) and k not in client_keys
+        }
+        if values:
+            dsk = subs_multiple(dsk, values)
+
+        # Unpack remote data and record its dependencies
+        dsk = {k: unpack_remotedata(v, byte_keys=True) for k, v in dsk.items()}
+        unpacked_futures = set.union(*[v[1] for v in dsk.values()]) if dsk else set()
+        for future in unpacked_futures:
+            if future.client is not client:
+                raise ValueError(
+                    "Inputs contain futures that were created by another client."
+                )
+            if stringify(future.key) not in client.futures:
+                raise CancelledError(stringify(future.key))
+        unpacked_futures_deps = {}
+        for k, v in dsk.items():
+            if len(v[1]):
+                unpacked_futures_deps[k] = {f.key for f in v[1]}
+        dsk = {k: v[0] for k, v in dsk.items()}
+
+        # Calculate dependencies without re-calculating already known dependencies
+        missing_keys = dsk.keys() - known_key_dependencies.keys()
+        dependencies = {
+            k: keys_in_tasks(all_hlg_keys, [dsk[k]], as_list=False)
+            for k in missing_keys
+        }
+        for k, v in unpacked_futures_deps.items():
+            dependencies[k] = set(dependencies.get(k, ())) | v
+
+        # The scheduler expect all keys to be strings
+        dependencies = {
+            stringify(k): {stringify(dep) for dep in deps}
+            for k, deps in dependencies.items()
+        }
+
+        merged_hlg_keys = all_hlg_keys | dsk.keys()
+        dsk = {
+            stringify(k): stringify(v, exclusive=merged_hlg_keys)
+            for k, v in dsk.items()
+        }
+        dsk = toolz.valmap(dumps_task, dsk)
+        return {"dsk": dsk, "dependencies": dependencies}
 
     @classmethod
     def __dask_distributed_unpack__(
         cls,
         state: Any,
-        dsk: Dict[str, Any],
-        dependencies: MutableMapping[Hashable, set],
-        annotations: Dict[str, Any],
-    ) -> None:
+        dsk: Mapping[str, Any],
+        dependencies: Mapping[str, set],
+    ) -> Dict:
         """Unpack the state of a layer previously packed by __dask_distributed_pack__()
 
         This method is called by the scheduler in Distributed in order to unpack
@@ -338,33 +413,24 @@ class Layer(collections.abc.Mapping):
         ----------
         state: Any
             The state returned by Layer.__dask_distributed_pack__()
-        dsk: dict
+        dsk: Mapping, read-only
             The materialized low level graph of the already unpacked layers
-        dependencies: MutableMapping
+        dependencies: Mapping, read-only
             The dependencies of each key in `dsk`
-        annotations: dict
-            The materialized task annotations
-        """
-        dsk.update(state["dsk"])
-        for k, v in state["dependencies"].items():
-            dependencies[k] = set(dependencies.get(k, ())) | set(v)
 
-        if state["annotations"]:
-            cls.unpack_annotations(
-                annotations, state["annotations"], state["dsk"].keys()
-            )
+        Returns
+        -------
+        unpacked-layer: dict
+            layer_dsk: Mapping[str, Any]
+                Materialized (stringified) graph of the layer
+            layer_deps: Mapping[str, set]
+                Dependencies of each key in `layer_dsk`
+        """
+        return {"dsk": state["dsk"], "deps": state["dependencies"]}
 
     def __reduce__(self):
-        """Default serialization implementation, which materializes the Layer
-
-        This should follow the standard pickle protocol[1] but must always return
-        a tuple and the arguments for the callable object must be compatible with
-        msgpack. This is because Distributed uses msgpack to send Layers to the
-        scheduler.
-
-        [1] <https://docs.python.org/3/library/pickle.html#object.__reduce__>
-        """
-        return (BasicLayer, (dict(self),))
+        """Default serialization implementation, which materializes the Layer"""
+        return (MaterializedLayer, (dict(self),))
 
     def __copy__(self):
         """Default shallow copy implementation"""
@@ -373,10 +439,8 @@ class Layer(collections.abc.Mapping):
         return obj
 
 
-class BasicLayer(Layer):
-    """Basic implementation of `Layer`
-
-    Fully materialized layer implemented by a mapping
+class MaterializedLayer(Layer):
+    """Fully materialized layer of `Layer`
 
     Parameters
     ----------
@@ -480,13 +544,14 @@ class HighLevelGraph(Mapping):
         self,
         layers: Mapping[str, Mapping],
         dependencies: Mapping[str, AbstractSet],
-        key_dependencies: Dict[Hashable, AbstractSet] = None,
+        key_dependencies: Optional[Dict[Hashable, AbstractSet]] = None,
     ):
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies or {}
         # Makes sure that all layers are `Layer`
         self.layers = {
-            k: v if isinstance(v, Layer) else BasicLayer(v) for k, v in layers.items()
+            k: v if isinstance(v, Layer) else MaterializedLayer(v)
+            for k, v in layers.items()
         }
 
     @classmethod
@@ -813,6 +878,108 @@ class HighLevelGraph(Mapping):
                     f"incorrect dependencies[{repr(k)}]: {repr(self.dependencies[k])} "
                     f"expected {repr(dependencies[k])}"
                 )
+
+    def __dask_distributed_pack__(self, client, client_keys: Iterable[Hashable]) -> Any:
+        """Pack the high level graph for Scheduler -> Worker communication
+
+        The approach is to delegate the packaging to each layer in the high level graph
+        by calling .__dask_distributed_pack__() and .__dask_distributed_anno_pack__()
+        on each layer. If the layer doesn't implement packaging, we materialize the
+        layer and pack it.
+
+        Parameters
+        ----------
+        client : distributed.Client
+            The client calling this function.
+        client_keys : Iterable
+            List of keys requested by the client.
+
+        Returns
+        -------
+        data: list of header and payload
+            Packed high level graph serialized by dumps_msgpack
+        """
+        from distributed.protocol.core import dumps_msgpack
+
+        # Dump each layer (in topological order)
+        layers = []
+        for layer in (self.layers[name] for name in self._toposort_layers()):
+            layers.append(
+                {
+                    "__module__": layer.__module__,
+                    "__name__": type(layer).__name__,
+                    "state": layer.__dask_distributed_pack__(
+                        self.get_all_external_keys(),
+                        self.key_dependencies,
+                        client,
+                        client_keys,
+                    ),
+                    "annotations": layer.__dask_distributed_anno_pack__(),
+                }
+            )
+        return dumps_msgpack({"layers": layers})
+
+    @staticmethod
+    def __dask_distributed_unpack__(packed_hlg, annotations: Mapping[str, Any]) -> Dict:
+        """Unpack the high level graph for Scheduler -> Worker communication
+
+        The approach is to delegate the unpackaging to each layer in the high level graph
+        by calling ..._unpack__() and ..._annotations_unpack__()
+        on each layer.
+
+        Parameters
+        ----------
+        packed_hlg : list of header and payload
+            Packed high level graph serialized by dumps_msgpack
+        annotations : dict
+            A top-level annotations object which may be partially populated,
+            and which may be further filled by annotations from the layers
+            of the packed_hlg.
+
+        Returns
+        -------
+        unpacked-graph: dict
+            dsk: Dict[str, Any]
+                Materialized (stringified) graph of all nodes in the high level graph
+            deps: Dict[str, set]
+                Dependencies of each key in `dsk`
+            annotations: Dict[str, Any]
+                Annotations for `dsk`
+        """
+        from distributed.protocol.core import loads_msgpack
+        from distributed.protocol.serialize import import_allowed_module
+
+        hlg = loads_msgpack(*packed_hlg)
+        dsk = {}
+        deps = {}
+        anno = {}
+
+        # Unpack each layer (in topological order)
+        for layer in hlg["layers"]:
+            # Find the unpack functions
+            if layer["__module__"] is None:  # Default implementation
+                unpack_state = Layer.__dask_distributed_unpack__
+                unpack_anno = Layer.__dask_distributed_annotations_unpack__
+            else:
+                mod = import_allowed_module(layer["__module__"])
+                cls = getattr(mod, layer["__name__"])
+                unpack_state = cls.__dask_distributed_unpack__
+                unpack_anno = cls.__dask_distributed_annotations_unpack__
+
+            # Unpack state into a graph and key dependencies
+            unpacked_layer = unpack_state(layer["state"], dsk, deps)
+            dsk.update(unpacked_layer["dsk"])
+            for k, v in unpacked_layer["deps"].items():
+                deps[k] = deps.get(k, set()) | v
+
+            # Unpack the annotations
+            if annotations and layer["annotations"]:
+                layer_annotations = {**layer["annotations"], **annotations}
+            else:
+                layer_annotations = annotations or layer["annotations"] or None
+            unpack_anno(anno, layer_annotations, unpacked_layer["dsk"].keys())
+
+        return {"dsk": dsk, "deps": deps, "annotations": anno}
 
 
 def to_graphviz(
