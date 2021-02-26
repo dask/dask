@@ -3810,25 +3810,36 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def sort_values(
-        self,
-        other,
-        npartitions=None,
-        divisions=None,
-        ascending=True,
-        **kwargs
-    ):
-        if divisions is not None:
-            check_divisions(divisions)
+    def sort_values(self, other, npartitions=None, ascending=True, **kwargs):
+        """Sort the dataset by a single column.
+
+        Sorting a parallel dataset requires expensive shuffles and is generally
+        not recommended. See ``set_index`` for implementation details.
+
+        Parameters
+        ----------
+        other: string
+        npartitions: int, None, or 'auto'
+            The ideal number of output partitions. If None, use the same as
+            the input. If 'auto' then decide by memory use.
+        ascending: bool, optional
+            Non ascending sort is not supported by Dask.
+            Defaults to True.
+
+        Examples
+        --------
+        >>> df2 = df.sort_values('x')  # doctest: +SKIP
+        """
+        if not ascending:
+            raise NotImplementedError("The ascending= keyword is not supported")
 
         from .shuffle import sort_values
 
         return sort_values(
             self,
             other,
-            ascending=True,
+            ascending=ascending,
             npartitions=npartitions,
-            divisions=divisions,
             **kwargs,
         )
 

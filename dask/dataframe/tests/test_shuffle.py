@@ -1132,3 +1132,15 @@ def test_set_index_nan_partition():
     d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
     a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
     assert_eq(a, a)
+
+
+@pytest.mark.parametrize(
+    "npartitions",
+    [10, 1],
+)
+def test_sort_values(npartitions):
+    df = pd.DataFrame({"a": np.random.randint(0, 10, 100)})
+
+    ddf = dd.from_pandas(df, npartitions=npartitions)
+
+    assert_eq(ddf.sort_values("a"), df.sort_values("a"))
