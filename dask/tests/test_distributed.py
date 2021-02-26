@@ -3,7 +3,6 @@ import pytest
 
 distributed = pytest.importorskip("distributed")
 
-import os
 import asyncio
 from functools import partial
 from operator import add
