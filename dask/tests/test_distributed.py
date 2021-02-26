@@ -343,6 +343,8 @@ def test_blockwise_array_creation(c, io, fuse):
     narr += 2
     with dask.config.set({"optimization.fuse.active": fuse}):
         da.assert_eq(darr, narr)
+
+
 @gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
