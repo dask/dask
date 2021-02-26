@@ -1,5 +1,6 @@
 import numbers
 import warnings
+import itertools
 
 import tlz as toolz
 
