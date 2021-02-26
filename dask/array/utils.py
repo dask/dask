@@ -1,5 +1,6 @@
 import difflib
 import functools
+import itertools
 import math
 import numbers
 import os
@@ -225,7 +226,18 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
+def _check_chunks(x):
+    x = x.persist()
+    for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
+        chunk = x.dask[(x.name,) + idx]
+        if not hasattr(chunk, "dtype"):
+            chunk = np.array(chunk, dtype="O")
+        expected_shape = tuple(c[i] for c, i in zip(x.chunks, idx))
+        assert_eq_shape(expected_shape, chunk.shape, check_nan=False)
+        assert chunk.dtype == x.dtype
+
+
+def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=True):
     x_original = x
     x_meta = None
     x_computed = None
@@ -246,6 +258,8 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
             assert x.dtype == x_original.dtype
         if check_shape:
             assert_eq_shape(x_original.shape, x.shape, check_nan=False)
+        if check_chunks:
+            _check_chunks(x_original)
     else:
         if not hasattr(x, "dtype"):
             x = np.array(x, dtype="O")
@@ -254,15 +268,23 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
     return x, adt, x_meta, x_computed
 
 
-def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwargs):
+def assert_eq(
+    a,
+    b,
+    check_shape=True,
+    check_graph=True,
+    check_meta=True,
+    check_chunks=True,
+    **kwargs,
+):
     a_original = a
     b_original = b
 
     a, adt, a_meta, a_computed = _get_dt_meta_computed(
-        a, check_shape=check_shape, check_graph=check_graph
+        a, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
     b, bdt, b_meta, b_computed = _get_dt_meta_computed(
-        b, check_shape=check_shape, check_graph=check_graph
+        b, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
 
     if str(adt) != str(bdt):
