@@ -660,6 +660,11 @@ class HighLevelGraph(Mapping):
         raise KeyError(key)
 
     def __len__(self) -> int:
+        # NOTE: this will double-count keys that are duplicated between layers, so it's
+        # possible that `len(hlg) > len(hlg.to_dict())`. However, duplicate keys should
+        # not occur through normal use, and their existence would usually be a bug.
+        # So we ignore this case in favor of better performance.
+        # https://github.com/dask/dask/issues/7271
         return sum(len(layer) for layer in self.layers.values())
 
     def __iter__(self):
