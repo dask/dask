@@ -1,9 +1,6 @@
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
-from .utils import DataFrameIOLayer
-from ...highlevelgraph import HighLevelGraph
-import pickle
 
 try:
     import psutil
@@ -36,80 +33,85 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import infer_compression
 
 
-class CSVFunctionWrapper:
+class CSVSubgraph(Mapping):
     """
-    CSV Function-Wrapper Class
-
-    Reads CSV data from disk to produce a partition (given a key).
+    Subgraph for reading CSV files.
     """
 
     def __init__(
         self,
-        columns,
-        colname,
+        name,
+        reader,
+        blocks,
+        is_first,
         head,
         header,
-        reader,
-        dtypes,
-        enforce,
         kwargs,
+        dtypes,
+        columns,
+        enforce,
+        path,
     ):
-        self.full_columns = columns
-        self.colname = colname
-        self.head = head
-        self.header = header
+        self.name = name
         self.reader = reader
-        self.dtypes = dtypes
-        self.enforce = enforce
+        self.blocks = blocks
+        self.is_first = is_first
+        self.head = head  # example pandas DF for metadata
+        self.header = header  # prepend to all blocks
         self.kwargs = kwargs
-        self.columns = None
+        self.dtypes = dtypes
+        self.columns = columns
+        self.enforce = enforce
+        self.colname, self.paths = path or (None, None)
 
-    def __call__(self, part):
+    def __getitem__(self, key):
+        try:
+            name, i = key
+        except ValueError:
+            # too many / few values to unpack
+            raise KeyError(key) from None
 
-        # Need to unpickle in distributed
-        if isinstance(part, bytes):
-            part = pickle.loads(part)
+        if name != self.name:
+            raise KeyError(key)
 
-        # Part will be a 3-element tuple
-        block, path, is_first = part
+        if i < 0 or i >= len(self.blocks):
+            raise KeyError(key)
 
-        # Construct `path_info`
-        if path is not None:
+        block = self.blocks[i]
+        if self.paths is not None:
             path_info = (
                 self.colname,
-                path,
+                self.paths[i],
                 sorted(list(self.head[self.colname].cat.categories)),
             )
         else:
             path_info = None
 
-        # Deal with arguments that are special
-        # for the first block of each file
         write_header = False
         rest_kwargs = self.kwargs.copy()
-        if not is_first:
+        if not self.is_first[i]:
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
-        # Generate the block if necessary
-        if isinstance(block, tuple) and block and callable(block[0]):
-            block = block[0](*block[1:])
-
-        # Call `pandas_read_text`
-        out = pandas_read_text(
+        return (
+            pandas_read_text,
             self.reader,
             block,
             self.header,
             rest_kwargs,
             self.dtypes,
-            self.full_columns,
+            self.columns,
             write_header,
             self.enforce,
             path_info,
         )
-        if self.columns is None:
-            return out
-        return out[self.columns]
+
+    def __len__(self):
+        return len(self.blocks)
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield (self.name, i)
 
 
 def pandas_read_text(
@@ -324,6 +326,8 @@ def text_blocks_to_pandas(
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
 
+    name = "read-csv-" + tokenize(reader, columns, enforce, head, blocksize)
+
     if path:
         colname, path_converter = path
         paths = [b[1].path for b in blocks]
@@ -341,39 +345,21 @@ def text_blocks_to_pandas(
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
-    # Define parts
-    parts = []
-    colname, paths = path or (None, None)
-    for i in range(len(blocks)):
-        parts.append(
-            (
-                blocks[i],
-                paths[i] if paths else None,
-                is_first[i],
-            )
-        )
-
-    # Create Blockwise layer
-    label = "read-csv-"
-    name = label + tokenize(reader, columns, enforce, head, blocksize)
-    layer = DataFrameIOLayer(
+    subgraph = CSVSubgraph(
         name,
+        reader,
+        blocks,
+        is_first,
+        head,
+        header,
+        kwargs,
+        dtypes,
         columns,
-        parts,
-        CSVFunctionWrapper(
-            columns,
-            colname,
-            head,
-            header,
-            reader,
-            dtypes,
-            enforce,
-            kwargs,
-        ),
-        label=label,
+        enforce,
+        path,
     )
-    graph = HighLevelGraph({name: layer}, {name: set()})
-    return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
+
+    return new_dd_object(subgraph, name, head, (None,) * (len(blocks) + 1))
 
 
 def block_mask(block_lists):

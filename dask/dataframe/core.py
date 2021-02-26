@@ -49,7 +49,7 @@ from ..array.utils import zeros_like_safe
 from ..blockwise import blockwise, Blockwise, subs
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
-from ..highlevelgraph import HighLevelGraph, Layer
+from ..highlevelgraph import HighLevelGraph
 
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
@@ -79,26 +79,6 @@ from .utils import (
 no_default = "__no_default__"
 
 pd.set_option("compute.use_numexpr", False)
-
-
-class DataFrameLayer(Layer):
-    """DataFrame-based HighLevelGraph Layer"""
-
-    def cull_columns(self, output_columns):
-        """Cull unnecessary columns from this layer
-
-        Given a list of required output columns, this method
-        returns a culled (by column) layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be culled by column. This
-        method should be overridden by specialized DataFrame
-        layers to enable column culling.
-        """
-
-        # Default behavior.
-        # Return: `culled_layer`, `dep_columns`
-        return self, None
 
 
 def _concat(args, ignore_index=False):

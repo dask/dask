@@ -13,13 +13,13 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
-from dask.dataframe.optimize import optimize_dataframe_getitem
+from dask.dataframe.optimize import optimize_read_parquet_getitem
+from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.utils import natural_sort_key, parse_bytes
-from dask.dataframe.io.utils import DataFrameIOLayer
+
 
 try:
     import fastparquet
@@ -211,7 +211,7 @@ def test_local(tmpdir, write_engine, read_engine):
 
     assert len(df2.divisions) > 1
 
-    out = df2.compute().reset_index()
+    out = df2.compute(scheduler="sync").reset_index()
 
     for column in df.columns:
         assert (data[column] == out[column]).all()
@@ -2398,11 +2398,11 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     # Write ddf back to disk to check that the round trip
     # preserves the getitem optimization
     out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
-    dsk = optimize_dataframe_getitem(out.dask, keys=[out.key])
+    dsk = optimize_read_parquet_getitem(out.dask, keys=[out.key])
 
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, DataFrameIOLayer)
+    assert isinstance(subgraph, ParquetSubgraph)
     assert subgraph.columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
@@ -2415,10 +2415,10 @@ def test_getitem_optimization_empty(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
 
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
-    dsk = optimize_dataframe_getitem(df2.dask, keys=[df2._name])
+    dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
 
     subgraph = next(iter((dsk.layers.values())))
-    assert isinstance(subgraph, DataFrameIOLayer)
+    assert isinstance(subgraph, ParquetSubgraph)
     assert subgraph.columns == []
 
 
@@ -2440,6 +2440,20 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
+def test_subgraph_getitem():
+    meta = pd.DataFrame(columns=["a"])
+    subgraph = ParquetSubgraph("name", "pyarrow", "fs", meta, [], [], [0, 1, 2], {})
+
+    with pytest.raises(KeyError):
+        subgraph["foo"]
+
+    with pytest.raises(KeyError):
+        subgraph[("name", -1)]
+
+    with pytest.raises(KeyError):
+        subgraph[("name", 3)]
+
+
 def test_blockwise_parquet_annotations(tmpdir):
     check_engine()
 
@@ -2454,53 +2468,8 @@ def test_blockwise_parquet_annotations(tmpdir):
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 1
     layer = next(iter((layers.values())))
-    assert isinstance(layer, Blockwise)
+    assert isinstance(layer, ParquetSubgraph)
     assert layer.annotations == {"foo": "bar"}
-
-
-def test_optimize_blockwise_parquet(tmpdir):
-    check_engine()
-
-    size = 40
-    npartitions = 2
-    tmp = str(tmpdir)
-    df = pd.DataFrame({"a": np.arange(size, dtype=np.int32)})
-    expect = dd.from_pandas(df, npartitions=npartitions)
-    expect.to_parquet(tmp)
-    ddf = dd.read_parquet(tmp)
-
-    # `ddf` should now have ONE Blockwise layer
-    layers = ddf.__dask_graph__().layers
-    assert len(layers) == 1
-    assert isinstance(list(layers.values())[0], Blockwise)
-
-    # Check single-layer result
-    assert_eq(ddf, expect)
-
-    # Increment by 1
-    ddf += 1
-    expect += 1
-
-    # Increment by 10
-    ddf += 10
-    expect += 10
-
-    # `ddf` should now have THREE Blockwise layers
-    layers = ddf.__dask_graph__().layers
-    assert len(layers) == 3
-    assert all(isinstance(layer, Blockwise) for layer in layers.values())
-
-    # Check that `optimize_blockwise` fuses all three
-    # `Blockwise` layers together into a singe `Blockwise` layer
-    keys = [(ddf._name, i) for i in range(npartitions)]
-    graph = optimize_blockwise(ddf.__dask_graph__(), keys)
-    layers = graph.layers
-    name = list(layers.keys())[0]
-    assert len(layers) == 1
-    assert isinstance(layers[name], Blockwise)
-
-    # Check final result
-    assert_eq(ddf, expect)
 
 
 def test_split_row_groups(tmpdir, engine):
@@ -2752,10 +2721,10 @@ def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
 
     # Make sure we are still allowing the getitem optimization
     ddf = ddf["A"]
-    dsk = optimize_dataframe_getitem(ddf.dask, keys=[(ddf._name, 0)])
+    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[(ddf._name, 0)])
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, DataFrameIOLayer)
+    assert isinstance(subgraph, ParquetSubgraph)
     assert subgraph.columns == ["A"]
 
 
@@ -3022,7 +2991,6 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         engine="pyarrow",
         filters=[("b", "==", "a")] if test_filter else None,
     )
-    read_df.compute(scheduler="synchronous")
 
     if test_filter:
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
@@ -3030,8 +2998,11 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         assert_eq(ddf, read_df)
 
 
+@pytest.mark.parametrize("read_from_paths", [True, False])
 @pytest.mark.parametrize("test_filter_partitioned", [True, False])
-def test_pyarrow_dataset_read_from_paths(tmpdir, test_filter_partitioned):
+def test_pyarrow_dataset_read_from_paths(
+    tmpdir, read_from_paths, test_filter_partitioned
+):
     check_pyarrow()
 
     if pa.__version__ <= LooseVersion("0.17.1"):
@@ -3052,6 +3023,7 @@ def test_pyarrow_dataset_read_from_paths(tmpdir, test_filter_partitioned):
         fn,
         engine="pyarrow",
         filters=[("b", "==", "a")] if test_filter_partitioned else None,
+        read_from_paths=read_from_paths,
     )
 
     if test_filter_partitioned:
