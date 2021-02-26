@@ -425,8 +425,6 @@ class ShuffleLayer(SimpleShuffleLayer):
                             dsk[input_key] = self.meta_input
                     else:
                         input_key = (self.name_input, _part)
-                    with open("debug.txt", "a") as f:
-                        f.write("self.name " + str(input_key) + "\n")
 
                     # Convert partition into dict of dataframe pieces
                     dsk[(shuffle_group_name, _inp)] = (
