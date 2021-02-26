@@ -302,6 +302,10 @@ def test_map_overlap():
     assert all([(type(s) is int) for s in y.shape])
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
 
+    x = da.ones((10, 10), chunks=(3, 4))
+    z = x.map_overlap(lambda x: x, depth={1: 5})
+    assert z.chunks[0] == x.chunks[0]  # don't rechunk the first dimension
+
     x = np.arange(16).reshape((4, 4))
     d = da.from_array(x, chunks=(2, 2))
     exp1 = d.map_overlap(lambda x: x + x.size, depth=1, dtype=d.dtype)

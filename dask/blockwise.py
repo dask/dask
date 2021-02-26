@@ -6,10 +6,9 @@ try:
 except ImportError:
     msgpack = None
 
-import numpy as np
-
 import tlz as toolz
 
+from .compatibility import prod
 from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
@@ -292,7 +291,7 @@ class Blockwise(Layer):
         return iter(self._dict)
 
     def __len__(self):
-        return int(np.prod(list(self._out_numblocks().values())))
+        return int(prod(self._out_numblocks().values()))
 
     def _out_numblocks(self):
         d = {}
@@ -309,7 +308,9 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def __dask_distributed_pack__(self, client):
+    def __dask_distributed_pack__(
+        self, all_hlg_keys, known_key_dependencies, client, client_keys
+    ):
         from distributed.worker import dumps_function
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
@@ -336,7 +337,7 @@ class Blockwise(Layer):
                 raise CancelledError(stringify(future.key))
 
         # All blockwise tasks will depend on the futures in `indices`
-        global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
+        global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
 
         # Check if we need to serialize the elements of `io_deps`
         # with `pickle` (i.e. something in the required inputs is
@@ -367,7 +368,7 @@ class Blockwise(Layer):
                                 check = False
                         input_map[k] = pickle.dumps(input_map[k])
 
-        ret = {
+        return {
             "output": self.output,
             "output_indices": self.output_indices,
             "func": func,
@@ -378,17 +379,13 @@ class Blockwise(Layer):
             "numblocks": self.numblocks,
             "concatenate": self.concatenate,
             "new_axes": self.new_axes,
-            "annotations": self.pack_annotations(),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
             "io_deps": self.io_deps,
         }
 
-        return ret
-
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
-
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         # Make sure we convert list items back from tuples in `indices`.
         # The msgpack serialization will have converted lists into
         # tuples, and tuples may be stringified during graph
@@ -398,7 +395,7 @@ class Blockwise(Layer):
             for ind, is_list in zip(state["indices"], state["is_list"])
         ]
 
-        raw, raw_deps = make_blockwise_graph(
+        layer_dsk, layer_deps = make_blockwise_graph(
             state["func"],
             state["output"],
             state["output_indices"],
@@ -413,16 +410,17 @@ class Blockwise(Layer):
             func_future_args=state["func_future_args"],
             io_deps=state["io_deps"],
         )
-        global_dependencies = list(state["global_dependencies"])
+        g_deps = state["global_dependencies"]
 
-        if state["annotations"]:
-            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
-
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        dsk.update(raw)
-
-        for k, v in raw_deps.items():
-            dependencies[stringify(k)] = [stringify(d) for d in v] + global_dependencies
+        # Stringify layer graph and dependencies
+        layer_dsk = {
+            stringify(k): stringify_collection_keys(v) for k, v in layer_dsk.items()
+        }
+        deps = {
+            stringify(k): {stringify(d) for d in v} | g_deps
+            for k, v in layer_deps.items()
+        }
+        return {"dsk": layer_dsk, "deps": deps}
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
@@ -497,8 +495,8 @@ class Blockwise(Layer):
             if key[0] == self.output:
                 output_blocks.add(key[1:])
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-        out_size = tuple([self.dims[i] for i in self.output_indices])
-        if np.prod(out_size) != len(culled_deps):
+        out_size_iter = (self.dims[i] for i in self.output_indices)
+        if prod(out_size_iter) != len(culled_deps):
             culled_layer = self._cull(output_blocks)
             return culled_layer, culled_deps
         else:

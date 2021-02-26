@@ -120,7 +120,9 @@ class SimpleShuffleLayer(Layer):
         ]
         return (SimpleShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def __dask_distributed_pack__(self, client):
+    def __dask_distributed_pack__(
+        self, all_hlg_keys, known_key_dependencies, client, client_keys
+    ):
         from distributed.protocol.serialize import to_serialize
 
         return {
@@ -132,11 +134,10 @@ class SimpleShuffleLayer(Layer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
-            "annotations": self.pack_annotations(),
         }
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         from distributed.worker import dumps_task
 
         # msgpack will convert lists into tuples, here
@@ -147,19 +148,18 @@ class SimpleShuffleLayer(Layer):
             state["inputs"] = list(state["inputs"])
 
         # Materialize the layer
-        raw = dict(cls(**state))
+        layer_dsk = dict(cls(**state))
 
         # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        dsk.update(toolz.valmap(dumps_task, raw))
+        layer_dsk = {
+            stringify(k): stringify_collection_keys(v) for k, v in layer_dsk.items()
+        }
+        keys = layer_dsk.keys() | dsk.keys()
 
         # TODO: use shuffle-knowledge to calculate dependencies more efficiently
-        dependencies.update(
-            {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
-        )
+        deps = {k: keys_in_tasks(keys, [v]) for k, v in layer_dsk.items()}
 
-        if state["annotations"]:
-            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
+        return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -341,8 +341,8 @@ class ShuffleLayer(SimpleShuffleLayer):
 
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
 
-    def __dask_distributed_pack__(self, client):
-        ret = super().__dask_distributed_pack__(client)
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        ret = super().__dask_distributed_pack__(*args, **kwargs)
         ret["inputs"] = self.inputs
         ret["stage"] = self.stage
         ret["nsplits"] = self.nsplits
@@ -689,7 +689,7 @@ def shuffle(
         else:
             index = list(index)
         nset = set(index)
-        if nset.intersection(set(df.columns)) == nset:
+        if nset & set(df.columns) == nset:
             return rearrange_by_column(
                 df,
                 index,

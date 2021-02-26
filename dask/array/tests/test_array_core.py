@@ -1266,7 +1266,7 @@ def test_map_blocks_block_info_with_new_axis():
     values = da.from_array(np.array(["a", "a", "b", "c"]), 2)
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0, None}
+        assert block_info.keys() == {0, None}
         assert block_info[0]["shape"] == (4,)
         assert block_info[0]["num-chunks"] == (2,)
         assert block_info[None]["shape"] == (4, 3)
@@ -1301,7 +1301,7 @@ def test_map_blocks_block_info_with_drop_axis():
     )
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0, None}
+        assert block_info.keys() == {0, None}
         assert block_info[0]["shape"] == (4, 3)
         # drop_axis concatenates along the dropped dimension, hence not (2, 3)
         assert block_info[0]["num-chunks"] == (2, 1)

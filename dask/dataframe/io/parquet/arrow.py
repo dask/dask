@@ -661,9 +661,7 @@ class ArrowDatasetEngine(Engine):
             elif index_in_columns_and_parts:
                 # The correct index has already been set
                 index = False
-                columns_and_parts = list(
-                    set(columns_and_parts).difference(set(df.index.names))
-                )
+                columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
         df = df[list(columns_and_parts)]
 
         if index:
@@ -1308,7 +1306,11 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
-                frag_map[(fpath, row_group_info[0].id)] = frag
+                if len(row_group_info):
+                    frag_map[(fpath, row_group_info[0].id)] = frag
+                else:
+                    # All row-groups were filtered
+                    continue
             else:
                 file_row_groups[fpath] = [None]
                 frag_map[(fpath, None)] = frag

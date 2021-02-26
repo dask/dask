@@ -303,8 +303,6 @@ def text_blocks_to_pandas(
     # 2. contain 'category' for data inferred types
     categoricals = head.select_dtypes(include=["category"]).columns
 
-    known_categoricals = []
-    unknown_categoricals = categoricals
     if isinstance(specified_dtypes, Mapping):
         known_categoricals = [
             k
@@ -313,11 +311,7 @@ def text_blocks_to_pandas(
             and specified_dtypes.get(k).categories is not None
         ]
         unknown_categoricals = categoricals.difference(known_categoricals)
-    elif (
-        isinstance(specified_dtypes, CategoricalDtype)
-        and specified_dtypes.categories is None
-    ):
-        known_categoricals = []
+    else:
         unknown_categoricals = categoricals
 
     # Fixup the dtypes

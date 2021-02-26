@@ -1,3 +1,4 @@
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 import pytest
 
 distributed = pytest.importorskip("distributed")
@@ -342,3 +343,49 @@ def test_blockwise_array_creation(c, io, fuse):
     narr += 2
     with dask.config.set({"optimization.fuse.active": fuse}):
         da.assert_eq(darr, narr)
+@gen_cluster(client=True)
+async def test_combo_of_layer_types(c, s, a, b):
+    """Check pack/unpack of a HLG that has every type of Layers!"""
+
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+
+    def add(x, y, z, extra_arg):
+        return x + y + z + extra_arg
+
+    y = c.submit(lambda x: x, 2)
+    z = c.submit(lambda x: x, 3)
+    x = da.blockwise(
+        add,
+        "x",
+        da.zeros((3,), chunks=(1,)),
+        "x",
+        da.ones((3,), chunks=(1,)),
+        "x",
+        y,
+        None,
+        concatenate=False,
+        dtype=int,
+        extra_arg=z,
+    )
+
+    df = dd.from_pandas(pd.DataFrame({"a": np.arange(3)}), npartitions=3)
+    df = df.shuffle("a", shuffle="tasks")
+    df = df["a"].to_dask_array()
+
+    res = x.sum() + df.sum()
+    res = await c.compute(res, optimize_graph=False)
+    assert res == 21
+
+
+@gen_cluster(client=True)
+async def test_annotation_pack_unpack(c, s, a, b):
+    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
+
+    annotations = {"workers": ("alice",)}
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
+    annotations = unpacked_hlg["annotations"]
+    assert annotations == {"workers": {"n": ("alice",)}}
