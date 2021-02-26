@@ -644,7 +644,6 @@ def merge(
             shuffle == "tasks"
             and how in ("inner", "left", "right")
             and how != bcast_side
-            and not npartitions
             and broadcast is not False
         ):
             # Note on `broadcast_bias`:
@@ -1633,9 +1632,11 @@ def broadcast_join(
     """
 
     if npartitions:
-        # We currently require the output partition count to
-        # be equivalent to the non-broadcasted input collection
-        raise ValueError("npartitions not yet supported.")
+        # Repartition the larger collection before the merge
+        if lhs.npartitions < rhs.npartitions:
+            rhs = rhs.repartition(npartitions=npartitions)
+        else:
+            lhs = lhs.repartition(npartitions=npartitions)
 
     if how not in ("inner", "left", "right"):
         # Broadcast algorithm cannot handle an "outer" join
