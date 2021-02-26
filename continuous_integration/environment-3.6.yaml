@@ -57,3 +57,5 @@ dependencies:
   - python-xxhash
   - mmh3
   - pip
+  - pip:
+    - git+https://github.com/dask/distributed
