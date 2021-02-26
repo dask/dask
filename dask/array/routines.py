@@ -620,7 +620,10 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-def _bincount_sum(bincounts, dtype=int):
+def _bincount_agg(bincounts, dtype, **kwargs):
+    if not isinstance(bincounts, list):
+        return bincounts
+
     n = max(map(len, bincounts))
     out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
@@ -629,7 +632,7 @@ def _bincount_sum(bincounts, dtype=int):
 
 
 @derived_from(np)
-def bincount(x, weights=None, minlength=0):
+def bincount(x, weights=None, minlength=0, split_every=None):
     if x.ndim != 1:
         raise ValueError("Input array must be one dimensional. Try using x.ravel()")
     if weights is not None:
@@ -637,41 +640,38 @@ def bincount(x, weights=None, minlength=0):
             raise ValueError("Chunks of input array x and weights must match.")
 
     token = tokenize(x, weights, minlength)
-    name = "bincount-" + token
-    final_name = "bincount-sum" + token
-    # Call np.bincount on each block, possibly with weights
+    args = [x, "i"]
     if weights is not None:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([1], weights=[1]).dtype
+        meta = np.bincount([1], weights=[1])
+        args.extend([weights, "i"])
     else:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), None, minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([]).dtype
+        meta = np.bincount([])
 
-    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
-    graph = HighLevelGraph.from_collections(
-        final_name, dsk, dependencies=[x] if weights is None else [x, weights]
+    chunked_counts = blockwise(
+        partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
     )
 
-    if minlength == 0:
-        chunks = ((np.nan,),)
-    else:
-        chunks = ((minlength,),)
+    from .reductions import _tree_reduce
 
-    meta = meta_from_array(x, 1, dtype=dtype)
-
-    return Array(graph, final_name, chunks, meta=meta)
+    output = _tree_reduce(
+        chunked_counts,
+        aggregate=partial(_bincount_agg, dtype=meta.dtype),
+        axis=(0,),
+        keepdims=False,
+        dtype=meta.dtype,
+        split_every=split_every,
+        concatenate=False,
+    )
+    output._meta = meta
+    return output
 
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    bins = np.asarray(bins)
-    dtype = np.digitize([0], bins, right=False).dtype
+    from .utils import asarray_safe
+
+    bins = asarray_safe(bins, like=meta_from_array(a))
+    dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
@@ -1602,6 +1602,37 @@ def insert(arr, obj, values, axis):
     interleaved = list(interleave([split_arr, split_values]))
     interleaved = [i for i in interleaved if i.nbytes]
     return concatenate(interleaved, axis=axis)
+
+
+@derived_from(np)
+def delete(arr, obj, axis):
+    """
+    NOTE: If ``obj`` is a dask array it is implicitly computed when this function
+    is called.
+    """
+    # axis is a required argument here to avoid needing to deal with the numpy
+    # default case (which reshapes the array to make it flat)
+    axis = validate_axis(axis, arr.ndim)
+
+    if isinstance(obj, slice):
+        tmp = np.arange(*obj.indices(arr.shape[axis]))
+        obj = tmp[::-1] if obj.step and obj.step < 0 else tmp
+    else:
+        obj = np.asarray(obj)
+        obj = np.where(obj < 0, obj + arr.shape[axis], obj)
+        obj = np.unique(obj)
+
+    target_arr = split_at_breaks(arr, obj, axis)
+
+    target_arr = [
+        arr[
+            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
+        ]
+        if i != 0
+        else arr
+        for i, arr in enumerate(target_arr)
+    ]
+    return concatenate(target_arr, axis=axis)
 
 
 @derived_from(np)

@@ -535,10 +535,16 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
 
-def test_bincount_with_weights():
+@pytest.mark.parametrize(
+    "weights",
+    [
+        np.array([1, 2, 1, 0.5, 1], dtype=np.float32),
+        np.array([1, 2, 1, 0, 1], dtype=np.int32),
+    ],
+)
+def test_bincount_with_weights(weights):
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
-    weights = np.array([1, 2, 1, 0.5, 1])
 
     dweights = da.from_array(weights, chunks=2)
     e = da.bincount(d, weights=dweights, minlength=6)
@@ -1711,6 +1717,33 @@ def test_multi_insert():
         np.insert(np.insert(z, [0, 1], -1, axis=0), [1], -1, axis=1),
         da.insert(da.insert(c, [0, 1], -1, axis=0), [1], -1, axis=1),
     )
+
+
+def test_delete():
+    x = np.random.randint(10, size=(10, 10))
+    a = da.from_array(x, chunks=(5, 5))
+
+    assert_eq(np.delete(x, 0, axis=0), da.delete(a, 0, axis=0))
+    assert_eq(np.delete(x, 3, axis=-1), da.delete(a, 3, axis=-1))
+    assert_eq(np.delete(x, 5, axis=1), da.delete(a, 5, axis=1))
+    assert_eq(np.delete(x, -1, axis=-2), da.delete(a, -1, axis=-2))
+    assert_eq(np.delete(x, [2, 3, 3], axis=1), da.delete(a, [2, 3, 3], axis=1))
+    assert_eq(
+        np.delete(x, [2, 3, 8, 8], axis=0),
+        da.delete(a, [2, 3, 8, 8], axis=0),
+    )
+    assert_eq(np.delete(x, slice(1, 4), axis=1), da.delete(a, slice(1, 4), axis=1))
+    assert_eq(
+        np.delete(x, slice(1, 10, -1), axis=1), da.delete(a, slice(1, 10, -1), axis=1)
+    )
+
+    assert_eq(np.delete(a, [4, 2], axis=0), da.delete(a, [4, 2], axis=0))
+
+    with pytest.raises(AxisError):
+        da.delete(a, [3], axis=2)
+
+    with pytest.raises(AxisError):
+        da.delete(a, [3], axis=-3)
 
 
 def test_result_type():

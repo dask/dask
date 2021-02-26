@@ -2467,7 +2467,7 @@ Dask Name: {name}, {task} tasks"""
         return self._cum_agg(
             "cumsum",
             chunk=M.cumsum,
-            aggregate=operator.add,
+            aggregate=methods.cumsum_aggregate,
             axis=axis,
             skipna=skipna,
             chunk_kwargs=dict(axis=axis, skipna=skipna),
@@ -2479,7 +2479,7 @@ Dask Name: {name}, {task} tasks"""
         return self._cum_agg(
             "cumprod",
             chunk=M.cumprod,
-            aggregate=operator.mul,
+            aggregate=methods.cumprod_aggregate,
             axis=axis,
             skipna=skipna,
             chunk_kwargs=dict(axis=axis, skipna=skipna),

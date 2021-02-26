@@ -6,10 +6,9 @@ try:
 except ImportError:
     msgpack = None
 
-import numpy as np
-
 import tlz as toolz
 
+from .compatibility import prod
 from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
@@ -292,7 +291,7 @@ class Blockwise(Layer):
         return iter(self._dict)
 
     def __len__(self):
-        return int(np.prod(list(self._out_numblocks().values())))
+        return int(prod(self._out_numblocks().values()))
 
     def _out_numblocks(self):
         d = {}
@@ -497,8 +496,8 @@ class Blockwise(Layer):
             if key[0] == self.output:
                 output_blocks.add(key[1:])
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-        out_size = tuple([self.dims[i] for i in self.output_indices])
-        if np.prod(out_size) != len(culled_deps):
+        out_size_iter = (self.dims[i] for i in self.output_indices)
+        if prod(out_size_iter) != len(culled_deps):
             culled_layer = self._cull(output_blocks)
             return culled_layer, culled_deps
         else:

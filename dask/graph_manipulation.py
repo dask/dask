@@ -5,8 +5,6 @@ their inputs.
 import uuid
 from typing import Callable, Hashable, Optional, Set, Tuple, TypeVar
 
-from .array import Array
-from .bag import Bag
 from .base import (
     clone_key,
     get_collection_name,
@@ -16,7 +14,6 @@ from .base import (
 )
 from .blockwise import blockwise
 from .core import flatten
-from .dataframe import DataFrame, Series
 from .delayed import Delayed, delayed
 from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
 
@@ -73,6 +70,35 @@ def checkpoint(*collections) -> Delayed:
     return Delayed(name, dsk)
 
 
+def _can_apply_blockwise(collection):
+    """Return True if _map_blocks can be sped up via blockwise operations; False
+    otherwise.
+
+    FIXME this returns False for collections that wrap around around da.Array, such as
+          pint.Quantity, xarray DataArray, Dataset, and Variable.
+    """
+    try:
+        from .bag import Bag
+
+        if isinstance(collection, Bag):
+            return True
+    except ImportError:
+        pass
+    try:
+        from .array import Array
+
+        if isinstance(collection, Array):
+            return True
+    except ImportError:
+        pass
+    try:
+        from .dataframe import DataFrame, Series
+
+        return isinstance(collection, (DataFrame, Series))
+    except ImportError:
+        return False
+
+
 def _build_map_layer(
     func: Callable, name: str, collection, dependencies: Tuple[Delayed, ...] = ()
 ) -> Layer:
@@ -91,14 +117,14 @@ def _build_map_layer(
         Zero or more Delayed objects, which will be passed as arbitrary variadic args to
         func after the collection's chunk
     """
-    if isinstance(collection, (Array, DataFrame, Series, Bag)):
+    if _can_apply_blockwise(collection):
         # Use a Blockwise layer
-        if isinstance(collection, Array):
+        try:
             numblocks = collection.numblocks
-        else:
+        except AttributeError:
             numblocks = (collection.npartitions,)
         indices = tuple(i for i, _ in enumerate(numblocks))
-        kwargs = {"_deps": dependencies} if dependencies else {}
+        kwargs = {"_deps": [d.key for d in dependencies]} if dependencies else {}
         prev_name = get_collection_name(collection)
         return blockwise(
             func,
@@ -138,12 +164,13 @@ def bind(
     ``a`` completely and then computes ``b`` completely, recomputing ``a`` in the
     process:
 
-    >>> from dask import array as da
+    >>> import dask
+    >>> import dask.array as da
     >>> a = da.ones(4, chunks=2)
     >>> b = a + 1
     >>> b2 = bind(b, a)
     >>> len(b2.dask)
-    11
+    9
     >>> b2.compute()
     array([2., 2., 2., 2.])
 
@@ -154,7 +181,7 @@ def bind(
     >>> c = a + 2
     >>> b3, c3 = bind((b, c), a, omit=a)
     >>> len(b3.dask), len(c3.dask)
-    (9, 9)
+    (7, 7)
     >>> dask.compute(b3, c3)
     (array([2., 2., 2., 2.]), array([3., 3., 3., 3.]))
 
@@ -320,7 +347,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     >>> x_i = da.asarray([1, 1, 1, 1], chunks=2)
     >>> y_i = x_i + 1
     >>> z_i = y_i + 2
-    >>> dict(z_i.dask)
+    >>> dict(z_i.dask)  # doctest: +SKIP
     {('array-1', 0): array([1, 1]),
      ('array-1', 1): array([1, 1]),
      ('add-2', 0): (<function operator.add>, ('array-1', 0), 1),
@@ -329,8 +356,8 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
      ('add-3', 1): (<function operator.add>, ('add-2', 1), 1)}
     >>> w_i = clone(z_i, omit=x_i)
     >>> w_i.compute()
-    array([4., 4., 4., 4.])
-    >>> dict(w_i.dask)
+    array([4, 4, 4, 4])
+    >>> dict(w_i.dask)  # doctest: +SKIP
     {('array-1', 0): array([1, 1]),
      ('array-1', 1): array([1, 1]),
      ('add-4', 0): (<function operator.add>, ('array-1', 0), 1),

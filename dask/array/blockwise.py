@@ -135,7 +135,7 @@ def blockwise(
     >>> b = da.from_array([10, 50, 100], chunks=1)
     >>> z = blockwise(np.outer, 'ij', a, 'i', b, 'j', dtype='f8')
     >>> z.compute()
-    array([[ 0,    0,   0],
+    array([[  0,   0,   0],
            [ 10,  50, 100],
            [ 20, 100, 200]])
 
