@@ -13,17 +13,6 @@ from ..blockwise import (
 )
 
 
-class CreateChunk:
-    """Generate a chunk from an index"""
-
-    def __init__(self, chunks):
-        self.chunks = chunks
-
-    def __call__(self, idx):
-        ndim = len(self.chunks)
-        return tuple(self.chunks[i][idx[i]] for i in range(ndim))
-
-
 class BlockwiseCreateArray(Blockwise):
     """
     Specialized Blockwise Layer for array creation routines.
@@ -56,6 +45,13 @@ class BlockwiseCreateArray(Blockwise):
         # Define "blockwise" graph
         dsk = {self.name: (func, blockwise_token(0))}
 
+        # Define mapping between keys and chunks
+        chunk_key_map = {}
+        for idx in itertools.product(*[range(len(c)) for c in chunks]):
+            ndim = len(chunks)
+            chunk = tuple(chunks[i][idx[i]] for i in range(ndim))
+            chunk_key_map[tuple(idx)] = chunk
+
         out_ind = tuple(range(len(shape)))
         self.nchunks = tuple(len(chunk) for chunk in chunks)
         super().__init__(
@@ -64,7 +60,7 @@ class BlockwiseCreateArray(Blockwise):
             dsk,
             [(io_name, out_ind)],
             {io_name: self.nchunks},
-            io_deps={io_name: {"func": CreateChunk(chunks)}},
+            io_deps={io_name: chunk_key_map},
         )
 
     def __repr__(self):
