@@ -227,7 +227,7 @@ def assert_eq_shape(a, b, check_nan=True):
 
 
 def _check_chunks(x):
-    x = x.persist()
+    x = x.persist(scheduler="sync")
     for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
         chunk = x.dask[(x.name,) + idx]
         if not hasattr(chunk, "dtype"):
