@@ -1248,7 +1248,7 @@ def test_optimize_globals():
     assert_eq(x + 1, np.ones(10) + 1)
 
     with dask.config.set(array_optimize=optimize_double):
-        assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2)
+        assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2, check_chunks=False)
 
     assert_eq(x + 1, np.ones(10) + 1)
 
