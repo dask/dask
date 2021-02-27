@@ -2285,6 +2285,10 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
     )
     pd_result = pd.merge(left, right, on="y", how=how)
 
+    # Make sure `on` dtypes match
+    dd_result["y"] = dd_result["y"].astype(np.int32)
+    pd_result["y"] = pd_result["y"].astype(np.int32)
+
     if npartitions:
         assert dd_result.npartitions == npartitions
 
@@ -2292,5 +2296,4 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         dd_result.compute().sort_values("y"),
         pd_result.sort_values("y"),
         check_index=False,
-        check_dtypes=False,
     )
