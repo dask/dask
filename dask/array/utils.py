@@ -417,7 +417,7 @@ def zeros_like_safe(a, shape, **kwargs):
     try:
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", a.dtype)
+        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
         return np.zeros(shape, **kwargs)
 
 
