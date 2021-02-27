@@ -3383,12 +3383,12 @@ def test_blockwise_concatenate():
         assert b.shape == (4, 4)
         assert c.shape == (4, 2)
 
-        return np.ones(5)
+        return np.ones(2)
 
     z = da.blockwise(
         f, "j", x, "ijk", y, "ki", y, "ij", concatenate=True, dtype=x.dtype
     )
-    assert_eq(z, np.ones(10), check_shape=False)
+    assert_eq(z, np.ones(4), check_shape=False)
 
 
 def test_common_blockdim():
