@@ -211,7 +211,7 @@ def rollaxis(a, axis, start=0):
 if _numpy_120:
     sliding_window_view = np.lib.stride_tricks.sliding_window_view
 else:
-
+    # copied from numpy.lib.stride_tricks
     def sliding_window_view(
         x, window_shape, axis=None, *, subok=False, writeable=False
     ):

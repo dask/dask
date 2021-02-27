@@ -792,6 +792,8 @@ def test_ensure_minimum_chunksize_raises_error():
         ((3, 4, 5), (2, 3, 4), (3, 2), (1, 2)),
         ((40, 30, 2), 5, (3,), (0,)),  # window < chunk
         ((21,), 3, (7,), (0,)),  # window > chunk
+        ((9,), 3, 3, 0),  # window == chunk
+        ((9,), 3, 3, -1),  # axis=-1
     ],
 )
 def test_sliding_window_view(shape, chunks, window_shape, axis):
@@ -801,5 +803,12 @@ def test_sliding_window_view(shape, chunks, window_shape, axis):
     arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)
     expected = np_sliding_window_view(arr.compute(), window_shape, axis)
-    assert expected.shape == actual.shape
-    assert_array_equal(expected, actual)
+
+    for block in actual.blocks:
+        assert block.shape == block.compute().shape
+
+    assert_eq(expected, actual)
+
+
+def test_sliding_window_errors():
+    pass

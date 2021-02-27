@@ -1,9 +1,36 @@
+import numpy as np
 from ..overlap import ensure_minimum_chunksize, map_overlap
 from ..numpy_compat import sliding_window_view as _np_sliding_window_view
 
 
 def sliding_window_view(arr, window_shape, axis):
     """ Dask wrapper for numpy.lib.stride_tricks.sliding_window_view."""
+
+    from numpy.core.numeric import normalize_axis_tuple
+
+    window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
+
+    window_shape_array = np.array(window_shape)
+    if np.any(window_shape_array < 0):
+        raise ValueError("`window_shape` cannot contain negative values")
+
+    if axis is None:
+        axis = tuple(range(arr.ndim))
+        if len(window_shape) != len(axis):
+            raise ValueError(
+                f"Since axis is `None`, must provide "
+                f"window_shape for all dimensions of `x`; "
+                f"got {len(window_shape)} window_shape elements "
+                f"and `arr.ndim` is {arr.ndim}."
+            )
+    else:
+        axis = normalize_axis_tuple(axis, arr.ndim, allow_duplicate=True)
+        if len(window_shape) != len(axis):
+            raise ValueError(
+                f"Must provide matching length window_shape and "
+                f"axis; got {len(window_shape)} window_shape "
+                f"elements and {len(axis)} axes elements."
+            )
 
     depths = [0] * arr.ndim
     for ax, window in zip(axis, window_shape):
