@@ -2292,4 +2292,5 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         dd_result.compute().sort_values("y"),
         pd_result.sort_values("y"),
         check_index=False,
+        check_dtypes=False,
     )
