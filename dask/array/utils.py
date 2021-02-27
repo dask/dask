@@ -368,6 +368,16 @@ def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
         return lambda x: x
 
 
+def _dtype_of(a):
+    """Determine dtype of an array-like."""
+    try:
+        # Check for the attribute before using asanyarray, because some types
+        # (notably sparse arrays) don't work with it.
+        return a.dtype
+    except AttributeError:
+        return np.asanyarray(a).dtype
+
+
 def empty_like_safe(a, shape, **kwargs):
     """
     Return np.empty_like(a, shape=shape, **kwargs) if the shape argument
@@ -377,7 +387,7 @@ def empty_like_safe(a, shape, **kwargs):
     try:
         return np.empty_like(a, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.empty(shape, **kwargs)
 
 
@@ -391,7 +401,7 @@ def full_like_safe(a, fill_value, shape, **kwargs):
     try:
         return np.full_like(a, fill_value, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.full(shape, fill_value, **kwargs)
 
 
@@ -404,7 +414,7 @@ def ones_like_safe(a, shape, **kwargs):
     try:
         return np.ones_like(a, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.ones(shape, **kwargs)
 
 
@@ -417,7 +427,7 @@ def zeros_like_safe(a, shape, **kwargs):
     try:
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.zeros(shape, **kwargs)
 
 
