@@ -234,7 +234,6 @@ def _check_chunks(x):
             chunk = np.array(chunk, dtype="O")
         expected_shape = tuple(c[i] for c, i in zip(x.chunks, idx))
         assert_eq_shape(expected_shape, chunk.shape, check_nan=False)
-        print(chunk.shape, chunk.dtype, x.dtype)
         assert chunk.dtype == x.dtype
     return x
 
