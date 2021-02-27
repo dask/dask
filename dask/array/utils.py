@@ -377,7 +377,7 @@ def empty_like_safe(a, shape, **kwargs):
     try:
         return np.empty_like(a, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", a.dtype)
+        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
         return np.empty(shape, **kwargs)
 
 
@@ -391,7 +391,7 @@ def full_like_safe(a, fill_value, shape, **kwargs):
     try:
         return np.full_like(a, fill_value, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", a.dtype)
+        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
         return np.full(shape, fill_value, **kwargs)
 
 
@@ -404,7 +404,7 @@ def ones_like_safe(a, shape, **kwargs):
     try:
         return np.ones_like(a, shape=shape, **kwargs)
     except TypeError:
-        kwargs.setdefault("dtype", a.dtype)
+        kwargs.setdefault("dtype", np.asanyarray(a).dtype)
         return np.ones(shape, **kwargs)
 
 
