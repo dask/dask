@@ -4557,7 +4557,7 @@ def test_dot():
     dask_s2 = dd.from_pandas(s2, npartitions=1)
 
     assert_eq(s1.dot(s2), dask_s1.dot(dask_s2).compute())
-    assert_eq((s1.dot(df) == dask_s1.dot(dask_df).compute()).all(), True)
+    assert_eq(s1.dot(df), dask_s1.dot(dask_df).compute())
 
     # With partitions
     partitioned_s1 = dd.from_pandas(s1, npartitions=2)
@@ -4565,7 +4565,7 @@ def test_dot():
     partitioned_s2 = dd.from_pandas(s2, npartitions=2)
 
     assert_eq(s1.dot(s2), partitioned_s1.dot(partitioned_s2).compute())
-    assert_eq((s1.dot(df) == partitioned_s1.dot(partitioned_df).compute()).all(), True)
+    assert_eq(s1.dot(df), partitioned_s1.dot(partitioned_df).compute())
 
     # Test passing meta kwarg
     res = dask_s1.dot(dask_df, meta=pd.Series([1], name="test_series")).compute()
@@ -4586,5 +4586,5 @@ def test_dot_nan():
     df = pd.DataFrame({"one": s1, "two": s2})
     dask_df = dd.from_pandas(df, npartitions=1)
 
-    assert_eq(np.isnan(dask_s1.dot(dask_s2).compute()), True)
-    assert_eq(dask_s2.dot(dask_df).isnull().all().compute(), True)
+    assert np.isnan(dask_s1.dot(dask_s2).compute())
+    assert dask_s2.dot(dask_df).isnull().all().compute()
