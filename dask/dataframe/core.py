@@ -2243,15 +2243,25 @@ Dask Name: {name}, {task} tasks"""
         percentiles_method="default",
         include=None,
         exclude=None,
+        datetime_is_numeric=False,
     ):
-
+        # pmh: one dimension -> series -> no need to select columns by dtype
         if self._meta.ndim == 1:
-            return self._describe_1d(self, split_every, percentiles, percentiles_method)
+            return self._describe_1d(self, split_every, percentiles, percentiles_method, datetime_is_numeric=datetime_is_numeric)
+
+        # pmh: >1 dim -> dataframe, need to think about dtypes
         elif (include is None) and (exclude is None):
-            data = self._meta.select_dtypes(include=[np.number, np.timedelta64])
+
+            # pmh: original default columns
+            _numeric_dtypes = [np.number, np.timedelta64]
+            # pmh: new parameter to match modern pandas
+            if datetime_is_numeric:
+                _numeric_dtypes.append(np.datetime64)
+
+            data = self._meta.select_dtypes(include=_numeric_dtypes)
 
             # when some numerics/timedeltas are found, by default keep them
-            if len(data.columns) == 0:
+            if len(data.columns) == 0:  # pmh: no numeric types
                 chosen_columns = self._meta.columns
             else:
                 # check if there are timedelta or boolean columns
@@ -2287,11 +2297,18 @@ Dask Name: {name}, {task} tasks"""
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _describe_1d(
-        self, data, split_every=False, percentiles=None, percentiles_method="default"
+        self,
+        data,
+        split_every=False,
+        percentiles=None,
+        percentiles_method="default",
+        datetime_is_numeric=False,
     ):
         if is_bool_dtype(data._meta):
             return self._describe_nonnumeric_1d(data, split_every=split_every)
-        elif is_numeric_dtype(data._meta):
+        elif is_numeric_dtype(data._meta) or (
+            is_datetime64_any_dtype(data._meta) and datetime_is_numeric
+        ):
             return self._describe_numeric(
                 data,
                 split_every=split_every,

@@ -388,9 +388,9 @@ def test_describe_numeric(method, test_values):
 
 
 # TODO(pandas) deal with this describe warning instead of ignoring
-@pytest.mark.filterwarnings(
-    "ignore:Treating datetime data as categorical|casting:FutureWarning"
-)
+# @pytest.mark.filterwarnings(
+#     "ignore:Treating datetime data as categorical|casting:FutureWarning"
+# )
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -407,7 +407,8 @@ def test_describe_numeric(method, test_values):
         (["object", "datetime", "bool"], None, None, None),
     ],
 )
-def test_describe(include, exclude, percentiles, subset):
+@pytest.mark.parametrize("dt_is_num", [True, False])
+def test_describe(include, exclude, percentiles, subset, dt_is_num):
     data = {
         "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
         "c": [None, 0, 1, 2, 3, 4] * 2,
@@ -442,8 +443,18 @@ def test_describe(include, exclude, percentiles, subset):
     ddf = dd.from_pandas(df, 2)
 
     # Act
-    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
-    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+    desc_ddf = ddf.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        datetime_is_numeric=dt_is_num,
+    )
+    desc_df = df.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        datetime_is_numeric=dt_is_num,
+    )
 
     # Assert
     assert_eq(desc_ddf, desc_df)
@@ -452,8 +463,8 @@ def test_describe(include, exclude, percentiles, subset):
     if subset is None:
         for col in ["a", "c", "e", "g"]:
             assert_eq(
-                df[col].describe(include=include, exclude=exclude),
-                ddf[col].describe(include=include, exclude=exclude),
+                df[col].describe(include=include, exclude=exclude, datetime_is_numeric=dt_is_num),
+                ddf[col].describe(include=include, exclude=exclude, datetime_is_numeric=dt_is_num),
             )
 
 
@@ -2522,12 +2533,7 @@ def test_drop_columns(columns):
     # Check both populated and empty list argument
     # https://github.com/dask/dask/issues/6870
 
-    df = pd.DataFrame(
-        {
-            "a": [2, 4, 6, 8],
-            "b": ["1a", "2b", "3c", "4d"],
-        }
-    )
+    df = pd.DataFrame({"a": [2, 4, 6, 8], "b": ["1a", "2b", "3c", "4d"],})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = ddf.drop(columns=columns)
     ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
