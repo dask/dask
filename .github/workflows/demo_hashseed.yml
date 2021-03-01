@@ -1,0 +1,29 @@
+name: Demo hash seed issue
+
+on: [pull_request]
+
+jobs:
+  test:
+    runs-on: macos-latest
+
+    steps:
+      - name: Checkout source
+        uses: actions/checkout@v2
+
+      - name: Setup Conda Environment
+        uses: conda-incubator/setup-miniconda@v2
+        with:
+          miniconda-version: "latest"
+          python-version: "3.9"
+          environment-file: continuous_integration/environment-3.9.yaml
+          activate-environment: test-environment
+          auto-activate-base: false
+
+      - name: Demo hash seed
+        shell: bash -l {0}
+        run: |
+          python --version
+          python -c 'print(hash("Hello world"))'
+          python -c 'print(hash("Hello world"))'
+          PYTHONHASHSEED=42 python -c 'print(hash("Hello world"))'
+          PYTHONHASHSEED=42 python -c 'print(hash("Hello world"))'
