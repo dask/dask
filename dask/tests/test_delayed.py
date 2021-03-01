@@ -13,6 +13,7 @@ import dask
 import dask.bag as db
 from dask import compute
 from dask.delayed import Delayed, delayed, to_task_dask
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils_test import inc
 
 try:
@@ -712,3 +713,20 @@ def test_dask_layers_to_delayed():
     assert d.dask.layers.keys() == {"delayed-" + name}
     assert d.dask.dependencies == {"delayed-" + name: set()}
     assert d.__dask_layers__() == ("delayed-" + name,)
+
+
+def test_annotations_survive_optimization():
+
+    with dask.annotate(foo="bar"):
+        d = delayed(add)(1, 2)
+
+    assert type(d.dask) is HighLevelGraph
+    assert len(d.dask.layers) == 1
+    assert next(iter(d.dask.layers.values())).annotations == {"foo": "bar"}
+
+    # Ensure optimizing a Delayed object returns a HighLevelGraph
+    # and doesn't loose annotations
+    (d_opt,) = dask.optimize(d)
+    assert type(d.dask) is HighLevelGraph
+    assert len(d_opt.dask.layers) == 1
+    assert next(iter(d_opt.dask.layers.values())).annotations == {"foo": "bar"}
