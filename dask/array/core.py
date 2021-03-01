@@ -1156,6 +1156,10 @@ class Array(DaskMethodsMixin):
             if result is not None:
                 self = result
 
+        self.dask.layers[name].type = type(self)
+        self.dask.layers[name].chunks = chunks
+        self.dask.layers[name].dtype = dtype
+
         return self
 
     def __reduce__(self):
