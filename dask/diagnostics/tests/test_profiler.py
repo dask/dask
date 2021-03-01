@@ -231,15 +231,15 @@ def test_profiler_plot():
     with prof:
         get(dsk, "e")
     p = prof.visualize(
-        plot_width=500,
-        plot_height=300,
+        width=500,
+        height=300,
         tools="hover",
         title="Not the default",
         show=False,
         save=False,
     )
-    assert p.plot_width == 500
-    assert p.plot_height == 300
+    assert p.width == 500
+    assert p.height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert check_title(p, "Not the default")
@@ -258,15 +258,15 @@ def test_resource_profiler_plot():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, "c")
     p = rprof.visualize(
-        plot_width=500,
-        plot_height=300,
+        width=500,
+        height=300,
         tools="hover",
         title="Not the default",
         show=False,
         save=False,
     )
-    assert p.plot_width == 500
-    assert p.plot_height == 300
+    assert p.width == 500
+    assert p.height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert check_title(p, "Not the default")
@@ -293,15 +293,15 @@ def test_cache_profiler_plot():
     with CacheProfiler(metric_name="non-standard") as cprof:
         get(dsk, "e")
     p = cprof.visualize(
-        plot_width=500,
-        plot_height=300,
+        width=500,
+        height=300,
         tools="hover",
         title="Not the default",
         show=False,
         save=False,
     )
-    assert p.plot_width == 500
-    assert p.plot_height == 300
+    assert p.width == 500
+    assert p.height == 300
     assert len(p.tools) == 1
     assert isinstance(p.tools[0], bokeh.models.HoverTool)
     assert check_title(p, "Not the default")

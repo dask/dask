@@ -199,11 +199,11 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
             f.x_range = top.x_range
             f.title = None
             f.min_border_top = 20
-            f.plot_height -= 30
+            f.height -= 30
         for f in figs[:-1]:
             f.xaxis.axis_label = None
             f.min_border_bottom = 20
-            f.plot_height -= 30
+            f.height -= 30
         for f in figs:
             f.min_border_left = 75
             f.min_border_right = 75
@@ -253,8 +253,8 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         title="Profile Results",
         tools="hover,save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
@@ -351,8 +351,8 @@ def plot_resources(results, palette="Viridis", **kwargs):
         title="Profile Results",
         tools="save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
     if results:
@@ -444,8 +444,8 @@ def plot_cache(
         title="Profile Results",
         tools="hover,save,reset,wheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
