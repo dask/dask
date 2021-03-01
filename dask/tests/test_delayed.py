@@ -727,6 +727,6 @@ def test_annotations_survive_optimization():
     # Ensure optimizing a Delayed object returns a HighLevelGraph
     # and doesn't loose annotations
     (d_opt,) = dask.optimize(d)
-    assert type(d.dask) is HighLevelGraph
+    assert type(d_opt.dask) is HighLevelGraph
     assert len(d_opt.dask.layers) == 1
     assert next(iter(d_opt.dask.layers.values())).annotations == {"foo": "bar"}
