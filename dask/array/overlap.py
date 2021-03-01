@@ -845,6 +845,8 @@ def coerce_boundary(ndim, boundary):
 
 def sliding_window_view(arr, window_shape, axis=None):
     """
+    Dask version of ``numpy.lib.stride_tricks.sliding_window_view``
+
     Create a sliding window view into the array with the given window shape.
     Also known as rolling or moving window, the window slides across all
     dimensions of the array and extracts subsets of the array at all window
@@ -875,6 +877,12 @@ def sliding_window_view(arr, window_shape, axis=None):
         That is, ``view.shape = x_shape_trimmed + window_shape``, where
         ``x_shape_trimmed`` is ``x.shape`` with every entry reduced by one less
         than the corresponding window size.
+    Notes
+    -----
+    The array is rechunked to have a minimum chunk size of 1 greater than window_shape
+    along that axis. Sliding window views are created at compute time by applying numpy's
+    ``sliding_window_view`` on each chunk (with appropriate overlaps from neighbouring
+    chunks)
     Examples
     --------
     >>> import numpy as np
