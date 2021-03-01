@@ -843,7 +843,7 @@ def coerce_boundary(ndim, boundary):
     return boundary
 
 
-def sliding_window_view(arr, window_shape, axis):
+def sliding_window_view(arr, window_shape, axis=None):
     """
     Create a sliding window view into the array with the given window shape.
     Also known as rolling or moving window, the window slides across all
@@ -866,15 +866,6 @@ def sliding_window_view(arr, window_shape, axis):
         If `axis` is given as a `tuple of int`, `window_shape[i]` will refer to
         the axis `axis[i]` of `x`.
         Single integers `i` are treated as if they were the tuple `(i,)`.
-    subok : bool, optional (not supported by dask)
-        If True, sub-classes will be passed-through, otherwise the returned
-        array will be forced to be a base-class array (default).
-    writeable : bool, optional (not supported by dask)
-        When true, allow writing to the returned view. The default is false,
-        as this should be used with caution: the returned view contains the
-        same memory location multiple times, so writing to one location will
-        cause others to change.
-
     Returns
     -------
     view : ndarray
@@ -884,6 +875,22 @@ def sliding_window_view(arr, window_shape, axis):
         That is, ``view.shape = x_shape_trimmed + window_shape``, where
         ``x_shape_trimmed`` is ``x.shape`` with every entry reduced by one less
         than the corresponding window size.
+    Examples
+    --------
+    >>> import numpy as np
+    >>> import dask.array as da
+
+    >>> x = da.from_array(np.arange(6), chunks=(2,))
+    >>> x.shape
+    (6,)
+    >>> v = sliding_window_view(x, 3)
+    >>> v.shape
+    (4, 3)
+    >>> v.compute()
+    array([[0, 1, 2],
+           [1, 2, 3],
+           [2, 3, 4],
+           [3, 4, 5]])
     """
 
     from numpy.core.numeric import normalize_axis_tuple
