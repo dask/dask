@@ -212,6 +212,7 @@ if _numpy_120:
     sliding_window_view = np.lib.stride_tricks.sliding_window_view
 else:
     # copied from numpy.lib.stride_tricks
+    # https://github.com/numpy/numpy/blob/0721406ede8b983b8689d8b70556499fc2aea28a/numpy/lib/stride_tricks.py#L122-L336
     def sliding_window_view(
         x, window_shape, axis=None, *, subok=False, writeable=False
     ):

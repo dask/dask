@@ -790,11 +790,16 @@ def test_ensure_minimum_chunksize_raises_error():
 @pytest.mark.parametrize(
     "shape, chunks, window_shape, axis",
     [
-        ((3, 4, 5), (2, 3, 4), (3, 2), (1, 2)),
+        ((6, 7, 8), (6, (2, 2, 2, 1), 4), (3, 2), (1, 2)),  # chunks vary along axis
         ((40, 30, 2), 5, (3,), (0,)),  # window < chunk
         ((21,), 3, (7,), (0,)),  # window > chunk
-        ((9,), 3, 3, 0),  # window == chunk
+        ((9,), 3, 3, 0),  # window == chunk, axis is integer
         ((9,), 3, 3, -1),  # axis=-1
+        ((9,), 3, 3, None),  # axis=None
+        ((9, 8), 3, (2, 4), None),  # axis=None
+        ((9,), 3, (3, 3, 3), (0, 0, 0)),  # axis is repeated
+        ((9,), 3, (3, 3), (0, -1)),  # axis is repeated, with -1
+        ((9,), 3, [3, 3], [0, -1]),  # list instead of tuple
     ],
 )
 def test_sliding_window_view(shape, chunks, window_shape, axis):
@@ -812,7 +817,13 @@ def test_sliding_window_view(shape, chunks, window_shape, axis):
 
 @pytest.mark.parametrize(
     "window_shape, axis",
-    [((10,), 0), ((2,), 3)],
+    [
+        ((10,), 0),  # window > axis shape
+        ((2,), 3),  # axis > ndim
+        (-1, 0),  # window shape is negative
+        (2, (0, 1)),  # len(window shape) < len(axis)
+        (2, None),  # len(window shape) < len(axis)
+    ],
 )
 def test_sliding_window_errors(window_shape, axis):
     arr = da.zeros((4, 3))
