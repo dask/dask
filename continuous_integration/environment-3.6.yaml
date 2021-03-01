@@ -31,7 +31,7 @@ dependencies:
   - boto3
   - botocore
   - aiohttp
-  - bokeh<2.3
+  - bokeh
   - httpretty
   - chest
   - cloudpickle
