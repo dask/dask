@@ -2015,3 +2015,67 @@ def test_iscomplexobj():
 
     a = da.from_array(np.array([1, 2 + 0j]), 2)
     assert np.iscomplexobj(a) is True
+
+
+def test_tril_triu():
+    A = np.random.randn(20, 20)
+    for chk in [5, 4]:
+        dA = da.from_array(A, (chk, chk))
+
+        assert np.allclose(da.triu(dA).compute(), np.triu(A))
+        assert np.allclose(da.tril(dA).compute(), np.tril(A))
+
+        for k in [
+            -25,
+            -20,
+            -19,
+            -15,
+            -14,
+            -9,
+            -8,
+            -6,
+            -5,
+            -1,
+            1,
+            4,
+            5,
+            6,
+            8,
+            10,
+            11,
+            15,
+            16,
+            19,
+            20,
+            21,
+        ]:
+            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
+            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
+
+
+def test_tril_ndims():
+    A = np.random.randint(0, 11, (10, 10, 10))
+    dA = da.from_array(A, chunks=(5, 5, 5))
+    assert_eq(da.triu(dA), np.triu(A))
+
+
+def test_tril_triu_non_square_arrays():
+    A = np.random.randint(0, 11, (30, 35))
+    dA = da.from_array(A, chunks=(5, 5))
+    assert_eq(da.triu(dA), np.triu(A))
+    assert_eq(da.tril(dA), np.tril(A))
+
+
+@pytest.mark.parametrize(
+    "n, k, m, chunks",
+    [(3, 0, 3, "auto"), (3, 1, 3, "auto"), (3, -1, 3, "auto"), (5, 0, 5, 1)],
+)
+def test_tril_triu_indices(n, k, m, chunks):
+    assert_eq(
+        da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
+        np.tril_indices(n=n, k=k, m=m)[0],
+    )
+    assert_eq(
+        da.triu_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
+        np.triu_indices(n=n, k=k, m=m)[0],
+    )
