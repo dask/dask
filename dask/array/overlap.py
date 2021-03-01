@@ -469,16 +469,6 @@ def ensure_minimum_chunksize(size, chunks):
     return tuple(output)
 
 
-def rechunk_for_overlap(x, depth):
-    depth2 = coerce_depth(x.ndim, depth)
-    # rechunk if new chunks are needed to fit depth in every chunk
-    depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
-    new_chunks = tuple(
-        ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
-    )
-    return x.rechunk(new_chunks)
-
-
 def overlap(x, depth, boundary):
     """Share boundaries between neighboring blocks
 
@@ -537,7 +527,12 @@ def overlap(x, depth, boundary):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
-    x1 = rechunk_for_overlap(x, depth2)
+    # rechunk if new chunks are needed to fit depth in every chunk
+    depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
+    new_chunks = tuple(
+        ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
+    )
+    x1 = x.rechunk(new_chunks)
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
     trim = dict(

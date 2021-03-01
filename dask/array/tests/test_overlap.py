@@ -20,6 +20,7 @@ from dask.array.overlap import (
     ensure_minimum_chunksize,
 )
 from dask.array.utils import assert_eq, same_keys
+from ..lib.stride_tricks import sliding_window_view
 
 
 def test_fractional_slice():
@@ -798,7 +799,6 @@ def test_ensure_minimum_chunksize_raises_error():
 )
 def test_sliding_window_view(shape, chunks, window_shape, axis):
     from ..numpy_compat import sliding_window_view as np_sliding_window_view
-    from ..lib.stride_tricks import sliding_window_view
 
     arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)
@@ -810,5 +810,11 @@ def test_sliding_window_view(shape, chunks, window_shape, axis):
     assert_eq(expected, actual)
 
 
-def test_sliding_window_errors():
-    pass
+@pytest.mark.parametrize(
+    "window_shape, axis",
+    [((10,), 0), ((2,), 3)],
+)
+def test_sliding_window_errors(window_shape, axis):
+    arr = da.zeros((4, 3))
+    with pytest.raises(ValueError):
+        sliding_window_view(arr, window_shape, axis)
