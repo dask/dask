@@ -11,10 +11,9 @@ from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import replace_name_in_key, tokenize as _tokenize
 from .compatibility import is_dataclass, dataclass_fields
 
-from .core import quote
+from .core import quote, flatten
 from .context import globalmethod
-from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
+from .utils import funcname, methodcaller, OperatorMethodMixin, apply
 from .highlevelgraph import HighLevelGraph
 
 __all__ = ["Delayed", "delayed"]
@@ -462,9 +461,12 @@ def right(method):
 
 
 def optimize(dsk, keys, **kwargs):
-    dsk = ensure_dict(dsk)
-    dsk2, _ = cull(dsk, keys)
-    return dsk2
+    if not isinstance(keys, (list, set)):
+        keys = [keys]
+    if not isinstance(dsk, HighLevelGraph):
+        dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
+    dsk = dsk.cull(set(flatten(keys)))
+    return dsk
 
 
 class Delayed(DaskMethodsMixin, OperatorMethodMixin):
