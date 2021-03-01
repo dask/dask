@@ -30,7 +30,7 @@ dependencies:
   - blosc
   - boto3
   - botocore
-  - bokeh
+  - bokeh<2.3
   - httpretty
   - aiohttp
   - chest
