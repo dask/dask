@@ -6,7 +6,7 @@ from numbers import Integral
 from tlz import merge, pipe, concat, partial, get
 from tlz.curried import map
 
-from . import chunk
+from . import chunk, numpy_compat
 from .core import (
     Array,
     map_blocks,
@@ -19,7 +19,7 @@ from .creation import empty_like, full_like
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
 from ..core import flatten
-from ..utils import concrete
+from ..utils import concrete, derived_from
 
 
 def fractional_slice(task, axes):
@@ -844,66 +844,9 @@ def coerce_boundary(ndim, boundary):
     return boundary
 
 
-def sliding_window_view(arr, window_shape, axis=None):
-    """
-    Dask version of ``numpy.lib.stride_tricks.sliding_window_view``
-
-    Create a sliding window view into the array with the given window shape.
-    Also known as rolling or moving window, the window slides across all
-    dimensions of the array and extracts subsets of the array at all window
-    positions.
-
-    Parameters
-    ----------
-    x : array_like
-        Array to create the sliding window view from.
-    window_shape : int or tuple of int
-        Size of window over each axis that takes part in the sliding window.
-        If `axis` is not present, must have same length as the number of input
-        array dimensions. Single integers `i` are treated as if they were the
-        tuple `(i,)`.
-    axis : int or tuple of int, optional
-        Axis or axes along which the sliding window is applied.
-        By default, the sliding window is applied to all axes and
-        `window_shape[i]` will refer to axis `i` of `x`.
-        If `axis` is given as a `tuple of int`, `window_shape[i]` will refer to
-        the axis `axis[i]` of `x`.
-        Single integers `i` are treated as if they were the tuple `(i,)`.
-    Returns
-    -------
-    view : ndarray
-        Sliding window view of the array. The sliding window dimensions are
-        inserted at the end, and the original dimensions are trimmed as
-        required by the size of the sliding window.
-        That is, ``view.shape = x_shape_trimmed + window_shape``, where
-        ``x_shape_trimmed`` is ``x.shape`` with every entry reduced by one less
-        than the corresponding window size.
-    Notes
-    -----
-    The array is rechunked to have a minimum chunk size of 1 greater than window_shape
-    along that axis. Sliding window views are created at compute time by applying numpy's
-    ``sliding_window_view`` on each chunk (with appropriate overlaps from neighbouring
-    chunks)
-    Examples
-    --------
-    >>> import numpy as np
-    >>> import dask.array as da
-
-    >>> x = da.from_array(np.arange(6), chunks=(2,))
-    >>> x.shape
-    (6,)
-    >>> v = sliding_window_view(x, 3)
-    >>> v.shape
-    (4, 3)
-    >>> v.compute()
-    array([[0, 1, 2],
-           [1, 2, 3],
-           [2, 3, 4],
-           [3, 4, 5]])
-    """
-
+@derived_from(numpy_compat)
+def sliding_window_view(x, window_shape, axis=None):
     from numpy.core.numeric import normalize_axis_tuple
-    from .numpy_compat import sliding_window_view as _np_sliding_window_view
 
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
@@ -912,16 +855,16 @@ def sliding_window_view(arr, window_shape, axis=None):
         raise ValueError("`window_shape` cannot contain negative values")
 
     if axis is None:
-        axis = tuple(range(arr.ndim))
+        axis = tuple(range(x.ndim))
         if len(window_shape) != len(axis):
             raise ValueError(
                 f"Since axis is `None`, must provide "
                 f"window_shape for all dimensions of `x`; "
                 f"got {len(window_shape)} window_shape elements "
-                f"and `arr.ndim` is {arr.ndim}."
+                f"and `x.ndim` is {x.ndim}."
             )
     else:
-        axis = normalize_axis_tuple(axis, arr.ndim, allow_duplicate=True)
+        axis = normalize_axis_tuple(axis, x.ndim, allow_duplicate=True)
         if len(window_shape) != len(axis):
             raise ValueError(
                 f"Must provide matching length window_shape and "
@@ -929,32 +872,32 @@ def sliding_window_view(arr, window_shape, axis=None):
                 f"elements and {len(axis)} axes elements."
             )
 
-    depths = [0] * arr.ndim
+    depths = [0] * x.ndim
     for ax, window in zip(axis, window_shape):
         depths[ax] += window - 1
 
     # Ensure that each chunk is big enough to leave at least a size-1 chunk
     # after windowing (this is only really necessary for the last chunk).
     safe_chunks = tuple(
-        ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, arr.chunks)
+        ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)
     )
-    arr = arr.rechunk(safe_chunks)
+    x = x.rechunk(safe_chunks)
 
-    # result.shape = arr_shape_trimmed + window_shape,
-    # where arr_shape_trimmed is arr.shape with every entry
+    # result.shape = x_shape_trimmed + window_shape,
+    # where x_shape_trimmed is x.shape with every entry
     # reduced by one less than the corresponding window size.
     # trim chunks to match x_shape_trimmed
-    newchunks = tuple(
-        c[:-1] + (c[-1] - d,) for d, c in zip(depths, arr.chunks)
-    ) + tuple((window,) for window in window_shape)
+    newchunks = tuple(c[:-1] + (c[-1] - d,) for d, c in zip(depths, x.chunks)) + tuple(
+        (window,) for window in window_shape
+    )
 
     return map_overlap(
-        _np_sliding_window_view,
-        arr,
+        numpy_compat.sliding_window_view,
+        x,
         depth=tuple((0, d) for d in depths),  # Overlap on +ve side only
         boundary="none",
-        meta=arr._meta,
-        new_axis=range(arr.ndim, arr.ndim + len(axis)),
+        meta=x._meta,
+        new_axis=range(x.ndim, x.ndim + len(axis)),
         chunks=newchunks,
         trim=False,
         align_arrays=False,
