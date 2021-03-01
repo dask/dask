@@ -534,6 +534,7 @@ def overlap(x, depth, boundary):
         ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
     )
     x1 = x.rechunk(new_chunks)
+
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
     trim = dict(
