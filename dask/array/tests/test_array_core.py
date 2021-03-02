@@ -3617,71 +3617,71 @@ def test_setitem_2d():
     assert_eq(x, dx)
 
 
-# def test_setitem_extended_API():
-#     x = np.ma.arange(60).reshape((6, 10))
-#     dx = da.from_array(x.copy(), chunks=(2, 2))
+def test_setitem_extended_API():
+    x = np.ma.arange(60).reshape((6, 10))
+    dx = da.from_array(x.copy(), chunks=(2, 2))
 
-#     x[:, 2] = range(6)
-#     x[3, :] = range(10)
-#     x[::2, ::-1] = -1
-#     x[1::2] = -2
-#     x[:, [3, 5, 6]] = -3
-#     x[2:4, x[0] > 3] = -5
-#     x[2, x[0] < -2] = -7
-#     x[x % 2 == 0] = -8
-#     x[[4, 3, 1]] = -9
-#     x[5, ...] = -10
-#     x[..., 4] = -11
-#     x[2:4, 5:1:-2] = -x[:2, 4:1:-2]
-#     x[:2, :3] = [[1, 2, 3]]
-#     x[1, 1:7:2] = np.ma.masked
-#     x[0, 1:3] = -x[0, 4:2:-1]
-#     x[...] = x
-#     x[...] = x[...]
-#     x[0] = x[-1]
-#     x[0, :] = x[-2, :]
-#     x[:, 1] = x[:, -3]
-#     x[[True, False, False, False, True, False], 2] = -4
-#     x[3, [True, True, False, True, True, False, True, False, True, True]] = -5
-#     x[
-#         4,
-#         da.from_array(
-#             [False, False, True, True, False, False, True, False, False, True]
-#         ),
-#     ] = -55
-#     x[np.array([False, False, True, True, False, False]), 5:7] = -66
+    x[:, 2] = range(6)
+    x[3, :] = range(10)
+    x[::2, ::-1] = -1
+    x[1::2] = -2
+    x[:, [3, 5, 6]] = -3
+    x[2:4, x[0] > 3] = -5
+    x[2, x[0] < -2] = -7
+    x[x % 2 == 0] = -8
+    x[[4, 3, 1]] = -9
+    x[5, ...] = -10
+    x[..., 4] = -11
+    x[2:4, 5:1:-2] = -x[:2, 4:1:-2]
+    x[:2, :3] = [[1, 2, 3]]
+    x[1, 1:7:2] = np.ma.masked
+    x[0, 1:3] = -x[0, 4:2:-1]
+    x[...] = x
+    x[...] = x[...]
+    x[0] = x[-1]
+    x[0, :] = x[-2, :]
+    x[:, 1] = x[:, -3]
+    x[[True, False, False, False, True, False], 2] = -4
+    x[3, [True, True, False, True, True, False, True, False, True, True]] = -5
+    x[
+        4,
+        da.from_array(
+            [False, False, True, True, False, False, True, False, False, True]
+        ),
+    ] = -55
+    x[np.array([False, False, True, True, False, False]), 5:7] = -66
 
-#     dx[:, 2] = range(6)
-#     dx[3, :] = range(10)
-#     dx[::2, ::-1] = -1
-#     dx[1::2] = -2
-#     dx[:, [3, 5, 6]] = -3
-#     dx[2:4, dx[0] > 3] = -5
-#     dx[2, dx[0] < -2] = -7
-#     dx[dx % 2 == 0] = -8
-#     dx[[4, 3, 1]] = -9
-#     dx[5, ...] = -10
-#     dx[..., 4] = -11
-#     dx[2:4, 5:1:-2] = -dx[:2, 4:1:-2]
-#     dx[:2, :3] = [[1, 2, 3]]
-#     dx[1, 1:7:2] = np.ma.masked
-#     dx[0, 1:3] = -dx[0, 4:2:-1]
-#     dx[...] = dx
-#     dx[...] = dx[...]
-#     dx[0, :] = dx[-2, :]
-#     dx[:, 1] = dx[:, -3]
-#     dx[[True, False, False, False, True, False], 2] = -4
-#     dx[3, [True, True, False, True, True, False, True, False, True, True]] = -5
-#     dx[
-#         4,
-#         da.from_array(
-#             [False, False, True, True, False, False, True, False, False, True]
-#         ),
-#     ] = -55
-#     dx[np.array([False, False, True, True, False, False]), 5:7] = -66
+    dx[:, 2] = range(6)
+    dx[3, :] = range(10)
+    dx[::2, ::-1] = -1
+    dx[1::2] = -2
+    dx[:, [3, 5, 6]] = -3
+    dx[2:4, dx[0] > 3] = -5
+    dx[2, dx[0] < -2] = -7
+    dx[dx % 2 == 0] = -8
+    dx[[4, 3, 1]] = -9
+    dx[5, ...] = -10
+    dx[..., 4] = -11
+    dx[2:4, 5:1:-2] = -dx[:2, 4:1:-2]
+    dx[:2, :3] = [[1, 2, 3]]
+    dx[1, 1:7:2] = np.ma.masked
+    dx[0, 1:3] = -dx[0, 4:2:-1]
+    dx[...] = dx
+    dx[...] = dx[...]
+    dx[0, :] = dx[-2, :]
+    dx[:, 1] = dx[:, -3]
+    dx[[True, False, False, False, True, False], 2] = -4
+    dx[3, [True, True, False, True, True, False, True, False, True, True]] = -5
+    dx[
+        4,
+        da.from_array(
+            [False, False, True, True, False, False, True, False, False, True]
+        ),
+    ] = -55
+    dx[np.array([False, False, True, True, False, False]), 5:7] = -66
 
-#     assert_eq(x, dx.compute())
-#     assert_eq(x.mask, da.ma.getmaskarray(dx))
+    assert_eq(x, dx.compute())
+    assert_eq(x.mask, da.ma.getmaskarray(dx))
 
 
 def test_setitem_on_read_only_blocks():

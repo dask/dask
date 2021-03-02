@@ -1764,7 +1764,9 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                 # by row-group
                 metadata = [p.path for p in dataset.pieces]
                 if schema is None:
-                    schema = dataset.pieces[0].get_metadata().schema.to_arrow_schema()
+                    schema = cls.collect_file_metadata(
+                        dataset.pieces[0], fs, None
+                    ).schema.to_arrow_schema()
                 return (
                     schema,
                     metadata,
