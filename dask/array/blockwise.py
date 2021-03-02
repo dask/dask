@@ -53,10 +53,13 @@ class BlockwiseCreateArray(Blockwise):
             dsk,
             [(io_name, out_ind)],
             {io_name: self.nchunks},
+            # Note that "generate_chunk" is a special tag that
+            # must match the tag for the "official" (registered)
+            # `generate_chunk` function in dask/dask/blockwise.py
             io_deps={
                 io_name: {
                     "func": (
-                        "generate_array_chunk",
+                        "generate_chunk",
                         chunks,
                     )
                 }

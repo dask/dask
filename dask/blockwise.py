@@ -22,17 +22,18 @@ from .utils import (
 )
 
 
-def blockwise_generate_chunk(idx, chunks):
-    """Generate a local dask.array chunk"""
-    ndim = len(chunks)
-    return tuple(chunks[i][idx[i]] for i in range(ndim))
+def generate_chunk(idx: tuple, chunks: tuple) -> tuple:
+    """Generate a local chunk"""
+    return tuple(chunk[i] for i, chunk in zip(idx, chunks))
 
 
 # Dictionary of registered functions for dynamic argument
 # generation within `Blockwise`.  For now, the arguments
 # to a registered function must be msgpack serializable.
 blockwise_io_reg = {
-    "generate_array_chunk": blockwise_generate_chunk,
+    # This "generate_chunk" tag is used in
+    # `BlockwiseCreateArray` (`dask/array/blockwise.py`)
+    "generate_chunk": generate_chunk,
 }
 
 
@@ -355,28 +356,28 @@ class Blockwise(Layer):
         # with `pickle` (i.e. something in the required inputs is
         # not msgpack serializable)
         if msgpack:
-            for _, input_map in self.io_deps.items():
+            for input_map in self.io_deps.values():
                 check = True
-                for k in input_map:
+                for k, v in input_map.items():
                     # Test msgpack on the very first element.
                     # If this fails, we will pickle everything.
                     # If this succeeds, we will assume all other
-                    # elelments are also msgpack serializable.
+                    # elements are also msgpack serializable.
                     #
                     # The risk here is that only a subset of
                     # elements requires pickling, and that subset
                     # does not include the first element.  For
                     # now, it is the responsibility of the
-                    # Blockwise layer to pickling/unpickle
+                    # Blockwise layer to pickle/unpickle
                     # offending elements in cases like this.
                     if k != "func":
                         if check:
                             try:
-                                msgpack.packb(input_map[k])
+                                msgpack.packb(v)
                                 break  # No need to pickle - Bail
                             except TypeError:
                                 check = False
-                        input_map[k] = pickle.dumps(input_map[k])
+                        input_map[k] = pickle.dumps(v)
 
         return {
             "output": self.output,
@@ -607,7 +608,22 @@ def _get_coord_mapping(
     return coord_maps, concat_axes, dummies
 
 
-def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
+def make_blockwise_graph(
+    func,
+    output,
+    out_indices,
+    *arrind_pairs,
+    numblocks=None,
+    concatenate=None,
+    new_axes=None,
+    output_blocks=None,
+    dims=None,
+    deserializing=False,
+    func_future_args=None,
+    return_key_deps=False,
+    io_deps=None,
+    **kwargs,
+):
     """Tensor operation
 
     Applies a function, ``func``, across blocks from many different input
@@ -714,17 +730,12 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     dask.blockwise.blockwise
     """
 
-    numblocks = kwargs.pop("numblocks")
-    concatenate = kwargs.pop("concatenate", None)
-    new_axes = kwargs.pop("new_axes", {})
-    output_blocks = kwargs.pop("output_blocks", None)
-    dims = kwargs.pop("dims", None)
+    if numblocks is None:
+        raise ValueError("Missing required numblocks argument.")
+    new_axes = new_axes or {}
+    io_deps = io_deps or {}
     argpairs = list(toolz.partition(2, arrind_pairs))
 
-    deserializing = kwargs.pop("deserializing", False)
-    func_future_args = kwargs.pop("func_future_args", None)
-    return_key_deps = kwargs.pop("return_key_deps", False)
-    io_deps = kwargs.pop("io_deps", {})
     if return_key_deps:
         key_deps = {}
 
@@ -735,12 +746,11 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     # we store the real (registered) function in `io_dep_funcs`.
     io_dep_funcs = {}
     for arg, val in io_deps.items():
-        if val and "func" in val:
-            if val["func"][0] not in blockwise_io_reg:
-                raise RuntimeError(
-                    f"{val['func'][0]} is not registered in blockwise_io_reg."
-                )
-            io_dep_funcs[arg] = blockwise_io_reg.get(val["func"][0])
+        try:
+            funcname = val["func"][0]
+        except KeyError:
+            continue
+        io_dep_funcs[arg] = blockwise_io_reg[funcname]
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -800,7 +810,7 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                     if arg not in io_deps:
                         deps.add(tups)
                 # Replace "place-holder" IO keys with "real" args
-                if io_deps and arg in io_deps:
+                if arg in io_deps:
                     # We don't want to stringify keys for args
                     # we are replacing here
                     idx = tups[1:]
@@ -819,11 +829,10 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                         # are specified explicitly in `io_deps`
                         # (Or the index is the only required arg)
                         args.append(io_deps[arg].get(idx, idx))
+                elif deserializing:
+                    args.append(stringify_collection_keys(tups))
                 else:
-                    if deserializing:
-                        args.append(stringify_collection_keys(tups))
-                    else:
-                        args.append(tups)
+                    args.append(tups)
         out_key = (output,) + out_coords
 
         if deserializing:
@@ -977,7 +986,7 @@ def _optimize_blockwise(full_graph, keys=()):
         if isinstance(layers[layer], Blockwise):
             blockwise_layers = {layer}
             deps = set(blockwise_layers)
-            io_names |= set(layers[layer].io_deps)
+            io_names |= layers[layer].io_deps.keys()
             while deps:  # we gather as many sub-layers as we can
                 dep = deps.pop()
 
