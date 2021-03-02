@@ -2591,9 +2591,8 @@ Dask Name: {name}, {task} tasks"""
             )
 
         def _dot_series(*args, **kwargs):
-            # The return type will be a series in case `other` is a dataframe
-            # but a scalar value in case `other` is a series. Casting to a pandas series
-            # will normalize the expected return type's value for both cases
+            # .sum() is invoked on each partition before being applied to all
+            # partitions. The return type is expected to be a series, not a numpy object
             return pd.Series(M.dot(*args, **kwargs))
 
         return self.map_partitions(_dot_series, other, token="dot", meta=meta).sum(
