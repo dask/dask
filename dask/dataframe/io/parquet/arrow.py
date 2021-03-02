@@ -1790,7 +1790,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     schema = metadata.schema.to_arrow_schema()
             else:
                 for piece, fn in zip(dataset.pieces, fns):
-                    md = piece.get_metadata()
+                    md = cls.collect_file_metadata(piece.path, fs, None)
                     if schema is None:
                         schema = md.schema.to_arrow_schema()
                     if fn_partitioned:
