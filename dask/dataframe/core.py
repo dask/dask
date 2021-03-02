@@ -148,8 +148,11 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return Scalar(dsk, name or self._name, self._meta, self.divisions)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return Scalar(dsk, name, self._meta, self.divisions)
 
     @property
     def _meta_nonempty(self):
@@ -326,8 +329,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return type(self)(dsk, name or self._name, self._meta, self.divisions)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return type(self)(dsk, name, self._meta, self.divisions)
 
     @property
     def _constructor(self):

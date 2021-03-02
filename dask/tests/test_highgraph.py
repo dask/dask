@@ -94,8 +94,36 @@ def test_cull():
     culled_by_x = hg.cull({"x"})
     assert dict(culled_by_x) == {"x": 1}
 
-    culled_by_y = hg.cull({"y"})
+    # parameter is the raw output of __dask_keys__()
+    culled_by_y = hg.cull([[["y"]]])
     assert dict(culled_by_y) == a
+
+
+def test_cull_layers():
+    hg = HighLevelGraph(
+        {
+            "a": {"a1": "d1", "a2": "e1"},
+            "b": {"b": "d", "dontcull_b": 1},
+            "c": {"dontcull_c": 1},
+            "d": {"d": 1, "dontcull_d": 1},
+            "e": {"e": 1, "dontcull_e": 1},
+        },
+        {"a": {"d", "e"}, "b": {"d"}, "c": set(), "d": set(), "e": set()},
+    )
+
+    # Deep-copy layers before calling method to test they aren't modified in place
+    expect = HighLevelGraph(
+        {k: dict(v) for k, v in hg.layers.items() if k != "c"},
+        {k: set(v) for k, v in hg.dependencies.items() if k != "c"},
+    )
+
+    culled = hg.cull_layers(["a", "b"])
+
+    assert culled.layers == expect.layers
+    assert culled.dependencies == expect.dependencies
+    for k in culled.layers:
+        assert culled.layers[k] is hg.layers[k]
+        assert culled.dependencies[k] is hg.dependencies[k]
 
 
 def annot_map_fn(key):
