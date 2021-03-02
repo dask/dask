@@ -27,7 +27,7 @@ from .base import (
 from .blockwise import blockwise
 from .core import flatten
 from .delayed import Delayed, delayed
-from .highlevelgraph import BasicLayer, HighLevelGraph, Layer
+from .highlevelgraph import MaterializedLayer, HighLevelGraph, Layer
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
@@ -162,7 +162,7 @@ def _build_map_layer(
     dependencies: Tuple[Delayed, ...] = (),
 ) -> Layer:
     """Apply func to all keys of collection. Create a Blockwise layer whenever possible;
-    fall back to BasicLayer otherwise.
+    fall back to MaterializedLayer otherwise.
 
     Parameters
     ----------
@@ -201,9 +201,9 @@ def _build_map_layer(
         )
     else:
         # Delayed, bag.Item, dataframe.core.Scalar, or third-party collection;
-        # fall back to BasicLayer
+        # fall back to MaterializedLayer
         dep_keys = tuple(d.key for d in dependencies)
-        return BasicLayer(
+        return MaterializedLayer(
             {
                 replace_name_in_key(k, {prev_name: new_name}): (func, k) + dep_keys
                 for k in flatten(collection.__dask_keys__())

@@ -5,7 +5,7 @@ import pytest
 
 import dask
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer, Layer
 
 
 def test_visualize(tmpdir):
@@ -167,6 +167,16 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
+def test_annotation_pack_unpack():
+    layer = MaterializedLayer({"n": 42}, annotations={"workers": ("alice",)})
+    packed_anno = layer.__dask_distributed_anno_pack__()
+    annotations = {}
+    Layer.__dask_distributed_annotations_unpack__(
+        annotations, packed_anno, layer.keys()
+    )
+    assert annotations == {"workers": {"n": ("alice",)}}
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     da = pytest.importorskip("dask.array")
@@ -202,6 +212,6 @@ def test_blockwise_cull(flat):
 
 def test_highlevelgraph_dicts_deprecation():
     with pytest.warns(FutureWarning):
-        layers = {"a": BasicLayer({"x": 1, "y": (inc, "x")})}
+        layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
         hg = HighLevelGraph(layers, {"a": set()})
         assert hg.dicts == layers
