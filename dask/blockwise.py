@@ -19,22 +19,16 @@ from .utils import (
     apply,
     stringify,
     stringify_collection_keys,
+    TaggedDispatch,
 )
 
 
-def generate_chunk(idx: tuple, chunks: tuple) -> tuple:
-    """Generate a local chunk"""
-    return tuple(chunk[i] for i, chunk in zip(idx, chunks))
-
-
-# Dictionary of registered functions for dynamic argument
-# generation within `Blockwise`.  For now, the arguments
-# to a registered function must be msgpack serializable.
-blockwise_io_reg = {
-    # This "generate_chunk" tag is used in
-    # `BlockwiseCreateArray` (`dask/array/blockwise.py`)
-    "generate_chunk": generate_chunk,
-}
+# Dispatch function for dynamic argument generation within
+# `Blockwise`.  All dispatch options must register by "tag",
+# and may only accept positional arguments (always ending with
+# the global index tuple).  For now, all arguments to the
+# registered function must be msgpack serializable.
+blockwise_io_dep_func = TaggedDispatch("generate_deps")
 
 
 def subs(task, substitution):
@@ -742,15 +736,16 @@ def make_blockwise_graph(
     if deserializing:
         from distributed.worker import warn_dumps, dumps_function
 
-    # Check if there are "func" arguments in `io_deps`.  If so,
-    # we store the real (registered) function in `io_dep_funcs`.
-    io_dep_funcs = {}
+    # Check if there are "func" arguments in `io_deps`.
+    # If so, we store the args for `blockwise_io_dep_func`
+    # in `io_dep_args`.
+    io_dep_args = {}
     for arg, val in io_deps.items():
         try:
-            funcname = val["func"][0]
+            _args = val["func"]
         except KeyError:
             continue
-        io_dep_funcs[arg] = blockwise_io_reg[funcname]
+        io_dep_args[arg] = _args
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -814,14 +809,19 @@ def make_blockwise_graph(
                     # We don't want to stringify keys for args
                     # we are replacing here
                     idx = tups[1:]
-                    if arg in io_dep_funcs:
-                        # Using a registered blockwise_io function
-                        # to generate arguments
+                    if arg in io_dep_args:
+                        # Using a registered `blockwise_io_dep_func`
+                        # definition to generate arguments
                         args.append(
-                            io_dep_funcs[arg](
-                                idx,
-                                *io_deps[arg]["func"][1:],
+                            blockwise_io_dep_func(
+                                # Dispatch function arguments
+                                # (first argument must be the "tag")
+                                *io_dep_args[arg],
+                                # Index-specific args
                                 *io_deps[arg].get(idx, []),
+                                # Index
+                                # (required to be the last argument)
+                                idx,
                             )
                         )
                     else:

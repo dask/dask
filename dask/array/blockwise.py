@@ -10,7 +10,14 @@ from ..blockwise import (
     Blockwise,
     blockwise as core_blockwise,
     blockwise_token,
+    blockwise_io_dep_func,
 )
+
+
+@blockwise_io_dep_func.register("generate_array_chunk")
+def generate_array_chunk(chunks: tuple, idx: tuple) -> tuple:
+    """Generate a local array chunk"""
+    return tuple(chunk[i] for i, chunk in zip(idx, chunks))
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -53,13 +60,13 @@ class BlockwiseCreateArray(Blockwise):
             dsk,
             [(io_name, out_ind)],
             {io_name: self.nchunks},
-            # Note that "generate_chunk" is a special tag that
-            # must match the tag for the "official" (registered)
-            # `generate_chunk` function in dask/dask/blockwise.py
+            # Note that "generate_array_chunk" is a special tag
+            # that must be registered with `blockwise_io_dep_func`
+            # so that it will dispatch to `generate_array_chunk`
             io_deps={
                 io_name: {
                     "func": (
-                        "generate_chunk",
+                        "generate_array_chunk",
                         chunks,
                     )
                 }

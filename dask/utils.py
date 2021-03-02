@@ -521,6 +521,29 @@ class Dispatch:
             return "Single Dispatch for %s" % self.__name__
 
 
+class TaggedDispatch:
+    """Simple dispatch by tag"""
+
+    def __init__(self, name=None):
+        self._lookup = {}
+
+    def register(self, tag, func=None):
+        """Register dispatch of `func` for given `tag`"""
+
+        def wrapper(func):
+            self._lookup[tag] = func
+            return func
+
+        return wrapper(func) if func is not None else wrapper
+
+    def __call__(self, tag, *args, **kwargs):
+        """
+        Call the corresponding method based on `tag`.
+        """
+        meth = self._lookup[tag]
+        return meth(*args, **kwargs)
+
+
 def ensure_not_exists(filename):
     """
     Ensure that a file does not exist.
