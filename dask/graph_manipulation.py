@@ -7,7 +7,8 @@ from typing import Callable, Hashable, Optional, Set, Tuple, TypeVar
 
 from .base import (
     clone_key,
-    get_collection_name,
+    get_collection_names,
+    get_name_from_key,
     replace_name_in_key,
     tokenize,
     unpack_collections,
@@ -43,7 +44,6 @@ def checkpoint(*collections) -> Delayed:
 
     tok = tokenize(collection)
     name = "checkpoint-" + tok
-    map_name = "checkpoint_map-" + tok
 
     keys_iter = flatten(collection.__dask_keys__())
     try:
@@ -57,15 +57,28 @@ def checkpoint(*collections) -> Delayed:
         # Collection has 2+ keys; apply a two-step map->reduce algorithm so that we
         # transfer over the network and store in RAM only a handful of None's instead of
         # the full computed collection's contents
-        map_layer = _build_map_layer(chunks.checkpoint, map_name, collection)
-        map_dsk = HighLevelGraph.from_collections(
-            map_name, map_layer, dependencies=(collection,)
+        dsks = []
+        map_names = set()
+        map_keys = []
+
+        for prev_name in get_collection_names(collection):
+            map_name = "checkpoint_map-" + tokenize(prev_name, tok)
+            map_names.add(map_name)
+            map_layer = _build_map_layer(
+                chunks.checkpoint, prev_name, map_name, collection
+            )
+            map_keys += list(map_layer.get_output_keys())
+            dsks.append(
+                HighLevelGraph.from_collections(
+                    map_name, map_layer, dependencies=(collection,)
+                )
+            )
+
+        reduce_layer = {name: (chunks.checkpoint, map_keys)}
+        dsks.append(
+            HighLevelGraph({name: reduce_layer}, dependencies={name: map_names})
         )
-        reduce_layer = {name: (chunks.checkpoint, list(map_layer.get_output_keys()))}
-        reduce_dsk = HighLevelGraph(
-            {name: reduce_layer}, dependencies={name: {map_name}}
-        )
-        dsk = HighLevelGraph.merge(map_dsk, reduce_dsk)
+        dsk = HighLevelGraph.merge(*dsks)
 
     return Delayed(name, dsk)
 
@@ -100,7 +113,11 @@ def _can_apply_blockwise(collection):
 
 
 def _build_map_layer(
-    func: Callable, name: str, collection, dependencies: Tuple[Delayed, ...] = ()
+    func: Callable,
+    prev_name: str,
+    new_name: str,
+    collection,
+    dependencies: Tuple[Delayed, ...] = (),
 ) -> Layer:
     """Apply func to all keys of collection. Create a Blockwise layer whenever possible;
     fall back to MaterializedLayer otherwise.
@@ -109,8 +126,12 @@ def _build_map_layer(
     ----------
     func
         Callable to be invoked on the graph node
-    name : str
-        Layer name
+    prev_name : str
+        name of the layer to map from; in case of dask base collections, this is the
+        collection name. Note how third-party collections, e.g. xarray.Dataset, can
+        have multiple names.
+    new_name : str
+        name of the layer to map to
     collection
         Arbitrary dask collection
     dependencies
@@ -125,10 +146,10 @@ def _build_map_layer(
             numblocks = (collection.npartitions,)
         indices = tuple(i for i, _ in enumerate(numblocks))
         kwargs = {"_deps": [d.key for d in dependencies]} if dependencies else {}
-        prev_name = get_collection_name(collection)
+
         return blockwise(
             func,
-            name,
+            new_name,
             indices,
             prev_name,
             indices,
@@ -142,8 +163,9 @@ def _build_map_layer(
         dep_keys = tuple(d.key for d in dependencies)
         return MaterializedLayer(
             {
-                replace_name_in_key(k, name): (func, k) + dep_keys
+                replace_name_in_key(k, {prev_name: new_name}): (func, k) + dep_keys
                 for k in flatten(collection.__dask_keys__())
+                if get_name_from_key(k) == prev_name
             }
         )
 
@@ -253,9 +275,8 @@ def _bind_one(
     omit_keys: Set[Hashable],
     seed: Hashable,
 ) -> T:
-    try:
-        prev_coll_name = get_collection_name(child)
-    except KeyError:
+    prev_coll_names = get_collection_names(child)
+    if not prev_coll_names:
         # Collection with no keys; this is a legitimate use case but, at the moment of
         # writing, can only happen with third-party collections
         return child
@@ -264,7 +285,11 @@ def _bind_one(
     new_layers = {}
     new_deps = {}
     if not isinstance(dsk, HighLevelGraph):
-        dsk = HighLevelGraph.from_collections(prev_coll_name, dsk)
+        if len(prev_coll_names) == 1:
+            hlg_name = next(iter(prev_coll_names))
+        else:
+            hlg_name = tokenize(*prev_coll_names)
+        dsk = HighLevelGraph.from_collections(hlg_name, dsk)
 
     clone_keys = dsk.get_all_external_keys() - omit_keys
     for layer_name in omit_layers:
@@ -289,7 +314,7 @@ def _bind_one(
     try:
         layers_to_clone = set(child.__dask_layers__())
     except AttributeError:
-        layers_to_clone = {prev_coll_name}
+        layers_to_clone = prev_coll_names.copy()
     layers_to_copy_verbatim = set()
 
     while layers_to_clone:
@@ -331,7 +356,7 @@ def _bind_one(
     return rebuild(
         HighLevelGraph(new_layers, new_deps),
         *args,
-        name=clone_key(prev_coll_name, seed),
+        rename={prev_name: clone_key(prev_name, seed) for prev_name in prev_coll_names},
     )
 
 
@@ -424,11 +449,23 @@ def wait_on(*collections):
     blocker = checkpoint(*collections)
 
     def block_one(coll):
-        name = "wait_on-" + tokenize(coll, blocker)
-        layer = _build_map_layer(chunks.bind, name, coll, dependencies=(blocker,))
-        dsk = HighLevelGraph.from_collections(name, layer, dependencies=(coll, blocker))
+        tok = tokenize(coll, blocker)
+        dsks = []
+        rename = {}
+        for prev_name in get_collection_names(coll):
+            new_name = "wait_on-" + tokenize(prev_name, tok)
+            rename[prev_name] = new_name
+            layer = _build_map_layer(
+                chunks.bind, prev_name, new_name, coll, dependencies=(blocker,)
+            )
+            dsks.append(
+                HighLevelGraph.from_collections(
+                    new_name, layer, dependencies=(coll, blocker)
+                )
+            )
+        dsk = HighLevelGraph.merge(*dsks)
         rebuild, args = coll.__dask_postpersist__()
-        return rebuild(dsk, *args, name=name)
+        return rebuild(dsk, *args, rename=rename)
 
     unpacked, repack = unpack_collections(*collections)
     out = repack([block_one(coll) for coll in unpacked])

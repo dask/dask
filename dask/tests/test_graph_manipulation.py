@@ -86,13 +86,27 @@ def collections_with_node_counters():
     return colls, cnt
 
 
-def test_checkpoint():
+def demo_tuples(layers: bool) -> "tuple[Tuple, Tuple, NodeCounter]":
     cnt = NodeCounter()
-    dsk1 = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
-    dsk2 = {"b": (cnt.f, 2)}
-    cp = checkpoint(Tuple(dsk1, list(dsk1)), {"x": [Tuple(dsk2, list(dsk2))]})
+    # Collections have multiple names
+    dsk1 = HighLevelGraph(
+        {"a": {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}, "b": {"b": (cnt.f, 3)}},
+        {},
+    )
+    dsk2 = HighLevelGraph({"c": {"c": (cnt.f, 4)}, "d": {"d": (cnt.f, 5)}}, {})
+    if not layers:
+        dsk1 = dsk1.to_dict()
+        dsk2 = dsk2.to_dict()
+
+    return Tuple(dsk1, list(dsk1)), Tuple(dsk2, list(dsk2)), cnt
+
+
+@pytest.mark.parametrize("layers", [False, True])
+def test_checkpoint(layers):
+    t1, t2, cnt = demo_tuples(layers)
+    cp = checkpoint(t1, {"x": [t2]})
     assert cp.compute(scheduler="sync") is None
-    assert cnt.n == 3
+    assert cnt.n == 5
 
 
 @pytest.mark.skipif("not da or not db or not dd")
@@ -103,21 +117,20 @@ def test_checkpoint_collections():
     assert cnt.n == 16
 
 
-def test_wait_on_one():
-    cnt = NodeCounter()
-    dsk = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
-    t = wait_on(Tuple(dsk, list(dsk)))
-    assert t.compute(scheduler="sync") == (1, 2)
-    assert cnt.n == 2
-
-
-def test_wait_on_many():
-    cnt = NodeCounter()
-    dsk1 = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
-    dsk2 = {"b": (cnt.f, 3)}
-    out = wait_on(Tuple(dsk1, list(dsk1)), {"x": [Tuple(dsk2, list(dsk2))]})
-    assert dask.compute(*out, scheduler="sync") == ((1, 2), {"x": [(3,)]})
+@pytest.mark.parametrize("layers", [False, True])
+def test_wait_on_one(layers):
+    t1, _, cnt = demo_tuples(layers)
+    t1w = wait_on(t1)
+    assert t1w.compute(scheduler="sync") == (1, 2, 3)
     assert cnt.n == 3
+
+
+@pytest.mark.parametrize("layers", [False, True])
+def test_wait_on_many(layers):
+    t1, t2, cnt = demo_tuples(layers)
+    out = wait_on(t1, {"x": [t2]})
+    assert dask.compute(*out, scheduler="sync") == ((1, 2, 3), {"x": [(4, 5)]})
+    assert cnt.n == 5
 
 
 @pytest.mark.skipif("not da or not db or not dd")
@@ -153,7 +166,7 @@ def test_wait_on_collections():
 def test_clone(layers):
     dsk1 = {("a", h1): 1, ("a", h2): 2}
     dsk2 = {"b": (add, ("a", h1), ("a", h2))}
-    dsk3 = {"c": 1}
+    dsk3 = {"c": 1, "d": 1}  # Multiple names
     if layers:
         dsk1 = HighLevelGraph.from_collections("a", dsk1)
         dsk2 = HighLevelGraph(
@@ -199,6 +212,7 @@ def test_bind(layers):
     dsk3 = {"c-1": "b-1"}
     cnt = NodeCounter()
     dsk4 = {("d-1", h1): (cnt.f, 1), ("d-1", h2): (cnt.f, 2)}
+    dsk4b = {"e": (cnt.f, 3)}
 
     if layers:
         dsk1 = HighLevelGraph.from_collections("a-1", dsk1)
@@ -209,28 +223,29 @@ def test_bind(layers):
             {"a-1": dsk1, "b-1": dsk2, "c-1": dsk3},
             dependencies={"a-1": set(), "b-1": {"a-1"}, "c-1": {"b-1"}},
         )
-        dsk4 = HighLevelGraph.from_collections("d-1", dsk4)
+        dsk4 = HighLevelGraph({"d-1": dsk4, "e": dsk4b}, {})
     else:
         dsk2.update(dsk1)
         dsk3.update(dsk2)
+        dsk4.update(dsk4b)
 
     # t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
     t2 = Tuple(dsk2, ["b-1"])
     t3 = Tuple(dsk3, ["c-1"])
-    t4 = Tuple(dsk4, [("d-1", h1), ("d-1", h2)])
+    t4 = Tuple(dsk4, [("d-1", h1), ("d-1", h2), "e"])  # Multiple names
 
     bound1 = bind(t3, t4, seed=1, assume_layers=layers)
     cloned_a_name = clone_key("a-1", seed=1)
     assert bound1.__dask_graph__()[cloned_a_name, h1][0] is chunks.bind
     assert bound1.__dask_graph__()[cloned_a_name, h2][0] is chunks.bind
     assert bound1.compute() == (3,)
-    assert cnt.n == 2
+    assert cnt.n == 3
 
     bound2 = bind(t3, t4, omit=t2, seed=1, assume_layers=layers)
     cloned_c_name = clone_key("c-1", seed=1)
     assert bound2.__dask_graph__()[cloned_c_name][0] is chunks.bind
     assert bound2.compute() == (3,)
-    assert cnt.n == 4
+    assert cnt.n == 6
 
 
 @pytest.mark.skipif("not da or not db or not dd")
