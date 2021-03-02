@@ -611,7 +611,7 @@ def test_set_index_interpolate():
 
     d1 = d.set_index("x", npartitions=3)
     assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 3, 4])
+    assert set(d1.divisions) == set([1, 2, 4])
 
     d2 = d.set_index("y", npartitions=3)
     assert d2.divisions[0] == 1.0
