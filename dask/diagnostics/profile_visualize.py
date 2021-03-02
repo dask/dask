@@ -253,9 +253,14 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         title="Profile Results",
         tools="hover,save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:
@@ -351,9 +356,14 @@ def plot_resources(results, palette="Viridis", **kwargs):
         title="Profile Results",
         tools="save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
     if results:
         t, mem, cpu = zip(*results)
@@ -444,9 +454,14 @@ def plot_cache(
         title="Profile Results",
         tools="hover,save,reset,wheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:
