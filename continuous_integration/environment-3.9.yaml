@@ -61,6 +61,4 @@ dependencies:
   - mmh3
   - pip
   - pip:
-    # TEMP HACK DO NOT MERGE!
-    # - git+https://github.com/dask/distributed
-    - git+https://github.com/crusaderky/distributed.git@python39
+    - git+https://github.com/dask/distributed
