@@ -1,6 +1,5 @@
 import numbers
 import warnings
-import itertools
 
 import tlz as toolz
 
@@ -40,34 +39,28 @@ class BlockwiseCreateArray(Blockwise):
         shape,
         chunks,
     ):
-        self.name = name
+        # self.name = name
         io_name = "blockwise-create-" + name
 
         # Define "blockwise" graph
-        dsk = {self.name: (func, blockwise_token(0))}
-
-        # Define mapping between keys and chunks
-        chunk_key_map = {}
-        for idx in itertools.product(*[range(len(c)) for c in chunks]):
-            ndim = len(chunks)
-            chunk = tuple(chunks[i][idx[i]] for i in range(ndim))
-            chunk_key_map[tuple(idx)] = chunk
+        dsk = {name: (func, blockwise_token(0))}
 
         out_ind = tuple(range(len(shape)))
         self.nchunks = tuple(len(chunk) for chunk in chunks)
         super().__init__(
-            self.name,
+            name,
             out_ind,
             dsk,
             [(io_name, out_ind)],
             {io_name: self.nchunks},
-            io_deps={io_name: chunk_key_map},
-        )
-
-    def __repr__(self):
-        return "BlockwiseCreateArray<name='{}', nchunks={}>".format(
-            self.name,
-            self.nchunks,
+            io_deps={
+                io_name: {
+                    "func": (
+                        "generate_array_chunk",
+                        chunks,
+                    )
+                }
+            },
         )
 
 

@@ -22,6 +22,20 @@ from .utils import (
 )
 
 
+def blockwise_generate_chunk(idx, chunks):
+    """Generate a local dask.array chunk"""
+    ndim = len(chunks)
+    return tuple(chunks[i][idx[i]] for i in range(ndim))
+
+
+# Dictionary of registered functions for dynamic argument
+# generation within `Blockwise`.  For now, the arguments
+# to a registered function must be msgpack serializable.
+blockwise_io_reg = {
+    "generate_array_chunk": blockwise_generate_chunk,
+}
+
+
 def subs(task, substitution):
     """Create a new task with the values substituted
 
@@ -59,7 +73,7 @@ def blockwise(
     concatenate=None,
     new_axes=None,
     dependencies=(),
-    **kwargs
+    **kwargs,
 ):
     """Create a Blockwise symbolic mutable mapping
 
@@ -355,13 +369,14 @@ class Blockwise(Layer):
                     # now, it is the responsibility of the
                     # Blockwise layer to pickling/unpickle
                     # offending elements in cases like this.
-                    if check:
-                        try:
-                            msgpack.packb(input_map[k])
-                            break  # No need to pickle - Bail
-                        except TypeError:
-                            check = False
-                    input_map[k] = pickle.dumps(input_map[k])
+                    if k != "func":
+                        if check:
+                            try:
+                                msgpack.packb(input_map[k])
+                                break  # No need to pickle - Bail
+                            except TypeError:
+                                check = False
+                        input_map[k] = pickle.dumps(input_map[k])
 
         return {
             "output": self.output,
@@ -716,6 +731,17 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
     if deserializing:
         from distributed.worker import warn_dumps, dumps_function
 
+    # Check if there are "func" arguments in `io_deps`.  If so,
+    # we store the real (registered) function in `io_dep_funcs`.
+    io_dep_funcs = {}
+    for arg, val in io_deps.items():
+        if val and "func" in val:
+            if val["func"][0] not in blockwise_io_reg:
+                raise RuntimeError(
+                    f"{val['func'][0]} is not registered in blockwise_io_reg."
+                )
+            io_dep_funcs[arg] = blockwise_io_reg.get(val["func"][0])
+
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
@@ -778,7 +804,21 @@ def make_blockwise_graph(func, output, out_indices, *arrind_pairs, **kwargs):
                     # We don't want to stringify keys for args
                     # we are replacing here
                     idx = tups[1:]
-                    args.append(io_deps[arg].get(idx, idx))
+                    if arg in io_dep_funcs:
+                        # Using a registered blockwise_io function
+                        # to generate arguments
+                        args.append(
+                            io_dep_funcs[arg](
+                                idx,
+                                *io_deps[arg]["func"][1:],
+                                *io_deps[arg].get(idx, []),
+                            )
+                        )
+                    else:
+                        # The required inputs for the IO function
+                        # are specified explicitly in `io_deps`
+                        # (Or the index is the only required arg)
+                        args.append(io_deps[arg].get(idx, idx))
                 else:
                     if deserializing:
                         args.append(stringify_collection_keys(tups))
