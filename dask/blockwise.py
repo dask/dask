@@ -470,7 +470,7 @@ class Blockwise(Layer):
         bind_to: Hashable = None,
     ) -> Tuple[Layer, bool]:
         if self.get_output_keys() - keys:
-            # Downgrade to BasicLayer to be able to cherry-pick keys
+            # Downgrade to MaterializedLayer to be able to cherry-pick keys
             return super().clone(keys, seed, bind_to)
 
         # The assumption here is that 'keys' will either contain all or none of the
