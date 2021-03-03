@@ -4,7 +4,7 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.8
+  - python=3.9
   - numpy
   - pandas
   # test dependencies
@@ -13,7 +13,8 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
-  - fastparquet
+  # Not available for Python 3.9 on conda-forge yet
+  # - fastparquet
   - h5py
   - pytables
   - zarr
@@ -24,7 +25,8 @@ dependencies:
   - coverage
   - jsonschema
   # other -- IO
-  - bcolz
+  # Not available for Python 3.9 on conda-forge yet
+  # - bcolz
   - blosc
   - boto3
   - botocore
@@ -40,7 +42,8 @@ dependencies:
   - graphviz
   - ipython
   - lz4
-  - numba
+  # Not available for Python 3.9 on conda-forge yet
+  # - numba
   - partd
   - psutil
   - requests
@@ -49,7 +52,8 @@ dependencies:
   - scipy
   - toolz
   - python-snappy
-  - sparse
+  # Depends on numba
+  # - sparse
   - cachey
   - python-graphviz
   - pandas-datareader
