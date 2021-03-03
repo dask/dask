@@ -1,11 +1,6 @@
 import itertools
 import pickle
 
-try:
-    import msgpack
-except ImportError:
-    msgpack = None
-
 import tlz as toolz
 
 from .compatibility import prod
@@ -26,7 +21,8 @@ from .utils import (
 # Dispatch function for dynamic argument generation within
 # `Blockwise`.  All dispatch options must register by "tag",
 # and all arguments needed to construct the registered
-# class must be msgpack serializable.
+# class must be msgpack serializable.  Otherwise, the
+# `__dask_distributed_{pack,unpack}__` methods must be defined.
 blockwise_io_dep_map = TaggedMappingDispatch()
 
 
@@ -356,7 +352,11 @@ class Blockwise(Layer):
                 input_map = blockwise_io_dep_map.__dask_distributed_pack__(input_map)
             else:
                 # If `io_deps[<collection_key>]` is just a dict, we
-                # pickle every element to be "safe"
+                # pickle every element to be "safe".  It is the responsibility
+                # of the underlying IO function to handle deserialization
+                # on the worker.  For more control over serialization, a
+                # `blockwise_io_dep_map` mapping should be registered with
+                # the necessary `__dask_distributed_{pack,unpack}__` methods.
                 for k, v in input_map.items():
                     input_map[k] = pickle.dumps(v)
 
