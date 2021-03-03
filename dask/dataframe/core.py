@@ -4174,6 +4174,7 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
+        broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -4229,6 +4230,14 @@ class DataFrame(_Frame):
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
+        broadcast: boolean or float, optional
+            Whether to use a broadcast-based join in lieu of a shuffle-based
+            join for supported cases.  By default, a simple heuristic will be
+            used to select the underlying algorithm. If a floating-point value
+            is specified, that number will be used as the ``broadcast_bias``
+            within the simple heuristic (a large number makes Dask more likely
+            to choose the ``broacast_join`` code path). See ``broadcast_join``
+            for more information.
 
         Notes
         -----
@@ -4270,6 +4279,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             indicator=indicator,
             shuffle=shuffle,
+            broadcast=broadcast,
         )
 
     @derived_from(pd.DataFrame)  # doctest: +SKIP
