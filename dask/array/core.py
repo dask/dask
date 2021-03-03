@@ -1204,8 +1204,11 @@ class Array(DaskMethodsMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return Array(dsk, name or self.name, self.chunks, self.dtype, self._meta)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return Array(dsk, name, self.chunks, self.dtype, self._meta)
 
     def _reset_cache(self, key=None):
         """

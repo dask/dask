@@ -86,13 +86,27 @@ def collections_with_node_counters():
     return colls, cnt
 
 
-def test_checkpoint():
+def demo_tuples(layers: bool) -> "tuple[Tuple, Tuple, NodeCounter]":
     cnt = NodeCounter()
-    dsk1 = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
-    dsk2 = {"b": (cnt.f, 2)}
-    cp = checkpoint(Tuple(dsk1, list(dsk1)), {"x": [Tuple(dsk2, list(dsk2))]})
+    # Collections have multiple names
+    dsk1 = HighLevelGraph(
+        {"a": {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}, "b": {"b": (cnt.f, 3)}},
+        {},
+    )
+    dsk2 = HighLevelGraph({"c": {"c": (cnt.f, 4)}, "d": {"d": (cnt.f, 5)}}, {})
+    if not layers:
+        dsk1 = dsk1.to_dict()
+        dsk2 = dsk2.to_dict()
+
+    return Tuple(dsk1, list(dsk1)), Tuple(dsk2, list(dsk2)), cnt
+
+
+@pytest.mark.parametrize("layers", [False, True])
+def test_checkpoint(layers):
+    t1, t2, cnt = demo_tuples(layers)
+    cp = checkpoint(t1, {"x": [t2]})
     assert cp.compute(scheduler="sync") is None
-    assert cnt.n == 3
+    assert cnt.n == 5
 
 
 @pytest.mark.skipif("not da or not db or not dd")
@@ -103,21 +117,20 @@ def test_checkpoint_collections():
     assert cnt.n == 16
 
 
-def test_wait_on_one():
-    cnt = NodeCounter()
-    dsk = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
-    t = wait_on(Tuple(dsk, list(dsk)))
-    assert t.compute(scheduler="sync") == (1, 2)
-    assert cnt.n == 2
-
-
-def test_wait_on_many():
-    cnt = NodeCounter()
-    dsk1 = {("a", h1): (cnt.f, 1), ("a", h2): (cnt.f, 2)}
-    dsk2 = {"b": (cnt.f, 3)}
-    out = wait_on(Tuple(dsk1, list(dsk1)), {"x": [Tuple(dsk2, list(dsk2))]})
-    assert dask.compute(*out, scheduler="sync") == ((1, 2), {"x": [(3,)]})
+@pytest.mark.parametrize("layers", [False, True])
+def test_wait_on_one(layers):
+    t1, _, cnt = demo_tuples(layers)
+    t1w = wait_on(t1)
+    assert t1w.compute(scheduler="sync") == (1, 2, 3)
     assert cnt.n == 3
+
+
+@pytest.mark.parametrize("layers", [False, True])
+def test_wait_on_many(layers):
+    t1, t2, cnt = demo_tuples(layers)
+    out = wait_on(t1, {"x": [t2]})
+    assert dask.compute(*out, scheduler="sync") == ((1, 2, 3), {"x": [(4, 5)]})
+    assert cnt.n == 5
 
 
 @pytest.mark.skipif("not da or not db or not dd")
@@ -153,7 +166,7 @@ def test_wait_on_collections():
 def test_clone(layers):
     dsk1 = {("a", h1): 1, ("a", h2): 2}
     dsk2 = {"b": (add, ("a", h1), ("a", h2))}
-    dsk3 = {"c": 1}
+    dsk3 = {"c": 1, "d": 1}  # Multiple names
     if layers:
         dsk1 = HighLevelGraph.from_collections("a", dsk1)
         dsk2 = HighLevelGraph(
@@ -199,38 +212,49 @@ def test_bind(layers):
     dsk3 = {"c-1": "b-1"}
     cnt = NodeCounter()
     dsk4 = {("d-1", h1): (cnt.f, 1), ("d-1", h2): (cnt.f, 2)}
+    dsk4b = {"e": (cnt.f, 3)}
 
     if layers:
-        dsk1 = HighLevelGraph.from_collections("a-1", dsk1)
+        dsk1 = HighLevelGraph({"a-1": dsk1}, {"a-1": set()})
         dsk2 = HighLevelGraph(
-            {"a-1": dsk1, "b-1": dsk2}, dependencies={"a-1": set(), "b-1": {"a-1"}}
+            {"a-1": dsk1, "b-1": dsk2}, {"a-1": set(), "b-1": {"a-1"}}
         )
         dsk3 = HighLevelGraph(
             {"a-1": dsk1, "b-1": dsk2, "c-1": dsk3},
-            dependencies={"a-1": set(), "b-1": {"a-1"}, "c-1": {"b-1"}},
+            {"a-1": set(), "b-1": {"a-1"}, "c-1": {"b-1"}},
         )
-        dsk4 = HighLevelGraph.from_collections("d-1", dsk4)
+        dsk4 = HighLevelGraph({"d-1": dsk4, "e": dsk4b}, {"d-1": set(), "e": set()})
     else:
         dsk2.update(dsk1)
         dsk3.update(dsk2)
+        dsk4.update(dsk4b)
 
     # t1 = Tuple(dsk1, [("a", h1), ("a", h2)])
     t2 = Tuple(dsk2, ["b-1"])
     t3 = Tuple(dsk3, ["c-1"])
-    t4 = Tuple(dsk4, [("d-1", h1), ("d-1", h2)])
+    t4 = Tuple(dsk4, [("d-1", h1), ("d-1", h2), "e"])  # Multiple names
 
     bound1 = bind(t3, t4, seed=1, assume_layers=layers)
     cloned_a_name = clone_key("a-1", seed=1)
     assert bound1.__dask_graph__()[cloned_a_name, h1][0] is chunks.bind
     assert bound1.__dask_graph__()[cloned_a_name, h2][0] is chunks.bind
     assert bound1.compute() == (3,)
-    assert cnt.n == 2
+    assert cnt.n == 3
 
     bound2 = bind(t3, t4, omit=t2, seed=1, assume_layers=layers)
     cloned_c_name = clone_key("c-1", seed=1)
     assert bound2.__dask_graph__()[cloned_c_name][0] is chunks.bind
     assert bound2.compute() == (3,)
-    assert cnt.n == 4
+    assert cnt.n == 6
+
+    bound3 = bind(t4, t3, seed=1, assume_layers=layers)
+    cloned_d_name = clone_key("d-1", seed=1)
+    cloned_e_name = clone_key("e", seed=1)
+    assert bound3.__dask_graph__()[cloned_d_name, h1][0] is chunks.bind
+    assert bound3.__dask_graph__()[cloned_d_name, h2][0] is chunks.bind
+    assert bound3.__dask_graph__()[cloned_e_name][0] is chunks.bind
+    assert bound3.compute() == (1, 2, 3)
+    assert cnt.n == 9
 
 
 @pytest.mark.skipif("not da or not db or not dd")
@@ -297,3 +321,47 @@ def test_bind_clone_collections(func):
     assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
     assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
     assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
+
+
+@pytest.mark.parametrize(
+    "split_every,nkeys",
+    [
+        (2, 299),
+        (3, 250),
+        (8, 215),
+        (None, 215),  # default is 8
+        (8.1, 215),
+        (1e9, 201),
+        (False, 201),
+    ],
+)
+def test_split_every(split_every, nkeys):
+    dsk = {("a", i): i for i in range(100)}
+    t1 = Tuple(dsk, list(dsk))
+    c = checkpoint(t1, split_every=split_every)
+    assert len(c.__dask_graph__()) == nkeys
+    assert c.compute(scheduler="sync") is None
+
+    t2 = wait_on(t1, split_every=split_every)
+    assert len(t2.__dask_graph__()) == nkeys + 100
+    assert t2.compute(scheduler="sync") == tuple(range(100))
+
+    dsk3 = {"b": 1, "c": 2}
+    t3 = Tuple(dsk3, list(dsk3))
+    t4 = bind(t3, t1, split_every=split_every, assume_layers=False)
+    assert len(t4.__dask_graph__()) == nkeys + 2
+    assert t4.compute(scheduler="sync") == (1, 2)
+
+
+def test_split_every_invalid():
+    t = Tuple({"a": 1, "b": 2}, ["a", "b"])
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=1)
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=1.9)
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=0)  # Not to be confused with False or None
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=-2)
+    with pytest.raises(TypeError):
+        checkpoint(t, split_every={0: 2})  # This is legal for dask.array but not here

@@ -68,15 +68,15 @@ interface is used inside Dask.
         After computation, the results will be returned in the same layout,
         with the keys replaced with their corresponding outputs.
 
-    If more than one key is returned, all keys must be tuples sharing the same first
-    string element, which is known as the *collection name*, followed by zero or more
-    arbitrary hashables. If the output of the graph is represented by a single key, it
-    *may* also be a bare string.
+    All keys must either be non-empty strings or tuples where the first element is a
+    non-empty string, followed by zero or more arbitrary hashables.
+    The non-empty string is commonly known as the *collection name*. All collections
+    embedded in the dask package have exactly one name, but this is not a requirement.
 
     These are all valid outputs:
 
     - ``[]``
-    - ``["x"]``
+    - ``["x", "y"]``
     - ``[[("y", "a", 0), ("y", "a", 1)], [("y", "b", 0), ("y", "b", 1)]``
 
 
@@ -168,17 +168,23 @@ interface is used inside Dask.
     Returns
     -------
     rebuild : callable
-        A function with the signature ``rebuild(dsk, *extra_args, name : str = None)``.
+        A function with the signature
+        ``rebuild(dsk, *extra_args, rename : Mapping[str, str] = None)``.
         ``dsk`` is a Mapping which contains at least the output keys returned by
-        :meth:`__dask_keys__`. The callable should return an equivalent Dask collection with the
-        same keys as ``self``, but with the results that are computed through a
+        :meth:`__dask_keys__`. The callable should return an equivalent Dask collection
+        with the same keys as ``self``, but with the results that are computed through a
         different graph. In the case of :func:`dask.persist`, the new graph will have
         just the output keys and the values already computed.
 
-        If the optional parameter ``name`` is specified, it indicates that all output
-        keys are changing too; e.g. if the previous output of :meth:`__dask_keys__` was
-        ``[("a", 0), ("a", 1)]``, after calling ``rebuild(dsk, *extra_args, name="b")``
-        it must become ``[("b", 0), ("b", 1)]``.
+        If the optional parameter ``rename`` is specified, it indicates that output
+        keys may be changing too; e.g. if the previous output of :meth:`__dask_keys__`
+        was ``[("a", 0), ("a", 1)]``, after calling
+        ``rebuild(dsk, *extra_args, rename={"a": "b"})`` it must become
+        ``[("b", 0), ("b", 1)]``.
+        The ``rename`` mapping may not contain the collection name(s); in such case the
+        associated keys do not change. It may contain replacements for unexpected names,
+        which must be ignored.
+
     extra_args : tuple
         Any extra arguments to pass to ``rebuild`` after ``dsk``. If no extra
         arguments are necessary, it must be an empty tuple.
@@ -508,13 +514,13 @@ elements of ``dask.delayed``:
 
         def __dask_postpersist__(self):
             # We need to return a callable with the signature
-            # rebuild(dsk, *extra_args, name: str = None)
+            # rebuild(dsk, *extra_args, rename: Mapping[str, str] = None)
             return Tuple._rebuild, (self._keys,)
 
         @staticmethod
-        def _rebuild(dsk, keys, name=None):
-            if name is not None:
-                keys = [replace_name_in_key(key, name) for key in keys]
+        def _rebuild(dsk, keys, *, rename=None):
+            if rename is not None:
+                keys = [replace_name_in_key(key, rename) for key in keys]
             return Tuple(dsk, keys)
 
         def __dask_tokenize__(self):
