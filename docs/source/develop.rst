@@ -81,8 +81,8 @@ clone the fork::
    git clone https://github.com/<your-github-username>/dask
    cd dask
 
-You should also pull the latest tags (otherwise the pip dependency resolver can
-sometimes get stuck installing Dask)::
+You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
+can successfully install Dask)::
 
    git remote add upstream https://github.com/dask/dask
    git pull upstream --tags
