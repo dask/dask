@@ -64,6 +64,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",

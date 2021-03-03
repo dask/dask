@@ -1358,20 +1358,19 @@ def test_callable_scheduler():
     assert called[0]
 
 
+@pytest.mark.slow
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
     pytest.importorskip("cloudpickle")
     # Regression test for issue #4082
 
-    @delayed
-    def f(x):
-        time.sleep(0.5)
-        return x
-
-    a = [f(i) for i in range(5)]
+    f = delayed(pure=False)(time.sleep)
+    # Be generous with the initial sleep times, as process have been observed
+    # to take >0.5s to spin up
+    a = [f(1.0), f(1.0), f(1.0), f(0.1)]
     num_workers = 3
     with dask.config.set(num_workers=num_workers), Profiler() as prof:
-        a = compute(*a, scheduler=scheduler)
+        compute(*a, scheduler=scheduler)
 
     workers = {i.worker_id for i in prof.results}
 
