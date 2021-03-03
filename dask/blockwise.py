@@ -349,7 +349,7 @@ class Blockwise(Layer):
             if isinstance(input_map, tuple):
                 # Use the `__dask_distributed_pack__` definition for the
                 # registered `blockwise_io_dep_map` class
-                input_map = blockwise_io_dep_map.__dask_distributed_pack__(input_map)
+                input_map = blockwise_io_dep_map.__dask_distributed_pack__(*input_map)
             else:
                 # If `io_deps[<collection_key>]` is just a dict, we
                 # pickle every element to be "safe".  It is the responsibility
