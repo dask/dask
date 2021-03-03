@@ -348,32 +348,16 @@ class Blockwise(Layer):
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
 
-        # Check if we need to serialize the elements of `io_deps`
-        # with `pickle` (i.e. something in the required inputs is
-        # not msgpack serializable)
-        if msgpack:
-            for input_map in self.io_deps.values():
-                check = True
-                if isinstance(input_map, tuple):
-                    break
+        # Handle `io_deps` serialization
+        for input_map in self.io_deps.values():
+            if isinstance(input_map, tuple):
+                # Use the `__dask_distributed_pack__` definition for the
+                # registered `blockwise_io_dep_map` class
+                input_map = blockwise_io_dep_map.__dask_distributed_pack__(input_map)
+            else:
+                # If `io_deps[<collection_key>]` is just a dict, we
+                # pickle every element to be "safe"
                 for k, v in input_map.items():
-                    # Test msgpack on the very first element.
-                    # If this fails, we will pickle everything.
-                    # If this succeeds, we will assume all other
-                    # elements are also msgpack serializable.
-                    #
-                    # The risk here is that only a subset of
-                    # elements requires pickling, and that subset
-                    # does not include the first element.  For
-                    # now, it is the responsibility of the
-                    # Blockwise layer to pickle/unpickle
-                    # offending elements in cases like this.
-                    if check:
-                        try:
-                            msgpack.packb(v)
-                            break  # No need to pickle - Bail
-                        except TypeError:
-                            check = False
                     input_map[k] = pickle.dumps(v)
 
         return {
@@ -745,7 +729,10 @@ def make_blockwise_graph(
     io_arg_mappings = {}
     for arg, val in io_deps.items():
         if isinstance(val, tuple):
-            io_arg_mappings[arg] = blockwise_io_dep_map(*io_deps[arg])
+            _args = io_deps[arg]
+            if deserializing:
+                _args = blockwise_io_dep_map.__dask_distributed_unpack__(*_args)
+            io_arg_mappings[arg] = blockwise_io_dep_map(*_args)
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
