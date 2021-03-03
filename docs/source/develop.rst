@@ -93,9 +93,8 @@ Contributions to Dask can then be made by submitting pull requests on GitHub.
 Install
 ~~~~~~~
 
-First, make sure you are in the top level of your cloned Dask repository.
-
-To build the library you can install the necessary requirements using
+From the top level of your cloned Dask repository you can install a
+local version of Dask, along with all necessary dependencies, using
 pip or conda_
 
 .. _conda: https://conda.io/
