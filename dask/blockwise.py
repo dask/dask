@@ -19,16 +19,15 @@ from .utils import (
     apply,
     stringify,
     stringify_collection_keys,
-    TaggedDispatch,
+    TaggedMappingDispatch,
 )
 
 
 # Dispatch function for dynamic argument generation within
 # `Blockwise`.  All dispatch options must register by "tag",
-# and may only accept positional arguments (always ending with
-# the global index tuple).  For now, all arguments to the
-# registered function must be msgpack serializable.
-blockwise_io_dep_func = TaggedDispatch("generate_deps")
+# and all arguments needed to construct the registered
+# class must be msgpack serializable.
+blockwise_io_dep_map = TaggedMappingDispatch()
 
 
 def subs(task, substitution):
@@ -352,6 +351,8 @@ class Blockwise(Layer):
         if msgpack:
             for input_map in self.io_deps.values():
                 check = True
+                if isinstance(input_map, tuple):
+                    break
                 for k, v in input_map.items():
                     # Test msgpack on the very first element.
                     # If this fails, we will pickle everything.
@@ -736,16 +737,13 @@ def make_blockwise_graph(
     if deserializing:
         from distributed.worker import warn_dumps, dumps_function
 
-    # Check if there are "func" arguments in `io_deps`.
-    # If so, we store the args for `blockwise_io_dep_func`
-    # in `io_dep_args`.
-    io_dep_args = {}
+    # Check if there are tuple arguments in `io_deps`.
+    # If so, we must use this tuple to construct the actual
+    # IO-argument mapping.
+    io_arg_mappings = {}
     for arg, val in io_deps.items():
-        try:
-            _args = val["func"]
-        except KeyError:
-            continue
-        io_dep_args[arg] = _args
+        if isinstance(val, tuple):
+            io_arg_mappings[arg] = blockwise_io_dep_map(*io_deps[arg])
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -809,21 +807,8 @@ def make_blockwise_graph(
                     # We don't want to stringify keys for args
                     # we are replacing here
                     idx = tups[1:]
-                    if arg in io_dep_args:
-                        # Using a registered `blockwise_io_dep_func`
-                        # definition to generate arguments
-                        args.append(
-                            blockwise_io_dep_func(
-                                # Dispatch function arguments
-                                # (first argument must be the "tag")
-                                *io_dep_args[arg],
-                                # Index-specific args
-                                *io_deps[arg].get(idx, []),
-                                # Index
-                                # (required to be the last argument)
-                                idx,
-                            )
-                        )
+                    if arg in io_arg_mappings:
+                        args.append(io_arg_mappings[arg][idx])
                     else:
                         # The required inputs for the IO function
                         # are specified explicitly in `io_deps`

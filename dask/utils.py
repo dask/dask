@@ -521,27 +521,21 @@ class Dispatch:
             return "Single Dispatch for %s" % self.__name__
 
 
-class TaggedDispatch:
-    """Simple dispatch by tag"""
+class TaggedMappingDispatch:
+    """Simple Mapping dispatch by tag"""
 
-    def __init__(self, name=None):
+    def __init__(self):
         self._lookup = {}
 
-    def register(self, tag, func=None):
-        """Register dispatch of `func` for given `tag`"""
+    def register(self, tag, cls):
+        if not hasattr(cls, "__getitem__"):
+            raise AttributeError(
+                "Cannot register class without a __getitem__ attribute."
+            )
+        self._lookup[tag] = cls
 
-        def wrapper(func):
-            self._lookup[tag] = func
-            return func
-
-        return wrapper(func) if func is not None else wrapper
-
-    def __call__(self, tag, *args, **kwargs):
-        """
-        Call the corresponding method based on `tag`.
-        """
-        meth = self._lookup[tag]
-        return meth(*args, **kwargs)
+    def __call__(self, tag, *args):
+        return self._lookup[tag](*args)
 
 
 def ensure_not_exists(filename):
