@@ -215,15 +215,15 @@ def test_bind(layers):
     dsk4b = {"e": (cnt.f, 3)}
 
     if layers:
-        dsk1 = HighLevelGraph.from_collections("a-1", dsk1)
+        dsk1 = HighLevelGraph({"a-1": dsk1}, {"a-1": set()})
         dsk2 = HighLevelGraph(
-            {"a-1": dsk1, "b-1": dsk2}, dependencies={"a-1": set(), "b-1": {"a-1"}}
+            {"a-1": dsk1, "b-1": dsk2}, {"a-1": set(), "b-1": {"a-1"}}
         )
         dsk3 = HighLevelGraph(
             {"a-1": dsk1, "b-1": dsk2, "c-1": dsk3},
-            dependencies={"a-1": set(), "b-1": {"a-1"}, "c-1": {"b-1"}},
+            {"a-1": set(), "b-1": {"a-1"}, "c-1": {"b-1"}},
         )
-        dsk4 = HighLevelGraph({"d-1": dsk4, "e": dsk4b}, {})
+        dsk4 = HighLevelGraph({"d-1": dsk4, "e": dsk4b}, {"d-1": set(), "e": set()})
     else:
         dsk2.update(dsk1)
         dsk3.update(dsk2)
@@ -246,6 +246,15 @@ def test_bind(layers):
     assert bound2.__dask_graph__()[cloned_c_name][0] is chunks.bind
     assert bound2.compute() == (3,)
     assert cnt.n == 6
+
+    bound3 = bind(t4, t3, seed=1, assume_layers=layers)
+    cloned_d_name = clone_key("d-1", seed=1)
+    cloned_e_name = clone_key("e", seed=1)
+    assert bound3.__dask_graph__()[cloned_d_name, h1][0] is chunks.bind
+    assert bound3.__dask_graph__()[cloned_d_name, h2][0] is chunks.bind
+    assert bound3.__dask_graph__()[cloned_e_name][0] is chunks.bind
+    assert bound3.compute() == (1, 2, 3)
+    assert cnt.n == 9
 
 
 @pytest.mark.skipif("not da or not db or not dd")
@@ -312,3 +321,47 @@ def test_bind_clone_collections(func):
     assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
     assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
     assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
+
+
+@pytest.mark.parametrize(
+    "split_every,nkeys",
+    [
+        (2, 299),
+        (3, 250),
+        (8, 215),
+        (None, 215),  # default is 8
+        (8.1, 215),
+        (1e9, 201),
+        (False, 201),
+    ],
+)
+def test_split_every(split_every, nkeys):
+    dsk = {("a", i): i for i in range(100)}
+    t1 = Tuple(dsk, list(dsk))
+    c = checkpoint(t1, split_every=split_every)
+    assert len(c.__dask_graph__()) == nkeys
+    assert c.compute(scheduler="sync") is None
+
+    t2 = wait_on(t1, split_every=split_every)
+    assert len(t2.__dask_graph__()) == nkeys + 100
+    assert t2.compute(scheduler="sync") == tuple(range(100))
+
+    dsk3 = {"b": 1, "c": 2}
+    t3 = Tuple(dsk3, list(dsk3))
+    t4 = bind(t3, t1, split_every=split_every, assume_layers=False)
+    assert len(t4.__dask_graph__()) == nkeys + 2
+    assert t4.compute(scheduler="sync") == (1, 2)
+
+
+def test_split_every_invalid():
+    t = Tuple({"a": 1, "b": 2}, ["a", "b"])
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=1)
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=1.9)
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=0)  # Not to be confused with False or None
+    with pytest.raises(ValueError):
+        checkpoint(t, split_every=-2)
+    with pytest.raises(TypeError):
+        checkpoint(t, split_every={0: 2})  # This is legal for dask.array but not here

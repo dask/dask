@@ -3,7 +3,18 @@ output collections produced by this module are typically not functionally equiva
 their inputs.
 """
 import uuid
-from typing import Callable, Hashable, Optional, Set, Tuple, TypeVar
+from numbers import Number
+from typing import (
+    AbstractSet,
+    Callable,
+    Dict,
+    Hashable,
+    Optional,
+    Set,
+    Tuple,
+    TypeVar,
+    Union,
+)
 
 from .base import (
     clone_key,
@@ -21,9 +32,15 @@ from .highlevelgraph import MaterializedLayer, HighLevelGraph, Layer
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
 T = TypeVar("T")
+try:
+    from typing import Literal  # Python >= 3.8
+
+    SplitEvery = Union[Number, Literal[False], None]
+except ImportError:
+    SplitEvery = Union[Number, bool, None]  # type: ignore
 
 
-def checkpoint(*collections) -> Delayed:
+def checkpoint(*collections, split_every: SplitEvery = None) -> Delayed:
     """Build a :doc:`delayed` which waits until all chunks of the input collection(s)
     have been computed before returning None.
 
@@ -32,16 +49,37 @@ def checkpoint(*collections) -> Delayed:
     collections
         Zero or more Dask collections or nested data structures containing zero or more
         collections
+    split_every: int >= 2 or False, optional
+        Determines the depth of the recursive aggregation. If greater than the number of
+        input keys, the aggregation will be performed in multiple steps; the depth of
+        the aggregation graph will be :math:`log_{split_every}(input keys)`. Setting to
+        a low value can reduce cache size and network transfers, at the cost of more CPU
+        and a larger dask graph.
+
+        Set to False to disable. Defaults to 8.
 
     Returns
     -------
     :doc:`delayed` yielding None
     """
-    collections, _ = unpack_collections(*collections)
-    if len(collections) != 1:
-        return delayed(chunks.checkpoint)(*(checkpoint(c) for c in collections))
-    (collection,) = collections
+    if split_every is None:
+        # FIXME https://github.com/python/typeshed/issues/5074
+        split_every = 8  # type: ignore
+    elif split_every is not False:
+        split_every = int(split_every)  # type: ignore
+        if split_every < 2:  # type: ignore
+            raise ValueError("split_every must be False, None, or >= 2")
 
+    collections, _ = unpack_collections(*collections)
+    if len(collections) == 1:
+        return _checkpoint_one(collections[0], split_every)
+    else:
+        return delayed(chunks.checkpoint)(
+            *(_checkpoint_one(c, split_every) for c in collections)
+        )
+
+
+def _checkpoint_one(collection, split_every) -> Delayed:
     tok = tokenize(collection)
     name = "checkpoint-" + tok
 
@@ -53,32 +91,36 @@ def checkpoint(*collections) -> Delayed:
         # Collection has 0 or 1 keys; no need for a map step
         layer = {name: (chunks.checkpoint, collection.__dask_keys__())}
         dsk = HighLevelGraph.from_collections(name, layer, dependencies=(collection,))
-    else:
-        # Collection has 2+ keys; apply a two-step map->reduce algorithm so that we
-        # transfer over the network and store in RAM only a handful of None's instead of
-        # the full computed collection's contents
-        dsks = []
-        map_names = set()
-        map_keys = []
+        return Delayed(name, dsk)
 
-        for prev_name in get_collection_names(collection):
-            map_name = "checkpoint_map-" + tokenize(prev_name, tok)
-            map_names.add(map_name)
-            map_layer = _build_map_layer(
-                chunks.checkpoint, prev_name, map_name, collection
-            )
-            map_keys += list(map_layer.get_output_keys())
-            dsks.append(
-                HighLevelGraph.from_collections(
-                    map_name, map_layer, dependencies=(collection,)
-                )
-            )
+    # Collection has 2+ keys; apply a two-step map->reduce algorithm so that we
+    # transfer over the network and store in RAM only a handful of None's instead of
+    # the full computed collection's contents
+    dsks = []
+    map_names = set()
+    map_keys = []
 
-        reduce_layer = {name: (chunks.checkpoint, map_keys)}
+    for prev_name in get_collection_names(collection):
+        map_name = "checkpoint_map-" + tokenize(prev_name, tok)
+        map_names.add(map_name)
+        map_layer = _build_map_layer(chunks.checkpoint, prev_name, map_name, collection)
+        map_keys += list(map_layer.get_output_keys())
         dsks.append(
-            HighLevelGraph({name: reduce_layer}, dependencies={name: map_names})
+            HighLevelGraph.from_collections(
+                map_name, map_layer, dependencies=(collection,)
+            )
         )
-        dsk = HighLevelGraph.merge(*dsks)
+
+    # recursive aggregation
+    reduce_layer: dict = {}
+    while split_every and len(map_keys) > split_every:
+        k = (name, len(reduce_layer))
+        reduce_layer[k] = (chunks.checkpoint, map_keys[:split_every])
+        map_keys = map_keys[split_every:] + [k]
+    reduce_layer[name] = (chunks.checkpoint, map_keys)
+
+    dsks.append(HighLevelGraph({name: reduce_layer}, dependencies={name: map_names}))
+    dsk = HighLevelGraph.merge(*dsks)
 
     return Delayed(name, dsk)
 
@@ -177,6 +219,7 @@ def bind(
     omit=None,
     seed: Hashable = None,
     assume_layers: bool = True,
+    split_every: SplitEvery = None,
 ) -> T:
     """
     Make ``children`` collection(s), optionally omitting sub-collections, dependent on
@@ -233,6 +276,8 @@ def bind(
         False
             Use a slower algorithm that works at keys level, which makes none of the
             above assumptions.
+    split_every
+        See :func:`checkpoint`
 
     Returns
     -------
@@ -247,7 +292,9 @@ def bind(
         seed = uuid.uuid4().bytes
 
     # parents=None is a special case invoked by the one-liner wrapper clone() below
-    blocker = checkpoint(parents) if parents is not None else None
+    blocker = (
+        checkpoint(parents, split_every=split_every) if parents is not None else None
+    )
 
     omit, _ = unpack_collections(omit)
     if assume_layers:
@@ -281,15 +328,22 @@ def _bind_one(
         # writing, can only happen with third-party collections
         return child
 
-    dsk = child.__dask_graph__()
-    new_layers = {}
-    new_deps = {}
-    if not isinstance(dsk, HighLevelGraph):
+    dsk = child.__dask_graph__()  # type: ignore
+    new_layers: Dict[str, Layer] = {}
+    new_deps: Dict[str, AbstractSet[str]] = {}
+
+    if isinstance(dsk, HighLevelGraph):
+        try:
+            layers_to_clone = set(child.__dask_layers__())  # type: ignore
+        except AttributeError:
+            layers_to_clone = prev_coll_names.copy()
+    else:
         if len(prev_coll_names) == 1:
             hlg_name = next(iter(prev_coll_names))
         else:
             hlg_name = tokenize(*prev_coll_names)
         dsk = HighLevelGraph.from_collections(hlg_name, dsk)
+        layers_to_clone = {hlg_name}
 
     clone_keys = dsk.get_all_external_keys() - omit_keys
     for layer_name in omit_layers:
@@ -311,10 +365,6 @@ def _bind_one(
     else:
         blocker_key = None
 
-    try:
-        layers_to_clone = set(child.__dask_layers__())
-    except AttributeError:
-        layers_to_clone = prev_coll_names.copy()
     layers_to_copy_verbatim = set()
 
     while layers_to_clone:
@@ -333,11 +383,12 @@ def _bind_one(
         new_layers[new_layer_name], is_bound = layer.clone(
             keys=clone_keys, seed=seed, bind_to=blocker_key
         )
-        new_deps[new_layer_name] = {
+        new_dep = {
             clone_key(dep, seed=seed) for dep in layer_deps_to_clone
         } | layer_deps_to_omit
         if is_bound:
-            new_deps[new_layer_name].add(blocker_key)
+            new_dep.add(blocker_key)
+        new_deps[new_layer_name] = new_dep
 
     # Add the layers of the collections from omit from child.dsk. Note that, when
     # assume_layers=False, it would be unsafe to simply do HighLevelGraph.merge(dsk,
@@ -352,7 +403,7 @@ def _bind_one(
         new_deps[layer_name] = layer_deps
         new_layers[layer_name] = dsk.layers[layer_name]
 
-    rebuild, args = child.__dask_postpersist__()
+    rebuild, args = child.__dask_postpersist__()  # type: ignore
     return rebuild(
         HighLevelGraph(new_layers, new_deps),
         *args,
@@ -364,8 +415,8 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     """Clone dask collections, returning equivalent collections that are generated from
     independent calculations.
 
-    Example
-    -------
+    Examples
+    --------
     (tokens have been simplified for the sake of brevity)
 
     >>> from dask import array as da
@@ -414,7 +465,7 @@ def clone(*collections, omit=None, seed: Hashable = None, assume_layers: bool = 
     return out[0] if len(collections) == 1 else out
 
 
-def wait_on(*collections):
+def wait_on(*collections, split_every: SplitEvery = None):
     """Ensure that all chunks of all input collections have been computed before
     computing the dependents of any of the chunks.
 
@@ -438,6 +489,8 @@ def wait_on(*collections):
     ----------
     collections
         Zero or more Dask collections or nested structures of Dask collections
+    split_every
+        See :func:`checkpoint`
 
     Returns
     -------
@@ -446,7 +499,7 @@ def wait_on(*collections):
         or a nested structure equivalent to the input where the original collections
         have been replaced.
     """
-    blocker = checkpoint(*collections)
+    blocker = checkpoint(*collections, split_every=split_every)
 
     def block_one(coll):
         tok = tokenize(coll, blocker)
