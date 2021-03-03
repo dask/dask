@@ -187,7 +187,7 @@ class Blockwise(Layer):
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
-    io_deps: dict of dict (optional)
+    io_deps: dict[dict or tuple] (optional)
         Dictionary containing the mapping between "place-holder" collection
         keys and the arguments needed to generate those collections internally.
         The outer-most dict keys are the names of place-holder collections
@@ -197,7 +197,10 @@ class Blockwise(Layer):
         dependencies.  The inner-most elements of io_deps correspond to the
         mapping between place-holder collection indices, e.g ``(1,)``,
         and any chunk/partition-specific arguments needed by the underlying
-        IO function.  See ``make_blockwise_graph`` for usage.
+        IO function. If ``io_deps[key]`` corresponds to a tuple, the first
+        element of that tuple must contain a registered "tag" for the
+        ``blockwise_io_dep_map`` dispatch, and the remaining elements should
+        be initialization arguments. See ``make_blockwise_graph`` for usage.
 
     See Also
     --------
@@ -365,14 +368,13 @@ class Blockwise(Layer):
                     # now, it is the responsibility of the
                     # Blockwise layer to pickle/unpickle
                     # offending elements in cases like this.
-                    if k != "func":
-                        if check:
-                            try:
-                                msgpack.packb(v)
-                                break  # No need to pickle - Bail
-                            except TypeError:
-                                check = False
-                        input_map[k] = pickle.dumps(v)
+                    if check:
+                        try:
+                            msgpack.packb(v)
+                            break  # No need to pickle - Bail
+                        except TypeError:
+                            check = False
+                    input_map[k] = pickle.dumps(v)
 
         return {
             "output": self.output,
