@@ -543,6 +543,12 @@ class TaggedMappingDispatch:
             return self._lookup[tag].__dask_distributed_pack__(*args)
         return (tag, *args)
 
+    def __dask_distributed_unpack__(self, tag, *args):
+        _obj = self._lookup[tag]
+        if hasattr(_obj, "__dask_distributed_unpack__"):
+            return self._lookup[tag].__dask_distributed_pack__(*args)
+        return (tag, *args)
+
     def __getitem__(self, key):
         raise NotImplementedError(
             "Must define `__getitem__` for a `TaggedMappingDispatch`"
