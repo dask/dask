@@ -1,5 +1,6 @@
 import difflib
 import functools
+import itertools
 import math
 import numbers
 import os
@@ -225,7 +226,19 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
+def _check_chunks(x):
+    x = x.persist(scheduler="sync")
+    for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
+        chunk = x.dask[(x.name,) + idx]
+        if not hasattr(chunk, "dtype"):
+            chunk = np.array(chunk, dtype="O")
+        expected_shape = tuple(c[i] for c, i in zip(x.chunks, idx))
+        assert_eq_shape(expected_shape, chunk.shape, check_nan=False)
+        assert chunk.dtype == x.dtype
+    return x
+
+
+def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=True):
     x_original = x
     x_meta = None
     x_computed = None
@@ -236,6 +249,9 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
         if check_graph:
             _check_dsk(x.dask)
         x_meta = getattr(x, "_meta", None)
+        if check_chunks:
+            # Replace x with persisted version to avoid computing it twice.
+            x = _check_chunks(x)
         x = x.compute(scheduler="sync")
         x_computed = x
         if hasattr(x, "todense"):
@@ -254,15 +270,23 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
     return x, adt, x_meta, x_computed
 
 
-def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwargs):
+def assert_eq(
+    a,
+    b,
+    check_shape=True,
+    check_graph=True,
+    check_meta=True,
+    check_chunks=True,
+    **kwargs,
+):
     a_original = a
     b_original = b
 
     a, adt, a_meta, a_computed = _get_dt_meta_computed(
-        a, check_shape=check_shape, check_graph=check_graph
+        a, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
     b, bdt, b_meta, b_computed = _get_dt_meta_computed(
-        b, check_shape=check_shape, check_graph=check_graph
+        b, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
 
     if str(adt) != str(bdt):
@@ -344,6 +368,16 @@ def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
         return lambda x: x
 
 
+def _dtype_of(a):
+    """Determine dtype of an array-like."""
+    try:
+        # Check for the attribute before using asanyarray, because some types
+        # (notably sparse arrays) don't work with it.
+        return a.dtype
+    except AttributeError:
+        return np.asanyarray(a).dtype
+
+
 def empty_like_safe(a, shape, **kwargs):
     """
     Return np.empty_like(a, shape=shape, **kwargs) if the shape argument
@@ -353,6 +387,7 @@ def empty_like_safe(a, shape, **kwargs):
     try:
         return np.empty_like(a, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.empty(shape, **kwargs)
 
 
@@ -366,6 +401,7 @@ def full_like_safe(a, fill_value, shape, **kwargs):
     try:
         return np.full_like(a, fill_value, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.full(shape, fill_value, **kwargs)
 
 
@@ -378,6 +414,7 @@ def ones_like_safe(a, shape, **kwargs):
     try:
         return np.ones_like(a, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.ones(shape, **kwargs)
 
 
@@ -390,6 +427,7 @@ def zeros_like_safe(a, shape, **kwargs):
     try:
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.zeros(shape, **kwargs)
 
 
