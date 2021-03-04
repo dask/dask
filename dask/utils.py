@@ -1129,6 +1129,7 @@ def is_arraylike(x):
         hasattr(x, "shape")
         and isinstance(x.shape, tuple)
         and hasattr(x, "dtype")
+        and hasattr(x, "__array_function__")
         and not any(is_dask_collection(n) for n in x.shape)
     )
 
