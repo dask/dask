@@ -6,14 +6,18 @@ import warnings
 import functools
 import bisect
 
+from sys import getrefcount
+
 import numpy as np
 from tlz import memoize, merge, pluck, concat, accumulate
 
+from ..utils import is_arraylike
 from .. import core
 from .. import config
 from .. import utils
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
+
 
 colon = slice(None, None, None)
 
@@ -52,6 +56,8 @@ def sanitize_index(ind):
     ...
     IndexError: Bad index.  Must be integer-like: 0.5
     """
+    from .utils import asanyarray_safe
+
     if ind is None:
         return None
     elif isinstance(ind, slice):
@@ -64,13 +70,16 @@ def sanitize_index(ind):
         return _sanitize_index_element(ind)
     elif is_dask_collection(ind):
         return ind
-    index_array = np.asanyarray(ind)
+    index_array = asanyarray_safe(ind, like=ind)
     if index_array.dtype == bool:
         nonzero = np.nonzero(index_array)
         if len(nonzero) == 1:
             # If a 1-element tuple, unwrap the element
             nonzero = nonzero[0]
-        return np.asanyarray(nonzero)
+        if is_arraylike(nonzero):
+            return nonzero
+        else:
+            return np.asanyarray(nonzero)
     elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
     elif np.issubdtype(index_array.dtype, np.floating):
@@ -218,13 +227,13 @@ def slice_wrap_lists(out_name, in_name, blockdims, index, itemsize):
     take : handle slicing with lists ("fancy" indexing)
     slice_slices_and_integers : handle slicing with slices and integers
     """
-    assert all(isinstance(i, (slice, list, Integral, np.ndarray)) for i in index)
+    assert all(isinstance(i, (slice, list, Integral)) or is_arraylike(i) for i in index)
     if not len(blockdims) == len(index):
         raise IndexError("Too many indices for array")
 
     # Do we have more than one list in the index?
     where_list = [
-        i for i, ind in enumerate(index) if isinstance(ind, np.ndarray) and ind.ndim > 0
+        i for i, ind in enumerate(index) if is_arraylike(ind) and ind.ndim > 0
     ]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
@@ -241,11 +250,11 @@ def slice_wrap_lists(out_name, in_name, blockdims, index, itemsize):
 
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(
-        slice(None, None, None) if isinstance(i, np.ndarray) else i for i in index
+        slice(None, None, None) if is_arraylike(i) else i for i in index
     )
 
     # lists and full slices.  Just use take
-    if all(isinstance(i, np.ndarray) or i == slice(None, None, None) for i in index):
+    if all(is_arraylike(i) or i == slice(None, None, None) for i in index):
         axis = where_list[0]
         blockdims2, dsk3 = take(
             out_name, in_name, blockdims, index[where_list[0]], itemsize, axis=axis
@@ -308,7 +317,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
                 range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
                 for d, i in zip(block_slices, index)
                 if not isinstance(i, Integral)
-            ]
+            ],
         )
     )
 
@@ -501,7 +510,8 @@ def partition_by_size(sizes, seq):
     >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
     [array([1, 5, 9]), array([ 2, 19]), array([5])]
     """
-    seq = np.asanyarray(seq)
+    if not is_arraylike(seq):
+        seq = np.asanyarray(seq)
     left = np.empty(len(sizes) + 1, dtype=int)
     left[0] = 0
 
@@ -540,12 +550,23 @@ def slicing_plan(chunks, index):
     out : List[Tuple[int, np.ndarray]]
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
-    index = np.asanyarray(index)
+    from .utils import asarray_safe
+
+    if not is_arraylike(index):
+        index = np.asanyarray(index)
     cum_chunks = cached_cumsum(chunks)
 
+    cum_chunks = asarray_safe(cum_chunks, like=index)
+    # this dispactches to the array library
     chunk_locations = np.searchsorted(cum_chunks, index, side="right")
+
+    # but we need chunk_locations as python ints for getitem calls downstream
+    chunk_locations = chunk_locations.tolist()
     where = np.where(np.diff(chunk_locations))[0] + 1
-    where = np.concatenate([[0], where, [len(chunk_locations)]])
+
+    extra = asarray_safe([0], like=where)
+    c_loc = asarray_safe([len(chunk_locations)], like=where)
+    where = np.concatenate([extra, where, c_loc])
 
     out = []
     for i in range(len(where) - 1):
@@ -606,7 +627,8 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             PerformanceWarning,
             stacklevel=6,
         )
-    index = np.asarray(index)
+    if not is_arraylike(index):
+        index = np.asarray(index)
 
     # Check for chunks from the plan that would violate the user's
     # configured chunk size.
@@ -650,7 +672,9 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             index_lists.extend(index_sublist)
             where_index.extend([where_idx] * len(index_sublist))
         else:
-            index_lists.append(np.array(index_list))
+            if not is_arraylike(index_list):
+                index_list = np.array(index_list)
+            index_lists.append(index_list)
             where_index.append(where_idx)
 
     dims = [range(len(bd)) for bd in chunks]
@@ -670,6 +694,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     chunks2 = list(chunks)
     chunks2[axis] = tuple(map(len, index_lists))
     dsk = dict(zip(keys, values))
+
     return tuple(chunks2), dsk
 
 
@@ -848,7 +873,7 @@ def normalize_index(idx, shape):
     >>> normalize_index(np.array([[True, False], [False, True], [True, True]]), (3, 2))
     (dask.array<array, shape=(3, 2), dtype=bool, chunksize=(3, 2), chunktype=numpy.ndarray>,)
     """
-    from .core import from_array
+    from .core import Array, from_array
 
     if not isinstance(idx, tuple):
         idx = (idx,)
@@ -856,7 +881,7 @@ def normalize_index(idx, shape):
     # if a > 1D numpy.array is provided, cast it to a dask array
     if len(idx) > 0 and len(shape) > 1:
         i = idx[0]
-        if isinstance(i, np.ndarray) and i.shape == shape:
+        if is_arraylike(i) and not isinstance(i, Array) and i.shape == shape:
             idx = (from_array(i), *idx[1:])
 
     idx = replace_ellipsis(len(shape), idx)
@@ -868,6 +893,7 @@ def normalize_index(idx, shape):
             continue
         else:
             n_sliced_dims += 1
+
     idx = idx + (slice(None),) * (len(shape) - n_sliced_dims)
     if len([i for i in idx if i is not None]) > len(shape):
         raise IndexError("Too many indices for array")
@@ -930,22 +956,24 @@ def check_index(ind, dimension):
     ...
     IndexError: Boolean array length 3 doesn't equal dimension 1
     """
+    if isinstance(ind, list):
+        ind = np.asanyarray(ind)
+
     # unknown dimension, assumed to be in bounds
     if np.isnan(dimension):
         return
-    elif isinstance(ind, (list, np.ndarray)):
-        x = np.asanyarray(ind)
-        if x.dtype == bool:
-            if x.size != dimension:
+    elif is_dask_collection(ind):
+        return
+    elif is_arraylike(ind):
+        if ind.dtype == bool:
+            if ind.size != dimension:
                 raise IndexError(
                     "Boolean array length %s doesn't equal dimension %s"
-                    % (x.size, dimension)
+                    % (ind.size, dimension)
                 )
-        elif (x >= dimension).any() or (x < -dimension).any():
+        elif (ind >= dimension).any() or (ind < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
-        return
-    elif is_dask_collection(ind):
         return
     elif ind is None:
         return
@@ -1156,7 +1184,7 @@ def slice_with_bool_dask_array(x, index):
         x,
         tuple(range(x.ndim)),
         *arginds,
-        dtype=x.dtype
+        dtype=x.dtype,
     )
 
     chunks = []
@@ -1252,7 +1280,7 @@ def shuffle_slice(x, index):
         return x[index2].rechunk(chunks2)[index3]
 
 
-class _HashIdWrapper(object):
+class _HashIdWrapper:
     """Hash and compare a wrapped object by identity instead of value"""
 
     def __init__(self, wrapped):
@@ -1309,3 +1337,447 @@ def cached_cumsum(seq, initial_zero=False):
         # Construct a temporary tuple, and look up by value.
         result = _cumsum(tuple(seq), initial_zero)
     return result
+
+
+def parse_assignment_indices(indices, shape):
+    """Reformat the indices for assignment.
+
+    The aim of this is is convert the indices to a standardised form
+    so that it is easier a) to check them for validity, and b) to
+    ascertain which chunks are touched by the indices.
+
+    Note that indices which are decreasing (such as as ``slice(7, 3,
+    -1)`` and ``[6, 2, 1]``) are recast as increasing indices
+    (``slice(4, 8, 1)`` and ``[1, 2, 6]`` respectively) to facilitate
+    finding which chunks are touched by the indices. The make sure
+    that the correct values are still assigned, the value is
+    (effectively) reversed along the appropriate dimensions at compute
+    time.
+
+    Parameters
+    ----------
+    indices : tuple
+        The given indices for assignment.
+    shape : sequence of ints
+        The shape of the global array.
+
+    Returns
+    -------
+    parsed_indices : list
+        The reformated indices that are equivalent to the input
+        indices.
+    indices_shape : list
+        The shape of the parsed indices. E.g. indices of
+        ``(slice(0,2), 5, [4,2,1)`` will have shape ``[2,3]``.
+    mirror : list
+        The dimensions that need to be reversed in the assigment
+        value, prior to assignment.
+
+    Examples
+    --------
+    >>> parse_assignment_indices((slice(1, -1),), (8,))
+    ([slice(1, 7, 1)], [6], [])
+    >>> parse_assignment_indices(([1, 2, 4, 6],), (8,))
+    ([array([1, 2, 4, 6])], [4], [])
+    >>> parse_assignment_indices((slice(-1, 2, -1),), (8,))
+    ([slice(3, 8, 1)], [5], [0])
+    >>> parse_assignment_indices(([6, 4, 2, 1],), (8,))
+    ([array([1, 2, 4, 6])], [4], [0])
+
+    """
+    indices_shape = []
+    mirror = []
+
+    if not isinstance(indices, tuple):
+        indices = (indices,)
+
+    # Disallow scalar boolean indexing, and also indexing by scalar
+    # numpy or dask array.
+    #
+    # numpy allows these, but Array.__getitem__ does not yet implement
+    # them properly, so disallow it for now in __setitem__
+    for index in indices:
+        if index is True or index is False:
+            raise NotImplementedError(
+                "dask does not yet implement assignment to a scalar "
+                f"boolean index: {index!r}"
+            )
+
+        if (
+            isinstance(index, np.ndarray) or is_dask_collection(index)
+        ) and not index.ndim:
+            raise NotImplementedError(
+                "dask does not yet implement assignment to a scalar "
+                f"numpy or dask array index: {index!r}"
+            )
+
+    parsed_indices = list(normalize_index(indices, shape))
+
+    n_lists = 0
+
+    for i, (index, size) in enumerate(zip(parsed_indices, shape)):
+        is_slice = isinstance(index, slice)
+        if is_slice:
+            # Index is a slice
+            start, stop, step = index.indices(size)
+            if step < 0 and stop == -1:
+                stop = None
+
+            index = slice(start, stop, step)
+
+        elif isinstance(index, (int, np.integer)):
+            # Index is an integer
+            index = int(index)
+
+        elif isinstance(index, np.ndarray) or is_dask_collection(index):
+            n_lists += 1
+            if index.ndim != 1:
+                raise IndexError(
+                    f"Incorrect shape ({index.shape}) of integer "
+                    f"indices for dimension with size {size}"
+                )
+
+            if index.dtype == int:
+                len_index = len(index)
+                if len_index == 1:
+                    index = index[0]
+                    if index < 0:
+                        index += size
+
+                    index = int(index)
+                    index = slice(index, index + 1, 1)
+                    is_slice = True
+                elif len_index:
+                    steps = index[1:] - index[:-1]
+                    step = steps[0]
+                    if (
+                        (step > 0 and (steps <= 0).any())
+                        or (step < 0 and (steps >= 0).any())
+                        or not step
+                    ):
+                        raise NotImplementedError(
+                            "1-d integer array assignment "
+                            "indices are currently limited "
+                            "to strictly monotonic sequences. "
+                            f"Got: {parsed_indices[i]}"
+                        )
+
+                    if step < 0:
+                        # The array is strictly monotonically
+                        # decreasing, so reverse it so that
+                        # it's strictly monotonically
+                        # increasing. Make a note that this
+                        # dimension will need reversing later.
+                        index = index[::-1]
+                        mirror.append(i)
+                else:
+                    # This is an empty slice
+                    index = slice(0, 0, 1)
+        else:
+            raise IndexError(
+                "only integers, slices (`:`), ellipsis (`...`), "
+                "and integer or boolean arrays are valid indices. "
+                f"Got {index!r}"
+            )
+
+        if is_slice and index.step < 0:
+            # If the slice step is negative, then transform the
+            # original slice to a new slice with a positive step such
+            # that the result of the new slice is the reverse of the
+            # result of the original slice.
+            #
+            # For example, if the original slice is slice(6,0,-2) then
+            # the new slice will be slice(2,7,2):
+            #
+            # >>> a = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+            # >>> a[slice(6, 0, -2)]
+            # [6, 4, 2]
+            # >>> a[slice(2, 7, 2)]
+            # [2, 4, 6]
+            # a[slice(6, 0, -2)] == list(reversed(a[slice(2, 7, 2)]))
+            # True
+            start, stop, step = index.indices(size)
+            step *= -1
+            div, mod = divmod(start - stop - 1, step)
+            div_step = div * step
+            start -= div_step
+            stop = start + div_step + 1
+
+            index = slice(start, stop, step)
+            mirror.append(i)
+
+        if n_lists > 1:
+            raise NotImplementedError(
+                "dask is currently limited to at most one "
+                "dimension's assignment index being a "
+                "1-d array of integers or booleans. "
+                f"Got: {indices}"
+            )
+
+        parsed_indices[i] = index
+
+    # Find the shape of the indices. E.g. indices of (slice(0,2), 5,
+    # [8,4,2,1], [True,False,True]) will have shape [2,4,3]. Note that
+    # integer indices are not inclded in the shape.
+    #
+    # A shape element of None means that the shape for that dimension
+    # could not be determined at this time (which might be the case if
+    # the index is a dask collection of booleans).
+    for index in parsed_indices:
+        if isinstance(index, slice):
+            # Index is a slice object
+            start, stop, step = index.indices(size)
+            div, mod = divmod(stop - start, step)
+            if div <= 0:
+                indices_shape.append(0)
+            else:
+                if mod != 0:
+                    div += 1
+
+                indices_shape.append(div)
+        elif isinstance(index, int):
+            # Index is an integer
+            continue
+        elif index.dtype == bool:
+            # Index is a sequence of booleans
+            if is_dask_collection(index):
+                indices_shape.append(None)
+            else:
+                indices_shape.append(int(np.count_nonzero(index)))
+        else:
+            # Index is a sequence of integers
+            indices_shape.append(len(index))
+
+    return parsed_indices, indices_shape, mirror
+
+
+def setitem(
+    array,
+    value=None,
+    block_info=None,
+    indices=None,
+    non_broadcast_dimensions=None,
+    offset=None,
+    base_value_indices=None,
+    mirror=None,
+    value_common_shape=None,
+):
+    """Function to be mapped across all blocks which assigns new values to elements of each block.
+
+    This function should not be used directly, instead, a new partial
+    function with value set should be used, e.g.::
+
+        self.map_blocks(functools.partial(setitem, value=x), **kwargs)
+
+    Parameters
+    ----------
+    value : array-like
+        The value from which to assign to the indices.
+    block_info:
+    indices : sequence of slice or int
+        A reformated version of the original indices that were passed
+        to __setitem__.
+    non_broadcast_dimensions : list of int
+        The dimensions of value which do not need to be broadcast
+        against the subspace defined by the indices.
+    offset: `int`
+        The difference in the relative positions of a dimension in
+        value and the corresponding dimension in self. A positive
+        value means the dimension position is higher (further to the
+        right) in self then value.
+    base_value_indices : list of slice or None
+        The indices used for initialising the selection from
+        value. slice(None) elements are unchanged, but an element of
+        None is replaced by an appropriate slice.
+    mirror: list of int
+        The dimensions that need to be reversed in the value, prior to
+        assignment.
+    value_common_shape: tuple of int
+        The shape of those dimensions of value which correspond to
+        dimensions of self.
+
+    Returns
+    -------
+    array : numpy.ndarray
+        The array for the block with assigned elements.
+
+    """
+    array_location = block_info[None]["array-location"]
+
+    # See if this block overlaps the indices
+    overlaps = True
+    block_indices = []
+    subset_shape = []
+    preceeding_size = []
+    local_offset = offset
+    j = -1
+    for index, (loc0, loc1), size, full_size in zip(
+        indices,
+        array_location,
+        block_info[None]["chunk-shape"],
+        block_info[None]["shape"],
+    ):
+        j += 1
+
+        integer_index = isinstance(index, int)
+        if isinstance(index, slice):
+            # Index is a slice
+            stop = size
+            if index.stop < loc1:
+                stop -= loc1 - index.stop
+
+            start = index.start - loc0
+            if start < 0:
+                # Make start positive
+                start %= index.step
+
+            if start >= stop:
+                # This block does not overlap the indices
+                overlaps = False
+                break
+
+            # Still here? Then this block does overlap the indices
+            step = index.step
+            block_index = slice(start, stop, step)
+            block_index_size, rem = divmod(stop - start, step)
+            if rem:
+                block_index_size += 1
+
+            # Find how many elements of 'value' precede this block
+            # along this dimension. Note that it is assumed that the
+            # slice step is positive, as will be the case for
+            # reformatted indices.
+            pre = index.indices(loc0)
+            n_preceeding, rem = divmod(pre[1] - pre[0], step)
+            if rem:
+                n_preceeding += 1
+        elif integer_index:
+            # Index is an integer
+            local_offset += 1
+            if not loc0 <= index < loc1:
+                # This block does not overlap the index
+                overlaps = False
+                break
+
+            block_index = index - loc0
+        else:
+            is_bool = index.dtype == bool
+
+            if is_bool:
+                # Index is a boolean array
+                block_index = np.nonzero(index[loc0:loc1])[0]
+            else:
+                # Index is an integer array
+                block_index = np.array([i - loc0 for i in index if loc0 <= i < loc1])
+
+            block_index_size = block_index.size
+
+            if is_bool and loc1 == full_size:
+                if value.size > 1:
+                    x = value.shape[j - local_offset]
+                    if x > 1 and int(np.sum(index)) < x:
+                        raise ValueError(
+                            "shape mismatch: value array of shape "
+                            f"{value.shape} could not be broadcast "
+                            "to indexing result"
+                        )
+
+            if not block_index_size:
+                # This block does not overlap the indices
+                overlaps = False
+                break
+
+            # Still here? Then this array block does overlap the 1-d
+            # array indices
+
+            # If possible, replace the 1-d array with a slice (for
+            # faster numpy assignment)
+            if block_index.size == 1:
+                block_index = slice(block_index[0], block_index[0] + 1)
+            else:
+                steps = block_index[1:] - block_index[:-1]
+                step = steps[0]
+                if step and not (steps - step).any():
+                    start, stop = block_index[0], block_index[-1] + 1
+                    block_index = slice(start, stop, step)
+
+            # Find how many elements of 'value' precede this block
+            # along this dimension. Note that it is assumed that the
+            # slice step is positive, as will be the case for
+            # reformatted indices.
+            if is_bool:
+                n_preceeding = int(np.sum(index[:loc0]))
+            else:
+                n_preceeding = sum(1 for i in index if i < loc0)
+
+        block_indices.append(block_index)
+        if not integer_index:
+            preceeding_size.append(n_preceeding)
+            subset_shape.append(block_index_size)
+
+    if not overlaps:
+        # This block does not overlap the indices, so return the block
+        # unchanged.
+        return array
+
+    # Still here? Then this block overlaps the indices and so needs to
+    # have some of its elements assigned.
+
+    # Initialise the indices of 'value' that define the parts of it
+    # which are to be assigned to this block
+    value_indices = base_value_indices[:]
+    for i in non_broadcast_dimensions:
+        j = i + offset
+        start = preceeding_size[j]
+        value_indices[i] = slice(start, start + subset_shape[j])
+
+    # Reverse the indices to 'value' if required as a consequence of
+    # reformatting the original indices.
+    for i in mirror:
+        size = value_common_shape[i]
+        start, stop, step = value_indices[i].indices(size)
+        size -= 1
+        start = size - start
+        stop = size - stop
+        if stop < 0:
+            stop = None
+
+        value_indices[i] = slice(start, stop, -1)
+
+    if value.ndim > len(indices):
+        # 'value' has more dimensions than self, so add a leading
+        # Ellipsis to the indices of 'value'.
+        value_indices.insert(0, Ellipsis)
+
+    # Get the part of 'value' that is to be assigned to elements of
+    # this block
+    v = np.asanyarray(value[tuple(value_indices)])
+
+    # Check for shape mismatch, which could occur if we didn't know
+    # the subset shape until now (which might be the case if the
+    # original index was a dask collection of booleans).
+    for i in non_broadcast_dimensions:
+        if v.shape[i] != subset_shape[i + offset]:
+            raise ValueError(
+                f"shape mismatch: value array of shape {value.shape} "
+                "could not be broadcast to indexing result"
+            )
+
+    if not np.ma.isMA(array) and np.ma.isMA(v):
+        # The block is not masked but the assignment is masking
+        # elements, so turn the non-masked block into a masked one.
+        array = array.view(np.ma.MaskedArray)
+
+    # Assign elements of 'value' to elements of this block
+    if not array.flags["WRITEABLE"]:
+        # array is read-only, so need to copy it first (e.g. this
+        # might be the case if the dask array was created by da.empty)
+        array = array.copy()
+    elif getrefcount(array) > 2:
+        # Copy the array if it is in use elsewhere, to avoid
+        # corrupting other objects.
+        array = array.copy()
+
+    array[tuple(block_indices)] = v
+
+    return array

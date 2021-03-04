@@ -27,15 +27,6 @@ from fsspec.compression import compr
 
 compute = partial(compute, scheduler="sync")
 
-try:
-    import numpy as np
-
-    numpy_120_mark = pytest.mark.xfail(
-        LooseVersion(np.__version__) >= "1.20.0", reason="Upstream incompatibility"
-    )
-except ImportError:
-    numpy_120_mark = pytest.mark.skip(reason="numpy not installed")
-
 
 test_bucket_name = "test"
 files = {
@@ -437,8 +428,9 @@ def test_modification_time_read_bytes(s3, s3so):
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
-@numpy_120_mark
 def test_parquet(s3, engine, s3so):
+    import s3fs
+
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
@@ -447,6 +439,13 @@ def test_parquet(s3, engine, s3so):
     lib = pytest.importorskip(engine)
     if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
+    if (
+        engine == "pyarrow"
+        and LooseVersion(lib.__version__) >= "2.0"
+        and LooseVersion(lib.__version__) < "3.0"
+        and LooseVersion(s3fs.__version__) > "0.5.0"
+    ):
+        pytest.skip("#7056 - new s3fs not supported before pyarrow 3.0")
 
     url = "s3://%s/test.parquet" % test_bucket_name
 
@@ -474,7 +473,6 @@ def test_parquet(s3, engine, s3so):
     tm.assert_frame_equal(data, df2.compute())
 
 
-@numpy_120_mark
 def test_parquet_wstoragepars(s3, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip("fastparquet")

@@ -4,9 +4,10 @@ import pandas as pd
 import pytest
 import numpy as np
 
-import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
+from dask.dataframe._compat import PANDAS_GT_130
+
 
 N = 40
 df = pd.DataFrame(
@@ -21,8 +22,9 @@ df = pd.DataFrame(
 ddf = dd.from_pandas(df, 3)
 
 idx = (
-    pd.date_range("2016-01-01", freq="3s", periods=100)
-    | pd.date_range("2016-01-01", freq="5s", periods=100)
+    pd.date_range("2016-01-01", freq="3s", periods=100).union(
+        pd.date_range("2016-01-01", freq="5s", periods=100)
+    )
 )[:N]
 
 ts = pd.DataFrame(
@@ -70,7 +72,7 @@ def test_map_overlap_names():
     res3 = ddf.map_overlap(shifted_sum, 0, 3, 0, 3, c=3)
     assert res3._name != res._name
     # Difference is just the final map
-    diff = set(res3.dask).difference(res.dask)
+    diff = res3.dask.keys() - res.dask.keys()
     assert len(diff) == npartitions
 
     res4 = ddf.map_overlap(shifted_sum, 3, 0, 0, 3, c=2)
@@ -141,12 +143,19 @@ rolling_method_args_check_less_precise = [
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_methods(method, args, window, center, check_less_precise):
     if dd._compat.PANDAS_GT_110:
-        check_less_precise = {}
+        if check_less_precise:
+            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
+        else:
+            check_less_precise = {}
     else:
         check_less_precise = {"check_less_precise": check_less_precise}
+    if dd._compat.PANDAS_GT_120 and method == "count":
+        min_periods = 0
+    else:
+        min_periods = None
     # DataFrame
-    prolling = df.rolling(window, center=center)
-    drolling = ddf.rolling(window, center=center)
+    prolling = df.rolling(window, center=center, min_periods=min_periods)
+    drolling = ddf.rolling(window, center=center, min_periods=min_periods)
     if method == "apply":
         kwargs = {"raw": False}
     else:
@@ -159,8 +168,8 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
     )
 
     # Series
-    prolling = df.a.rolling(window, center=center)
-    drolling = ddf.a.rolling(window, center=center)
+    prolling = df.a.rolling(window, center=center, min_periods=min_periods)
+    drolling = ddf.a.rolling(window, center=center, min_periods=min_periods)
     assert_eq(
         getattr(prolling, method)(*args, **kwargs),
         getattr(drolling, method)(*args, **kwargs),
@@ -239,11 +248,15 @@ def test_rolling_repr():
     assert res == "Rolling [window=4,center=False,axis=0]"
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
+@pytest.mark.skipif(PANDAS_GT_130, reason="win_type changed in pandas master")
 def test_time_rolling_repr():
     res = repr(dts.rolling("4s"))
     assert res == "Rolling [window=4000000000,center=False,win_type=freq,axis=0]"
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
+@pytest.mark.skipif(PANDAS_GT_130, reason="win_type changed in pandas master")
 def test_time_rolling_constructor():
     result = dts.rolling("4s")
     assert result.window == "4s"
@@ -255,6 +268,8 @@ def test_time_rolling_constructor():
     assert result._min_periods == 1
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
+@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize(
     "method,args,check_less_precise", rolling_method_args_check_less_precise
 )
@@ -262,7 +277,7 @@ def test_time_rolling_constructor():
 def test_time_rolling_methods(method, args, window, check_less_precise):
     if dd._compat.PANDAS_GT_110:
         if check_less_precise:
-            check_less_precise = {"atol": 0.5e-3, "rtol": 0.5e-3}
+            check_less_precise = {"atol": 1e-3, "rtol": 1e-3}
         else:
             check_less_precise = {}
     else:
@@ -291,6 +306,8 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
     )
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
+@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
@@ -304,6 +321,8 @@ def test_time_rolling_cov(window):
     assert_eq(prolling.cov(), drolling.cov())
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
+@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize(
     "window,N",
     [("1s", 10), ("2s", 10), ("10s", 10), ("10h", 10), ("10s", 100), ("10h", 100)],
@@ -322,6 +341,8 @@ def test_time_rolling_large_window_fixed_chunks(window, N):
     assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
+@pytest.mark.filterwarnings("ignore:win_type:FutureWarning")
 @pytest.mark.parametrize("window", ["2s", "5s", "20s", "10h"])
 def test_time_rolling_large_window_variable_chunks(window):
     df = pd.DataFrame(
@@ -339,6 +360,7 @@ def test_time_rolling_large_window_variable_chunks(window):
     assert_eq(ddf.rolling(window).mean(), df.rolling(window).mean())
 
 
+# TODO(pandas) fix rolling to be compatible with pandas 1.3.0
 @pytest.mark.parametrize("before, after", [("6s", "6s"), ("2s", "2s"), ("6s", "2s")])
 def test_time_rolling(before, after):
     window = before
@@ -381,7 +403,6 @@ def test_rolling_agg_aggregate():
 
 
 @pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
-@pytest.mark.xfail(da.numpy_compat._numpy_120, reason="sparse-383")
 def test_rolling_numba_engine():
     numba = pytest.importorskip("numba")
     if not dd._compat.PANDAS_GT_104 and LooseVersion(numba.__version__) >= "0.49":
@@ -400,7 +421,7 @@ def test_rolling_numba_engine():
     )
 
 
-@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas<1.0.0")
+@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas>1.0.0")
 def test_rolling_apply_numba_raises():
     df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
     ddf = dd.from_pandas(df, npartitions=3)

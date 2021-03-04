@@ -146,7 +146,7 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
+def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     If multiple profilers are passed in, the plots are stacked vertically.
@@ -161,6 +161,8 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
         If True (default), the plot is opened in a browser.
     save : boolean, optional
         If True (default), the plot is saved to disk.
+    mode : str, optional
+        Mode passed to bokeh.output_file()
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by visualize.
@@ -183,7 +185,7 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
 
     if not in_notebook:
         file_path = file_path or "profile.html"
-        bp.output_file(file_path)
+        bp.output_file(file_path, mode=mode)
 
     if not isinstance(profilers, list):
         profilers = [profilers]
@@ -251,9 +253,14 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         title="Profile Results",
         tools="hover,save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:
@@ -349,9 +356,14 @@ def plot_resources(results, palette="Viridis", **kwargs):
         title="Profile Results",
         tools="save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
     if results:
         t, mem, cpu = zip(*results)
@@ -442,9 +454,14 @@ def plot_cache(
         title="Profile Results",
         tools="hover,save,reset,wheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:

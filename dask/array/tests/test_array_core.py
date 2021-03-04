@@ -50,7 +50,6 @@ from dask.blockwise import (
     optimize_blockwise,
 )
 from dask.array.utils import assert_eq, same_keys
-from dask.array.numpy_compat import _numpy_120
 
 from numpy import nancumsum, nancumprod
 
@@ -1267,7 +1266,7 @@ def test_map_blocks_block_info_with_new_axis():
     values = da.from_array(np.array(["a", "a", "b", "c"]), 2)
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0, None}
+        assert block_info.keys() == {0, None}
         assert block_info[0]["shape"] == (4,)
         assert block_info[0]["num-chunks"] == (2,)
         assert block_info[None]["shape"] == (4, 3)
@@ -1302,7 +1301,7 @@ def test_map_blocks_block_info_with_drop_axis():
     )
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0, None}
+        assert block_info.keys() == {0, None}
         assert block_info[0]["shape"] == (4, 3)
         # drop_axis concatenates along the dropped dimension, hence not (2, 3)
         assert block_info[0]["num-chunks"] == (2, 1)
@@ -1577,7 +1576,7 @@ def test_slicing_flexible_type():
 
 def test_slicing_with_object_dtype():
     # https://github.com/dask/dask/issues/6892
-    d = da.from_array(np.array(["a", "b"], dtype=np.object), chunks=(1,))
+    d = da.from_array(np.array(["a", "b"], dtype=object), chunks=(1,))
     assert d.dtype == d[(0,)].dtype
 
 
@@ -1846,7 +1845,7 @@ class ThreadSafetyError(Exception):
     pass
 
 
-class NonthreadSafeStore(object):
+class NonthreadSafeStore:
     def __init__(self):
         self.in_use = False
 
@@ -1858,7 +1857,7 @@ class NonthreadSafeStore(object):
         self.in_use = False
 
 
-class ThreadSafeStore(object):
+class ThreadSafeStore:
     def __init__(self):
         self.concurrent_uses = 0
         self.max_concurrent_uses = 0
@@ -1870,7 +1869,7 @@ class ThreadSafeStore(object):
         self.concurrent_uses -= 1
 
 
-class CounterLock(object):
+class CounterLock:
     def __init__(self, *args, **kwargs):
         self.lock = Lock(*args, **kwargs)
 
@@ -2264,7 +2263,7 @@ def test_optimize():
 
 
 def test_slicing_with_non_ndarrays():
-    class ARangeSlice(object):
+    class ARangeSlice:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2275,7 +2274,7 @@ def test_slicing_with_non_ndarrays():
         def __array__(self):
             return np.arange(self.start, self.stop)
 
-    class ARangeSlicable(object):
+    class ARangeSlicable:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2342,7 +2341,7 @@ def test_from_array_with_lock():
     assert_eq(e + f, x + x)
 
 
-class MyArray(object):
+class MyArray:
     def __init__(self, x):
         self.x = x
         self.dtype = x.dtype
@@ -2397,7 +2396,12 @@ def test_from_array_list(x):
     assert dx.dask[dx.name, 0][0] == x[0]
 
 
-@pytest.mark.parametrize("type_", [t for t in np.ScalarType if t is not memoryview])
+# On MacOS Python 3.9, the order of the np.ScalarType tuple randomly changes across
+# interpreter restarts, thus causing pytest-xdist failures; setting PYTHONHASHSEED does
+# not help
+@pytest.mark.parametrize(
+    "type_", sorted((t for t in np.ScalarType if t is not memoryview), key=str)
+)
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray"""
     if type_ == np.datetime64:
@@ -3384,12 +3388,12 @@ def test_blockwise_concatenate():
         assert b.shape == (4, 4)
         assert c.shape == (4, 2)
 
-        return np.ones(5)
+        return np.ones(2)
 
     z = da.blockwise(
         f, "j", x, "ijk", y, "ki", y, "ij", concatenate=True, dtype=x.dtype
     )
-    assert_eq(z, np.ones(10), check_shape=False)
+    assert_eq(z, np.ones(4), check_shape=False)
 
 
 def test_common_blockdim():
@@ -3611,11 +3615,167 @@ def test_setitem_2d():
     assert_eq(x, dx)
 
 
+def test_setitem_extended_API():
+    x = np.ma.arange(60).reshape((6, 10))
+    dx = da.from_array(x.copy(), chunks=(2, 2))
+
+    x[:, 2] = range(6)
+    x[3, :] = range(10)
+    x[::2, ::-1] = -1
+    x[1::2] = -2
+    x[:, [3, 5, 6]] = -3
+    x[2:4, x[0] > 3] = -5
+    x[2, x[0] < -2] = -7
+    x[x % 2 == 0] = -8
+    x[[4, 3, 1]] = -9
+    x[5, ...] = -10
+    x[..., 4] = -11
+    x[2:4, 5:1:-2] = -x[:2, 4:1:-2]
+    x[:2, :3] = [[1, 2, 3]]
+    x[1, 1:7:2] = np.ma.masked
+    x[0, 1:3] = -x[0, 4:2:-1]
+    x[...] = x
+    x[...] = x[...]
+    x[0] = x[-1]
+    x[0, :] = x[-2, :]
+    x[:, 1] = x[:, -3]
+    x[[True, False, False, False, True, False], 2] = -4
+    x[3, [True, True, False, True, True, False, True, False, True, True]] = -5
+    x[
+        4,
+        da.from_array(
+            [False, False, True, True, False, False, True, False, False, True]
+        ),
+    ] = -55
+    x[np.array([False, False, True, True, False, False]), 5:7] = -66
+
+    dx[:, 2] = range(6)
+    dx[3, :] = range(10)
+    dx[::2, ::-1] = -1
+    dx[1::2] = -2
+    dx[:, [3, 5, 6]] = -3
+    dx[2:4, dx[0] > 3] = -5
+    dx[2, dx[0] < -2] = -7
+    dx[dx % 2 == 0] = -8
+    dx[[4, 3, 1]] = -9
+    dx[5, ...] = -10
+    dx[..., 4] = -11
+    dx[2:4, 5:1:-2] = -dx[:2, 4:1:-2]
+    dx[:2, :3] = [[1, 2, 3]]
+    dx[1, 1:7:2] = np.ma.masked
+    dx[0, 1:3] = -dx[0, 4:2:-1]
+    dx[...] = dx
+    dx[...] = dx[...]
+    dx[0, :] = dx[-2, :]
+    dx[:, 1] = dx[:, -3]
+    dx[[True, False, False, False, True, False], 2] = -4
+    dx[3, [True, True, False, True, True, False, True, False, True, True]] = -5
+    dx[
+        4,
+        da.from_array(
+            [False, False, True, True, False, False, True, False, False, True]
+        ),
+    ] = -55
+    dx[np.array([False, False, True, True, False, False]), 5:7] = -66
+
+    assert_eq(x, dx.compute())
+    assert_eq(x.mask, da.ma.getmaskarray(dx))
+
+
+def test_setitem_on_read_only_blocks():
+    # Outputs of broadcast_trick-style functions contain read-only
+    # arrays
+    dx = da.empty((4, 6), dtype=float, chunks=(2, 2))
+    dx[0] = 99
+
+    assert_eq(dx[0, 0].compute(), 99)
+
+    dx[0:2] = 88
+
+    assert_eq(dx[0, 0].compute(), 88)
+
+
 def test_setitem_errs():
     x = da.ones((4, 4), chunks=(2, 2))
 
     with pytest.raises(ValueError):
         x[x > 1] = x
+
+    # Shape mismatch
+    with pytest.raises(ValueError):
+        x[[True, True, False, False], 0] = [2, 3, 4]
+
+    with pytest.raises(ValueError):
+        x[[True, True, True, False], 0] = [2, 3]
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    x[0, da.from_array([True, False, False, True])] = [2, 3, 4]
+    with pytest.raises(ValueError):
+        x.compute()
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    x[0, da.from_array([True, True, False, False])] = [2, 3, 4]
+    with pytest.raises(ValueError):
+        x.compute()
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    x[da.from_array([True, True, True, False]), 0] = [2, 3]
+    with pytest.raises(ValueError):
+        x.compute()
+
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    # Too many indices
+    with pytest.raises(IndexError):
+        x[:, :, :] = 2
+
+    # 2-d boolean indexing a single dimension
+    with pytest.raises(IndexError):
+        x[[[True, True, False, False]], 0] = 5
+
+    # Too many/not enough booleans
+    with pytest.raises(IndexError):
+        x[[True, True, False]] = 5
+
+    with pytest.raises(IndexError):
+        x[[False, True, True, True, False]] = 5
+
+    # 2-d indexing a single dimension
+    with pytest.raises(IndexError):
+        x[[[1, 2, 3]], 0] = 5
+
+    # Multiple 1-d boolean/integer arrays
+    with pytest.raises(NotImplementedError):
+        x[[1, 2], [2, 3]] = 6
+
+    with pytest.raises(NotImplementedError):
+        x[[True, True, False, False], [2, 3]] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[[True, True, False, False], [False, True, False, False]] = 7
+
+    # scalar boolean indexing
+    with pytest.raises(NotImplementedError):
+        x[True] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[np.array(True)] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[0, da.from_array(True)] = 5
+
+    # Not strictly monotonic
+    with pytest.raises(NotImplementedError):
+        x[[1, 3, 2]] = 7
+
+    # Repeated index
+    with pytest.raises(NotImplementedError):
+        x[[1, 3, 3]] = 7
+
+    # Scalar arrays
+    y = da.from_array(np.array(1))
+    with pytest.raises(IndexError):
+        y[:] = 2
 
 
 def test_zero_slice_dtypes():
@@ -4313,7 +4473,6 @@ def test_no_warnings_from_blockwise():
     assert not record
 
 
-@pytest.mark.xfail(_numpy_120, reason="https://github.com/pydata/sparse/issues/383")
 def test_from_array_meta():
     sparse = pytest.importorskip("sparse")
     x = np.ones(10)
@@ -4484,3 +4643,14 @@ def test_map_blocks_dataframe():
     assert isinstance(s, dd.DataFrame)
     assert s.npartitions == x.npartitions
     dd_assert_eq(s, s)
+
+
+def test_dask_layers():
+    a = da.ones(1)
+    assert a.dask.layers.keys() == {a.name}
+    assert a.dask.dependencies == {a.name: set()}
+    assert a.__dask_layers__() == (a.name,)
+    b = a + 1
+    assert b.dask.layers.keys() == {a.name, b.name}
+    assert b.dask.dependencies == {a.name: set(), b.name: {a.name}}
+    assert b.__dask_layers__() == (b.name,)

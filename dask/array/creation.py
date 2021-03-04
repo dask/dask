@@ -22,7 +22,7 @@ from .core import (
     broadcast_arrays,
     cached_cumsum,
 )
-from .ufunc import rint
+from .ufunc import rint, greater_equal
 from .wrap import empty, ones, zeros, full
 from .utils import AxisError, meta_from_array, zeros_like_safe
 
@@ -676,120 +676,24 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     return Array(graph, name, shape=shape, chunks=chunks, meta=meta)
 
 
-def triu(m, k=0):
-    """
-    Upper triangle of an array with elements below the `k`-th diagonal zeroed.
+@derived_from(np)
+def tri(N, M=None, k=0, dtype=float, chunks="auto"):
+    _min_int = np.lib.twodim_base._min_int
 
-    Parameters
-    ----------
-    m : array_like, shape (M, N)
-        Input array.
-    k : int, optional
-        Diagonal below which to zero elements.  `k = 0` (the default) is the
-        main diagonal, `k < 0` is below it and `k > 0` is above.
+    if M is None:
+        M = N
 
-    Returns
-    -------
-    triu : ndarray, shape (M, N)
-        Upper triangle of `m`, of same shape and data-type as `m`.
+    chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
 
-    See Also
-    --------
-    tril : lower triangle of an array
-    """
-    if m.ndim != 2:
-        raise ValueError("input must be 2 dimensional")
-    if m.chunks[0][0] != m.chunks[1][0]:
-        msg = (
-            "chunks must be a square. "
-            "Use .rechunk method to change the size of chunks."
-        )
-        raise NotImplementedError(msg)
-
-    rdim = len(m.chunks[0])
-    hdim = len(m.chunks[1])
-    chunk = m.chunks[0][0]
-
-    token = tokenize(m, k)
-    name = "triu-" + token
-
-    triu_is_empty = True
-    dsk = {}
-    for i in range(rdim):
-        for j in range(hdim):
-            if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (
-                    partial(zeros_like_safe, shape=(m.chunks[0][i], m.chunks[1][j])),
-                    m._meta,
-                )
-            elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
-                dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
-                triu_is_empty = False
-            else:
-                dsk[(name, i, j)] = (m.name, i, j)
-                triu_is_empty = False
-    graph = HighLevelGraph.from_collections(
-        name, dsk, dependencies=[] if triu_is_empty else [m]
+    m = greater_equal.outer(
+        arange(N, chunks=chunks[0][0], dtype=_min_int(0, N)),
+        arange(-k, M - k, chunks=chunks[1][0], dtype=_min_int(-k, M - k)),
     )
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
 
+    # Avoid making a copy if the requested type is already bool
+    m = m.astype(dtype, copy=False)
 
-def tril(m, k=0):
-    """
-    Lower triangle of an array with elements above the `k`-th diagonal zeroed.
-
-    Parameters
-    ----------
-    m : array_like, shape (M, M)
-        Input array.
-    k : int, optional
-        Diagonal above which to zero elements.  `k = 0` (the default) is the
-        main diagonal, `k < 0` is below it and `k > 0` is above.
-
-    Returns
-    -------
-    tril : ndarray, shape (M, M)
-        Lower triangle of `m`, of same shape and data-type as `m`.
-
-    See Also
-    --------
-    triu : upper triangle of an array
-    """
-    if m.ndim != 2:
-        raise ValueError("input must be 2 dimensional")
-    if not len(set(m.chunks[0] + m.chunks[1])) == 1:
-        msg = (
-            "All chunks must be a square matrix to perform lu decomposition. "
-            "Use .rechunk method to change the size of chunks."
-        )
-        raise ValueError(msg)
-
-    rdim = len(m.chunks[0])
-    hdim = len(m.chunks[1])
-    chunk = m.chunks[0][0]
-
-    token = tokenize(m, k)
-    name = "tril-" + token
-
-    tril_is_empty = True
-    dsk = {}
-    for i in range(rdim):
-        for j in range(hdim):
-            if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (m.name, i, j)
-                tril_is_empty = False
-            elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
-                dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
-                tril_is_empty = False
-            else:
-                dsk[(name, i, j)] = (
-                    partial(zeros_like_safe, shape=(m.chunks[0][i], m.chunks[1][j])),
-                    m._meta,
-                )
-    graph = HighLevelGraph.from_collections(
-        name, dsk, dependencies=[] if tril_is_empty else [m]
-    )
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
+    return m
 
 
 def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
@@ -962,6 +866,8 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     Helper function to find the linear ramp for a chunk.
     """
 
+    from .utils import empty_like_safe
+
     num1 = num + 1
 
     shape = list(start.shape)
@@ -970,7 +876,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = np.empty(shape, dtype=dtype)
+    result = empty_like_safe(start, shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)
@@ -996,8 +902,13 @@ def pad_edge(array, pad_width, mode, **kwargs):
         pad_arrays = [result, result]
 
         if mode == "constant":
+            from .utils import asarray_safe
+
             constant_values = kwargs["constant_values"][d]
-            constant_values = [asarray(c).astype(result.dtype) for c in constant_values]
+            constant_values = [
+                asarray_safe(c, like=meta_from_array(array), dtype=result.dtype)
+                for c in constant_values
+            ]
 
             pad_arrays = [
                 broadcast_to(v, s, c)
@@ -1035,7 +946,7 @@ def pad_edge(array, pad_width, mode, **kwargs):
                 ]
         elif mode == "empty":
             pad_arrays = [
-                empty(s, dtype=array.dtype, chunks=c)
+                empty_like(array, shape=s, dtype=array.dtype, chunks=c)
                 for s, c in zip(pad_shapes, pad_chunks)
             ]
 

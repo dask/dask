@@ -122,7 +122,7 @@ def test_read_bytes_blocksize_float_errs():
 def test_read_bytes_include_path():
     with filetexts(files, mode="b"):
         _, _, paths = read_bytes(".test.accounts.*", include_path=True)
-        assert {os.path.split(path)[1] for path in paths} == set(files.keys())
+        assert {os.path.split(path)[1] for path in paths} == files.keys()
 
 
 def test_with_urls():

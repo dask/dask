@@ -4,7 +4,7 @@ import warnings
 from collections.abc import Iterable
 from functools import wraps, partial
 from numbers import Real, Integral
-from typing import List
+from typing import List, Tuple
 
 import numpy as np
 from tlz import concat, sliding_window, interleave
@@ -16,7 +16,7 @@ from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
-from .creation import arange, diag, empty, indices
+from .creation import arange, diag, empty, indices, tri, zeros
 from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -280,6 +280,14 @@ def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
 
 
+def _matmul(a, b):
+    chunk = np.matmul(a, b)
+    # Since we have performed the contraction via matmul
+    # but blockwise expects all dimensions back, we need
+    # to add one dummy dimension back
+    return chunk[..., np.newaxis]
+
+
 @derived_from(np)
 def matmul(a, b):
     a = asanyarray(a)
@@ -303,16 +311,54 @@ def matmul(a, b):
     elif a.ndim > b.ndim:
         b = b[(a.ndim - b.ndim) * (np.newaxis,)]
 
+    # out_ind includes all dimensions to prevent contraction
+    # in the blockwise below
+    out_ind = tuple(range(a.ndim + 1))
+    # lhs_ind includes `a`/LHS dimensions
+    lhs_ind = tuple(range(a.ndim))
+    # on `b`/RHS everything above 2nd dimension, is the same
+    # as `a`, -2 dimension is "contracted" with the last dimension
+    # of `a`, last dimension of `b` is `b` specific
+    rhs_ind = tuple(range(a.ndim - 2)) + (lhs_ind[-1], a.ndim)
+
     out = blockwise(
-        np.matmul,
-        tuple(range(1, a.ndim + 1)),
+        _matmul,
+        out_ind,
         a,
-        tuple(range(1, a.ndim - 1)) + (a.ndim - 1, 0),
+        lhs_ind,
         b,
-        tuple(range(1, a.ndim - 1)) + (0, a.ndim),
+        rhs_ind,
+        adjust_chunks={lhs_ind[-1]: 1},
         dtype=result_type(a, b),
-        concatenate=True,
+        concatenate=False,
     )
+
+    # Because contraction + concatenate in blockwise leads to high
+    # memory footprints, we want to avoid them. Instead we will perform
+    # blockwise (without contraction) followed by reduction. More about
+    # this issue: https://github.com/dask/dask/issues/6874
+
+    # When we perform reduction, we need to worry about the last 2 dimensions
+    # which hold the matrices, some care is required to handle chunking in
+    # that space.
+    contraction_dimension_is_chunked = (
+        max(min(a.chunks[-1], b.chunks[-2])) < a.shape[-1]
+    )
+    b_last_dim_max_chunk = max(b.chunks[-1])
+    if contraction_dimension_is_chunked or b_last_dim_max_chunk < b.shape[-1]:
+        if b_last_dim_max_chunk > 1:
+            # This is the case when both contraction and last dimension axes
+            # are chunked
+            out = out.reshape(out.shape[:-1] + (1, -1))
+            out = out.sum(axis=-3)
+            out = out.reshape(out.shape[:-2] + (b.shape[-1],))
+        else:
+            # Contraction axis is chunked
+            out = out.sum(axis=-2)
+    else:
+        # Neither contraction nor last dimension axes are chunked, we
+        # remove the dummy dimension without reduction
+        out = out.reshape(out.shape[:-2] + (b.shape[-1],))
 
     if a_is_1d:
         out = out[..., 0, :]
@@ -574,7 +620,10 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-def _bincount_sum(bincounts, dtype=int):
+def _bincount_agg(bincounts, dtype, **kwargs):
+    if not isinstance(bincounts, list):
+        return bincounts
+
     n = max(map(len, bincounts))
     out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
@@ -583,7 +632,7 @@ def _bincount_sum(bincounts, dtype=int):
 
 
 @derived_from(np)
-def bincount(x, weights=None, minlength=0):
+def bincount(x, weights=None, minlength=0, split_every=None):
     if x.ndim != 1:
         raise ValueError("Input array must be one dimensional. Try using x.ravel()")
     if weights is not None:
@@ -591,41 +640,38 @@ def bincount(x, weights=None, minlength=0):
             raise ValueError("Chunks of input array x and weights must match.")
 
     token = tokenize(x, weights, minlength)
-    name = "bincount-" + token
-    final_name = "bincount-sum" + token
-    # Call np.bincount on each block, possibly with weights
+    args = [x, "i"]
     if weights is not None:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([1], weights=[1]).dtype
+        meta = np.bincount([1], weights=[1])
+        args.extend([weights, "i"])
     else:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), None, minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([]).dtype
+        meta = np.bincount([])
 
-    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
-    graph = HighLevelGraph.from_collections(
-        final_name, dsk, dependencies=[x] if weights is None else [x, weights]
+    chunked_counts = blockwise(
+        partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
     )
 
-    if minlength == 0:
-        chunks = ((np.nan,),)
-    else:
-        chunks = ((minlength,),)
+    from .reductions import _tree_reduce
 
-    meta = meta_from_array(x, 1, dtype=dtype)
-
-    return Array(graph, final_name, chunks, meta=meta)
+    output = _tree_reduce(
+        chunked_counts,
+        aggregate=partial(_bincount_agg, dtype=meta.dtype),
+        axis=(0,),
+        keepdims=False,
+        dtype=meta.dtype,
+        split_every=split_every,
+        concatenate=False,
+    )
+    output._meta = meta
+    return output
 
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    bins = np.asarray(bins)
-    dtype = np.digitize([0], bins, right=False).dtype
+    from .utils import asarray_safe
+
+    bins = asarray_safe(bins, like=meta_from_array(a))
+    dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
@@ -1148,8 +1194,8 @@ def union1d(ar1, ar2):
 
 
 @derived_from(np)
-def ravel(array):
-    return array.reshape((-1,))
+def ravel(array_like):
+    return asanyarray(array_like).reshape((-1,))
 
 
 @derived_from(np)
@@ -1412,7 +1458,21 @@ def piecewise(x, condlist, funclist, *args, **kw):
     )
 
 
-def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
+def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
+    """
+    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
+    the number of times it divides `total`, and length-1 or empty tuple containing the remainder when
+    `total` is divided by `divisor`. If `divisor` factors `total`, i.e. if the remainder is 0, then
+    `remainder` is empty.
+    """
+    multiples = (divisor,) * (total // divisor)
+    remainder = ()
+    if (total % divisor) > 0:
+        remainder = (total % divisor,)
+    return (multiples, remainder)
+
+
+def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
     """
     Returns a new chunking aligned with the coarsening multiple.
     Any excess is at the end of the array.
@@ -1422,47 +1482,32 @@ def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> List[int]:
     >>> aligned_coarsen_chunks(chunks=(1, 2, 3), multiple=4)
     (4, 2)
     >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
-    (20, 4, 4)
+    (4, 20, 4)
     >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
     (20, 10, 20, 20, 20, 2)
     """
-
-    def choose_new_size(multiple, q, left):
-        """
-        See if multiple * q is a good choice when 'left' elements are remaining.
-        Else return multiple * (q-1)
-        """
-        possible = multiple * q
-        if (left - possible) > 0:
-            return possible
-        else:
-            return multiple * (q - 1)
-
-    newchunks = []
-    left = sum(chunks) - sum(newchunks)
-    chunkgen = (c for c in chunks)
-    while left > 0:
-        if left < multiple:
-            newchunks.append(left)
-            break
-
-        chunk_size = next(chunkgen, 0)
-        if chunk_size == 0:
-            chunk_size = multiple
-
-        q, r = divmod(chunk_size, multiple)
-        if q == 0:
-            continue
-        elif r == 0:
-            newchunks.append(chunk_size)
-        elif r >= 5:
-            newchunks.append(choose_new_size(multiple, q + 1, left))
-        else:
-            newchunks.append(choose_new_size(multiple, q, left))
-
-        left = sum(chunks) - sum(newchunks)
-
-    return tuple(newchunks)
+    overflow = np.array(chunks) % multiple
+    excess = overflow.sum()
+    new_chunks = np.array(chunks) - overflow
+    # valid chunks are those that are already factorizable by `multiple`
+    chunk_validity = new_chunks == chunks
+    valid_inds, invalid_inds = np.where(chunk_validity)[0], np.where(~chunk_validity)[0]
+    # sort the invalid chunks by size (ascending), then concatenate the results of
+    # sorting the valid chunks by size (ascending)
+    chunk_modification_order = [
+        *invalid_inds[np.argsort(new_chunks[invalid_inds])],
+        *valid_inds[np.argsort(new_chunks[valid_inds])],
+    ]
+    partitioned_excess, remainder = _partition(excess, multiple)
+    # add elements the partitioned excess to the smallest invalid chunks,
+    # then smallest valid chunks if needed.
+    for idx, extra in enumerate(partitioned_excess):
+        new_chunks[chunk_modification_order[idx]] += extra
+    # create excess chunk with remainder, if any remainder exists
+    new_chunks = np.array([*new_chunks, *remainder])
+    # remove 0-sized chunks
+    new_chunks = new_chunks[new_chunks > 0]
+    return tuple(new_chunks)
 
 
 @wraps(chunk.coarsen)
@@ -1559,6 +1604,49 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
+@derived_from(np)
+def delete(arr, obj, axis):
+    """
+    NOTE: If ``obj`` is a dask array it is implicitly computed when this function
+    is called.
+    """
+    # axis is a required argument here to avoid needing to deal with the numpy
+    # default case (which reshapes the array to make it flat)
+    axis = validate_axis(axis, arr.ndim)
+
+    if isinstance(obj, slice):
+        tmp = np.arange(*obj.indices(arr.shape[axis]))
+        obj = tmp[::-1] if obj.step and obj.step < 0 else tmp
+    else:
+        obj = np.asarray(obj)
+        obj = np.where(obj < 0, obj + arr.shape[axis], obj)
+        obj = np.unique(obj)
+
+    target_arr = split_at_breaks(arr, obj, axis)
+
+    target_arr = [
+        arr[
+            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
+        ]
+        if i != 0
+        else arr
+        for i, arr in enumerate(target_arr)
+    ]
+    return concatenate(target_arr, axis=axis)
+
+
+@derived_from(np)
+def append(arr, values, axis=None):
+    # based on numpy.append
+    arr = asanyarray(arr)
+    if axis is None:
+        if arr.ndim != 1:
+            arr = arr.ravel()
+        values = ravel(asanyarray(values))
+        axis = arr.ndim - 1
+    return concatenate((arr, values), axis=axis)
+
+
 def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
@@ -1613,3 +1701,43 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
 @derived_from(np)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=False)
+
+
+@derived_from(np)
+def tril(m, k=0):
+    m = asarray(m)
+    mask = tri(*m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:])
+
+    return where(mask, m, zeros(1, dtype=m.dtype))
+
+
+@derived_from(np)
+def triu(m, k=0):
+    m = asarray(m)
+    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool, chunks=m.chunks[-2:])
+
+    return where(mask, zeros(1, dtype=m.dtype), m)
+
+
+@derived_from(np)
+def tril_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(tri(n, m, k=k, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def tril_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return tril_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)
+
+
+@derived_from(np)
+def triu_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(~tri(n, m, k=k - 1, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def triu_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return triu_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)

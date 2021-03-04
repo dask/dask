@@ -43,11 +43,9 @@ def optimize(dsk, keys, **kwargs):
 
 def optimize_read_parquet_getitem(dsk, keys):
     # find the keys to optimize
-    from .io.parquet.core import BlockwiseParquet
+    from .io.parquet.core import ParquetSubgraph
 
-    read_parquets = [
-        k for k, v in dsk.layers.items() if isinstance(v, BlockwiseParquet)
-    ]
+    read_parquets = [k for k, v in dsk.layers.items() if isinstance(v, ParquetSubgraph)]
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
@@ -72,9 +70,9 @@ def optimize_read_parquet_getitem(dsk, keys):
                 # ... where this value is __getitem__...
                 return dsk
 
-            if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
-                # if any(block.output == x[0] for x in keys if isinstance(x, tuple)):
-                # ... but bail on the optimization if the getitem is what's requested
+            if any(layers[k].name == x[0] for x in keys if isinstance(x, tuple)):
+                # ... but bail on the optimization if the read_parquet layer is in
+                # the requested keys, because we cannot change the name anymore.
                 # These keys are structured like [('getitem-<token>', 0), ...]
                 # so we check for the first item of the tuple.
                 # See https://github.com/dask/dask/issues/5893
@@ -120,8 +118,16 @@ def optimize_read_parquet_getitem(dsk, keys):
             meta = old.meta
             columns = list(meta.columns)
 
-        new = BlockwiseParquet(
-            name, old.engine, old.fs, meta, columns, old.index, old.parts, old.kwargs
+        new = ParquetSubgraph(
+            name,
+            old.engine,
+            old.fs,
+            meta,
+            columns,
+            old.index,
+            old.parts,
+            old.kwargs,
+            common_kwargs=old.common_kwargs,
         )
         layers[name] = new
         if name != old.name:

@@ -13,4 +13,5 @@ dependencies:
   - toolz
   # test dependencies
   - pytest
+  - pytest-rerunfailures
   - pytest-xdist
