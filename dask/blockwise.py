@@ -1,5 +1,4 @@
 import itertools
-import pickle
 
 import tlz as toolz
 
@@ -14,16 +13,24 @@ from .utils import (
     apply,
     stringify,
     stringify_collection_keys,
-    TaggedMappingDispatch,
 )
 
 
-# Dispatch function for dynamic argument generation within
-# `Blockwise`.  All dispatch options must register by "tag",
-# and all arguments needed to construct the registered
-# class must be msgpack serializable.  Otherwise, the
-# `__dask_distributed_{pack,unpack}__` methods must be defined.
-blockwise_io_dep_map = TaggedMappingDispatch()
+class BlockwiseIODeps:
+    """Index-argument mapping for Blockwise IO dependencies"""
+
+    def __getitem__(self, idx: tuple):
+        raise NotImplementedError(
+            "Must define `__getitem__` for `BlockwiseIODeps` subclass."
+        )
+
+    @classmethod
+    def __dask_distributed_pack__(cls, module: str, name: str, *args):
+        return (module, name, *args)
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, module: str, name: str, *args):
+        return (module, name, *args)
 
 
 def subs(task, substitution):
@@ -194,9 +201,10 @@ class Blockwise(Layer):
         mapping between place-holder collection indices, e.g ``(1,)``,
         and any chunk/partition-specific arguments needed by the underlying
         IO function. If ``io_deps[key]`` corresponds to a tuple, the first
-        element of that tuple must contain a registered "tag" for the
-        ``blockwise_io_dep_map`` dispatch, and the remaining elements should
-        be initialization arguments. See ``make_blockwise_graph`` for usage.
+        two elements of that tuple must contain the dask module path and the
+        name for the desired ``BlockwiseIODeps``-based mapping, respectively.
+        The remaining tuple elements should be initialization arguments.
+        See ``make_blockwise_graph`` for usage.
 
     See Also
     --------
@@ -319,6 +327,7 @@ class Blockwise(Layer):
         from distributed.worker import dumps_function
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
+        from distributed.protocol.serialize import import_allowed_module
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
@@ -344,21 +353,22 @@ class Blockwise(Layer):
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
 
-        # Handle `io_deps` serialization
+        # Handle `io_deps` serialization.
+        # If `io_deps[<collection_key>]` is just a dict, we rely
+        # entirely on msgpack.  It is up to the `Blockwise` layer to
+        # ensure that all arguments are msgpack serializable. To enable
+        # more control over serialization, a `BlockwiseIODeps` mapping
+        # subclass can be defined with the necessary
+        # `__dask_distributed_{pack,unpack}__` methods.
         for input_map in self.io_deps.values():
             if isinstance(input_map, tuple):
                 # Use the `__dask_distributed_pack__` definition for the
-                # registered `blockwise_io_dep_map` class
-                input_map = blockwise_io_dep_map.__dask_distributed_pack__(*input_map)
-            else:
-                # If `io_deps[<collection_key>]` is just a dict, we
-                # pickle every element to be "safe".  It is the responsibility
-                # of the underlying IO function to handle deserialization
-                # on the worker.  For more control over serialization, a
-                # `blockwise_io_dep_map` mapping should be registered with
-                # the necessary `__dask_distributed_{pack,unpack}__` methods.
-                for k, v in input_map.items():
-                    input_map[k] = pickle.dumps(v)
+                # specified `BlockwiseIODeps` subclass
+                io_dep_map = getattr(
+                    import_allowed_module(input_map[0]),
+                    input_map[1],
+                )
+                input_map = io_dep_map.__dask_distributed_pack__(*input_map)
 
         return {
             "output": self.output,
@@ -722,6 +732,9 @@ def make_blockwise_graph(
 
     if deserializing:
         from distributed.worker import warn_dumps, dumps_function
+        from distributed.protocol.serialize import import_allowed_module
+    else:
+        from importlib import import_module as import_allowed_module
 
     # Check if there are tuple arguments in `io_deps`.
     # If so, we must use this tuple to construct the actual
@@ -730,9 +743,10 @@ def make_blockwise_graph(
     for arg, val in io_deps.items():
         if isinstance(val, tuple):
             _args = io_deps[arg]
+            io_dep_map = getattr(import_allowed_module(_args[0]), _args[1])
             if deserializing:
-                _args = blockwise_io_dep_map.__dask_distributed_unpack__(*_args)
-            io_arg_mappings[arg] = blockwise_io_dep_map(*_args)
+                _args = io_dep_map.__dask_distributed_unpack__(*_args)
+            io_arg_mappings[arg] = io_dep_map(*_args[2:])
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate

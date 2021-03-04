@@ -10,25 +10,18 @@ from ..blockwise import (
     Blockwise,
     blockwise as core_blockwise,
     blockwise_token,
-    blockwise_io_dep_map,
+    BlockwiseIODeps,
 )
 
 
-class CreateArrayIODeps:
-    """Index-chunk mapping for BlockwiseCreateArray
-
-    This class is registered with ``blockwise_io_dep_map`` under
-    the "create_array_io_deps" tag.
-    """
+class CreateArrayDeps(BlockwiseIODeps):
+    """Index-chunk mapping for BlockwiseCreateArray"""
 
     def __init__(self, chunks: tuple):
         self.chunks = chunks
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
-
-
-blockwise_io_dep_map.register("create_array_io_deps", CreateArrayIODeps)
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -71,7 +64,13 @@ class BlockwiseCreateArray(Blockwise):
             dsk,
             [(io_name, out_ind)],
             {io_name: self.nchunks},
-            io_deps={io_name: ("create_array_io_deps", chunks)},
+            io_deps={
+                io_name: (
+                    "dask.array.blockwise",
+                    "CreateArrayDeps",
+                    chunks,
+                )
+            },
         )
 
 
