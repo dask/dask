@@ -79,6 +79,13 @@ Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
 clone the fork::
 
    git clone https://github.com/<your-github-username>/dask
+   cd dask
+
+You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
+can successfully install Dask)::
+
+   git remote add upstream https://github.com/dask/dask
+   git pull upstream --tags
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
 
@@ -86,10 +93,9 @@ Contributions to Dask can then be made by submitting pull requests on GitHub.
 Install
 ~~~~~~~
 
-To build the library you can install the necessary requirements using
-pip or conda_::
-
-  cd dask
+From the top level of your cloned Dask repository you can install a
+local version of Dask, along with all necessary dependencies, using
+pip or conda_
 
 .. _conda: https://conda.io/
 
