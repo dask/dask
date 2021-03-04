@@ -1,6 +1,8 @@
 import itertools
+import os
 import warnings
-from typing import Any, Hashable, Iterable, Mapping, Optional, Set, Tuple
+from itertools import product
+from typing import Any, Hashable, Iterable, Mapping, Optional, Sequence, Set, Tuple
 
 import tlz as toolz
 
@@ -158,18 +160,19 @@ class Blockwise(Layer):
     dsk: dict
         A small graph to apply per-output-block.  May include keys from the
         input indices.
-    indices: Tuple[str, Tuple[str, str]]
+    indices: Tuple[str, Tuple[str, ...]]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
         Or includes literals, which have ``None`` for an index value
-    numblocks: Dict[key, Sequence[int]]
+    numblocks: Mapping[key, Sequence[int]]
         Number of blocks along each dimension for each input
-    concatenate: boolean
+    concatenate: bool
         Whether or not to pass contracted dimensions as a list of inputs or a
         single input to the block function
-    new_axes: Dict
-        New index dimensions that may have been created, and their extent
-    output_blocks: Set[tuple]
+    new_axes: Mapping
+        New index dimensions that may have been created and their size,
+        e.g. ``{'j': 2, 'k': 3}``
+    output_blocks: Set[Tuple[int, ...]]
         Specify a specific set of required output blocks. Since the graph
         will only contain the necessary tasks to generate these outputs,
         this kwarg can be used to "cull" the abstract layer (without needing
@@ -188,10 +191,10 @@ class Blockwise(Layer):
     output_indices: Tuple[str, ...]
     dsk: Mapping[str, tuple]
     indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
-    numblocks: Mapping[str, Tuple[int, ...]]
+    numblocks: Mapping[str, Sequence[int]]
     concatenate: Optional[bool]
-    new_axes: Mapping
-    output_blocks: Optional[Set[tuple]]
+    new_axes: Mapping[str, int]
+    output_blocks: Optional[Set[Tuple[int, ...]]]
 
     def __init__(
         self,
@@ -199,10 +202,10 @@ class Blockwise(Layer):
         output_indices: Iterable[str],
         dsk: Mapping[str, tuple],
         indices: Iterable[Tuple[str, Optional[Iterable[str]]]],
-        numblocks: Mapping[str, Tuple[int, ...]],
+        numblocks: Mapping[str, Sequence[int]],
         concatenate: bool = None,
-        new_axes: Mapping = None,
-        output_blocks: Set[tuple] = None,
+        new_axes: Mapping[str, int] = None,
+        output_blocks: Set[Tuple[int, ...]] = None,
         annotations: Mapping[str, Any] = None,
     ):
         super().__init__(annotations=annotations)
@@ -469,13 +472,17 @@ class Blockwise(Layer):
         seed: Hashable,
         bind_to: Hashable = None,
     ) -> Tuple[Layer, bool]:
-        if self.get_output_keys() - keys:
-            # Downgrade to MaterializedLayer to be able to cherry-pick keys
-            return super().clone(keys, seed, bind_to)
-
-        # The assumption here is that 'keys' will either contain all or none of the
-        # output keys of each of the dependency layers
         names = {get_name_from_key(k) for k in keys}
+        # We assume that 'keys' will contain either all or none of the output keys of
+        # each of the layers, because clone/bind are always invoked at collection level.
+        # Asserting this is very expensive, so we only check it during unit tests.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            assert not self.get_output_keys() - keys
+            for name, nb in self.numblocks.items():
+                if name in names:
+                    for block in product(*(list(range(nbi)) for nbi in nb)):
+                        assert (name, *block) in keys
+
         is_leaf = True
 
         indices = []
