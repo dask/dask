@@ -521,39 +521,6 @@ class Dispatch:
             return "Single Dispatch for %s" % self.__name__
 
 
-# class TaggedMappingDispatch:
-#     """Simple Mapping dispatch by tag"""
-
-#     def __init__(self):
-#         self._lookup = {}
-
-#     def register(self, tag, cls):
-#         """Register mapping dispatch by unique tag"""
-#         if not hasattr(cls, "__getitem__"):
-#             raise AttributeError(
-#                 "Cannot register class without a __getitem__ attribute."
-#             )
-#         self._lookup[tag] = cls
-
-#     def __call__(self, tag, *args):
-#         """Initialize dispatched mapping"""
-#         return self._lookup[tag](*args)
-
-#     def __dask_distributed_pack__(self, tag, *args):
-#         """Call optional serialization routine"""
-#         _obj = self._lookup[tag]
-#         if hasattr(_obj, "__dask_distributed_pack__"):
-#             return self._lookup[tag].__dask_distributed_pack__(*args)
-#         return (tag, *args)
-
-#     def __dask_distributed_unpack__(self, tag, *args):
-#         """Call optional deserialization routine"""
-#         _obj = self._lookup[tag]
-#         if hasattr(_obj, "__dask_distributed_unpack__"):
-#             return self._lookup[tag].__dask_distributed_pack__(*args)
-#         return (tag, *args)
-
-
 def ensure_not_exists(filename):
     """
     Ensure that a file does not exist.
