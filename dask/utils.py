@@ -1124,12 +1124,13 @@ def is_arraylike(x):
     False
     """
     from .base import is_dask_collection
+    from .array.utils import IS_NEP18_ACTIVE
 
     return bool(
         hasattr(x, "shape")
         and isinstance(x.shape, tuple)
         and hasattr(x, "dtype")
-        and hasattr(x, "__array_function__")
+        and (hasattr(x, "__array_function__") if IS_NEP18_ACTIVE else True)
         and not any(is_dask_collection(n) for n in x.shape)
     )
 
