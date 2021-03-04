@@ -306,6 +306,7 @@ def test_blockwise_array_creation(c, io, fuse):
     darr += 2
     narr += 2
     with dask.config.set({"optimization.fuse.active": fuse}):
+        darr.compute()
         da.assert_eq(darr, narr)
 
 
