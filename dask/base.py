@@ -932,13 +932,17 @@ def register_pandas():
         return [
             s.name,
             s.dtype,
-            normalize_token(s._data.blocks[0].values),
+            normalize_token(s._values),
             normalize_token(s.index),
         ]
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        data = [block.values for block in df._data.blocks]
+        mgr = df._data
+        if hasattr(mgr, "arrays"):
+            data = list(mgr.arrays)
+        else:
+            data = [block.values for block in mgr.blocks]
         data.extend([df.columns, df.index])
         return list(map(normalize_token, data))
 
