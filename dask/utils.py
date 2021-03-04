@@ -1124,12 +1124,8 @@ def is_arraylike(x):
     False
     """
     from .base import is_dask_collection
-    from .array.utils import IS_NEP18_ACTIVE
 
-    # Fallback to True for cases where NEP-18 isn't active (e.g. older versions of NumPy)
-    implements_array_fuction = (
-        hasattr(x, "__array_function__") if IS_NEP18_ACTIVE else True
-    )
+    is_duck_array = hasattr(x, "__array_function__") or hasattr(x, "__array_ufunc__")
 
     return bool(
         hasattr(x, "shape")
@@ -1140,7 +1136,7 @@ def is_arraylike(x):
         # support for them is useful in scenerios where we mostly call `map_partitions`
         # or `map_blocks` with scikit-learn functions on dask arrays and dask dataframes.
         # https://github.com/dask/dask/pull/3738
-        and (implements_array_fuction or "scipy.sparse" in typename(type(x)))
+        and (is_duck_array or "scipy.sparse" in typename(type(x)))
     )
 
 
