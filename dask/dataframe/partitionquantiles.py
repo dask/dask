@@ -413,9 +413,9 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     if is_categorical_dtype(data):
         data = data.codes
         interpolation = "nearest"
+    elif np.issubdtype(data.dtype, np.integer):
+        interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
-    if interpolation == "linear" and np.issubdtype(data.dtype, np.integer):
-        vals = np.round(vals).astype(data.dtype)
     vals_and_weights = percentiles_to_weights(qs, vals, length)
     return vals_and_weights
 
