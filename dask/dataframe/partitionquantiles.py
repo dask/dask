@@ -415,6 +415,8 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         data = data.codes
         interpolation = "nearest"
     elif np.issubdtype(data.dtype, np.integer) and not is_cupy_type(data):
+        # CuPy doesn't currently support "nearest" interpolation,
+        # so it's special cased in the condition above.
         interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
     vals_and_weights = percentiles_to_weights(qs, vals, length)
