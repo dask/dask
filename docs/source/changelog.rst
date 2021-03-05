@@ -1,6 +1,71 @@
 Changelog
 =========
 
+2021.03.0
+---------
+
+Released on March 5, 2021
+
+.. note::
+
+    This is the first release with support for Python 3.9 and the
+    last release with support for Python 3.6
+
+- Bump minimum version of ``distributed`` (:pr:`7328`) `James Bourbeau`_
+- Fix ``percentiles_summary`` with ``dask_cudf`` (:pr:`7325`) `Peter Andreas Entschev`_
+- Temporarily revert recent ``Array.__setitem__`` updates (:pr:`7326`) `James Bourbeau`_
+- ``Blockwise.clone`` (:pr:`7312`) `Guido Imperiale`_
+- NEP-35 duck array update (:pr:`7321`) `James Bourbeau`_
+- Don't allow setting ``.name`` for array (:pr:`7222`) `Julia Signell`_
+- Use nearest interpolation for creating percentiles of integer input (:pr:`7305`) `Kyle Barron`_
+- Test ``exp`` with CuPy arrays (:pr:`7322`) `John A Kirkham`_
+- Check that computed chunks have right size and dtype (:pr:`7277`) `Bruce Merry`_
+- ``pytest.mark.flaky`` (:pr:`7319`) `Guido Imperiale`_
+- Contributing docs: add note to pull the latest git tags before pip installing Dask (:pr:`7308`) `Genevieve Buckley`_
+- Support for Python 3.9 (:pr:`7289`) `Guido Imperiale`_
+- Add broadcast-based merge implementation (:pr:`7143`) `Richard (Rick) Zamora`_
+- Add ``split_every`` to ``graph_manipulation`` (:pr:`7282`) `Guido Imperiale`_
+- Typo in optimize docs (:pr:`7306`) `Julius Busecke`_
+- ``dask.graph_manipulation`` support for ``xarray.Dataset`` (:pr:`7276`) `Guido Imperiale`_
+- Add plot width and height support for Bokeh 2.3.0 (:pr:`7297`) `James Bourbeau`_
+- Add NumPy functions ``tri``, ``triu_indices``, ``triu_indices_from``, ``tril_indices``, ``tril_indices_from`` (:pr:`6997`) `Illviljan`_
+- Remove "cleanup" task in DataFrame on-disk shuffle (:pr:`7260`) `Sinclair Target`_
+- Use development version of ``distributed`` in CI (:pr:`7279`) `James Bourbeau`_
+- Moving high level graph pack/unpack Dask  (:pr:`7179`) `Mads R. B. Kristensen`_
+- Improve performance of ``merge_percentiles`` (:pr:`7172`) `Ashwin Srinath`_
+- DOC: add ``dask-sql`` and ``fugue`` (:pr:`7129`) `Ray Bell`_
+- Example for working with categoricals and parquet (:pr:`7085`) `McToel`_
+- Adds tree reduction to ``bincount`` (:pr:`7183`) `Thomas J. Fan`_
+- Improve documentation of ``name`` in ``from_array`` (:pr:`7264`) `Bruce Merry`_
+- Fix ``cumsum`` for empty partitions (:pr:`7230`) `Julia Signell`_
+- Add ``map_blocks`` example to dask array creation docs (:pr:`7221`) `Julia Signell`_
+- Fix performance issue in ``dask.graph_manipulation.wait_on()`` (:pr:`7258`) `Guido Imperiale`_
+- Replace coveralls with codecov.io (:pr:`7246`) `Guido Imperiale`_
+- Pin to a particular ``black`` rev in pre-commit (:pr:`7256`) `Julia Signell`_
+- Minor typo in documentation: ``array-chunks.rst`` (:pr:`7254`) `Magnus Nord`_
+- Fix bugs in ``Blockwise`` and ``ShuffleLayer`` (:pr:`7213`) `Richard (Rick) Zamora`_
+- Fix parquet filtering bug for ``"pyarrow-dataset"`` with pyarrow-3.0.0 (:pr:`7200`) `Richard (Rick) Zamora`_
+- ``graph_manipulation`` without NumPy (:pr:`7243`) `Guido Imperiale`_
+- Support for NEP-35 (:pr:`6738`) `Peter Andreas Entschev`_
+- Avoid running unit tests during doctest CI build (:pr:`7240`) `James Bourbeau`_
+- Run doctests on CI (:pr:`7238`) `Julia Signell`_
+- Cleanup code quality on set arithmetics (:pr:`7196`) `Guido Imperiale`_
+- Add ``dask.array.delete`` (:pr:`7125`) `Julia Signell`_
+- Unpin graphviz now that new conda-forge recipe is built (:pr:`7235`) `Julia Signell`_
+- Don't use NumPy 1.20 from conda-forge on Mac (:pr:`7211`) `Guido Imperiale`_
+- ``map_overlap``: Don't rechunk axes without overlap (:pr:`7233`) `Deepak Cherian`_
+- Pin graphviz to avoid issue with latest conda-forge build (:pr:`7232`) `Julia Signell`_
+- Use ``html_css_files`` in docs for custom CSS (:pr:`7220`) `James Bourbeau`_
+- Graph manipulation: ``clone``, ``bind``, ``checkpoint``, ``wait_on`` (:pr:`7109`) `Guido Imperiale`_
+- Fix handling of filter expressions in parquet ``pyarrow-dataset`` engine (:pr:`7186`) `Joris Van den Bossche`_
+- Extend ``__setitem__`` to more closely match numpy (:pr:`7033`) `David Hassell`_
+- Clean up Python 2 syntax (:pr:`7195`) `Guido Imperiale`_
+- Fix regression in ``Delayed._length`` (:pr:`7194`) `Guido Imperiale`_
+- ``__dask_layers__()`` tests and tweaks (:pr:`7177`) `Guido Imperiale`_
+- Properly convert ``HighLevelGraph`` in multiprocessing scheduler (:pr:`7191`) `Jim Crist-Harif`_
+- Don't fail fast in CI (:pr:`7188`) `James Bourbeau`_
+
+
 2021.02.0
 ---------
 
@@ -3962,3 +4027,8 @@ Other
 .. _`patquem`: https://github.com/patquem
 .. _`Amit Kumar`: https://github.com/aktech
 .. _`D-Stacks`: https://github.com/D-Stacks
+.. _`Kyle Barron`: https://github.com/kylebarron
+.. _`Julius Busecke`: https://github.com/jbusecke
+.. _`Sinclair Target`: https://github.com/sinclairtarget
+.. _`Ashwin Srinath`: https://github.com/shwina
+.. _`David Hassell`: https://github.com/davidhassell
