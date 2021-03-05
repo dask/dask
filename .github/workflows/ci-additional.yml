@@ -7,9 +7,8 @@ jobs:
     runs-on: "ubuntu-latest"
 
     strategy:
-      fail-fast: false
       matrix:
-        environment: ["mindeps-array-dataframe", "mindeps-bag-delayed", "mindeps-distributed"]
+        environment: ["mindeps-array-dataframe", "mindeps-bag-delayed"]
 
     steps:
       - name: Checkout source
