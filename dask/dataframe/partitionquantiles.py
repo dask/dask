@@ -75,7 +75,7 @@ from pandas.api.types import is_datetime64tz_dtype
 
 from tlz import merge, merge_sorted, take
 
-from ..utils import random_state_data
+from ..utils import is_cupy_type, random_state_data
 from ..base import tokenize
 from .core import Series
 from .utils import is_categorical_dtype
@@ -402,7 +402,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         each partition.  Use to improve accuracy.
     """
     from dask.array.percentile import _percentile
-    from ..utils import is_cupy_type
 
     length = len(df)
     if length == 0:
