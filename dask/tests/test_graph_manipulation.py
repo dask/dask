@@ -7,6 +7,7 @@ import pytest
 import dask
 from dask import delayed
 from dask.base import clone_key
+from dask.blockwise import Blockwise
 from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on
 from dask.highlevelgraph import HighLevelGraph
 from dask.tests.test_base import Tuple
@@ -57,7 +58,7 @@ def assert_no_common_keys(a, b, omit=None, *, layers: bool) -> None:
 
 def assert_did_not_materialize(cloned, orig):
     """Test that all layers of the original collection exist in the cloned collection
-    too and that they have not been materialized
+    too and that Blockwise layers have not been materialized
     """
     olayers = orig.__dask_graph__().layers
     clayers = cloned.__dask_graph__().layers
@@ -66,7 +67,9 @@ def assert_did_not_materialize(cloned, orig):
             cv = clayers[k]
         except KeyError:
             cv = clayers[clone_key(k, 0)]
-        assert cv.is_materialized() == v.is_materialized()
+        if isinstance(v, Blockwise):
+            assert not v.is_materialized()
+            assert not cv.is_materialized()
 
 
 # Generic hashables
@@ -323,6 +326,21 @@ def test_bind_clone_collections(func):
             seed=0,
         )
 
+    assert_did_not_materialize(d2c, d2)
+    assert_did_not_materialize(a3c, a3)
+    assert_did_not_materialize(b3c, b3)
+    assert_did_not_materialize(b4c, b4)
+    assert_did_not_materialize(ddf3c, ddf3)
+    assert_did_not_materialize(ddf4c, ddf4)
+    assert_did_not_materialize(ddf5c, ddf5)
+
+    assert_no_common_keys(d2c, d2, omit=d1, layers=True)
+    assert_no_common_keys(a3c, a3, omit=a1, layers=True)
+    assert_no_common_keys(b3c, b3, omit=b2, layers=True)
+    assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
+    assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
+    assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
+
     assert d2.compute() == d2c.compute()
     assert cnt.n == 4 or func is clone
     da.utils.assert_eq(a3c, a3)
@@ -337,21 +355,6 @@ def test_bind_clone_collections(func):
     assert cnt.n == 32 or func is clone  # dd.utils.assert_eq calls compute() twice
     dd.utils.assert_eq(ddf5c, ddf5)
     assert cnt.n == 36 or func is clone
-
-    assert_no_common_keys(d2c, d2, omit=d1, layers=True)
-    assert_no_common_keys(a3c, a3, omit=a1, layers=True)
-    assert_no_common_keys(b3c, b3, omit=b2, layers=True)
-    assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
-    assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
-    assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
-
-    assert_did_not_materialize(d2c, d2)
-    assert_did_not_materialize(a3c, a3)
-    assert_did_not_materialize(b3c, b3)
-    assert_did_not_materialize(b4c, b4)
-    assert_did_not_materialize(ddf3c, ddf3)
-    assert_did_not_materialize(ddf4c, ddf4)
-    assert_did_not_materialize(ddf5c, ddf5)
 
 
 @pytest.mark.parametrize(
