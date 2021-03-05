@@ -11,7 +11,7 @@ from tlz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, ignoring, is_arraylike
+from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
 
 try:
     AxisError = np.AxisError
@@ -22,13 +22,8 @@ except AttributeError:
         AxisError = type(e)
 
 
-def _is_cupy_type(x):
-    # TODO: avoid explicit reference to CuPy
-    return "cupy" in str(type(x))
-
-
 def normalize_to_array(x):
-    if _is_cupy_type(x):
+    if is_cupy_type(x):
         return x.get()
     else:
         return x

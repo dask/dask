@@ -1162,6 +1162,11 @@ def is_index_like(s):
     )
 
 
+def is_cupy_type(x):
+    # TODO: avoid explicit reference to CuPy
+    return "cupy" in str(type(x))
+
+
 def natural_sort_key(s):
     """
     Sorting `key` function for performing a natural sort on a collection of
