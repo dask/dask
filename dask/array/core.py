@@ -1657,7 +1657,7 @@ class Array(DaskMethodsMixin):
                 ) from e
             self._meta = y._meta
             self.dask = y.dask
-            self.name = y.name
+            self._name = y.name
             self._chunks = y.chunks
             return self
         else:
