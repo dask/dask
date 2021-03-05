@@ -3609,6 +3609,12 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors = set()
 
+    def __init__(self, dsk, name, meta, divisions):
+        super().__init__(dsk, name, meta, divisions)
+        self.dask.layers[name].type = type(self)
+        self.dask.layers[name].divisions = divisions
+        self.dask.layers[name].chunk_type = type(meta)
+
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
             if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
