@@ -855,22 +855,14 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name1 = "shuffle-collect-1" + token
+    name = "shuffle-collect-" + token
     dsk4 = {
-        (name1, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
+        (name, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
     }
-    cleanup_token = "cleanup-" + always_new_token
-    barrier_token2 = "barrier2-" + always_new_token
-    # A task that depends on `cleanup-`, but has a small output
-    dsk5 = {(barrier_token2, i): (barrier, part) for i, part in enumerate(dsk4)}
-    # This indirectly depends on `cleanup-` and so runs after we're done using the disk
-    dsk6 = {cleanup_token: (cleanup_partd_files, p, list(dsk5))}
 
-    name = "shuffle-collect-2" + token
-    dsk7 = {(name, i): (_noop, (name1, i), cleanup_token) for i in range(npartitions)}
     divisions = (None,) * (npartitions + 1)
 
-    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4, dsk5, dsk6, dsk7)
+    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
     return DataFrame(graph, name, df._meta, divisions)
 

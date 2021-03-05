@@ -118,6 +118,12 @@ functions = [
         ),
     ),
     pytest.param(
+        lambda x: np.exp(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
         lambda x: np.fix(x),
         marks=pytest.mark.skipif(
             not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"

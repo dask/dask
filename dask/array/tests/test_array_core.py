@@ -284,7 +284,7 @@ def test_keys():
     assert dx.__dask_keys__() is dx.__dask_keys__()
     # Test mutating names clears key cache
     dx.dask = {("y", i, j): () for i in range(5) for j in range(6)}
-    dx.name = "y"
+    dx._name = "y"
     assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)] for i in range(5)]
     d = Array({}, "x", (), shape=(), dtype="f8")
     assert d.__dask_keys__() == [("x",)]
@@ -2398,7 +2398,12 @@ def test_from_array_list(x):
     assert dx.dask[dx.name, 0][0] == x[0]
 
 
-@pytest.mark.parametrize("type_", [t for t in np.ScalarType if t is not memoryview])
+# On MacOS Python 3.9, the order of the np.ScalarType tuple randomly changes across
+# interpreter restarts, thus causing pytest-xdist failures; setting PYTHONHASHSEED does
+# not help
+@pytest.mark.parametrize(
+    "type_", sorted((t for t in np.ScalarType if t is not memoryview), key=str)
+)
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray"""
     if type_ == np.datetime64:
@@ -3385,12 +3390,12 @@ def test_blockwise_concatenate():
         assert b.shape == (4, 4)
         assert c.shape == (4, 2)
 
-        return np.ones(5)
+        return np.ones(2)
 
     z = da.blockwise(
         f, "j", x, "ijk", y, "ki", y, "ij", concatenate=True, dtype=x.dtype
     )
-    assert_eq(z, np.ones(10), check_shape=False)
+    assert_eq(z, np.ones(4), check_shape=False)
 
 
 def test_common_blockdim():

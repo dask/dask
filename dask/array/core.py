@@ -1125,7 +1125,7 @@ class Array(DaskMethodsMixin):
     dask.array.from_array
     """
 
-    __slots__ = "dask", "_name", "_cached_keys", "__chunks", "_meta", "__dict__"
+    __slots__ = "dask", "__name", "_cached_keys", "__chunks", "_meta", "__dict__"
 
     def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super(Array, cls).__new__(cls)
@@ -1133,7 +1133,7 @@ class Array(DaskMethodsMixin):
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
-        self.name = str(name)
+        self._name = str(name)
         meta = meta_from_array(meta, dtype=dtype)
 
         if (
@@ -1200,8 +1200,11 @@ class Array(DaskMethodsMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return Array(dsk, name or self.name, self.chunks, self.dtype, self._meta)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return Array(dsk, name, self.chunks, self.dtype, self._meta)
 
     def _reset_cache(self, key=None):
         """
@@ -1454,14 +1457,27 @@ class Array(DaskMethodsMixin):
         return self.dtype.itemsize
 
     @property
+    def _name(self):
+        return self.__name
+
+    @_name.setter
+    def _name(self, val):
+        self.__name = val
+        # Clear the key cache when the name is reset
+        self._cached_keys = None
+
+    @property
     def name(self):
-        return self._name
+        return self.__name
 
     @name.setter
     def name(self, val):
-        self._name = val
-        # Clear the key cache when the name is reset
-        self._cached_keys = None
+        raise TypeError(
+            "Cannot set name directly\n\n"
+            "Name is used to relate the array to the task graph.\n"
+            "It is uncommon to need to change it, but if you do\n"
+            "please set ``._name``"
+        )
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
@@ -1648,7 +1664,7 @@ class Array(DaskMethodsMixin):
                 ) from e
             self._meta = y._meta
             self.dask = y.dask
-            self.name = y.name
+            self._name = y.name
             self._chunks = y.chunks
             return self
 
@@ -1766,7 +1782,7 @@ class Array(DaskMethodsMixin):
 
         self._meta = y._meta
         self.dask = y.dask
-        self.name = y.name
+        self._name = y.name
         self._chunks = y.chunks
 
         return self
@@ -4430,7 +4446,7 @@ def handle_out(out, result):
         out._chunks = result.chunks
         out.dask = result.dask
         out._meta = result._meta
-        out.name = result.name
+        out._name = result.name
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
