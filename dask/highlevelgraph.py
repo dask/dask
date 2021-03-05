@@ -18,7 +18,7 @@ import tlz as toolz
 
 from . import config
 from .utils import ensure_dict, ignoring, stringify
-from .base import clone_key, is_dask_collection
+from .base import clone_key, flatten, is_dask_collection
 from .core import reverse_dict, keys_in_tasks
 from .utils_test import add, inc  # noqa: F401
 
@@ -566,10 +566,7 @@ class HighLevelGraph(Mapping):
                 with ignoring(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
-                try:
-                    [key] = collection.__dask_layers__()
-                except AttributeError:
-                    key = id(graph)
+                key = _get_some_layer_name(collection)
                 layers = {name: layer, key: graph}
                 deps = {name: {key}, key: set()}
         else:
@@ -625,10 +622,7 @@ class HighLevelGraph(Mapping):
                     with ignoring(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
-                    try:
-                        [key] = collection.__dask_layers__()
-                    except AttributeError:
-                        key = id(graph)
+                    key = _get_some_layer_name(collection)
                     layers[key] = graph
                     deps[name].add(key)
                     deps[key] = set()
@@ -804,17 +798,23 @@ class HighLevelGraph(Mapping):
                     ready.add(k)
         return ret
 
-    def cull(self, keys: set) -> "HighLevelGraph":
+    def cull(self, keys: Iterable) -> "HighLevelGraph":
         """Return new HighLevelGraph with only the tasks required to calculate keys.
 
         In other words, remove unnecessary tasks from dask.
-        ``keys`` may be a single key or list of keys.
+
+        Parameters
+        ----------
+        keys
+            iterable of keys or nested list of keys such as the output of
+            ``__dask_keys__()``
 
         Returns
         -------
         hlg: HighLevelGraph
             Culled high level graph
         """
+        keys_set = set(flatten(keys))
 
         all_ext_keys = self.get_all_external_keys()
         ret_layers = {}
@@ -822,7 +822,7 @@ class HighLevelGraph(Mapping):
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
             # Let's cull the layer to produce its part of `keys`
-            output_keys = keys & layer.get_output_keys()
+            output_keys = keys_set & layer.get_output_keys()
             if output_keys:
                 culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
                 # Update `keys` with all layer's external key dependencies, which
@@ -832,7 +832,7 @@ class HighLevelGraph(Mapping):
                 for d in culled_deps.values():
                     external_deps |= d
                 external_deps -= culled_layer.get_output_keys()
-                keys |= external_deps
+                keys_set |= external_deps
 
                 # Save the culled layer and its key dependencies
                 ret_layers[layer_name] = culled_layer
@@ -844,6 +844,30 @@ class HighLevelGraph(Mapping):
         }
 
         return HighLevelGraph(ret_layers, ret_dependencies, ret_key_deps)
+
+    def cull_layers(self, layers: Iterable[str]) -> "HighLevelGraph":
+        """Return a new HighLevelGraph with only the given layers and their
+        dependencies. Internally, layers are not modified.
+
+        This is a variant of :meth:`HighLevelGraph.cull` which is much faster and does
+        not risk creating a collision between two layers with the same name and
+        different content when two culled graphs are merged later on.
+
+        Returns
+        -------
+        hlg: HighLevelGraph
+            Culled high level graph
+        """
+        to_visit = set(layers)
+        ret_layers = {}
+        ret_dependencies = {}
+        while to_visit:
+            k = to_visit.pop()
+            ret_layers[k] = self.layers[k]
+            ret_dependencies[k] = self.dependencies[k]
+            to_visit |= ret_dependencies[k] - ret_dependencies.keys()
+
+        return HighLevelGraph(ret_layers, ret_dependencies)
 
     def validate(self):
         # Check dependencies
@@ -1021,3 +1045,14 @@ def to_graphviz(
             dep_name = name(dep)
             g.edge(dep_name, k_name)
     return g
+
+
+def _get_some_layer_name(collection) -> str:
+    """Somehow get a unique name for a Layer from a non-HighLevelGraph dask mapping"""
+    try:
+        (name,) = collection.__dask_layers__()
+        return name
+    except (AttributeError, ValueError):
+        # collection does not define the optional __dask_layers__ method
+        # or it spuriously returns more than one layer
+        return str(id(collection))

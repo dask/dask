@@ -1,8 +1,12 @@
 import itertools
+import os
 import warnings
+from itertools import product
+from typing import Any, Hashable, Iterable, Mapping, Optional, Sequence, Set, Tuple
 
 import tlz as toolz
 
+from .base import clone_key, get_name_from_key
 from .compatibility import prod
 from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
@@ -54,7 +58,7 @@ def blockwise(
     concatenate=None,
     new_axes=None,
     dependencies=(),
-    **kwargs
+    **kwargs,
 ):
     """Create a Blockwise symbolic mutable mapping
 
@@ -156,18 +160,19 @@ class Blockwise(Layer):
     dsk: dict
         A small graph to apply per-output-block.  May include keys from the
         input indices.
-    indices: Tuple[str, Tuple[str, str]]
+    indices: Tuple[str, Tuple[str, ...]]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
         Or includes literals, which have ``None`` for an index value
-    numblocks: Dict[key, Sequence[int]]
+    numblocks: Mapping[key, Sequence[int]]
         Number of blocks along each dimension for each input
-    concatenate: boolean
+    concatenate: bool
         Whether or not to pass contracted dimensions as a list of inputs or a
         single input to the block function
-    new_axes: Dict
-        New index dimensions that may have been created, and their extent
-    output_blocks: Set[Tuple]
+    new_axes: Mapping
+        New index dimensions that may have been created and their size,
+        e.g. ``{'j': 2, 'k': 3}``
+    output_blocks: Set[Tuple[int, ...]]
         Specify a specific set of required output blocks. Since the graph
         will only contain the necessary tasks to generate these outputs,
         this kwarg can be used to "cull" the abstract layer (without needing
@@ -182,17 +187,26 @@ class Blockwise(Layer):
     dask.array.blockwise
     """
 
+    output: str
+    output_indices: Tuple[str, ...]
+    dsk: Mapping[str, tuple]
+    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
+    numblocks: Mapping[str, Sequence[int]]
+    concatenate: Optional[bool]
+    new_axes: Mapping[str, int]
+    output_blocks: Optional[Set[Tuple[int, ...]]]
+
     def __init__(
         self,
-        output,
-        output_indices,
-        dsk,
-        indices,
-        numblocks,
-        concatenate=None,
-        new_axes=None,
-        output_blocks=None,
-        annotations=None,
+        output: str,
+        output_indices: Iterable[str],
+        dsk: Mapping[str, tuple],
+        indices: Iterable[Tuple[str, Optional[Iterable[str]]]],
+        numblocks: Mapping[str, Sequence[int]],
+        concatenate: bool = None,
+        new_axes: Mapping[str, int] = None,
+        output_blocks: Set[Tuple[int, ...]] = None,
+        annotations: Mapping[str, Any] = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
@@ -205,14 +219,15 @@ class Blockwise(Layer):
         self.numblocks = numblocks
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
         # enforce a canonical value if there are no axes for reduction.
-        if all(
-            all(i in output_indices for i in ind)
-            for name, ind in indices
+        output_indices_set = set(self.output_indices)
+        if concatenate is not None and all(
+            i in output_indices_set
+            for name, ind in self.indices
             if ind is not None
+            for i in ind
         ):
-            self.concatenate = None
-        else:
-            self.concatenate = concatenate
+            concatenate = None
+        self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
     @property
@@ -432,8 +447,9 @@ class Blockwise(Layer):
             annotations=self.annotations,
         )
 
-    def cull(self, keys, all_hlg_keys):
-
+    def cull(
+        self, keys: set, all_hlg_keys: Iterable
+    ) -> Tuple[Layer, Mapping[Hashable, set]]:
         # Culling is simple for Blockwise layers.  We can just
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
@@ -449,6 +465,65 @@ class Blockwise(Layer):
             return culled_layer, culled_deps
         else:
             return self, culled_deps
+
+    def clone(
+        self,
+        keys: set,
+        seed: Hashable,
+        bind_to: Hashable = None,
+    ) -> Tuple[Layer, bool]:
+        names = {get_name_from_key(k) for k in keys}
+        # We assume that 'keys' will contain either all or none of the output keys of
+        # each of the layers, because clone/bind are always invoked at collection level.
+        # Asserting this is very expensive, so we only check it during unit tests.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            assert not self.get_output_keys() - keys
+            for name, nb in self.numblocks.items():
+                if name in names:
+                    for block in product(*(list(range(nbi)) for nbi in nb)):
+                        assert (name, *block) in keys
+
+        is_leaf = True
+
+        indices = []
+        for k, idxv in self.indices:
+            if k in names:
+                is_leaf = False
+                k = clone_key(k, seed)
+            indices.append((k, idxv))
+
+        numblocks = {}
+        for k, nbv in self.numblocks.items():
+            if k in names:
+                is_leaf = False
+                k = clone_key(k, seed)
+            numblocks[k] = nbv
+
+        dsk = {clone_key(k, seed): v for k, v in self.dsk.items()}
+
+        if bind_to is not None and is_leaf:
+            from .graph_manipulation import chunks
+
+            # It's always a Delayed generated by dask.graph_manipulation.checkpoint;
+            # the layer name always matches the key
+            assert isinstance(bind_to, str)
+            dsk = {k: (chunks.bind, v, f"_{len(indices)}") for k, v in dsk.items()}
+            indices.append((bind_to, None))
+
+        return (
+            Blockwise(
+                output=clone_key(self.output, seed),
+                output_indices=self.output_indices,
+                dsk=dsk,
+                indices=indices,
+                numblocks=numblocks,
+                concatenate=self.concatenate,
+                new_axes=self.new_axes,
+                output_blocks=self.output_blocks,
+                annotations=self.annotations,
+            ),
+            (bind_to is not None and is_leaf),
+        )
 
 
 def _get_coord_mapping(

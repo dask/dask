@@ -64,8 +64,6 @@ from .slicing import (
     slice_array,
     replace_ellipsis,
     cached_cumsum,
-    parse_assignment_indices,
-    setitem,
 )
 from .blockwise import blockwise
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -1125,7 +1123,7 @@ class Array(DaskMethodsMixin):
     dask.array.from_array
     """
 
-    __slots__ = "dask", "_name", "_cached_keys", "__chunks", "_meta", "__dict__"
+    __slots__ = "dask", "__name", "_cached_keys", "__chunks", "_meta", "__dict__"
 
     def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super(Array, cls).__new__(cls)
@@ -1133,7 +1131,7 @@ class Array(DaskMethodsMixin):
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
-        self.name = str(name)
+        self._name = str(name)
         meta = meta_from_array(meta, dtype=dtype)
 
         if (
@@ -1200,8 +1198,11 @@ class Array(DaskMethodsMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return Array(dsk, name or self.name, self.chunks, self.dtype, self._meta)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return Array(dsk, name, self.chunks, self.dtype, self._meta)
 
     def _reset_cache(self, key=None):
         """
@@ -1454,14 +1455,27 @@ class Array(DaskMethodsMixin):
         return self.dtype.itemsize
 
     @property
+    def _name(self):
+        return self.__name
+
+    @_name.setter
+    def _name(self, val):
+        self.__name = val
+        # Clear the key cache when the name is reset
+        self._cached_keys = None
+
+    @property
     def name(self):
-        return self._name
+        return self.__name
 
     @name.setter
     def name(self, val):
-        self._name = val
-        # Clear the key cache when the name is reset
-        self._cached_keys = None
+        raise TypeError(
+            "Cannot set name directly\n\n"
+            "Name is used to relate the array to the task graph.\n"
+            "It is uncommon to need to change it, but if you do\n"
+            "please set ``._name``"
+        )
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
@@ -1626,17 +1640,12 @@ class Array(DaskMethodsMixin):
     def __complex__(self):
         return self._scalarfunc(complex)
 
-    def __index__(self):
-        return self._scalarfunc(int)
-
     def __setitem__(self, key, value):
-        # Use the "where" method for cases when key is an Array
+        from .routines import where
+
         if isinstance(key, Array):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
-
-            from .routines import where
-
             try:
                 y = where(key, value, self)
             except ValueError as e:
@@ -1648,128 +1657,13 @@ class Array(DaskMethodsMixin):
                 ) from e
             self._meta = y._meta
             self.dask = y.dask
-            self.name = y.name
+            self._name = y.name
             self._chunks = y.chunks
             return self
-
-        # Still here? Then parse the indices from 'key' and apply the
-        # assignment via map_blocks
-
-        # Reformat input indices
-        indices, indices_shape, mirror = parse_assignment_indices(key, self.shape)
-
-        # Cast 'value' as a dask array
-        if value is np.ma.masked:
-            # Convert masked to a scalar masked array
-            value = np.ma.array(0, mask=True)
-
-        if value is self:
-            # Need to copy value if it is the same as self. This
-            # allows x[...] = x and x[...] = x[...], etc.
-            value = value.copy()
-
-        value = asanyarray(value)
-        value_shape = value.shape
-
-        if 0 in indices_shape and value.size > 1:
-            # Can only assign size 1 values (with any number of
-            # dimensions) to empty slices
-            raise ValueError(
-                f"shape mismatch: value array of shape {value_shape} "
-                "could not be broadcast to indexing result "
-                f"of shape {tuple(indices_shape)}"
-            )
-
-        # Define:
-        #
-        #  offset: The difference in the relative positions of a
-        #          dimension in 'value' and the corresponding
-        #          dimension in self. A positive value means the
-        #          dimension position is further to the right in self
-        #          than 'value'.
-        #
-        #  self_common_shape: The shape of those dimensions of self
-        #                     which correspond to dimensions of
-        #                     'value'.
-        #
-        #  value_common_shape: The shape of those dimensions of
-        #                      'value' which correspond to dimensions
-        #                      of self.
-        #
-        #  base_value_indices: The indices used for initialising the
-        #                      selection from 'value'. slice(None)
-        #                      elements are unchanged, but an element
-        #                      of None will, inside a call to setitem,
-        #                      be replaced by an appropriate slice.
-        #
-        # Note that self_common_shape and value_common_shape may be
-        # different if there are any size 1 dimensions are being
-        # brodacast.
-        offset = len(indices_shape) - value.ndim
-        if offset >= 0:
-            # self has the same number or more dimensions than 'value'
-            self_common_shape = indices_shape[offset:]
-            value_common_shape = value_shape
-
-            # Modify the mirror dimensions with the offset
-            mirror = [i - offset for i in mirror if i >= offset]
         else:
-            # 'value' has more dimensions than self
-            value_offset = -offset
-            if value_shape[:value_offset] != [1] * value_offset:
-                # Can only allow 'value' to have more dimensions then
-                # self if the extra leading dimensions all have size
-                # 1.
-                raise ValueError(
-                    "could not broadcast input array from shape"
-                    f"{value_shape} into shape {tuple(indices_shape)}"
-                )
-
-            offset = 0
-            self_common_shape = indices_shape
-            value_common_shape = value_shape[value_offset:]
-
-        # Find out which of the dimensions of 'value' are to be
-        # broadcast across self.
-        #
-        # Note that, as in numpy, it is not allowed for a dimension in
-        # 'value' to be larger than a size 1 dimension in self
-        base_value_indices = []
-        non_broadcast_dimensions = []
-        for i, (a, b) in enumerate(zip(self_common_shape, value_common_shape)):
-            if b == 1:
-                base_value_indices.append(slice(None))
-            elif a == b and b != 1:
-                base_value_indices.append(None)
-                non_broadcast_dimensions.append(i)
-            elif a is None and b != 1:
-                base_value_indices.append(None)
-                non_broadcast_dimensions.append(i)
-            elif a is not None:
-                # Can't check  ...
-                raise ValueError(
-                    f"Can't broadcast data with shape {value_common_shape} "
-                    f"across shape {tuple(indices_shape)}"
-                )
-
-        # Map the setitem function across all blocks
-        y = self.map_blocks(
-            partial(setitem, value=value),
-            dtype=self.dtype,
-            indices=indices,
-            non_broadcast_dimensions=non_broadcast_dimensions,
-            offset=offset,
-            base_value_indices=base_value_indices,
-            mirror=mirror,
-            value_common_shape=value_common_shape,
-        )
-
-        self._meta = y._meta
-        self.dask = y.dask
-        self.name = y.name
-        self._chunks = y.chunks
-
-        return self
+            raise NotImplementedError(
+                "Item assignment with %s not supported" % type(key)
+            )
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
@@ -4430,7 +4324,7 @@ def handle_out(out, result):
         out._chunks = result.chunks
         out.dask = result.dask
         out._meta = result._meta
-        out.name = result.name
+        out._name = result.name
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
