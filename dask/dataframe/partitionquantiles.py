@@ -419,6 +419,11 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         # so it's special cased in the condition above.
         interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
+    if is_cupy_type(data) and interpolation == "linear" and np.issubdtype(data.dtype, np.integer):
+        vals = np.round(vals).astype(data.dtype)
+        if qs[0] == 0:
+            # Ensure the 0th quantile is the minimum value of the data
+            vals[0] = data.min()
     vals_and_weights = percentiles_to_weights(qs, vals, length)
     return vals_and_weights
 
