@@ -585,6 +585,7 @@ class Blockwise(Layer):
                 new_axes=self.new_axes,
                 output_blocks=self.output_blocks,
                 annotations=self.annotations,
+                io_deps=self.io_deps,
             ),
             (bind_to is not None and is_leaf),
         )
