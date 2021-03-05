@@ -433,7 +433,7 @@ def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if isinstance(like, Array):
         return da_func(a, **kwargs)
     elif isinstance(a, Array):
-        if _is_cupy_type(a._meta):
+        if is_cupy_type(a._meta):
             a = a.compute(scheduler="sync")
 
     try:
