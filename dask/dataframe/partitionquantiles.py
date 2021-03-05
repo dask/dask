@@ -402,6 +402,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         each partition.  Use to improve accuracy.
     """
     from dask.array.percentile import _percentile
+    from ..utils import is_cupy_type
 
     length = len(df)
     if length == 0:
@@ -413,7 +414,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     if is_categorical_dtype(data):
         data = data.codes
         interpolation = "nearest"
-    elif np.issubdtype(data.dtype, np.integer):
+    elif np.issubdtype(data.dtype, np.integer) and not is_cupy_type(data):
         interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
     vals_and_weights = percentiles_to_weights(qs, vals, length)
