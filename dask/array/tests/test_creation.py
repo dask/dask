@@ -365,53 +365,21 @@ def test_meshgrid_inputcoercion():
     assert_eq(z, z_d)
 
 
-def test_tril_triu():
-    A = np.random.randn(20, 20)
-    for chk in [5, 4]:
-        dA = da.from_array(A, (chk, chk))
-
-        assert np.allclose(da.triu(dA).compute(), np.triu(A))
-        assert np.allclose(da.tril(dA).compute(), np.tril(A))
-
-        for k in [
-            -25,
-            -20,
-            -19,
-            -15,
-            -14,
-            -9,
-            -8,
-            -6,
-            -5,
-            -1,
-            1,
-            4,
-            5,
-            6,
-            8,
-            10,
-            11,
-            15,
-            16,
-            19,
-            20,
-            21,
-        ]:
-            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
-            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
-
-
-def test_tril_triu_errors():
-    A = np.random.randint(0, 11, (10, 10, 10))
-    dA = da.from_array(A, chunks=(5, 5, 5))
-    pytest.raises(ValueError, lambda: da.triu(dA))
-
-
-def test_tril_triu_non_square_arrays():
-    A = np.random.randint(0, 11, (30, 35))
-    dA = da.from_array(A, chunks=(5, 5))
-    assert_eq(da.triu(dA), np.triu(A))
-    assert_eq(da.tril(dA), np.tril(A))
+@pytest.mark.parametrize(
+    "N, M, k, dtype, chunks",
+    [
+        (3, None, 0, float, "auto"),
+        (4, None, 0, float, "auto"),
+        (3, 4, 0, bool, "auto"),
+        (3, None, 1, int, "auto"),
+        (3, None, -1, int, "auto"),
+        (3, None, 2, int, 1),
+        (6, 8, -2, int, (3, 4)),
+        (6, 8, 0, int, (3, "auto")),
+    ],
+)
+def test_tri(N, M, k, dtype, chunks):
+    assert_eq(da.tri(N, M, k, dtype, chunks), np.tri(N, M, k, dtype))
 
 
 def test_eye():
