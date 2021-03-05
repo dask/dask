@@ -3,6 +3,7 @@ import warnings
 
 import tlz as toolz
 
+from .slicing import cached_cumsum
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph

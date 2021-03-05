@@ -43,9 +43,20 @@ class CreateArrayDeps(BlockwiseIODeps):
 
     def __init__(self, chunks: tuple):
         self.chunks = chunks
+        self.shape = tuple(sum(c) for c in chunks)
+        self.starts = [cached_cumsum(c, initial_zero=True) for c in chunks]
 
     def __getitem__(self, idx: tuple):
-        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+        chunk_shape = tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+        array_location = tuple(
+            (start[i], start[i + 1]) for i, start in zip(idx, self.starts)
+        )
+        return {
+            "shape": self.shape,
+            "num-chunks": tuple(len(c) for c in self.chunks),
+            "array-location": array_location,
+            "chunk-shape": chunk_shape,
+        }
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -74,6 +85,7 @@ class BlockwiseCreateArray(Blockwise):
         shape,
         chunks,
     ):
+        # self.name = name
         io_name = "blockwise-create-" + name
 
         # Define "blockwise" graph
@@ -94,7 +106,6 @@ class BlockwiseCreateArray(Blockwise):
                 )
             },
         )
-
 
 #
 ##
