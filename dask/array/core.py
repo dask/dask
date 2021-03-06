@@ -2953,7 +2953,6 @@ def from_array(
     fancy=True,
     getitem=None,
     meta=None,
-    inline_array=False,
 ):
     """Create dask array from something that looks like an array.
 
@@ -3019,46 +3018,6 @@ def from_array(
         The metadata for the resulting dask array.  This is the kind of array
         that will result from slicing the input array.
         Defaults to the input array.
-    inline_array : bool, default False
-        How to include the array in the task graph. By default
-        (``inline_array=False``) the array is included in a task by itself,
-        and each chunk refers to that task by its key.
-
-        .. code-block:: python
-
-           >>> x = h5py.File("data.h5")["/x"]  # doctest: +SKIP
-           >>> a = da.from_array(x, chunks=500)  # doctest: +SKIP
-           >>> dict(a.dask)  # doctest: +SKIP
-           {
-              'array-original-<name>': <HDF5 dataset ...>,
-              ('array-<name>', 0): (getitem, "array-original-<name>", ...),
-              ('array-<name>', 1): (getitem, "array-original-<name>", ...)
-           }
-
-        With ``inline_array=True``, Dask will instead inline the array directly
-        in the values of the task graph.
-
-        .. code-block:: python
-
-           >>> a = da.from_array(x, chunks=500, inline_array=True)  # doctest: +SKIP
-           >>> dict(a.dask)  # doctest: +SKIP
-           {
-              ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
-              ('array-<name>', 1): (getitem, <HDF5 dataset ...>, ...)
-           }
-
-        Note that there's no key in the task graph with just the array `x`
-        anymore. Instead it's placed directly in the values.
-
-        The right choice for ``inline_array`` depends on several factors,
-        including the size of ``x``, how expensive it is to create, which
-        scheduler you're using, and the pattern of downstream computations.
-        As a heuristic, ``inline_array=True`` may be the right choice when
-        the array ``x`` is cheap to serialize and deserialize (since it's
-        included in the graph many times) and if you're experiencing ordering
-        issues (see :ref:`order` for more).
-
-        This has no effect when ``x`` is a NumPy array.
 
     Examples
     --------
@@ -3182,7 +3141,6 @@ def from_zarr(
     storage_options=None,
     chunks=None,
     name=None,
-    inline_array=False,
     **kwargs,
 ):
     """Load array from the zarr storage format
@@ -3208,9 +3166,6 @@ def from_zarr(
     name : str, optional
          An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
-    inline_array : bool, default False
-        Whether to inline the zarr Array in the values of the task graph.
-        See :meth:`dask.array.from_array` for an explanation.
 
     See Also
     --------
@@ -3230,7 +3185,7 @@ def from_zarr(
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
-    return from_array(z, chunks, name=name, inline_array=inline_array)
+    return from_array(z, chunks, name=name)
 
 
 def to_zarr(

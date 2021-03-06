@@ -67,11 +67,11 @@ def test_graph_from_arraylike():
         assert key in dsk
 
         # Check the array is bound
-        func = dsk[key][0].dsk["X"][0].func
+        func = dsk[key][0].dsk["X"][0]
         assert arr in func.args[0].args
 
         # Check the block dimensions
-        block_info = dsk[key][1][0]
+        block_info = dsk[key][1]
         assert block_info["shape"] == shape
         assert block_info["chunk-shape"] == chunk
         assert block_info["array-location"] == (
@@ -2355,7 +2355,7 @@ def test_from_array_with_lock():
     # Pull io_subgraph and getter functions from deep in the graph
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
     io_subgraphs = [t[0] for t in tasks]
-    getters = [next(iter(i.dsk.values()))[0].func.args[0] for i in io_subgraphs]
+    getters = [next(iter(i.dsk.values()))[0].args[0] for i in io_subgraphs]
 
     # Check that a lock is set.
     assert hasattr(getters[0].keywords.get("lock"), "acquire")
@@ -2461,7 +2461,7 @@ def test_from_array_no_asarray(asarray, cls):
     dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
     assert_chunks_are_of_type(dx)
     assert_chunks_are_of_type(dx[0:5])
-    assert_chunks_are_of_type(dx[0:5][:, 0])
+    assert_chunks_are_of_type(dx[0:5][:, 0:1])
 
 
 def test_from_array_getitem():
@@ -2517,19 +2517,6 @@ def test_from_array_dask_collection_warns():
         da.array(x)
 
 
-def test_from_array_inline():
-    class MyArray(np.ndarray):
-        pass
-
-    a = np.array([1, 2, 3]).view(MyArray)
-    dsk = dict(da.from_array(a, name="my-array").dask)
-    assert dsk["my-array"] is a
-
-    dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
-    assert "my-array" not in dsk
-    assert a is dsk[("my-array", 0)][1]
-
-
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
 def test_asarray(asarray):
     assert_eq(asarray([1, 2, 3]), np.asarray([1, 2, 3]))
@@ -2570,7 +2557,7 @@ def test_asarray_h5py(asarray):
             # Check the array is bound
             dsk = dict(x.dask)
             key = next(iter(dsk))
-            func = dsk[key][0].dsk[key[0]][0].func
+            func = dsk[key][0].dsk[key[0]][0]
             assert d in func.args[0].args
             assert all(istask(v) for v in dsk.values())
 
@@ -3952,14 +3939,6 @@ def test_to_zarr_delayed_creates_no_metadata():
         result.compute()
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
-
-
-def test_zarr_inline_array():
-    zarr = pytest.importorskip("zarr")
-    a = zarr.array([1, 2, 3])
-    dsk = dict(da.from_zarr(a, inline_array=True).dask)
-    assert len(dsk) == 1
-    assert a in list(dsk.values())[0]
 
 
 def test_zarr_existing_array():
