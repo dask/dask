@@ -2206,7 +2206,7 @@ Dask Name: {name}, {task} tasks"""
         # import depends on scipy, not installed by default
         from ..array import stats as da_stats
 
-        if pd.Int64Dtype.is_dtype(column._meta_nonempty):
+        if pd.api.types.is_integer_dtype(column._meta_nonempty):
             column = column.astype("f8")
 
         if not np.issubdtype(column.dtype, np.number):
