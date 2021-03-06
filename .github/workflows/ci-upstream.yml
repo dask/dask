@@ -20,11 +20,11 @@ jobs:
       - uses: xarray-contrib/ci-trigger@v1
         id: detect-trigger
         with:
-          keyword: "[test-upstream]"
+          keyword: "test-upstream"
 
   build:
     needs: check
-    runs-on: "ubuntu-latest"
+    runs-on: ubuntu-latest
     if: |
       needs.check-upstream.outputs.test-upstream == 'true'
       || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
