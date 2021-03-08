@@ -19,6 +19,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - xarray
   - fsspec
   - sqlalchemy
   - pyarrow=1.0

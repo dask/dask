@@ -19,6 +19,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - xarray
   - sqlalchemy
   - pyarrow
   - jsonschema

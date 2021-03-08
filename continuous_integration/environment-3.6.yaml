@@ -23,6 +23,7 @@ dependencies:
   - fsspec
   - zarr
   - tiledb-py
+  - xarray
   - sqlalchemy
   - pyarrow=0.14
   # other -- IO
