@@ -22,7 +22,7 @@ dependencies:
   - xarray
   - fsspec
   - sqlalchemy
-  - pyarrow=1
+  - pyarrow=1.0
   - coverage
   - jsonschema
   # other -- IO
