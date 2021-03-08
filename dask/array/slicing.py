@@ -14,6 +14,7 @@ from ..utils import is_arraylike
 from .. import core
 from .. import config
 from .. import utils
+from .. import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
 
@@ -1445,11 +1446,11 @@ def parse_assignment_indices(indices, shape):
             # array index being computed multiple times (up to once
             # per block) in setitem_layers.
             #
-            # (It would be nice to defer the compute of this 1-d array
+            # It would be nice to defer the compute of this 1-d array
             # until the Array.__setitem__ compute time. Currently, the
             # values are needed up front so that the part of the
             # assignment value needed for each block can be created
-            # and merged into the graph.)
+            # and merged into the graph.
             if is_dask_collection(index):
                 index = np.array(index)
             
