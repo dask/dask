@@ -3080,6 +3080,12 @@ def from_array(
     >>> a.dask[a.name, 0, 0][0]
     array([1])
 
+    Chunks with exactly-specified, different sizes can be created.
+
+    >>> import numpy as np
+    >>> import dask.array as da
+    >>> x = np.random.random((100, 6))
+    >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
         raise ValueError(
