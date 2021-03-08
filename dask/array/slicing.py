@@ -31,6 +31,9 @@ def _sanitize_index_element(ind):
             return ind2
     elif ind is None:
         return None
+    elif is_dask_collection(ind):
+        if ind.dtype.kind != "i" or ind.size != 1:
+             raise IndexError("Bad index.  Must be integer-like: %s" % ind)
     else:
         raise TypeError("Invalid index type", type(ind), ind)
 
