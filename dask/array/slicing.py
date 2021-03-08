@@ -1685,7 +1685,7 @@ def setitem_layer(
                 if rem:
                     block_index_size += 1
 
-                # Find how many elements of value precede this block
+                # Find how many elements of 'value' precede this block
                 # along this dimension. Note that it is assumed that
                 # the slice step is positive, as will be the case for
                 # reformatted indices.
@@ -1759,7 +1759,7 @@ def setitem_layer(
         # Still here? Then this block overlaps the indices and so
         # needs to have some of its elements assigned.
 
-        # Initialise the indices of value that define the parts of it
+        # Initialise the indices of 'value' that define the parts of it
         # which are to be assigned to this block
         value_indices = base_value_indices[:]
         for i in non_broadcast_dimensions:
@@ -1767,7 +1767,7 @@ def setitem_layer(
             start = preceeding_size[j]
             value_indices[i] = slice(start, start + subset_shape[j])
 
-        # Reverse the indices to value, if required as a consequence
+        # Reverse the indices to 'value', if required as a consequence
         # of reformatting the original indices.
         for i in mirror:
             size = value_common_shape[i]
@@ -1781,12 +1781,12 @@ def setitem_layer(
             value_indices[i] = slice(start, stop, -1)
 
         if value.ndim > len(indices):
-            # value has more dimensions than self, so add a leading
+            # 'value' has more dimensions than self, so add a leading
             # Ellipsis to the indices of value.
             value_indices.insert(0, Ellipsis)
 
-        # Get the part of value that is to be assigned to elements of
-        # this block
+        # Get the part of 'value' that is to be assigned to elements
+        # of this block
         v = value[tuple(value_indices)]
 
         # Check for shape mismatch, which could occur if we didn't know
@@ -1799,17 +1799,17 @@ def setitem_layer(
                     "could not be broadcast to indexing result"
                 )
 
-        # Make sure that the the assignment value has just one
-        # chunk. This should be ok memory-wise, as this chunk can not
-        # be larger than the block that we are assigning to.
+        # Make sure that 'value' has just one chunk. This should be ok
+        # memory-wise, as this chunk can not be larger than the block
+        # that we are assigning to.
         v = v.rechunk((-1,) * v.ndim)
 
-        # Get the key for rechunked value
-        vkey = tuple(flatten(v.__dask_keys__()))[0]
+        # Get the single key for rechunked 'value'
+        vkey = next(flatten(v.__dask_keys__()))
         
-        # Add all of the keys that the define the assignment value to
-        # the new dictionary, not minding if we overwrite any existing
-        # keys.
+        # Add all of the keys that the define 'value' to the new
+        # dictionary, not minding if we overwrite any existing keys,
+        # as the values will be the same.
         dsk.update(dict(v.dask))
 
         # Define the assignment function for this block.
