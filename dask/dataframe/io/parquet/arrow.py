@@ -1778,6 +1778,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     root_dir=base,
                     engine=cls,
                     out_dir=False,
+                    fs=fs,
                 )
                 if schema is None:
                     schema = metadata.schema.to_arrow_schema()
