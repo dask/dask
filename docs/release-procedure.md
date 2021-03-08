@@ -21,7 +21,7 @@ Release per project:
 
 *   Push to GitHub
 
-        git push dask master --tags
+        git push dask main --tags
 
 *   Upload to PyPI
 
