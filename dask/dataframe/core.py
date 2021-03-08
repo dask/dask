@@ -1217,7 +1217,7 @@ Dask Name: {name}, {task} tasks"""
         ):
             raise ValueError(
                 "Please provide exactly one of ``npartitions=``, ``freq=``, "
-                "``divisions=``, ``partitions_size=`` keyword arguments"
+                "``divisions=``, ``partition_size=`` keyword arguments"
             )
 
         if partition_size is not None:
