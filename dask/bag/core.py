@@ -1757,7 +1757,7 @@ def from_url(urls):
 
     Examples
     --------
-    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/master/README.rst')  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/main/README.rst')  # doctest: +SKIP
     >>> a.npartitions  # doctest: +SKIP
     1
 

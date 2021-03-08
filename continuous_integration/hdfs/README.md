@@ -3,7 +3,7 @@
 Dask & HDFS testing relies on a docker container. The tests are setup to run on
 Travis CI, but only under the following conditions:
 
-- Merges to master
+- Merges to main
 - PRs where the commit message contains the string `"test-hdfs"`
 
 If you make a PR changing HDFS functionality it'd be good to have the HDFS
