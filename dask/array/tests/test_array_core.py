@@ -3694,7 +3694,7 @@ def test_setitem_extended_API():
     dx[...] = -11
     assert_eq(x, dx.compute())
 
-     
+
 def test_setitem_on_read_only_blocks():
     # Outputs of broadcast_trick-style functions contain read-only
     # arrays

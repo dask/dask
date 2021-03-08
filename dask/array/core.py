@@ -1644,7 +1644,7 @@ class Array(DaskMethodsMixin):
 
     def __index__(self):
         return self._scalarfunc(int)
-    
+
     def __setitem__(self, key, value):
         # Use the "where" method for cases when key is an Array
         if isinstance(key, Array):

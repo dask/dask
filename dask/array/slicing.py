@@ -14,7 +14,6 @@ from ..utils import is_arraylike
 from .. import core
 from .. import config
 from .. import utils
-from .. import delayed
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
 
