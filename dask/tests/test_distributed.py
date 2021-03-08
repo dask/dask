@@ -11,7 +11,6 @@ from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
-from dask.array.numpy_compat import _numpy_120
 from dask.delayed import Delayed
 from dask.utils import tmpdir, get_named_args
 from distributed import futures_of
@@ -70,10 +69,15 @@ def test_persist_nested(c):
     assert res[2:] == (4, [5])
 
 
-@pytest.mark.skipif(_numpy_120, reason="https://github.com/dask/dask/issues/7170")
 def test_futures_to_delayed_dataframe(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+
+    from dask.array.numpy_compat import _numpy_120
+
+    if _numpy_120:
+        pytest.skip("https://github.com/dask/dask/issues/7170")
+
     df = pd.DataFrame({"x": [1, 2, 3]})
 
     futures = c.scatter([df, df])
@@ -147,6 +151,9 @@ def test_local_get_with_distributed_active(c, s, a, b):
 
 
 def test_to_hdf_distributed(c):
+    pytest.importorskip("numpy")
+    pytest.importorskip("pandas")
+
     from ..dataframe.io.tests.test_hdf import test_to_hdf
 
     test_to_hdf()
@@ -167,6 +174,9 @@ def test_to_hdf_distributed(c):
     ],
 )
 def test_to_hdf_scheduler_distributed(npartitions, c):
+    pytest.importorskip("numpy")
+    pytest.importorskip("pandas")
+
     from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
 
     test_to_hdf_schedulers(None, npartitions)
