@@ -39,3 +39,8 @@ def pytest_addoption(parser):
 def pytest_runtest_setup(item):
     if "slow" in item.keywords and not item.config.getoption("--runslow"):
         pytest.skip("need --runslow option to run")
+
+
+pytest.register_assert_rewrite(
+    "dask.array.utils", "dask.dataframe.utils", "dask.bag.utils"
+)
