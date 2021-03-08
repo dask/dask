@@ -1384,6 +1384,8 @@ def parse_assignment_indices(indices, shape):
     ([array([1, 2, 4, 6])], [4], [0])
 
     """
+    from .routines import diff
+    
     indices_shape = []
     mirror = []
 
@@ -1436,6 +1438,12 @@ def parse_assignment_indices(indices, shape):
                     f"indices for dimension with size {size}"
                 )
 
+            # Convert to a numpy array. We do this to prevent the a
+            # dask array index being computed multiple times (up to
+            # once per block) in setitem_layers.
+            if is_dask_collection(index):
+                index = np.array(index)
+            
             if index.dtype == int:
                 len_index = len(index)
                 if len_index == 1:
@@ -1446,9 +1454,9 @@ def parse_assignment_indices(indices, shape):
                     index = int(index)
                     index = slice(index, index + 1, 1)
                     is_slice = True
-                elif len_index:
-                    steps = index[1:] - index[:-1]
-                    step = steps[0]
+                elif len_index:                    
+                    steps = diff(index)
+                    step = int(steps[0])
                     if (
                         (step > 0 and (steps <= 0).any())
                         or (step < 0 and (steps >= 0).any())
@@ -1472,6 +1480,7 @@ def parse_assignment_indices(indices, shape):
                 else:
                     # This is an empty slice
                     index = slice(0, 0, 1)
+
         else:
             raise IndexError(
                 "only integers, slices (`:`), ellipsis (`...`), "
@@ -1619,11 +1628,15 @@ def setitem_layer(
     # Sort by chunk index the dask graph keys of the most recent
     # layer, so that they correspond elementwise to the array
     # locations.
-    full_shape = array.shape
-    keys = sorted(
-        flatten(array.__dask_keys__()), key=itemgetter(*range(1, len(full_shape)))
-    )
-
+    shape = array.shape
+    if shape:
+        keys = sorted(
+            flatten(array.__dask_keys__()), key=itemgetter(*range(1, len(shape)))
+        )
+    else:
+        # Scalar array
+        keys = flatten(array.__dask_keys__())
+        
     dsk = {}
     name = (name,)
 
@@ -1643,7 +1656,7 @@ def setitem_layer(
         j = -1
         for index, full_size, (loc0, loc1) in zip(
             indices,
-            full_shape,
+            shape,
             array_location,
         ):
             j += 1
@@ -1672,9 +1685,9 @@ def setitem_layer(
                 if rem:
                     block_index_size += 1
 
-                # Find how many elements of 'value' precede this block
-                # along this dimension. Note that it is assumed that the
-                # slice step is positive, as will be the case for
+                # Find how many elements of value precede this block
+                # along this dimension. Note that it is assumed that
+                # the slice step is positive, as will be the case for
                 # reformatted indices.
                 pre = index.indices(loc0)
                 n_preceeding, rem = divmod(pre[1] - pre[0], step)
@@ -1694,18 +1707,11 @@ def setitem_layer(
 
                 if is_bool:
                     # Index is a boolean array
-                    try:
-                        i = index[loc0:loc1]
-                    except ValueError:
-                        index.compute_chunk_sizes()
-                        i = index[loc0:loc1]
-
-                    block_index = np.nonzero(i.compute())[0]
+                    block_index = index[loc0:loc1]
                 else:
                     # Index is an integer array
-                    block_index = np.array(
-                        [i - loc0 for i in index if loc0 <= i < loc1]
-                    )
+                    i = np.where((loc0 <= index) & (index < loc1))[0]
+                    block_index = index[i] - loc0
 
                 block_index_size = block_index.size
 
@@ -1775,8 +1781,8 @@ def setitem_layer(
             value_indices[i] = slice(start, stop, -1)
 
         if value.ndim > len(indices):
-            # 'value' has more dimensions than self, so add a leading
-            # Ellipsis to the indices of 'value'.
+            # value has more dimensions than self, so add a leading
+            # Ellipsis to the indices of value.
             value_indices.insert(0, Ellipsis)
 
         # Get the part of value that is to be assigned to elements of
@@ -1870,3 +1876,5 @@ def setitem(array, indices, value):
     array[indices] = value
 
     return array
+
+

@@ -3682,7 +3682,19 @@ def test_setitem_extended_API():
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx))
 
+    # Scalar array
+    x = np.array(9)
+    dx = da.from_array(9)
 
+    x[()] = -1
+    dx[()] = -1
+    assert_eq(x, dx.compute())
+
+    x[...] = -11
+    dx[...] = -11
+    assert_eq(x, dx.compute())
+
+     
 def test_setitem_on_read_only_blocks():
     # Outputs of broadcast_trick-style functions contain read-only
     # arrays
