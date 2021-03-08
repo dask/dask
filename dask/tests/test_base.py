@@ -806,17 +806,6 @@ def test_persist_array_rename():
     da.utils.assert_eq(b, [1, 2, 3, 4])
 
 
-@pytest.mark.skipif("not da")
-def test_from_array_works_with_specific_chunk_sizes():
-    arr = np.random.random((100, 6))
-    with pytest.raises(ValueError, match="Chunks do not add up to shape"):
-        _ = da.from_array(arr, chunks=((33, 67), (6, 6)))
-    darr = da.from_array(arr, chunks=((33, 67), (6,)))
-    assert darr.npartitions == 2
-    assert np.allclose(darr.partitions[0].compute(), arr[:33, :])
-    assert np.allclose(darr.partitions[1].compute(), arr[33:, :])
-
-
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe():
     df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 5, 3, 3]})
