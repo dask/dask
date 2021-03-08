@@ -1,0 +1,12 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.7
+  - pyyaml
+  # optional dependencies pulled in by pip install dask[distributed]
+  - distributed
+  # test dependencies
+  - pytest
+  - pytest-xdist
