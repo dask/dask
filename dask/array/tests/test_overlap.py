@@ -808,10 +808,6 @@ def test_sliding_window_view(shape, chunks, window_shape, axis):
     arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
     actual = sliding_window_view(arr, window_shape, axis)
     expected = np_sliding_window_view(arr.compute(), window_shape, axis)
-
-    for block in actual.blocks:
-        assert block.shape == block.compute().shape
-
     assert_eq(expected, actual)
 
 
