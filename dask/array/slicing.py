@@ -1441,9 +1441,15 @@ def parse_assignment_indices(indices, shape):
                     f"indices for dimension with size {size}"
                 )
 
-            # Convert to a numpy array. We do this to prevent the a
-            # dask array index being computed multiple times (up to
-            # once per block) in setitem_layers.
+            # Convert to a numpy array. We do this to prevent the dask
+            # array index being computed multiple times (up to once
+            # per block) in setitem_layers.
+            #
+            # (It would be nice to defer the compute of this 1-d array
+            # until the Array.__setitem__ compute time. Currently, the
+            # values are needed up front so that the part of the
+            # assignment value needed for each block can be created
+            # and merged into the graph.)
             if is_dask_collection(index):
                 index = np.array(index)
             
@@ -1742,8 +1748,8 @@ def setitem_layer(
                 if is_bool:
                     n_preceeding = np.sum(index[:loc0])
                 else:
-                    n_preceeding = sum(1 for i in index if i < loc0)
-
+                    n_preceeding = np.sum(np.where(index < loc0, index, 0))
+                    
             # Still here? This block does overlap the indices.
             block_indices.append(block_index)
             if not integer_index:
@@ -1880,4 +1886,4 @@ def setitem(array, indices, value):
 
     return array
 
-
+                  
