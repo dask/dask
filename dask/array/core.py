@@ -65,7 +65,7 @@ from .slicing import (
     replace_ellipsis,
     cached_cumsum,
     parse_assignment_indices,
-    setitem_layer,
+    setitem_array,
 )
 from .blockwise import blockwise
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
@@ -1762,13 +1762,10 @@ class Array(DaskMethodsMixin):
                     f"across shape {tuple(indices_shape)}"
                 )
 
-        name = "setitem-" + tokenize(self, indices, value)
-
-        dsk = setitem_layer(
+        dsk, name = setitem_array(
             self,
-            value,
             indices,
-            name,
+            value,
             non_broadcast_dimensions=non_broadcast_dimensions,
             offset=offset,
             base_value_indices=base_value_indices,

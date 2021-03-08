@@ -33,7 +33,7 @@ def _sanitize_index_element(ind):
         return None
     elif is_dask_collection(ind):
         if ind.dtype.kind != "i" or ind.size != 1:
-             raise IndexError("Bad index.  Must be integer-like: %s" % ind)
+            raise IndexError("Bad index.  Must be integer-like: %s" % ind)
     else:
         raise TypeError("Invalid index type", type(ind), ind)
 
@@ -1388,7 +1388,7 @@ def parse_assignment_indices(indices, shape):
 
     """
     from .routines import diff
-    
+
     indices_shape = []
     mirror = []
 
@@ -1443,7 +1443,7 @@ def parse_assignment_indices(indices, shape):
 
             # Convert to a numpy array. We do this to prevent the dask
             # array index being computed multiple times (up to once
-            # per block) in setitem_layers.
+            # per block) in setitem_array.
             #
             # It would be nice to defer the compute of this 1-d array
             # until the Array.__setitem__ compute time. Currently, the
@@ -1452,7 +1452,7 @@ def parse_assignment_indices(indices, shape):
             # and merged into the graph.
             if is_dask_collection(index):
                 index = np.array(index)
-            
+
             if index.dtype == int:
                 len_index = len(index)
                 if len_index == 1:
@@ -1463,7 +1463,7 @@ def parse_assignment_indices(indices, shape):
                     index = int(index)
                     index = slice(index, index + 1, 1)
                     is_slice = True
-                elif len_index:                    
+                elif len_index:
                     steps = diff(index)
                     step = int(steps[0])
                     if (
@@ -1568,61 +1568,72 @@ def parse_assignment_indices(indices, shape):
     return parsed_indices, indices_shape, mirror
 
 
-def setitem_layer(
+def setitem_array(
     array,
-    value,
     indices,
-    name,
+    value,
     non_broadcast_dimensions=None,
     offset=None,
     base_value_indices=None,
     mirror=None,
     value_common_shape=None,
 ):
-    """TODO
+    """Master function for array assignment.
+
+    This function makes a new dask that assigns values to each block
+    that is touched by the indices, leaving other blocks unchanged.
 
     Parameters
     ----------
     array : dask array
         The dask array that is being assigned to.
+    indices : `list`
+        Indices to array defining the elements to be assigned. Must be
+        an output of `parse_assignment_indices`.
     value : array-like
         The values which will be assigned.
-    indices : sequence of slice or int
-        A reformated version of the original indices that were passed
-        to Array.__setitem__.
-    name : `str`
-        This is the dask variable output name for the new setitem
-        layer.
     non_broadcast_dimensions : list of `int`
         The dimensions of value which do not need to be broadcast
         against the subspace defined by the indices.
     offset: `int`
         The difference in the relative positions of a dimension in
-        value and the corresponding dimension in self. A positive
+        value and the corresponding dimension in array. A positive
         value means the dimension position is higher (further to the
-        right) in self then value.
+        right) in array then value.
     base_value_indices : list of `slice` or `None`
         The indices used for initialising the selection from
-        value. slice(None) elements are unchanged, but an element of
-        None is replaced by an appropriate slice.
+        value. `slice(None)` elements are unchanged, but an element of
+        `None` is replaced by an appropriate slice.
     mirror: list of `int`
         The dimensions that need to be reversed in the value, prior to
         assignment.
     value_common_shape: tuple of `int`
         The shape of those dimensions of value which correspond to
-        dimensions of self.
+        dimensions of array.
 
     Returns
     -------
     Dict where the keys are tuples of
 
-        (name, dim_index[, dim_index[, ...]])
+        (out_name, dim_index, ...)
 
-    with the addition of keys inherited from the results of indexing
-    value.
+    and the values are
+
+        (function, (in_name, dim_index, ...),
+                   index,
+                   (value_name, dim_index, ...))
+
+    with the addition of any key/value pairs needed to define
+    'value_name'.
+
+    Also the string 'out_name' is returned.
 
     """
     from ..core import flatten
+
+    # Initialize outputs
+    dsk = {}
+    name = ("setitem-" + tokenize(array, indices, value),)
 
     # Translate chunks tuple to a set of array locations in product
     # order
@@ -1634,24 +1645,24 @@ def setitem_layer(
     ]
     array_locations = product(*array_locations)
 
-    # Sort by chunk index the dask graph keys of the most recent
-    # layer, so that they correspond elementwise to the array
+    # Get the dask keys of the most recent layer and sort by chunk
+    # index, so that they correspond elementwise to the array
     # locations.
     shape = array.shape
-    if shape:
-        keys = sorted(
-            flatten(array.__dask_keys__()), key=itemgetter(*range(1, len(shape)))
-        )
+    ndim = len(shape)
+    if ndim > 1:
+        # N-d array (N>=2)
+        keys = sorted(flatten(array.__dask_keys__()), key=itemgetter(*range(1, ndim)))
+    elif ndim == 1:
+        # 1-d array
+        keys = sorted(flatten(array.__dask_keys__()), key=itemgetter(1))
     else:
         # Scalar array
         keys = flatten(array.__dask_keys__())
-        
-    dsk = {}
-    name = (name,)
 
     # Loop round each block in dask array to create new "setitem"
     # graph entries.
-    for key, array_location in zip(keys, array_locations):
+    for key, locations in zip(keys, array_locations):
         # Assume, until demonstrated otherwise, that this block
         # overlaps the assignment indices.
         overlaps = True
@@ -1666,7 +1677,7 @@ def setitem_layer(
         for index, full_size, (loc0, loc1) in zip(
             indices,
             shape,
-            array_location,
+            locations,
         ):
             j += 1
 
@@ -1749,7 +1760,7 @@ def setitem_layer(
                     n_preceeding = np.sum(index[:loc0])
                 else:
                     n_preceeding = np.sum(np.where(index < loc0, index, 0))
-                    
+
             # Still here? This block does overlap the indices.
             block_indices.append(block_index)
             if not integer_index:
@@ -1790,8 +1801,8 @@ def setitem_layer(
             value_indices[i] = slice(start, stop, -1)
 
         if value.ndim > len(indices):
-            # 'value' has more dimensions than self, so add a leading
-            # Ellipsis to the indices of value.
+            # 'value' has more dimensions than 'array', so add a
+            # leading Ellipsis to the indices of value.
             value_indices.insert(0, Ellipsis)
 
         # Get the part of 'value' that is to be assigned to elements
@@ -1815,16 +1826,16 @@ def setitem_layer(
 
         # Get the single key for rechunked 'value'
         vkey = next(flatten(v.__dask_keys__()))
-        
+
         # Add all of the keys that the define 'value' to the new
         # dictionary, not minding if we overwrite any existing keys,
         # as the values will be the same.
-        dsk.update(dict(v.dask))
+        dsk = merge(dict(v.dask), dsk)
 
         # Define the assignment function for this block.
         dsk[new_key] = (setitem, key, tuple(block_indices), vkey)
 
-    return dsk
+    return dsk, name[0]
 
 
 def setitem(array, indices, value):
@@ -1834,42 +1845,54 @@ def setitem(array, indices, value):
     ----------
     array : numpy array
         The array to be assigned to.
-    indices : tuple of `slice` or `int`, or `None`
-        The indices of array that are to be assigned. If `None` then
-        no assignment will occur, regardless of value, and the input
-        array will be returned
+    indices : `None` or numpy indices
+        If `None` then no assignment will occur, regardless of
+        value. Otherwise the indices of the elements of array to be
+        assigned from value.
     value : array-like
         The values which will be assigned.
 
     Returns
     -------
     array : numpy.ndarray
-        The new array for the block with assigned elements, or the
-        original input array if no assignment took place.
+        The new array with assigned elements, or the original input
+        array if no assignment took place.
 
     Examples
     --------
-
-    >>> array = np.arange(12).reshape(3, 4)]
-    >>> setitem(array, None, None)
+    >>> array = np.arange(12).reshape(3, 4)
+    >>> x = setitem(array, None, None)
+    >>> x
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7],
            [ 8,  9, 10, 11]])
-    >>> setitem(array, (1, slice(None)), -99)
+    >>> x is array
+    True
+    >>> x = setitem(array, (1, slice(None)), -99)
+    >>> x
     array([[  0,   1,   2,   3],
            [-99, -99, -99, -99],
            [  8,   9,  10,  11]])
+    >>> x is array
+    False
     >>> setitem(array, (slice(None), slice(None)), -array)
     array([[  0,  -1,  -2,  -3],
            [ -4,  -5,  -6,  -7],
            [ -8,  -9, -10, -11]])
+    >>> x = setitem(array, Ellipsis, array)
+    >>> x
+    array([[ 0,  1,  2,  3],
+           [ 4,  5,  6,  7],
+           [ 8,  9, 10, 11]])
+    >>> x is array
+    False
 
     """
     if indices is None:
         # No assignment: Return the original array.
         return array
 
-    if np.ma.isMA(value) and not np.ma.isMA(array):
+    if not np.ma.isMA(array) and np.ma.isMA(value):
         # array is not masked but the assignment is masking elements,
         # so turn the non-masked array into a masked one.
         array = array.view(np.ma.MaskedArray)
@@ -1885,5 +1908,3 @@ def setitem(array, indices, value):
     array[indices] = value
 
     return array
-
-                  
