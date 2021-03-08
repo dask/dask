@@ -22,7 +22,7 @@ extras_require = {
         "partd >= 0.3.10",
         "fsspec >= 0.6.0",
     ],
-    "distributed": ["distributed >= 2.0"],
+    "distributed": ["distributed >= 2021.03.0"],
     "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
     "delayed": ["cloudpickle >= 0.2.2", "toolz >= 0.8.2"],
 }
@@ -64,6 +64,7 @@ setup(
         "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",

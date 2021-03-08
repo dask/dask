@@ -1,3 +1,4 @@
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 import pytest
 
 distributed = pytest.importorskip("distributed")
@@ -81,6 +82,33 @@ def test_futures_to_delayed_dataframe(c):
 
     with pytest.raises(TypeError):
         ddf = dd.from_delayed([1, 2])
+
+
+@pytest.mark.parametrize("fuse", [True, False])
+def test_fused_blockwise_dataframe_merge(c, fuse):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Generate two DataFrames with more partitions than
+    # the `max_branch` default used for shuffling (32).
+    # We need a multi-stage shuffle to cover #7178 fix.
+    size = 35
+    df1 = pd.DataFrame({"x": range(size), "y": range(size)})
+    df2 = pd.DataFrame({"x": range(size), "z": range(size)})
+    ddf1 = dd.from_pandas(df1, npartitions=size) + 10
+    ddf2 = dd.from_pandas(df2, npartitions=5) + 10
+    df1 += 10
+    df2 += 10
+
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left")
+        ddfm.head()  # https://github.com/dask/dask/issues/7178
+        dfm = ddfm.compute().sort_values("x")
+        # We call compute above since `sort_values` is not
+        # supported in `dask.dataframe`
+    dd.utils.assert_eq(
+        dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
+    )
 
 
 def test_futures_to_delayed_bag(c):
@@ -247,3 +275,51 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
         z = await c.compute(z)
 
     assert_eq(z, np.ones(10) * 4.0)
+
+
+@gen_cluster(client=True)
+async def test_combo_of_layer_types(c, s, a, b):
+    """Check pack/unpack of a HLG that has every type of Layers!"""
+
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+
+    def add(x, y, z, extra_arg):
+        return x + y + z + extra_arg
+
+    y = c.submit(lambda x: x, 2)
+    z = c.submit(lambda x: x, 3)
+    x = da.blockwise(
+        add,
+        "x",
+        da.zeros((3,), chunks=(1,)),
+        "x",
+        da.ones((3,), chunks=(1,)),
+        "x",
+        y,
+        None,
+        concatenate=False,
+        dtype=int,
+        extra_arg=z,
+    )
+
+    df = dd.from_pandas(pd.DataFrame({"a": np.arange(3)}), npartitions=3)
+    df = df.shuffle("a", shuffle="tasks")
+    df = df["a"].to_dask_array()
+
+    res = x.sum() + df.sum()
+    res = await c.compute(res, optimize_graph=False)
+    assert res == 21
+
+
+@gen_cluster(client=True)
+async def test_annotation_pack_unpack(c, s, a, b):
+    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
+
+    annotations = {"workers": ("alice",)}
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
+    annotations = unpacked_hlg["annotations"]
+    assert annotations == {"workers": {"n": ("alice",)}}

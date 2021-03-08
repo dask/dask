@@ -254,7 +254,7 @@ def set_fill_value(a, fill_value):
     fill_value = np.ma.core._check_fill_value(fill_value, a.dtype)
     res = a.map_blocks(_set_fill_value, fill_value)
     a.dask = res.dask
-    a.name = res.name
+    a._name = res.name
 
 
 @derived_from(np.ma)

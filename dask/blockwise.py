@@ -1,10 +1,13 @@
 import itertools
+import os
 import warnings
-
-import numpy as np
+from itertools import product
+from typing import Any, Hashable, Iterable, Mapping, Optional, Sequence, Set, Tuple
 
 import tlz as toolz
 
+from .base import clone_key, get_name_from_key
+from .compatibility import prod
 from .core import reverse_dict, flatten, keys_in_tasks
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
@@ -55,7 +58,7 @@ def blockwise(
     concatenate=None,
     new_axes=None,
     dependencies=(),
-    **kwargs
+    **kwargs,
 ):
     """Create a Blockwise symbolic mutable mapping
 
@@ -157,18 +160,19 @@ class Blockwise(Layer):
     dsk: dict
         A small graph to apply per-output-block.  May include keys from the
         input indices.
-    indices: Tuple[str, Tuple[str, str]]
+    indices: Tuple[str, Tuple[str, ...]]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
         Or includes literals, which have ``None`` for an index value
-    numblocks: Dict[key, Sequence[int]]
+    numblocks: Mapping[key, Sequence[int]]
         Number of blocks along each dimension for each input
-    concatenate: boolean
+    concatenate: bool
         Whether or not to pass contracted dimensions as a list of inputs or a
         single input to the block function
-    new_axes: Dict
-        New index dimensions that may have been created, and their extent
-    output_blocks: Set[Tuple]
+    new_axes: Mapping
+        New index dimensions that may have been created and their size,
+        e.g. ``{'j': 2, 'k': 3}``
+    output_blocks: Set[Tuple[int, ...]]
         Specify a specific set of required output blocks. Since the graph
         will only contain the necessary tasks to generate these outputs,
         this kwarg can be used to "cull" the abstract layer (without needing
@@ -183,17 +187,26 @@ class Blockwise(Layer):
     dask.array.blockwise
     """
 
+    output: str
+    output_indices: Tuple[str, ...]
+    dsk: Mapping[str, tuple]
+    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
+    numblocks: Mapping[str, Sequence[int]]
+    concatenate: Optional[bool]
+    new_axes: Mapping[str, int]
+    output_blocks: Optional[Set[Tuple[int, ...]]]
+
     def __init__(
         self,
-        output,
-        output_indices,
-        dsk,
-        indices,
-        numblocks,
-        concatenate=None,
-        new_axes=None,
-        output_blocks=None,
-        annotations=None,
+        output: str,
+        output_indices: Iterable[str],
+        dsk: Mapping[str, tuple],
+        indices: Iterable[Tuple[str, Optional[Iterable[str]]]],
+        numblocks: Mapping[str, Sequence[int]],
+        concatenate: bool = None,
+        new_axes: Mapping[str, int] = None,
+        output_blocks: Set[Tuple[int, ...]] = None,
+        annotations: Mapping[str, Any] = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
@@ -206,14 +219,15 @@ class Blockwise(Layer):
         self.numblocks = numblocks
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
         # enforce a canonical value if there are no axes for reduction.
-        if all(
-            all(i in output_indices for i in ind)
-            for name, ind in indices
+        output_indices_set = set(self.output_indices)
+        if concatenate is not None and all(
+            i in output_indices_set
+            for name, ind in self.indices
             if ind is not None
+            for i in ind
         ):
-            self.concatenate = None
-        else:
-            self.concatenate = concatenate
+            concatenate = None
+        self.concatenate = concatenate
         self.new_axes = new_axes or {}
 
     @property
@@ -272,7 +286,7 @@ class Blockwise(Layer):
         return iter(self._dict)
 
     def __len__(self):
-        return int(np.prod(list(self._out_numblocks().values())))
+        return int(prod(self._out_numblocks().values()))
 
     def _out_numblocks(self):
         d = {}
@@ -289,7 +303,9 @@ class Blockwise(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def __dask_distributed_pack__(self, client):
+    def __dask_distributed_pack__(
+        self, all_hlg_keys, known_key_dependencies, client, client_keys
+    ):
         from distributed.worker import dumps_function
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
@@ -316,32 +332,39 @@ class Blockwise(Layer):
                 raise CancelledError(stringify(future.key))
 
         # All blockwise tasks will depend on the futures in `indices`
-        global_dependencies = tuple(stringify(f.key) for f in indices_unpacked_futures)
+        global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
 
-        ret = {
+        return {
             "output": self.output,
             "output_indices": self.output_indices,
             "func": func,
             "func_future_args": func_future_args,
             "global_dependencies": global_dependencies,
             "indices": indices,
+            "is_list": [isinstance(x, list) for x in indices],
             "numblocks": self.numblocks,
             "concatenate": self.concatenate,
             "new_axes": self.new_axes,
-            "annotations": self.pack_annotations(),
             "output_blocks": self.output_blocks,
             "dims": self.dims,
         }
 
-        return ret
-
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
-        raw, raw_deps = make_blockwise_graph(
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        # Make sure we convert list items back from tuples in `indices`.
+        # The msgpack serialization will have converted lists into
+        # tuples, and tuples may be stringified during graph
+        # materialization (bad if the item was not a key).
+        indices = [
+            list(ind) if is_list else ind
+            for ind, is_list in zip(state["indices"], state["is_list"])
+        ]
+
+        layer_dsk, layer_deps = make_blockwise_graph(
             state["func"],
             state["output"],
             state["output_indices"],
-            *state["indices"],
+            *indices,
             new_axes=state["new_axes"],
             numblocks=state["numblocks"],
             concatenate=state["concatenate"],
@@ -351,16 +374,17 @@ class Blockwise(Layer):
             deserializing=True,
             func_future_args=state["func_future_args"],
         )
-        global_dependencies = list(state["global_dependencies"])
+        g_deps = state["global_dependencies"]
 
-        if state["annotations"]:
-            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
-
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        dsk.update(raw)
-
-        for k, v in raw_deps.items():
-            dependencies[stringify(k)] = [stringify(d) for d in v] + global_dependencies
+        # Stringify layer graph and dependencies
+        layer_dsk = {
+            stringify(k): stringify_collection_keys(v) for k, v in layer_dsk.items()
+        }
+        deps = {
+            stringify(k): {stringify(d) for d in v} | g_deps
+            for k, v in layer_deps.items()
+        }
+        return {"dsk": layer_dsk, "deps": deps}
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
@@ -423,8 +447,9 @@ class Blockwise(Layer):
             annotations=self.annotations,
         )
 
-    def cull(self, keys, all_hlg_keys):
-
+    def cull(
+        self, keys: set, all_hlg_keys: Iterable
+    ) -> Tuple[Layer, Mapping[Hashable, set]]:
         # Culling is simple for Blockwise layers.  We can just
         # collect a set of required output blocks (tuples), and
         # only construct graph for these blocks in `make_blockwise_graph`
@@ -434,12 +459,71 @@ class Blockwise(Layer):
             if key[0] == self.output:
                 output_blocks.add(key[1:])
         culled_deps = self._cull_dependencies(all_hlg_keys, output_blocks)
-        out_size = tuple([self.dims[i] for i in self.output_indices])
-        if np.prod(out_size) != len(culled_deps):
+        out_size_iter = (self.dims[i] for i in self.output_indices)
+        if prod(out_size_iter) != len(culled_deps):
             culled_layer = self._cull(output_blocks)
             return culled_layer, culled_deps
         else:
             return self, culled_deps
+
+    def clone(
+        self,
+        keys: set,
+        seed: Hashable,
+        bind_to: Hashable = None,
+    ) -> Tuple[Layer, bool]:
+        names = {get_name_from_key(k) for k in keys}
+        # We assume that 'keys' will contain either all or none of the output keys of
+        # each of the layers, because clone/bind are always invoked at collection level.
+        # Asserting this is very expensive, so we only check it during unit tests.
+        if "PYTEST_CURRENT_TEST" in os.environ:
+            assert not self.get_output_keys() - keys
+            for name, nb in self.numblocks.items():
+                if name in names:
+                    for block in product(*(list(range(nbi)) for nbi in nb)):
+                        assert (name, *block) in keys
+
+        is_leaf = True
+
+        indices = []
+        for k, idxv in self.indices:
+            if k in names:
+                is_leaf = False
+                k = clone_key(k, seed)
+            indices.append((k, idxv))
+
+        numblocks = {}
+        for k, nbv in self.numblocks.items():
+            if k in names:
+                is_leaf = False
+                k = clone_key(k, seed)
+            numblocks[k] = nbv
+
+        dsk = {clone_key(k, seed): v for k, v in self.dsk.items()}
+
+        if bind_to is not None and is_leaf:
+            from .graph_manipulation import chunks
+
+            # It's always a Delayed generated by dask.graph_manipulation.checkpoint;
+            # the layer name always matches the key
+            assert isinstance(bind_to, str)
+            dsk = {k: (chunks.bind, v, f"_{len(indices)}") for k, v in dsk.items()}
+            indices.append((bind_to, None))
+
+        return (
+            Blockwise(
+                output=clone_key(self.output, seed),
+                output_indices=self.output_indices,
+                dsk=dsk,
+                indices=indices,
+                numblocks=numblocks,
+                concatenate=self.concatenate,
+                new_axes=self.new_axes,
+                output_blocks=self.output_blocks,
+                annotations=self.annotations,
+            ),
+            (bind_to is not None and is_leaf),
+        )
 
 
 def _get_coord_mapping(

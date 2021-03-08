@@ -252,6 +252,24 @@ def _cum_aggregate_apply(aggregate, x, y):
         return aggregate(x, y)
 
 
+def cumsum_aggregate(x, y):
+    if x is None:
+        return y
+    elif y is None:
+        return x
+    else:
+        return x + y
+
+
+def cumprod_aggregate(x, y):
+    if x is None:
+        return y
+    elif y is None:
+        return x
+    else:
+        return x * y
+
+
 def cummin_aggregate(x, y):
     if is_series_like(x) or is_dataframe_like(x):
         return x.where((x < y) | x.isnull(), y, axis=x.ndim - 1)
