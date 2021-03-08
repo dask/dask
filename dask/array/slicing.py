@@ -1565,14 +1565,17 @@ def setitem_layer(
 
     Parameters
     ----------
-    array : dask array TODO
+    array : dask array
+        The dask array that is being assigned to.
     value : array-like
-        The value from which to assign to the indices.
+        The values which will be assigned.
     indices : sequence of slice or int
         A reformated version of the original indices that were passed
-        to __setitem__.
-    name : `str` TODO
-    non_broadcast_dimensions : list of int
+        to Array.__setitem__.
+    name : `str`
+        This is the dask variable output name for the new setitem
+        layer.
+    non_broadcast_dimensions : list of `int`
         The dimensions of value which do not need to be broadcast
         against the subspace defined by the indices.
     offset: `int`
@@ -1580,21 +1583,25 @@ def setitem_layer(
         value and the corresponding dimension in self. A positive
         value means the dimension position is higher (further to the
         right) in self then value.
-    base_value_indices : list of slice or None
+    base_value_indices : list of `slice` or `None`
         The indices used for initialising the selection from
         value. slice(None) elements are unchanged, but an element of
         None is replaced by an appropriate slice.
-    mirror: list of int
+    mirror: list of `int`
         The dimensions that need to be reversed in the value, prior to
         assignment.
-    value_common_shape: tuple of int
+    value_common_shape: tuple of `int`
         The shape of those dimensions of value which correspond to
         dimensions of self.
 
     Returns
     -------
-    array : numpy.ndarray
-        The array for the block with assigned elements.
+    Dict where the keys are tuples of
+
+        (name, dim_index[, dim_index[, ...]])
+
+    with the addition of keys inherited from the results of indexing
+    value.
 
     """
     from ..core import flatten
@@ -1620,9 +1627,15 @@ def setitem_layer(
     dsk = {}
     name = (name,)
 
+    # Loop round each block in dask array to create new "setitem"
+    # graph entries.
     for key, array_location in zip(keys, array_locations):
-        # See if this block overlaps the indices
+        # Assume, until demonstrated otherwise, that this block
+        # overlaps the assignment indices.
         overlaps = True
+
+        # Loop round each dimension of the dask array, checking if the
+        # corresponding assignment index overlaps the block.
         block_indices = []
         subset_shape = []
         preceeding_size = []
@@ -1633,8 +1646,6 @@ def setitem_layer(
             full_shape,
             array_location,
         ):
-            chunk_location = key[1:]
-
             j += 1
 
             integer_index = isinstance(index, int)
@@ -1698,15 +1709,14 @@ def setitem_layer(
 
                 block_index_size = block_index.size
 
-                if is_bool and loc1 == full_size:
-                    if value.size > 1:
-                        x = value.shape[j - local_offset]
-                        if x > 1 and int(np.sum(index)) < x:
-                            raise ValueError(
-                                "shape mismatch: value array of shape "
-                                f"{value.shape} could not be broadcast "
-                                "to indexing result"
-                            )
+                if is_bool and loc1 == full_size and value.size > 1:
+                    x = value.shape[j - local_offset]
+                    if x > 1 and int(np.sum(index)) < x:
+                        raise ValueError(
+                            "shape mismatch: value array of shape "
+                            f"{value.shape} could not be broadcast "
+                            "to indexing result"
+                        )
 
                 if not block_index_size:
                     # This block does not overlap the indices
@@ -1715,17 +1725,6 @@ def setitem_layer(
 
                 # Still here? Then this block does overlap the 1-d
                 # array indices.
-
-                # If possible, replace the 1-d array with a slice (for
-                # faster numpy assignment).
-                if block_index.size == 1:
-                    block_index = slice(block_index[0], block_index[0] + 1)
-                else:
-                    steps = block_index[1:] - block_index[:-1]
-                    step = steps[0]
-                    if step and not (steps - step).any():
-                        start, stop = block_index[0], block_index[-1] + 1
-                        block_index = slice(start, stop, step)
 
                 # Find how many elements of 'value' precede this block
                 # along this dimension. Note that it is assumed that
@@ -1742,15 +1741,19 @@ def setitem_layer(
                 preceeding_size.append(n_preceeding)
                 subset_shape.append(block_index_size)
 
+        # The new graph key
+        new_key = name + key[1:]
+
         if not overlaps:
-            # This block does not overlap the indices
-            dsk[name + chunk_location] = (setitem, key, None, None)
+            # This block does not overlap the indices, so create a
+            # null assignment function.
+            dsk[new_key] = (setitem, key, None, None)
             continue
 
-        # Still here? Then this block overlaps the indices and so needs to
-        # have some of its elements assigned.
+        # Still here? Then this block overlaps the indices and so
+        # needs to have some of its elements assigned.
 
-        # Initialise the indices of 'value' that define the parts of it
+        # Initialise the indices of value that define the parts of it
         # which are to be assigned to this block
         value_indices = base_value_indices[:]
         for i in non_broadcast_dimensions:
@@ -1758,8 +1761,8 @@ def setitem_layer(
             start = preceeding_size[j]
             value_indices[i] = slice(start, start + subset_shape[j])
 
-        # Reverse the indices to 'value' if required as a consequence of
-        # reformatting the original indices.
+        # Reverse the indices to value, if required as a consequence
+        # of reformatting the original indices.
         for i in mirror:
             size = value_common_shape[i]
             start, stop, step = value_indices[i].indices(size)
@@ -1776,7 +1779,7 @@ def setitem_layer(
             # Ellipsis to the indices of 'value'.
             value_indices.insert(0, Ellipsis)
 
-        # Get the part of 'value' that is to be assigned to elements of
+        # Get the part of value that is to be assigned to elements of
         # this block
         v = value[tuple(value_indices)]
 
@@ -1790,11 +1793,21 @@ def setitem_layer(
                     "could not be broadcast to indexing result"
                 )
 
+        # Make sure that the the assignment value has just one
+        # chunk. This should be ok memory-wise, as this chunk can not
+        # be larger than the block that we are assigning to.
         v = v.rechunk((-1,) * v.ndim)
+
+        # Get the key for rechunked value
+        vkey = tuple(flatten(v.__dask_keys__()))[0]
+        
+        # Add all of the keys that the define the assignment value to
+        # the new dictionary, not minding if we overwrite any existing
+        # keys.
         dsk.update(dict(v.dask))
 
-        vkey = tuple(flatten(v.__dask_keys__()))[0]
-        dsk[name + chunk_location] = (setitem, key, tuple(block_indices), vkey)
+        # Define the assignment function for this block.
+        dsk[new_key] = (setitem, key, tuple(block_indices), vkey)
 
     return dsk
 
@@ -1811,7 +1824,7 @@ def setitem(array, indices, value):
         no assignment will occur, regardless of value, and the input
         array will be returned
     value : array-like
-        The value which will be assigned.
+        The values which will be assigned.
 
     Returns
     -------
