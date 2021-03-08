@@ -3707,6 +3707,7 @@ def test_setitem_extended_API():
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx))
 
+
 def test_setitem_on_read_only_blocks():
     # Outputs of broadcast_trick-style functions contain read-only
     # arrays
