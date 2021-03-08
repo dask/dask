@@ -428,7 +428,8 @@ def test_modification_time_read_bytes(s3, s3so):
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
-def test_parquet(s3, engine, s3so):
+@pytest.mark.parametrize("metadata_file", [True, False])
+def test_parquet(s3, engine, s3so, metadata_file):
     import s3fs
 
     dd = pytest.importorskip("dask.dataframe")
@@ -461,13 +462,19 @@ def test_parquet(s3, engine, s3so):
         index=pd.Index(np.arange(1000), name="foo"),
     )
     df = dd.from_pandas(data, chunksize=500)
-    df.to_parquet(url, engine=engine, storage_options=s3so)
+    df.to_parquet(
+        url, engine=engine, storage_options=s3so, write_metadata_file=metadata_file
+    )
 
     files = [f.split("/")[-1] for f in s3.ls(url)]
-    assert "_common_metadata" in files
+    if metadata_file:
+        assert "_common_metadata" in files
+        assert "_metadata" in files
     assert "part.0.parquet" in files
 
-    df2 = dd.read_parquet(url, index="foo", engine=engine, storage_options=s3so)
+    df2 = dd.read_parquet(
+        url, index="foo", gather_statistics=True, engine=engine, storage_options=s3so
+    )
     assert len(df2.divisions) > 1
 
     tm.assert_frame_equal(data, df2.compute())
