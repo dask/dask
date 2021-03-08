@@ -3616,6 +3616,31 @@ def test_setitem_2d():
 
 
 def test_setitem_extended_API():
+    # 0-d array
+    x = np.array(9)
+    dx = da.from_array(9)
+
+    x[()] = -1
+    dx[()] = -1
+    assert_eq(x, dx.compute())
+
+    x[...] = -11
+    dx[...] = -11
+    assert_eq(x, dx.compute())
+
+    # 1-d array
+    x = np.arange(10)
+    dx = da.from_array(x.copy(), chunks=(4, 6))
+
+    x[2:8:2] = -1
+    dx[2:8:2] = -1
+    assert_eq(x, dx.compute())
+
+    x[...] = -11
+    dx[...] = -11
+    assert_eq(x, dx.compute())
+
+    # 2-d array
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.copy(), chunks=(2, 2))
 
@@ -3681,19 +3706,6 @@ def test_setitem_extended_API():
     dx = dx.persist()
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx))
-
-    # Scalar array
-    x = np.array(9)
-    dx = da.from_array(9)
-
-    x[()] = -1
-    dx[()] = -1
-    assert_eq(x, dx.compute())
-
-    x[...] = -11
-    dx[...] = -11
-    assert_eq(x, dx.compute())
-
 
 def test_setitem_on_read_only_blocks():
     # Outputs of broadcast_trick-style functions contain read-only
