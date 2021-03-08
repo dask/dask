@@ -1737,7 +1737,7 @@ def setitem_layer(
                 # the slice step is positive, as will be the case for
                 # reformatted indices.
                 if is_bool:
-                    n_preceeding = int(np.sum(index[:loc0]))
+                    n_preceeding = np.sum(index[:loc0])
                 else:
                     n_preceeding = sum(1 for i in index if i < loc0)
 
