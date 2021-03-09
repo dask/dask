@@ -88,7 +88,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +===============+==========+==============================================================+
 |     bokeh     | >=1.0.0  |                Visualizing dask diagnostics                  |
 +---------------+----------+--------------------------------------------------------------+
-|  cloudpickle  | >=0.2.2  |              Pickling support for Python objects             |
+|  cloudpickle  | >=0.4.0  |              Pickling support for Python objects             |
 +---------------+----------+--------------------------------------------------------------+
 |   cityhash    |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+

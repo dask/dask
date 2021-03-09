@@ -5,11 +5,11 @@ dependencies:
   # required dependencies
   - python=3.7
   - pyyaml
-  # optional dependencies pulled in by pip install dask[distributed]
-  - cloudpickle=0.2.2
+  - cloudpickle=0.4.0
   - partd=0.3.10
   - fsspec=0.6.0
   - toolz=0.8.2
+  # optional dependencies pulled in by pip install dask[distributed]
   - distributed=2021.03.0
   # test dependencies
   - pytest
