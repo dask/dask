@@ -8,9 +8,9 @@ dependencies:
   # optional dependencies pulled in by pip install dask[array, dataframe]
   - numpy=1.15.1
   - pandas=0.25.0
-  - partd
-  - fsspec
-  - toolz
+  - partd=0.3.10
+  - fsspec=0.6.0
+  - toolz=0.8.2
   # test dependencies
   - pytest
   - pytest-rerunfailures

@@ -5,7 +5,7 @@ from os.path import exists
 from setuptools import setup
 import versioneer
 
-# NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
+# NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
     "array": [
