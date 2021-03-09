@@ -24,7 +24,7 @@ def test_asanyarray():
     assert_eq(y, y)
 
 
-def test_asarray_recognises_xarray_data():
+def test_asarray_xarray_intersphinx_workaround():
     module = xr.DataArray.__module__
     try:
         xr.DataArray.__module__ = "xarray"
