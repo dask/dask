@@ -64,7 +64,6 @@ from .slicing import (
     slice_array,
     replace_ellipsis,
     cached_cumsum,
-    parse_assignment_indices,
     setitem_array,
 )
 from .blockwise import blockwise
@@ -1667,111 +1666,17 @@ class Array(DaskMethodsMixin):
             self._chunks = y.chunks
             return
 
-        # Still here? Then parse the indices from 'key' and apply the
-        # assignment the via `setitem_array` function.
+        # Still here? Then apply the assignment to more general
+        # indices via the `setitem_array` function.
 
-        # Reformat input indices
-        indices, indices_shape, mirror = parse_assignment_indices(key, self.shape)
-
-        # Cast 'value' as a dask array
         if value is np.ma.masked:
-            # Convert masked to a scalar masked array
             value = np.ma.array(0, mask=True)
 
+        # Cast value as a dask array
         value = asanyarray(value)
-        value_shape = value.shape
 
-        if 0 in indices_shape and value.size > 1:
-            # Can only assign size 1 values (with any number of
-            # dimensions) to empty slices
-            raise ValueError(
-                f"shape mismatch: value array of shape {value_shape} "
-                "could not be broadcast to indexing result "
-                f"of shape {tuple(indices_shape)}"
-            )
-
-        # Define:
-        #
-        #  offset: The difference in the relative positions of a
-        #          dimension in 'value' and the corresponding
-        #          dimension in self. A positive value means the
-        #          dimension position is further to the right in self
-        #          than 'value'.
-        #
-        #  self_common_shape: The shape of those dimensions of self
-        #                     which correspond to dimensions of
-        #                     'value'.
-        #
-        #  value_common_shape: The shape of those dimensions of
-        #                      'value' which correspond to dimensions
-        #                      of self.
-        #
-        #  base_value_indices: The indices used for initialising the
-        #                      selection from 'value'. slice(None)
-        #                      elements are unchanged, but an element
-        #                      of None will, inside a call to setitem,
-        #                      be replaced by an appropriate slice.
-        #
-        # Note that self_common_shape and value_common_shape may be
-        # different if there are any size 1 dimensions are being
-        # brodacast.
-        offset = len(indices_shape) - value.ndim
-        if offset >= 0:
-            # self has the same number or more dimensions than 'value'
-            self_common_shape = indices_shape[offset:]
-            value_common_shape = value_shape
-
-            # Modify the mirror dimensions with the offset
-            mirror = [i - offset for i in mirror if i >= offset]
-        else:
-            # 'value' has more dimensions than self
-            value_offset = -offset
-            if value_shape[:value_offset] != [1] * value_offset:
-                # Can only allow 'value' to have more dimensions then
-                # self if the extra leading dimensions all have size
-                # 1.
-                raise ValueError(
-                    "could not broadcast input array from shape"
-                    f"{value_shape} into shape {tuple(indices_shape)}"
-                )
-
-            offset = 0
-            self_common_shape = indices_shape
-            value_common_shape = value_shape[value_offset:]
-
-        # Find out which of the dimensions of 'value' are to be
-        # broadcast across self.
-        #
-        # Note that, as in numpy, it is not allowed for a dimension in
-        # 'value' to be larger than a size 1 dimension in self
-        base_value_indices = []
-        non_broadcast_dimensions = []
-        for i, (a, b) in enumerate(zip(self_common_shape, value_common_shape)):
-            if b == 1:
-                base_value_indices.append(slice(None))
-            elif a == b and b != 1:
-                base_value_indices.append(None)
-                non_broadcast_dimensions.append(i)
-            elif a is None and b != 1:
-                base_value_indices.append(None)
-                non_broadcast_dimensions.append(i)
-            elif a is not None:
-                # Can't check  ...
-                raise ValueError(
-                    f"Can't broadcast data with shape {value_common_shape} "
-                    f"across shape {tuple(indices_shape)}"
-                )
-
-        dsk, name = setitem_array(
-            self,
-            indices,
-            value,
-            non_broadcast_dimensions=non_broadcast_dimensions,
-            offset=offset,
-            base_value_indices=base_value_indices,
-            mirror=mirror,
-            value_common_shape=value_common_shape,
-        )
+        # Create a new dask layer for the assignment
+        dsk, name = setitem_array(self, key, value)
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         y = Array(graph, name, chunks=self.chunks, dtype=self.dtype)

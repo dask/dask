@@ -1342,9 +1342,11 @@ def cached_cumsum(seq, initial_zero=False):
 def parse_assignment_indices(indices, shape):
     """Reformat the indices for assignment.
 
-    The aim of this is is convert the indices to a standardised form
+    The aim of this is to convert the indices to a standardised form
     so that it is easier a) to check them for validity, and b) to
     ascertain which chunks are touched by the indices.
+
+    This function is intended to be called by `setitem_array`.
 
     Note that indices which are decreasing (such as as
     ``slice(7,3,-1)`` and ``[6,2,1]``) are recast as increasing
@@ -1359,10 +1361,10 @@ def parse_assignment_indices(indices, shape):
 
     Parameters
     ----------
-    indices : tuple
-        The given indices for assignment.
-    shape : sequence of ints
-        The shape of the global array.
+    indices : numpy-style indices
+        Indices to array defining the elements to be assigned.
+    shape : sequence of `int`
+        The shape of the array.
 
     Returns
     -------
@@ -1576,79 +1578,46 @@ def parse_assignment_indices(indices, shape):
     return parsed_indices, indices_shape, mirror
 
 
-def setitem_array(
-    array,
-    indices,
-    value,
-    non_broadcast_dimensions=None,
-    offset=None,
-    base_value_indices=None,
-    mirror=None,
-    value_common_shape=None,
-):
+def setitem_array(array, indices, value):
     """Master function for array assignment.
 
     This function makes a new dask that assigns values to each block
     that is touched by the indices, leaving other blocks unchanged.
 
-    This function is called by `Array.__setitem__`.
+    This function is intended to be called by `Array.__setitem__`.
 
     Parameters
     ----------
     array : dask array
         The dask array that is being assigned to.
-    indices : `list`
-        Indices to array defining the elements to be assigned. Must be
-        an output of `parse_assignment_indices`. In particular, an
-        original index that is a decreasing slice or decreasing
-        integer sequence needs to be reversed prior to being used in
-        this function, and the dimension position for the reversed
-        index must be recorded in the mirror parameter. See
-        `parse_assignment_indices` for details.
+    indices : numpy-style indices
+        Indices to array defining the elements to be assigned.
     value : array-like
         The values which will be assigned to elements of array.
-    non_broadcast_dimensions : list of `int`
-        The dimensions of value which do not need to be broadcast
-        against the subspace defined by the indices.
-    offset: `int`
-        The difference in the relative positions of a dimension in
-        value and the corresponding dimension in array. A positive
-        value means the dimension position is higher (further to the
-        right) in array then value.
-    base_value_indices : list of `slice` or `None`
-        The indices used for initialising the selection from
-        value. `slice(None)` elements are unchanged, but an element of
-        `None` is replaced by an appropriate slice.
-    mirror: list of `int`
-        The dimensions that have had reversed indices. See
-        `parse_assignment_indices` for details.
-    value_common_shape: tuple of `int`
-        The shape of those dimensions of value which correspond to
-        dimensions of array.
 
     Returns
     -------
-    Dict where the keys are tuples of
-
-        (out_name, dim_index, ...)
-
-    and the values are
-
-        (function, (in_name, dim_index, ...),
-                   index,
-                   (value_name, dim_index, ...))
-
-    with the addition of any key/value pairs needed to define
-    'value_name'.
-
-    Also the string token 'out_name' is returned.
+    dsk : `dict`
+        Dict where the keys are tuples of
+            (name, dim_index, ...)
+        and the values are
+            (function, (key, dim_index, ...),
+                       index,
+                       (vkey, vdim_index, ...))
+        Also includes any key/value pairs needed to define vkey.
+    name : `str`
+        The string token for the new dask layer.
 
     """
 
     @functools.lru_cache()
     def block_index_from_1d_index(dim, loc0, loc1, is_bool):
-        # Takes the index corresponding to dim from the inherited
-        # namespace
+        """The elements of index between positions loc0 and loc1.
+
+        Parameters dim, loc0, loc1 and is_bool are all as defined in
+        the namespace of the caller, as is the 1-d array index.
+
+        """
         if is_bool:
             return index[loc0:loc1]
         else:
@@ -1657,14 +1626,104 @@ def setitem_array(
 
     @functools.lru_cache()
     def n_preceeding_from_1d_index(dim, loc0, is_bool):
-        # Takes the index corresponding to dim from the inherited
-        # namespace
+        """Sum the number of elements of index preceeding position loc0.
+
+        Parameters dim, loc0 and is_bool are all as defined in the
+        namespace of the caller, as is the 1-d array index.
+
+        """
         if is_bool:
             return np.sum(index[:loc0])
         else:
             return np.sum(np.where(index < loc0, 1, 0))
 
     from ..core import flatten
+
+    array_shape = array.shape
+    value_shape = value.shape
+
+    # Reformat input indices
+    indices, indices_shape, mirror = parse_assignment_indices(indices, array_shape)
+
+    if 0 in indices_shape and value_shape and max(value_shape) > 1:
+        # Empty slices can only be assigned size 1 values
+        raise ValueError(
+            f"shape mismatch: value array of shape {value_shape} "
+            "could not be broadcast to indexing result "
+            f"of shape {tuple(indices_shape)}"
+        )
+
+    # Define:
+    #
+    #  offset: The difference in the relative positions of a
+    #          dimension in 'value' and the corresponding
+    #          dimension in self. A positive value means the
+    #          dimension position is further to the right in self
+    #          than 'value'.
+    #
+    #  self_common_shape: The shape of those dimensions of self
+    #                     which correspond to dimensions of
+    #                     'value'.
+    #
+    #  value_common_shape: The shape of those dimensions of
+    #                      'value' which correspond to dimensions
+    #                      of self.
+    #
+    #  base_value_indices: The indices used for initialising the
+    #                      selection from 'value'. slice(None)
+    #                      elements are unchanged, but an element
+    #                      of None will, inside a call to setitem,
+    #                      be replaced by an appropriate slice.
+    #
+    # Note that self_common_shape and value_common_shape may be
+    # different if there are any size 1 dimensions are being
+    # brodacast.
+    offset = len(indices_shape) - value.ndim
+    if offset >= 0:
+        # self has the same number or more dimensions than 'value'
+        self_common_shape = indices_shape[offset:]
+        value_common_shape = value_shape
+
+        # Modify the mirror dimensions with the offset
+        mirror = [i - offset for i in mirror if i >= offset]
+    else:
+        # 'value' has more dimensions than self
+        value_offset = -offset
+        if value_shape[:value_offset] != [1] * value_offset:
+            # Can only allow 'value' to have more dimensions then
+            # self if the extra leading dimensions all have size
+            # 1.
+            raise ValueError(
+                "could not broadcast input array from shape"
+                f"{value_shape} into shape {tuple(indices_shape)}"
+            )
+
+        offset = 0
+        self_common_shape = indices_shape
+        value_common_shape = value_shape[value_offset:]
+
+    # Find out which of the dimensions of 'value' are to be
+    # broadcast across self.
+    #
+    # Note that, as in numpy, it is not allowed for a dimension in
+    # 'value' to be larger than a size 1 dimension in self
+    base_value_indices = []
+    non_broadcast_dimensions = []
+    for i, (a, b) in enumerate(zip(self_common_shape, value_common_shape)):
+        if b == 1:
+            base_value_indices.append(slice(None))
+        elif a == b and b != 1:
+            base_value_indices.append(None)
+            non_broadcast_dimensions.append(i)
+        elif a is None and b != 1:
+            base_value_indices.append(None)
+            non_broadcast_dimensions.append(i)
+        elif a is not None:
+            # Can't check  ...
+            raise ValueError(
+                f"Can't broadcast data with shape {value_common_shape} "
+                f"across shape {tuple(indices_shape)}"
+            )
 
     # Initialize outputs
     dsk = {}
@@ -1680,11 +1739,10 @@ def setitem_array(
     ]
     array_locations = product(*array_locations)
 
-    # Get the dask keys of the most recent layer and sort by chunk
-    # index, so that they correspond elementwise to the array
+    # Get the dask keys of the most recent layer of array and sort by
+    # chunk index, so that they correspond elementwise to the array
     # locations.
-    shape = array.shape
-    ndim = len(shape)
+    ndim = len(array_shape)
     if ndim > 1:
         # N-d array (N>=2)
         keys = sorted(flatten(array.__dask_keys__()), key=itemgetter(*range(1, ndim)))
@@ -1695,27 +1753,27 @@ def setitem_array(
         # Scalar array
         keys = flatten(array.__dask_keys__())
 
-    # Loop round each block in dask array to create new "setitem"
-    # graph entries.
+    # Create a new "setitem" graph entry for each block in the array
     for key, locations in zip(keys, array_locations):
-        # Assume, until demonstrated otherwise, that this block
-        # overlaps the assignment indices.
-        overlaps = True
-
+        
         # The indices that will be used to  assign to this block
         block_indices = []
         # The shape implied by block_indices
         subset_shape = []
         preceeding_size = []
         local_offset = offset
-
-        # Loop round each dimension of the dask array, checking if the
-        # corresponding assignment index overlaps the block.
+        # Assume, until demonstrated otherwise, that this block
+        # overlaps the assignment indices.
+        overlaps = True
+        
         j = -1
+
+        # Loop round each block dimension, checking if the
+        # corresponding assignment index overlaps the block.
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
             zip(
                 indices,
-                shape,
+                array_shape,
                 locations,
             )
         ):
@@ -1769,11 +1827,11 @@ def setitem_array(
                 block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
 
                 if is_bool and loc1 == full_size and value.size > 1:
-                    x = value.shape[j - local_offset]
+                    x = value_shape[j - local_offset]
                     if x > 1 and int(np.sum(index)) < x:
                         raise ValueError(
                             "shape mismatch: value array of shape "
-                            f"{value.shape} could not be broadcast "
+                            f"{value_shape} could not be broadcast "
                             "to indexing result"
                         )
 
@@ -1791,7 +1849,7 @@ def setitem_array(
                 n_preceeding = n_preceeding_from_1d_index(dim, loc0, is_bool)
 
             # Still here? This block overlaps the index for this
-            # dimemnsion.
+            # dimension.
             block_indices.append(block_index)
             if not integer_index:
                 preceeding_size.append(n_preceeding)
@@ -1801,25 +1859,26 @@ def setitem_array(
         new_key = name + key[1:]
 
         if not overlaps:
-            # This block does not overlap the indices, so create a
-            # null assignment function.
+            # This block does not overlap the indices for all
+            # dimensions, so create a null assignment function and
+            # move on to the next block.
             dsk[new_key] = (setitem, key, None, None)
             continue
 
-        # Still here? Then this block overlaps the indices of all
+        # Still here? Then this block overlaps the indices for all
         # dimensions and so needs to have some of its elements
         # assigned.
 
-        # Initialise the indices of 'value' that define the parts of it
-        # which are to be assigned to this block
+        # Initialise the indices of the assgnment value that define
+        # the parts of it which are to be assigned to this block
         value_indices = base_value_indices[:]
         for i in non_broadcast_dimensions:
             j = i + offset
             start = preceeding_size[j]
             value_indices[i] = slice(start, start + subset_shape[j])
 
-        # Reverse the indices to 'value', if required as a consequence
-        # of reformatting the original indices.
+        # If required as a consequence of reformatting the original
+        # indices, reverse the indices to assgnment value.
         for i in mirror:
             size = value_common_shape[i]
             start, stop, step = value_indices[i].indices(size)
@@ -1832,12 +1891,11 @@ def setitem_array(
             value_indices[i] = slice(start, stop, -1)
 
         if value.ndim > len(indices):
-            # The full assignment value has more dimensions than
-            # 'array', so add a leading Ellipsis to the indices of
-            # value.
+            # The assignment value has more dimensions than array, so
+            # add a leading Ellipsis to the indices of value.
             value_indices.insert(0, Ellipsis)
 
-        # Get the part of the full assignment value that is to be
+        # Create the part of the full assignment value that is to be
         # assigned to elements of this block
         v = value[tuple(value_indices)]
 
@@ -1847,21 +1905,22 @@ def setitem_array(
         for i in non_broadcast_dimensions:
             if v.shape[i] != subset_shape[i + offset]:
                 raise ValueError(
-                    f"shape mismatch: value array of shape {value.shape} "
+                    f"shape mismatch: value array of shape {value_shape} "
                     "could not be broadcast to indexing result"
                 )
 
-        # Make sure that the assignment value for this block has just
-        # one chunk, so we can represent it with a single key in thex
-        # argument list of setitem.
+        # Make sure that the part of the assignment value for this
+        # block has just one chunk, so we can represent it with a
+        # single key in thex argument list of setitem ...
         v = v.rechunk((-1,) * v.ndim)
 
-        # Get the single key for rechunked assignment value
+        # ... and get its single layer key.
         vkey = next(flatten(v.__dask_keys__()))
 
-        # Insert all of the keys that the define assignment value for
-        # this block into the new dask dictionary, not minding when we
-        # overwrite any existing keys as the values will be the same.
+        # Insert into the new dask dictionary all of the keys that
+        # define the part of assignment value for this block, not
+        # minding when we overwrite any existing keys as the values
+        # will be the same.
         dsk = merge(dict(v.dask), dsk)
 
         # Define the assignment function for this block.
