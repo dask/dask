@@ -46,6 +46,7 @@ try:
         bincount,
         digitize,
         histogram,
+        histogramdd,
         cov,
         array,
         dstack,
