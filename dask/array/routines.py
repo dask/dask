@@ -984,7 +984,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     # TODO: handle weighted data.
 
     # generate token and name for task
-    token = dask.base.tokenize(sample, bins, range, weights, density)
+    token = tokenize(sample, bins, range, weights, density)
     name = "histogramdd-sum-" + token
 
     ######### set up bins #################
@@ -1009,7 +1009,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     # chunk, each building block is a D-dimensional histogram result.
     dsk = {
         (name, i, 0): (_block_histogramdd, k, bins_edges)
-        for i, k in enumerate(dask.core.flatten(sample.__dask_keys__()))
+        for i, k in enumerate(flatten(sample.__dask_keys__()))
     }
     # da.histogram does this to get the dtype (TODO: figure out why)
     dtype = np.histogramdd([])[0].dtype
@@ -1032,10 +1032,10 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     #    steps 1 and 2
     # 4. make dask Array and collapse the 0th axis (which has size
     #    nchunks_in_sample)
-    nchunks_in_sample = len(list(dask.core.flatten(sample.__dask_keys__())))
+    nchunks_in_sample = len(list(flatten(sample.__dask_keys__())))
     all_nbins = tuple((b.size - 1,) for b in bins_edges)
     stacked_chunks = ((1,) * nchunks_in_sample, *all_nbins)
-    mapped = da.Array(graph, name, stacked_chunks, dtype=dtype)
+    mapped = Array(graph, name, stacked_chunks, dtype=dtype)
     # finally sum over sample chunk providing the final result array.
     n = mapped.sum(axis=0)
 
