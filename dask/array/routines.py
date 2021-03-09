@@ -895,7 +895,7 @@ def _block_histogramdd(sample, bins, range=None, weights=None):
         NumPy array with an additional outer dimension.
 
     """
-    return np.histogramdd(x, bins, range=range, weights=weights)[0][np.newaxis]
+    return np.histogramdd(sample, bins, range=range, weights=weights)[0][np.newaxis]
 
 
 def histogramdd(sample, bins, range, weights=None, density=None):
