@@ -1703,9 +1703,7 @@ def setitem_array(array, indices, value):
         value_common_shape = value_shape[value_offset:]
         offset = 0
 
-        # If the assignment value has more dimensions than the array
-        # then all of its extra leading dimensions must all have size
-        # 1
+        # All of the extra leading dimensions must have size 1
         if value_shape[:value_offset] != (1,) * value_offset:
             raise ValueError(
                 "could not broadcast input array from shape"
@@ -1729,7 +1727,7 @@ def setitem_array(array, indices, value):
                 f"Can't broadcast data with shape {value_common_shape} "
                 f"across shape {tuple(indices_shape)}"
             )
-
+              
     # Initialize outputs
     dsk = {}
     name = ("setitem-" + tokenize(array, indices, value),)
