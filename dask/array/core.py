@@ -1665,10 +1665,10 @@ class Array(DaskMethodsMixin):
             self.dask = y.dask
             self._name = y.name
             self._chunks = y.chunks
-            return self
+            return
 
         # Still here? Then parse the indices from 'key' and apply the
-        # assignment via map_blocks
+        # assignment the via `setitem_array` function.
 
         # Reformat input indices
         indices, indices_shape, mirror = parse_assignment_indices(key, self.shape)
@@ -1780,8 +1780,6 @@ class Array(DaskMethodsMixin):
         self.dask = y.dask
         self._name = y.name
         self._chunks = y.chunks
-
-        return self
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
