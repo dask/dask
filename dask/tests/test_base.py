@@ -1001,7 +1001,6 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
-    pytest.importorskip("cloudpickle")
     from textwrap import dedent
 
     defn = dedent(
@@ -1362,7 +1361,6 @@ def test_callable_scheduler():
 @pytest.mark.slow
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
-    pytest.importorskip("cloudpickle")
     # Regression test for issue #4082
 
     f = delayed(pure=False)(time.sleep)

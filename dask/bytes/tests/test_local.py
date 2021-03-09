@@ -7,6 +7,7 @@ from functools import partial
 from distutils.version import LooseVersion
 
 import pytest
+import cloudpickle
 from tlz import concat, valmap
 
 from dask import compute
@@ -316,7 +317,6 @@ def test_open_files_write(tmpdir, compression_opener):
 
 def test_pickability_of_lazy_files(tmpdir):
     tmpdir = str(tmpdir)
-    cloudpickle = pytest.importorskip("cloudpickle")
 
     with filetexts(files, mode="b"):
         myfiles = open_files(".test.accounts.*")
