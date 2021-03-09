@@ -285,20 +285,13 @@ class Blockwise(Layer):
     def __iter__(self):
         return iter(self._dict)
 
-    def __len__(self):
-        return int(prod(self._out_numblocks().values()))
-
-    def _out_numblocks(self):
-        d = {}
-        out_d = {}
-        indices = {k: v for k, v in self.indices if v is not None}
-        for k, v in self.numblocks.items():
-            for a, b in zip(indices[k], v):
-                d[a] = max(d.get(a, 0), b)
-                if a in self.output_indices:
-                    out_d[a] = d[a]
-
-        return out_d
+    def __len__(self) -> int:
+        # same method as `get_output_keys`, without manifesting the keys themselves
+        return (
+            len(self.output_blocks)
+            if self.output_blocks
+            else prod(self.dims[i] for i in self.output_indices)
+        )
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
