@@ -851,8 +851,8 @@ def sliding_window_view(x, window_shape, axis=None):
     window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
 
     window_shape_array = np.array(window_shape)
-    if np.any(window_shape_array < 0):
-        raise ValueError("`window_shape` cannot contain negative values")
+    if np.any(window_shape_array <= 0):
+        raise ValueError("`window_shape` must contain values > 0")
 
     if axis is None:
         axis = tuple(range(x.ndim))

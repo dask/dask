@@ -819,6 +819,7 @@ def test_sliding_window_view(shape, chunks, window_shape, axis):
         (-1, 0),  # window shape is negative
         (2, (0, 1)),  # len(window shape) < len(axis)
         (2, None),  # len(window shape) < len(axis)
+        (0, None),  # window_shape = 0
     ],
 )
 def test_sliding_window_errors(window_shape, axis):
