@@ -6,7 +6,7 @@ import time
 import fsspec
 from distutils.version import LooseVersion
 
-from dask.bytes.core import open_files
+from dask.bytes import open_files
 from dask.utils import tmpdir
 
 files = ["a", "b"]

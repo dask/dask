@@ -7,6 +7,7 @@ try:
 except ImportError:
     psutil = None
 
+from fsspec.core import open as open_file, open_files
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -18,7 +19,7 @@ from pandas.api.types import (
 )
 
 from ...base import tokenize
-from ...bytes import read_bytes, open_file, open_files
+from ...bytes import read_bytes
 from ..core import new_dd_object
 from ...core import flatten
 from ...delayed import delayed

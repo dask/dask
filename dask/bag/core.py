@@ -34,11 +34,11 @@ from tlz import (
     unique,
     accumulate,
 )
+from fsspec.core import open_files
 
 from .. import config
 from .avro import to_avro
 from ..base import tokenize, dont_optimize, replace_name_in_key, DaskMethodsMixin
-from ..bytes import open_files
 from ..context import globalmethod
 from ..core import (
     quote,

@@ -1,6 +1,7 @@
 import io
 import pandas as pd
-from dask.bytes import open_files, read_bytes
+from fsspec.core import open_files
+from dask.bytes import read_bytes
 import dask
 from ..utils import insert_meta_param_description, make_meta
 

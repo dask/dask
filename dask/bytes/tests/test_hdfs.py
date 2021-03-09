@@ -3,9 +3,10 @@ import posixpath
 
 import pytest
 from tlz import concat
+from fsspec.core import open_files, get_fs_token_paths
 
 import dask
-from dask.bytes.core import read_bytes, open_files, get_fs_token_paths
+from dask.bytes.core import read_bytes
 
 
 try:
