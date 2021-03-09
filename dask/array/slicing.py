@@ -1614,8 +1614,8 @@ def setitem_array(array, indices, value):
     def block_index_from_1d_index(dim, loc0, loc1, is_bool):
         """The elements of index between positions loc0 and loc1.
 
-        Parameters dim, loc0, loc1 and is_bool are all as defined in
-        the namespace of the caller, as is the 1-d array index.
+        dim is used to define LRU cache keys.
+        index is defined in the namespace of the caller
 
         """
         if is_bool:
@@ -1628,9 +1628,9 @@ def setitem_array(array, indices, value):
     def n_preceeding_from_1d_index(dim, loc0, is_bool):
         """Sum the number of elements of index preceeding position loc0.
 
-        Parameters dim, loc0 and is_bool are all as defined in the
-        namespace of the caller, as is the 1-d array index.
-      
+        dim is used to define LRU cache keys.
+        index is defined in the namespace of the caller
+
         """
         if is_bool:
             return np.sum(index[:loc0])
@@ -1653,7 +1653,8 @@ def setitem_array(array, indices, value):
             f"of shape {tuple(indices_shape)}"
         )
 
-    # Define:
+    # Define variables needed when creating the part of the assignment
+    # value that applies to each block.
     #
     #  offset: The difference in the relative positions of a dimension
     #          in the assignment value and the corresponding dimension
@@ -1678,10 +1679,7 @@ def setitem_array(array, indices, value):
     # non_broadcast_dimensions: The integer positions of
     #                           array_common_shape which do not
     #                           correspond to broadcast dimensions in
-    #                           the assignment value. This is used
-    #                           when creating the part of the
-    #                           assignment value that applies to a
-    #                           block
+    #                           the assignment value.
     #
     # array_common_shape and value_common_shape may be different if
     # there are any size 1 dimensions are being brodacast.
@@ -1762,7 +1760,7 @@ def setitem_array(array, indices, value):
 
     # Create a new "setitem" graph entry for each block in the array
     for key, locations in zip(keys, array_locations):
-        
+
         # The indices that will be used to  assign to this block
         block_indices = []
         # The shape implied by block_indices
@@ -1772,7 +1770,7 @@ def setitem_array(array, indices, value):
         # Assume, until demonstrated otherwise, that this block
         # overlaps the assignment indices.
         overlaps = True
-        
+
         j = -1
 
         # Loop round each block dimension, checking if the
@@ -1849,10 +1847,10 @@ def setitem_array(array, indices, value):
                     overlaps = False
                     break
 
-                # Find how many elements of 'value' precede this block
-                # along this dimension. Note that it is assumed that
-                # the index values are increasing, as will be the case
-                # for reformatted indices.
+                # Find how many elements of the assignment value
+                # precede this block along this dimension. Note that
+                # it is assumed that the index values are increasing,
+                # as will be the case for reformatted indices.
                 n_preceeding = n_preceeding_from_1d_index(dim, loc0, is_bool)
 
             # Still here? This block overlaps the index for this
