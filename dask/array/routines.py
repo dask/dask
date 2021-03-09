@@ -947,8 +947,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     # converting the pairs of bins and ranges definitions into a
     # bunch of (immediately available) arrays of bin edges.
     bins_edges = [
-        _linspace_from_delayed(r[0], r[1], b + 1)
-        for b, r in zip(bins, range)
+        _linspace_from_delayed(r[0], r[1], b + 1) for b, r in zip(bins, range)
     ]
     ## total number of bin edge arrays must be the total number of dimensions
     assert len(bins_edges) == D
