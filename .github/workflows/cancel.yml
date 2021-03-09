@@ -2,7 +2,7 @@ name: Cancel
 
 on:
   workflow_run:
-    workflows: ["CI"]
+    workflows: ["CI", "CI Additional", "Upstream"]
     types:
       - requested
 
