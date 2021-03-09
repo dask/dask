@@ -89,18 +89,26 @@ def read_text(
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
 
-    files = open_files(
-        urlpath,
-        mode="rt",
-        encoding=encoding,
-        errors=errors,
-        compression=compression,
-        **(storage_options or {})
-    )
     if blocksize is None:
+        if linedelimiter in [None, "", "\n", "\r", "\r\n"]:
+            newline = linedelimiter
+            linedelimiter = None
+        else:
+            newline = ""
+        files = open_files(
+            urlpath,
+            mode="rt",
+            encoding=encoding,
+            errors=errors,
+            compression=compression,
+            newline=newline,
+            **(storage_options or {})
+        )
         if files_per_partition is None:
             blocks = [
-                delayed(list)(delayed(partial(file_to_blocks, include_path))(fil))
+                delayed(partial(file_to_blocks, include_path, delimiter=linedelimiter))(
+                    fil
+                )
                 for fil in files
             ]
         else:
@@ -109,7 +117,7 @@ def read_text(
                 block_files = files[start : (start + files_per_partition)]
                 block_lines = delayed(concat)(
                     delayed(map)(
-                        partial(file_to_blocks, include_path),
+                        partial(file_to_blocks, include_path, delimiter=linedelimiter),
                         block_files,
                     )
                 )
@@ -125,7 +133,10 @@ def read_text(
             **(storage_options or {})
         )
         raw_blocks = o[1]
-        blocks = [delayed(decode)(b, encoding, errors) for b in concat(raw_blocks)]
+        blocks = [
+            delayed(decode)(b, encoding, errors, linedelimiter)
+            for b in concat(raw_blocks)
+        ]
         if include_path:
             paths = list(
                 concat([[path] * len(raw_blocks[i]) for i, path in enumerate(o[2])])
@@ -143,10 +154,13 @@ def read_text(
     return blocks
 
 
-def file_to_blocks(include_path, lazy_file):
+def file_to_blocks(include_path, lazy_file, delimiter=None):
     with lazy_file as f:
-        for line in f:
-            yield (line, lazy_file.path) if include_path else line
+        if delimiter:
+            yield from [line + delimiter for line in f.read().split(delimiter)]
+        else:
+            for line in f:
+                yield (line, lazy_file.path) if include_path else line
 
 
 def attach_path(block, path):
@@ -154,7 +168,10 @@ def attach_path(block, path):
         yield (p, path)
 
 
-def decode(block, encoding, errors):
+def decode(block, encoding, errors, line_delimiter):
     text = block.decode(encoding, errors)
-    lines = io.StringIO(text)
-    return list(lines)
+    if line_delimiter in [None, "", "\n", "\r", "\r\n"]:
+        lines = io.StringIO(text, newline=line_delimiter)
+        return list(lines)
+    else:
+        return [t + line_delimiter for t in text.split(line_delimiter)]
