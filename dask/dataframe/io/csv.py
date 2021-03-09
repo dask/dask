@@ -18,8 +18,6 @@ from pandas.api.types import (
 )
 
 from ...base import tokenize
-
-# this import checks for the importability of fsspec
 from ...bytes import read_bytes, open_file, open_files
 from ..core import new_dd_object
 from ...core import flatten
