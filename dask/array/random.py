@@ -1,11 +1,13 @@
 import numbers
 import warnings
+import functools
 from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
+from .blockwise import CreateArrayDeps
 from .core import (
     normalize_chunks,
     Array,
@@ -15,9 +17,86 @@ from .core import (
     broadcast_to,
 )
 from .creation import arange
+from ..blockwise import Blockwise, blockwise_token
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, random_state_data, derived_from, skip_doctest
+
+
+def _get_from_random_array_deps(func, block_info):
+    return _apply_random(
+        None, func, block_info["seed"], block_info["chunk-shape"], [], {}
+    )
+
+
+class CreateRandomArrayDeps(CreateArrayDeps):
+    """Index-block info mapping for BlockwiseCreateRandomArray"""
+
+    def __init__(self, chunks: tuple, seeds):
+        super().__init__(chunks)
+        self.seeds = seeds
+
+    def __getitem__(self, idx: tuple):
+        block_info = super().__getitem__(idx)
+        n = 0
+        for dim, index in enumerate(idx[:-1]):
+            n += index * np.product(self.num_chunks[(dim + 1) :], dtype=int)
+        n += idx[-1]
+        block_info["seed"] = self.seeds[n]
+        return block_info
+
+
+class BlockwiseCreateRandomArray(Blockwise):
+    """
+    Specialized Blockwise Layer for random array creation routines.
+    Similar to BlockwiseCreateArray, but allows for passing of seed/randomstate data.
+
+    Enables HighLevelGraph optimizations.
+
+    Parameters
+    ----------
+    name: string
+        The output name.
+    func : callable
+        Function to apply to populate individual blocks. This function should take
+        an iterable containing the dimensions of the given block.
+    shape: iterable
+        Iterable containing the overall shape of the array.
+    chunks: iterable
+        Iterable containing the chunk sizes along each dimension of array.
+    """
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+        seeds,
+    ):
+        # self.name = name
+        io_name = "blockwise-create-random-" + name
+
+        # Define "blockwise" graph
+        dsk = {name: (func, blockwise_token(0))}
+
+        out_ind = tuple(range(len(shape)))
+        self.nchunks = tuple(len(chunk) for chunk in chunks)
+        super().__init__(
+            name,
+            out_ind,
+            dsk,
+            [(io_name, out_ind)],
+            {io_name: self.nchunks},
+            io_deps={
+                io_name: (
+                    "dask.array.random",
+                    "CreateRandomArrayDeps",
+                    chunks,
+                    seeds,
+                )
+            },
+        )
 
 
 def doc_wraps(func):
@@ -191,10 +270,14 @@ class RandomState:
             small_args,
             small_kwargs,
         )
-
-        dsk.update(dict(zip(keys, vals)))
-
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+        func = functools.partial(_get_from_random_array_deps, funcname)
+        graph = BlockwiseCreateRandomArray(
+            name,
+            func,
+            size,
+            chunks,
+            seeds,
+        )
         return Array(graph, name, chunks + extra_chunks, meta=meta)
 
     @derived_from(np.random.RandomState, skipblocks=1)

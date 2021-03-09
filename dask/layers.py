@@ -2,6 +2,7 @@ import tlz as toolz
 import operator
 from collections import defaultdict
 
+from .array.slicing import cached_cumsum
 from .core import keys_in_tasks
 from .utils import apply, insert, stringify, stringify_collection_keys
 from .highlevelgraph import Layer
@@ -45,6 +46,7 @@ class CreateArrayDeps(BlockwiseIODeps):
         self.chunks = chunks
         self.shape = tuple(sum(c) for c in chunks)
         self.starts = [cached_cumsum(c, initial_zero=True) for c in chunks]
+        self.num_chunks = tuple(len(c) for c in chunks)
 
     def __getitem__(self, idx: tuple):
         chunk_shape = tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
@@ -53,7 +55,7 @@ class CreateArrayDeps(BlockwiseIODeps):
         )
         return {
             "shape": self.shape,
-            "num-chunks": tuple(len(c) for c in self.chunks),
+            "num-chunks": self.num_chunks,
             "array-location": array_location,
             "chunk-shape": chunk_shape,
         }
