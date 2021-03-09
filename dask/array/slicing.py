@@ -1655,61 +1655,65 @@ def setitem_array(array, indices, value):
 
     # Define:
     #
-    #  offset: The difference in the relative positions of a
-    #          dimension in 'value' and the corresponding
-    #          dimension in self. A positive value means the
-    #          dimension position is further to the right in self
-    #          than 'value'.
+    #  offset: The difference in the relative positions of a dimension
+    #          in the assignment value and the corresponding dimension
+    #          in the array. A positive value means the dimension
+    #          position is further to the right in the array.
     #
-    #  self_common_shape: The shape of those dimensions of self
-    #                     which correspond to dimensions of
-    #                     'value'.
+    #  array_common_shape: The shape of those dimensions of array
+    #                      which correspond to dimensions of the
+    #                      assignment value.
     #
-    #  value_common_shape: The shape of those dimensions of
-    #                      'value' which correspond to dimensions
-    #                      of self.
+    #  value_common_shape: The shape of those dimensions of the
+    #                      assignment value which correspond to
+    #                      dimensions of the array.
     #
     #  base_value_indices: The indices used for initialising the
-    #                      selection from 'value'. slice(None)
-    #                      elements are unchanged, but an element
-    #                      of None will, inside a call to setitem,
-    #                      be replaced by an appropriate slice.
+    #                      selection of the part of the assignment
+    #                      value that applies to each block of
+    #                      array. An element of `None` will end up
+    #                      being replaced by an appropriate slice on a
+    #                      block-by-block basis.
     #
-    # Note that self_common_shape and value_common_shape may be
-    # different if there are any size 1 dimensions are being
-    # brodacast.
-    offset = len(indices_shape) - value.ndim
+    # non_broadcast_dimensions: The integer positions of
+    #                           array_common_shape which do not
+    #                           correspond to broadcast dimensions in
+    #                           the assignment value
+    #
+    # array_common_shape and value_common_shape may be different if
+    # there are any size 1 dimensions are being brodacast.
+    #
+    # As in numpy, it is not allowed for a dimension in the assignment
+    # value to be larger than a size 1 dimension in the array.
+
+    offset = len(indices_shape) - len(value_shape)
     if offset >= 0:
-        # self has the same number or more dimensions than 'value'
-        self_common_shape = indices_shape[offset:]
+        # The array has the same number or more dimensions than the
+        # assignment value
+        array_common_shape = indices_shape[offset:]
         value_common_shape = value_shape
 
         # Modify the mirror dimensions with the offset
         mirror = [i - offset for i in mirror if i >= offset]
     else:
-        # 'value' has more dimensions than self
+        # The array has fewer dimensions than the assignment value
         value_offset = -offset
-        if value_shape[:value_offset] != [1] * value_offset:
-            # Can only allow 'value' to have more dimensions then
-            # self if the extra leading dimensions all have size
-            # 1.
+        offset = 0
+        array_common_shape = indices_shape
+        value_common_shape = value_shape[value_offset:]
+        
+        # If the assignment value has more dimensions than the array
+        # then all of its extra leading dimensions must all have size
+        # 1
+        if value_shape[:value_offset] != (1,) * value_offset:
             raise ValueError(
                 "could not broadcast input array from shape"
                 f"{value_shape} into shape {tuple(indices_shape)}"
             )
 
-        offset = 0
-        self_common_shape = indices_shape
-        value_common_shape = value_shape[value_offset:]
-
-    # Find out which of the dimensions of 'value' are to be
-    # broadcast across self.
-    #
-    # Note that, as in numpy, it is not allowed for a dimension in
-    # 'value' to be larger than a size 1 dimension in self
     base_value_indices = []
     non_broadcast_dimensions = []
-    for i, (a, b) in enumerate(zip(self_common_shape, value_common_shape)):
+    for i, (a, b) in enumerate(zip(array_common_shape, value_common_shape)):
         if b == 1:
             base_value_indices.append(slice(None))
         elif a == b and b != 1:
@@ -1898,16 +1902,6 @@ def setitem_array(array, indices, value):
         # Create the part of the full assignment value that is to be
         # assigned to elements of this block
         v = value[tuple(value_indices)]
-
-        # Check for shape mismatch, which could occur if we didn't know
-        # the subset shape until now (which might be the case if the
-        # original index was a dask collection of booleans).
-        for i in non_broadcast_dimensions:
-            if v.shape[i] != subset_shape[i + offset]:
-                raise ValueError(
-                    f"shape mismatch: value array of shape {value_shape} "
-                    "could not be broadcast to indexing result"
-                )
 
         # Make sure that the part of the assignment value for this
         # block has just one chunk, so we can represent it with a

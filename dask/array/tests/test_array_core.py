@@ -3709,9 +3709,18 @@ def test_setitem_extended_API():
 
     dx = dx.persist()
     assert_eq(x, dx.compute())
-    assert_eq(x.mask, da.ma.getmaskarray(dx))
+    assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
+    # RHS has extra leading size 1 dimensions compared to LHS
+    x = np.arange(12).reshape((3, 4))
+    dx = da.from_array(x, chunks=(2, 2))
+    v = np.arange(12).reshape((1, 1, 3, 4))
 
+    x[...] = -v
+    dx[...] = -v
+    assert_eq(x, dx.compute())
+
+    
 def test_setitem_on_read_only_blocks():
     # Outputs of broadcast_trick-style functions contain read-only
     # arrays
@@ -3804,6 +3813,12 @@ def test_setitem_errs():
     with pytest.raises(IndexError):
         y[:] = 2
 
+    # RHS has non-brodacastable extra leading dimensions
+    x = np.arange(12).reshape((3, 4))
+    dx = da.from_array(x, chunks=(2, 2))
+    with pytest.raises(ValueError):
+        dx[...] = np.arange(24).reshape((2, 1, 3, 4))
+        
 
 def test_zero_slice_dtypes():
     x = da.arange(5, chunks=1)
