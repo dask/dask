@@ -698,7 +698,7 @@ def test_histogram_normed_deprecation():
 def test_histogramdd():
     # test for normal input
     n1, n2 = 20000, 3
-    x = da.random.standard_normal(size=(20000, 3), chunks="128 KiB")
+    x = da.random.standard_normal(size=(n1, n2), chunks="128 KiB")
     bins = (5, 7, 6)
     ranges = ((-3, 3), (-3.2, 3.2), (-2.9, 2.9))
     (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
