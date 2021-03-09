@@ -1630,7 +1630,7 @@ def setitem_array(array, indices, value):
 
         Parameters dim, loc0 and is_bool are all as defined in the
         namespace of the caller, as is the 1-d array index.
-
+      
         """
         if is_bool:
             return np.sum(index[:loc0])
@@ -1645,8 +1645,8 @@ def setitem_array(array, indices, value):
     # Reformat input indices
     indices, indices_shape, mirror = parse_assignment_indices(indices, array_shape)
 
+    # Empty slices can only be assigned size 1 values
     if 0 in indices_shape and value_shape and max(value_shape) > 1:
-        # Empty slices can only be assigned size 1 values
         raise ValueError(
             f"shape mismatch: value array of shape {value_shape} "
             "could not be broadcast to indexing result "
@@ -1678,7 +1678,10 @@ def setitem_array(array, indices, value):
     # non_broadcast_dimensions: The integer positions of
     #                           array_common_shape which do not
     #                           correspond to broadcast dimensions in
-    #                           the assignment value
+    #                           the assignment value. This is used
+    #                           when creating the part of the
+    #                           assignment value that applies to a
+    #                           block
     #
     # array_common_shape and value_common_shape may be different if
     # there are any size 1 dimensions are being brodacast.
@@ -1698,10 +1701,10 @@ def setitem_array(array, indices, value):
     else:
         # The array has fewer dimensions than the assignment value
         value_offset = -offset
-        offset = 0
         array_common_shape = indices_shape
         value_common_shape = value_shape[value_offset:]
-        
+        offset = 0
+
         # If the assignment value has more dimensions than the array
         # then all of its extra leading dimensions must all have size
         # 1
