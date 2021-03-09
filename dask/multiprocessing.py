@@ -1,5 +1,4 @@
-from concurrent.futures import ProcessPoolExecutor as _ProcessPoolExecutor
-from contextlib import suppress
+from concurrent.futures import ProcessPoolExecutor
 import copyreg
 import multiprocessing
 import os
@@ -150,30 +149,8 @@ def get_context():
             # Only spawn is supported on Win32, can't change it:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
-    elif sys.version_info[:2] < (3, 7):
-        with suppress(RuntimeError):
-            multiprocessing.set_start_method(context_name)
-        if multiprocessing.get_start_method() != context_name:
-            raise RuntimeError(
-                f"Unable to set multiprocessing context to '{context_name}'"
-            )
-        return multiprocessing
     else:
         return multiprocessing.get_context(context_name)
-
-
-def worker_init_exec_func(func, *args, **kwds):
-    """ Ensure worker is initialized (workaround for Python 3.6) """
-    initialize_worker_process()
-    return func(*args, **kwds)
-
-
-class ProcessPoolExecutor(_ProcessPoolExecutor):
-    """ Wrap `submit` calls to handle worker initialization on Python 3.6 """
-    def submit(self, fn, *args, **kwargs):
-        if sys.version_info[:2] < (3, 7):
-            fn = partial(worker_init_exec_func, fn)
-        return super(ProcessPoolExecutor, self).submit(fn, *args, **kwargs)
 
 
 def get(
@@ -218,12 +195,9 @@ def get(
             # https://github.com/dask/dask/issues/6640.
             os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
-        if sys.version_info[:2] < (3, 7):
-            pool = ProcessPoolExecutor(num_workers)
-        else:
-            pool = ProcessPoolExecutor(
-                num_workers, mp_context=context, initializer=initialize_worker_process
-            )
+        pool = ProcessPoolExecutor(
+            num_workers, mp_context=context, initializer=initialize_worker_process
+        )
         cleanup = True
     else:
         cleanup = False
