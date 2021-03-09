@@ -23,9 +23,9 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, random_state_data, derived_from, skip_doctest
 
 
-def _get_from_random_array_deps(func, block_info):
+def _get_from_random_array_deps(func, args, kwargs, block_info):
     return _apply_random(
-        None, func, block_info["seed"], block_info["chunk-shape"], [], {}
+        None, func, block_info["seed"], block_info["chunk-shape"], args, kwargs
     )
 
 
@@ -44,6 +44,30 @@ class CreateRandomArrayDeps(CreateArrayDeps):
         n += idx[-1]
         block_info["seed"] = self.seeds[n]
         return block_info
+
+    @classmethod
+    def __dask_distributed_pack__(cls, module: str, name: str, *args):
+        chunks, seeds = args
+        from distributed.protocol import serialize
+
+        return (
+            module,
+            name,
+            chunks,
+            serialize(seeds),
+        )
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, module: str, name: str, *args):
+        from distributed.protocol import deserialize
+
+        chunks, seeds = args
+        return (
+            module,
+            name,
+            chunks,
+            deserialize(*seeds),
+        )
 
 
 class BlockwiseCreateRandomArray(Blockwise):
@@ -270,7 +294,7 @@ class RandomState:
             small_args,
             small_kwargs,
         )
-        func = functools.partial(_get_from_random_array_deps, funcname)
+        func = functools.partial(_get_from_random_array_deps, funcname, args, kwargs)
         graph = BlockwiseCreateRandomArray(
             name,
             func,
