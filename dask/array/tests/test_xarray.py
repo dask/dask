@@ -25,6 +25,7 @@ def test_asanyarray():
 
 
 def test_asarray_xarray_intersphinx_workaround():
+    # test that the intersphinx workaround in https://github.com/pydata/xarray/issues/4279 works
     module = xr.DataArray.__module__
     try:
         xr.DataArray.__module__ = "xarray"
