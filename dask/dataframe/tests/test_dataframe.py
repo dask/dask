@@ -1079,6 +1079,17 @@ def test_value_counts_with_dropna():
     assert result._name != result2._name
 
 
+def test_value_counts_with_normalize():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, 3, 1, 4]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    result = ddf.x.value_counts(normalize=True)
+    expected = df.x.value_counts(normalize=True)
+    assert_eq(result, expected)
+    result2 = ddf.x.value_counts(split_every=2, normalize=True)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+
 def test_unique():
     pdf = pd.DataFrame(
         {
