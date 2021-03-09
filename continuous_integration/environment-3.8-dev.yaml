@@ -21,7 +21,7 @@ dependencies:
   - tiledb-py
   - xarray
   - sqlalchemy
-  - pyarrow
+  - pyarrow<3.0.0
   - jsonschema
   # other -- IO
   - bcolz
