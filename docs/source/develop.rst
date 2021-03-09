@@ -130,7 +130,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.6, 3.7, and 3.8.
+Dask supports Python versions 3.7, 3.8, and 3.9.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -243,7 +243,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
+Docstrings are tested under Python 3.8 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules

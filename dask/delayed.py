@@ -1,3 +1,4 @@
+from dataclasses import is_dataclass, fields
 import operator
 import types
 import uuid
@@ -9,7 +10,6 @@ from tlz import curry, concat, unique, merge
 from . import config, threaded
 from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
 from .base import replace_name_in_key, tokenize as _tokenize
-from .compatibility import is_dataclass, dataclass_fields
 
 from .core import quote
 from .context import globalmethod
@@ -105,7 +105,7 @@ def unpack_collections(expr):
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
-            [[f.name, getattr(expr, f.name)] for f in dataclass_fields(expr)]
+            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
         )
 
         return (apply, typ, (), (dict, args)), collections
@@ -183,7 +183,7 @@ def to_task_dask(expr):
 
     if is_dataclass(expr):
         args, dsk = to_task_dask(
-            [[f.name, getattr(expr, f.name)] for f in dataclass_fields(expr)]
+            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
         )
 
         return (apply, typ, (), (dict, args)), dsk

@@ -1,5 +1,6 @@
 from collections import OrderedDict
 from contextlib import contextmanager
+from dataclasses import is_dataclass, fields
 from functools import partial
 from hashlib import md5
 from numbers import Number
@@ -14,7 +15,6 @@ import uuid
 from tlz import merge, groupby, curry, identity
 from tlz.functoolz import Compose
 
-from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
@@ -428,7 +428,7 @@ def unpack_collections(*args, **kwargs):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in dataclass_fields(expr)
+                            for f in fields(expr)
                         ],
                     ),
                 )
