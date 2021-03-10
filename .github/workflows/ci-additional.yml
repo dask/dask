@@ -53,6 +53,10 @@ jobs:
 
   doctest:
     runs-on: "ubuntu-latest"
+    strategy:
+      matrix:
+        environment: ["latest", "mindeps"]
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -62,7 +66,7 @@ jobs:
         with:
           miniconda-version: "latest"
           python-version: "3.8"
-          environment-file: continuous_integration/environment-latest.yaml
+          environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
 
