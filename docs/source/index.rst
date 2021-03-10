@@ -190,6 +190,7 @@ messy situations in everyday problems.
    phases-of-computation.rst
    remote-data-services.rst
    gpu.rst
+   contrib.rst
    cite.rst
    funding.rst
    logos.rst
