@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: ["mindeps-array-dataframe", "mindeps-no-optional", "mindeps-distributed"]
+        environment: ["mindeps-array-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
     steps:
       - name: Checkout source
