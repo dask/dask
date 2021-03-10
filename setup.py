@@ -18,6 +18,7 @@ extras_require = {
     ],
     "distributed": ["distributed >= 2021.03.0"],
     "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
+    "delayed": [],
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
 
