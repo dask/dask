@@ -463,7 +463,8 @@ def to_parquet(
         Key/value pairs to be passed on to the file-system backend, if any.
     custom_metadata : dict, optional
         Custom key/value metadata to include in all footer metadata (and
-        in the global "_metadata" file, if applicable).
+        in the global "_metadata" file, if applicable).  This argument is
+        only supported for the "pyarrow" engine, for now.
     write_metadata_file : bool, optional
         Whether to write the special "_metadata" file.
     compute : bool, optional

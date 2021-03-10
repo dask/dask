@@ -841,14 +841,9 @@ class ArrowDatasetEngine(Engine):
 
         t = cls._pandas_to_arrow_table(df, preserve_index=preserve_index, schema=schema)
         if custom_metadata:
-            if not hasattr(t, "replace_schema_metadata"):
-                raise ValueError(
-                    "The `custom_metadata=` argument is not supported "
-                    "for this version of pyarrow."
-                )
             _md = t.schema.metadata
             _md.update(custom_metadata)
-            t = t.replace_schema_metadata(_md)
+            t = t.replace_schema_metadata(metadata=_md)
 
         if partition_on:
             md_list = _write_partitioned(
