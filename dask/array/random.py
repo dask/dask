@@ -23,9 +23,9 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import ignoring, random_state_data, derived_from, skip_doctest
 
 
-def _get_from_random_array_deps(func, args, kwargs, block_info):
+def _get_from_random_array_deps(random_state, func, args, kwargs, block_info):
     return _apply_random(
-        None, func, block_info["seed"], block_info["chunk-shape"], args, kwargs
+        random_state, func, block_info["seed"], block_info["chunk-shape"], args, kwargs
     )
 
 
@@ -188,6 +188,9 @@ class RandomState:
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
+        has_dask_array_dep = any(
+            isinstance(ar, Array) for ar in chain(args, kwargs.values())
+        )
         shapes = list(
             {
                 ar.shape
@@ -204,105 +207,131 @@ class RandomState:
             size,  # ideally would use dtype here
             dtype=kwargs.get("dtype", np.float64),
         )
+
         slices = slices_from_chunks(chunks)
-
-        def _broadcast_any(ar, shape, chunks):
-            if isinstance(ar, Array):
-                return broadcast_to(ar, shape).rechunk(chunks)
-            if isinstance(ar, np.ndarray):
-                return np.ascontiguousarray(np.broadcast_to(ar, shape))
-
-        # Broadcast all arguments, get tiny versions as well
-        # Start adding the relevant bits to the graph
-        dsk = {}
-        dsks = []
-        lookup = {}
-        small_args = []
-        dependencies = []
-        for i, ar in enumerate(args):
-            if isinstance(ar, (np.ndarray, Array)):
-                res = _broadcast_any(ar, size, chunks)
-                if isinstance(res, Array):
-                    dependencies.append(res)
-                    dsks.append(res.dask)
-                    lookup[i] = res.name
-                elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
-                    lookup[i] = name
-                    dsk[name] = res
-                small_args.append(ar[tuple(0 for _ in ar.shape)])
-            else:
-                small_args.append(ar)
-
-        small_kwargs = {}
-        for key, ar in kwargs.items():
-            if isinstance(ar, (np.ndarray, Array)):
-                res = _broadcast_any(ar, size, chunks)
-                if isinstance(res, Array):
-                    dependencies.append(res)
-                    dsks.append(res.dask)
-                    lookup[key] = res.name
-                elif isinstance(res, np.ndarray):
-                    name = "array-{}".format(tokenize(res))
-                    lookup[key] = name
-                    dsk[name] = res
-                small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
-            else:
-                small_kwargs[key] = ar
-
         sizes = list(product(*chunks))
         seeds = random_state_data(len(sizes), self._numpy_state)
         token = tokenize(seeds, size, chunks, args, kwargs)
         name = "{0}-{1}".format(funcname, token)
 
-        keys = product(
-            [name], *([range(len(bd)) for bd in chunks] + [[0]] * len(extra_chunks))
-        )
-        blocks = product(*[range(len(bd)) for bd in chunks])
+        if not has_dask_array_dep:
+            # If no dependencies are dask arrays, we can use blockwise with io_deps.
 
-        vals = []
-        for seed, size, slc, block in zip(seeds, sizes, slices, blocks):
-            arg = []
-            for i, ar in enumerate(args):
-                if i not in lookup:
-                    arg.append(ar)
-                else:
-                    if isinstance(ar, Array):
-                        dependencies.append(ar)
-                        arg.append((lookup[i],) + block)
-                    else:  # np.ndarray
-                        arg.append((getitem, lookup[i], slc))
-            kwrg = {}
-            for k, ar in kwargs.items():
-                if k not in lookup:
-                    kwrg[k] = ar
-                else:
-                    if isinstance(ar, Array):
-                        dependencies.append(ar)
-                        kwrg[k] = (lookup[k],) + block
-                    else:  # np.ndarray
-                        kwrg[k] = (getitem, lookup[k], slc)
-            vals.append(
-                (_apply_random, self._RandomState, funcname, seed, size, arg, kwrg)
+            meta = _apply_random(
+                self._RandomState,
+                funcname,
+                seeds[-1],
+                (0,) * len(sizes[-1]),
+                args,
+                kwargs,
             )
+            func = functools.partial(
+                _get_from_random_array_deps,
+                self._RandomState,
+                funcname,
+                args,
+                kwargs
+            )
+            graph = BlockwiseCreateRandomArray(
+                name,
+                func,
+                size,
+                chunks,
+                seeds,
+            )
+            return Array(graph, name, chunks + extra_chunks, meta=meta)
 
-        meta = _apply_random(
-            self._RandomState,
-            funcname,
-            seed,
-            (0,) * len(size),
-            small_args,
-            small_kwargs,
-        )
-        func = functools.partial(_get_from_random_array_deps, funcname, args, kwargs)
-        graph = BlockwiseCreateRandomArray(
-            name,
-            func,
-            size,
-            chunks,
-            seeds,
-        )
-        return Array(graph, name, chunks + extra_chunks, meta=meta)
+        else:
+            # Otherwise, construct a fully materialized graph.
+
+            def _broadcast_any(ar, shape, chunks):
+                if isinstance(ar, Array):
+                    return broadcast_to(ar, shape).rechunk(chunks)
+                if isinstance(ar, np.ndarray):
+                    return np.ascontiguousarray(np.broadcast_to(ar, shape))
+
+            # Broadcast all arguments, get tiny versions as well
+            # Start adding the relevant bits to the graph
+            dsk = {}
+            dsks = []
+            lookup = {}
+            small_args = []
+            dependencies = []
+            for i, ar in enumerate(args):
+                if isinstance(ar, (np.ndarray, Array)):
+                    res = _broadcast_any(ar, size, chunks)
+                    if isinstance(res, Array):
+                        dependencies.append(res)
+                        dsks.append(res.dask)
+                        lookup[i] = res.name
+                    elif isinstance(res, np.ndarray):
+                        name = "array-{}".format(tokenize(res))
+                        lookup[i] = name
+                        dsk[name] = res
+                    small_args.append(ar[tuple(0 for _ in ar.shape)])
+                else:
+                    small_args.append(ar)
+
+            small_kwargs = {}
+            for key, ar in kwargs.items():
+                if isinstance(ar, (np.ndarray, Array)):
+                    res = _broadcast_any(ar, size, chunks)
+                    if isinstance(res, Array):
+                        dependencies.append(res)
+                        dsks.append(res.dask)
+                        lookup[key] = res.name
+                    elif isinstance(res, np.ndarray):
+                        name = "array-{}".format(tokenize(res))
+                        lookup[key] = name
+                        dsk[name] = res
+                    small_kwargs[key] = ar[tuple(0 for _ in ar.shape)]
+                else:
+                    small_kwargs[key] = ar
+
+            keys = product(
+                [name], *([range(len(bd)) for bd in chunks] + [[0]] * len(extra_chunks))
+            )
+            blocks = product(*[range(len(bd)) for bd in chunks])
+
+            vals = []
+            for seed, size, slc, block in zip(seeds, sizes, slices, blocks):
+                arg = []
+                for i, ar in enumerate(args):
+                    if i not in lookup:
+                        arg.append(ar)
+                    else:
+                        if isinstance(ar, Array):
+                            dependencies.append(ar)
+                            arg.append((lookup[i],) + block)
+                        else:  # np.ndarray
+                            arg.append((getitem, lookup[i], slc))
+                kwrg = {}
+                for k, ar in kwargs.items():
+                    if k not in lookup:
+                        kwrg[k] = ar
+                    else:
+                        if isinstance(ar, Array):
+                            dependencies.append(ar)
+                            kwrg[k] = (lookup[k],) + block
+                        else:  # np.ndarray
+                            kwrg[k] = (getitem, lookup[k], slc)
+                vals.append(
+                    (_apply_random, self._RandomState, funcname, seed, size, arg, kwrg)
+                )
+                meta = _apply_random(
+                    self._RandomState,
+                    funcname,
+                    seed,
+                    (0,) * len(size),
+                    small_args,
+                    small_kwargs,
+                )
+
+                dsk.update(dict(zip(keys, vals)))
+
+                graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+                return Array(graph, name, chunks + extra_chunks, meta=meta)
+
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def beta(self, a, b, size=None, chunks="auto", **kwargs):
