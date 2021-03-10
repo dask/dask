@@ -3218,7 +3218,7 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        from ..bytes.core import get_mapper
+        from fsspec.core import get_mapper
 
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
@@ -3305,7 +3305,7 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        from ..bytes.core import get_mapper
+        from fsspec.core import get_mapper
 
         mapper = get_mapper(url, **storage_options)
     else:
