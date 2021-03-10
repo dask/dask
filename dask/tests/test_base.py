@@ -6,7 +6,7 @@ import sys
 import time
 from collections import OrderedDict
 
-from tlz import merge
+from tlz import merge, partial, compose, curry
 
 import dask
 import dask.bag as db
@@ -38,7 +38,6 @@ from dask.utils_test import dec, inc, import_or_none
 from dask.diagnostics import Profiler
 
 
-tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
@@ -59,39 +58,24 @@ def f3(a):
 
 
 def test_normalize_function():
-
     assert normalize_function(f2)
 
     assert normalize_function(lambda a: a)
 
-    assert normalize_function(tz.partial(f2, b=2)) == normalize_function(
-        tz.partial(f2, b=2)
-    )
+    assert normalize_function(partial(f2, b=2)) == normalize_function(partial(f2, b=2))
 
-    assert normalize_function(tz.partial(f2, b=2)) != normalize_function(
-        tz.partial(f2, b=3)
-    )
+    assert normalize_function(partial(f2, b=2)) != normalize_function(partial(f2, b=3))
 
-    assert normalize_function(tz.partial(f1, b=2)) != normalize_function(
-        tz.partial(f2, b=2)
-    )
+    assert normalize_function(partial(f1, b=2)) != normalize_function(partial(f2, b=2))
 
-    assert normalize_function(tz.compose(f2, f3)) == normalize_function(
-        tz.compose(f2, f3)
-    )
+    assert normalize_function(compose(f2, f3)) == normalize_function(compose(f2, f3))
 
-    assert normalize_function(tz.compose(f2, f3)) != normalize_function(
-        tz.compose(f2, f1)
-    )
+    assert normalize_function(compose(f2, f3)) != normalize_function(compose(f2, f1))
 
-    assert normalize_function(tz.curry(f2)) == normalize_function(tz.curry(f2))
-    assert normalize_function(tz.curry(f2)) != normalize_function(tz.curry(f1))
-    assert normalize_function(tz.curry(f2, b=1)) == normalize_function(
-        tz.curry(f2, b=1)
-    )
-    assert normalize_function(tz.curry(f2, b=1)) != normalize_function(
-        tz.curry(f2, b=2)
-    )
+    assert normalize_function(curry(f2)) == normalize_function(curry(f2))
+    assert normalize_function(curry(f2)) != normalize_function(curry(f1))
+    assert normalize_function(curry(f2, b=1)) == normalize_function(curry(f2, b=1))
+    assert normalize_function(curry(f2, b=1)) != normalize_function(curry(f2, b=2))
 
 
 def test_tokenize():
@@ -225,7 +209,7 @@ def test_tokenize_numpy_ufunc_consistent():
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
-    f = tz.partial(f3, f2, c=f1)
+    f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
         b"cdask.tests.test_base\nf3\np0\n.",
@@ -748,8 +732,8 @@ def test_compute_no_opt():
     from dask.callbacks import Callback
 
     b = db.from_sequence(range(100), npartitions=4)
-    add1 = tz.partial(add, 1)
-    mul2 = tz.partial(mul, 2)
+    add1 = partial(add, 1)
+    mul2 = partial(mul, 2)
     o = b.map(add1).map(mul2)
     # Check that with the kwarg, the optimization doesn't happen
     keys = []
