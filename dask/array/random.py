@@ -47,9 +47,9 @@ class CreateRandomArrayDeps(CreateArrayDeps):
 
     @classmethod
     def __dask_distributed_pack__(cls, module: str, name: str, *args):
-        chunks, seeds = args
         from distributed.protocol import serialize
 
+        chunks, seeds = args
         return (
             module,
             name,
@@ -216,21 +216,27 @@ class RandomState:
 
         if not has_dask_array_dep:
             # If no dependencies are dask arrays, we can use blockwise with io_deps.
+            small_args = []
+            for ar in args:
+                small_args.append(
+                    ar[tuple(0 for _ in ar.shape)] if isinstance(ar, np.ndarray) else ar
+                )
+            small_kwargs = {}
+            for k, ar in kwargs.items():
+                small_kwargs[k] = (
+                    ar[tuple(0 for _ in ar.shape)] if isinstance(ar, np.ndarray) else ar
+                )
 
             meta = _apply_random(
                 self._RandomState,
                 funcname,
                 seeds[-1],
                 (0,) * len(sizes[-1]),
-                args,
-                kwargs,
+                small_args,
+                small_kwargs,
             )
             func = functools.partial(
-                _get_from_random_array_deps,
-                self._RandomState,
-                funcname,
-                args,
-                kwargs
+                _get_from_random_array_deps, self._RandomState, funcname, args, kwargs
             )
             graph = BlockwiseCreateRandomArray(
                 name,
@@ -318,20 +324,21 @@ class RandomState:
                 vals.append(
                     (_apply_random, self._RandomState, funcname, seed, size, arg, kwrg)
                 )
-                meta = _apply_random(
-                    self._RandomState,
-                    funcname,
-                    seed,
-                    (0,) * len(size),
-                    small_args,
-                    small_kwargs,
-                )
+            meta = _apply_random(
+                self._RandomState,
+                funcname,
+                seed,
+                (0,) * len(size),
+                small_args,
+                small_kwargs,
+            )
 
-                dsk.update(dict(zip(keys, vals)))
+            dsk.update(dict(zip(keys, vals)))
 
-                graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-                return Array(graph, name, chunks + extra_chunks, meta=meta)
-
+            graph = HighLevelGraph.from_collections(
+                name, dsk, dependencies=dependencies
+            )
+            return Array(graph, name, chunks + extra_chunks, meta=meta)
 
     @derived_from(np.random.RandomState, skipblocks=1)
     def beta(self, a, b, size=None, chunks="auto", **kwargs):
