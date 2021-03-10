@@ -313,13 +313,23 @@ class Blockwise(Layer):
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
 
-        dsk = (SubgraphCallable(dsk, self.output, keys),)
+        # Embed literals in `dsk`
+        keys2 = []
+        indices2 = []
+        for key, (val, index) in zip(keys, self.indices):
+            if index is None:  # Literal
+                dsk[key] = val
+            else:
+                keys2.append(key)
+                indices2.append((val, index))
+
+        dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
         func = dumps_function(dsk[0])
         func_future_args = dsk[1:]
 
-        indices = list(toolz.concat(self.indices))
+        indices = list(toolz.concat(indices2))
         indices, indices_unpacked_futures = unpack_remotedata(indices, byte_keys=True)
 
         # Check the legality of the unpacked futures
