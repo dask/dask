@@ -102,6 +102,8 @@ pip or conda_
 ``pip``::
 
   python -m pip install -e ".[complete]"
+  # to run tests you'll also need
+  python -m pip install pytest pytest-rerunfailures pytest-xdist
 
 ``conda``::
 
