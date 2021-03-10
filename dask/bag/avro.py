@@ -1,7 +1,8 @@
 import io
 import uuid
 
-from fsspec.core import open_files, get_fs_token_paths, OpenFile, tokenize, read_block
+from fsspec.core import open_files, get_fs_token_paths, OpenFile
+from fsspec.utils import tokenize, read_block
 
 
 from ..highlevelgraph import HighLevelGraph
