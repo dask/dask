@@ -32,7 +32,7 @@ into an existing Dask project.
 
 This will be assessed on a case-by-case basis by the Dask maintenance team.
 
-For some projects it may make sense to graduate their content into other repositories. The now defunct ``dask-lightgbm`` project was integrated into
+For some projects it may make sense to graduate their content into other repositories. The now archived ``dask-lightgbm`` project was integrated into
 LightGBM for example.
 
 Generally for a project to make it into the main Dask Org it should meet the following criteria:
