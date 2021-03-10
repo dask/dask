@@ -76,34 +76,23 @@ which do not overlap the assignment indices are unchanged by the
 assignment operation and therefore do not add anything extra to the
 computational cost.
 
-The one special case that could affect performance is when a 1-d dask
-array index is used in combination with other index types
-(i.e. `slice`, `int`, `list` or `numpy.array`). In this case, the 1-d
-dask array index is computed when the assignment is defined, rather
-than its compution being deferred to the compute time of the
-assignment operation. This has the potential to cause resource issues
-if the computation of the 1-d dask array index takes a considerable
-amount of time, or if the result consumes a considerable amount of
-memory.
+The one special case that could affect performance is when an
+comprising a 1-d dask array of integers is used in combination with
+other index types (i.e. `slice`, `int`, `list` or `numpy.array`). In
+this case, the 1-d dask array index is computed when the assignment is
+defined, rather than its compution being deferred to the compute time
+of the assignment operation. This has the potential to cause resource
+issues if the computation of the 1-d dask array index of integers
+takes a considerable amount of time, or if its result consumes a large
+amount of memory.
 
-In the example below, the dask array index ``ind`` is being used with
-another index (the integer ``1``), and so is computed during the
-execution of the final assigment command, even though the dask array
-``a`` has not yet been computed:
+In the example below, the dask array integer index ``ind`` is being
+used with another index (the integer ``1``), and so is computed during
+the execution of the final assigment command, even though the dask
+array ``a`` has not yet been computed:
 
 .. code-block:: python
 
    >>> a = da.arange(12).reshape(2, 6)
-   >>> ind = a[0] > 3
+   >>> ind = da.where(a[0] > 3)[0]
    >>> a[1, ind] = -99
-
-Note that when the assignment indices comprise solely a dask array
-then computation of the dask array index is deferred to the compute
-time of the assignment operation. For instance, at the end of the
-example below the dask array index ``ind`` has not yet been computed:
-
-.. code-block:: python
-
-   >>> a = da.arange(12).reshape(2, 6)
-   >>> ind = a < 9
-   >>> a[ind] = -99

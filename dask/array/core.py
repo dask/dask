@@ -1652,7 +1652,6 @@ class Array(DaskMethodsMixin):
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
             try:
-                print (9999)
                 y = where(key, value, self)
             except ValueError as e:
                 raise ValueError(
@@ -1673,11 +1672,13 @@ class Array(DaskMethodsMixin):
         if value is np.ma.masked:
             value = np.ma.masked_all(())
 
-        # Create a new dask layer for the assignment
-        dsk, name = setitem_array(self, key, asanyarray(value))
+        value = asanyarray(value)
+        
+        out = "setitem-" + tokenize(self, key, value)
+        dsk = setitem_array(out, self, key, asanyarray(value))
 
-        graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-        y = Array(graph, name, chunks=self.chunks, dtype=self.dtype)
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
+        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype)
 
         self._meta = y._meta
         self.dask = y.dask
