@@ -7,6 +7,7 @@ import fsspec
 from fsspec.core import open_files
 from distutils.version import LooseVersion
 
+import dask.bag as db
 from dask.utils import tmpdir
 
 files = ["a", "b"]
@@ -175,7 +176,6 @@ def test_parquet():
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts
-    db = pytest.importorskip("dask.bag")
     urls = [
         "https://raw.githubusercontent.com/weierophinney/pastebin/"
         "master/public/js-src/dojox/data/tests/stores/patterns.csv",

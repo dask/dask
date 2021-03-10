@@ -9,6 +9,7 @@ from collections import OrderedDict
 from tlz import merge
 
 import dask
+import dask.bag as db
 from dask import delayed
 from dask.base import (
     compute,
@@ -39,7 +40,6 @@ from dask.diagnostics import Profiler
 
 tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
-db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
@@ -741,7 +741,6 @@ def test_custom_collection():
     assert z3.compute() == (70,)
 
 
-@pytest.mark.skipif("not db")
 def test_compute_no_opt():
     # Bag does `fuse` by default. Test that with `optimize_graph=False` that
     # doesn't get called. We check this by using a callback to track the keys
@@ -908,7 +907,7 @@ def test_compute_dataframe_invalid_unicode():
     dd.from_pandas(df, npartitions=4)
 
 
-@pytest.mark.skipif("not da or not db")
+@pytest.mark.skipif("not da")
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
@@ -1196,7 +1195,7 @@ def test_persist_delayedattr():
     assert xx.compute() == 1
 
 
-@pytest.mark.skipif("not da or not db")
+@pytest.mark.skipif("not da")
 def test_persist_array_bag():
     x = da.arange(5, chunks=2) + 1
     b = db.from_sequence([1, 2, 3]).map(inc)
@@ -1218,7 +1217,6 @@ def test_persist_array_bag():
     assert list(b) == list(bb)
 
 
-@pytest.mark.skipif("not db")
 def test_persist_bag():
     a = db.from_sequence([1, 2, 3], npartitions=2).map(lambda x: x * 2)
     assert len(a.__dask_graph__()) == 4
@@ -1228,7 +1226,6 @@ def test_persist_bag():
     db.utils.assert_eq(a, b)
 
 
-@pytest.mark.skipif("not db")
 def test_persist_item():
     a = db.from_sequence([1, 2, 3], npartitions=2).map(lambda x: x * 2).min()
     assert len(a.__dask_graph__()) == 7
@@ -1238,7 +1235,6 @@ def test_persist_item():
     db.utils.assert_eq(a, b)
 
 
-@pytest.mark.skipif("not db")
 def test_persist_bag_rename():
     a = db.from_sequence([1, 2, 3], npartitions=2)
     rebuild, args = a.__dask_postpersist__()
@@ -1250,7 +1246,6 @@ def test_persist_bag_rename():
     db.utils.assert_eq(b, [4, 5, 6])
 
 
-@pytest.mark.skipif("not db")
 def test_persist_item_change_name():
     a = db.from_sequence([1, 2, 3]).min()
     rebuild, args = a.__dask_postpersist__()
@@ -1269,7 +1264,6 @@ def test_normalize_function_limited_size():
 
 def test_optimize_globals():
     da = pytest.importorskip("dask.array")
-    db = pytest.importorskip("dask.bag")
 
     x = da.ones(10, chunks=(5,))
 

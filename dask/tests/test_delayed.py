@@ -9,6 +9,7 @@ from tlz import merge
 import pytest
 
 import dask
+import dask.bag as db
 from dask import compute
 from dask.delayed import delayed, to_task_dask, Delayed
 from dask.utils_test import inc
@@ -442,7 +443,6 @@ def test_array_delayed():
 
 
 def test_array_bag_delayed():
-    db = pytest.importorskip("dask.bag")
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
 
