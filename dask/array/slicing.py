@@ -1374,7 +1374,7 @@ def parse_assignment_indices(indices, shape):
     indices_shape : list
         The shape implied by of the parsed indices. E.g. indices of
         ``(slice(0,2), 5, [4,2,1)`` will have shape ``[2,3]``.
-    mirror : list
+    reverse : list
         The dimension positions whose indices in the parsed_indices
         output are reversed realtive to the original input indices
         parameter.
@@ -1397,7 +1397,7 @@ def parse_assignment_indices(indices, shape):
     from .routines import diff
 
     indices_shape = []
-    mirror = []
+    reverse = []
 
     if not isinstance(indices, tuple):
         indices = (indices,)
@@ -1463,8 +1463,9 @@ def parse_assignment_indices(indices, shape):
             if is_dask_collection(index):
                 index = np.array(index)
 
-            if index.dtype == int:
-                len_index = len(index)
+            dtype = index.dtype
+            len_index = index.size
+            if dtype == int:
                 if len_index == 1:
                     index = index[0]
                     if index < 0:
@@ -1489,23 +1490,15 @@ def parse_assignment_indices(indices, shape):
                         )
 
                     if step < 0:
-                        # The array is strictly monotonically
-                        # decreasing, so reverse it so that
-                        # it's strictly monotonically
+                        # reverse a strictly monotonically decreasing
+                        # array so that it is strictly monotonically
                         # increasing. Make a note that this
-                        # dimension will need reversing later.
+                        # dimension's index has been reversed.
                         index = index[::-1]
-                        mirror.append(i)
+                        reverse.append(i)
                 else:
                     # This is an empty slice
                     index = slice(0, 0, 1)
-
-        else:
-            raise IndexError(
-                "only integers, slices (`:`), ellipsis (`...`), "
-                "and integer or boolean arrays are valid indices. "
-                f"Got {index!r}"
-            )
 
         if is_slice and index.step < 0:
             # If the slice step is negative, then transform the
@@ -1531,7 +1524,7 @@ def parse_assignment_indices(indices, shape):
             stop = start + div_step + 1
 
             index = slice(start, stop, step)
-            mirror.append(i)
+            reverse.append(i)
 
         if n_lists > 1:
             raise NotImplementedError(
@@ -1575,7 +1568,7 @@ def parse_assignment_indices(indices, shape):
             # Index is a sequence of integers
             indices_shape.append(len(index))
 
-    return parsed_indices, indices_shape, mirror
+    return parsed_indices, indices_shape, reverse
 
 
 def setitem_array(array, indices, value):
@@ -1614,8 +1607,8 @@ def setitem_array(array, indices, value):
     def block_index_from_1d_index(dim, loc0, loc1, is_bool):
         """The elements of index between positions loc0 and loc1.
 
-        dim is used to define LRU cache keys.
-        index is defined in the namespace of the caller
+        index is defined in the namespace of the caller. dim is unique
+        to each index and is used to define LRU cache keys.
 
         """
         if is_bool:
@@ -1628,8 +1621,8 @@ def setitem_array(array, indices, value):
     def n_preceeding_from_1d_index(dim, loc0, is_bool):
         """Sum the number of elements of index preceeding position loc0.
 
-        dim is used to define LRU cache keys.
-        index is defined in the namespace of the caller
+        index is defined in the namespace of the caller. dim is unique
+        to each index and is used to define LRU cache keys.
 
         """
         if is_bool:
@@ -1643,7 +1636,7 @@ def setitem_array(array, indices, value):
     value_shape = value.shape
 
     # Reformat input indices
-    indices, indices_shape, mirror = parse_assignment_indices(indices, array_shape)
+    indices, indices_shape, reverse = parse_assignment_indices(indices, array_shape)
 
     # Empty slices can only be assigned size 1 values
     if 0 in indices_shape and value_shape and max(value_shape) > 1:
@@ -1693,9 +1686,7 @@ def setitem_array(array, indices, value):
         # assignment value
         array_common_shape = indices_shape[offset:]
         value_common_shape = value_shape
-
-        # Modify the mirror dimensions with the offset
-        mirror = [i - offset for i in mirror if i >= offset]
+        reverse = [i - offset for i in reverse if i >= offset]
     else:
         # The array has fewer dimensions than the assignment value
         value_offset = -offset
@@ -1727,7 +1718,7 @@ def setitem_array(array, indices, value):
                 f"Can't broadcast data with shape {value_common_shape} "
                 f"across shape {tuple(indices_shape)}"
             )
-              
+
     # Initialize outputs
     dsk = {}
     name = ("setitem-" + tokenize(array, indices, value),)
@@ -1747,32 +1738,42 @@ def setitem_array(array, indices, value):
     # locations.
     ndim = len(array_shape)
     if ndim > 1:
-        # N-d array (N>=2)
-        keys = sorted(flatten(array.__dask_keys__()), key=itemgetter(*range(1, ndim)))
+        sort_key = itemgetter(*range(1, ndim))
     elif ndim == 1:
-        # 1-d array
-        keys = sorted(flatten(array.__dask_keys__()), key=itemgetter(1))
+        sort_key = itemgetter(1)
     else:
-        # Scalar array
-        keys = flatten(array.__dask_keys__())
+        sort_key = None
 
-    # Create a new "setitem" graph entry for each block in the array
+    keys = sorted(flatten(array.__dask_keys__()), key=sort_key)
+
+    # Create a new `setitem` dask entry for each block in the array
     for key, locations in zip(keys, array_locations):
 
-        # The indices that will be used to  assign to this block
+        # Now loop round each block dimension.
+        #
+        # If the block overlaps the indices then set the following
+        # (which will be used to define the new dask entry):
+        #
+        # block_indices: The indices that will be used to assign to
+        #                this block.
+        #
+        # subset_shape: The shape implied by block_indices.
+        #
+        # preceeding_size: How many assigned elements precede this
+        #                  block along each dimension. Note that it is
+        #                  assumed that the index step is positive, as
+        #                  will be the case for reformatted indices.
         block_indices = []
-        # The shape implied by block_indices
         subset_shape = []
         preceeding_size = []
+
         local_offset = offset
+
         # Assume, until demonstrated otherwise, that this block
         # overlaps the assignment indices.
         overlaps = True
 
         j = -1
-
-        # Loop round each block dimension, checking if the
-        # corresponding assignment index overlaps the block.
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
             zip(
                 indices,
@@ -1805,10 +1806,6 @@ def setitem_array(array, indices, value):
                 if rem:
                     block_index_size += 1
 
-                # Find how many elements of 'value' precede this block
-                # along this dimension. Note that it is assumed that
-                # the slice step is positive, as will be the case for
-                # reformatted indices.
                 pre = index.indices(loc0)
                 n_preceeding, rem = divmod(pre[1] - pre[0], step)
                 if rem:
@@ -1823,9 +1820,7 @@ def setitem_array(array, indices, value):
 
                 block_index = index - loc0
             else:
-                # Find the indices to this dimension of this block
-                # that correspond to the 1-d array index to the full
-                # array
+                # Index is a 1-d array
                 is_bool = index.dtype == bool
                 block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
 
@@ -1840,15 +1835,10 @@ def setitem_array(array, indices, value):
 
                 block_index_size = block_index.size
                 if not block_index_size:
-                    # This block does not overlap the 1-d array
-                    # indices
+                    # This block does not overlap the 1-d array index
                     overlaps = False
                     break
 
-                # Find how many elements of the assignment value
-                # precede this block along this dimension. Note that
-                # it is assumed that the index values are increasing,
-                # as will be the case for reformatted indices.
                 n_preceeding = n_preceeding_from_1d_index(dim, loc0, is_bool)
 
             # Still here? This block overlaps the index for this
@@ -1858,7 +1848,7 @@ def setitem_array(array, indices, value):
                 preceeding_size.append(n_preceeding)
                 subset_shape.append(block_index_size)
 
-        # The new graph key
+        # The new dask key
         new_key = name + key[1:]
 
         if not overlaps:
@@ -1880,9 +1870,9 @@ def setitem_array(array, indices, value):
             start = preceeding_size[j]
             value_indices[i] = slice(start, start + subset_shape[j])
 
-        # If required as a consequence of reformatting the original
-        # indices, reverse the indices to assgnment value.
-        for i in mirror:
+        # If required, and as a consequence of reformatting the
+        # original indices, reverse the indices to assgnment value.
+        for i in reverse:
             size = value_common_shape[i]
             start, stop, step = value_indices[i].indices(size)
             size -= 1
@@ -1899,21 +1889,17 @@ def setitem_array(array, indices, value):
             value_indices.insert(0, Ellipsis)
 
         # Create the part of the full assignment value that is to be
-        # assigned to elements of this block
+        # assigned to elements of this block and make sure that it has
+        # just one chunk (so we can represent it with a single key in
+        # thex argument list of setitem).
         v = value[tuple(value_indices)]
-
-        # Make sure that the part of the assignment value for this
-        # block has just one chunk, so we can represent it with a
-        # single key in thex argument list of setitem ...
         v = v.rechunk((-1,) * v.ndim)
-
-        # ... and get its single layer key.
         vkey = next(flatten(v.__dask_keys__()))
 
         # Insert into the new dask dictionary all of the keys that
-        # define the part of assignment value for this block, not
+        # define the part of assignment value for this block (not
         # minding when we overwrite any existing keys as the values
-        # will be the same.
+        # will be the same).
         dsk = merge(dict(v.dask), dsk)
 
         # Define the assignment function for this block.
@@ -1955,13 +1941,13 @@ def setitem(array, indices, value):
     >>> setitem(x, (1, slice(None)), -99)
     array([[  0,   1,   2,   3],
            [-99, -99, -99, -99]])
-    >>> x
-    array([[ 0,  1,  2,  3],
-           [ 4,  5,  6,  7]])
 
     >>> setitem(x, (slice(None), [1, 3]), [-88, -99])
     array([[  0, -88,   2, -99],
            [  4, -88,   6, -99]])
+    >>> x
+    array([[ 0,  1,  2,  3],
+           [ 4,  5,  6,  7]])
 
     >>> setitem(x, Ellipsis, -x)
     array([[  0,  -1,  -2,  -3],
@@ -1972,7 +1958,7 @@ def setitem(array, indices, value):
 
     """
     if indices is None:
-        # No assignment: Return the original array.
+        # No assignment
         return array
 
     if not np.ma.isMA(array) and np.ma.isMA(value):
@@ -1980,7 +1966,8 @@ def setitem(array, indices, value):
         # so turn the non-masked array into a masked one.
         array = array.view(np.ma.MaskedArray)
 
+    # Copy the array to guarantee no other objects are corrupted
     array = array.copy()
-    array[indices] = value
 
+    array[indices] = value
     return array
