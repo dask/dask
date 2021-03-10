@@ -412,6 +412,7 @@ def to_parquet(
     ignore_divisions=False,
     partition_on=None,
     storage_options=None,
+    custom_metadata=None,
     write_metadata_file=True,
     compute=True,
     compute_kwargs=None,
@@ -460,6 +461,9 @@ def to_parquet(
         there will be no global groupby.
     storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
+    custom_metadata : dict, optional
+        Custom key/value metadata to include in all footer metadata (and
+        in the global "_metadata" file, if applicable).
     write_metadata_file : bool, optional
         Whether to write the special "_metadata" file.
     compute : bool, optional
@@ -630,6 +634,8 @@ def to_parquet(
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
     kwargs_pass["schema"] = schema
+    if custom_metadata:
+        kwargs_pass["custom_metadata"] = custom_metadata
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,
