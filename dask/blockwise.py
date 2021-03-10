@@ -385,7 +385,7 @@ class Blockwise(Layer):
         # more control over serialization, a `BlockwiseIODeps` mapping
         # subclass can be defined with the necessary
         # `__dask_distributed_{pack,unpack}__` methods.
-        for input_map in self.io_deps.values():
+        for name, input_map in self.io_deps.items():
             if isinstance(input_map, tuple):
                 # Use the `__dask_distributed_pack__` definition for the
                 # specified `BlockwiseIODeps` subclass
@@ -393,7 +393,7 @@ class Blockwise(Layer):
                     import_allowed_module(input_map[0]),
                     input_map[1],
                 )
-                input_map = io_dep_map.__dask_distributed_pack__(*input_map)
+                self.io_deps[name] = io_dep_map.__dask_distributed_pack__(*input_map)
 
         return {
             "output": self.output,
