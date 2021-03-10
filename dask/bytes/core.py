@@ -1,14 +1,8 @@
 import os
 import copy
 
-from fsspec.core import (
-    OpenFile,
-    get_fs_token_paths,
-)
-from fsspec.utils import (
-    read_block,
-    infer_compression,
-)
+from fsspec.core import OpenFile, get_fs_token_paths
+from fsspec.utils import read_block, infer_compression
 
 from ..base import tokenize
 from ..delayed import delayed
