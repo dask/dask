@@ -1423,7 +1423,6 @@ def parse_assignment_indices(indices, shape):
             )
 
     parsed_indices = list(normalize_index(indices, shape))
-
     n_lists = 0
 
     for i, (index, size) in enumerate(zip(parsed_indices, shape)):
@@ -1585,7 +1584,7 @@ def setitem_array(array, indices, value):
         The dask array that is being assigned to.
     indices : numpy-style indices
         Indices to array defining the elements to be assigned.
-    value : array-like
+    value : dask array
         The values which will be assigned to elements of array.
 
     Returns
@@ -1646,7 +1645,7 @@ def setitem_array(array, indices, value):
             f"of shape {tuple(indices_shape)}"
         )
 
-    # Define variables needed when creating the part of the assignment
+    # Set variables needed when creating the part of the assignment
     # value that applies to each block.
     #
     #  offset: The difference in the relative positions of a dimension
@@ -1676,9 +1675,6 @@ def setitem_array(array, indices, value):
     #
     # array_common_shape and value_common_shape may be different if
     # there are any size 1 dimensions are being brodacast.
-    #
-    # As in numpy, it is not allowed for a dimension in the assignment
-    # value to be larger than a size 1 dimension in the array.
 
     offset = len(indices_shape) - len(value_shape)
     if offset >= 0:
@@ -1745,10 +1741,9 @@ def setitem_array(array, indices, value):
         sort_key = None
 
     keys = sorted(flatten(array.__dask_keys__()), key=sort_key)
-
-    # Create a new `setitem` dask entry for each block in the array
+    # Create a new "setitem" dask entry for each block in the array
     for key, locations in zip(keys, array_locations):
-
+    
         # Now loop round each block dimension.
         #
         # If the block overlaps the indices then set the following
@@ -1760,7 +1755,8 @@ def setitem_array(array, indices, value):
         # subset_shape: The shape implied by block_indices.
         #
         # preceeding_size: How many assigned elements precede this
-        #                  block along each dimension. Note that it is
+        #                  block along each dimension that doesn't
+        #                  have an integer index. Note that it is
         #                  assumed that the index step is positive, as
         #                  will be the case for reformatted indices.
         block_indices = []
@@ -1782,7 +1778,7 @@ def setitem_array(array, indices, value):
             )
         ):
             j += 1
-
+ 
             integer_index = isinstance(index, int)
             if isinstance(index, slice):
                 # Index is a slice
@@ -1823,16 +1819,6 @@ def setitem_array(array, indices, value):
                 # Index is a 1-d array
                 is_bool = index.dtype == bool
                 block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
-
-                if is_bool and loc1 == full_size and value.size > 1:
-                    x = value_shape[j - local_offset]
-                    if x > 1 and int(np.sum(index)) < x:
-                        raise ValueError(
-                            "shape mismatch: value array of shape "
-                            f"{value_shape} could not be broadcast "
-                            "to indexing result"
-                        )
-
                 block_index_size = block_index.size
                 if not block_index_size:
                     # This block does not overlap the 1-d array index
