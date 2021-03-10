@@ -1447,43 +1447,6 @@ def parse_assignment_indices(indices, shape):
                     f"indices for dimension with size {size}"
                 )
 
-            if index.dtype == int:
-                index = np.array(index)
-                len_index = index.size
-                if len_index == 1:
-                    index = index[0]
-                    if index < 0:
-                        index += size
-
-                    index = int(index)
-                    index = slice(index, index + 1, 1)
-                    is_slice = True
-                elif len_index:
-                    steps = diff(index)
-                    step = int(steps[0])
-                    if (
-                        (step > 0 and (steps <= 0).any())
-                        or (step < 0 and (steps >= 0).any())
-                        or not step
-                    ):
-                        raise NotImplementedError(
-                            "1-d integer array assignment "
-                            "indices are currently limited "
-                            "to strictly monotonic sequences. "
-                            f"Got: {parsed_indices[i]}"
-                        )
-
-                    if step < 0:
-                        # reverse a strictly monotonically decreasing
-                        # array so that it is strictly monotonically
-                        # increasing. Make a note that this
-                        # dimension's index has been reversed.
-                        index = index[::-1]
-                        reverse.append(i)
-                else:
-                    # This is an empty slice
-                    index = slice(0, 0, 1)
-
         if is_slice and index.step < 0:
             # If the slice step is negative, then transform the
             # original slice to a new slice with a positive step such
@@ -1544,12 +1507,7 @@ def parse_assignment_indices(indices, shape):
             continue
         elif is_dask_collection(index):
             indices_shape.append(None)
-        elif index.dtype == bool:
-            # Index is a sequence of booleans
-            if is_dask_collection(index):
-                indices_shape.append(None)
-        else:
-            # Index is a sequence of integers
+        else:            
             indices_shape.append(len(index))
 
     return parsed_indices, indices_shape, reverse
@@ -1611,12 +1569,10 @@ def setitem_array(out_name, array, indices, value):
 
         """
         if is_bool:
-            i =  np.sum(index[loc0:loc1])
+            return np.sum(index[loc0:loc1])
         else:
-            i =  np.sum(np.where((loc0 <= index) & (index < loc1), 1, 0)[0])
+            return np.sum(np.where((loc0 <= index) & (index < loc1), 1, 0))
 
-        return i
-    
     @functools.lru_cache()
     def n_preceeding_from_1d_index(dim, loc0, is_bool):
         """Number of assignment elements of index preceeding position loc0.
@@ -1626,11 +1582,19 @@ def setitem_array(out_name, array, indices, value):
 
         """
         if is_bool:
-            i = np.sum(index[:loc0])
+            return np.sum(index[:loc0])
         else:
-            i = np.sum(np.where(index < loc0, 1, 0)) #)[0]
+            return np.sum(np.where(index < loc0, 1, 0))
+ 
+    @functools.lru_cache()
+    def value_indices_from_1d_int_index(dim, loc0, loc1):
+        """Value indices for index elements between loc0 and loc1.
 
-        return i
+        index is defined in the namespace of the caller. dim is unique
+        to each index and is used to define LRU cache keys.
+
+        """
+        return np.where((loc0 <= index) & (index < loc1))[0]
     
     from ..core import flatten
 
@@ -1770,7 +1734,7 @@ def setitem_array(out_name, array, indices, value):
         # Assume, until demonstrated otherwise, that this block
         # overlaps the assignment indices.
         overlaps = True
-
+        dim_1d_index = None
         j = -1
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
             zip(
@@ -1825,12 +1789,10 @@ def setitem_array(out_name, array, indices, value):
                     dim, loc0, loc1, is_bool
                 )
                 
-#                if not block_index_size:
-#                    # This block does not overlap the 1-d array index
-#                    overlaps = False
-#                    break
-
                 n_preceeding = n_preceeding_from_1d_index(dim, loc0, is_bool)
+
+                dim_1d_index = dim
+                loc0_loc1 = (loc0, loc1)
 
                 # Do not break if this block does not overlap the 1-d
                 # index
@@ -1861,7 +1823,13 @@ def setitem_array(out_name, array, indices, value):
         for i in non_broadcast_dimensions:
             j = i + offset
             start = preceeding_size[j]
-            value_indices[i] = slice(start, start + block_indices_shape[j])
+            if j == dim_1d_index:
+                index = indices[j]
+                value_indices[i] = value_indices_from_1d_int_index(
+                    dim_1d_index, *loc0_loc1
+                )
+            else:
+                value_indices[i] = slice(start, start + block_indices_shape[j])
 
         # If required, and as a consequence of reformatting the
         # original indices, reverse the indices to assgnment value.
@@ -1880,7 +1848,7 @@ def setitem_array(out_name, array, indices, value):
             # The assignment value has more dimensions than array, so
             # add a leading Ellipsis to the indices of value.
             value_indices.insert(0, Ellipsis)
-
+           
         # Create the part of the full assignment value that is to be
         # assigned to elements of this block and make sure that it has
         # just one chunk (so we can represent it with a single key in

@@ -3651,6 +3651,7 @@ def test_setitem_extended_API():
     x[:, [3, 5, 6]] = [-33, -22, -11]
     x[:, [3, 5, 6]] = -33
     x[:, [3, 5, 6]] = -3
+    x[:, [6, 1, 3]] = [-441, -551, -661]
     x[2:4, x[0] > 3] = -5
     x[2, x[0] < -2] = -7
     x[x % 2 == 0] = -8
@@ -3683,6 +3684,7 @@ def test_setitem_extended_API():
     dx[:, [3, 5, 6]] = [-33, -22, -11]
     dx[:, [3, 5, 6]] = -33
     dx[:, [3, 5, 6]] = -3
+    dx[:, [6, 1, 3]] = [-441, -551, -661]
     dx[2:4, dx[0] > 3] = -5
     dx[2, dx[0] < -2] = -7
     dx[dx % 2 == 0] = -8
@@ -3719,6 +3721,13 @@ def test_setitem_extended_API():
     x[...] = v
     dx[...] = v
     assert_eq(x, dx.compute())
+
+#    x = np.ma.arange(60).reshape((6, 10))
+#    dx = da.from_array(x.copy(), chunks=(3, 5))
+#    x[:, [6, 2, 5, 1]] = [-44, -55, -66, -77]
+#    dx[:, [6, 2, 5, 1]] = [-44, -55, -66, -77]
+#
+#    assert_eq(x, dx.compute())
 
 
 def test_setitem_on_read_only_blocks():
