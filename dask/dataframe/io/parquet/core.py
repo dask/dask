@@ -463,8 +463,8 @@ def to_parquet(
         Key/value pairs to be passed on to the file-system backend, if any.
     custom_metadata : dict, optional
         Custom key/value metadata to include in all footer metadata (and
-        in the global "_metadata" file, if applicable).  This argument is
-        only supported for the "pyarrow" engine, for now.
+        in the global "_metadata" file, if applicable).  Note that the custom
+        metadata may not contain the reserved b"pandas" key.
     write_metadata_file : bool, optional
         Whether to write the special "_metadata" file.
     compute : bool, optional
@@ -636,6 +636,13 @@ def to_parquet(
     kwargs_pass["index_cols"] = index_cols
     kwargs_pass["schema"] = schema
     if custom_metadata:
+        if b"pandas" in custom_metadata.keys():
+            raise ValueError(
+                "User-defined key/value metadata (custom_metadata) can not "
+                "contain a b'pandas' key.  This key is reserved by Pandas, "
+                "and overwriting the corresponding value can render the "
+                "entire dataset unreadable."
+            )
         kwargs_pass["custom_metadata"] = custom_metadata
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
