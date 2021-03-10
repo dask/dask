@@ -79,6 +79,8 @@ jobs:
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
       - name: Setup Conda
         uses: conda-incubator/setup-miniconda@v2
