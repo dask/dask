@@ -462,7 +462,7 @@ def plot_cache(
 
     if results:
         starts, ends = list(zip(*results))[3:]
-        tics = list(sorted(unique(starts + ends)))
+        tics = sorted(unique(starts + ends))
         groups = groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
         data = {}
         for k, vals in groups.items():

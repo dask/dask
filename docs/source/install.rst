@@ -40,6 +40,7 @@ We also maintain other dependency sets for different subsets of functionality::
 
    python -m pip install "dask[array]"       # Install requirements for dask array
    python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
+   python -m pip install "dask[diagnostics]" # Install requirements for dask diagnostics
    python -m pip install "dask[distributed]" # Install requirements for distributed dask
 
 We have these options so that users of the lightweight core Dask scheduler
