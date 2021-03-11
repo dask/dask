@@ -18,7 +18,7 @@ def read_text(
     compression="infer",
     encoding=system_encoding,
     errors="strict",
-    linedelimiter=os.linesep,
+    linedelimiter=None,
     collection=True,
     storage_options=None,
     files_per_partition=None,
@@ -41,7 +41,7 @@ def read_text(
         Compression format like 'gzip' or 'xz'.  Defaults to 'infer'
     encoding: string
     errors: string
-    linedelimiter: string
+    linedelimiter: string or None
     collection: bool, optional
         Return dask.bag if True, or list of delayed values if false
     storage_options: dict
@@ -123,9 +123,12 @@ def read_text(
                 )
                 blocks.append(block_lines)
     else:
+        # special case for linedelimiter=None: we will need to split on an actual bytestring
+        # and the line reader will then use "universal" mode. Just as well that \r\n and \n
+        # will both work (thankfully \r for MacOS is no longer a thing)
         o = read_bytes(
             urlpath,
-            delimiter=linedelimiter.encode(),
+            delimiter=linedelimiter.encode() if linedelimiter is not None else b"\n",
             blocksize=blocksize,
             sample=False,
             compression=compression,
@@ -155,6 +158,7 @@ def read_text(
 
 
 def file_to_blocks(include_path, lazy_file, delimiter=None):
+    # blocksize is None branch
     with lazy_file as f:
         if delimiter is not None:
             text = f.read()
@@ -176,6 +180,7 @@ def attach_path(block, path):
 
 
 def decode(block, encoding, errors, line_delimiter):
+    # blocksize is not None branch
     text = block.decode(encoding, errors)
     if line_delimiter in [None, "", "\n", "\r", "\r\n"]:
         lines = io.StringIO(text, newline=line_delimiter)

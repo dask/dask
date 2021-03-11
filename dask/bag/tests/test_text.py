@@ -111,17 +111,6 @@ def test_files_per_partition():
             assert len(b_unique_paths) == 20
 
 
-@pytest.mark.parametrize("bs", [None, 1, 10])
-def test_include_path(bs):
-    with filetexts(files):
-        vals = read_text(".test.accounts*", blocksize=bs, include_path=True).compute()
-        for name in files:
-            assert (
-                "".join(part[0] for part in vals if part[1].endswith(name))
-                == files[name]
-            )
-
-
 def test_errors():
     with filetexts({".test.foo": b"Jos\xe9\nAlice"}, mode="b"):
         with pytest.raises(UnicodeDecodeError):
