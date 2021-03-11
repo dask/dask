@@ -4,27 +4,37 @@ Assignment
 ==========
 
 Dask Array supports most of the NumPy assignment indexing syntax. In
-particular, it supports the following:
+particular, it supports combinations of the following:
 
-*  Indexing by integers and slices: ``x[0, :5] = y``
-*  Indexing by strictly monotonic lists/arrays of integers: ``x[[1, 2, 4]] = y``
-*  Indexing by lists/arrays of booleans: ``x[[False, True, True, False, True]] = y``
-*  Indexing one :class:`~dask.array.Array` with an :class:`~dask.array.Array` of bools: ``x[x > 0] = y``
-*  Indexing one :class:`~dask.array.Array` with a zero or one-dimensional :class:`~dask.array.Array`
-   of ints: ``a[b.argtopk(5)] = y``
+* Indexing by integers: ``x[1] = y``
+* Indexing by slices: ``x[2::-1] = y``
+* Indexing by a list of integers: ``x[[0, 2, 1]] = y``
+* Indexing by a 1-d :class:`numpy` array of integers: ``x[np.arange(3)] = y``
+* Indexing by a 1-d :class:`~dask.array.Array` of integers: ``x[da.arange(3)] = y``
+* Indexing by a list of booleans: ``x[[False, True, True]] = y``
+* Indexing by a 1-d :class:`numpy` array of booleans: ``x[np.arange(3) > 0] = y``
+* Indexing by a 1-d :class:`~dask.array.Array` of booleans:
+  ``x[da.arange(3) > 0] = y``
+
+It also supports:
+
+* Indexing by one broadcastable :class:`~dask.array.Array` of
+  booleans: ``x[x > 0] = y``
 
 However, it does not currently support the following:
 
-*  Indexing with lists in multiple axes: ``x[[1, 2, 3], [3, 2, 1]] = y``
-*  Indexing with non-strictly monotonic lists: ``x[[1, 3, 3, 2]] = y``
-*  Indexing  one :class:`~dask.array.Array` with a multi-dimensional :class:`~dask.array.Array` of ints
+* Indexing with lists in multiple axes: ``x[[1, 2, 3], [3, 1, 2]] =
+  y``
+* Indexing with an :class:`~dask.array.Array` of integers that has
+  unknown size: ``x[da.where(np.array([1, 2, 3]) < 3)[0]] = y``
+
 
 .. _array.assignment.broadcasting:
 
 Broadcasting
 ------------
 
-The normal numpy broadcasting rules apply:
+The normal NumPy broadcasting rules apply:
 
 .. code-block:: python
 
@@ -36,17 +46,17 @@ The normal numpy broadcasting rules apply:
    >>> x.compute()
    array([[1., 2., 3., 5., 1., 6.],
           [0., 2., 4., 5., 0., 6.]])
-   >>> x[0] = -x[0]
+   >>> x[1] = -x[0]
    >>> x.compute()
-   array([[-1., -2., -3., -5., -1., -6.],
-          [ 0.,  2.,  4.,  5.,  0.,  6.]])
+   array([[ 1.,  2.,  3.,  5.,  1.,  6.],
+          [-1., -2., -3., -5., -1., -6.]])
 
 .. _array.assignment.masking:
 
 Masking
 -------
 
-Elements may be masked by assigning to the numpy masked value, or to an
+Elements may be masked by assigning to the NumPy masked value, or to an
 array with masked values:
 
 .. code-block:: python
@@ -65,34 +75,3 @@ array with masked values:
    >>> print(x.compute())
    [[-- -- 1.0 1.0 -- 1.0]
     [-- -- -- 3.0 4.0 5.0]]
-
-.. _array.assignment.efficiency:
-
-Efficiency
-----------
-
-During computation all blocks are processed as expected, but blocks
-which do not overlap the assignment indices are unchanged by the
-assignment operation and therefore do not add anything extra to the
-computational cost.
-
-The one special case that could affect performance is when an
-comprising a 1-d dask array of integers is used in combination with
-other index types (i.e. `slice`, `int`, `list` or `numpy.array`). In
-this case, the 1-d dask array index is computed when the assignment is
-defined, rather than its compution being deferred to the compute time
-of the assignment operation. This has the potential to cause resource
-issues if the computation of the 1-d dask array index of integers
-takes a considerable amount of time, or if its result consumes a large
-amount of memory.
-
-In the example below, the dask array integer index ``ind`` is being
-used with another index (the integer ``1``), and so is computed during
-the execution of the final assigment command, even though the dask
-array ``a`` has not yet been computed:
-
-.. code-block:: python
-
-   >>> a = da.arange(12).reshape(2, 6)
-   >>> ind = da.where(a[0] > 3)[0]
-   >>> a[1, ind] = -99

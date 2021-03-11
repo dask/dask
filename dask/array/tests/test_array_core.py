@@ -3642,70 +3642,113 @@ def test_setitem_extended_API():
 
     # 2-d array
     x = np.ma.arange(60).reshape((6, 10))
-    dx = da.from_array(x.copy(), chunks=(2, 2))
+    dx = da.from_array(x.copy(), chunks=(2, 3))
 
-    x[:, 2] = range(6)
-    x[3, :] = range(10)
-    x[::2, ::-1] = -1
-    x[1::2] = -2
-    x[:, [3, 5, 6]] = [-33, -22, -11]
-    x[:, [3, 5, 6]] = -33
-    x[:, [3, 5, 6]] = -3
+    check_each_op = False
+
+    value = -1
+    for index in (
+        (slice(None, None, 2), slice(None, None, -1)),
+        slice(1, None, 2),
+        [4, 3, 1],
+        (Ellipsis, 4),
+        5,
+        ([True, False, False, False, True, False], 2),
+        (3, [True, True, False, True, True, False, True, False, True, True]),
+        (np.array([False, False, True, True, False, False]), slice(5, 7)),
+        (
+            4,
+            da.from_array(
+                [False, False, True, True, False, False, True, False, False, True]
+            ),
+        ),
+    ):
+        x[index] = value
+        dx[index] = value
+        if check_each_op:
+            assert_eq(x, dx.compute())
+
+    for index, value in zip(
+        [
+            (slice(None), 2),
+            3,
+            (slice(None), [3, 5, 6]),
+            ([-1, 0, 1], 2),
+            (slice(None, 2), slice(None, 3)),
+            (slice(None), [6, 1, 3]),
+            (slice(1, 3), slice(1, 4)),
+        ],
+        [
+            range(6),
+            range(10),
+            [-30, -31, -32],
+            [-30, -31, -32],
+            [-50, -51, -52],
+            [-60, -61, -62],
+            [[-70, -71, -72]],
+        ],
+    ):
+        x[index] = value
+        dx[index] = value
+        if check_each_op:
+            assert_eq(x, dx.compute())
+
     x[2:4, x[0] > 3] = -5
-    x[2, x[0] < -2] = -7
-    x[x % 2 == 0] = -8
-    x[[4, 3, 1]] = -9
-    x[5, ...] = -10
-    x[..., 4] = -11
-    x[3:5, 5:1:-2] = -x[:2, 4:1:-2]
-    x[:2, :3] = [[1, 2, 3]]
-    x[1, 1:7:2] = np.ma.masked
-    x[0, 1:3] = -x[0, 4:2:-1]
-    x[...] = x
-    x[...] = x[...]
-    x[0] = x[-1]
-    x[0, :] = x[-2, :]
-    x[:, 1] = x[:, -3]
-    x[[True, False, False, False, True, False], 2] = -4
-    x[3, [True, True, False, True, True, False, True, False, True, True]] = -50
-    x[
-        4,
-        da.from_array(
-            [False, False, True, True, False, False, True, False, False, True]
-        ),
-    ] = -55
-    x[np.array([False, False, True, True, False, False]), 5:7] = -66
-
-    dx[:, 2] = range(6)
-    dx[3, :] = range(10)
-    dx[::2, ::-1] = -1
-    dx[1::2] = -2
-    dx[:, [3, 5, 6]] = [-33, -22, -11]
-    dx[:, [3, 5, 6]] = -33
-    dx[:, [3, 5, 6]] = -3
     dx[2:4, dx[0] > 3] = -5
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[2, x[0] < -2] = -7
     dx[2, dx[0] < -2] = -7
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[x % 2 == 0] = -8
     dx[dx % 2 == 0] = -8
-    dx[[4, 3, 1]] = -9
-    dx[5, ...] = -10
-    dx[..., 4] = -11
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[3:5, 5:1:-2] = -x[:2, 4:1:-2]
     dx[3:5, 5:1:-2] = -dx[:2, 4:1:-2]
-    dx[:2, :3] = [[1, 2, 3]]
-    dx[1, 1:7:2] = np.ma.masked
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[0, 1:3] = -x[0, 4:2:-1]
     dx[0, 1:3] = -dx[0, 4:2:-1]
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[...] = x
     dx[...] = dx
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[...] = x[...]
     dx[...] = dx[...]
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[0] = x[-1]
+    dx[0] = dx[-1]
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[0, :] = x[-2, :]
     dx[0, :] = dx[-2, :]
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    x[:, 1] = x[:, -3]
     dx[:, 1] = dx[:, -3]
-    dx[[True, False, False, False, True, False], 2] = -4
-    dx[3, [True, True, False, True, True, False, True, False, True, True]] = -50
-    dx[
-        4,
-        da.from_array(
-            [False, False, True, True, False, False, True, False, False, True]
-        ),
-    ] = -55
-    dx[np.array([False, False, True, True, False, False]), 5:7] = -66
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    # Masking
+    x[1, 1:7:2] = np.ma.masked
+    dx[1, 1:7:2] = np.ma.masked
+
+    x[1:5:2, [7, 5]] = np.ma.masked_all((2, 2))
+    dx[1:5:2, [7, 5]] = np.ma.masked_all((2, 2))
 
     dx = dx.persist()
     assert_eq(x, dx.compute())
@@ -3713,11 +3756,16 @@ def test_setitem_extended_API():
 
     # RHS has extra leading size 1 dimensions compared to LHS
     x = np.arange(12).reshape((3, 4))
-    dx = da.from_array(x, chunks=(2, 2))
+    dx = da.from_array(x, chunks=(2, 3))
     v = np.arange(12).reshape((1, 1, 3, 4))
 
     x[...] = v
     dx[...] = v
+    assert_eq(x, dx.compute())
+
+    index = da.from_array([0, 2], chunks=(2,))
+    x[[0, 2]] = 99
+    dx[index] = 99
     assert_eq(x, dx.compute())
 
 
@@ -3774,7 +3822,7 @@ def test_setitem_errs():
         x[[True, True, False]] = 5
 
     with pytest.raises(IndexError):
-        x[[False, True, True, True, False]] = 5
+        x[[False, True, True, rue, False]] = 5
 
     # 2-d indexing a single dimension
     with pytest.raises(IndexError):
@@ -3800,14 +3848,6 @@ def test_setitem_errs():
     with pytest.raises(NotImplementedError):
         x[0, da.from_array(True)] = 5
 
-    # Not strictly monotonic
-    with pytest.raises(NotImplementedError):
-        x[[1, 3, 2]] = 7
-
-    # Repeated index
-    with pytest.raises(NotImplementedError):
-        x[[1, 3, 3]] = 7
-
     # Scalar arrays
     y = da.from_array(np.array(1))
     with pytest.raises(IndexError):
@@ -3819,6 +3859,15 @@ def test_setitem_errs():
     with pytest.raises(ValueError):
         dx[...] = np.arange(24).reshape((2, 1, 3, 4))
 
+    # RHS has extra leading size 1 dimensions compared to LHS
+    x = np.arange(12).reshape((3, 4))
+    dx = da.from_array(x, chunks=(2, 3))
+   
+    # Integer array index with unknown chunk sizes
+    index = da.from_array([0, 1, 2], chunks=(2,))
+    i = da.where(index < 3)[0]
+    with pytest.raises(ValueError):
+        dx[i] = 99
 
 def test_zero_slice_dtypes():
     x = da.arange(5, chunks=1)

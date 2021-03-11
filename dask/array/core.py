@@ -1643,12 +1643,12 @@ class Array(DaskMethodsMixin):
 
     def __index__(self):
         return self._scalarfunc(int)
-
+    
     def __setitem__(self, key, value):
-        # Use the "where" method for cases when key is an Array
-        if isinstance(key, Array):
+        ## Use the "where" method for cases when key is an Array
+        if isinstance(key, Array) and key.dtype == bool:
             from .routines import where
-
+      
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
             try:
@@ -1666,14 +1666,14 @@ class Array(DaskMethodsMixin):
             self._chunks = y.chunks
             return
 
-        # Still here? Then apply the assignment to more general
+        # Still here? Then apply the assignment to other type of
         # indices via the `setitem_array` function.
 
         if value is np.ma.masked:
             value = np.ma.masked_all(())
 
         value = asanyarray(value)
-        
+
         out = "setitem-" + tokenize(self, key, value)
         dsk = setitem_array(out, self, key, asanyarray(value))
 
@@ -1684,7 +1684,7 @@ class Array(DaskMethodsMixin):
         self.dask = y.dask
         self._name = y.name
         self._chunks = y.chunks
-
+        
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (
