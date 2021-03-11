@@ -161,7 +161,10 @@ def file_to_blocks(include_path, lazy_file, delimiter=None):
             if not text:
                 return []
             parts = text.split(delimiter)
-            yield from [line + delimiter for line in parts[:-1]] + parts[-1:]
+            yield from (
+                (line, lazy_file.path) if include_path else line
+                for line in [line + delimiter for line in parts[:-1]] + parts[-1:]
+            )
         else:
             for line in f:
                 yield (line, lazy_file.path) if include_path else line
