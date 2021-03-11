@@ -1899,6 +1899,7 @@ def setitem_array(out_name, array, indices, value):
                     block_index_size = None
                     n_preceeding = None
                     dim_1d_int_index = dim
+                    loc0_loc1 = loc0, loc1
 
                 if not is_dask_collection(index) and not block_index.size:
                     # This block does not overlap the non-dask 1-d
@@ -1943,7 +1944,7 @@ def setitem_array(out_name, array, indices, value):
                 # Define index for use in `value_indices_from_1d_int_index`
                 index = indices[j]
                 value_indices[i] = value_indices_from_1d_int_index(
-                    dim_1d_int_index, *locations[i]
+                    dim_1d_int_index, *loc0_loc1
                 )
             else:
                 start = preceeding_size[j]

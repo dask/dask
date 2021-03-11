@@ -3644,7 +3644,7 @@ def test_setitem_extended_API():
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.copy(), chunks=(2, 3))
 
-    check_each_op = False
+    check_each_op = True # False
 
     value = -1
     for index in (
@@ -3691,6 +3691,7 @@ def test_setitem_extended_API():
         x[index] = value
         dx[index] = value
         if check_each_op:
+            print (index)
             assert_eq(x, dx.compute())
 
     x[2:4, x[0] > 3] = -5
@@ -3822,7 +3823,7 @@ def test_setitem_errs():
         x[[True, True, False]] = 5
 
     with pytest.raises(IndexError):
-        x[[False, True, True, rue, False]] = 5
+        x[[False, True, True, True, False]] = 5
 
     # 2-d indexing a single dimension
     with pytest.raises(IndexError):
