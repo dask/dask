@@ -23,7 +23,9 @@ jobs:
           fetch-depth: 0  # Needed by codecov.io
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@master
+        # Latest commit as of 2021-02-07
+        # TODO replace with label as soon as it's available
+        uses: conda-incubator/setup-miniconda@77b16ed746da28724c61e1f1ad23395a4b695ef5
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -47,7 +49,7 @@ jobs:
         # test_base.py::test_tokenize_object_with_recursion_error_returns_uuid
         shell: bash -l {0}
         if: ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.9' }}
-        run: conda uninstall ipython
+        run: mamba uninstall ipython
 
       - name: Install
         shell: bash -l {0}

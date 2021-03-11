@@ -34,7 +34,9 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Conda Environment
-        uses: conda-incubator/setup-miniconda@master
+        # Latest commit as of 2021-02-07
+        # TODO replace with label as soon as it's available
+        uses: conda-incubator/setup-miniconda@77b16ed746da28724c61e1f1ad23395a4b695ef5
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
