@@ -75,3 +75,16 @@ array with masked values:
    >>> print(x.compute())
    [[-- -- 1.0 1.0 -- 1.0]
     [-- -- -- 3.0 4.0 5.0]]
+<<<<<<< HEAD
+=======
+
+.. _array.assignment.efficiency:
+
+Efficiency
+----------
+
+During computation all blocks are processed as expected, but blocks
+which do not overlap the assignment indices are unchanged by the
+assignment operation and therefore do not add anything extra to the
+computational cost.
+>>>>>>> 9dbc5fd0b48db385ea72e4542e092914bfbaecf8

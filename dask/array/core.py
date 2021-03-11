@@ -1651,7 +1651,7 @@ class Array(DaskMethodsMixin):
       
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
-            try:
+            try:            
                 y = where(key, value, self)
             except ValueError as e:
                 raise ValueError(

@@ -3701,7 +3701,7 @@ def test_setitem_extended_API():
 
     x[2, x[0] < -2] = -7
     dx[2, dx[0] < -2] = -7
-    if check_each_op:
+    if check_each_op:    
         assert_eq(x, dx.compute())
 
     x[x % 2 == 0] = -8
