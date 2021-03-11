@@ -16,7 +16,7 @@ from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
-from .creation import arange, diag, empty, indices
+from .creation import arange, diag, empty, indices, tri, zeros
 from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -620,7 +620,10 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-def _bincount_sum(bincounts, dtype=int):
+def _bincount_agg(bincounts, dtype, **kwargs):
+    if not isinstance(bincounts, list):
+        return bincounts
+
     n = max(map(len, bincounts))
     out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
@@ -629,7 +632,7 @@ def _bincount_sum(bincounts, dtype=int):
 
 
 @derived_from(np)
-def bincount(x, weights=None, minlength=0):
+def bincount(x, weights=None, minlength=0, split_every=None):
     if x.ndim != 1:
         raise ValueError("Input array must be one dimensional. Try using x.ravel()")
     if weights is not None:
@@ -637,41 +640,38 @@ def bincount(x, weights=None, minlength=0):
             raise ValueError("Chunks of input array x and weights must match.")
 
     token = tokenize(x, weights, minlength)
-    name = "bincount-" + token
-    final_name = "bincount-sum" + token
-    # Call np.bincount on each block, possibly with weights
+    args = [x, "i"]
     if weights is not None:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([1], weights=[1]).dtype
+        meta = np.bincount([1], weights=[1])
+        args.extend([weights, "i"])
     else:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), None, minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([]).dtype
+        meta = np.bincount([])
 
-    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
-    graph = HighLevelGraph.from_collections(
-        final_name, dsk, dependencies=[x] if weights is None else [x, weights]
+    chunked_counts = blockwise(
+        partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
     )
 
-    if minlength == 0:
-        chunks = ((np.nan,),)
-    else:
-        chunks = ((minlength,),)
+    from .reductions import _tree_reduce
 
-    meta = meta_from_array(x, 1, dtype=dtype)
-
-    return Array(graph, final_name, chunks, meta=meta)
+    output = _tree_reduce(
+        chunked_counts,
+        aggregate=partial(_bincount_agg, dtype=meta.dtype),
+        axis=(0,),
+        keepdims=False,
+        dtype=meta.dtype,
+        split_every=split_every,
+        concatenate=False,
+    )
+    output._meta = meta
+    return output
 
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    bins = np.asarray(bins)
-    dtype = np.digitize([0], bins, right=False).dtype
+    from .utils import asarray_safe
+
+    bins = asarray_safe(bins, like=meta_from_array(a))
+    dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
@@ -1701,3 +1701,43 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
 @derived_from(np)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=False)
+
+
+@derived_from(np)
+def tril(m, k=0):
+    m = asarray(m)
+    mask = tri(*m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:])
+
+    return where(mask, m, zeros(1, dtype=m.dtype))
+
+
+@derived_from(np)
+def triu(m, k=0):
+    m = asarray(m)
+    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool, chunks=m.chunks[-2:])
+
+    return where(mask, zeros(1, dtype=m.dtype), m)
+
+
+@derived_from(np)
+def tril_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(tri(n, m, k=k, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def tril_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return tril_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)
+
+
+@derived_from(np)
+def triu_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(~tri(n, m, k=k - 1, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def triu_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return triu_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)

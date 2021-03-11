@@ -1,3 +1,4 @@
+from dask.blockwise import Blockwise, blockwise_token
 import os
 from collections.abc import Set
 
@@ -5,7 +6,7 @@ import pytest
 
 import dask
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph, BasicLayer, Layer
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer, Layer
 
 
 def test_visualize(tmpdir):
@@ -94,8 +95,36 @@ def test_cull():
     culled_by_x = hg.cull({"x"})
     assert dict(culled_by_x) == {"x": 1}
 
-    culled_by_y = hg.cull({"y"})
+    # parameter is the raw output of __dask_keys__()
+    culled_by_y = hg.cull([[["y"]]])
     assert dict(culled_by_y) == a
+
+
+def test_cull_layers():
+    hg = HighLevelGraph(
+        {
+            "a": {"a1": "d1", "a2": "e1"},
+            "b": {"b": "d", "dontcull_b": 1},
+            "c": {"dontcull_c": 1},
+            "d": {"d": 1, "dontcull_d": 1},
+            "e": {"e": 1, "dontcull_e": 1},
+        },
+        {"a": {"d", "e"}, "b": {"d"}, "c": set(), "d": set(), "e": set()},
+    )
+
+    # Deep-copy layers before calling method to test they aren't modified in place
+    expect = HighLevelGraph(
+        {k: dict(v) for k, v in hg.layers.items() if k != "c"},
+        {k: set(v) for k, v in hg.dependencies.items() if k != "c"},
+    )
+
+    culled = hg.cull_layers(["a", "b"])
+
+    assert culled.layers == expect.layers
+    assert culled.dependencies == expect.dependencies
+    for k in culled.layers:
+        assert culled.layers[k] is hg.layers[k]
+        assert culled.dependencies[k] is hg.dependencies[k]
 
 
 def annot_map_fn(key):
@@ -139,6 +168,16 @@ def test_multiple_annotations():
     assert clayer.annotations is None
 
 
+def test_annotation_pack_unpack():
+    layer = MaterializedLayer({"n": 42}, annotations={"workers": ("alice",)})
+    packed_anno = layer.__dask_distributed_anno_pack__()
+    annotations = {}
+    Layer.__dask_distributed_annotations_unpack__(
+        annotations, packed_anno, layer.keys()
+    )
+    assert annotations == {"workers": {"n": ("alice",)}}
+
+
 @pytest.mark.parametrize("flat", [True, False])
 def test_blockwise_cull(flat):
     da = pytest.importorskip("dask.array")
@@ -174,6 +213,30 @@ def test_blockwise_cull(flat):
 
 def test_highlevelgraph_dicts_deprecation():
     with pytest.warns(FutureWarning):
-        layers = {"a": BasicLayer({"x": 1, "y": (inc, "x")})}
+        layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
         hg = HighLevelGraph(layers, {"a": set()})
         assert hg.dicts == layers
+
+
+def test_len_does_not_materialize():
+    a = {"x": 1}
+    b = Blockwise(
+        output="b",
+        output_indices=tuple("ij"),
+        dsk={"b": [[blockwise_token(0)]]},
+        indices=(),
+        numblocks={},
+        new_axes={"i": (1, 1, 1), "j": (1, 1)},
+    )
+    assert len(b) == len(b.get_output_keys())
+
+    layers = {"a": a, "b": b}
+    dependencies = {"a": set(), "b": {"a"}}
+    hg = HighLevelGraph(layers, dependencies)
+
+    assert hg.layers["a"].is_materialized()
+    assert not hg.layers["b"].is_materialized()
+
+    assert len(hg) == len(a) + len(b) == 7
+
+    assert not hg.layers["b"].is_materialized()

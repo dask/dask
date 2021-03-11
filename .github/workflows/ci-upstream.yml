@@ -7,9 +7,27 @@ on:
   pull_request:
 
 jobs:
+
+  check:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    outputs:
+      test-upstream: ${{ steps.detect-trigger.outputs.trigger-found }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+      - uses: xarray-contrib/ci-trigger@v1
+        id: detect-trigger
+        with:
+          keyword: "test-upstream"
+
   build:
-    runs-on: "ubuntu-latest"
-    if: "contains(github.event.head_commit.message, 'test-upstream') || (github.repository == 'dask/dask' && github.event_name != 'pull_request')"
+    needs: check
+    runs-on: ubuntu-latest
+    if: |
+      needs.check.outputs.test-upstream == 'true'
+      || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
 
     steps:
       - name: Checkout source

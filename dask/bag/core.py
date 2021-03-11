@@ -379,8 +379,8 @@ class Item(DaskMethodsMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        key = replace_name_in_key(self.key, name) if name else self.key
+    def _rebuild(self, dsk, *, rename=None):
+        key = replace_name_in_key(self.key, rename) if rename else self.key
         return Item(dsk, key)
 
     @staticmethod
@@ -489,8 +489,11 @@ class Bag(DaskMethodsMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return type(self)(dsk, name or self.name, self.npartitions)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self.name
+        if rename:
+            name = rename.get(name, name)
+        return type(self)(dsk, name, self.npartitions)
 
     def __str__(self):
         return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
@@ -1754,7 +1757,7 @@ def from_url(urls):
 
     Examples
     --------
-    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/master/README.rst')  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/main/README.rst')  # doctest: +SKIP
     >>> a.npartitions  # doctest: +SKIP
     1
 

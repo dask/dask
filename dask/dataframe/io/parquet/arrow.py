@@ -1306,7 +1306,11 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
-                frag_map[(fpath, row_group_info[0].id)] = frag
+                if len(row_group_info):
+                    frag_map[(fpath, row_group_info[0].id)] = frag
+                else:
+                    # All row-groups were filtered
+                    continue
             else:
                 file_row_groups[fpath] = [None]
                 frag_map[(fpath, None)] = frag
@@ -1774,6 +1778,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     root_dir=base,
                     engine=cls,
                     out_dir=False,
+                    fs=fs,
                 )
                 if schema is None:
                     schema = metadata.schema.to_arrow_schema()

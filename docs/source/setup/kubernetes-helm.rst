@@ -155,7 +155,7 @@ Configure Environment
 By default, the Helm deployment launches three workers using one core each and
 a standard conda environment. We can customize this environment by creating a
 small yaml file that implements a subset of the values in the
-`dask helm chart values.yaml file <https://github.com/dask/helm-chart/blob/master/dask/values.yaml>`_.
+`dask helm chart values.yaml file <https://github.com/dask/helm-chart/blob/main/dask/values.yaml>`_.
 
 For example, we can increase the number of workers, and include extra conda and
 pip packages to install on the both the workers and Jupyter server (these two
@@ -285,7 +285,7 @@ without any arguments.
 
    The ``dask/daskhub`` helm chart came out of the `Pangeo`_ project, a community
    platform for big data geoscience.
-   
+
 .. _Pangeo: http://pangeo.io/
 .. _Dask Gateway: https://gateway.dask.org/
 .. _JupyterHub: https://jupyterhub.readthedocs.io/en/stable/
@@ -293,7 +293,7 @@ without any arguments.
 The ``dask/daskhub`` helm chart uses the JupyterHub and Dask-Gateway helm charts.
 You'll want to consult the `JupyterHub helm documentation <https://zero-to-jupyterhub.readthedocs.io/en/latest/setup-jupyterhub/setup-jupyterhub.html>`_ and
 and `Dask Gateway helm documentation <https://gateway.dask.org/install-kube.html>`_ for further customization. The default values
-are at https://github.com/dask/helm-chart/blob/master/daskhub/values.yaml.
+are at https://github.com/dask/helm-chart/blob/main/daskhub/values.yaml.
 
 Verify that you've set up a Kubernetes cluster and added Dask's helm charts:
 
