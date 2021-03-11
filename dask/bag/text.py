@@ -156,8 +156,11 @@ def read_text(
 
 def file_to_blocks(include_path, lazy_file, delimiter=None):
     with lazy_file as f:
-        if delimiter:
-            parts = f.read().split(delimiter)
+        if delimiter is not None:
+            text = f.read()
+            if not text:
+                return []
+            parts = text.split(delimiter)
             yield from [line + delimiter for line in parts[:-1]] + parts[-1:]
         else:
             for line in f:
@@ -175,5 +178,10 @@ def decode(block, encoding, errors, line_delimiter):
         lines = io.StringIO(text, newline=line_delimiter)
         return list(lines)
     else:
+        if not text:
+            return []
         parts = text.split(line_delimiter)
-        return [t + line_delimiter for t in parts[:-1]] + parts[-1:]
+        out = [t + line_delimiter for t in parts[:-1]] + (
+            parts[-1:] if not text.endswith(line_delimiter) else []
+        )
+        return out

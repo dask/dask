@@ -127,7 +127,6 @@ def test_complex_delimiter():
         assert read_text(".test.delim.txt", linedelimiter="$$$$").count().compute() == 3
         assert (
             read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2)
-            .filter(bool)
             .count()
             .compute()
             == 3
@@ -135,10 +134,6 @@ def test_complex_delimiter():
         vals = read_text(".test.delim.txt", linedelimiter="$$$$").compute()
         assert vals[-1] == "hello"
         assert vals[0].endswith("$$$$")
-        vals = (
-            read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2)
-            .filter(bool)
-            .compute()
-        )
+        vals = read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2).compute()
         assert vals[-1] == "hello"
         assert vals[0].endswith("$$$$")
