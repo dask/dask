@@ -2,7 +2,8 @@ import io
 import pandas as pd
 from fsspec.core import open_files
 
-from ...core import flatten, compute as dask_compute
+from ...core import flatten
+from ...base import compute as dask_compute
 from ...delayed import delayed
 from ...bytes import read_bytes
 from ..utils import insert_meta_param_description, make_meta
