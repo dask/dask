@@ -160,10 +160,8 @@ def get(
         Number of worker processes (defaults to number of cores)
     func_dumps : function
         Function to use for function serialization
-        (defaults to cloudpickle.dumps if available, otherwise pickle.dumps)
     func_loads : function
         Function to use for function deserialization
-        (defaults to cloudpickle.loads if available, otherwise pickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
     """
