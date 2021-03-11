@@ -18,7 +18,7 @@ from threading import Lock
 from tlz import partition, concat, first, groupby, accumulate, frequencies
 from tlz.curried import pluck
 import numpy as np
-from fsspec.core import get_mapper
+from fsspec import get_mapper
 
 from . import chunk
 from .. import config, compute
