@@ -1520,30 +1520,35 @@ def parse_assignment_indices(indices, shape):
     return parsed_indices, indices_shape, reverse
 
 
-def concatenate_1d_array_chunks(x):
-    """Concatenate the chunks of a 1-d array with unknown chunk sizes.
+def concatenate_array_chunks(x):
+    """Concatenate the multidimensional chunks of an array.
 
-    For instance, can be used on the output of `where` when used with
-    a single argument that is a 1-d array.
+    Can be used on chunks with unknown sizes.
 
     Parameters
     ----------
     x : dask array
-        A 1-d dask array with unknown chunk sizes.
 
     Returns
     -------
     dask array
-        The concatenated dask array with one chunk of unknown size.
+        The concatenated dask array with one chunk.
 
     """
     from ..core import flatten
     from .core import concatenate3, Array
 
+    if x.npartitions == 1:
+        return x
+
     name = "concatenate3-" + tokenize(x)
-    d = {(name, 0): (concatenate3, sorted(flatten(x.__dask_keys__())))}
+    d = {(name, 0): (concatenate3, x.__dask_keys__())}
     graph = HighLevelGraph.from_collections(name, d, dependencies=[x])
-    return Array(graph, name, chunks=((np.nan,),), dtype=x.dtype)
+    chunks = x.shape
+    if not chunks:
+        chunks = (1,)
+        
+    return Array(graph, name, chunks=(chunks,), dtype=x.dtype)
 
 
 def setitem_array(out_name, array, indices, value):
@@ -1614,10 +1619,10 @@ def setitem_array(out_name, array, indices, value):
             i = index[i] - loc0
 
         if is_dask_collection(i):
-            if is_bool:
-                i = i.rechunk(-1)
-            else:
-                i = concatenate_1d_array_chunks(i)
+#            if is_bool:
+#                i = i.rechunk(-1)
+#            else:
+            i = concatenate_array_chunks(i)
 
             dsk_id.update(dict(i.dask))
             i = next(flatten(i.__dask_keys__()))
@@ -1690,7 +1695,7 @@ def setitem_array(out_name, array, indices, value):
         """
         i = np.where((loc0 <= index) & (index < loc1))[0]
         if is_dask_collection(i):
-            i = concatenate_1d_array_chunks(i)
+            i = concatenate_array_chunks(i)
 
         return i
 
@@ -1793,15 +1798,15 @@ def setitem_array(out_name, array, indices, value):
     # Get the dask keys of the most recent layer of array and sort by
     # chunk index, so that they correspond elementwise to the array
     # locations.
-    ndim = len(array_shape)
-    if ndim > 1:
-        sort_key = itemgetter(*range(1, ndim))
-    elif ndim == 1:
-        sort_key = itemgetter(1)
-    else:
-        sort_key = None
+#   ndim = len(array_shape)
+#   if ndim > 1:
+#       sort_key = itemgetter(*range(1, ndim))
+#   elif ndim == 1:
+#       sort_key = itemgetter(1)
+#   else:
+#       sort_key = None
 
-    in_keys = sorted(flatten(array.__dask_keys__()), key=sort_key)
+    in_keys = list(flatten(array.__dask_keys__())) #, key=sort_key)
 
     # Create a new "setitem" dask entry for each block in the array
     dsk = {}
@@ -1974,7 +1979,8 @@ def setitem_array(out_name, array, indices, value):
         # just one chunk (so we can represent it with a single key in
         # thex argument list of setitem).
         v = value[tuple(value_indices)]
-        v = v.rechunk((-1,) * v.ndim)
+        v = concatenate_array_chunks(v)
+#        v = v.rechunk((-1,) * v.ndim)
         vkey = next(flatten(v.__dask_keys__()))
 
         # Insert into the output dask dictionary the dask of the part
