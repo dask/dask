@@ -131,7 +131,7 @@ def get_colors(palette, funcs):
     """
     palettes = import_required("bokeh.palettes", _BOKEH_MISSING_MSG)
 
-    unique_funcs = list(sorted(unique(funcs)))
+    unique_funcs = sorted(unique(funcs))
     n_funcs = len(unique_funcs)
     palette_lookup = palettes.all_palettes[palette]
     keys = list(sorted(palette_lookup.keys()))
