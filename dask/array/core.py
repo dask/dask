@@ -1643,15 +1643,15 @@ class Array(DaskMethodsMixin):
 
     def __index__(self):
         return self._scalarfunc(int)
-    
+
     def __setitem__(self, key, value):
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array) and key.dtype == bool:
             from .routines import where
-      
+
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
-            try:            
+            try:
                 y = where(key, value, self)
             except ValueError as e:
                 raise ValueError(
@@ -1684,7 +1684,7 @@ class Array(DaskMethodsMixin):
         self.dask = y.dask
         self._name = y.name
         self._chunks = y.chunks
-        
+
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
         if isinstance(index, str) or (

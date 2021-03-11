@@ -1391,8 +1391,6 @@ def parse_assignment_indices(indices, shape):
     ([3, slice(3, 8, 1)], [5], [1])
 
     """
-    from .routines import diff
-
     # Set TODO variables needed when creating the part of the assignment
     # value that applies to each block.
     #
@@ -1547,7 +1545,7 @@ def concatenate_array_chunks(x):
     chunks = x.shape
     if not chunks:
         chunks = (1,)
-        
+
     return Array(graph, name, chunks=(chunks,), dtype=x.dtype)
 
 
@@ -1619,9 +1617,9 @@ def setitem_array(out_name, array, indices, value):
             i = index[i] - loc0
 
         if is_dask_collection(i):
-#            if is_bool:
-#                i = i.rechunk(-1)
-#            else:
+            #            if is_bool:
+            #                i = i.rechunk(-1)
+            #            else:
             i = concatenate_array_chunks(i)
 
             dsk_id.update(dict(i.dask))
@@ -1636,7 +1634,7 @@ def setitem_array(out_name, array, indices, value):
         The non-hashable index is defined in the namespace of the
         caller. index is the input assignment index for the whole
         array.
-        
+
         dim is unique to each index and is used to define LRU cache
         keys.
 
@@ -1798,15 +1796,15 @@ def setitem_array(out_name, array, indices, value):
     # Get the dask keys of the most recent layer of array and sort by
     # chunk index, so that they correspond elementwise to the array
     # locations.
-#   ndim = len(array_shape)
-#   if ndim > 1:
-#       sort_key = itemgetter(*range(1, ndim))
-#   elif ndim == 1:
-#       sort_key = itemgetter(1)
-#   else:
-#       sort_key = None
+    #   ndim = len(array_shape)
+    #   if ndim > 1:
+    #       sort_key = itemgetter(*range(1, ndim))
+    #   elif ndim == 1:
+    #       sort_key = itemgetter(1)
+    #   else:
+    #       sort_key = None
 
-    in_keys = list(flatten(array.__dask_keys__())) #, key=sort_key)
+    in_keys = list(flatten(array.__dask_keys__()))  # , key=sort_key)
 
     # Create a new "setitem" dask entry for each block in the array
     dsk = {}
@@ -1840,7 +1838,7 @@ def setitem_array(out_name, array, indices, value):
 
         # Note which dimension, if any, has 1-d integer array index
         dim_1d_int_index = None
-        
+
         j = -1
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
             zip(
@@ -1980,7 +1978,7 @@ def setitem_array(out_name, array, indices, value):
         # thex argument list of setitem).
         v = value[tuple(value_indices)]
         v = concatenate_array_chunks(v)
-#        v = v.rechunk((-1,) * v.ndim)
+        #        v = v.rechunk((-1,) * v.ndim)
         vkey = next(flatten(v.__dask_keys__()))
 
         # Insert into the output dask dictionary the dask of the part

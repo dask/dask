@@ -3700,7 +3700,7 @@ def test_setitem_extended_API():
 
     x[2, x[0] < -2] = -7
     dx[2, dx[0] < -2] = -7
-    if check_each_op:    
+    if check_each_op:
         assert_eq(x, dx.compute())
 
     x[x % 2 == 0] = -8
@@ -3873,12 +3873,13 @@ def test_setitem_errs():
     # RHS has extra leading size 1 dimensions compared to LHS
     x = np.arange(12).reshape((3, 4))
     dx = da.from_array(x, chunks=(2, 3))
-   
+
     # Integer array index with unknown chunk sizes
     index = da.from_array([0, 1, 2], chunks=(2,))
     i = da.where(index < 3)[0]
     with pytest.raises(ValueError):
         dx[i] = 99
+
 
 def test_zero_slice_dtypes():
     x = da.arange(5, chunks=1)
