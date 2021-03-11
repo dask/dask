@@ -5,8 +5,9 @@ import pickle
 from random import random
 import types
 
-from tlz import merge
 import pytest
+import cloudpickle
+from tlz import merge
 
 import dask
 import dask.bag as db
@@ -671,8 +672,6 @@ def test_pickle(f):
     "f", [delayed(modlevel_eager), modlevel_delayed1, modlevel_delayed2]
 )
 def test_cloudpickle(f):
-    import cloudpickle
-
     d = f(2)
     d = cloudpickle.loads(cloudpickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
     assert d.compute() == 3

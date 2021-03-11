@@ -2,7 +2,7 @@ import io
 import uuid
 
 from fsspec.core import open_files, get_fs_token_paths, OpenFile
-from fsspec.utils import tokenize, read_block
+from fsspec.utils import tokenize as fs_tokenize, read_block
 
 
 from ..highlevelgraph import HighLevelGraph
@@ -119,7 +119,7 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
         for path, offset, length, head in zip(paths, offsets, lengths, heads):
             delimiter = head["sync"]
             f = OpenFile(fs, path, compression=compression)
-            token = tokenize(
+            token = fs_tokenize(
                 fs_token, delimiter, path, fs.ukey(path), compression, offset
             )
             keys = ["read-avro-%s-%s" % (o, token) for o in offset]

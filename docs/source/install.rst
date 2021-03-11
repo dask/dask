@@ -111,10 +111,14 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |   sqlalchemy  |          |            Writing and reading from SQL databases            |
 +---------------+----------+--------------------------------------------------------------+
-|    cytoolz    | >=0.8.2  | Utility functions for iterators, functions, and dictionaries |
+|    cytoolz*   | >=0.8.2  | Utility functions for iterators, functions, and dictionaries |
 +---------------+----------+--------------------------------------------------------------+
 |    xxhash     |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+
+
+* Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
+``cytoolz``.
+
 
 Test
 ----

@@ -47,11 +47,13 @@ def test_pickle_locals():
 
 
 @pytest.mark.skipif(pickle.HIGHEST_PROTOCOL < 5, reason="requires pickle protocol 5")
+@pytest.mark.skipif(
+    cloudpickle.__version__ < LooseVersion("1.3.0"),
+    reason="requires cloudpickle >= 1.3.0",
+)
 def test_out_of_band_pickling():
     """Test that out-of-band pickling works"""
     np = pytest.importorskip("numpy")
-    if cloudpickle.__version__ < LooseVersion("1.3.0"):
-        pytest.skip("when using cloudpickle, it must be version 1.3.0+")
 
     a = np.arange(5)
 
