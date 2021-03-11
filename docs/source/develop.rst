@@ -101,7 +101,7 @@ pip or conda_
 
 ``pip``::
 
-  python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete,test]"
 
 ``conda``::
 
