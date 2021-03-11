@@ -27,6 +27,8 @@ extras_require = {
     "delayed": ["cloudpickle >= 0.2.2", "toolz >= 0.8.2"],
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
+# after complete is set, add in test
+extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist"]
 
 install_requires = ["pyyaml"]
 
