@@ -3,6 +3,7 @@ import warnings
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
+from pandas._libs.lib import no_default as pd_no_default
 from tlz import partition
 
 from ._compat import PANDAS_GT_110
@@ -325,16 +326,11 @@ def size(x):
     return x.size
 
 
-if PANDAS_GT_110:
-
-    def to_numpy(df, _dtype, na_value):
-        return df.to_numpy(dtype=_dtype, copy=False, na_value=na_value)
-
-
-else:
-
-    def to_numpy(df, _dtype, na_value=None):
-        return df.to_numpy(dtype=_dtype, copy=False)
+def to_numpy(df, _dtype, na_value=pd_no_default):
+    kwargs = {"dtype": _dtype, "copy": False}
+    if PANDAS_GT_110:
+        kwargs["na_value"] = na_value
+    return df.to_numpy(**kwargs)
 
 
 def sample(df, state, frac, replace):
