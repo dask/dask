@@ -5,7 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7
-  - numpy=1.15
+  - numpy=1.16
   - pandas=0.25
   # test dependencies
   - pytest
@@ -14,9 +14,7 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
-  # Issue with conda package for NumPy 1.15
-  # See fastparquet-444
-  # - fastparquet
+  - fastparquet
   - h5py
   - pytables
   - zarr
