@@ -40,6 +40,9 @@ from .core import (
 from .einsumfuncs import einsum  # noqa
 from .numpy_compat import _unravel_index_keyword
 
+# save built-in for histogram functions which use range as a kwarg.
+_range = range
+
 
 @derived_from(np)
 def array(x, dtype=None, ndmin=None):
@@ -960,7 +963,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     # converted to arrays of bin edges). The graph is stacked for each
     # chunk, each building block is a D-dimensional histogram result.
     dsk = {
-        (name, i, 0, 0, 0): (_block_histogramdd, k, bins_edges)
+        (name, i, *tuple(0 for _ in _range(D))): (_block_histogramdd, k, bins_edges)
         for i, k in enumerate(flatten(sample.__dask_keys__()))
     }
     # da.histogram does this to get the dtype (TODO: figure out why)
