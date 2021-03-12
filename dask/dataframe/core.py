@@ -3611,9 +3611,10 @@ class DataFrame(_Frame):
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
-        self.dask.layers[name].type = type(self)
-        self.dask.layers[name].divisions = divisions
-        self.dask.layers[name].chunk_type = type(meta)
+        if name in self.dask.layers:
+            self.dask.layers[name].info['type'] = type(self)
+            self.dask.layers[name].info['divisions'] = divisions
+            self.dask.layers[name].info['chunk_type'] = type(meta)
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:

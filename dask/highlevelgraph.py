@@ -59,6 +59,7 @@ class Layer(collections.abc.Mapping):
     annotations: Optional[Mapping[str, Any]]
 
     def __init__(self, annotations: Mapping[str, Any] = None):
+        self.info = {}
         if annotations:
             self.annotations = annotations
         else:
