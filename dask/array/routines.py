@@ -984,7 +984,11 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     # D == total number of dimensions
     N, D = sample.shape
 
-    # TODO: handle weighted data.
+    if weights is not None and weights.chunks[0] != sample.chunks[0]:
+        raise ValueError(
+            "Input array and weights must have the same shape "
+            "and chunk structure along the first dimension."
+        )
 
     # generate token and name for task
     token = tokenize(sample, bins, range, weights, density)
@@ -1003,37 +1007,27 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     assert len(bins_edges) == D
     (bins_ref, ranges_ref), deps = unpack_collections([bins_edges, range])
 
-    ######### set up graph ################
-    # New graph where the callable is _block_histogramdd and the
-    # function arguments are chunks of our sample array followed by
-    # the bin information (range information is unncessary since we
-    # converted to arrays of bin edges). The graph is stacked for each
-    # chunk, each building block is a D-dimensional histogram result.
-    dsk = {
-        (name, i, *tuple(0 for _ in _range(D))): (_block_histogramdd, k, bins_edges)
-        for i, k in enumerate(flatten(sample.__dask_keys__()))
-    }
-    # da.histogram does this to get the dtype (TODO: figure out why)
-    dtype = np.histogramdd([])[0].dtype
-    # da.histogram does this to track possible dependencies from
-    # potentially delayed binning information.
-    final_deps = (sample,) + deps
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=final_deps)
+    szeros = tuple(0 for _ in _range(D))
+    if weights is None:
+        dsk = {
+            (name, i, *szeros): (_block_histogramdd, k, bins_ref, ranges_ref)
+            for i, k in enumerate(flatten(sample.__dask_keys__()))
+        }
+        dtype = np.histogramdd([])[0].dtype
+    else:
+        a_keys = flatten(sample.__dask_keys__())
+        w_keys = flatten(weights.__dask_keys__())
+        dsk = {
+            (name, i, *szeros): (_block_histogramdd, k, bins_ref, ranges_ref, w)
+            for i, (k, w) in enumerate(zip(a_keys, w_keys))
+        }
+        dtype = weights.dtype
 
-    ######### set up array ################
-    # this logic yields chunks where the shape is:
-    # (nchunks, nbin_D1, nbin_D2, nbin_D3, ...)
-    # such that we add (collapse) the chunks along axis=0 to get the
-    # final result.
-    #
-    # steps:
-    # 1. get the total number of chunks in the sample
-    # 2. make a tuple of tuples; each inner tuple is the total number
-    #    of bins in a dimension
-    # 3. make "stacked chunks" tuple which combines information from
-    #    steps 1 and 2
-    # 4. make dask Array and collapse the 0th axis (which has size
-    #    nchunks_in_sample)
+    deps = (sample,) + deps
+    if weights is not None:
+        deps += (weights,)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
+
     nchunks_in_sample = len(list(flatten(sample.__dask_keys__())))
     all_nbins = tuple((b.size - 1,) for b in bins_edges)
     stacked_chunks = ((1,) * nchunks_in_sample, *all_nbins)
