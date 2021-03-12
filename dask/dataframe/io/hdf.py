@@ -445,7 +445,7 @@ def read_hdf(
         index (default is False).
     lock : boolean, optional
         Option to use a lock to prevent concurrency issues (default is True).
-    mode : {'a', 'r', 'r+'}, default 'a'. Mode to use when opening file(s).
+    mode : {'a', 'r', 'r+'}, default 'r'. Mode to use when opening file(s).
         'r'
             Read-only; no data can be modified.
         'a'
