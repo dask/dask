@@ -120,8 +120,8 @@ def test_to_hdf_multiple_nodes():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             b.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df16, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df16, out)
 
 
 def test_to_hdf_multiple_files():
@@ -203,8 +203,8 @@ def test_to_hdf_multiple_files():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             a.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df, out)
 
 
 def test_to_hdf_modes_multiple_nodes():
