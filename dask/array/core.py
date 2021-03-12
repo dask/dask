@@ -18,6 +18,7 @@ from threading import Lock
 from tlz import partition, concat, first, groupby, accumulate, frequencies
 from tlz.curried import pluck
 import numpy as np
+from fsspec import get_mapper
 
 from . import chunk
 from .. import config, compute
@@ -48,9 +49,11 @@ from ..utils import (
     ndimlist,
     format_bytes,
     typename,
+    is_arraylike,
     is_dataframe_like,
     is_series_like,
     is_index_like,
+    cached_property,
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
@@ -58,7 +61,11 @@ from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
 from .numpy_compat import _Recurser, _make_sliced_dtype
-from .slicing import slice_array, replace_ellipsis, cached_cumsum
+from .slicing import (
+    slice_array,
+    replace_ellipsis,
+    cached_cumsum,
+)
 from .blockwise import blockwise
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
@@ -101,7 +108,11 @@ def getter(a, b, asarray=True, lock=None):
         lock.acquire()
     try:
         c = a[b]
-        if asarray:
+        # Below we special-case `np.matrix` to force a conversion to
+        # `np.ndarray` and preserve original Dask behavior for `getter`,
+        # as for all purposes `np.matrix` is array-like and thus
+        # `is_arraylike` evaluates to `True` in that case.
+        if asarray and (not is_arraylike(c) or isinstance(c, np.matrix)):
             c = np.asarray(c)
     finally:
         if lock:
@@ -566,9 +577,9 @@ def map_blocks(
             69, 799,  79, 899,  89, 999,  99])
 
     Your block function get information about where it is in the array by
-    accepting a special ``block_info`` keyword argument.
+    accepting a special ``block_info`` or ``block_id`` keyword argument.
 
-    >>> def func(block, block_info=None):
+    >>> def func(block_info=None):
     ...     pass
 
     This will receive the following information:
@@ -605,6 +616,16 @@ def map_blocks(
 
     >>> _.compute()
     array([0, 1, 2, 3, 4, 5, 6, 7])
+
+    ``block_id`` is similar to ``block_info`` but contains only the ``chunk_location``:
+
+    >>> def func(block_id=None):
+    ...     pass
+
+    This will receive the following information:
+
+    >>> block_id  # doctest: +SKIP
+    (4, 3)
 
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
@@ -1103,7 +1124,7 @@ class Array(DaskMethodsMixin):
     dask.array.from_array
     """
 
-    __slots__ = "dask", "_name", "_cached_keys", "_chunks", "_meta"
+    __slots__ = "dask", "__name", "_cached_keys", "__chunks", "_meta", "__dict__"
 
     def __new__(cls, dask, name, chunks, dtype=None, meta=None, shape=None):
         self = super(Array, cls).__new__(cls)
@@ -1111,7 +1132,7 @@ class Array(DaskMethodsMixin):
         if not isinstance(dask, HighLevelGraph):
             dask = HighLevelGraph.from_collections(name, dask, dependencies=())
         self.dask = dask
-        self.name = str(name)
+        self._name = str(name)
         meta = meta_from_array(meta, dtype=dtype)
 
         if (
@@ -1124,7 +1145,7 @@ class Array(DaskMethodsMixin):
         else:
             dt = None
         self._chunks = normalize_chunks(chunks, shape, dtype=dt)
-        if self._chunks is None:
+        if self.chunks is None:
             raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
 
         self._meta = meta_from_array(meta, ndim=self.ndim, dtype=dtype)
@@ -1176,13 +1197,33 @@ class Array(DaskMethodsMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return Array, (self.name, self.chunks, self.dtype, self._meta)
+        return self._rebuild, ()
 
-    @property
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return Array(dsk, name, self.chunks, self.dtype, self._meta)
+
+    def _reset_cache(self, key=None):
+        """
+        Reset cached properties.
+
+        Parameters
+        ----------
+        key : str, optional
+            Remove specified key. The default removes all items.
+        """
+        if key is None:
+            self.__dict__.clear()
+        else:
+            self.__dict__.pop(key, None)
+
+    @cached_property
     def numblocks(self):
         return tuple(map(len, self.chunks))
 
-    @property
+    @cached_property
     def npartitions(self):
         return reduce(mul, self.numblocks, 1)
 
@@ -1235,7 +1276,7 @@ class Array(DaskMethodsMixin):
         )
         return x
 
-    @property
+    @cached_property
     def shape(self):
         return tuple(cached_cumsum(c, initial_zero=True)[-1] for c in self.chunks)
 
@@ -1247,20 +1288,34 @@ class Array(DaskMethodsMixin):
     def dtype(self):
         return self._meta.dtype
 
-    def _get_chunks(self):
-        return self._chunks
+    @property
+    def _chunks(self):
+        """Non-public chunks property. Allows setting a chunk value."""
+        return self.__chunks
 
-    def _set_chunks(self, chunks):
-        msg = (
+    @_chunks.setter
+    def _chunks(self, chunks):
+        self.__chunks = chunks
+
+        # When the chunks changes the cached properties that was
+        # dependent on it needs to be deleted:
+        for key in ["numblocks", "npartitions", "shape", "ndim", "size"]:
+            self._reset_cache(key)
+
+    @property
+    def chunks(self):
+        """Chunks property."""
+        return self.__chunks
+
+    @chunks.setter
+    def chunks(self, chunks):
+        raise TypeError(
             "Can not set chunks directly\n\n"
             "Please use the rechunk method instead:\n"
-            "  x.rechunk({})\n\n"
+            f"  x.rechunk({chunks})\n\n"
             "If trying to avoid unknown chunks, use\n"
             "  x.compute_chunk_sizes()"
         )
-        raise TypeError(msg.format(chunks))
-
-    chunks = property(_get_chunks, _set_chunks, "chunks property")
 
     def __len__(self):
         if not self.chunks:
@@ -1381,11 +1436,11 @@ class Array(DaskMethodsMixin):
         ]
         return "\n".join(table)
 
-    @property
+    @cached_property
     def ndim(self):
         return len(self.shape)
 
-    @property
+    @cached_property
     def size(self):
         """ Number of elements in array """
         return reduce(mul, self.shape, 1)
@@ -1401,14 +1456,27 @@ class Array(DaskMethodsMixin):
         return self.dtype.itemsize
 
     @property
+    def _name(self):
+        return self.__name
+
+    @_name.setter
+    def _name(self, val):
+        self.__name = val
+        # Clear the key cache when the name is reset
+        self._cached_keys = None
+
+    @property
     def name(self):
-        return self._name
+        return self.__name
 
     @name.setter
     def name(self, val):
-        self._name = val
-        # Clear the key cache when the name is reset
-        self._cached_keys = None
+        raise TypeError(
+            "Cannot set name directly\n\n"
+            "Name is used to relate the array to the task graph.\n"
+            "It is uncommon to need to change it, but if you do\n"
+            "please set ``._name``"
+        )
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
@@ -1590,7 +1658,7 @@ class Array(DaskMethodsMixin):
                 ) from e
             self._meta = y._meta
             self.dask = y.dask
-            self.name = y.name
+            self._name = y.name
             self._chunks = y.chunks
             return self
         else:
@@ -1838,12 +1906,18 @@ class Array(DaskMethodsMixin):
         return choose(self, choices)
 
     @derived_from(np.ndarray)
-    def reshape(self, *shape):
+    def reshape(self, *shape, merge_chunks=True):
+        """
+        .. note::
+
+           See :meth:`dask.array.reshape` for an explanation of
+           the ``merge_chunks`` keyword.
+        """
         from .reshape import reshape
 
         if len(shape) == 1 and not isinstance(shape[0], Number):
             shape = shape[0]
-        return reshape(self, shape)
+        return reshape(self, shape, merge_chunks=merge_chunks)
 
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
@@ -2869,7 +2943,7 @@ def from_array(
     meta=None,
     inline_array=False,
 ):
-    """Create dask array from something that looks like an array
+    """Create dask array from something that looks like an array.
 
     Input must have a ``.shape``, ``.ndim``, ``.dtype`` and support numpy-style slicing.
 
@@ -2890,12 +2964,25 @@ def from_array(
 
         -1 or None as a blocksize indicate the size of the corresponding
         dimension.
-    name : str, optional
+    name : str or bool, optional
         The key name to use for the array. Defaults to a hash of ``x``.
-        By default, hash uses python's standard sha1. This behaviour can be
+
+        Hashing is useful if the same value of ``x`` is used to create multiple
+        arrays, as Dask can then recognise that they're the same and
+        avoid duplicate computations. However, it can also be slow, and if the
+        array is not contiguous it is copied for hashing. If the array uses
+        stride tricks (such as ``np.broadcast_to`` or
+        ``skimage.util.view_as_windows``) to have a larger logical
+        than physical size, this copy can cause excessive memory usage.
+
+        If you don't need the deduplication provided by hashing, use
+        ``name=False`` to generate a random name instead of hashing, which
+        avoids the pitfalls described above. Using ``name=True`` is
+        equivalent to the default.
+
+        By default, hashing uses python's standard sha1. This behaviour can be
         changed by installing cityhash, xxhash or murmurhash. If installed,
         a large-factor speedup can be obtained in the tokenisation step.
-        Use ``name=False`` to generate a random name instead of hashing (fast)
 
         .. note::
 
@@ -2951,10 +3038,10 @@ def from_array(
         Note that there's no key in the task graph with just the array `x`
         anymore. Instead it's placed directly in the values.
 
-        The right choice for ``inline_arary`` depends on several factors,
+        The right choice for ``inline_array`` depends on several factors,
         including the size of ``x``, how expensive it is to create, which
         scheduler you're using, and the pattern of downstream computations.
-        As a hueristic, ``inline_array=True`` may be the right choice when
+        As a heuristic, ``inline_array=True`` may be the right choice when
         the array ``x`` is cheap to serialize and deserialize (since it's
         included in the graph many times) and if you're experiencing ordering
         issues (see :ref:`order` for more).
@@ -2994,6 +3081,12 @@ def from_array(
     >>> a.dask[a.name, 0, 0][0]
     array([1])
 
+    Chunks with exactly-specified, different sizes can be created.
+
+    >>> import numpy as np
+    >>> import dask.array as da
+    >>> x = np.random.random((100, 6))
+    >>> a = da.from_array(x, chunks=((67, 33), (6,)))
     """
     if isinstance(x, Array):
         raise ValueError(
@@ -3126,8 +3219,6 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        from ..bytes.core import get_mapper
-
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
@@ -3213,8 +3304,6 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        from ..bytes.core import get_mapper
-
         mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
@@ -3872,7 +3961,10 @@ def load_store_chunk(x, out, index, lock, return_stored, load_stored):
         lock.acquire()
     try:
         if x is not None:
-            out[index] = np.asanyarray(x)
+            if is_arraylike(x):
+                out[index] = x
+            else:
+                out[index] = np.asanyarray(x)
         if return_stored and load_stored:
             result = out[index]
     finally:
@@ -4011,7 +4103,7 @@ def asarray(a, **kwargs):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
@@ -4051,7 +4143,7 @@ def asanyarray(a):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asanyarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
@@ -4235,7 +4327,7 @@ def handle_out(out, result):
         out._chunks = result.chunks
         out.dask = result.dask
         out._meta = result._meta
-        out.name = result.name
+        out._name = result.name
     elif out is not None:
         msg = (
             "The out parameter is not fully supported."
@@ -4288,7 +4380,7 @@ def _enforce_dtype(*args, **kwargs):
     return result
 
 
-def broadcast_to(x, shape, chunks=None):
+def broadcast_to(x, shape, chunks=None, meta=None):
     """Broadcast an array to a new shape.
 
     Parameters
@@ -4303,6 +4395,9 @@ def broadcast_to(x, shape, chunks=None):
         broadcast_to is more efficient than rechunking afterwards. Chunks are
         only allowed to differ from the original shape along dimensions that
         are new on the result or have size 1 the input array.
+    meta : empty ndarray
+        empty ndarray created with same NumPy backend, ndim and dtype as the
+        Dask Array being created (overrides dtype)
 
     Returns
     -------
@@ -4314,6 +4409,9 @@ def broadcast_to(x, shape, chunks=None):
     """
     x = asarray(x)
     shape = tuple(shape)
+
+    if meta is None:
+        meta = meta_from_array(x)
 
     if x.shape == shape and (chunks is None or chunks == x.chunks):
         return x
@@ -4354,7 +4452,7 @@ def broadcast_to(x, shape, chunks=None):
         dsk[new_key] = (np.broadcast_to, old_key, quote(chunk_shape))
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    return Array(graph, name, chunks, dtype=x.dtype)
+    return Array(graph, name, chunks, dtype=x.dtype, meta=meta)
 
 
 @derived_from(np)
@@ -4908,6 +5006,7 @@ def _vindex_array(x, dict_indexes):
             out_name,
             chunks,
             x.dtype,
+            meta=x._meta,
         )
         return result_1d.reshape(broadcast_shape + result_1d.shape[1:])
 
@@ -4965,6 +5064,8 @@ def _vindex_merge(locations, values):
            [40, 50, 60],
            [10, 20, 30]])
     """
+    from .utils import empty_like_safe
+
     locations = list(map(list, locations))
     values = list(values)
 
@@ -4976,7 +5077,7 @@ def _vindex_merge(locations, values):
 
     dtype = values[0].dtype
 
-    x = np.empty(shape, dtype=dtype)
+    x = empty_like_safe(values[0], dtype=dtype, shape=shape)
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):

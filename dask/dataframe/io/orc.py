@@ -1,11 +1,9 @@
 from distutils.version import LooseVersion
+from fsspec.core import get_fs_token_paths
 
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
-from ...blockwise import BlockwiseIO
-from ...bytes.core import get_fs_token_paths
-from ...highlevelgraph import HighLevelGraph
 from ...utils import import_required
 
 __all__ = ("read_orc",)
@@ -85,26 +83,12 @@ def read_orc(path, columns=None, storage_options=None):
         columns = list(schema)
     meta = _meta_from_dtypes(columns, schema, [], [])
 
-    # Create IO subgraph
-    output_name = "read-orc-" + tokenize(fs_token, path, columns)
-    name = "blockwise-io-" + output_name
-    dsk_io = {}
+    name = "read-orc-" + tokenize(fs_token, path, columns)
+    dsk = {}
     N = 0
     for path, n in zip(paths, nstripes_per_file):
         for stripe in range(n):
-            dsk_io[(name, N)] = (_read_orc_stripe, fs, path, stripe, columns)
+            dsk[(name, N)] = (_read_orc_stripe, fs, path, stripe, columns)
             N += 1
 
-    # Create Blockwise layer
-    npartitions = len(dsk_io)
-    layer = BlockwiseIO(
-        {name: dsk_io},
-        output_name,
-        "i",
-        None,
-        [(name, "i")],
-        {name: (npartitions,)},
-    )
-    graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-
-    return DataFrame(graph, output_name, meta, [None] * (npartitions + 1))
+    return DataFrame(dsk, name, meta, [None] * (len(dsk) + 1))

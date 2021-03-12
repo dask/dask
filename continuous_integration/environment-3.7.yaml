@@ -4,22 +4,27 @@ channels:
   - conda-forge
 dependencies:
   # required dependencies
-  - python=3.7.*
-  - numpy=1.17.*
-  - pandas=0.25.*
+  - python=3.7
+  - numpy=1.15
+  - pandas=0.25
   # test dependencies
   - pytest
+  - pytest-cov
+  - pytest-rerunfailures
   - pytest-xdist
-  - moto>=1.3.14
+  - moto
   - flask
-  - fastparquet
+  # Issue with conda package for NumPy 1.15
+  # See fastparquet-444
+  # - fastparquet
   - h5py
   - pytables
   - zarr
   - tiledb-py
-  - fsspec>=0.6.0
+  - xarray
+  - fsspec
   - sqlalchemy
-  - pyarrow=1.0.*
+  - pyarrow=0.14
   - coverage
   - jsonschema
   # other -- IO
@@ -56,3 +61,5 @@ dependencies:
   - python-xxhash
   - mmh3
   - pip
+  - pip:
+    - git+https://github.com/dask/distributed

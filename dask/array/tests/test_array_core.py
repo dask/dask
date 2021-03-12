@@ -50,7 +50,6 @@ from dask.blockwise import (
     optimize_blockwise,
 )
 from dask.array.utils import assert_eq, same_keys
-from dask.array.numpy_compat import _numpy_120
 
 from numpy import nancumsum, nancumprod
 
@@ -285,7 +284,7 @@ def test_keys():
     assert dx.__dask_keys__() is dx.__dask_keys__()
     # Test mutating names clears key cache
     dx.dask = {("y", i, j): () for i in range(5) for j in range(6)}
-    dx.name = "y"
+    dx._name = "y"
     assert dx.__dask_keys__() == [[(dx.name, i, j) for j in range(6)] for i in range(5)]
     d = Array({}, "x", (), shape=(), dtype="f8")
     assert d.__dask_keys__() == [("x",)]
@@ -1267,7 +1266,7 @@ def test_map_blocks_block_info_with_new_axis():
     values = da.from_array(np.array(["a", "a", "b", "c"]), 2)
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0, None}
+        assert block_info.keys() == {0, None}
         assert block_info[0]["shape"] == (4,)
         assert block_info[0]["num-chunks"] == (2,)
         assert block_info[None]["shape"] == (4, 3)
@@ -1302,7 +1301,7 @@ def test_map_blocks_block_info_with_drop_axis():
     )
 
     def func(x, block_info=None):
-        assert set(block_info.keys()) == {0, None}
+        assert block_info.keys() == {0, None}
         assert block_info[0]["shape"] == (4, 3)
         # drop_axis concatenates along the dropped dimension, hence not (2, 3)
         assert block_info[0]["num-chunks"] == (2, 1)
@@ -1527,8 +1526,10 @@ def test_map_blocks_optimize_blockwise(func):
     c = b + base[3]
     dsk = c.__dask_graph__()
     optimized = optimize_blockwise(dsk)
-    # The two additions and the map_blocks should be fused together
-    assert len(optimized.layers) == len(dsk.layers) - 2
+
+    # Everything should be fused into a single layer.
+    # If the lambda includes block_info, there will be two layers.
+    assert len(optimized.layers) == len(dsk.layers) - 6
 
 
 def test_repr():
@@ -1577,7 +1578,7 @@ def test_slicing_flexible_type():
 
 def test_slicing_with_object_dtype():
     # https://github.com/dask/dask/issues/6892
-    d = da.from_array(np.array(["a", "b"], dtype=np.object), chunks=(1,))
+    d = da.from_array(np.array(["a", "b"], dtype=object), chunks=(1,))
     assert d.dtype == d[(0,)].dtype
 
 
@@ -1846,7 +1847,7 @@ class ThreadSafetyError(Exception):
     pass
 
 
-class NonthreadSafeStore(object):
+class NonthreadSafeStore:
     def __init__(self):
         self.in_use = False
 
@@ -1858,7 +1859,7 @@ class NonthreadSafeStore(object):
         self.in_use = False
 
 
-class ThreadSafeStore(object):
+class ThreadSafeStore:
     def __init__(self):
         self.concurrent_uses = 0
         self.max_concurrent_uses = 0
@@ -1870,7 +1871,7 @@ class ThreadSafeStore(object):
         self.concurrent_uses -= 1
 
 
-class CounterLock(object):
+class CounterLock:
     def __init__(self, *args, **kwargs):
         self.lock = Lock(*args, **kwargs)
 
@@ -2264,7 +2265,7 @@ def test_optimize():
 
 
 def test_slicing_with_non_ndarrays():
-    class ARangeSlice(object):
+    class ARangeSlice:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2275,7 +2276,7 @@ def test_slicing_with_non_ndarrays():
         def __array__(self):
             return np.arange(self.start, self.stop)
 
-    class ARangeSlicable(object):
+    class ARangeSlicable:
         dtype = np.dtype("i8")
         ndim = 1
 
@@ -2342,7 +2343,7 @@ def test_from_array_with_lock():
     assert_eq(e + f, x + x)
 
 
-class MyArray(object):
+class MyArray:
     def __init__(self, x):
         self.x = x
         self.dtype = x.dtype
@@ -2397,7 +2398,12 @@ def test_from_array_list(x):
     assert dx.dask[dx.name, 0][0] == x[0]
 
 
-@pytest.mark.parametrize("type_", [t for t in np.ScalarType if t is not memoryview])
+# On MacOS Python 3.9, the order of the np.ScalarType tuple randomly changes across
+# interpreter restarts, thus causing pytest-xdist failures; setting PYTHONHASHSEED does
+# not help
+@pytest.mark.parametrize(
+    "type_", sorted((t for t in np.ScalarType if t is not memoryview), key=str)
+)
 def test_from_array_scalar(type_):
     """Python and numpy scalars are automatically converted to ndarray"""
     if type_ == np.datetime64:
@@ -3384,12 +3390,12 @@ def test_blockwise_concatenate():
         assert b.shape == (4, 4)
         assert c.shape == (4, 2)
 
-        return np.ones(5)
+        return np.ones(2)
 
     z = da.blockwise(
         f, "j", x, "ijk", y, "ki", y, "ij", concatenate=True, dtype=x.dtype
     )
-    assert_eq(z, np.ones(10), check_shape=False)
+    assert_eq(z, np.ones(4), check_shape=False)
 
 
 def test_common_blockdim():
@@ -4313,7 +4319,6 @@ def test_no_warnings_from_blockwise():
     assert not record
 
 
-@pytest.mark.xfail(_numpy_120, reason="https://github.com/pydata/sparse/issues/383")
 def test_from_array_meta():
     sparse = pytest.importorskip("sparse")
     x = np.ones(10)
@@ -4484,3 +4489,14 @@ def test_map_blocks_dataframe():
     assert isinstance(s, dd.DataFrame)
     assert s.npartitions == x.npartitions
     dd_assert_eq(s, s)
+
+
+def test_dask_layers():
+    a = da.ones(1)
+    assert a.dask.layers.keys() == {a.name}
+    assert a.dask.dependencies == {a.name: set()}
+    assert a.__dask_layers__() == (a.name,)
+    b = a + 1
+    assert b.dask.layers.keys() == {a.name, b.name}
+    assert b.dask.dependencies == {a.name: set(), b.name: {a.name}}
+    assert b.__dask_layers__() == (b.name,)

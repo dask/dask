@@ -27,6 +27,7 @@ from dask.dataframe.shuffle import (
     remove_nans,
 )
 from dask.dataframe.utils import assert_eq, make_meta
+from dask.dataframe._compat import PANDAS_GT_120
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
@@ -604,13 +605,26 @@ def test_set_index():
     assert_eq(d5, full.set_index(["b"]))
 
 
-def test_set_index_interpolate():
+@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+def test_set_index_interpolate(engine):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
     df = pd.DataFrame({"x": [4, 1, 1, 3, 3], "y": [1.0, 1, 1, 1, 2]})
-    d = dd.from_pandas(df, 2)
+
+    if engine == "cudf":
+        gdf = cudf.from_pandas(df)
+        d = dask_cudf.from_cudf(gdf, npartitions=3)
+    else:
+        d = dd.from_pandas(df, 2)
 
     d1 = d.set_index("x", npartitions=3)
     assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 3, 4])
+    assert set(d1.divisions) == set([1, 2, 4])
 
     d2 = d.set_index("y", npartitions=3)
     assert d2.divisions[0] == 1.0
@@ -618,12 +632,51 @@ def test_set_index_interpolate():
     assert d2.divisions[3] == 2.0
 
 
-def test_set_index_interpolate_int():
+@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+def test_set_index_interpolate_int(engine):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
     L = sorted(list(range(0, 200, 10)) * 2)
     df = pd.DataFrame({"x": 2 * L})
-    d = dd.from_pandas(df, 2)
+
+    if engine == "cudf":
+        gdf = cudf.from_pandas(df)
+        d = dask_cudf.from_cudf(gdf, npartitions=2)
+    else:
+        d = dd.from_pandas(df, 2)
+
     d1 = d.set_index("x", npartitions=10)
     assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
+
+
+@pytest.mark.parametrize("engine", ["pandas", "cudf"])
+def test_set_index_interpolate_large_uint(engine):
+    if engine == "cudf":
+        # NOTE: engine == "cudf" requires cudf/dask_cudf,
+        # will be skipped by non-GPU CI.
+
+        cudf = pytest.importorskip("cudf")
+        dask_cudf = pytest.importorskip("dask_cudf")
+
+    """This test is for #7304"""
+    df = pd.DataFrame(
+        {"x": np.array([612509347682975743, 616762138058293247], dtype=np.uint64)}
+    )
+
+    if engine == "cudf":
+        gdf = cudf.from_pandas(df)
+        d = dask_cudf.from_cudf(gdf, npartitions=2)
+    else:
+        d = dd.from_pandas(df, 1)
+
+    d1 = d.set_index("x", npartitions=1)
+    assert d1.npartitions == 1
+    assert set(d1.divisions) == set([612509347682975743, 616762138058293247])
 
 
 def test_set_index_timezone():
@@ -646,8 +699,13 @@ def test_set_index_timezone():
     assert d2.divisions[0].tz == s2[0].tz
     assert d2.divisions[0].tz is not None
     s2badtype = pd.DatetimeIndex(s_aware.values, dtype=s_naive.dtype)
-    with pytest.raises(TypeError):
-        d2.divisions[0] == s2badtype[0]
+    if PANDAS_GT_120:
+        # starting with pandas 1.2.0, comparing equality of timestamps with different
+        # timezones returns False instead of raising an error
+        assert not d2.divisions[0] == s2badtype[0]
+    else:
+        with pytest.raises(TypeError):
+            d2.divisions[0] == s2badtype[0]
 
 
 def test_set_index_npartitions():

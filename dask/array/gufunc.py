@@ -391,7 +391,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ### Assert correct partitioning, for case:
     for dim, sizes in dimsizess.items():
         #### Check that the arrays have same length for same dimensions or dimension `1`
-        if set(sizes).union({1}) != {1, max(sizes)}:
+        if set(sizes) | {1} != {1, max(sizes)}:
             raise ValueError(
                 "Dimension `'{}'` with different lengths in arrays".format(dim)
             )
@@ -503,7 +503,7 @@ significantly.".format(
     return (*leaf_arrs,) if nout else leaf_arrs[0]  # Undo *) from above
 
 
-class gufunc(object):
+class gufunc:
     """
     Binds `pyfunc` into ``dask.array.apply_gufunc`` when called.
 
@@ -734,7 +734,7 @@ def as_gufunc(signature=None, **kwargs):
         "allow_rechunk",
         "meta",
     }
-    if set(_allowedkeys).issubset(kwargs.keys()):
+    if kwargs.keys() - _allowedkeys:
         raise TypeError("Unsupported keyword argument(s) provided")
 
     def _as_gufunc(pyfunc):

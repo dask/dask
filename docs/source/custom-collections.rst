@@ -44,15 +44,22 @@ interface is used inside Dask.
 
     Returns
     -------
-    dsk : MutableMapping, None
+    dsk : Mapping, None
         The Dask graph.  If ``None``, this instance will not be interpreted as a
         Dask collection, and none of the remaining interface methods will be
         called.
+
+    If the collection also specifies :meth:`__dask_layers__`, then ``dsk`` must be a
+    :class:`~dask.highlevelgraph.HighLevelGraph` or ``None``.
 
 
 .. method:: __dask_keys__(self)
 
     The output keys for the Dask graph.
+
+    Note that there are additional constraints on keys for a Dask collection
+    than those described in the :doc:`task graph specification documentation <spec>`.
+    These additional constraints are described below.
 
     Returns
     -------
@@ -60,6 +67,29 @@ interface is used inside Dask.
         A possibly nested list of keys that represent the outputs of the graph.
         After computation, the results will be returned in the same layout,
         with the keys replaced with their corresponding outputs.
+
+    All keys must either be non-empty strings or tuples where the first element is a
+    non-empty string, followed by zero or more arbitrary hashables.
+    The non-empty string is commonly known as the *collection name*. All collections
+    embedded in the dask package have exactly one name, but this is not a requirement.
+
+    These are all valid outputs:
+
+    - ``[]``
+    - ``["x", "y"]``
+    - ``[[("y", "a", 0), ("y", "a", 1)], [("y", "b", 0), ("y", "b", 1)]``
+
+
+.. method:: __dask_layers__(self)
+
+    This method should only be implemented if the collection uses
+    :class:`~dask.highlevelgraph.HighLevelGraph` to implement its dask graph.
+
+    Returns
+    -------
+    names : tuple
+        Tuple of names of the HighLevelGraph layers which contain all keys returned by
+        :meth:`__dask_keys__`.
 
 
 .. staticmethod:: __dask_optimize__(dsk, keys, \*\*kwargs)
@@ -100,7 +130,7 @@ interface is used inside Dask.
     Usually attached to the class as a staticmethod, e.g.:
 
     >>> import dask.threaded
-    >>> class MyCollection(object):
+    >>> class MyCollection:
     ...     # Use the threaded scheduler by default
     ...     __dask_scheduler__ = staticmethod(dask.threaded.get)
 
@@ -131,23 +161,33 @@ interface is used inside Dask.
 .. method:: __dask_postpersist__(self)
 
     Return the rebuilder and (optional) extra arguments to rebuild an equivalent
-    Dask collection from a persisted graph.
+    Dask collection from a persisted or rebuilt graph.
 
-    Used to implement ``dask.persist``.
+    Used to implement :func:`dask.persist`.
 
     Returns
     -------
     rebuild : callable
-        A function with the signature ``rebuild(dsk, *extra_args)``. Called
-        with a persisted graph containing only the keys and results from
-        ``__dask_keys__``, as well as any extra arguments as specified in
-        ``extra_args``. Should return an equivalent Dask collection with the
-        same keys as ``self``, but with the results already computed. For
-        example, the ``rebuild`` function for ``dask.array.Array`` is just the
-        ``__init__`` method called with the new graph but the same metadata.
+        A function with the signature
+        ``rebuild(dsk, *extra_args, rename : Mapping[str, str] = None)``.
+        ``dsk`` is a Mapping which contains at least the output keys returned by
+        :meth:`__dask_keys__`. The callable should return an equivalent Dask collection
+        with the same keys as ``self``, but with the results that are computed through a
+        different graph. In the case of :func:`dask.persist`, the new graph will have
+        just the output keys and the values already computed.
+
+        If the optional parameter ``rename`` is specified, it indicates that output
+        keys may be changing too; e.g. if the previous output of :meth:`__dask_keys__`
+        was ``[("a", 0), ("a", 1)]``, after calling
+        ``rebuild(dsk, *extra_args, rename={"a": "b"})`` it must become
+        ``[("b", 0), ("b", 1)]``.
+        The ``rename`` mapping may not contain the collection name(s); in such case the
+        associated keys do not change. It may contain replacements for unexpected names,
+        which must be ignored.
+
     extra_args : tuple
         Any extra arguments to pass to ``rebuild`` after ``dsk``. If no extra
-        arguments should be an empty tuple.
+        arguments are necessary, it must be an empty tuple.
 
 
 .. note:: It's also recommended to define ``__dask_tokenize__``,
@@ -436,7 +476,8 @@ elements of ``dask.delayed``:
 .. code:: python
 
     # Saved as dask_tuple.py
-    from dask.base import DaskMethodsMixin
+    import dask
+    from dask.base import DaskMethodsMixin, replace_name_in_key
     from dask.optimization import cull
 
     # We subclass from DaskMethodsMixin to add common dask methods to our
@@ -472,16 +513,21 @@ elements of ``dask.delayed``:
             return tuple, ()
 
         def __dask_postpersist__(self):
-            # Since our __init__ takes a graph as its first argument, our
-            # rebuild function can just be the class itself. For extra
-            # arguments we also return a tuple containing just the keys.
-            return Tuple, (self._keys,)
+            # We need to return a callable with the signature
+            # rebuild(dsk, *extra_args, rename: Mapping[str, str] = None)
+            return Tuple._rebuild, (self._keys,)
+
+        @staticmethod
+        def _rebuild(dsk, keys, *, rename=None):
+            if rename is not None:
+                keys = [replace_name_in_key(key, rename) for key in keys]
+            return Tuple(dsk, keys)
 
         def __dask_tokenize__(self):
             # For tokenize to work we want to return a value that fully
             # represents this object. In this case it's the list of keys
             # to be computed.
-            return tuple(self._keys)
+            return self._keys
 
 Demonstrating this class:
 
@@ -491,14 +537,16 @@ Demonstrating this class:
     >>> from operator import add, mul
 
     # Define a dask graph
-    >>> dsk = {'a': 1,
-    ...        'b': 2,
-    ...        'c': (add, 'a', 'b'),
-    ...        'd': (mul, 'b', 2),
-    ...        'e': (add, 'b', 'c')}
+    >>> dsk = {"k0": 1,
+    ...        ("x", "k1"): 2,
+    ...        ("x", 1): (add, "k0", ("x", "k1")),
+    ...        ("x", 2): (mul, ("x", "k1"), 2),
+    ...        ("x", 3): (add, ("x", "k1"), ("x", 1))}
 
-    # The output keys for this graph
-    >>> keys = ['b', 'c', 'd', 'e']
+    # The output keys for this graph.
+    # The first element of each tuple must be the same across the whole collection;
+    # the remainder are arbitrary, unique hashables
+    >>> keys = [("x", "k1"), ("x", 1), ("x", 2), ("x", 3)]
 
     >>> x = Tuple(dsk, keys)
 
@@ -511,10 +559,7 @@ Demonstrating this class:
     >>> isinstance(x2, Tuple)
     True
     >>> x2.__dask_graph__()
-    {'b': 2,
-     'c': 3,
-     'd': 4,
-     'e': 5}
+    {('x', 'k1'): 2, ('x', 1): 3, ('x', 2): 4, ('x', 3): 5}
     >>> x2.compute()
     (2, 3, 4, 5)
 
@@ -582,7 +627,7 @@ Example
     >>> from dask.base import tokenize, normalize_token
 
     # Define a tokenize implementation using a method.
-    >>> class Foo(object):
+    >>> class Foo:
     ...     def __init__(self, a, b):
     ...         self.a = a
     ...         self.b = b
@@ -598,7 +643,7 @@ Example
     True
 
     # Register an implementation with normalize_token
-    >>> class Bar(object):
+    >>> class Bar:
     ...     def __init__(self, x, y):
     ...         self.x = x
     ...         self.y = y

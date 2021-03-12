@@ -4,12 +4,13 @@ from distutils.version import LooseVersion
 from itertools import cycle
 from operator import itemgetter, add
 
+from tlz import groupby, unique, accumulate, pluck
+
 from ..utils import funcname, import_required, apply
 from ..core import istask
 
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
-_TOOLZ_MISSING_MSG = "Diagnostics plots require `toolz` to be installed"
 
 
 def unquote(expr):
@@ -129,16 +130,15 @@ def get_colors(palette, funcs):
         Iterable of function names
     """
     palettes = import_required("bokeh.palettes", _BOKEH_MISSING_MSG)
-    tz = import_required("tlz", _TOOLZ_MISSING_MSG)
 
-    unique_funcs = list(sorted(tz.unique(funcs)))
+    unique_funcs = sorted(unique(funcs))
     n_funcs = len(unique_funcs)
     palette_lookup = palettes.all_palettes[palette]
     keys = list(sorted(palette_lookup.keys()))
     index = keys[min(bisect_left(keys, n_funcs), len(keys) - 1)]
     palette = palette_lookup[index]
     # Some bokeh palettes repeat colors, we want just the unique set
-    palette = list(tz.unique(palette))
+    palette = list(unique(palette))
     if len(palette) > n_funcs:
         # Consistently shuffle palette - prevents just using low-range
         random.Random(42).shuffle(palette)
@@ -146,7 +146,7 @@ def get_colors(palette, funcs):
     return [color_lookup[n] for n in funcs]
 
 
-def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
+def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
     If multiple profilers are passed in, the plots are stacked vertically.
@@ -161,6 +161,8 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
         If True (default), the plot is opened in a browser.
     save : boolean, optional
         If True (default), the plot is saved to disk.
+    mode : str, optional
+        Mode passed to bokeh.output_file()
     **kwargs
         Other keyword arguments, passed to bokeh.figure. These will override
         all defaults set by visualize.
@@ -183,7 +185,7 @@ def visualize(profilers, file_path=None, show=True, save=True, **kwargs):
 
     if not in_notebook:
         file_path = file_path or "profile.html"
-        bp.output_file(file_path)
+        bp.output_file(file_path, mode=mode)
 
     if not isinstance(profilers, list):
         profilers = [profilers]
@@ -245,21 +247,24 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
 
-    tz = import_required("tlz", _TOOLZ_MISSING_MSG)
-
     defaults = dict(
         title="Profile Results",
         tools="hover,save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:
         keys, tasks, starts, ends, ids = zip(*results)
 
-        id_group = tz.groupby(itemgetter(4), results)
+        id_group = groupby(itemgetter(4), results)
         timings = dict(
             (k, [i.end_time - i.start_time for i in v]) for (k, v) in id_group.items()
         )
@@ -349,9 +354,14 @@ def plot_resources(results, palette="Viridis", **kwargs):
         title="Profile Results",
         tools="save,reset,xwheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
     if results:
         t, mem, cpu = zip(*results)
@@ -436,28 +446,31 @@ def plot_cache(
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
     from bokeh.models import HoverTool
 
-    tz = import_required("tlz", _TOOLZ_MISSING_MSG)
-
     defaults = dict(
         title="Profile Results",
         tools="hover,save,reset,wheel_zoom,xpan",
         toolbar_location="above",
-        plot_width=800,
-        plot_height=300,
+        width=800,
+        height=300,
     )
+    # Support plot_width and plot_height for backwards compatibility
+    if "plot_width" in kwargs:
+        kwargs["width"] = kwargs.pop("plot_width")
+    if "plot_height" in kwargs:
+        kwargs["height"] = kwargs.pop("plot_height")
     defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
 
     if results:
         starts, ends = list(zip(*results))[3:]
-        tics = list(sorted(tz.unique(starts + ends)))
-        groups = tz.groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
+        tics = sorted(unique(starts + ends))
+        groups = groupby(lambda d: pprint_task(d[1], dsk, label_size), results)
         data = {}
         for k, vals in groups.items():
             cnts = dict.fromkeys(tics, 0)
             for v in vals:
                 cnts[v.cache_time] += v.metric
                 cnts[v.free_time] -= v.metric
-            data[k] = [0] + list(tz.accumulate(add, tz.pluck(1, sorted(cnts.items()))))
+            data[k] = [0] + list(accumulate(add, pluck(1, sorted(cnts.items()))))
 
         tics = [0] + [i - start_time for i in tics]
         p = bp.figure(x_range=[0, max(tics)], **defaults)

@@ -1,3 +1,4 @@
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 import pytest
 
 distributed = pytest.importorskip("distributed")
@@ -10,6 +11,7 @@ from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
+import dask.bag as db
 from dask.delayed import Delayed
 from dask.utils import tmpdir, get_named_args
 from distributed import futures_of
@@ -21,6 +23,7 @@ from distributed.utils_test import (  # noqa F401
     cluster_fixture,
     loop,
     client as c,
+    varying,
 )
 
 
@@ -70,6 +73,12 @@ def test_persist_nested(c):
 def test_futures_to_delayed_dataframe(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
+
+    from dask.array.numpy_compat import _numpy_120
+
+    if _numpy_120:
+        pytest.skip("https://github.com/dask/dask/issues/7170")
+
     df = pd.DataFrame({"x": [1, 2, 3]})
 
     futures = c.scatter([df, df])
@@ -80,8 +89,34 @@ def test_futures_to_delayed_dataframe(c):
         ddf = dd.from_delayed([1, 2])
 
 
+@pytest.mark.parametrize("fuse", [True, False])
+def test_fused_blockwise_dataframe_merge(c, fuse):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Generate two DataFrames with more partitions than
+    # the `max_branch` default used for shuffling (32).
+    # We need a multi-stage shuffle to cover #7178 fix.
+    size = 35
+    df1 = pd.DataFrame({"x": range(size), "y": range(size)})
+    df2 = pd.DataFrame({"x": range(size), "z": range(size)})
+    ddf1 = dd.from_pandas(df1, npartitions=size) + 10
+    ddf2 = dd.from_pandas(df2, npartitions=5) + 10
+    df1 += 10
+    df2 += 10
+
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        ddfm = ddf1.merge(ddf2, on=["x"], how="left")
+        ddfm.head()  # https://github.com/dask/dask/issues/7178
+        dfm = ddfm.compute().sort_values("x")
+        # We call compute above since `sort_values` is not
+        # supported in `dask.dataframe`
+    dd.utils.assert_eq(
+        dfm, df1.merge(df2, on=["x"], how="left").sort_values("x"), check_index=False
+    )
+
+
 def test_futures_to_delayed_bag(c):
-    db = pytest.importorskip("dask.bag")
     L = [1, 2, 3]
 
     futures = c.scatter([L, L])
@@ -116,6 +151,9 @@ def test_local_get_with_distributed_active(c, s, a, b):
 
 
 def test_to_hdf_distributed(c):
+    pytest.importorskip("numpy")
+    pytest.importorskip("pandas")
+
     from ..dataframe.io.tests.test_hdf import test_to_hdf
 
     test_to_hdf()
@@ -136,6 +174,9 @@ def test_to_hdf_distributed(c):
     ],
 )
 def test_to_hdf_scheduler_distributed(npartitions, c):
+    pytest.importorskip("numpy")
+    pytest.importorskip("pandas")
+
     from ..dataframe.io.tests.test_hdf import test_to_hdf_schedulers
 
     test_to_hdf_schedulers(None, npartitions)
@@ -213,3 +254,115 @@ def test_local_scheduler():
         assert len(z.dask) == 1
 
     asyncio.get_event_loop().run_until_complete(f())
+
+
+@gen_cluster(client=True)
+async def test_annotations_blockwise_unpack(c, s, a, b):
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+    from dask.array.utils import assert_eq
+
+    # A flaky doubling function -- need extra args because it is called before
+    # application to establish dtype/meta.
+    scale = varying([ZeroDivisionError("one"), ZeroDivisionError("two"), 2, 2])
+
+    def flaky_double(x):
+        return scale() * x
+
+    # A reliable double function.
+    def reliable_double(x):
+        return 2 * x
+
+    x = da.ones(10, chunks=(5,))
+
+    # The later annotations should not override the earlier annotations
+    with dask.annotate(retries=2):
+        y = x.map_blocks(flaky_double, meta=np.array((), dtype=np.float_))
+    with dask.annotate(retries=0):
+        z = y.map_blocks(reliable_double, meta=np.array((), dtype=np.float_))
+
+    with dask.config.set(optimization__fuse__active=False):
+        z = await c.compute(z)
+
+    assert_eq(z, np.ones(10) * 4.0)
+
+
+@pytest.mark.parametrize(
+    "io",
+    [
+        "ones",
+        "zeros",
+        "full",
+    ],
+)
+@pytest.mark.parametrize("fuse", [True, False])
+def test_blockwise_array_creation(c, io, fuse):
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    chunks = (5, 2)
+    shape = (10, 4)
+
+    if io == "ones":
+        darr = da.ones(shape, chunks=chunks)
+        narr = np.ones(shape)
+    elif io == "zeros":
+        darr = da.zeros(shape, chunks=chunks)
+        narr = np.zeros(shape)
+    elif io == "full":
+        darr = da.full(shape, 10, chunks=chunks)
+        narr = np.full(shape, 10)
+
+    darr += 2
+    narr += 2
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        darr.compute()
+        da.assert_eq(darr, narr)
+
+
+@gen_cluster(client=True)
+async def test_combo_of_layer_types(c, s, a, b):
+    """Check pack/unpack of a HLG that has every type of Layers!"""
+
+    da = pytest.importorskip("dask.array")
+    dd = pytest.importorskip("dask.dataframe")
+    np = pytest.importorskip("numpy")
+    pd = pytest.importorskip("pandas")
+
+    def add(x, y, z, extra_arg):
+        return x + y + z + extra_arg
+
+    y = c.submit(lambda x: x, 2)
+    z = c.submit(lambda x: x, 3)
+    x = da.blockwise(
+        add,
+        "x",
+        da.zeros((3,), chunks=(1,)),
+        "x",
+        da.ones((3,), chunks=(1,)),
+        "x",
+        y,
+        None,
+        concatenate=False,
+        dtype=int,
+        extra_arg=z,
+    )
+
+    df = dd.from_pandas(pd.DataFrame({"a": np.arange(3)}), npartitions=3)
+    df = df.shuffle("a", shuffle="tasks")
+    df = df["a"].to_dask_array()
+
+    res = x.sum() + df.sum()
+    res = await c.compute(res, optimize_graph=False)
+    assert res == 21
+
+
+@gen_cluster(client=True)
+async def test_annotation_pack_unpack(c, s, a, b):
+    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
+
+    annotations = {"workers": ("alice",)}
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
+    annotations = unpacked_hlg["annotations"]
+    assert annotations == {"workers": {"n": ("alice",)}}

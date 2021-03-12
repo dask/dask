@@ -1,3 +1,6 @@
+import importlib
+
+
 def inc(x):
     return x + 1
 
@@ -10,7 +13,7 @@ def add(x, y):
     return x + y
 
 
-class GetFunctionTestMixin(object):
+class GetFunctionTestMixin:
     """
     The GetFunctionTestCase class can be imported and used to test foreign
     implementations of the `get` function specification. It aims to enforce all
@@ -112,3 +115,11 @@ class GetFunctionTestMixin(object):
         dependencies = {"a": (), "b": {"a"}}
         graph = HighLevelGraph(layers, dependencies)
         assert self.get(graph, "z") == 4
+
+
+def import_or_none(name):
+    """Import a module and return it; in case of failure; return None"""
+    try:
+        return importlib.import_module(name)
+    except (ImportError, AttributeError):
+        return None

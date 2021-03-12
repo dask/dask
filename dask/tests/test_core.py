@@ -185,7 +185,7 @@ def test_subs():
     assert subs((sum, [1, ["x"]]), "x", 2) == (sum, [1, [2]])
 
 
-class MutateOnEq(object):
+class MutateOnEq:
     hit_eq = 0
 
     def __eq__(self, other):

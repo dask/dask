@@ -1,8 +1,13 @@
 import io
 import pandas as pd
-from dask.bytes import open_files, read_bytes
-import dask
+from fsspec.core import open_files
+
+from ...core import flatten
+from ...base import compute as dask_compute
+from ...delayed import delayed
+from ...bytes import read_bytes
 from ..utils import insert_meta_param_description, make_meta
+from .io import from_delayed
 
 
 def to_json(
@@ -73,13 +78,13 @@ def to_json(
         **(storage_options or {})
     )
     parts = [
-        dask.delayed(write_json_partition)(d, outfile, kwargs)
+        delayed(write_json_partition)(d, outfile, kwargs)
         for outfile, d in zip(outfiles, df.to_delayed())
     ]
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
-        dask.compute(parts, **compute_kwargs)
+        dask_compute(parts, **compute_kwargs)
         return [f.path for f in outfiles]
     else:
         return parts
@@ -168,8 +173,6 @@ def read_json(
 
     >> dd.read_json('data/file*.csv', blocksize=2**28)
     """
-    import dask.dataframe as dd
-
     if lines is None:
         lines = orient == "records"
     if orient != "records" and lines:
@@ -191,17 +194,15 @@ def read_json(
             compression=compression,
             **storage_options
         )
-        chunks = list(dask.core.flatten(chunks))
+        chunks = list(flatten(chunks))
         if meta is None:
             meta = read_json_chunk(first, encoding, errors, engine, kwargs)
         meta = make_meta(meta)
         parts = [
-            dask.delayed(read_json_chunk)(
-                chunk, encoding, errors, engine, kwargs, meta=meta
-            )
+            delayed(read_json_chunk)(chunk, encoding, errors, engine, kwargs, meta=meta)
             for chunk in chunks
         ]
-        return dd.from_delayed(parts, meta=meta)
+        return from_delayed(parts, meta=meta)
     else:
         files = open_files(
             url_path,
@@ -212,10 +213,9 @@ def read_json(
             **storage_options
         )
         parts = [
-            dask.delayed(read_json_file)(f, orient, lines, engine, kwargs)
-            for f in files
+            delayed(read_json_file)(f, orient, lines, engine, kwargs) for f in files
         ]
-        return dd.from_delayed(parts, meta=meta)
+        return from_delayed(parts, meta=meta)
 
 
 def read_json_chunk(chunk, encoding, errors, engine, kwargs, meta=None):

@@ -255,6 +255,72 @@ You can pass rechunk any valid chunking form:
    x = x.rechunk({0: 50, 1: 1000})
 
 
+.. _array-chunks.reshaping:
+
+Reshaping
+---------
+
+The efficiency of :func:`dask.array.reshape` can depend strongly on the chunking
+of the input array. In reshaping operations, there's the concept of "fast-moving"
+or "high" axes. For a 2d array the second axis (``axis=1``) is the fastest-moving,
+followed by the first. This means that if we draw a line indicating how values
+are filled, we move across the "columns" first (along ``axis=1``), and then down
+to the next row.
+
+.. image:: images/reshape.png
+
+Now consider the impact of Dask's chunking on this operation. If the slow-moving
+axis (just ``axis=0`` in this case) has chunks larger than size 1, we run into
+a problem.
+
+.. image:: images/reshape_problem.png
+
+The first block has a shape ``(2, 2)``. Following the rules of ``reshape`` we
+take the two values from the first row of block 1. But then we cross a chunk
+boundary (from 1 to 2) while we still have two "unused" values in the first
+block. There's no way to line up the input blocks with the output shape. We
+need to somehow rechunk the input to be compatible with the output shape. We
+have two options
+
+1. Merge chunks using the logic in :meth:`dask.array.rechunk`. This avoids
+   making two many tasks / blocks, at the cost of some communication and
+   larger intermediates. This is the default behavior.
+2. Use ``da.reshape(x, shape, merge_chunks=False)`` to avoid merging chunks
+   by *splitting the input*. In particular, we can rechunk all the
+   slow-moving axes to have a chunksize of 1. This avoids
+   communication and moving around large amounts of data, at the cost of
+   a larger task graph (potentially much larger, since the number of chunks
+   on the slow-moving axes will equal the length of those axes.).
+
+Visually, here's the second option:
+
+.. image:: images/reshape_rechunked.png
+
+Which if these is better depends on your problem. If communication is very
+expensive and your data is relatively small along the slow-moving axes, then
+``merge_chunks=False`` may be better. Let's compare the task graphs of these
+two on a problem reshaping a 3-d array to a 2-d, where the input array doesn't
+have ``chunksize=1`` on the slow-moving axes.
+
+.. code-block:: python
+
+   >>> a = da.from_array(np.arange(24).reshape(2, 3, 4), chunks=((2,), (2, 1), (2, 2)))
+   >>> a
+   dask.array<array, shape=(2, 3, 4), dtype=int64, chunksize=(2, 2, 2), chunktype=numpy.ndarray>
+   >>> a.reshape(6, 4).visualize()
+
+.. image:: images/merge_chunks.png
+
+.. code-block:: python
+
+   >>> a.reshape(6, 4, merge_chunks=False).visualize()
+
+.. image:: images/merge_chunks_false.png
+
+By default, some intermediate chunks chunks are merged, leading to a more complicated task
+graph. With ``merge_chunks=False`` we split the input chunks (leading to more overall tasks,
+depending on the size of the array) but avoid later communication.
+
 Automatic Chunking
 ------------------
 

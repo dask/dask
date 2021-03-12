@@ -8,9 +8,9 @@ This page provides resources on how best to contribute.
 .. note:: Dask strives to be a welcoming community of individuals with diverse
    backgrounds. For more information on our values, please see our
    `code of conduct
-   <https://github.com/dask/governance/blob/master/code-of-conduct.md>`_
+   <https://github.com/dask/governance/blob/main/code-of-conduct.md>`_
    and
-   `diversity statement <https://github.com/dask/governance/blob/master/diversity.md>`_
+   `diversity statement <https://github.com/dask/governance/blob/main/diversity.md>`_
 
 Where to ask for help
 ---------------------
@@ -79,6 +79,13 @@ Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
 clone the fork::
 
    git clone https://github.com/<your-github-username>/dask
+   cd dask
+
+You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
+can successfully install Dask)::
+
+   git remote add upstream https://github.com/dask/dask
+   git pull upstream --tags
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
 
@@ -86,16 +93,15 @@ Contributions to Dask can then be made by submitting pull requests on GitHub.
 Install
 ~~~~~~~
 
-To build the library you can install the necessary requirements using
-pip or conda_::
-
-  cd dask
+From the top level of your cloned Dask repository you can install a
+local version of Dask, along with all necessary dependencies, using
+pip or conda_
 
 .. _conda: https://conda.io/
 
 ``pip``::
 
-  python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete,test]"
 
 ``conda``::
 
@@ -124,7 +130,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.6, 3.7, and 3.8.
+Dask supports Python versions 3.7, 3.8, and 3.9.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -237,7 +243,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
+Docstrings are tested under Python 3.8 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules

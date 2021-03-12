@@ -222,43 +222,51 @@ def test_flip(funcname, kwargs, shape):
 
 
 @pytest.mark.parametrize(
-    "x_shape, y_shape",
+    "x_shape, y_shape, x_chunks, y_chunks",
     [
-        [(), ()],
-        [(), (7,)],
-        [(), (7, 11)],
-        [(), (7, 11, 15)],
-        [(), (7, 11, 15, 19)],
-        [(7,), ()],
-        [(7,), (7,)],
-        [(11,), (11, 7)],
-        [(15,), (7, 15, 11)],
-        [(19,), (7, 11, 19, 15)],
-        [(7, 11), ()],
-        [(7, 11), (11,)],
-        [(7, 11), (11, 7)],
-        [(11, 15), (7, 15, 11)],
-        [(15, 19), (7, 11, 19, 15)],
-        [(7, 11, 15), ()],
-        [(7, 11, 15), (15,)],
-        [(7, 11, 15), (15, 7)],
-        [(7, 11, 15), (7, 15, 11)],
-        [(11, 15, 19), (7, 11, 19, 15)],
-        [(7, 11, 15, 19), ()],
-        [(7, 11, 15, 19), (19,)],
-        [(7, 11, 15, 19), (19, 7)],
-        [(7, 11, 15, 19), (11, 19, 13)],
-        [(7, 11, 15, 19), (7, 11, 19, 15)],
+        [(), (), (), ()],
+        [(), (7,), (), ()],
+        [(), (7, 11), (), ()],
+        [(), (7, 11, 15), (), ()],
+        [(), (7, 11, 15, 19), (), ()],
+        [(7,), (), (), ()],
+        [(7,), (7,), (), ()],
+        [(11,), (11, 7), (), ()],
+        [(15,), (7, 15, 11), (), ()],
+        [(19,), (7, 11, 19, 15), (), ()],
+        [(7, 11), (), (), ()],
+        [(7, 11), (11,), (), ()],
+        [(7, 11), (11, 7), (), ()],
+        [(11, 15), (7, 15, 11), (), ()],
+        [(15, 19), (7, 11, 19, 15), (), ()],
+        [(7, 11, 15), (), (), ()],
+        [(7, 11, 15), (15,), (), ()],
+        [(7, 11, 15), (15, 7), (), ()],
+        [(7, 11, 15), (7, 15, 11), (), ()],
+        [(11, 15, 19), (7, 11, 19, 15), (), ()],
+        [(7, 11, 15, 19), (), (), ()],
+        [(7, 11, 15, 19), (19,), (), ()],
+        [(7, 11, 15, 19), (19, 7), (), ()],
+        [(7, 11, 15, 19), (11, 19, 13), (), ()],
+        [(7, 11, 15, 19), (7, 11, 19, 15), (), ()],
+        # These tests use explicitly special/disparate chunk sizes:
+        [(), (7,), (), (5,)],
+        [(), (7, 11, 15, 19), (), (1, 3, 5, 19)],
+        [(7, 11), (11, 7), (1, 1), (1, 1)],
+        [(7, 11), (11, 7), (3, 5), (4, 2)],
+        [(7, 11), (11, 7), (7, 11), (11, 7)],
+        [(11, 15, 19), (7, 11, 19, 15), (7, 7, 7), (3, 9, 9, 9)],
+        [(3, 3, 20, 30), (3, 3, 30, 20), (1, 3, 2, 6), (1, 3, 5, 10)],
     ],
 )
-def test_matmul(x_shape, y_shape):
+def test_matmul(x_shape, y_shape, x_chunks, y_chunks):
     np.random.seed(3732)
 
     x = np.random.random(x_shape)[()]
     y = np.random.random(y_shape)[()]
 
-    a = da.from_array(x, chunks=tuple((i // 2) for i in x.shape))
-    b = da.from_array(y, chunks=tuple((i // 2) for i in y.shape))
+    a = da.from_array(x, chunks=x_chunks or tuple((i // 2) for i in x.shape))
+    b = da.from_array(y, chunks=y_chunks or tuple((i // 2) for i in y.shape))
 
     expected = None
     try:
@@ -527,10 +535,16 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
 
-def test_bincount_with_weights():
+@pytest.mark.parametrize(
+    "weights",
+    [
+        np.array([1, 2, 1, 0.5, 1], dtype=np.float32),
+        np.array([1, 2, 1, 0, 1], dtype=np.int32),
+    ],
+)
+def test_bincount_with_weights(weights):
     x = np.array([2, 1, 5, 2, 1])
     d = da.from_array(x, chunks=2)
-    weights = np.array([1, 2, 1, 0.5, 1])
 
     dweights = da.from_array(weights, chunks=2)
     e = da.bincount(d, weights=dweights, minlength=6)
@@ -976,6 +990,24 @@ def test_ravel_1D_no_op():
     assert_eq(dx.ravel(), x.ravel())
     # Unknown dims
     assert_eq(dx[dx > 2].ravel(), x[x > 2].ravel())
+
+
+def test_ravel_with_array_like():
+    # int
+    assert_eq(np.ravel(0), da.ravel(0))
+    assert isinstance(da.ravel(0), da.core.Array)
+
+    # list
+    assert_eq(np.ravel([0, 0]), da.ravel([0, 0]))
+    assert isinstance(da.ravel([0, 0]), da.core.Array)
+
+    # tuple
+    assert_eq(np.ravel((0, 0)), da.ravel((0, 0)))
+    assert isinstance(da.ravel((0, 0)), da.core.Array)
+
+    # nested i.e. tuples in list
+    assert_eq(np.ravel([(0,), (0,)]), da.ravel([(0,), (0,)]))
+    assert isinstance(da.ravel([(0,), (0,)]), da.core.Array)
 
 
 @pytest.mark.parametrize("is_func", [True, False])
@@ -1541,22 +1573,54 @@ def test_coarsen_with_excess():
     )
 
 
-def test_coarsen_bad_chunks():
+@pytest.mark.parametrize("chunks", [(x,) * 3 for x in range(16, 32)])
+def test_coarsen_bad_chunks(chunks):
+    x1 = da.arange(np.sum(chunks), chunks=5)
+    x2 = x1.rechunk(tuple(chunks))
+    assert_eq(
+        da.coarsen(np.sum, x1, {0: 10}, trim_excess=True),
+        da.coarsen(np.sum, x2, {0: 10}, trim_excess=True),
+    )
 
-    x1 = da.arange(10, chunks=5)
-    x2 = x1.rechunk((1, 2, 3, 4))
-    assert_eq(da.coarsen(np.sum, x1, {0: 5}), da.coarsen(np.sum, x2, {0: 5}))
 
-
-def test_aligned_coarsen_chunks():
+@pytest.mark.parametrize(
+    "chunks, divisor",
+    [
+        ((1, 1), 1),
+        ((1, 1), 2),
+        ((1, 1, 1), 2),
+        ((10, 1), 10),
+        ((20, 10, 15, 23, 24), 10),
+        ((20, 10, 15, 23, 24), 8),
+        ((10, 20, 30, 40, 2), 10),
+        ((20, 10, 15, 42, 23, 24), 16),
+        ((20, 10, 15, 47, 23, 24), 10),
+        ((2, 10, 15, 47, 23, 24), 4),
+    ],
+)
+def test_aligned_coarsen_chunks(chunks, divisor):
 
     from ..routines import aligned_coarsen_chunks as acc
 
-    assert acc((20, 10, 15, 23, 24), 10) == (20, 10, 20, 20, 20, 2)
-    assert acc((20, 10, 15, 42, 23, 24), 10) == (20, 10, 20, 40, 20, 20, 4)
-    assert acc((20, 10, 15, 47, 23, 24), 10) == (20, 10, 20, 50, 20, 10, 9)
-    assert acc((2, 10, 15, 47, 23, 24), 10) == (10, 20, 50, 20, 20, 1)
-    assert acc((10, 20, 30, 40, 2), 10) == (10, 20, 30, 40, 2)
+    aligned_chunks = acc(chunks, divisor)
+    any_remainders = (np.array(aligned_chunks) % divisor) != 0
+    valid_chunks = np.where((np.array(chunks) % divisor) == 0)[0]
+
+    # check that total number of elements is conserved
+    assert sum(aligned_chunks) == sum(chunks)
+    # check that valid chunks are not modified
+    assert [chunks[idx] for idx in valid_chunks] == [
+        aligned_chunks[idx] for idx in valid_chunks
+    ]
+    # check that no chunks are 0
+    assert (np.array(aligned_chunks) > 0).all()
+    # check that at most one chunk was added
+    assert len(aligned_chunks) <= len(chunks) + 1
+    # check that either 0 or 1 chunks are not divisible by divisor
+    assert any_remainders.sum() in (0, 1)
+    # check that the only indivisible chunk is the last
+    if any_remainders.sum() == 1:
+        assert any_remainders[-1] == 1
 
 
 def test_insert():
@@ -1598,6 +1662,54 @@ def test_insert():
         da.insert(a, [3], -1, axis=-3)
 
 
+def test_append():
+    x = np.random.randint(10, size=(10, 10))
+    a = da.from_array(x, chunks=(5, 5))
+
+    # appendage for axis 1 / -1
+    y1 = np.random.randint(10, size=(10, 5))
+    b1 = da.from_array(y1, chunks=(4, 4))
+
+    # appendage for axis 0 / -2
+    y0 = np.random.randint(10, size=(5, 10))
+    b0 = da.from_array(y0, chunks=(4, 4))
+
+    # test axis None
+    assert_eq(np.append(x, x, axis=None), da.append(a, a, axis=None))
+    assert_eq(np.append(x, y0, axis=None), da.append(a, b0, axis=None))
+    assert_eq(np.append(x, y1, axis=None), da.append(a, b1, axis=None))
+
+    # test axis 0 / -2
+    assert_eq(np.append(x, y0, axis=0), da.append(a, b0, axis=0))
+    assert_eq(np.append(x, y0, axis=-2), da.append(a, b0, axis=-2))
+
+    # test axis 1 / -1
+    assert_eq(np.append(x, y1, axis=1), da.append(a, b1, axis=1))
+    assert_eq(np.append(x, y1, axis=-1), da.append(a, b1, axis=-1))
+
+    # test --> treat values as array_likes
+    assert_eq(
+        np.append(x, ((0,) * 10,) * 10, axis=None),
+        da.append(a, ((0,) * 10,) * 10, axis=None),
+    )
+    assert_eq(
+        np.append(x, ((0,) * 10,) * 10, axis=0), da.append(a, ((0,) * 10,) * 10, axis=0)
+    )
+    assert_eq(
+        np.append(x, ((0,) * 10,) * 10, axis=1), da.append(a, ((0,) * 10,) * 10, axis=1)
+    )
+
+    # check AxisError
+    with pytest.raises(AxisError):
+        da.append(a, ((0,) * 10,) * 10, axis=2)
+    with pytest.raises(AxisError):
+        da.append(a, ((0,) * 10,) * 10, axis=-3)
+
+    # check ValueError if dimensions don't align
+    with pytest.raises(ValueError):
+        da.append(a, (0,) * 10, axis=0)
+
+
 def test_multi_insert():
     z = np.random.randint(10, size=(1, 2))
     c = da.from_array(z, chunks=(1, 2))
@@ -1605,6 +1717,33 @@ def test_multi_insert():
         np.insert(np.insert(z, [0, 1], -1, axis=0), [1], -1, axis=1),
         da.insert(da.insert(c, [0, 1], -1, axis=0), [1], -1, axis=1),
     )
+
+
+def test_delete():
+    x = np.random.randint(10, size=(10, 10))
+    a = da.from_array(x, chunks=(5, 5))
+
+    assert_eq(np.delete(x, 0, axis=0), da.delete(a, 0, axis=0))
+    assert_eq(np.delete(x, 3, axis=-1), da.delete(a, 3, axis=-1))
+    assert_eq(np.delete(x, 5, axis=1), da.delete(a, 5, axis=1))
+    assert_eq(np.delete(x, -1, axis=-2), da.delete(a, -1, axis=-2))
+    assert_eq(np.delete(x, [2, 3, 3], axis=1), da.delete(a, [2, 3, 3], axis=1))
+    assert_eq(
+        np.delete(x, [2, 3, 8, 8], axis=0),
+        da.delete(a, [2, 3, 8, 8], axis=0),
+    )
+    assert_eq(np.delete(x, slice(1, 4), axis=1), da.delete(a, slice(1, 4), axis=1))
+    assert_eq(
+        np.delete(x, slice(1, 10, -1), axis=1), da.delete(a, slice(1, 10, -1), axis=1)
+    )
+
+    assert_eq(np.delete(a, [4, 2], axis=0), da.delete(a, [4, 2], axis=0))
+
+    with pytest.raises(AxisError):
+        da.delete(a, [3], axis=2)
+
+    with pytest.raises(AxisError):
+        da.delete(a, [3], axis=-3)
 
 
 def test_result_type():
@@ -1876,3 +2015,67 @@ def test_iscomplexobj():
 
     a = da.from_array(np.array([1, 2 + 0j]), 2)
     assert np.iscomplexobj(a) is True
+
+
+def test_tril_triu():
+    A = np.random.randn(20, 20)
+    for chk in [5, 4]:
+        dA = da.from_array(A, (chk, chk))
+
+        assert np.allclose(da.triu(dA).compute(), np.triu(A))
+        assert np.allclose(da.tril(dA).compute(), np.tril(A))
+
+        for k in [
+            -25,
+            -20,
+            -19,
+            -15,
+            -14,
+            -9,
+            -8,
+            -6,
+            -5,
+            -1,
+            1,
+            4,
+            5,
+            6,
+            8,
+            10,
+            11,
+            15,
+            16,
+            19,
+            20,
+            21,
+        ]:
+            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
+            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
+
+
+def test_tril_ndims():
+    A = np.random.randint(0, 11, (10, 10, 10))
+    dA = da.from_array(A, chunks=(5, 5, 5))
+    assert_eq(da.triu(dA), np.triu(A))
+
+
+def test_tril_triu_non_square_arrays():
+    A = np.random.randint(0, 11, (30, 35))
+    dA = da.from_array(A, chunks=(5, 5))
+    assert_eq(da.triu(dA), np.triu(A))
+    assert_eq(da.tril(dA), np.tril(A))
+
+
+@pytest.mark.parametrize(
+    "n, k, m, chunks",
+    [(3, 0, 3, "auto"), (3, 1, 3, "auto"), (3, -1, 3, "auto"), (5, 0, 5, 1)],
+)
+def test_tril_triu_indices(n, k, m, chunks):
+    assert_eq(
+        da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
+        np.tril_indices(n=n, k=k, m=m)[0],
+    )
+    assert_eq(
+        da.triu_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
+        np.triu_indices(n=n, k=k, m=m)[0],
+    )

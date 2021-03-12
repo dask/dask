@@ -3,7 +3,6 @@ import math
 
 import tlz as toolz
 import warnings
-from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
@@ -15,7 +14,6 @@ from ....delayed import Delayed
 from ....utils import import_required, natural_sort_key, parse_bytes, apply
 from ...methods import concat
 from ....highlevelgraph import Layer, HighLevelGraph
-from ....blockwise import BlockwiseIO
 
 
 try:
@@ -42,8 +40,20 @@ class ParquetSubgraph(Layer):
     """
 
     def __init__(
-        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
+        self,
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        part_ids=None,
+        common_kwargs=None,
+        annotations=None,
     ):
+        super().__init__(annotations=annotations)
         self.name = name
         self.engine = engine
         self.fs = fs
@@ -53,6 +63,12 @@ class ParquetSubgraph(Layer):
         self.parts = parts
         self.kwargs = kwargs
         self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
+
+        # `kwargs` = user-defined kwargs to be passed for all parts
+        self.kwargs = kwargs
+
+        # `common_kwargs` = engine-gathered kwargs to be passed for all parts
+        self.common_kwargs = common_kwargs if common_kwargs else {}
 
     def __repr__(self):
         return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
@@ -81,10 +97,10 @@ class ParquetSubgraph(Layer):
             self.fs,
             self.engine.read_partition,
             self.meta,
-            [p["piece"] for p in part],
+            [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
             self.index,
-            toolz.merge(part[0]["kwargs"], self.kwargs or {}),
+            toolz.merge(self.common_kwargs, self.kwargs or {}),
         )
 
     def __len__(self):
@@ -111,56 +127,10 @@ class ParquetSubgraph(Layer):
             parts=self.parts,
             kwargs=self.kwargs,
             part_ids={i for i in self.part_ids if (self.name, i) in keys},
+            common_kwargs=self.common_kwargs,
+            annotations=self.annotations,
         )
         return ret, ret.get_dependencies(all_hlg_keys)
-
-
-class BlockwiseParquet(BlockwiseIO):
-    """
-    Specialized BlockwiseIO Layer for read_parquet.
-
-    Enables HighLevelGraph optimizations.
-    """
-
-    def __init__(
-        self, name, engine, fs, meta, columns, index, parts, kwargs, part_ids=None
-    ):
-        self.name = name
-        self.engine = engine
-        self.fs = fs
-        self.meta = meta
-        self.columns = columns
-        self.index = index
-        self.parts = parts
-        self.kwargs = kwargs
-        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
-
-        self.io_name = "blockwise-io-" + name
-        dsk_io = ParquetSubgraph(
-            self.io_name,
-            self.engine,
-            self.fs,
-            self.meta,
-            self.columns,
-            self.index,
-            self.parts,
-            self.kwargs,
-            part_ids=self.part_ids,
-        )
-
-        super().__init__(
-            {self.io_name: dsk_io},
-            self.name,
-            "i",
-            None,
-            [(self.io_name, "i")],
-            {self.io_name: (len(self.part_ids),)},
-        )
-
-    def __repr__(self):
-        return "BlockwiseParquet<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
-        )
 
 
 def read_parquet(
@@ -199,19 +169,22 @@ def read_parquet(
     filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
         List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
         argument will NOT result in row-wise filtering of the final partitions
-        unless `engine="pyarrow-dataset"` is also specified.  For other engines,
+        unless ``engine="pyarrow-dataset"`` is also specified.  For other engines,
         filtering is only performed at the partition level, i.e., to prevent the
         loading of some row-groups and/or files.
 
-        Predicates can be expressed in disjunctive normal form (DNF). This means
-        that the innermost tuple describes a single column predicate. These
-        inner predicates are combined with an AND conjunction into a larger
-        predicate. The outer-most list then combines all of the combined
-        filters with an OR disjunction.
+        For the "pyarrow" engines, predicates can be expressed in disjunctive
+        normal form (DNF). This means that the innermost tuple describes a single
+        column predicate. These inner predicates are combined with an AND
+        conjunction into a larger predicate. The outer-most list then combines all
+        of the combined filters with an OR disjunction.
 
         Predicates can also be expressed as a List[Tuple]. These are evaluated
         as an AND conjunction. To express OR in predictates, one must use the
-        (preferred) List[List[Tuple]] notation.
+        (preferred for "pyarrow") List[List[Tuple]] notation.
+
+        Note that the "fastparquet" engine does not currently support DNF for
+        the filtering of partitioned columns (List[Tuple] is required).
     index : string, list, False or None (default)
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
@@ -252,14 +225,14 @@ def read_parquet(
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
     read_from_paths : bool or None (default)
-        Only used by `ArrowDatasetEngine`. Determines whether the engine should
-        avoid inserting large pyarrow (`ParquetFileFragment`) objects in the
-        task graph.  If this option is `True`, `read_partition` will need to
-        depend on the file path and row-group ID list (rather than a fragment).
-        This option will reduce the size of the task graph, but will add minor
-        overhead to `read_partition`, and will disable row-wise filtering at
-        read time.  By default (None), `ArrowDatasetEngine` will set this
-        option to `False`.
+        Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
+        Determines whether the engine should avoid inserting large pyarrow
+        (``ParquetFileFragment``) objects in the task graph.  If this option
+        is True, ``read_partition`` will need to regenerate the appropriate
+        fragment object from the path and row-group IDs.  This will reduce the
+        size of the task graph, but will add minor overhead to ``read_partition``.
+        By default (None), ``ArrowDatasetEngine`` will set this option to
+        ``False`` when there are filters.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -268,11 +241,11 @@ def read_parquet(
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
         the second level corresponds to the kwargs that will be passed on to
-        the underlying `pyarrow` or `fastparquet` function.
-        Supported top-level keys: 'dataset' (for opening a `pyarrow` dataset),
-        'file' (for opening a `fastparquet` `ParquetFile`), 'read' (for the
+        the underlying ``pyarrow`` or ``fastparquet`` function.
+        Supported top-level keys: 'dataset' (for opening a ``pyarrow`` dataset),
+        'file' (for opening a ``fastparquet`` ``ParquetFile``), 'read' (for the
         backend read function), 'arrow_to_pandas' (for controlling the arguments
-        passed to convert from a `pyarrow.Table.to_pandas()`)
+        passed to convert from a ``pyarrow.Table.to_pandas()``)
 
     Examples
     --------
@@ -286,16 +259,16 @@ def read_parquet(
     if isinstance(columns, str):
         df = read_parquet(
             path,
-            [columns],
-            filters,
-            categories,
-            index,
-            storage_options,
-            engine,
-            gather_statistics,
-            split_row_groups,
-            read_from_paths,
-            chunksize,
+            columns=[columns],
+            filters=filters,
+            categories=categories,
+            index=index,
+            storage_options=storage_options,
+            engine=engine,
+            gather_statistics=gather_statistics,
+            split_row_groups=split_row_groups,
+            read_from_paths=read_from_paths,
+            chunksize=chunksize,
         )
         return df[columns]
 
@@ -311,6 +284,7 @@ def read_parquet(
         storage_options,
         engine,
         gather_statistics,
+        split_row_groups,
         read_from_paths,
         chunksize,
     )
@@ -331,7 +305,7 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
-    meta, statistics, parts, index = engine.read_metadata(
+    read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
@@ -340,9 +314,25 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
-        engine=engine,
         **kwargs,
     )
+
+    # In the future, we may want to give the engine the
+    # option to return a dedicated element for `common_kwargs`.
+    # However, to avoid breaking the API, we just embed this
+    # data in the first element of `parts` for now.
+    # The logic below is inteded to handle backward and forward
+    # compatibility with a user-defined engine.
+    meta, statistics, parts, index = read_metadata_result[:4]
+    common_kwargs = {}
+    if len(read_metadata_result) > 4:
+        # Engine may return common_kwargs as a separate element
+        common_kwargs = read_metadata_result[4]
+    elif len(parts):
+        # If the engine does not return a dedicated
+        # common_kwargs argument, it may be stored in
+        # the first element of `parts`
+        common_kwargs = parts[0].pop("common_kwargs", {})
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -357,7 +347,17 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = BlockwiseParquet(name, engine, fs, meta, columns, index, parts, kwargs)
+    subgraph = ParquetSubgraph(
+        name,
+        engine,
+        fs,
+        meta,
+        columns,
+        index,
+        parts,
+        kwargs,
+        common_kwargs=common_kwargs,
+    )
 
     # Set the index that was previously treated as a column
     if index_in_columns:
@@ -379,10 +379,16 @@ def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
     This function is used by `read_parquet`."""
 
     if isinstance(part, list):
-        dfs = [func(fs, rg, columns.copy(), index, **kwargs) for rg in part]
+        dfs = [
+            func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
+            for (rg, kw) in part
+        ]
         df = concat(dfs, axis=0)
     else:
-        df = func(fs, part, columns, index, **kwargs)
+        # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
+        #       be different for each part.
+        rg, part_kwargs = part
+        df = func(fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs))
 
     if meta.columns.name:
         df.columns.name = meta.columns.name
@@ -569,7 +575,7 @@ def to_parquet(
             df.columns = [
                 c if c not in reserved_names else NONE_LABEL for c in df.columns
             ]
-        index_cols = [c for c in set(df.columns).difference(real_cols)]
+        index_cols = [c for c in set(df.columns) - real_cols]
     else:
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
@@ -674,6 +680,7 @@ def create_metadata_file(
     split_every=32,
     compute=True,
     compute_kwargs=None,
+    fs=None,
 ):
     """Construct a global _metadata file from a list of parquet files.
 
@@ -715,6 +722,12 @@ def create_metadata_file(
         then a ``dask.delayed`` object is returned for future computation.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
+    fs : fsspec object, optional
+        File-system instance to use for file handling. If prefixes have
+        been removed from the elements of ``paths`` before calling this
+        function, an ``fs`` argument must be provided to ensure correct
+        behavior on remote file systems ("naked" paths cannot be used
+        to infer file-system information).
     """
 
     # Get engine.
@@ -728,7 +741,12 @@ def create_metadata_file(
         engine = get_engine(engine)
 
     # Process input path list
-    fs, _, paths = get_fs_token_paths(paths, mode="rb", storage_options=storage_options)
+    if fs is None:
+        # Only do this if an fsspec file-system object is not
+        # already defined. The prefixes may already be stripped.
+        fs, _, paths = get_fs_token_paths(
+            paths, mode="rb", storage_options=storage_options
+        )
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
     ap_kwargs = {"root": root_dir} if root_dir else {}
     root_dir, fns = _analyze_paths(paths, fs, **ap_kwargs)
@@ -936,6 +954,8 @@ def apply_filters(parts, statistics, filters):
         as an AND conjunction. To express OR in predictates, one must use the
         (preferred) List[List[Tuple]] notation.
 
+        Note that the "fastparquet" engine does not currently support DNF for
+        the filtering of partitioned columns (List[Tuple] is required).
     Returns
     -------
     parts, statistics: the same as the input, but possibly a subset
@@ -1139,8 +1159,6 @@ def aggregate_row_groups(parts, stats, chunksize):
             for col, col_add in zip(next_stat["columns"], stat["columns"]):
                 if col["name"] != col_add["name"]:
                     raise ValueError("Columns are different!!")
-                if "null_count" in col:
-                    col["null_count"] += col_add["null_count"]
                 if "min" in col:
                     col["min"] = min(col["min"], col_add["min"])
                 if "max" in col:

@@ -21,6 +21,8 @@ from .utils import (
     _normalize_index_columns,
     Engine,
     _analyze_paths,
+    _flatten_filters,
+    _row_groups_to_parts,
 )
 
 
@@ -181,7 +183,7 @@ def _frag_subset(old_frag, row_groups):
 
 
 def _collect_pyarrow_dataset_frags(
-    ds, filters, valid_paths, fs, split_row_groups, gather_statistics, read_from_paths
+    ds, filters, valid_paths, fs, split_row_groups, gather_statistics
 ):
     """Collect all dataset fragments while applying filters.
 
@@ -243,8 +245,8 @@ def _collect_pyarrow_dataset_frags(
                 for name in partition_names
             ]
 
-        # Append fragements to our "metadata" list
-        if ds_filters or (split_row_groups and not read_from_paths):
+        # Append fragments to our "metadata" list
+        if ds_filters is not None:
             # If we have filters, we need to split the row groups to apply them.
             # If any row-groups are filtered out, we convert the remaining row-groups
             # to a NEW (filtered) fragment, and append the filtered fragment to our
@@ -352,15 +354,6 @@ def _get_pandas_metadata(schema):
         return {}
 
 
-def _flatten_filters(filters):
-    """Flatten DNF-formatted filters (list of tuples)"""
-    return (
-        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
-        if filters
-        else []
-    )
-
-
 def _read_table_from_path(
     path,
     fs,
@@ -376,9 +369,9 @@ def _read_table_from_path(
     """Read arrow table from file path.
 
     Used in all cases by `ArrowLegacyEngine._read_table`.
-    Used by `ArrowDatasetEngine._read_table` when dataset is
-    not partitioned and no filters are specified (otherwise
-    fragments are converted directly into tables).
+    Used by `ArrowDatasetEngine._read_table` when no filters
+    are specified (otherwise fragments are converted directly
+    into tables).
     """
     if partition_keys or (not read_row_groups_supported and row_groups != [None]):
         tables = []
@@ -453,6 +446,25 @@ def _get_rg_statistics(row_group, col_indices):
         return row_group.statistics
 
 
+def _need_fragments(filters, partition_keys):
+    # Check if we need to generate a fragment for filtering.
+    # We only need to do this if we are applying filters to
+    # columns that were not already filtered by "partition".
+
+    partition_cols = (
+        set([v[0] for v in flatten(partition_keys, container=list) if len(v)])
+        if partition_keys
+        else set()
+    )
+    filtered_cols = (
+        set([v[0] for v in flatten(filters, container=list) if len(v)])
+        if filters
+        else set()
+    )
+
+    return bool(filtered_cols - partition_cols)
+
+
 #
 #  ArrowDatasetEngine
 #
@@ -475,16 +487,8 @@ class ArrowDatasetEngine(Engine):
         filters=None,
         split_row_groups=None,
         read_from_paths=None,
-        engine=None,
         **kwargs,
     ):
-        # Reading from fragments by default if we are filtering.
-        # Otherwise, we will read from (path, row-group) info
-        # to avoid passing large object in the task graph.
-        # (This does not affect `ArrowLegacyEngine` behavior)
-        if read_from_paths is None:
-            read_from_paths = filters is None
-
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
         # This may also set split_row_groups and gather_statistics,
@@ -503,7 +507,6 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             index,
-            read_from_paths,
             kwargs.get("dataset", {}),
         )
 
@@ -514,7 +517,7 @@ class ArrowDatasetEngine(Engine):
 
         # Finally, construct our list of `parts`
         # (and a corresponding list of statistics)
-        parts, stats = cls._construct_parts(
+        parts, stats, common_kwargs = cls._construct_parts(
             fs,
             metadata,
             schema,
@@ -527,6 +530,12 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             read_from_paths,
         )
+
+        # Add `common_kwargs` to the first element of `parts`.
+        # We can return as a separate element in the future, but
+        # should avoid breaking the API for now.
+        if len(parts):
+            parts[0]["common_kwargs"] = common_kwargs
 
         return (meta, stats, parts, index)
 
@@ -575,6 +584,10 @@ class ArrowDatasetEngine(Engine):
             # `piece` contains (path, row_group, partition_keys)
             (path_or_frag, row_group, partition_keys) = piece
 
+        # Convert row_group to a list and be sure to
+        # check if msgpack converted it to a tuple
+        if isinstance(row_group, tuple):
+            row_group = list(row_group)
         if not isinstance(row_group, list):
             row_group = [row_group]
 
@@ -594,10 +607,7 @@ class ArrowDatasetEngine(Engine):
         # For pyarrow.dataset api, if we did not read directly from
         # fragments, we need to add the partitioned columns here.
         if partitions and isinstance(partitions, list):
-            if not isinstance(path_or_frag, pa_ds.ParquetFileFragment):
-                keys_dict = {k: v for (k, v) in partition_keys}
-            else:
-                keys_dict = {}
+            keys_dict = {k: v for (k, v) in partition_keys}
             for partition in partitions:
                 if partition.name not in arrow_table.schema.names:
                     # We read from file paths, so the partition
@@ -617,7 +627,7 @@ class ArrowDatasetEngine(Engine):
         # to categorigal manually for integer types.
         if partitions and isinstance(partitions, list):
             for partition in partitions:
-                if df[partition.name].dtype != pd.Categorical:
+                if df[partition.name].dtype.name != "category":
                     # We read directly from fragments, so the partition
                     # columns are already in our dataframe.  We just
                     # need to convert non-categorical types.
@@ -651,9 +661,7 @@ class ArrowDatasetEngine(Engine):
             elif index_in_columns_and_parts:
                 # The correct index has already been set
                 index = False
-                columns_and_parts = list(
-                    set(columns_and_parts).difference(set(df.index.names))
-                )
+                columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
         df = df[list(columns_and_parts)]
 
         if index:
@@ -909,7 +917,6 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         filters,
         index,
-        read_from_paths,
         dataset_kwargs,
     ):
         """pyarrow.dataset version of _gather_metadata
@@ -922,9 +929,18 @@ class ArrowDatasetEngine(Engine):
         # Use pyarrow.dataset API
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
-        default_partitioning = pa_ds.HivePartitioning.discover(
-            max_partition_dictionary_size=-1
+
+        # Discover Partitioning - Note that we need to avoid creating
+        # this factory until it is actually used.  The `partitioning`
+        # object can be overridden if a "partitioning" kwarg is passed
+        # in, containing a `dict` with a required "obj" argument and
+        # optional "arg" and "kwarg" elements.  Note that the "obj"
+        # value must support the "discover" attribute.
+        partitioning = dataset_kwargs.get(
+            "partitioning",
+            {"obj": pa_ds.HivePartitioning},
         )
+
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # Use _analyze_paths to avoid relative-path
@@ -938,8 +954,9 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=fs,
-                    partitioning=dataset_kwargs.get(
-                        "partitioning", default_partitioning
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 if gather_statistics is None:
@@ -953,8 +970,9 @@ class ArrowDatasetEngine(Engine):
                 ds = pa_ds.parquet_dataset(
                     meta_path,
                     filesystem=fs,
-                    partitioning=dataset_kwargs.get(
-                        "partitioning", default_partitioning
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 if gather_statistics is None:
@@ -970,9 +988,10 @@ class ArrowDatasetEngine(Engine):
                 paths,
                 filesystem=fs,
                 format="parquet",
-                partitioning=dataset_kwargs.get(
-                    "partitioning", default_partitioning
-                ),  # Assume "hive" by default
+                partitioning=partitioning["obj"].discover(
+                    *partitioning.get("args", []),
+                    **partitioning.get("kwargs", {}),
+                ),
             )
         schema = ds.schema
         base = ""
@@ -1009,8 +1028,13 @@ class ArrowDatasetEngine(Engine):
             fs,
             split_row_groups,
             gather_statistics,
-            read_from_paths,
         )
+
+        # Store dict needed to produce a `partitioning`
+        # factory at IO time. This object is needed to
+        # reproduce a `fragment` (for row-wise filtering)
+        # on the worker.
+        partition_info["partitioning"] = partitioning
 
         return (
             schema,
@@ -1094,12 +1118,12 @@ class ArrowDatasetEngine(Engine):
                 if isinstance(index, list) and partition.name == index[0]:
                     # Index from directory structure
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=index[0]
+                        [], categories=partition.keys, name=index[0]
                     )
                 elif partition.name == meta.index.name:
                     # Index created from a categorical column
                     meta.index = pd.CategoricalIndex(
-                        categories=partition.keys, name=meta.index.name
+                        [], categories=partition.keys, name=meta.index.name
                     )
                 elif partition.name in meta.columns:
                     meta[partition.name] = pd.Series(
@@ -1147,12 +1171,10 @@ class ArrowDatasetEngine(Engine):
             parts = []
             stats = []
             for full_path in metadata:
-                part = {
-                    "piece": (full_path, None, partition_keys.get(full_path, None)),
-                    "kwargs": {"partitions": partition_obj, "categories": categories},
-                }
+                part = {"piece": (full_path, None, partition_keys.get(full_path, None))}
                 parts.append(part)
-            return parts, stats
+            common_kwargs = {"partitions": partition_obj, "categories": categories}
+            return parts, stats, common_kwargs
 
         # Use final metadata info to update our options for
         # `parts`/`stats` construnction
@@ -1233,8 +1255,12 @@ class ArrowDatasetEngine(Engine):
         # If the user has not specified `gather_statistics`,
         # we will only do so if there are specific columns in
         # need of statistics.
+        # NOTE: We cannot change `gather_statistics` from True
+        # to False (even if `stat_col_indices` is empty), in
+        # case a `chunksize` was specified, and the row-group
+        # statistics are needed for part aggregation.
         if gather_statistics is None:
-            gather_statistics = len(stat_col_indices.keys()) > 0
+            gather_statistics = bool(stat_col_indices)
         if split_row_groups is None:
             split_row_groups = False
 
@@ -1245,27 +1271,18 @@ class ArrowDatasetEngine(Engine):
         )
 
     @classmethod
-    def _process_metadata(
+    def _organize_row_groups(
         cls,
         metadata,
-        schema,
         split_row_groups,
         gather_statistics,
         stat_col_indices,
         filters,
-        categories,
-        partition_info,
-        data_path,
-        fs,
-        read_from_paths,
     ):
-        """Process row-groups and statistics.
+        """Organize row-groups by file.
 
-        This method is overridden in `ArrowLegacyEngine`.
+        This method is used by ArrowDatasetEngine._process_metadata
         """
-
-        partition_keys = partition_info["partition_keys"]
-        partition_obj = partition_info["partitions"]
 
         # Get the number of row groups per file
         frag_map = {}
@@ -1289,7 +1306,11 @@ class ArrowDatasetEngine(Engine):
                 if row_group_info is None:
                     frag.ensure_complete_metadata()
                     row_group_info = frag.row_groups
-                frag_map[(fpath, row_group_info[0].id)] = frag
+                if len(row_group_info):
+                    frag_map[(fpath, row_group_info[0].id)] = frag
+                else:
+                    # All row-groups were filtered
+                    continue
             else:
                 file_row_groups[fpath] = [None]
                 frag_map[(fpath, None)] = frag
@@ -1315,7 +1336,6 @@ class ArrowDatasetEngine(Engine):
                         if name in statistics:
                             cmin = statistics[name]["min"]
                             cmax = statistics[name]["max"]
-                            cnull = 0  # Not yet available/needed
                             last = cmax_last.get(name, None)
                             if not filters:
                                 # Only think about bailing if we don't need
@@ -1342,11 +1362,10 @@ class ArrowDatasetEngine(Engine):
                                         "max": pd.Timestamp(cmax)
                                         if isinstance(cmax, datetime)
                                         else cmax,
-                                        "null_count": cnull,
                                     }
                                 )
                             else:
-                                cstats += [cmin, cmax, cnull]
+                                cstats += [cmin, cmax]
                             cmax_last[name] = cmax
                         else:
                             if single_rg_parts:
@@ -1358,147 +1377,116 @@ class ArrowDatasetEngine(Engine):
                         if not single_rg_parts:
                             file_row_group_column_stats[fpath].append(tuple(cstats))
 
-        # Construct `parts` and `stats`
-        parts = []
-        stats = []
-        if split_row_groups:
-            # Create parts from each file,
-            # limiting the number of row_groups in each piece
-            split_row_groups = int(split_row_groups)
-            for filename, row_groups in file_row_groups.items():
-                row_group_count = len(row_groups)
-                for i in range(0, row_group_count, split_row_groups):
-                    i_end = i + split_row_groups
-                    rg_list = row_groups[i:i_end]
-                    # Get full path (empty strings should be ignored)
-                    full_path = fs.sep.join(
-                        [p for p in [data_path, filename] if p != ""]
-                    )
-                    pkeys = partition_keys.get(full_path, None)
-                    if partition_obj and pkeys is None:
-                        continue  # This partition was filtered
-                    part = {
-                        "piece": (
-                            full_path
-                            if read_from_paths
-                            else frag_map[(full_path, rg_list[0])],
-                            rg_list,
-                            pkeys,
-                        ),
-                        "kwargs": {
-                            "partitions": partition_obj,
-                            "categories": categories,
-                            "filters": filters,
-                            "schema": schema,
-                        },
-                    }
-                    parts.append(part)
-                    if gather_statistics:
-                        stat = cls._aggregate_stats(
-                            filename,
-                            file_row_group_stats[filename][i:i_end],
-                            file_row_group_column_stats[filename][i:i_end],
-                            stat_col_indices,
-                        )
-                        stats.append(stat)
-        else:
-            for filename, row_groups in file_row_groups.items():
-                # Get full path (empty strings should be ignored)
-                full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
-                pkeys = partition_keys.get(full_path, None)
-                if partition_obj and pkeys is None:
-                    continue  # This partition was filtered
-                part = {
-                    "piece": (
-                        full_path
-                        if read_from_paths
-                        else frag_map[(full_path, row_groups[0])],
-                        row_groups,
-                        pkeys,
-                    ),
-                    "kwargs": {
-                        "partitions": partition_obj,
-                        "categories": categories,
-                        "filters": filters,
-                        "schema": schema,
-                    },
-                }
-                parts.append(part)
-                if gather_statistics:
-                    stat = cls._aggregate_stats(
-                        filename,
-                        file_row_group_stats[filename],
-                        file_row_group_column_stats[filename],
-                        stat_col_indices,
-                    )
-                    stats.append(stat)
-
-        return parts, stats
+        return (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+            frag_map,
+        )
 
     @classmethod
-    def _aggregate_stats(
+    def _make_part(
         cls,
-        file_path,
-        file_row_group_stats,
-        file_row_group_column_stats,
-        stat_col_indices,
+        filename,
+        rg_list,
+        fs=None,
+        partition_keys=None,
+        partition_obj=None,
+        data_path=None,
+        frag_map=None,
     ):
-        """Utility to aggregate the statistics for N row-groups
-        into a single dictionary.
+        """Generate a partition-specific element of `parts`.
 
-        Used by `_construct_parts`
+        This method is used by both `ArrowDatasetEngine`
+        and `ArrowLegacyEngine`.
         """
-        if len(file_row_group_stats) < 1:
-            # Empty statistics
-            return {}
-        elif len(file_row_group_column_stats) == 0:
-            assert len(file_row_group_stats) == 1
-            return file_row_group_stats[0]
-        else:
-            # Note: It would be better to avoid df_rgs and df_cols
-            #       construction altogether. It makes it fast to aggregate
-            #       the statistics for many row groups, but isn't
-            #       worthwhile for a small number of row groups.
-            if len(file_row_group_stats) > 1:
-                df_rgs = pd.DataFrame(file_row_group_stats)
-                s = {
-                    "file_path_0": file_path,
-                    "num-rows": df_rgs["num-rows"].sum(),
-                    "total_byte_size": df_rgs["total_byte_size"].sum(),
-                    "columns": [],
-                }
-            else:
-                s = {
-                    "file_path_0": file_path,
-                    "num-rows": file_row_group_stats[0]["num-rows"],
-                    "total_byte_size": file_row_group_stats[0]["total_byte_size"],
-                    "columns": [],
-                }
 
-            df_cols = None
-            if len(file_row_group_column_stats) > 1:
-                df_cols = pd.DataFrame(file_row_group_column_stats)
-            for ind, name in enumerate(stat_col_indices):
-                i = ind * 3
-                if df_cols is None:
-                    s["columns"].append(
-                        {
-                            "name": name,
-                            "min": file_row_group_column_stats[0][i],
-                            "max": file_row_group_column_stats[0][i + 1],
-                            "null_count": file_row_group_column_stats[0][i + 2],
-                        }
-                    )
-                else:
-                    s["columns"].append(
-                        {
-                            "name": name,
-                            "min": df_cols.iloc[:, i].min(),
-                            "max": df_cols.iloc[:, i + 1].max(),
-                            "null_count": df_cols.iloc[:, i + 2].sum(),
-                        }
-                    )
-            return s
+        # Get full path (empty strings should be ignored)
+        full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
+
+        pkeys = partition_keys.get(full_path, None)
+        if partition_obj and pkeys is None:
+            return None  # This partition was filtered
+        return {
+            "piece": (
+                frag_map[(full_path, rg_list[0])] if frag_map else full_path,
+                rg_list,
+                pkeys,
+            ),
+        }
+
+    @classmethod
+    def _process_metadata(
+        cls,
+        metadata,
+        schema,
+        split_row_groups,
+        gather_statistics,
+        stat_col_indices,
+        filters,
+        categories,
+        partition_info,
+        data_path,
+        fs,
+        read_from_paths,
+    ):
+        """Process row-groups and statistics.
+
+        This method is overridden in `ArrowLegacyEngine`.
+        """
+
+        # Organize row-groups by file
+        (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+            frag_map,
+        ) = cls._organize_row_groups(
+            metadata,
+            split_row_groups,
+            gather_statistics,
+            stat_col_indices,
+            filters,
+        )
+
+        # Check if we need to pass a fragment for each output partition
+        read_from_paths = read_from_paths or False
+        pass_frags = (
+            filters
+            and (not read_from_paths)
+            and _need_fragments(filters, partition_info.get("partition_keys", None))
+        )
+
+        # Convert organized row-groups to parts
+        parts, stats = _row_groups_to_parts(
+            gather_statistics,
+            split_row_groups,
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            stat_col_indices,
+            cls._make_part,
+            make_part_kwargs={
+                "fs": fs,
+                "partition_keys": partition_info.get("partition_keys", None),
+                "partition_obj": partition_info.get("partitions", None),
+                "data_path": data_path,
+                "frag_map": frag_map if pass_frags else None,
+            },
+        )
+
+        # Add common kwargs
+        common_kwargs = {
+            "partitioning": partition_info["partitioning"],
+            "partitions": partition_info["partitions"],
+            "categories": categories,
+            "filters": filters,
+            "schema": schema,
+        }
+
+        return parts, stats, common_kwargs
 
     @classmethod
     def _read_table(
@@ -1517,7 +1505,43 @@ class ArrowDatasetEngine(Engine):
 
         This method is overridden in `ArrowLegacyEngine`.
         """
+
         if isinstance(path_or_frag, pa_ds.ParquetFileFragment):
+            frag = path_or_frag
+
+        else:
+            frag = None
+
+            # Check if we have partitioning information.
+            # Will only have this if the engine="pyarrow-dataset"
+            partitioning = kwargs.pop("partitioning", None)
+
+            # Check if we need to generate a fragment for filtering.
+            # We only need to do this if we are applying filters to
+            # columns that were not already filtered by "partition".
+            if partitioning and _need_fragments(filters, partition_keys):
+
+                # We are filtering with "pyarrow-dataset".
+                # Need to convert the path and row-group IDs
+                # to a single "fragment" to read
+                ds = pa_ds.dataset(
+                    path_or_frag,
+                    filesystem=fs,
+                    format="parquet",
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
+                    ),
+                )
+                frags = list(ds.get_fragments())
+                assert len(frags) == 1
+                frag = (
+                    _frag_subset(frags[0], row_groups)
+                    if row_groups != [None]
+                    else frags[0]
+                )
+
+        if frag:
             cols = []
             for name in columns:
                 if name is None:
@@ -1526,7 +1550,7 @@ class ArrowDatasetEngine(Engine):
                 else:
                     cols.append(name)
 
-            return path_or_frag.to_table(
+            return frag.to_table(
                 use_threads=False,
                 schema=schema,
                 columns=cols,
@@ -1633,7 +1657,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         gather_statistics,
         filters,
         index,
-        read_from_paths,
         dataset_kwargs,
     ):
         """Gather parquet metadata into a single data structure.
@@ -1755,6 +1778,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     root_dir=base,
                     engine=cls,
                     out_dir=False,
+                    fs=fs,
                 )
                 if schema is None:
                     schema = metadata.schema.to_arrow_schema()
@@ -1782,27 +1806,18 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             )
 
     @classmethod
-    def _process_metadata(
+    def _organize_row_groups(
         cls,
         metadata,
-        schema,
         split_row_groups,
         gather_statistics,
         stat_col_indices,
         filters,
-        categories,
-        partition_info,
-        data_path,
-        fs,
-        read_from_paths,
     ):
-        """Process row-groups and statistics.
+        """Organize row-groups by file.
 
-        This method is overrides the `ArrowDatasetEngine` implementation.
+        This method is used by ArrowLegacyEngine._process_metadata
         """
-
-        partition_keys = partition_info["partition_keys"]
-        partition_obj = partition_info["partitions"]
 
         # Get the number of row groups per file
         single_rg_parts = int(split_row_groups) == 1
@@ -1812,6 +1827,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         cmax_last = {}
         for rg in range(metadata.num_row_groups):
             row_group = metadata.row_group(rg)
+
+            # NOTE: Here we assume that all column chunks are stored
+            # in the same file. This is not strictly required by the
+            # parquet spec.
             fpath = row_group.column(0).file_path
             if fpath is None:
                 raise ValueError(
@@ -1842,7 +1861,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     if column.statistics:
                         cmin = column.statistics.min
                         cmax = column.statistics.max
-                        cnull = column.statistics.null_count
                         last = cmax_last.get(name, None)
                         if not filters:
                             # Only think about bailing if we don't need
@@ -1866,11 +1884,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                                     "name": name,
                                     "min": cmin if not to_ts else pd.Timestamp(cmin),
                                     "max": cmax if not to_ts else pd.Timestamp(cmax),
-                                    "null_count": cnull,
                                 }
                             )
                         else:
-                            cstats += [cmin, cmax, cnull]
+                            cstats += [cmin, cmax]
                         cmax_last[name] = cmax
                     else:
 
@@ -1891,70 +1908,72 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     if not single_rg_parts:
                         file_row_group_column_stats[fpath].append(tuple(cstats))
 
-        # Construct `parts` and `stats`
-        parts = []
-        stats = []
-        if split_row_groups:
-            # Create parts from each file,
-            # limiting the number of row_groups in each piece
-            split_row_groups = int(split_row_groups)
-            for filename, row_groups in file_row_groups.items():
-                row_group_count = len(row_groups)
-                for i in range(0, row_group_count, split_row_groups):
-                    i_end = i + split_row_groups
-                    rg_list = row_groups[i:i_end]
-                    # Get full path (empty strings should be ignored)
-                    full_path = fs.sep.join(
-                        [p for p in [data_path, filename] if p != ""]
-                    )
-                    pkeys = partition_keys.get(full_path, None)
-                    if partition_obj and pkeys is None:
-                        continue  # This partition was filtered
-                    part = {
-                        "piece": (full_path, rg_list, pkeys),
-                        "kwargs": {
-                            "partitions": partition_obj,
-                            "categories": categories,
-                            "filters": filters,
-                            "schema": schema,
-                        },
-                    }
-                    parts.append(part)
-                    if gather_statistics:
-                        stat = cls._aggregate_stats(
-                            filename,
-                            file_row_group_stats[filename][i:i_end],
-                            file_row_group_column_stats[filename][i:i_end],
-                            stat_col_indices,
-                        )
-                        stats.append(stat)
-        else:
-            for filename, row_groups in file_row_groups.items():
-                # Get full path (empty strings should be ignored)
-                full_path = fs.sep.join([p for p in [data_path, filename] if p != ""])
-                pkeys = partition_keys.get(full_path, None)
-                if partition_obj and pkeys is None:
-                    continue  # This partition was filtered
-                part = {
-                    "piece": (full_path, None, pkeys),
-                    "kwargs": {
-                        "partitions": partition_obj,
-                        "categories": categories,
-                        "filters": filters,
-                        "schema": schema,
-                    },
-                }
-                parts.append(part)
-                if gather_statistics:
-                    stat = cls._aggregate_stats(
-                        filename,
-                        file_row_group_stats[filename],
-                        file_row_group_column_stats[filename],
-                        stat_col_indices,
-                    )
-                    stats.append(stat)
+        return (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+        )
 
-        return parts, stats
+    @classmethod
+    def _process_metadata(
+        cls,
+        metadata,
+        schema,
+        split_row_groups,
+        gather_statistics,
+        stat_col_indices,
+        filters,
+        categories,
+        partition_info,
+        data_path,
+        fs,
+        read_from_paths,
+    ):
+        """Process row-groups and statistics.
+
+        This method is overrides the `ArrowDatasetEngine` implementation.
+        """
+
+        # Organize row-groups by file
+        (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+        ) = cls._organize_row_groups(
+            metadata,
+            split_row_groups,
+            gather_statistics,
+            stat_col_indices,
+            filters,
+        )
+
+        # Convert organized row-groups to parts
+        parts, stats = _row_groups_to_parts(
+            gather_statistics,
+            split_row_groups,
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            stat_col_indices,
+            cls._make_part,
+            make_part_kwargs={
+                "fs": fs,
+                "partition_keys": partition_info.get("partition_keys", None),
+                "partition_obj": partition_info.get("partitions", None),
+                "data_path": data_path,
+            },
+        )
+
+        # Add common kwargs
+        common_kwargs = {
+            "partitions": partition_info["partitions"],
+            "categories": categories,
+            "filters": filters,
+        }
+
+        return parts, stats, common_kwargs
 
     @classmethod
     def _read_table(
