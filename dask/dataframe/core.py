@@ -2758,9 +2758,7 @@ Dask Name: {name}, {task} tasks"""
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
-        # NOTE: `.values` could return a pandas ExtensionArray, which is currently
-        # incompatible with dask Array, so we force conversion to NumPy (gh7206).
-        return self.to_dask_array()
+        return self.map_partitions(methods.values)
 
     def _validate_chunks(self, arr, lengths):
         from dask.array.core import normalize_chunks
@@ -6530,7 +6528,7 @@ def new_dd_object(dsk, name, meta, divisions):
                 suffix = (0,) * (len(chunks) - 1)
                 for i in range(len(chunks[0])):
                     layer[(name, i) + suffix] = layer.pop((name, i))
-        return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
+        return da.Array(dsk, name=name, chunks=chunks, meta=meta)
     else:
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 
