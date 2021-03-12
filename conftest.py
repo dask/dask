@@ -27,9 +27,9 @@ except ImportError:
     collect_ignore_glob.append("dask/dataframe/*")
 
 try:
-    import fsspec  # noqa: F401
+    import scipy  # noqa: F401
 except ImportError:
-    collect_ignore_glob.extend(["dask/bag/*", "dask/bytes/*"])
+    collect_ignore.append("dask/array/stats.py")
 
 
 def pytest_addoption(parser):

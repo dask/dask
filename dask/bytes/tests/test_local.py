@@ -7,13 +7,15 @@ from functools import partial
 from distutils.version import LooseVersion
 
 import pytest
+import cloudpickle
 from tlz import concat, valmap
+from fsspec.core import open_files
 
 from dask import compute
 from dask.utils import filetexts
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.compression import compr
-from dask.bytes.core import read_bytes, open_files
+from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
 
 compute = partial(compute, scheduler="sync")
@@ -309,7 +311,6 @@ def test_open_files_write(tmpdir, compression_opener):
 
 def test_pickability_of_lazy_files(tmpdir):
     tmpdir = str(tmpdir)
-    cloudpickle = pytest.importorskip("cloudpickle")
 
     with filetexts(files, mode="b"):
         myfiles = open_files(".test.accounts.*")

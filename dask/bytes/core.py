@@ -1,24 +1,8 @@
 import os
 import copy
 
-from fsspec.core import (  # noqa: F401
-    OpenFile,  # noqa: F401
-    open_files,  # noqa: F401
-    get_fs_token_paths,  # noqa: F401
-    expand_paths_if_needed,  # noqa: F401
-    _expand_paths,  # noqa: F401
-    get_compression,  # noqa: F401
-)
-from fsspec.core import open as open_file  # noqa: F401
-from fsspec.utils import (  # noqa: F401
-    read_block,  # noqa: F401
-    seek_delimiter,  # noqa: F401
-    infer_storage_options,  # noqa: F401
-    stringify_path,  # noqa: F401
-    infer_compression,  # noqa: F401
-)
-from fsspec import get_mapper  # noqa: F401
-from fsspec.compression import compr  # noqa: F401
+from fsspec.core import OpenFile, get_fs_token_paths
+from fsspec.utils import read_block, infer_compression
 
 from ..base import tokenize
 from ..delayed import delayed
