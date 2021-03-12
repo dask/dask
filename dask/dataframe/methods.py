@@ -325,10 +325,6 @@ def size(x):
     return x.size
 
 
-def values(df):
-    return df.values
-
-
 if PANDAS_GT_110:
 
     def to_numpy(df, _dtype, na_value):

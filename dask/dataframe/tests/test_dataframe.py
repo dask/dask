@@ -3771,14 +3771,14 @@ def test_values_extension_array():
     # HACK: compare the arrays as strings, since `assert_eq` and its NumPy relatives
     # don't know how to handle pandas NA values. Because the dtype ends up being `object`,
     # it's just doing elementwise comparison, and NA != NA, but also NA is not NaN.
-    assert str(df.values) == str(ddf.values.compute()), "Stringified values are not equal"
+    assert str(df.to_numpy()) == str(ddf.values.compute()), "Stringified values are not equal"
 
     assert_eq(df.index.values, ddf.index.values)
     for column in df.columns:
         # FIXME fails on the `null_bool` column with `TypeError: boolean value of NA is ambiguous`
         # from `pandas/_libs/missing.pyx:360` (`__bool__` method on `NAType`). Again, NumPy is doing
         # elementwise == here, which doesn't work the way we want it to on NAs.
-        assert_eq(df[column].values, ddf[column].values, equal_nan=True)
+        assert_eq(df[column].to_numpy(), ddf[column].values, equal_nan=True)
 
 
 def test_copy():
