@@ -6,6 +6,7 @@ import pytest
 import numpy as np
 import pandas as pd
 from pandas.io.formats import format as pandas_format
+from pandas._libs.lib import no_default as pd_no_default
 
 import dask
 import dask.array as da
@@ -2522,12 +2523,7 @@ def test_drop_columns(columns):
     # Check both populated and empty list argument
     # https://github.com/dask/dask/issues/6870
 
-    df = pd.DataFrame(
-        {
-            "a": [2, 4, 6, 8],
-            "b": ["1a", "2b", "3c", "4d"],
-        }
-    )
+    df = pd.DataFrame({"a": [2, 4, 6, 8], "b": ["1a", "2b", "3c", "4d"],})
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = ddf.drop(columns=columns)
     ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
@@ -2630,30 +2626,68 @@ def test_to_dask_array_unknown(as_frame):
     assert all(np.isnan(x) for x in result)
 
 
+@pytest.mark.parametrize("lengths", [None, [2, 3], True])
+@pytest.mark.parametrize("as_frame", [False, True])
 @pytest.mark.parametrize(
-    "lengths,as_frame,meta",
+    "input, dtype, na_value, meta",
     [
-        ([2, 3], False, None),
-        (True, False, None),
-        (True, False, np.array([], dtype="f4")),
+        (pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4"), None, pd_no_default, None),
+        (
+            pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4"),
+            "float32",
+            pd_no_default,
+            None,
+        ),
+        (
+            pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4"),
+            float,
+            pd_no_default,
+            np.array([], dtype="f4"),
+        ),
+        (
+            pd.Series(pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]), name="foo"),
+            None,
+            pd_no_default,
+            None,
+        ),
+        (
+            pd.Series(pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]), name="foo"),
+            int,
+            0,
+            None,
+        ),
+        (
+            pd.Series(pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]), name="foo"),
+            None,
+            0.0,
+            np.array([], dtype="float64"),
+        ),
     ],
 )
-def test_to_dask_array(meta, as_frame, lengths):
-    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
-    a = dd.from_pandas(s, chunksize=2)
+def test_to_dask_array(input, dtype, na_value, meta, as_frame, lengths):
+    from dask.array.utils import assert_eq
+
+    a = dd.from_pandas(input, chunksize=2)
 
     if as_frame:
         a = a.to_frame()
 
-    result = a.to_dask_array(lengths=lengths, meta=meta)
+    result = a.to_dask_array(lengths=lengths, dtype=dtype, na_value=na_value, meta=meta)
     assert isinstance(result, da.Array)
 
-    expected_chunks = ((2, 3),)
+    if lengths:
+        expected_chunks = ((2, 3),)
+    else:
+        expected_chunks = ((np.nan, np.nan),)
 
     if as_frame:
         expected_chunks = expected_chunks + ((1,),)
 
     assert result.chunks == expected_chunks
+
+    assert_eq(
+        result, a.compute().to_numpy(dtype=dtype, na_value=na_value), equal_nan=True,
+    )
 
 
 def test_apply():
@@ -3710,6 +3744,41 @@ def test_values():
     assert_eq(df.x.values, ddf.x.values)
     assert_eq(df.y.values, ddf.y.values)
     assert_eq(df.index.values, ddf.index.values)
+
+
+def test_values_extension_array():
+    from dask.array.utils import assert_eq
+
+    # NOTE: based on the list of pandas extension types at
+    # https://pandas.pydata.org/docs/user_guide/basics.html#dtypes
+    df = pd.DataFrame(
+        {
+            "datetime_tz": pd.array(
+                ["2020-01-01", "2020-02-01", "2020-03-01"],
+                dtype="datetime64[ns, US/Mountain]",
+            ),
+            "categorical": pd.Series(["a", "b", "a"], dtype="category"),
+            "period": pd.period_range("1/1/2021", "3/1/2021", freq="M"),
+            "sparse": pd.arrays.SparseArray([np.nan, np.nan, 1]),
+            "interval": pd.arrays.IntervalArray(pd.interval_range(start=0, end=3)),
+            "null_int": pd.array([1, 2, np.nan], dtype=pd.Int64Dtype()),
+            "string": pd.array(["foo", "bar", "baz"], dtype="string"),
+            "null_bool": pd.array([True, np.nan, False], dtype="boolean"),
+        }
+    )
+    ddf = dd.from_pandas(df, 2)
+
+    # HACK: compare the arrays as strings, since `assert_eq` and its NumPy relatives
+    # don't know how to handle pandas NA values. Because the dtype ends up being `object`,
+    # it's just doing elementwise comparison, and NA != NA, but also NA is not NaN.
+    assert str(df.to_numpy()) == str(ddf.values.compute()), "Stringified values are not equal"
+
+    assert_eq(df.index.values, ddf.index.values)
+    for column in df.columns:
+        # FIXME fails on the `null_bool` column with `TypeError: boolean value of NA is ambiguous`
+        # from `pandas/_libs/missing.pyx:360` (`__bool__` method on `NAType`). Again, NumPy is doing
+        # elementwise == here, which doesn't work the way we want it to on NAs.
+        assert_eq(df[column].to_numpy(), ddf[column].values, equal_nan=True)
 
 
 def test_copy():

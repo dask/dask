@@ -324,8 +324,8 @@ def size(x):
     return x.size
 
 
-def values(df):
-    return df.values
+def to_numpy(df, _dtype, na_value):
+    return df.to_numpy(dtype=_dtype, copy=False, na_value=na_value)
 
 
 def sample(df, state, frac, replace):

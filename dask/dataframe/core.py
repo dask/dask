@@ -16,6 +16,7 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_datetime64_any_dtype,
 )
+from pandas._libs.lib import no_default as pd_no_default
 from tlz import merge, first, unique, partition_all, remove
 
 try:
@@ -45,7 +46,7 @@ from ..utils import (
     iter_chunks,
 )
 from ..array.core import Array, normalize_arg
-from ..array.utils import zeros_like_safe
+from ..array.utils import meta_from_array, zeros_like_safe
 from ..blockwise import blockwise, Blockwise, subs
 from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
 from ..delayed import delayed, Delayed, unpack_collections
@@ -1416,7 +1417,9 @@ Dask Name: {name}, {task} tasks"""
             enforce_metadata=False,
         )
 
-    def to_dask_array(self, lengths=None, meta=None):
+    def to_dask_array(
+        self, lengths=None, dtype=None, na_value=pd_no_default, meta=None
+    ):
         """Convert a dask DataFrame to a dask array.
 
         Parameters
@@ -1432,9 +1435,20 @@ Dask Name: {name}, {task} tasks"""
               on the first axis. These values are *not* validated for
               correctness, beyond ensuring that the number of items
               matches the number of partitions.
+        dtype : str or numpy.dtype, optional
+            The dtype to pass to :meth:`numpy.asarray` when called on
+            each partition.
+        na_value : Any, optional
+            The value to use for missing values. The default value depends
+            on `dtype` and the dtypes of the DataFrame columns.
+
+            .. versionadded:: 1.1.0
+
         meta : object, optional
             An optional `meta` parameter can be passed for dask to override the
-            default metadata on the underlying dask array.
+            default metadata on the returned dask array.
+            Should not be used outside of advanced cases; setting `dtype`
+            is preferred.
 
         Returns
         -------
@@ -1442,13 +1456,13 @@ Dask Name: {name}, {task} tasks"""
         if lengths is True:
             lengths = tuple(self.map_partitions(len, enforce_metadata=False).compute())
 
-        arr = self.values
+        arr = self.map_partitions(methods.to_numpy, _dtype=dtype, na_value=na_value)
 
         chunks = self._validate_chunks(arr, lengths)
         arr._chunks = chunks
 
-        if meta is not None:
-            arr._meta = meta
+        if dtype is not None or meta is not None:
+            arr._meta = meta_from_array(meta, dtype=dtype, ndim=len(chunks))
 
         return arr
 
@@ -2744,7 +2758,9 @@ Dask Name: {name}, {task} tasks"""
         Operations that depend on shape information, like slicing or reshaping,
         will not work.
         """
-        return self.map_partitions(methods.values)
+        # NOTE: `.values` could return a pandas ExtensionArray, which is currently
+        # incompatible with dask Array, so we force conversion to NumPy (gh7206).
+        return self.to_dask_array()
 
     def _validate_chunks(self, arr, lengths):
         from dask.array.core import normalize_chunks
