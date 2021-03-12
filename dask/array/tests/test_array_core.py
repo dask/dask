@@ -3751,14 +3751,14 @@ def test_setitem_extended_API():
     if check_each_op:
         assert_eq(x, dx.compute())
 
-    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
-    x[[0, 1], 7] = [-23, -33]
-    dx[index, 7] = [-23, -33]
+    x[:, [0, 2]] = x[:, :2]
+    dx[:, index] = dx[:, :2]
     if check_each_op:
         assert_eq(x, dx.compute())
 
-    x[:, [0, 2]] = x[:, :2]
-    dx[:, index] = dx[:, :2]
+    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
+    x[[0, 1], 7] = [-23, -33]
+    dx[index, 7] = [-23, -33]
     if check_each_op:
         assert_eq(x, dx.compute())
 
