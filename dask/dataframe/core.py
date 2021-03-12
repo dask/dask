@@ -1442,8 +1442,7 @@ Dask Name: {name}, {task} tasks"""
             The value to use for missing values. The default value depends
             on `dtype` and the dtypes of the DataFrame columns.
 
-            .. versionadded:: 1.1.0
-
+            Requires pandas >= 1.1.0.
         meta : object, optional
             An optional `meta` parameter can be passed for dask to override the
             default metadata on the returned dask array.
@@ -1453,6 +1452,12 @@ Dask Name: {name}, {task} tasks"""
         Returns
         -------
         """
+        if not PANDAS_GT_110 and na_value is not pd_no_default:
+            raise NotImplementedError(
+                "na_value is not a valid argument for to_dask_array"
+                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+            )
+
         if lengths is True:
             lengths = tuple(self.map_partitions(len, enforce_metadata=False).compute())
 

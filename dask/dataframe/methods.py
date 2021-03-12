@@ -5,6 +5,7 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from tlz import partition
 
+from ._compat import PANDAS_GT_110
 from .utils import (
     is_series_like,
     is_index_like,
@@ -328,8 +329,16 @@ def values(df):
     return df.values
 
 
-def to_numpy(df, _dtype, na_value):
-    return df.to_numpy(dtype=_dtype, copy=False, na_value=na_value)
+if PANDAS_GT_110:
+
+    def to_numpy(df, _dtype, na_value):
+        return df.to_numpy(dtype=_dtype, copy=False, na_value=na_value)
+
+
+else:
+
+    def to_numpy(df, _dtype, na_value=None):
+        return df.to_numpy(dtype=_dtype, copy=False)
 
 
 def sample(df, state, frac, replace):
