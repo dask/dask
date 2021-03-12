@@ -1,5 +1,4 @@
 import io
-import os
 from functools import partial
 
 from tlz import concat
