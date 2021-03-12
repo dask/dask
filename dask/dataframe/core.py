@@ -3611,10 +3611,10 @@ class DataFrame(_Frame):
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
-        if hasattr(self, 'dask') and name in self.dask.layers:
-            self.dask.layers[name].info['type'] = type(self)
-            self.dask.layers[name].info['divisions'] = divisions
-            self.dask.layers[name].info['chunk_type'] = type(meta)
+        if hasattr(self, "dask") and name in self.dask.layers:
+            self.dask.layers[name].info["type"] = type(self)
+            self.dask.layers[name].info["divisions"] = divisions
+            self.dask.layers[name].info["chunk_type"] = type(meta)
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
