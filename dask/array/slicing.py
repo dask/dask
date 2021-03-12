@@ -1613,7 +1613,7 @@ def setitem_array(out_name, array, indices, value):
 
     @functools.lru_cache()
     def indices_from_1d_int_index(dim, size, loc0, loc1):
-        """The index elements between loc0 and loc1.
+        """The positions of integer index elements between loc0 and loc1.
 
         The index is the input assignment index that is defined in the
         namespace of the caller.
@@ -1649,18 +1649,24 @@ def setitem_array(out_name, array, indices, value):
 
         """
         if is_dask_collection(index):
-            try:
-                i = np.where(
-                    ((loc0 <= index) & (index < loc1))
-                    | ((loc0 - size <= index) & (index < loc1 - size))
-                )[0]
-            except ValueError as e:
-                raise ValueError(
-                    f"Unknown size ({index.size}) of integer "
-                    f"indices for dimension {dim}"
-                ) from e
-
+            i = np.where(
+                ((loc0 <= index) & (index < loc1))
+                | ((loc0 - size <= index) & (index < loc1 - size)),
+                index, size + loc0 
+            )[0]
             i = concatenate_array_chunks(i)
+ #           try:
+ #               i = np.where(
+ #                   ((loc0 <= index) & (index < loc1))
+ #                   | ((loc0 - size <= index) & (index < loc1 - size))
+ #               )[0]
+ #           except ValueError as e:
+ #               raise ValueError(
+ #                   f"Unknown size ({index.size}) of integer "
+ #                   f"indices for dimension {dim}"
+ #               ) from e
+ #
+ #           i = concatenate_array_chunks(i)
         else:
             i = np.where((loc0 <= index) & (index < loc1))[0]
 
@@ -1668,7 +1674,7 @@ def setitem_array(out_name, array, indices, value):
 
     @functools.lru_cache()
     def block_index_from_1d_index(dim, size, loc0, loc1, is_bool):
-        """The elements of index between positions loc0 and loc1.
+        """The positions of index elements in the range values loc0 and loc1.
 
         The index is the input assignment index that is defined in the
         namespace of the caller.
@@ -1701,12 +1707,24 @@ def setitem_array(out_name, array, indices, value):
         """
         if is_bool:
             i = index[loc0:loc1]
-        else:
-            i = indices_from_1d_int_index(dim, size, loc0, loc1)
+        elif is_dask_collection(index):
+            if index.size == np.nan:
+                i = np.where(
+                    ((loc0 <= index) & (index < loc1))
+                    | ((loc0 - size <= index) & (index < loc1 - size)),
+                    index, size + loc0 
+                )[0]
+            else:
+                i = np.where((loc0 <= index) & (index < loc1))[0]
+
             i = index[i] - loc0
+            
+        else:
+            i = np.where((loc0 <= index) & (index < loc1))[0]
 
         if is_dask_collection(i):
             # Return dask key intead of dask array
+            i = concatenate_array_chunks(i)
             dsk.update(dict(i.dask))
             i = next(flatten(i.__dask_keys__()))
 
@@ -1714,7 +1732,7 @@ def setitem_array(out_name, array, indices, value):
 
     @functools.lru_cache()
     def block_index_shape_from_1d_bool_index(dim, loc0, loc1):
-        """The number of elements of index between positions loc0 and loc1.
+        """Number of True index elements between positions loc0 and loc1.
 
         The index is the input assignment index that is defined in the
         namespace of the caller.
@@ -1742,7 +1760,7 @@ def setitem_array(out_name, array, indices, value):
 
     @functools.lru_cache()
     def n_preceeding_from_1d_bool_index(dim, loc0):
-        """Number of assignment elements of index preceeding position loc0.
+        """Number of True index elements preceeding position loc0.
 
         The index is the input assignment index that is defined in the
         namespace of the caller.
@@ -1767,7 +1785,7 @@ def setitem_array(out_name, array, indices, value):
         return np.sum(index[:loc0])
 
     @functools.lru_cache()
-    def value_indices_from_1d_int_index(dim, size, loc0, loc1):
+    def value_indices_from_1d_int_index(dim, size, vsize, loc0, loc1):
         """Value indices for index elements between loc0 and loc1.
 
         The index is the input assignment index that is defined in the
@@ -1780,6 +1798,8 @@ def setitem_array(out_name, array, indices, value):
            for the non-hashable index to define LRU cache key.
         size : `int`
             The full size of the dimension.
+        vsize : `int`
+            The full size of the dimension of the assignment value.
         loc0 : `int`
             The start index of the block along the dimension.
         loc1 : `int`
@@ -1794,8 +1814,29 @@ def setitem_array(out_name, array, indices, value):
             If index is dask array then a dask array is returned.
 
         """
-        return indices_from_1d_int_index(dim, size, loc0, loc1)
-
+        if is_dask_collection(index):
+            if index.size == np.nan:
+                print (9999999999999999)
+                i = np.where(
+                    ((loc0 <= index) & (index < loc1))
+                    | ((loc0 - size <= index) & (index < loc1 - size)),
+                    index, vsize
+                )
+                i = i < vsize
+                i = concatenate_array_chunks(i)
+                i._chunks = ((vsize,),)
+            else:
+                i = np.where(
+                    ((loc0 <= index) & (index < loc1))
+                    | ((loc0 - size <= index) & (index < loc1 - size))
+                )[0]
+                i = concatenate_array_chunks(i)
+        else:
+#            i = indices_from_1d_int_index(dim, size, loc0, loc1)
+            i = np.where((loc0 <= index) & (index < loc1))[0]
+            
+        return i
+    
     from ..core import flatten
 
     array_shape = array.shape
@@ -2055,7 +2096,9 @@ def setitem_array(out_name, array, indices, value):
                 # Define index for use in `value_indices_from_1d_int_index`
                 index = indices[j]
                 value_indices[i] = value_indices_from_1d_int_index(
-                    dim_1d_int_index, array_shape[j], *loc0_loc1
+#                    dim_1d_int_index, array_shape[j], *loc0_loc1
+                    dim_1d_int_index, array_shape[j], value.shape[i], *loc0_loc1
+                    
                 )
             else:
                 start = block_preceeding_sizes[j]
@@ -2094,7 +2137,7 @@ def setitem_array(out_name, array, indices, value):
         dsk = merge(dict(v.dask), dsk)
 
         # Define the assignment function for this block.
-        dsk[out_key] = (setitem, in_key, v_key, block_indices, block_offsets)
+        dsk[out_key] = (setitem, in_key, v_key, block_indices, block_offsets, array_shape)
 
     indices_from_1d_int_index.cache_clear()
     block_index_from_1d_index.cache_clear()
@@ -2105,7 +2148,7 @@ def setitem_array(out_name, array, indices, value):
     return dsk
 
 
-def setitem(x, v, indices, offsets):
+def setitem(x, v, indices, offsets, shape):
     """Chunk function of `setitem_array`.
 
     Assign v to indices of x.
@@ -2126,6 +2169,7 @@ def setitem(x, v, indices, offsets):
     offsets : list of `int`
         The offsets at which the chunk starts along each axis. Used
         for posifying numpy array indices.
+    shape ;
 
     Returns
     -------
@@ -2167,10 +2211,15 @@ def setitem(x, v, indices, offsets):
         return x
 
     # Normalize negative array indices
-    for i, (index, size, offset) in enumerate(zip(indices, x.shape, offsets)):
+    for i, (index, size, offset, full_size) in enumerate(
+            zip(indices, x.shape, offsets, shape)
+    ):
         if isinstance(index, np.ndarray) and index.dtype != bool:
-            indices[i] = np.where(index < 0, index + size + offset, index)
-
+            index = index[np.where(index < full_size)[0]]
+            index = np.where(index < 0, index + size + offset, index)
+            indices[i] = index
+            
+    print ( indices)
     # If x is not masked but v is, then turn the x into a masked
     # array.
     if not np.ma.isMA(x) and np.ma.isMA(v):

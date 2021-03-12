@@ -3644,7 +3644,7 @@ def test_setitem_extended_API():
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.copy(), chunks=(2, 3))
 
-    check_each_op = False
+    check_each_op = 1 ## False
 
     value = -1
     for index in (
@@ -3748,6 +3748,12 @@ def test_setitem_extended_API():
     index = da.from_array([0, 2], chunks=(2,))
     x[[0, 2], 8] = [99, 88]
     dx[index, 8] = [99, 88]
+    if check_each_op:
+        assert_eq(x, dx.compute())
+
+    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
+    x[[0, 1], 7] = [-23, -33]
+    dx[index, 7] = [-23, -33]
     if check_each_op:
         assert_eq(x, dx.compute())
 
