@@ -15,7 +15,7 @@ from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_obj
 
 from .. import base, config
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
-from ..highlevelgraph import HighLevelGraph, Layer
+from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
@@ -28,7 +28,7 @@ from .layers import (
 logger = logging.getLogger(__name__)
 
 
-class SimpleShuffleLayer(Layer):
+class SimpleShuffleLayer(_SimpleShuffleLayer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -78,7 +78,6 @@ class SimpleShuffleLayer(Layer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
-        self._layer_materialize_module = "dask.dataframe.layers"
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -217,7 +216,7 @@ class SimpleShuffleLayer(Layer):
         )
 
 
-class ShuffleLayer(SimpleShuffleLayer):
+class ShuffleLayer(SimpleShuffleLayer, _ShuffleLayer):
     """Shuffle-stage HighLevelGraph layer
 
     High-level graph layer corresponding to a single stage of
@@ -306,13 +305,6 @@ class ShuffleLayer(SimpleShuffleLayer):
         ]
 
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        ret = super().__dask_distributed_pack__(*args, **kwargs)
-        ret["inputs"] = self.inputs
-        ret["stage"] = self.stage
-        ret["nsplits"] = self.nsplits
-        return ret
 
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.

@@ -220,6 +220,14 @@ class Layer(collections.abc.Mapping):
             v.update(annotations.get(k, {}))
         annotations.update(expanded)
 
+    @property
+    def layer_materialize_module(self):
+        return type(self).__module__
+
+    @property
+    def layer_materialize_class(self):
+        return type(self).__name__
+
     def clone(
         self,
         keys: set,
@@ -933,17 +941,10 @@ class HighLevelGraph(Mapping):
         # Dump each layer (in topological order)
         layers = []
         for layer in (self.layers[name] for name in self._toposort_layers()):
-            if hasattr(layer, "_layer_materialize_module"):
-                # Use isolated layer-materialization module if
-                # one is defined for this layer
-                mod = layer._layer_materialize_module
-            else:
-                mod = layer.__module__
-            name = type(layer).__name__
             layers.append(
                 {
-                    "__module__": mod,
-                    "__name__": name,
+                    "__module__": layer.layer_materialize_module,
+                    "__name__": layer.layer_materialize_class,
                     "state": layer.__dask_distributed_pack__(
                         self.get_all_external_keys(),
                         self.key_dependencies,
