@@ -321,6 +321,38 @@ def test_blockwise_array_creation(c, io, fuse):
 
 
 @gen_cluster(client=True)
+async def test_blockwise_numpy_args(c, s, a, b):
+    """Test pack/unpack of blockwise that includes a NumPy literal argument"""
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def fn(x, dt):
+        assert type(dt) is np.uint16
+        return x.astype(dt)
+
+    arr = da.blockwise(
+        fn, "x", da.ones(1000), "x", np.uint16(42), None, dtype=np.uint16
+    )
+    res = await c.compute(arr.sum(), optimize_graph=False)
+    assert res == 1000
+
+
+@gen_cluster(client=True)
+async def test_blockwise_numpy_kwargs(c, s, a, b):
+    """Test pack/unpack of blockwise that includes a NumPy literal keyword argument"""
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def fn(x, dt=None):
+        assert type(dt) is np.uint16
+        return x.astype(dt)
+
+    arr = da.blockwise(fn, "x", da.ones(1000), "x", dtype=np.uint16, dt=np.uint16(42))
+    res = await c.compute(arr.sum(), optimize_graph=False)
+    assert res == 1000
+
+
+@gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
 
