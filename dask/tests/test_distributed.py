@@ -6,6 +6,7 @@ distributed = pytest.importorskip("distributed")
 import asyncio
 from functools import partial
 from operator import add
+import sys
 
 from tornado import gen
 
@@ -13,7 +14,7 @@ import dask
 from dask import persist, delayed, compute
 from dask.delayed import Delayed
 from dask.utils import tmpdir, get_named_args
-from distributed import futures_of
+from distributed import futures_of, SchedulerPlugin, Client
 from distributed.client import wait
 from distributed.utils_test import (  # noqa F401
     gen_cluster,
@@ -23,6 +24,7 @@ from distributed.utils_test import (  # noqa F401
     loop,
     client as c,
     varying,
+    cleanup,
 )
 
 
@@ -333,3 +335,58 @@ async def test_annotation_pack_unpack(c, s, a, b):
     unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
+
+
+class SchedulerImportCheck(SchedulerPlugin):
+    """Plugin to help record which modules are imported on the scheduler"""
+
+    async def start(self, scheduler):
+        # Record the modules that have been imported when the scheduler starts
+        self.start_modules = set(sys.modules)
+
+
+def get_start_modules(dask_scheduler):
+    import_check_plugins = [
+        p for p in dask_scheduler.plugins if type(p) is SchedulerImportCheck
+    ]
+    assert len(import_check_plugins) == 1
+
+    plugin = import_check_plugins[0]
+    return plugin.start_modules
+
+
+@pytest.mark.parametrize(
+    "optimize_graph",
+    [
+        # This passes because we materialize the graph on the client
+        True,
+        # This fails because we send a HighLevelGraph to the scheduler and end up
+        # importing libraries like pandas when unpacking the layer
+        pytest.param(False, marks=pytest.mark.xfail()),
+    ],
+)
+def test_scheduler_highlevel_graph_unpack_import(optimize_graph, cleanup):
+    # Test to highlight that in some cases we import modules like pandas
+    # on the scheduler when unpacking some HighLevelGraphs.
+    # This is a problem because pandas may not be installed in the process
+    # where the scheduler is running -- leading to an ImportError.
+
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    with cluster(scheduler_kwargs={"plugins": [SchedulerImportCheck()]}) as (
+        scheduler,
+        workers,
+    ):
+        with Client(scheduler["address"]) as c:
+            # Perform a computation using a HighLevelGraph shuffle layer
+            df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
+            ddf = dd.from_pandas(df, npartitions=2)
+            c.compute(ddf.shuffle("a"), optimize_graph=optimize_graph)
+
+            # Get the new modules which were imported on the scheduler during the computation
+            end_modules = c.run_on_scheduler(lambda: set(sys.modules))
+            start_modules = c.run_on_scheduler(get_start_modules)
+            new_modules = end_modules - start_modules
+            # Check whether we imported pandas on the scheduler
+            assert not any(module.startswith("pandas.") for module in new_modules)
