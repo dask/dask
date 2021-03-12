@@ -7,6 +7,7 @@ from tlz import curry
 
 from ..base import tokenize
 from ..utils import funcname
+from .blockwise import BlockwiseCreateArray
 from .core import Array, normalize_chunks
 from .utils import (
     meta_from_array,
@@ -68,14 +69,15 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     chunks = parsed["chunks"]
     name = parsed["name"]
     kwargs = parsed["kwargs"]
-
-    keys = product([name], *[range(len(bd)) for bd in chunks])
-    shapes = product(*chunks)
     func = partial(func, dtype=dtype, **kwargs)
-    vals = ((func,) + (s,) + args for s in shapes)
 
-    dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
+    graph = BlockwiseCreateArray(
+        name,
+        func,
+        shape,
+        chunks,
+    )
+    return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
 def wrap_func_like(func, *args, **kwargs):

@@ -6,7 +6,72 @@ import tlz as toolz
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..blockwise import blockwise as core_blockwise
+from ..blockwise import (
+    Blockwise,
+    blockwise as core_blockwise,
+    blockwise_token,
+    BlockwiseIODeps,
+)
+
+
+class CreateArrayDeps(BlockwiseIODeps):
+    """Index-chunk mapping for BlockwiseCreateArray"""
+
+    def __init__(self, chunks: tuple):
+        self.chunks = chunks
+
+    def __getitem__(self, idx: tuple):
+        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+
+
+class BlockwiseCreateArray(Blockwise):
+    """
+    Specialized Blockwise Layer for array creation routines.
+
+    Enables HighLevelGraph optimizations.
+
+    Parameters
+    ----------
+    name: string
+        The output name.
+    func : callable
+        Function to apply to populate individual blocks. This function should take
+        an iterable containing the dimensions of the given block.
+    shape: iterable
+        Iterable containing the overall shape of the array.
+    chunks: iterable
+        Iterable containing the chunk sizes along each dimension of array.
+    """
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+    ):
+        # self.name = name
+        io_name = "blockwise-create-" + name
+
+        # Define "blockwise" graph
+        dsk = {name: (func, blockwise_token(0))}
+
+        out_ind = tuple(range(len(shape)))
+        self.nchunks = tuple(len(chunk) for chunk in chunks)
+        super().__init__(
+            name,
+            out_ind,
+            dsk,
+            [(io_name, out_ind)],
+            {io_name: self.nchunks},
+            io_deps={
+                io_name: (
+                    "dask.array.blockwise",
+                    "CreateArrayDeps",
+                    chunks,
+                )
+            },
+        )
 
 
 def blockwise(
