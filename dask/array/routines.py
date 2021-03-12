@@ -960,7 +960,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     # converted to arrays of bin edges). The graph is stacked for each
     # chunk, each building block is a D-dimensional histogram result.
     dsk = {
-        (name, i, 0): (_block_histogramdd, k, bins_edges)
+        (name, i, 0, 0, 0): (_block_histogramdd, k, bins_edges)
         for i, k in enumerate(flatten(sample.__dask_keys__()))
     }
     # da.histogram does this to get the dtype (TODO: figure out why)
