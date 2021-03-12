@@ -14,13 +14,16 @@ import pandas as pd
 from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
 
 from .. import base, config
-from ..core import keys_in_tasks
 from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
 from ..highlevelgraph import HighLevelGraph, Layer
 from ..sizeof import sizeof
-from ..utils import digit, insert, M, stringify, stringify_collection_keys
+from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
+from .layers import (
+    SimpleShuffleLayer as _SimpleShuffleLayer,
+    ShuffleLayer as _ShuffleLayer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,6 +78,7 @@ class SimpleShuffleLayer(Layer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
+        self._layer_materialize_module = "dask.dataframe.layers"
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -124,6 +128,7 @@ class SimpleShuffleLayer(Layer):
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
         from distributed.protocol.serialize import to_serialize
+        from distributed.worker import dumps_function
 
         return {
             "name": self.name,
@@ -134,32 +139,10 @@ class SimpleShuffleLayer(Layer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
+            "concat_func": dumps_function(_concat),
+            "getitem_func": dumps_function(operator.getitem),
+            "shuffle_group_func": dumps_function(shuffle_group),
         }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
-
-        # msgpack will convert lists into tuples, here
-        # we convert them back to lists
-        if isinstance(state["column"], tuple):
-            state["column"] = list(state["column"])
-        if "inputs" in state:
-            state["inputs"] = list(state["inputs"])
-
-        # Materialize the layer
-        layer_dsk = dict(cls(**state))
-
-        # Convert all keys to strings and dump tasks
-        layer_dsk = {
-            stringify(k): stringify_collection_keys(v) for k, v in layer_dsk.items()
-        }
-        keys = layer_dsk.keys() | dsk.keys()
-
-        # TODO: use shuffle-knowledge to calculate dependencies more efficiently
-        deps = {k: keys_in_tasks(keys, [v]) for k, v in layer_dsk.items()}
-
-        return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -219,36 +202,19 @@ class SimpleShuffleLayer(Layer):
 
     def _construct_graph(self):
         """Construct graph for a simple shuffle operation."""
-
-        shuffle_group_name = "group-" + self.name
-        shuffle_split_name = "split-" + self.name
-
-        dsk = {}
-        for part_out in self.parts_out:
-            _concat_list = [
-                (shuffle_split_name, part_out, part_in)
-                for part_in in range(self.npartitions_input)
-            ]
-            dsk[(self.name, part_out)] = (_concat, _concat_list, self.ignore_index)
-            for _, _part_out, _part_in in _concat_list:
-                dsk[(shuffle_split_name, _part_out, _part_in)] = (
-                    operator.getitem,
-                    (shuffle_group_name, _part_in),
-                    _part_out,
-                )
-                if (shuffle_group_name, _part_in) not in dsk:
-                    dsk[(shuffle_group_name, _part_in)] = (
-                        shuffle_group,
-                        (self.name_input, _part_in),
-                        self.column,
-                        0,
-                        self.npartitions,
-                        self.npartitions,
-                        self.ignore_index,
-                        self.npartitions,
-                    )
-
-        return dsk
+        return _SimpleShuffleLayer._construct_graph(
+            name=self.name,
+            column=self.column,
+            npartitions=self.npartitions,
+            npartitions_input=self.npartitions_input,
+            ignore_index=self.ignore_index,
+            name_input=self.name_input,
+            meta_input=self.meta_input,
+            parts_out=self.parts_out,
+            concat_func=_concat,
+            getitem_func=operator.getitem,
+            shuffle_group_func=shuffle_group,
+        )
 
 
 class ShuffleLayer(SimpleShuffleLayer):
@@ -384,61 +350,22 @@ class ShuffleLayer(SimpleShuffleLayer):
 
     def _construct_graph(self):
         """Construct graph for a "rearrange-by-column" stage."""
-
-        shuffle_group_name = "group-" + self.name
-        shuffle_split_name = "split-" + self.name
-
-        dsk = {}
-        inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
-        for part in self.parts_out:
-
-            out = self.inputs[part]
-
-            _concat_list = []  # get_item tasks to concat for this output partition
-            for i in range(self.nsplits):
-                # Get out each individual dataframe piece from the dicts
-                _inp = insert(out, self.stage, i)
-                _idx = out[self.stage]
-                _concat_list.append((shuffle_split_name, _idx, _inp))
-
-            # concatenate those pieces together, with their friends
-            dsk[(self.name, part)] = (_concat, _concat_list, self.ignore_index)
-
-            for _, _idx, _inp in _concat_list:
-                dsk[(shuffle_split_name, _idx, _inp)] = (
-                    operator.getitem,
-                    (shuffle_group_name, _inp),
-                    _idx,
-                )
-
-                if (shuffle_group_name, _inp) not in dsk:
-
-                    # Initial partitions (output of previous stage)
-                    _part = inp_part_map[_inp]
-                    if self.stage == 0:
-                        if _part < self.npartitions_input:
-                            input_key = (self.name_input, _part)
-                        else:
-                            # In order to make sure that to_serialize() serialize the
-                            # empty dataframe input, we add it as a key.
-                            input_key = (shuffle_group_name, _inp, "empty")
-                            dsk[input_key] = self.meta_input
-                    else:
-                        input_key = (self.name_input, _part)
-
-                    # Convert partition into dict of dataframe pieces
-                    dsk[(shuffle_group_name, _inp)] = (
-                        shuffle_group,
-                        input_key,
-                        self.column,
-                        self.stage,
-                        self.nsplits,
-                        self.npartitions_input,
-                        self.ignore_index,
-                        self.npartitions,
-                    )
-
-        return dsk
+        return _ShuffleLayer._construct_graph(
+            name=self.name,
+            column=self.column,
+            npartitions=self.npartitions,
+            npartitions_input=self.npartitions_input,
+            ignore_index=self.ignore_index,
+            name_input=self.name_input,
+            meta_input=self.meta_input,
+            parts_out=self.parts_out,
+            concat_func=_concat,
+            getitem_func=operator.getitem,
+            shuffle_group_func=shuffle_group,
+            inputs=self.inputs,
+            stage=self.stage,
+            nsplits=self.nsplits,
+        )
 
 
 def set_index(

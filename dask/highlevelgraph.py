@@ -933,10 +933,17 @@ class HighLevelGraph(Mapping):
         # Dump each layer (in topological order)
         layers = []
         for layer in (self.layers[name] for name in self._toposort_layers()):
+            if hasattr(layer, "_layer_materialize_module"):
+                # Use isolated layer-materialization module if
+                # one is defined for this layer
+                mod = layer._layer_materialize_module
+            else:
+                mod = layer.__module__
+            name = type(layer).__name__
             layers.append(
                 {
-                    "__module__": layer.__module__,
-                    "__name__": type(layer).__name__,
+                    "__module__": mod,
+                    "__name__": name,
                     "state": layer.__dask_distributed_pack__(
                         self.get_all_external_keys(),
                         self.key_dependencies,
