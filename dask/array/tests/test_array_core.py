@@ -3666,6 +3666,7 @@ def test_setitem_extended_API():
         x[index] = value
         dx[index] = value
         if check_each_op:
+            print("index=", index)
             assert_eq(x, dx.compute())
 
     for index, value in zip(
@@ -3691,6 +3692,7 @@ def test_setitem_extended_API():
         x[index] = value
         dx[index] = value
         if check_each_op:
+            print("index=", index)
             assert_eq(x, dx.compute())
 
     x[2:4, x[0] > 3] = -5
@@ -3766,17 +3768,19 @@ def test_setitem_extended_API():
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
     # RHS has extra leading size 1 dimensions compared to LHS
-    x = np.arange(12).reshape((3, 4))
-    dx = da.from_array(x, chunks=(2, 3))
-    v = np.arange(12).reshape((1, 1, 3, 4))
-
+    dx = da.from_array(x.copy(), chunks=(2, 3))
+    v = x.reshape((1, 1) + x.shape)
     x[...] = v
     dx[...] = v
     assert_eq(x, dx.compute())
 
-    index = da.from_array([0, 2], chunks=(2,))
-    x[[0, 2]] = 99
-    dx[index] = 99
+    index = da.from_array([0, -1], chunks=(1,))
+    x[[0, -1]] = 9999
+    dx[index] = 9999
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x.copy(), chunks=(-1, -1))
+    dx[...] = da.from_array(x.copy(), chunks=(2, 3))
     assert_eq(x, dx.compute())
 
 

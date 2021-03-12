@@ -1645,6 +1645,9 @@ class Array(DaskMethodsMixin):
         return self._scalarfunc(int)
 
     def __setitem__(self, key, value):
+        if value is np.ma.masked:
+            value = np.ma.masked_all(())
+
         ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array) and key.dtype == bool:
             from .routines import where
@@ -1668,14 +1671,10 @@ class Array(DaskMethodsMixin):
 
         # Still here? Then apply the assignment to other type of
         # indices via the `setitem_array` function.
-
-        if value is np.ma.masked:
-            value = np.ma.masked_all(())
-
         value = asanyarray(value)
 
         out = "setitem-" + tokenize(self, key, value)
-        dsk = setitem_array(out, self, key, asanyarray(value))
+        dsk = setitem_array(out, self, key, value)
 
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
         y = Array(graph, out, chunks=self.chunks, dtype=self.dtype)
