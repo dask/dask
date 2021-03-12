@@ -287,6 +287,39 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
     assert_eq(z, np.ones(10) * 4.0)
 
 
+@pytest.mark.parametrize(
+    "io",
+    [
+        "ones",
+        "zeros",
+        "full",
+    ],
+)
+@pytest.mark.parametrize("fuse", [True, False])
+def test_blockwise_array_creation(c, io, fuse):
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    chunks = (5, 2)
+    shape = (10, 4)
+
+    if io == "ones":
+        darr = da.ones(shape, chunks=chunks)
+        narr = np.ones(shape)
+    elif io == "zeros":
+        darr = da.zeros(shape, chunks=chunks)
+        narr = np.zeros(shape)
+    elif io == "full":
+        darr = da.full(shape, 10, chunks=chunks)
+        narr = np.full(shape, 10)
+
+    darr += 2
+    narr += 2
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        darr.compute()
+        da.assert_eq(darr, narr)
+
+
 @gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
