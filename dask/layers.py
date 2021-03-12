@@ -1,8 +1,8 @@
 import tlz as toolz
 
-from ..core import keys_in_tasks
-from ..utils import insert, stringify, stringify_collection_keys
-from ..highlevelgraph import Layer
+from .core import keys_in_tasks
+from .utils import insert, stringify, stringify_collection_keys
+from .highlevelgraph import Layer
 
 
 def run_ext_function(func, *args):
@@ -41,7 +41,6 @@ class SimpleShuffleLayer(Layer):
             state["inputs"] = list(state["inputs"])
 
         # Materialize the layer
-        # layer_dsk = dict(cls(**state))
         layer_dsk = cls._construct_graph(**state)
 
         # Convert all keys to strings and dump tasks

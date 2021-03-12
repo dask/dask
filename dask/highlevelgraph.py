@@ -1016,6 +1016,9 @@ class HighLevelGraph(Mapping):
                 layer_annotations = annotations or layer["annotations"] or None
             unpack_anno(anno, layer_annotations, unpacked_layer["dsk"].keys())
 
+        with open("debug.txt", "w") as f:
+            f.write(str(dsk))
+
         return {"dsk": dsk, "deps": deps, "annotations": anno}
 
 

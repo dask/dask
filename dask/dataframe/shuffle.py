@@ -20,7 +20,7 @@ from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
-from .layers import (
+from ..layers import (
     SimpleShuffleLayer as _SimpleShuffleLayer,
     ShuffleLayer as _ShuffleLayer,
 )
