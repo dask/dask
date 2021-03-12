@@ -17,9 +17,10 @@ pytest.importorskip("flask")  # server mode needs flask too
 requests = pytest.importorskip("requests")
 
 from tlz import concat, valmap
+from fsspec.core import open_files
 
 from dask import compute
-from dask.bytes.core import read_bytes, open_files
+from dask.bytes.core import read_bytes
 from s3fs import S3FileSystem as DaskS3FileSystem
 from dask.bytes.utils import compress
 from fsspec.compression import compr

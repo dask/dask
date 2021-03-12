@@ -34,9 +34,6 @@ from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
 
-# Needed to pickle the lambda functions used in this test suite
-pytest.importorskip("cloudpickle")
-
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
 L = list(range(5)) * 3

@@ -1,9 +1,9 @@
 from distutils.version import LooseVersion
+from fsspec.core import get_fs_token_paths
 
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from ..core import DataFrame
 from ...base import tokenize
-from ...bytes.core import get_fs_token_paths
 from ...utils import import_required
 
 __all__ = ("read_orc",)

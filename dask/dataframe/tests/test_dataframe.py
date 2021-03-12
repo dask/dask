@@ -1647,10 +1647,7 @@ def test_combine_first():
 
 def test_dataframe_picklable():
     from pickle import loads, dumps
-
-    cloudpickle = pytest.importorskip("cloudpickle")
-    cp_dumps = cloudpickle.dumps
-    cp_loads = cloudpickle.loads
+    from cloudpickle import dumps as cp_dumps, loads as cp_loads
 
     d = _compat.makeTimeDataFrame()
     df = dd.from_pandas(d, npartitions=3)

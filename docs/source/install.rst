@@ -30,8 +30,8 @@ choice for Dask users::
    python -m pip install "dask[complete]"    # Install everything
 
 You can also install only the Dask library.  Modules like ``dask.array``,
-``dask.dataframe``, ``dask.delayed``, or ``dask.distributed`` won't work until you also install NumPy,
-Pandas, Toolz, or Tornado, respectively.  This is common for downstream library
+``dask.dataframe``, or ``dask.distributed`` won't work until you also install NumPy,
+Pandas, or Tornado, respectively.  This is common for downstream library
 maintainers::
 
    python -m pip install dask                # Install only core parts of dask
@@ -39,9 +39,8 @@ maintainers::
 We also maintain other dependency sets for different subsets of functionality::
 
    python -m pip install "dask[array]"       # Install requirements for dask array
-   python -m pip install "dask[bag]"         # Install requirements for dask bag
    python -m pip install "dask[dataframe]"   # Install requirements for dask dataframe
-   python -m pip install "dask[delayed]"     # Install requirements for dask delayed
+   python -m pip install "dask[diagnostics]" # Install requirements for dask diagnostics
    python -m pip install "dask[distributed]" # Install requirements for distributed dask
 
 We have these options so that users of the lightweight core Dask scheduler
@@ -88,15 +87,11 @@ These optional dependencies and their minimum supported versions are listed belo
 +===============+==========+==============================================================+
 |     bokeh     | >=1.0.0  |                Visualizing dask diagnostics                  |
 +---------------+----------+--------------------------------------------------------------+
-|  cloudpickle  | >=0.2.2  |              Pickling support for Python objects             |
-+---------------+----------+--------------------------------------------------------------+
 |   cityhash    |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+
 |  distributed  | >=2.0    |               Distributed computing in Python                |
 +---------------+----------+--------------------------------------------------------------+
 |  fastparquet  |          |         Storing and reading data from parquet files          |
-+---------------+----------+--------------------------------------------------------------+
-|     fsspec    | >=0.6.0  |          Used for local, cluster and remote data IO          |
 +---------------+----------+--------------------------------------------------------------+
 |     gcsfs     | >=0.4.0  |        File-system interface to Google Cloud Storage         |
 +---------------+----------+--------------------------------------------------------------+
@@ -105,8 +100,6 @@ These optional dependencies and their minimum supported versions are listed belo
 |     numpy     | >=1.15.1 |                   Required for dask.array                    |
 +---------------+----------+--------------------------------------------------------------+
 |     pandas    | >=0.25.0 |                  Required for dask.dataframe                 |
-+---------------+----------+--------------------------------------------------------------+
-|     partd     | >=0.3.10 |            Concurrent appendable key-value storage           |
 +---------------+----------+--------------------------------------------------------------+
 |     psutil    |          |             Enables a more accurate CPU count                |
 +---------------+----------+--------------------------------------------------------------+
@@ -118,10 +111,14 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |   sqlalchemy  |          |            Writing and reading from SQL databases            |
 +---------------+----------+--------------------------------------------------------------+
-| cytoolz/toolz | >=0.8.2  | Utility functions for iterators, functions, and dictionaries |
+|    cytoolz*   | >=0.8.2  | Utility functions for iterators, functions, and dictionaries |
 +---------------+----------+--------------------------------------------------------------+
 |    xxhash     |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+
+
+* Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
+``cytoolz``.
+
 
 Test
 ----

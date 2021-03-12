@@ -4,6 +4,7 @@ import operator
 import pickle
 
 import pytest
+from tlz import curry
 
 from dask import get
 from dask.utils import (
@@ -363,9 +364,7 @@ def test_funcname_long():
 
 
 def test_funcname_toolz():
-    toolz = pytest.importorskip("tlz")
-
-    @toolz.curry
+    @curry
     def foo(a, b, c):
         pass
 

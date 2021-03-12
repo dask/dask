@@ -3,8 +3,9 @@ import os
 from functools import partial
 
 from tlz import concat
+from fsspec.core import open_files
 
-from ..bytes import open_files, read_bytes
+from ..bytes import read_bytes
 from ..delayed import delayed
 from ..utils import parse_bytes, system_encoding
 from .core import from_delayed
