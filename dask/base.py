@@ -1,10 +1,11 @@
 from collections import OrderedDict
-from collections.abc import Mapping, Iterator
 from contextlib import contextmanager
+from dataclasses import is_dataclass, fields
 from functools import partial
 from hashlib import md5
 from numbers import Number
 from operator import getitem
+from typing import Iterator, Mapping, Set
 import inspect
 import pickle
 import os
@@ -14,11 +15,10 @@ import uuid
 from tlz import merge, groupby, curry, identity
 from tlz.functoolz import Compose
 
-from .compatibility import is_dataclass, dataclass_fields
 from .context import thread_state
 from .core import flatten, quote, get as simple_get, literal
 from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict, apply
+from .utils import Dispatch, ensure_dict, apply, key_split
 from . import config, local, threaded
 
 
@@ -32,6 +32,10 @@ __all__ = (
     "visualize",
     "tokenize",
     "normalize_token",
+    "get_collection_names",
+    "get_name_from_key",
+    "replace_name_in_key",
+    "clone_key",
 )
 
 
@@ -153,7 +157,7 @@ def is_dask_collection(x):
         return False
 
 
-class DaskMethodsMixin(object):
+class DaskMethodsMixin:
     """A mixin adding standard dask collection methods"""
 
     __slots__ = ()
@@ -424,7 +428,7 @@ def unpack_collections(*args, **kwargs):
                         dict,
                         [
                             [f.name, _unpack(getattr(expr, f.name))]
-                            for f in dataclass_fields(expr)
+                            for f in fields(expr)
                         ],
                     ),
                 )
@@ -1186,3 +1190,98 @@ def wait(x, timeout=None, return_when="ALL_COMPLETED"):
         return wait(x, timeout=timeout, return_when=return_when)
     except (ImportError, ValueError):
         return x
+
+
+def get_collection_names(collection) -> Set[str]:
+    """Infer the collection names from the dask keys, under the assumption that all keys
+    are either tuples with matching first element, and that element is a string, or
+    there is exactly one key and it is a string.
+
+    Examples
+    --------
+    >>> a.__dask_keys__()  # doctest: +SKIP
+    ["foo", "bar"]  # doctest: +SKIP
+    >>> get_collection_names(a)  # doctest: +SKIP
+    {"foo", "bar"}  # doctest: +SKIP
+    >>> b.__dask_keys__()  # doctest: +SKIP
+    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]  # doctest: +SKIP
+    >>> get_collection_names(b)  # doctest: +SKIP
+    {"foo-123"}  # doctest: +SKIP
+    """
+    if not is_dask_collection(collection):
+        raise TypeError(f"Expected Dask collection; got {type(collection)}")
+    return {get_name_from_key(k) for k in flatten(collection.__dask_keys__())}
+
+
+def get_name_from_key(key) -> str:
+    """Given a dask collection's key, extract the collection name.
+
+    Parameters
+    ----------
+    key: string or tuple
+        Dask collection's key, which must be either a single string or a tuple whose
+        first element is a string (commonly referred to as a collection's 'name'),
+
+    Examples
+    --------
+    >>> get_name_from_key("foo")
+    'foo'
+    >>> get_name_from_key(("foo-123", 1, 2))
+    'foo-123'
+    """
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return key[0]
+    if isinstance(key, str):
+        return key
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+
+
+def replace_name_in_key(key, rename: Mapping[str, str]):
+    """Given a dask collection's key, replace the collection name with a new one.
+
+    Parameters
+    ----------
+    key: string or tuple
+        Dask collection's key, which must be either a single string or a tuple whose
+        first element is a string (commonly referred to as a collection's 'name'),
+    rename:
+        Mapping of zero or more names from : to. Extraneous names will be ignored.
+        Names not found in this mapping won't be replaced.
+
+    Examples
+    --------
+    >>> replace_name_in_key("foo", {})
+    'foo'
+    >>> replace_name_in_key("foo", {"foo": "bar"})
+    'bar'
+    >>> replace_name_in_key(("foo-123", 1, 2), {"foo-123": "bar-456"})
+    ('bar-456', 1, 2)
+    """
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return (rename.get(key[0], key[0]),) + key[1:]
+    if isinstance(key, str):
+        return rename.get(key, key)
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")
+
+
+def clone_key(key, seed):
+    """Clone a key from a Dask collection, producing a new key with the same prefix and
+    indices and a token which a deterministic function of the previous token and seed.
+
+    Examples
+    --------
+    >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
+    'inc-1d291de52f5045f8a969743daea271fd'  # doctest: +SKIP
+    >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
+    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)  # doctest: +SKIP
+    """
+    if isinstance(key, tuple) and key and isinstance(key[0], str):
+        return (clone_key(key[0], seed),) + key[1:]
+    if isinstance(key, str):
+        prefix = key_split(key)
+        token = key[len(prefix) + 1 :]
+        if token:
+            return prefix + "-" + tokenize(token, seed)
+        else:
+            return tokenize(key, seed)
+    raise TypeError(f"Expected str or tuple[str, Hashable, ...]; got {key}")

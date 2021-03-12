@@ -6,9 +6,10 @@ import sys
 import time
 from collections import OrderedDict
 
-from tlz import merge
+from tlz import merge, partial, compose, curry
 
 import dask
+import dask.bag as db
 from dask import delayed
 from dask.base import (
     compute,
@@ -25,23 +26,19 @@ from dask.base import (
     named_schedulers,
     get_scheduler,
     collections_to_dsk,
+    get_collection_names,
+    get_name_from_key,
+    replace_name_in_key,
+    clone_key,
 )
 from dask.core import literal
 from dask.delayed import Delayed
-from dask.utils import tmpdir, tmpfile, ignoring
-from dask.utils_test import inc, dec
+from dask.utils import tmpdir, tmpfile
+from dask.utils_test import dec, inc, import_or_none
 from dask.diagnostics import Profiler
 
 
-def import_or_none(path):
-    with ignoring(BaseException):
-        return pytest.importorskip(path)
-    return None
-
-
-tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
-db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
@@ -61,39 +58,24 @@ def f3(a):
 
 
 def test_normalize_function():
-
     assert normalize_function(f2)
 
     assert normalize_function(lambda a: a)
 
-    assert normalize_function(tz.partial(f2, b=2)) == normalize_function(
-        tz.partial(f2, b=2)
-    )
+    assert normalize_function(partial(f2, b=2)) == normalize_function(partial(f2, b=2))
 
-    assert normalize_function(tz.partial(f2, b=2)) != normalize_function(
-        tz.partial(f2, b=3)
-    )
+    assert normalize_function(partial(f2, b=2)) != normalize_function(partial(f2, b=3))
 
-    assert normalize_function(tz.partial(f1, b=2)) != normalize_function(
-        tz.partial(f2, b=2)
-    )
+    assert normalize_function(partial(f1, b=2)) != normalize_function(partial(f2, b=2))
 
-    assert normalize_function(tz.compose(f2, f3)) == normalize_function(
-        tz.compose(f2, f3)
-    )
+    assert normalize_function(compose(f2, f3)) == normalize_function(compose(f2, f3))
 
-    assert normalize_function(tz.compose(f2, f3)) != normalize_function(
-        tz.compose(f2, f1)
-    )
+    assert normalize_function(compose(f2, f3)) != normalize_function(compose(f2, f1))
 
-    assert normalize_function(tz.curry(f2)) == normalize_function(tz.curry(f2))
-    assert normalize_function(tz.curry(f2)) != normalize_function(tz.curry(f1))
-    assert normalize_function(tz.curry(f2, b=1)) == normalize_function(
-        tz.curry(f2, b=1)
-    )
-    assert normalize_function(tz.curry(f2, b=1)) != normalize_function(
-        tz.curry(f2, b=2)
-    )
+    assert normalize_function(curry(f2)) == normalize_function(curry(f2))
+    assert normalize_function(curry(f2)) != normalize_function(curry(f1))
+    assert normalize_function(curry(f2, b=1)) == normalize_function(curry(f2, b=1))
+    assert normalize_function(curry(f2, b=1)) != normalize_function(curry(f2, b=2))
 
 
 def test_tokenize():
@@ -227,7 +209,7 @@ def test_tokenize_numpy_ufunc_consistent():
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
-    f = tz.partial(f3, f2, c=f1)
+    f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
         b"cdask.tests.test_base\nf3\np0\n.",
@@ -279,7 +261,7 @@ def test_tokenize_pandas_mixed_unicode_bytes():
 
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas_no_pickle():
-    class NoPickle(object):
+    class NoPickle:
         # pickling not supported because it is a local class
         pass
 
@@ -330,7 +312,7 @@ def test_tokenize_kwargs():
 
 
 def test_tokenize_same_repr():
-    class Foo(object):
+    class Foo:
         def __init__(self, x):
             self.x = x
 
@@ -341,7 +323,7 @@ def test_tokenize_same_repr():
 
 
 def test_tokenize_method():
-    class Foo(object):
+    class Foo:
         def __init__(self, x):
             self.x = x
 
@@ -464,8 +446,8 @@ def test_tokenize_object_with_recursion_error_returns_uuid():
 
 
 def test_is_dask_collection():
-    class DummyCollection(object):
-        def __init__(self, dsk=None):
+    class DummyCollection:
+        def __init__(self, dsk):
             self.dask = dsk
 
         def __dask_graph__(self):
@@ -475,7 +457,7 @@ def test_is_dask_collection():
     assert is_dask_collection(x)
     assert not is_dask_collection(2)
     assert is_dask_collection(DummyCollection({}))
-    assert not is_dask_collection(DummyCollection())
+    assert not is_dask_collection(DummyCollection(None))
     assert not is_dask_collection(DummyCollection)
 
 
@@ -537,13 +519,90 @@ def test_unpack_collections():
 
     # Result that looks like a task
     def fail(*args):
-        raise ValueError("Shouldn't have been called")
+        raise ValueError("Shouldn't have been called")  # pragma: nocover
 
     collections, repack = unpack_collections(
         a, (fail, 1), [(fail, 2, 3)], traverse=False
     )
     repack(collections)  # Smoketest task literals
     repack([(fail, 1)])  # Smoketest results that look like tasks
+
+
+def test_get_collection_names():
+    class DummyCollection:
+        def __init__(self, dsk, keys):
+            self.dask = dsk
+            self.keys = keys
+
+        def __dask_graph__(self):
+            return self.dask
+
+        def __dask_keys__(self):
+            return self.keys
+
+    with pytest.raises(TypeError):
+        get_collection_names(object())
+    with pytest.raises(TypeError):
+        get_collection_names(DummyCollection(None, []))
+    # Keys must either be a string or a tuple where the first element is a string
+    with pytest.raises(TypeError):
+        get_collection_names(DummyCollection({1: 2}, [1]))
+    with pytest.raises(TypeError):
+        get_collection_names(DummyCollection({(): 1}, [()]))
+    with pytest.raises(TypeError):
+        get_collection_names(DummyCollection({(1,): 1}, [(1,)]))
+
+    assert get_collection_names(DummyCollection({}, [])) == set()
+
+    # Arbitrary hashables
+    h1 = object()
+    h2 = object()
+    # __dask_keys__() returns a nested list
+    assert (
+        get_collection_names(
+            DummyCollection(
+                {("a-1", h1): 1, ("a-1", h2): 2, "b-2": 3, "c": 4},
+                [[[("a-1", h1), ("a-1", h2), "b-2", "c"]]],
+            )
+        )
+        == {"a-1", "b-2", "c"}
+    )
+
+
+def test_get_name_from_key():
+    # Arbitrary hashables
+    h1 = object()
+    h2 = object()
+
+    assert get_name_from_key("foo") == "foo"
+    assert get_name_from_key("foo-123"), "foo-123"
+    assert get_name_from_key(("foo-123", h1, h2)) == "foo-123"
+    with pytest.raises(TypeError):
+        get_name_from_key(1)
+    with pytest.raises(TypeError):
+        get_name_from_key(())
+    with pytest.raises(TypeError):
+        get_name_from_key((1,))
+
+
+def test_replace_name_in_keys():
+    assert replace_name_in_key("foo", {}) == "foo"
+    assert replace_name_in_key("foo", {"bar": "baz"}) == "foo"
+    assert replace_name_in_key("foo", {"foo": "bar", "baz": "asd"}) == "bar"
+    assert replace_name_in_key("foo-123", {"foo-123": "bar-456"}) == "bar-456"
+    h1 = object()  # Arbitrary hashables
+    h2 = object()
+    assert replace_name_in_key(("foo-123", h1, h2), {"foo-123": "bar"}) == (
+        "bar",
+        h1,
+        h2,
+    )
+    with pytest.raises(TypeError):
+        replace_name_in_key(1, {})
+    with pytest.raises(TypeError):
+        replace_name_in_key((), {})
+    with pytest.raises(TypeError):
+        replace_name_in_key((1,), {})
 
 
 class Tuple(DaskMethodsMixin):
@@ -555,15 +614,18 @@ class Tuple(DaskMethodsMixin):
         self._keys = keys
 
     def __add__(self, other):
-        if isinstance(other, Tuple):
-            return Tuple(merge(self._dask, other._dask), self._keys + other._keys)
-        return NotImplemented
+        if not isinstance(other, Tuple):
+            return NotImplemented  # pragma: nocover
+        return Tuple(merge(self._dask, other._dask), self._keys + other._keys)
 
     def __dask_graph__(self):
         return self._dask
 
     def __dask_keys__(self):
         return self._keys
+
+    def __dask_layers__(self):
+        return tuple(get_collection_names(self))
 
     def __dask_tokenize__(self):
         return self._keys
@@ -572,48 +634,97 @@ class Tuple(DaskMethodsMixin):
         return tuple, ()
 
     def __dask_postpersist__(self):
-        return Tuple, (self._keys,)
+        return Tuple._rebuild, (self._keys,)
+
+    @staticmethod
+    def _rebuild(dsk, keys, *, rename=None):
+        if rename:
+            keys = [replace_name_in_key(key, rename) for key in keys]
+        return Tuple(dsk, keys)
 
 
 def test_custom_collection():
-    dsk = {"a": 1, "b": 2}
-    dsk2 = {"c": (add, "a", "b"), "d": (add, "c", 1)}
-    dsk2.update(dsk)
-    dsk3 = {"e": (add, "a", 4), "f": (inc, "e")}
-    dsk3.update(dsk)
+    # Arbitrary hashables
+    h1 = object()
+    h2 = object()
 
-    x = Tuple(dsk, ["a", "b"])
-    y = Tuple(dsk2, ["c", "d"])
-    z = Tuple(dsk3, ["e", "f"])
+    dsk = {("x", h1): 1, ("x", h2): 2}
+    dsk2 = {("y", h1): (add, ("x", h1), ("x", h2)), ("y", h2): (add, ("y", h1), 1)}
+    dsk2.update(dsk)
+    dsk3 = {"z": (add, ("y", h1), ("y", h2))}
+    dsk3.update(dsk2)
+
+    w = Tuple({}, [])  # A collection can have no keys at all
+    x = Tuple(dsk, [("x", h1), ("x", h2)])
+    y = Tuple(dsk2, [("y", h1), ("y", h2)])
+    z = Tuple(dsk3, ["z"])
+    # Collection with multiple names
+    t = w + x + y + z
 
     # __slots__ defined on base mixin class propagates
     with pytest.raises(AttributeError):
         x.foo = 1
 
     # is_dask_collection
+    assert is_dask_collection(w)
     assert is_dask_collection(x)
+    assert is_dask_collection(y)
+    assert is_dask_collection(z)
+    assert is_dask_collection(t)
 
     # tokenize
+    assert tokenize(w) == tokenize(w)
     assert tokenize(x) == tokenize(x)
-    assert tokenize(x) != tokenize(y)
+    assert tokenize(y) == tokenize(y)
+    assert tokenize(z) == tokenize(z)
+    assert tokenize(t) == tokenize(t)
+    # All tokens are unique
+    assert len({tokenize(coll) for coll in (w, x, y, z, t)}) == 5
+
+    # get_collection_names
+    assert get_collection_names(w) == set()
+    assert get_collection_names(x) == {"x"}
+    assert get_collection_names(y) == {"y"}
+    assert get_collection_names(z) == {"z"}
+    assert get_collection_names(t) == {"x", "y", "z"}
 
     # compute
+    assert w.compute() == ()
     assert x.compute() == (1, 2)
-    assert dask.compute(x, [y, z]) == ((1, 2), [(3, 4), (5, 6)])
-    t = x + y + z
-    assert t.compute() == (1, 2, 3, 4, 5, 6)
+    assert y.compute() == (3, 4)
+    assert z.compute() == (7,)
+    assert dask.compute(w, [{"x": x}, y, z]) == ((), [{"x": (1, 2)}, (3, 4), (7,)])
+    assert t.compute() == (1, 2, 3, 4, 7)
 
     # persist
     t2 = t.persist()
     assert isinstance(t2, Tuple)
-    assert t2._dask == dict(zip("abcdef", range(1, 7)))
-    assert t2.compute() == (1, 2, 3, 4, 5, 6)
-    x2, y2, z2 = dask.persist(x, y, z)
+    assert t2._keys == t._keys
+    assert sorted(t2._dask.values()) == [1, 2, 3, 4, 7]
+    assert t2.compute() == (1, 2, 3, 4, 7)
+
+    w2, x2, y2, z2 = dask.persist(w, x, y, z)
+    assert y2._keys == y._keys
+    assert y2._dask == {("y", h1): 3, ("y", h2): 4}
+    assert y2.compute() == (3, 4)
+
     t3 = x2 + y2 + z2
-    assert t2._dask == t3._dask
+    assert t3.compute() == (1, 2, 3, 4, 7)
+
+    # __dask_postpersist__ with name change
+    rebuild, args = w.__dask_postpersist__()
+    w3 = rebuild({}, *args, rename={"w": "w3"})
+    assert w3.compute() == ()
+
+    rebuild, args = x.__dask_postpersist__()
+    x3 = rebuild({("x3", h1): 10, ("x3", h2): 20}, *args, rename={"x": "x3"})
+    assert x3.compute() == (10, 20)
+
+    rebuild, args = z.__dask_postpersist__()
+    z3 = rebuild({"z3": 70}, *args, rename={"z": "z3"})
+    assert z3.compute() == (70,)
 
 
-@pytest.mark.skipif("not db")
 def test_compute_no_opt():
     # Bag does `fuse` by default. Test that with `optimize_graph=False` that
     # doesn't get called. We check this by using a callback to track the keys
@@ -621,8 +732,8 @@ def test_compute_no_opt():
     from dask.callbacks import Callback
 
     b = db.from_sequence(range(100), npartitions=4)
-    add1 = tz.partial(add, 1)
-    mul2 = tz.partial(mul, 2)
+    add1 = partial(add, 1)
+    mul2 = partial(mul, 2)
     o = b.map(add1).map(mul2)
     # Check that with the kwarg, the optimization doesn't happen
     keys = []
@@ -666,6 +777,18 @@ def test_persist_array():
     assert len(y.dask) == y.npartitions
 
 
+@pytest.mark.skipif("not da")
+def test_persist_array_rename():
+    a = da.zeros(4, dtype=int, chunks=2)
+    rebuild, args = a.__dask_postpersist__()
+    dsk = {("b", 0): np.array([1, 2]), ("b", 1): np.array([3, 4])}
+    b = rebuild(dsk, *args, rename={a.name: "b"})
+    assert isinstance(b, da.Array)
+    assert b.name == "b"
+    assert b.__dask_keys__() == [("b", 0), ("b", 1)]
+    da.utils.assert_eq(b, [1, 2, 3, 4])
+
+
 @pytest.mark.skipif("not dd")
 def test_compute_dataframe():
     df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 5, 3, 3]})
@@ -673,8 +796,75 @@ def test_compute_dataframe():
     ddf1 = ddf.a + 1
     ddf2 = ddf.a + ddf.b
     out1, out2 = compute(ddf1, ddf2)
-    dd._compat.tm.assert_series_equal(out1, df.a + 1)
-    dd._compat.tm.assert_series_equal(out2, df.a + df.b)
+    dd.utils.assert_eq(out1, df.a + 1)
+    dd.utils.assert_eq(out2, df.a + df.b)
+
+
+@pytest.mark.skipif("not dd")
+def test_persist_dataframe():
+    df = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
+    ddf1 = dd.from_pandas(df, npartitions=2) * 2
+    assert len(ddf1.__dask_graph__()) == 4
+    ddf2 = ddf1.persist()
+    assert isinstance(ddf2, dd.DataFrame)
+    assert len(ddf2.__dask_graph__()) == 2
+    dd.utils.assert_eq(ddf2, ddf1)
+
+
+@pytest.mark.skipif("not dd")
+def test_persist_series():
+    ds = pd.Series([1, 2, 3, 4])
+    dds1 = dd.from_pandas(ds, npartitions=2) * 2
+    assert len(dds1.__dask_graph__()) == 4
+    dds2 = dds1.persist()
+    assert isinstance(dds2, dd.Series)
+    assert len(dds2.__dask_graph__()) == 2
+    dd.utils.assert_eq(dds2, dds1)
+
+
+@pytest.mark.skipif("not dd")
+def test_persist_scalar():
+    ds = pd.Series([1, 2, 3, 4])
+    dds1 = dd.from_pandas(ds, npartitions=2).min()
+    assert len(dds1.__dask_graph__()) == 5
+    dds2 = dds1.persist()
+    assert isinstance(dds2, dd.core.Scalar)
+    assert len(dds2.__dask_graph__()) == 1
+    dd.utils.assert_eq(dds2, dds1)
+
+
+@pytest.mark.skipif("not dd")
+def test_persist_dataframe_rename():
+    df1 = pd.DataFrame({"a": [1, 2, 3, 4], "b": [5, 6, 7, 8]})
+    df2 = pd.DataFrame({"a": [2, 3, 5, 6], "b": [6, 7, 9, 10]})
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    rebuild, args = ddf1.__dask_postpersist__()
+    dsk = {("x", 0): df2.iloc[:2], ("x", 1): df2.iloc[2:]}
+    ddf2 = rebuild(dsk, *args, rename={ddf1._name: "x"})
+    assert ddf2.__dask_keys__() == [("x", 0), ("x", 1)]
+    dd.utils.assert_eq(ddf2, df2)
+
+
+@pytest.mark.skipif("not dd")
+def test_persist_series_rename():
+    ds1 = pd.Series([1, 2, 3, 4])
+    ds2 = pd.Series([5, 6, 7, 8])
+    dds1 = dd.from_pandas(ds1, npartitions=2)
+    rebuild, args = dds1.__dask_postpersist__()
+    dsk = {("x", 0): ds2.iloc[:2], ("x", 1): ds2.iloc[2:]}
+    dds2 = rebuild(dsk, *args, rename={dds1._name: "x"})
+    assert dds2.__dask_keys__() == [("x", 0), ("x", 1)]
+    dd.utils.assert_eq(dds2, ds2)
+
+
+@pytest.mark.skipif("not dd")
+def test_persist_scalar_rename():
+    ds1 = pd.Series([1, 2, 3, 4])
+    dds1 = dd.from_pandas(ds1, npartitions=2).min()
+    rebuild, args = dds1.__dask_postpersist__()
+    dds2 = rebuild({("x", 0): 5}, *args, rename={dds1._name: "x"})
+    assert dds2.__dask_keys__() == [("x", 0)]
+    dd.utils.assert_eq(dds2, 5)
 
 
 @pytest.mark.skipif("not dd or not da")
@@ -685,7 +875,7 @@ def test_compute_array_dataframe():
     ddf = dd.from_pandas(df, npartitions=2).a + 2
     arr_out, df_out = compute(darr, ddf)
     assert np.allclose(arr_out, arr + 1)
-    dd._compat.tm.assert_series_equal(df_out, df.a + 2)
+    dd.utils.assert_eq(df_out, df.a + 2)
 
 
 @pytest.mark.skipif("not dd")
@@ -701,7 +891,7 @@ def test_compute_dataframe_invalid_unicode():
     dd.from_pandas(df, npartitions=4)
 
 
-@pytest.mark.skipif("not da or not db")
+@pytest.mark.skipif("not da")
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
@@ -794,7 +984,6 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
-    pytest.importorskip("cloudpickle")
     from textwrap import dedent
 
     defn = dedent(
@@ -941,7 +1130,56 @@ def test_persist_delayed():
     assert x3.compute() == xx.compute()
 
 
-@pytest.mark.skipif("not da or not db")
+some_hashable = object()
+
+
+@pytest.mark.parametrize("key", ["a", ("a-123", some_hashable)])
+def test_persist_delayed_custom_key(key):
+    d = Delayed(key, {key: "b", "b": 1})
+    assert d.compute() == 1
+    dp = d.persist()
+    assert dp.compute() == 1
+    assert dp.key == key
+    assert dict(dp.dask) == {key: 1}
+
+
+@pytest.mark.parametrize(
+    "key,rename,new_key",
+    [
+        ("a", {}, "a"),
+        ("a", {"c": "d"}, "a"),
+        ("a", {"a": "b"}, "b"),
+        (("a-123", some_hashable), {"a-123": "b-123"}, ("b-123", some_hashable)),
+    ],
+)
+def test_persist_delayed_rename(key, rename, new_key):
+    d = Delayed(key, {key: 1})
+    assert d.compute() == 1
+    rebuild, args = d.__dask_postpersist__()
+    dp = rebuild({new_key: 2}, *args, rename=rename)
+    assert dp.compute() == 2
+    assert dp.key == new_key
+    assert dict(dp.dask) == {new_key: 2}
+
+
+def test_persist_delayedleaf():
+    x = delayed(1)
+    (xx,) = persist(x)
+    assert isinstance(xx, Delayed)
+    assert xx.compute() == 1
+
+
+def test_persist_delayedattr():
+    class C:
+        x = 1
+
+    x = delayed(C).x
+    (xx,) = persist(x)
+    assert isinstance(xx, Delayed)
+    assert xx.compute() == 1
+
+
+@pytest.mark.skipif("not da")
 def test_persist_array_bag():
     x = da.arange(5, chunks=2) + 1
     b = db.from_sequence([1, 2, 3]).map(inc)
@@ -963,6 +1201,44 @@ def test_persist_array_bag():
     assert list(b) == list(bb)
 
 
+def test_persist_bag():
+    a = db.from_sequence([1, 2, 3], npartitions=2).map(lambda x: x * 2)
+    assert len(a.__dask_graph__()) == 4
+    b = a.persist(scheduler="sync")
+    assert isinstance(b, db.Bag)
+    assert len(b.__dask_graph__()) == 2
+    db.utils.assert_eq(a, b)
+
+
+def test_persist_item():
+    a = db.from_sequence([1, 2, 3], npartitions=2).map(lambda x: x * 2).min()
+    assert len(a.__dask_graph__()) == 7
+    b = a.persist(scheduler="sync")
+    assert isinstance(b, db.Item)
+    assert len(b.__dask_graph__()) == 1
+    db.utils.assert_eq(a, b)
+
+
+def test_persist_bag_rename():
+    a = db.from_sequence([1, 2, 3], npartitions=2)
+    rebuild, args = a.__dask_postpersist__()
+    dsk = {("b", 0): [4], ("b", 1): [5, 6]}
+    b = rebuild(dsk, *args, rename={a.name: "b"})
+    assert isinstance(b, db.Bag)
+    assert b.name == "b"
+    assert b.__dask_keys__() == [("b", 0), ("b", 1)]
+    db.utils.assert_eq(b, [4, 5, 6])
+
+
+def test_persist_item_change_name():
+    a = db.from_sequence([1, 2, 3]).min()
+    rebuild, args = a.__dask_postpersist__()
+    b = rebuild({"x": 4}, *args, rename={a.name: "x"})
+    assert isinstance(b, db.Item)
+    assert b.__dask_keys__() == ["x"]
+    db.utils.assert_eq(b, 4)
+
+
 def test_normalize_function_limited_size():
     for i in range(1000):
         normalize_function(lambda x: x)
@@ -972,7 +1248,6 @@ def test_normalize_function_limited_size():
 
 def test_optimize_globals():
     da = pytest.importorskip("dask.array")
-    db = pytest.importorskip("dask.bag")
 
     x = da.ones(10, chunks=(5,))
 
@@ -984,7 +1259,7 @@ def test_optimize_globals():
     assert_eq(x + 1, np.ones(10) + 1)
 
     with dask.config.set(array_optimize=optimize_double):
-        assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2)
+        assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2, check_chunks=False)
 
     assert_eq(x + 1, np.ones(10) + 1)
 
@@ -1060,20 +1335,19 @@ def test_callable_scheduler():
     assert called[0]
 
 
+@pytest.mark.flaky(reruns=10, reruns_delay=5)
+@pytest.mark.slow
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
-    pytest.importorskip("cloudpickle")
     # Regression test for issue #4082
 
-    @delayed
-    def f(x):
-        time.sleep(0.5)
-        return x
-
-    a = [f(i) for i in range(5)]
+    f = delayed(pure=False)(time.sleep)
+    # Be generous with the initial sleep times, as process have been observed
+    # to take >0.5s to spin up
+    a = [f(1.0), f(1.0), f(1.0), f(0.1)]
     num_workers = 3
     with dask.config.set(num_workers=num_workers), Profiler() as prof:
-        a = compute(*a, scheduler=scheduler)
+        compute(*a, scheduler=scheduler)
 
     workers = {i.worker_id for i in prof.results}
 
@@ -1088,3 +1362,17 @@ def test_optimizations_ctd():
         dsk2 = collections_to_dsk([x])
 
     assert dsk1 == dsk2
+
+
+def test_clone_key():
+    h = object()  # arbitrary hashable
+    assert clone_key("inc-1-2-3", 123) == "inc-27b6e15b795fcaff169e0e0df14af97a"
+    assert clone_key("x", 123) == "dc2b8d1c184c72c19faa81c797f8c6b0"
+    assert clone_key("x", 456) == "b76f061b547b00d18b9c7a18ccc47e2d"
+    assert clone_key(("sum-1-2-3", h, 1), 123) == (
+        "sum-27b6e15b795fcaff169e0e0df14af97a",
+        h,
+        1,
+    )
+    with pytest.raises(TypeError):
+        clone_key(1, 2)

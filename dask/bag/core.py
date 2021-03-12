@@ -34,13 +34,19 @@ from tlz import (
     unique,
     accumulate,
 )
+from fsspec.core import open_files
 
 from .. import config
 from .avro import to_avro
-from ..base import tokenize, dont_optimize, DaskMethodsMixin
-from ..bytes import open_files
+from ..base import tokenize, dont_optimize, replace_name_in_key, DaskMethodsMixin
 from ..context import globalmethod
-from ..core import quote, istask, get_dependencies, reverse_dict, flatten
+from ..core import (
+    quote,
+    istask,
+    get_dependencies,
+    reverse_dict,
+    flatten,
+)
 from ..sizeof import sizeof
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -273,7 +279,7 @@ def finalize_item(results):
     return results[0]
 
 
-class StringAccessor(object):
+class StringAccessor:
     """String processing functions
 
     Examples
@@ -352,6 +358,15 @@ class Item(DaskMethodsMixin):
     def __dask_keys__(self):
         return [self.key]
 
+    def __dask_layers__(self):
+        # Deal with instances created with Item.from_delayed()
+        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
+        # See Delayed.__dask_layers__
+        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
+            return tuple(self.dask.layers)
+        else:
+            return (self.key,)
+
     def __dask_tokenize__(self):
         return self.key
 
@@ -362,7 +377,11 @@ class Item(DaskMethodsMixin):
         return finalize_item, ()
 
     def __dask_postpersist__(self):
-        return Item, (self.key,)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        key = replace_name_in_key(self.key, rename) if rename else self.key
+        return Item(dsk, key)
 
     @staticmethod
     def from_delayed(value):
@@ -375,7 +394,7 @@ class Item(DaskMethodsMixin):
         if not isinstance(value, Delayed) and hasattr(value, "key"):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(ensure_dict(value.dask), value.key)
+        return Item(value.dask, value.key)
 
     @property
     def _args(self):
@@ -468,7 +487,13 @@ class Bag(DaskMethodsMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return type(self), (self.name, self.npartitions)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        name = self.name
+        if rename:
+            name = rename.get(name, name)
+        return type(self)(dsk, name, self.npartitions)
 
     def __str__(self):
         return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
@@ -1732,7 +1757,7 @@ def from_url(urls):
 
     Examples
     --------
-    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/master/README.rst')  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/main/README.rst')  # doctest: +SKIP
     >>> a.npartitions  # doctest: +SKIP
     1
 

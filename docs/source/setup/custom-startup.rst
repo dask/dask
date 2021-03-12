@@ -43,7 +43,7 @@ and registers it with the scheduler
    class MyPlugin(SchedulerPlugin):
        def __init__(self, print_count):
          self.print_count = print_count
-         SchedulerPlugin.__init__(self)
+         super().__init__()
 
        def add_worker(self, scheduler=None, worker=None, **kwargs):
            print("Added a new worker at:", worker)

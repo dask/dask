@@ -6,7 +6,72 @@ import tlz as toolz
 from .. import base, utils
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..blockwise import blockwise as core_blockwise
+from ..blockwise import (
+    Blockwise,
+    blockwise as core_blockwise,
+    blockwise_token,
+    BlockwiseIODeps,
+)
+
+
+class CreateArrayDeps(BlockwiseIODeps):
+    """Index-chunk mapping for BlockwiseCreateArray"""
+
+    def __init__(self, chunks: tuple):
+        self.chunks = chunks
+
+    def __getitem__(self, idx: tuple):
+        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+
+
+class BlockwiseCreateArray(Blockwise):
+    """
+    Specialized Blockwise Layer for array creation routines.
+
+    Enables HighLevelGraph optimizations.
+
+    Parameters
+    ----------
+    name: string
+        The output name.
+    func : callable
+        Function to apply to populate individual blocks. This function should take
+        an iterable containing the dimensions of the given block.
+    shape: iterable
+        Iterable containing the overall shape of the array.
+    chunks: iterable
+        Iterable containing the chunk sizes along each dimension of array.
+    """
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+    ):
+        # self.name = name
+        io_name = "blockwise-create-" + name
+
+        # Define "blockwise" graph
+        dsk = {name: (func, blockwise_token(0))}
+
+        out_ind = tuple(range(len(shape)))
+        self.nchunks = tuple(len(chunk) for chunk in chunks)
+        super().__init__(
+            name,
+            out_ind,
+            dsk,
+            [(io_name, out_ind)],
+            {io_name: self.nchunks},
+            io_deps={
+                io_name: (
+                    "dask.array.blockwise",
+                    "CreateArrayDeps",
+                    chunks,
+                )
+            },
+        )
 
 
 def blockwise(
@@ -54,17 +119,34 @@ def blockwise(
     --------
     2D embarrassingly parallel operation from two arrays, x, and y.
 
-    >>> z = blockwise(operator.add, 'ij', x, 'ij', y, 'ij', dtype='f8')  # z = x + y  # doctest: +SKIP
+    >>> import operator, numpy as np, dask.array as da
+    >>> x = da.from_array([[1, 2],
+    ...                    [3, 4]], chunks=(1, 2))
+    >>> y = da.from_array([[10, 20],
+    ...                    [0, 0]])
+    >>> z = blockwise(operator.add, 'ij', x, 'ij', y, 'ij', dtype='f8')
+    >>> z.compute()
+    array([[11, 22],
+           [ 3,  4]])
 
-    Outer product multiplying x by y, two 1-d vectors
+    Outer product multiplying a by b, two 1-d vectors
 
-    >>> z = blockwise(operator.mul, 'ij', x, 'i', y, 'j', dtype='f8')  # doctest: +SKIP
+    >>> a = da.from_array([0, 1, 2], chunks=1)
+    >>> b = da.from_array([10, 50, 100], chunks=1)
+    >>> z = blockwise(np.outer, 'ij', a, 'i', b, 'j', dtype='f8')
+    >>> z.compute()
+    array([[  0,   0,   0],
+           [ 10,  50, 100],
+           [ 20, 100, 200]])
 
     z = x.T
 
-    >>> z = blockwise(np.transpose, 'ji', x, 'ij', dtype=x.dtype)  # doctest: +SKIP
+    >>> z = blockwise(np.transpose, 'ji', x, 'ij', dtype=x.dtype)
+    >>> z.compute()
+    array([[1, 3],
+           [2, 4]])
 
-    The transpose case above is illustrative because it does same transposition
+    The transpose case above is illustrative because it does transposition
     both on each in-memory block by calling ``np.transpose`` and on the order
     of the blocks themselves, by switching the order of the index ``ij -> ji``.
 
@@ -73,7 +155,10 @@ def blockwise(
 
     z = X + Y.T
 
-    >>> z = blockwise(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji', dtype='f8')  # doctest: +SKIP
+    >>> z = blockwise(lambda x, y: x + y.T, 'ij', x, 'ij', y, 'ji', dtype='f8')
+    >>> z.compute()
+    array([[11,  2],
+           [23,  4]])
 
     Any index, like ``i`` missing from the output index is interpreted as a
     contraction (note that this differs from Einstein convention; repeated
@@ -82,31 +167,35 @@ def blockwise(
     index.  To receive arrays concatenated along contracted dimensions instead
     pass ``concatenate=True``.
 
-    Inner product multiplying x by y, two 1-d vectors
+    Inner product multiplying a by b, two 1-d vectors
 
-    >>> def sequence_dot(x_blocks, y_blocks):
+    >>> def sequence_dot(a_blocks, b_blocks):
     ...     result = 0
-    ...     for x, y in zip(x_blocks, y_blocks):
-    ...         result += x.dot(y)
+    ...     for a, b in zip(a_blocks, b_blocks):
+    ...         result += a.dot(b)
     ...     return result
 
-    >>> z = blockwise(sequence_dot, '', x, 'i', y, 'i', dtype='f8')  # doctest: +SKIP
+    >>> z = blockwise(sequence_dot, '', a, 'i', b, 'i', dtype='f8')
+    >>> z.compute()
+    250
 
     Add new single-chunk dimensions with the ``new_axes=`` keyword, including
     the length of the new dimension.  New dimensions will always be in a single
     chunk.
 
-    >>> def f(x):
-    ...     return x[:, None] * np.ones((1, 5))
+    >>> def f(a):
+    ...     return a[:, None] * np.ones((1, 5))
 
-    >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': 5}, dtype=x.dtype)  # doctest: +SKIP
+    >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': 5}, dtype=a.dtype)
 
     New dimensions can also be multi-chunk by specifying a tuple of chunk
     sizes.  This has limited utility as is (because the chunks are all the
     same), but the resulting graph can be modified to achieve more useful
     results (see ``da.map_blocks``).
 
-    >>> z = blockwise(f, 'az', x, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)  # doctest: +SKIP
+    >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)
+    >>> z.chunks
+    ((1, 1, 1), (5, 5))
 
     If the applied function changes the size of each chunk you can specify this
     with a ``adjust_chunks={...}`` dictionary holding a function for each index
@@ -116,11 +205,16 @@ def blockwise(
     ...     return np.concatenate([x, x])
 
     >>> y = blockwise(double, 'ij', x, 'ij',
-    ...               adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)  # doctest: +SKIP
+    ...               adjust_chunks={'i': lambda n: 2 * n}, dtype=x.dtype)
+    >>> y.chunks
+    ((2, 2), (2,))
 
     Include literals by indexing with None
 
-    >>> y = blockwise(add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)  # doctest: +SKIP
+    >>> z = blockwise(operator.add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)
+    >>> z.compute()
+    array([[1235, 1236],
+           [1237, 1238]])
     """
     out = name
     new_axes = new_axes or {}

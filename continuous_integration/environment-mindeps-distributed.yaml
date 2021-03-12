@@ -1,0 +1,17 @@
+name: test-environment
+channels:
+  - conda-forge
+dependencies:
+  # required dependencies
+  - python=3.7
+  - pyyaml
+  - cloudpickle=1.5.0  # this is in the min from distributed
+  - partd=0.3.10
+  - fsspec=0.6.0
+  - toolz=0.8.2
+  # optional dependencies pulled in by pip install dask[distributed]
+  - distributed=2021.03.0
+  # test dependencies
+  - pytest
+  - pytest-rerunfailures
+  - pytest-xdist

@@ -216,7 +216,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
 ###############################################################
 
 
-class Aggregation(object):
+class Aggregation:
     """User defined groupby-aggregation.
 
     This class allows users to define their own custom aggregation in terms of
@@ -470,7 +470,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     # when index is None we probably have selected a particular column
     # df.groupby('a')[['b']].cov()
     if len(idx_vals) == 1 and all(n is None for n in idx_vals):
-        idx_vals = list(set(inv_col_mapping.keys()) - set(total_sums.columns))
+        idx_vals = list(inv_col_mapping.keys() - set(total_sums.columns))
 
     for idx, val in enumerate(idx_vals):
         idx_name = inv_col_mapping.get(val, val)
@@ -1022,7 +1022,7 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-class _GroupBy(object):
+class _GroupBy:
     """Superclass for DataFrameGroupBy and SeriesGroupBy
 
     Parameters
@@ -1931,7 +1931,7 @@ class SeriesGroupBy(_GroupBy):
     def value_counts(self, split_every=None, split_out=1):
         return self._aca_agg(
             token="value_counts",
-            func=M.value_counts,
+            func=_value_counts,
             aggfunc=_value_counts_aggregate,
             split_every=split_every,
             split_out=split_out,
@@ -1954,6 +1954,13 @@ def _unique_aggregate(series_gb, name=None):
     ret = pd.Series({k: v.explode().unique() for k, v in series_gb}, name=name)
     ret.index.names = series_gb.obj.index.names
     return ret
+
+
+def _value_counts(x, **kwargs):
+    if len(x):
+        return M.value_counts(x, **kwargs)
+    else:
+        return pd.Series(dtype=int)
 
 
 def _value_counts_aggregate(series_gb):

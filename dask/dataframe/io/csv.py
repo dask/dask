@@ -7,6 +7,7 @@ try:
 except ImportError:
     psutil = None
 
+from fsspec.core import open as open_file, open_files
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -18,18 +19,17 @@ from pandas.api.types import (
 )
 
 from ...base import tokenize
-
-# this import checks for the importability of fsspec
-from ...bytes import read_bytes, open_file, open_files
+from ...bytes import read_bytes
 from ..core import new_dd_object
 from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
 from ..utils import clear_known_categories
-from ...blockwise import BlockwiseIO
 
 import fsspec.implementations.local
 from fsspec.compression import compr
+from fsspec.core import get_fs_token_paths
+from fsspec.utils import infer_compression
 
 
 class CSVSubgraph(Mapping):
@@ -111,58 +111,6 @@ class CSVSubgraph(Mapping):
     def __iter__(self):
         for i in range(len(self)):
             yield (self.name, i)
-
-
-class BlockwiseReadCSV(BlockwiseIO):
-    """
-    Specialized Blockwise Layer for read_csv.
-
-    Enables HighLevelGraph optimizations.
-    """
-
-    def __init__(
-        self,
-        name,
-        reader,
-        blocks,
-        is_first,
-        head,
-        header,
-        kwargs,
-        dtypes,
-        columns,
-        enforce,
-        path,
-    ):
-        self.name = name
-        self.blocks = blocks
-        self.io_name = "blockwise-io-" + name
-        dsk_io = CSVSubgraph(
-            self.io_name,
-            reader,
-            blocks,
-            is_first,
-            head,
-            header,
-            kwargs,
-            dtypes,
-            columns,
-            enforce,
-            path,
-        )
-        super().__init__(
-            {self.io_name: dsk_io},
-            self.name,
-            "i",
-            None,
-            [(self.io_name, "i")],
-            {self.io_name: (len(self.blocks),)},
-        )
-
-    def __repr__(self):
-        return "BlockwiseReadCSV<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.blocks), list(self.columns)
-        )
 
 
 def pandas_read_text(
@@ -356,8 +304,6 @@ def text_blocks_to_pandas(
     # 2. contain 'category' for data inferred types
     categoricals = head.select_dtypes(include=["category"]).columns
 
-    known_categoricals = []
-    unknown_categoricals = categoricals
     if isinstance(specified_dtypes, Mapping):
         known_categoricals = [
             k
@@ -366,11 +312,7 @@ def text_blocks_to_pandas(
             and specified_dtypes.get(k).categories is not None
         ]
         unknown_categoricals = categoricals.difference(known_categoricals)
-    elif (
-        isinstance(specified_dtypes, CategoricalDtype)
-        and specified_dtypes.categories is None
-    ):
-        known_categoricals = []
+    else:
         unknown_categoricals = categoricals
 
     # Fixup the dtypes
@@ -402,7 +344,7 @@ def text_blocks_to_pandas(
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
-    subgraph = BlockwiseReadCSV(
+    subgraph = CSVSubgraph(
         name,
         reader,
         blocks,
@@ -456,7 +398,7 @@ def read_pandas(
     urlpath,
     blocksize="default",
     lineterminator=None,
-    compression=None,
+    compression="infer",
     sample=256000,
     enforce=False,
     assume_missing=False,
@@ -507,6 +449,17 @@ def read_pandas(
         path_converter = kwargs.get("converters").get(include_path_column, None)
     else:
         path_converter = None
+
+    # If compression is "infer", inspect the (first) path suffix and
+    # set the proper compression option if the suffix is recongnized.
+    if compression == "infer":
+        # Translate the input urlpath to a simple path list
+        paths = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)[
+            2
+        ]
+
+        # Infer compression from first path
+        compression = infer_compression(paths[0])
 
     if blocksize == "default":
         blocksize = AUTO_BLOCKSIZE
@@ -593,7 +546,7 @@ def read_pandas(
             if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
                 head[c] = head[c].astype(float)
 
-    values = [[dsk.dask.values() for dsk in block] for block in values]
+    values = [[list(dsk.dask.values()) for dsk in block] for block in values]
 
     return text_blocks_to_pandas(
         reader,
@@ -688,7 +641,7 @@ def make_reader(reader, reader_name, file_type):
         urlpath,
         blocksize="default",
         lineterminator=None,
-        compression=None,
+        compression="infer",
         sample=256000,
         enforce=False,
         assume_missing=False,

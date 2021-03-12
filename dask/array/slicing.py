@@ -9,11 +9,13 @@ import bisect
 import numpy as np
 from tlz import memoize, merge, pluck, concat, accumulate
 
+from ..utils import is_arraylike
 from .. import core
 from .. import config
 from .. import utils
 from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize, is_dask_collection
+
 
 colon = slice(None, None, None)
 
@@ -52,6 +54,8 @@ def sanitize_index(ind):
     ...
     IndexError: Bad index.  Must be integer-like: 0.5
     """
+    from .utils import asanyarray_safe
+
     if ind is None:
         return None
     elif isinstance(ind, slice):
@@ -64,13 +68,16 @@ def sanitize_index(ind):
         return _sanitize_index_element(ind)
     elif is_dask_collection(ind):
         return ind
-    index_array = np.asanyarray(ind)
+    index_array = asanyarray_safe(ind, like=ind)
     if index_array.dtype == bool:
         nonzero = np.nonzero(index_array)
         if len(nonzero) == 1:
             # If a 1-element tuple, unwrap the element
             nonzero = nonzero[0]
-        return np.asanyarray(nonzero)
+        if is_arraylike(nonzero):
+            return nonzero
+        else:
+            return np.asanyarray(nonzero)
     elif np.issubdtype(index_array.dtype, np.integer):
         return index_array
     elif np.issubdtype(index_array.dtype, np.floating):
@@ -218,13 +225,13 @@ def slice_wrap_lists(out_name, in_name, blockdims, index, itemsize):
     take : handle slicing with lists ("fancy" indexing)
     slice_slices_and_integers : handle slicing with slices and integers
     """
-    assert all(isinstance(i, (slice, list, Integral, np.ndarray)) for i in index)
+    assert all(isinstance(i, (slice, list, Integral)) or is_arraylike(i) for i in index)
     if not len(blockdims) == len(index):
         raise IndexError("Too many indices for array")
 
     # Do we have more than one list in the index?
     where_list = [
-        i for i, ind in enumerate(index) if isinstance(ind, np.ndarray) and ind.ndim > 0
+        i for i, ind in enumerate(index) if is_arraylike(ind) and ind.ndim > 0
     ]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
@@ -241,11 +248,11 @@ def slice_wrap_lists(out_name, in_name, blockdims, index, itemsize):
 
     # Replace all lists with full slices  [3, 1, 0] -> slice(None, None, None)
     index_without_list = tuple(
-        slice(None, None, None) if isinstance(i, np.ndarray) else i for i in index
+        slice(None, None, None) if is_arraylike(i) else i for i in index
     )
 
     # lists and full slices.  Just use take
-    if all(isinstance(i, np.ndarray) or i == slice(None, None, None) for i in index):
+    if all(is_arraylike(i) or i == slice(None, None, None) for i in index):
         axis = where_list[0]
         blockdims2, dsk3 = take(
             out_name, in_name, blockdims, index[where_list[0]], itemsize, axis=axis
@@ -308,7 +315,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
                 range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
                 for d, i in zip(block_slices, index)
                 if not isinstance(i, Integral)
-            ]
+            ],
         )
     )
 
@@ -501,7 +508,8 @@ def partition_by_size(sizes, seq):
     >>> partition_by_size([10, 20, 10], [1, 5, 9, 12, 29, 35])
     [array([1, 5, 9]), array([ 2, 19]), array([5])]
     """
-    seq = np.asanyarray(seq)
+    if not is_arraylike(seq):
+        seq = np.asanyarray(seq)
     left = np.empty(len(sizes) + 1, dtype=int)
     left[0] = 0
 
@@ -540,12 +548,23 @@ def slicing_plan(chunks, index):
     out : List[Tuple[int, np.ndarray]]
         A list of chunk/sub-index pairs corresponding to each output chunk
     """
-    index = np.asanyarray(index)
+    from .utils import asarray_safe
+
+    if not is_arraylike(index):
+        index = np.asanyarray(index)
     cum_chunks = cached_cumsum(chunks)
 
+    cum_chunks = asarray_safe(cum_chunks, like=index)
+    # this dispactches to the array library
     chunk_locations = np.searchsorted(cum_chunks, index, side="right")
+
+    # but we need chunk_locations as python ints for getitem calls downstream
+    chunk_locations = chunk_locations.tolist()
     where = np.where(np.diff(chunk_locations))[0] + 1
-    where = np.concatenate([[0], where, [len(chunk_locations)]])
+
+    extra = asarray_safe([0], like=where)
+    c_loc = asarray_safe([len(chunk_locations)], like=where)
+    where = np.concatenate([extra, where, c_loc])
 
     out = []
     for i in range(len(where) - 1):
@@ -606,7 +625,8 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             PerformanceWarning,
             stacklevel=6,
         )
-    index = np.asarray(index)
+    if not is_arraylike(index):
+        index = np.asarray(index)
 
     # Check for chunks from the plan that would violate the user's
     # configured chunk size.
@@ -650,7 +670,9 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
             index_lists.extend(index_sublist)
             where_index.extend([where_idx] * len(index_sublist))
         else:
-            index_lists.append(np.array(index_list))
+            if not is_arraylike(index_list):
+                index_list = np.array(index_list)
+            index_lists.append(index_list)
             where_index.append(where_idx)
 
     dims = [range(len(bd)) for bd in chunks]
@@ -670,6 +692,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     chunks2 = list(chunks)
     chunks2[axis] = tuple(map(len, index_lists))
     dsk = dict(zip(keys, values))
+
     return tuple(chunks2), dsk
 
 
@@ -848,7 +871,7 @@ def normalize_index(idx, shape):
     >>> normalize_index(np.array([[True, False], [False, True], [True, True]]), (3, 2))
     (dask.array<array, shape=(3, 2), dtype=bool, chunksize=(3, 2), chunktype=numpy.ndarray>,)
     """
-    from .core import from_array
+    from .core import Array, from_array
 
     if not isinstance(idx, tuple):
         idx = (idx,)
@@ -856,7 +879,7 @@ def normalize_index(idx, shape):
     # if a > 1D numpy.array is provided, cast it to a dask array
     if len(idx) > 0 and len(shape) > 1:
         i = idx[0]
-        if isinstance(i, np.ndarray) and i.shape == shape:
+        if is_arraylike(i) and not isinstance(i, Array) and i.shape == shape:
             idx = (from_array(i), *idx[1:])
 
     idx = replace_ellipsis(len(shape), idx)
@@ -868,6 +891,7 @@ def normalize_index(idx, shape):
             continue
         else:
             n_sliced_dims += 1
+
     idx = idx + (slice(None),) * (len(shape) - n_sliced_dims)
     if len([i for i in idx if i is not None]) > len(shape):
         raise IndexError("Too many indices for array")
@@ -930,22 +954,24 @@ def check_index(ind, dimension):
     ...
     IndexError: Boolean array length 3 doesn't equal dimension 1
     """
+    if isinstance(ind, list):
+        ind = np.asanyarray(ind)
+
     # unknown dimension, assumed to be in bounds
     if np.isnan(dimension):
         return
-    elif isinstance(ind, (list, np.ndarray)):
-        x = np.asanyarray(ind)
-        if x.dtype == bool:
-            if x.size != dimension:
+    elif is_dask_collection(ind):
+        return
+    elif is_arraylike(ind):
+        if ind.dtype == bool:
+            if ind.size != dimension:
                 raise IndexError(
                     "Boolean array length %s doesn't equal dimension %s"
-                    % (x.size, dimension)
+                    % (ind.size, dimension)
                 )
-        elif (x >= dimension).any() or (x < -dimension).any():
+        elif (ind >= dimension).any() or (ind < -dimension).any():
             raise IndexError("Index out of bounds %s" % dimension)
     elif isinstance(ind, slice):
-        return
-    elif is_dask_collection(ind):
         return
     elif ind is None:
         return
@@ -1020,6 +1046,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
     from .core import Array, blockwise, from_array
+    from .utils import asarray_safe
     from . import chunk
 
     assert 0 <= axis < x.ndim
@@ -1032,12 +1059,14 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     # Calculate the offset at which each chunk starts along axis
     # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
-    offset = np.roll(np.cumsum(x.chunks[axis]), 1)
+    offset = np.roll(np.cumsum(asarray_safe(x.chunks[axis], like=x._meta)), 1)
     offset[0] = 0
     offset = from_array(offset, chunks=1)
     # Tamper with the declared chunks of offset to make blockwise align it with
     # x[axis]
-    offset = Array(offset.dask, offset.name, (x.chunks[axis],), offset.dtype)
+    offset = Array(
+        offset.dask, offset.name, (x.chunks[axis],), offset.dtype, meta=x._meta
+    )
 
     # Define axis labels for blockwise
     x_axes = tuple(range(x.ndim))
@@ -1059,6 +1088,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
         x_size=x.shape[axis],
         axis=axis,
         dtype=x.dtype,
+        meta=x._meta,
     )
 
     # Aggregate on the chunks of x along axis
@@ -1073,6 +1103,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
         x_chunks=x.chunks[axis],
         axis=axis,
         dtype=x.dtype,
+        meta=x._meta,
     )
     return y
 
@@ -1156,7 +1187,7 @@ def slice_with_bool_dask_array(x, index):
         x,
         tuple(range(x.ndim)),
         *arginds,
-        dtype=x.dtype
+        dtype=x.dtype,
     )
 
     chunks = []
@@ -1252,7 +1283,7 @@ def shuffle_slice(x, index):
         return x[index2].rechunk(chunks2)[index3]
 
 
-class _HashIdWrapper(object):
+class _HashIdWrapper:
     """Hash and compare a wrapped object by identity instead of value"""
 
     def __init__(self, wrapped):

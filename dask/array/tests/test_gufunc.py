@@ -12,7 +12,6 @@ from dask.array.gufunc import (
     gufunc,
     as_gufunc,
 )
-from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import IS_NEP18_ACTIVE
 
 
@@ -599,7 +598,6 @@ def test_apply_gufunc_via_numba_02():
 @pytest.mark.skipif(
     not IS_NEP18_ACTIVE, reason="NEP18 required for sparse meta propagation"
 )
-@pytest.mark.xfail(_numpy_120, reason="https://github.com/pydata/sparse/issues/383")
 def test_preserve_meta_type():
     sparse = pytest.importorskip("sparse")
 

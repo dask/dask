@@ -13,7 +13,7 @@ def maybe_wrap_pandas(obj, x):
     return x
 
 
-class Accessor(object):
+class Accessor:
     """
     Base class for pandas Accessor objects cat, dt, and str.
 
@@ -75,7 +75,7 @@ class Accessor(object):
 
     @property
     def _delegates(self):
-        return set(dir(self._meta)).difference(self._not_implemented)
+        return set(dir(self._meta)) - self._not_implemented
 
     def __dir__(self):
         o = self._delegates

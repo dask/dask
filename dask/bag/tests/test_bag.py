@@ -34,9 +34,6 @@ from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
 
-# Needed to pickle the lambda functions used in this test suite
-pytest.importorskip("cloudpickle")
-
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
 L = list(range(5)) * 3
@@ -633,7 +630,7 @@ def test_from_url():
     a = db.from_url(["http://google.com", "http://github.com"])
     assert a.npartitions == 2
 
-    b = db.from_url("http://raw.githubusercontent.com/dask/dask/master/README.rst")
+    b = db.from_url("http://raw.githubusercontent.com/dask/dask/main/README.rst")
     assert b.npartitions == 1
     assert b"Dask\n" in b.take(10)
 
@@ -1564,3 +1561,26 @@ def test_bagged_array_delayed():
     bag = db.from_delayed(obj)
     b = bag.compute()
     assert_eq(b, [1.0, 1.0, 1.0, 1.0, 1.0])
+
+
+def test_dask_layers():
+    a = db.from_sequence([1, 2], npartitions=2)
+    assert a.__dask_layers__() == (a.name,)
+    assert a.dask.layers.keys() == {a.name}
+    assert a.dask.dependencies == {a.name: set()}
+    i = a.min()
+    assert i.__dask_layers__() == (i.key,)
+    assert i.dask.layers.keys() == {a.name, i.key}
+    assert i.dask.dependencies == {a.name: set(), i.key: {a.name}}
+
+
+def test_dask_layers_to_delayed():
+    # da.Array.to_delayed squashes the dask graph and causes the layer name not to
+    # match the key
+    da = pytest.importorskip("dask.array")
+    i = db.Item.from_delayed(da.ones(1).to_delayed()[0])
+    name = i.key[0]
+    assert i.key[1:] == (0,)
+    assert i.dask.layers.keys() == {"delayed-" + name}
+    assert i.dask.dependencies == {"delayed-" + name: set()}
+    assert i.__dask_layers__() == ("delayed-" + name,)

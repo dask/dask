@@ -507,7 +507,6 @@ def test_from_dask_array_unknown_chunks():
 
 
 def test_to_bag():
-    pytest.importorskip("dask.bag")
     a = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
         index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),

@@ -12,6 +12,7 @@ import dask.array as da
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
+    cached_cumsum,
     new_blockdim,
     sanitize_index,
     slice_array,
@@ -20,17 +21,6 @@ from dask.array.slicing import (
     slicing_plan,
     make_block_sorted_slices,
     shuffle_slice,
-)
-from dask.array.slicing import (
-    _sanitize_index_element,
-    _slice_1d,
-    new_blockdim,
-    sanitize_index,
-    slice_array,
-    take,
-    normalize_index,
-    slicing_plan,
-    cached_cumsum,
 )
 from dask.array.utils import assert_eq, same_keys
 
@@ -460,7 +450,7 @@ def test_slice_list_then_None():
     assert_eq(y, np.zeros((1, 2, 5)))
 
 
-class ReturnItem(object):
+class ReturnItem:
     def __getitem__(self, key):
         return key
 

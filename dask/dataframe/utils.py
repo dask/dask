@@ -23,6 +23,7 @@ from pandas.api.types import (
 from ._compat import (  # noqa: F401
     PANDAS_GT_100,
     PANDAS_GT_110,
+    PANDAS_GT_120,
     tm,
 )
 
@@ -51,6 +52,18 @@ def is_integer_na_dtype(t):
         pd.UInt16Dtype,
         pd.UInt32Dtype,
         pd.UInt64Dtype,
+    )
+    return isinstance(dtype, types)
+
+
+def is_float_na_dtype(t):
+    if not PANDAS_GT_120:
+        return False
+
+    dtype = getattr(t, "dtype", t)
+    types = (
+        pd.Float32Dtype,
+        pd.Float64Dtype,
     )
     return isinstance(dtype, types)
 
@@ -542,7 +555,10 @@ def _nonempty_series(s, idx=None):
     if idx is None:
         idx = _nonempty_index(s.index)
     dtype = s.dtype
-    if is_datetime64tz_dtype(dtype):
+    if len(s) > 0:
+        # use value from meta if provided
+        data = [s.iloc[0]] * 2
+    elif is_datetime64tz_dtype(dtype):
         entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
         data = [entry, entry]
     elif is_categorical_dtype(dtype):
@@ -555,6 +571,8 @@ def _nonempty_series(s, idx=None):
         data = pd.Categorical(data, categories=cats, ordered=s.cat.ordered)
     elif is_integer_na_dtype(dtype):
         data = pd.array([1, None], dtype=dtype)
+    elif is_float_na_dtype(dtype):
+        data = pd.array([1.0, None], dtype=dtype)
     elif is_period_dtype(dtype):
         # pandas 0.24.0+ should infer this to be Series[Period[freq]]
         freq = dtype.freq

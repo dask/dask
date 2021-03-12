@@ -17,24 +17,16 @@ pytest.importorskip("flask")  # server mode needs flask too
 requests = pytest.importorskip("requests")
 
 from tlz import concat, valmap
+from fsspec.core import open_files
 
 from dask import compute
-from dask.bytes.core import read_bytes, open_files
+from dask.bytes.core import read_bytes
 from s3fs import S3FileSystem as DaskS3FileSystem
 from dask.bytes.utils import compress
 from fsspec.compression import compr
 
 
 compute = partial(compute, scheduler="sync")
-
-try:
-    import numpy as np
-
-    numpy_120_mark = pytest.mark.xfail(
-        LooseVersion(np.__version__) >= "1.20.0", reason="Upstream incompatibility"
-    )
-except ImportError:
-    numpy_120_mark = pytest.mark.skip(reason="numpy not installed")
 
 
 test_bucket_name = "test"
@@ -437,8 +429,10 @@ def test_modification_time_read_bytes(s3, s3so):
 
 
 @pytest.mark.parametrize("engine", ["pyarrow", "fastparquet"])
-@numpy_120_mark
-def test_parquet(s3, engine, s3so):
+@pytest.mark.parametrize("metadata_file", [True, False])
+def test_parquet(s3, engine, s3so, metadata_file):
+    import s3fs
+
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
@@ -447,6 +441,13 @@ def test_parquet(s3, engine, s3so):
     lib = pytest.importorskip(engine)
     if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
+    if (
+        engine == "pyarrow"
+        and LooseVersion(lib.__version__) >= "2.0"
+        and LooseVersion(lib.__version__) < "3.0"
+        and LooseVersion(s3fs.__version__) > "0.5.0"
+    ):
+        pytest.skip("#7056 - new s3fs not supported before pyarrow 3.0")
 
     url = "s3://%s/test.parquet" % test_bucket_name
 
@@ -462,19 +463,24 @@ def test_parquet(s3, engine, s3so):
         index=pd.Index(np.arange(1000), name="foo"),
     )
     df = dd.from_pandas(data, chunksize=500)
-    df.to_parquet(url, engine=engine, storage_options=s3so)
+    df.to_parquet(
+        url, engine=engine, storage_options=s3so, write_metadata_file=metadata_file
+    )
 
     files = [f.split("/")[-1] for f in s3.ls(url)]
-    assert "_common_metadata" in files
+    if metadata_file:
+        assert "_common_metadata" in files
+        assert "_metadata" in files
     assert "part.0.parquet" in files
 
-    df2 = dd.read_parquet(url, index="foo", engine=engine, storage_options=s3so)
+    df2 = dd.read_parquet(
+        url, index="foo", gather_statistics=True, engine=engine, storage_options=s3so
+    )
     assert len(df2.divisions) > 1
 
     tm.assert_frame_equal(data, df2.compute())
 
 
-@numpy_120_mark
 def test_parquet_wstoragepars(s3, s3so):
     dd = pytest.importorskip("dask.dataframe")
     pytest.importorskip("fastparquet")

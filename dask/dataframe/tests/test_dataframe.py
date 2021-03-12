@@ -9,7 +9,7 @@ from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_118, _numpy_120
+from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat
@@ -387,6 +387,10 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
+# TODO(pandas) deal with this describe warning instead of ignoring
+@pytest.mark.filterwarnings(
+    "ignore:Treating datetime data as categorical|casting:FutureWarning"
+)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -395,48 +399,12 @@ def test_describe_numeric(method, test_values):
         (None, None, None, ["c", "d", "g"]),  # numeric + bool
         (None, None, None, ["c", "d", "f", "g"]),  # numeric + bool + timedelta
         (None, None, None, ["f", "g"]),  # bool + timedelta
-        pytest.param(
-            "all",
-            None,
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            ["number"],
-            None,
-            [0.25, 0.5],
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            [np.timedelta64],
-            None,
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            ["number", "object"],
-            None,
-            [0.25, 0.75],
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            None,
-            ["number", "object"],
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
-        pytest.param(
-            ["object", "datetime", "bool"],
-            None,
-            None,
-            None,
-            marks=pytest.mark.xfail(PANDAS_GT_110, reason="upstream changes"),
-        ),
+        ("all", None, None, None),
+        (["number"], None, [0.25, 0.5], None),
+        ([np.timedelta64], None, None, None),
+        (["number", "object"], None, [0.25, 0.75], None),
+        (None, ["number", "object"], None, None),
+        (["object", "datetime", "bool"], None, None, None),
     ],
 )
 def test_describe(include, exclude, percentiles, subset):
@@ -856,6 +824,19 @@ def test_map_partitions_type():
     result = d.map_partitions(type).compute(scheduler="single-threaded")
     assert isinstance(result, pd.Series)
     assert all(x == pd.DataFrame for x in result)
+
+
+def test_map_partitions_partition_info():
+    def f(df, partition_info=None):
+        assert partition_info is not None
+        assert "number" in partition_info
+        assert "division" in partition_info
+        assert dsk[("x", partition_info["number"])].equals(df)
+        assert dsk[("x", d.divisions.index(partition_info["division"]))].equals(df)
+        return df
+
+    result = d.map_partitions(f, meta=d).compute(scheduler="single-threaded")
+    assert type(result) == pd.DataFrame
 
 
 def test_map_partitions_names():
@@ -1666,10 +1647,7 @@ def test_combine_first():
 
 def test_dataframe_picklable():
     from pickle import loads, dumps
-
-    cloudpickle = pytest.importorskip("cloudpickle")
-    cp_dumps = cloudpickle.dumps
-    cp_loads = cloudpickle.loads
+    from cloudpickle import dumps as cp_dumps, loads as cp_loads
 
     d = _compat.makeTimeDataFrame()
     df = dd.from_pandas(d, npartitions=3)
@@ -2367,13 +2345,13 @@ def test_aca_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 * (2 + 1) + 7 * (2 + 1) + (3 + 2)
@@ -2465,13 +2443,13 @@ def test_reduction_method_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert set(f(15).dask.keys()) == set(f(ddf.npartitions).dask.keys())
+    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(set(r3.dask.keys()) & set(r4.dask.keys())) == len(ddf.dask.keys())
+    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 + 7 * (2 + 1) + (3 + 2)
@@ -4065,7 +4043,6 @@ def test_map_partition_array(func):
         assert x.chunks[0] == (np.nan, np.nan)
 
 
-@pytest.mark.xfail(_numpy_120, reason="sparse-383")
 def test_map_partition_sparse():
     sparse = pytest.importorskip("sparse")
     # Avoid searchsorted failure.
@@ -4150,6 +4127,20 @@ def test_meta_raises():
         ddf.a + ddf.c
 
     assert "meta=" not in str(info.value)
+
+
+def test_meta_nonempty_uses_meta_value_if_provided():
+    # https://github.com/dask/dask/issues/6958
+    base = pd.Series([1, 2, 3], dtype="datetime64[ns]")
+    offsets = pd.Series([pd.offsets.DateOffset(years=o) for o in range(3)])
+    dask_base = dd.from_pandas(base, npartitions=1)
+    dask_offsets = dd.from_pandas(offsets, npartitions=1)
+    dask_offsets._meta = offsets.head()
+
+    with pytest.warns(None):  # not vectorized performance warning
+        expected = base + offsets
+        actual = dask_base + dask_offsets
+        assert_eq(expected, actual)
 
 
 def test_dask_dataframe_holds_scipy_sparse_containers():
@@ -4414,10 +4405,18 @@ def test_iter():
         assert col == expected
 
 
-def test_dataframe_groupby_agg_empty_partitions():
+def test_dataframe_groupby_cumsum_agg_empty_partitions():
     df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
     ddf = dd.from_pandas(df, npartitions=4)
     assert_eq(ddf[ddf.x < 5].x.cumsum(), df[df.x < 5].x.cumsum())
+    assert_eq(ddf[ddf.x > 5].x.cumsum(), df[df.x > 5].x.cumsum())
+
+
+def test_dataframe_groupby_cumprod_agg_empty_partitions():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=4)
+    assert_eq(ddf[ddf.x < 5].x.cumprod(), df[df.x < 5].x.cumprod())
+    assert_eq(ddf[ddf.x > 5].x.cumprod(), df[df.x > 5].x.cumprod())
 
 
 def test_fuse_roots():
@@ -4473,3 +4472,38 @@ def test_join_series():
     expected_df = dd.from_pandas(df.join(df["x"], lsuffix="_"), npartitions=1)
     actual_df = ddf.join(ddf["x"], lsuffix="_")
     assert_eq(actual_df, expected_df)
+
+
+def test_dask_layers():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert ddf.dask.layers.keys() == {ddf._name}
+    assert ddf.dask.dependencies == {ddf._name: set()}
+    assert ddf.__dask_layers__() == (ddf._name,)
+    dds = ddf["x"]
+    assert dds.dask.layers.keys() == {ddf._name, dds._name}
+    assert dds.dask.dependencies == {ddf._name: set(), dds._name: {ddf._name}}
+    assert dds.__dask_layers__() == (dds._name,)
+    ddi = dds.min()
+    assert ddi.key[1:] == (0,)
+    assert ddi.dask.layers.keys() == {ddf._name, dds._name, ddi.key[0]}
+    assert ddi.dask.dependencies == {
+        ddf._name: set(),
+        dds._name: {ddf._name},
+        ddi.key[0]: {dds._name},
+    }
+    assert ddi.__dask_layers__() == (ddi.key[0],)
+
+
+@pytest.mark.skipif(
+    not dd._compat.PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2"
+)
+def test_assign_na_float_columns():
+    # See https://github.com/dask/dask/issues/7156
+    df_pandas = pd.DataFrame({"a": [1.1]}, dtype="Float64")
+    df = dd.from_pandas(df_pandas, npartitions=1)
+
+    df = df.assign(new_col=df["a"])
+
+    assert df.compute()["a"].dtypes == "Float64"
+    assert df.compute()["new_col"].dtypes == "Float64"

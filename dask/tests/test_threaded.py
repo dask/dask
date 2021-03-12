@@ -1,5 +1,4 @@
 import os
-import sys
 import signal
 import threading
 from multiprocessing.pool import ThreadPool
@@ -147,11 +146,7 @@ def test_thread_safety():
     assert L == [1] * 20
 
 
-@pytest.mark.xfail(
-    "xdist" in sys.modules,
-    reason="This test fails intermittently when using pytest-xdist (maybe)",
-    strict=False,
-)
+@pytest.mark.flaky(reruns=10, reruns_delay=5)
 def test_interrupt():
     # Windows implements `queue.get` using polling,
     # which means we can set an exception to interrupt the call to `get`.
