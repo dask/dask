@@ -1156,7 +1156,7 @@ class Array(DaskMethodsMixin):
             if result is not None:
                 self = result
 
-        if name in self.dask.layers:
+        if hasattr(self, 'dask') and name in self.dask.layers:
             self.dask.layers[name].info['type'] = type(self)
             self.dask.layers[name].info['chunk_type'] = type(meta)
             self.dask.layers[name].info['chunks'] = chunks

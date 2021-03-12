@@ -3611,7 +3611,7 @@ class DataFrame(_Frame):
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
-        if name in self.dask.layers:
+        if hasattr(self, 'dask') and name in self.dask.layers:
             self.dask.layers[name].info['type'] = type(self)
             self.dask.layers[name].info['divisions'] = divisions
             self.dask.layers[name].info['chunk_type'] = type(meta)
