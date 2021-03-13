@@ -500,6 +500,7 @@ Other functions
 .. autofunction:: greater
 .. autofunction:: greater_equal
 .. autofunction:: histogram
+.. autofunction:: histogramdd
 .. autofunction:: hstack
 .. autofunction:: hypot
 .. autofunction:: imag

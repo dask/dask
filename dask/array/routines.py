@@ -951,23 +951,72 @@ def _block_histogramdd(sample, bins, range=None, weights=None):
 def histogramdd(sample, bins, range, weights=None, density=None):
     """Histogram data in multiple dimensions
 
-    Dask version of :func:`np.histogramdd`.
+    Dask version of :func:`numpy.histogramdd`.
 
-    Current prototype requires bins to be a tuple of ints (total
-    number of bins in each dimension) and range to to be a tuple of
-    (xmin, xmax) entries (the range of each dimension).
+    Chunking of the input data (:code:`sample`) is only allowed along
+    the 0th (row) axis (the axis corresponding to the total number of
+    samples). Data chunked along the 1st axis (column) axis is not
+    compatible with this function. If weights are used, they must be
+    chunked along the 0th axis identically to the input sample.
 
-    A lot of type/shape checking logic will be required for a
-    production implementation. Weights are currently unsupported as
-    well.
+    For example, A "good" setup for a three dimensional histogram,
+    where the sample shape is (8, 3) and weights are shape (8,),
+    sample chunks would be ((4, 4), (3,)) and the weights chunks would
+    be ((4, 4),).
+
+    .. code-block::
+
+                    sample                    weights
+        +-------+-----+-----------+   +-------+-----+-----+
+        | chunk | row |  x  y  z  |   | chunk | row |  w  |
+        +-------+-----+-----------+   +-------+-----+-----+
+        |       |   0 |  5  6  6  |   |       |   0 | 0.5 |
+        |   0   |   1 |  8  9  2  |   |   0   |   1 | 0.8 |
+        |       |   2 |  3  3  1  |   |       |   2 | 0.3 |
+        |       |   3 |  2  5  6  |   |       |   3 | 0.7 |
+        +-------+-----+-----------+   +-------+-----+-----+
+        |       |   4 |  3  1  1  |   |       |   4 | 0.3 |
+        |   1   |   5 |  3  2  9  |   |   1   |   5 | 1.3 |
+        |       |   6 |  8  1  5  |   |       |   6 | 0.8 |
+        |       |   7 |  3  5  3  |   |       |   7 | 0.7 |
+        +-------+-----+-----------+   +-------+-----+-----+
+
+    If the sample 0th dimension and weight 0th dimension are chunked
+    differently, a ValueError will be raised. If a coordinate grouping
+    ((x, y, z) trio) are separated by a chunk boundry, then a
+    ValueError will be raised. We suggest that you rechunk your data
+    if it is of that form.
 
     Parameters
     ----------
-    sample : dask Array
-        Multidimensional data to histogram.
-    bins : sequence of ints
-        Number of bins in each dimension to histogram.
-    range : sequence of pairs
+    sample : dask.array.Array (N, D) or sequence of dask.array.Array
+        Multidimensional data to be histogrammed.
+
+        Note the unusual interpretation of a sample when it is a
+        sequence of dask Arrays:
+
+        * When a (N, D) dask Array, each row is an entry in the sample
+          (coordinate in D dimensional space).
+        * When a sequence of dask Arrays, each element in the sequence
+          is the array of values for a single coordinate.
+
+    bins : int, sequence of ints, dask.array.Array, or sequence of dask.array.Array
+        The bin specification:
+
+        * A sequence of arrays describing the monotonically increasing
+          bin edges along each dimension.
+        * A single array describing the monotonically increasing bin
+          edges that will be used for all dimensions.
+        * A single int describing the total number of bins that will
+          be used in each dimensions.
+        * A sequence of ints describing the total numbeer of bins to
+          be used in each dimension.
+
+        When bins are described by arrays, the rightmost edge is
+        included. Bins described by arrays also allows for non-uniform
+        bin widths.
+
+    range : sequence of pairs, optional
         Axes limits in each dimension (xmin, xmax)
     weights : dask Array, optional
         Optional weights associated with the data. (TODO)
@@ -982,8 +1031,74 @@ def histogramdd(sample, bins, range, weights=None, density=None):
 
     # N == total number of samples
     # D == total number of dimensions
-    N, D = sample.shape
+    try:
+        # Recommended input ND-array
+        N, D = sample.shape
+    except (AttributeError, ValueError):
+        # If we have a sequence of 1D arrays
+        sample = atleast_2d(sample).T
+        N, D = sample.shape
 
+    # Check for bad bins/range/weights
+    for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
+        if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
+            raise TypeError(
+                "Dask types besides Array and Delayed are not supported "
+                "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
+            )
+
+    # all possible bin configurations start as False
+    (
+        single_scalar_bins,
+        seq_scalar_bins,
+        single_arr_bins,
+        seq_arr_bins,
+    ) = False
+
+    # First check if bins is a single scalar
+    if isinstance(bins, Array):
+        single_scalar_bins = bins.ndim == 0
+    elif isinstance(bins, Delayed):
+        single_scalar_bins = bins._length is None or bins._length == 1
+    else:
+        single_scalar_bins = np.ndim(bins) == 0
+    if single_scalar_bins and range is None:
+        raise ValueError("If bins is not a sequence of bin edges "
+                         "then range must be defined (not None).")
+
+    # Now check if bins is a sequence of scalars
+    if isinstance(bins, Array):
+        seq_scalar_bins = bins.ndim == 1 and bins.shape[0] == sample.shape[1]
+    if isinstance(bins, (list, tuple)):
+        if len(bins) != sample.shape[1]:
+            raise ValueError(
+                "number of bins axes is incompatible with the shape of the sample."
+            )
+        if all(isinstance(b, int) for b in bins):
+            seq_scalar_bins = True
+        elif all(isinstance(b, Array) for b in bins):
+            seq_scalar_bins = all(b.ndim == 0 for b in bins)
+        elif all(isinstance(b, Delayed) for b in bins):
+            seq_scalar_bins = all(b._length is None or b._length == 1 for b in bins)
+
+    # Now check if single array of bins.
+    if range is None:
+        # this would be a special case where we have a single array of
+        # bins where the total number of bins is 1 less than the
+        # dimensions of the histogram in each dimension. Definitely seems
+        # rare, but still possible.
+        if seq_scalar_bins:
+            seq_scalar_bins = False
+            single_arr_bins = True
+    if isinstance(bins, Array):
+        single_arr_bins = bins.ndim == 1
+    if isinstance(bins, (list, tuple, np.ndarray)):
+        single_arr_bins = np.ndim(bins)
+        bins = np.asarray(bins)
+        if not np.all(bins[1:] >= bins[:-1]):
+            raise ValueError("Bins sequence must be monotonically increasing")
+
+    # ensure that the chunking of the sample and weights are compatible.
     if weights is not None and weights.chunks[0] != sample.chunks[0]:
         raise ValueError(
             "Input array and weights must have the same shape "
@@ -994,12 +1109,6 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     token = tokenize(sample, bins, range, weights, density)
     name = "histogramdd-sum-" + token
 
-    ######### set up bins #################
-    # In this prototype the bins are _not_ delayed, the use of
-    # _linspace_from_delayed is taking into consideration future
-    # compatibility with delayed bin edge arrays. We're just
-    # converting the pairs of bins and ranges definitions into a
-    # bunch of (immediately available) arrays of bin edges.
     bins_edges = [
         _linspace_from_delayed(r[0], r[1], b + 1) for b, r in zip(bins, range)
     ]
