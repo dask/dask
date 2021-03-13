@@ -6,7 +6,6 @@ import pytest
 import numpy as np
 import pandas as pd
 from pandas.io.formats import format as pandas_format
-from pandas._libs.lib import no_default as pd_no_default
 
 import dask
 import dask.array as da
@@ -29,6 +28,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe import methods
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
+from dask.dataframe.core import no_default
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -2575,13 +2575,13 @@ def test_to_timestamp():
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
 
@@ -2631,48 +2631,58 @@ def test_to_dask_array_unknown(as_frame):
     assert all(np.isnan(x) for x in result)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_110, reason=f"No extension arrays in pandas version {pd.__version__}"
+)
 @pytest.mark.parametrize("lengths", [None, [2, 3], True])
 @pytest.mark.parametrize("as_frame", [False, True])
 @pytest.mark.parametrize(
-    "input, dtype, na_value, meta",
+    "input_func, dtype, na_value, meta",
     [
-        (pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4"), None, pd_no_default, None),
         (
-            pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4"),
-            "float32",
-            pd_no_default,
+            lambda: [1, 2, 3, 4, 5],
+            None,
+            no_default,
             None,
         ),
         (
-            pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4"),
+            lambda: [1, 2, 3, 4, 5],
+            "float32",
+            no_default,
+            None,
+        ),
+        (
+            lambda: [1, 2, 3, 4, 5],
             float,
-            pd_no_default,
+            no_default,
             np.array([], dtype="f4"),
         ),
         (
-            pd.Series(pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]), name="foo"),
+            lambda: pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]),
             None,
-            pd_no_default,
+            no_default,
             None,
         ),
         (
-            pd.Series(pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]), name="foo"),
+            lambda: pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]),
             int,
             0,
             None,
         ),
         (
-            pd.Series(pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]), name="foo"),
+            lambda: pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]),
             None,
             0.0,
             np.array([], dtype="float64"),
         ),
     ],
 )
-def test_to_dask_array(input, dtype, na_value, meta, as_frame, lengths):
+def test_to_dask_array(input_func, dtype, na_value, meta, as_frame, lengths):
     from dask.array.utils import assert_eq
+    from pandas.api.extensions import no_default as pd_no_default
 
-    a = dd.from_pandas(input, chunksize=2)
+    series = pd.Series(input_func(), name="foo")
+    a = dd.from_pandas(series, chunksize=2)
 
     if as_frame:
         a = a.to_frame()
@@ -2689,6 +2699,10 @@ def test_to_dask_array(input, dtype, na_value, meta, as_frame, lengths):
         expected_chunks = expected_chunks + ((1,),)
 
     assert result.chunks == expected_chunks
+
+    # translate dask `no_default` to pandas `no_default`
+    if na_value is no_default:
+        na_value = pd_no_default
 
     assert_eq(
         result,
@@ -3753,6 +3767,9 @@ def test_values():
     assert_eq(df.index.values, ddf.index.values)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_110, reason=f"No extension arrays in pandas version {pd.__version__}"
+)
 def test_values_extension_array():
     from dask.array.utils import assert_eq, assert_eq_shape
 
