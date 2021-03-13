@@ -1092,16 +1092,16 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.std(split_every=split_every), "dataframe-var")
     assert_dask_graph(ddf1.std(split_every=split_every), "moment_chunk")
     assert_dask_graph(ddf1.std(split_every=split_every), "moment_agg")
-    assert_dask_graph(ddf1.std(split_every=split_every), "values")
+    assert_dask_graph(ddf1.std(split_every=split_every), "to_numpy")
 
     assert_dask_graph(ddf1.var(split_every=split_every), "moment_chunk")
     assert_dask_graph(ddf1.var(split_every=split_every), "moment_agg")
-    assert_dask_graph(ddf1.var(split_every=split_every), "values")
+    assert_dask_graph(ddf1.var(split_every=split_every), "to_numpy")
 
     assert_dask_graph(ddf1.sem(split_every=split_every), "dataframe-var")
     assert_dask_graph(ddf1.sem(split_every=split_every), "moment_chunk")
     assert_dask_graph(ddf1.sem(split_every=split_every), "moment_agg")
-    assert_dask_graph(ddf1.sem(split_every=split_every), "values")
+    assert_dask_graph(ddf1.sem(split_every=split_every), "to_numpy")
 
     assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-sum")
     assert_dask_graph(ddf1.mean(split_every=split_every), "dataframe-count")
