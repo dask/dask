@@ -1650,11 +1650,11 @@ def setitem_array(out_name, array, indices, value):
             i = index[loc0:loc1]
         elif is_dask_collection(index):
             # Check for positive values in [loc, loc1) and
-            # negative elements in [loc-size, loc-size)            
+            # negative elements in [loc-size, loc-size)
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
-                # The 1-argument "where" doesn't work, so use the
+                # The 1-argument "where" won't work, so use the
                 # 3-argument "where" to insert place-holder non-valid
                 # elements that will be removed in `setitem` at
                 # compute time.
@@ -1774,17 +1774,17 @@ def setitem_array(out_name, array, indices, value):
         """
         if is_dask_collection(index):
             # Check for positive values in [loc, loc1) and
-            # negative elements in [loc-size, loc-size) 
+            # negative elements in [loc-size, loc-size)
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
-                # The 1-argument "where" doesn't work, so use the
+                # The 1-argument "where" won't work, so use the
                 # 3-argument "where" and convert to a boolean
                 # array. We know that index has the same size the full
                 # size of the dimension of the assignment value, so we
-                # can concatenate and set the chunks size, which
-                # allows the returned array, i, to be used as a
-                # __getitem__ index of value.
+                # can concatenate and set the chunk size, which allows
+                # the returned array to be used as a __getitem__ index
+                # of value.
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
@@ -2058,13 +2058,20 @@ def setitem_array(out_name, array, indices, value):
         for i in non_broadcast_dimensions:
             j = i + offset
             if j == dim_1d_int_index:
-                # Define index for use in `value_indices_from_1d_int_index`
+                # Index is a 1-d integer array
+
+                # Define index in the current namespace for use in
+                # `value_indices_from_1d_int_index`
                 index = indices[j]
+
                 value_indices[i] = value_indices_from_1d_int_index(
-                    dim_1d_int_index, array_shape[j],
-                    value_shape[i + value_offset], *loc0_loc1
+                    dim_1d_int_index,
+                    array_shape[j],
+                    value_shape[i + value_offset],
+                    *loc0_loc1,
                 )
             else:
+                # Index is a slice or 1-d boolean array
                 start = block_preceeding_sizes[j]
                 value_indices[i] = slice(start, start + block_indices_shape[j])
 

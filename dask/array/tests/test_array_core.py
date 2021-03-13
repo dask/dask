@@ -3785,7 +3785,7 @@ def test_setitem_extended_API():
     x[:, [0, 1]] = v
     dx[:, index] = v
     assert_eq(x, dx.compute())
-        
+
     index = da.from_array([0, -1], chunks=(1,))
     x[[0, -1]] = 9999
     dx[index] = 9999
