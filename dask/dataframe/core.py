@@ -16,7 +16,6 @@ from pandas.api.types import (
     is_numeric_dtype,
     is_datetime64_any_dtype,
 )
-from pandas._libs.lib import no_default as pd_no_default
 from tlz import merge, first, unique, partition_all, remove
 
 try:
@@ -1417,9 +1416,7 @@ Dask Name: {name}, {task} tasks"""
             enforce_metadata=False,
         )
 
-    def to_dask_array(
-        self, lengths=None, dtype=None, na_value=pd_no_default, meta=None
-    ):
+    def to_dask_array(self, lengths=None, dtype=None, na_value=no_default, meta=None):
         """Convert a dask DataFrame to a dask array.
 
         Parameters
@@ -1452,7 +1449,7 @@ Dask Name: {name}, {task} tasks"""
         Returns
         -------
         """
-        if not PANDAS_GT_110 and na_value is not pd_no_default:
+        if not PANDAS_GT_110 and na_value is not no_default:
             raise NotImplementedError(
                 "na_value is not a valid argument for to_dask_array"
                 f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
