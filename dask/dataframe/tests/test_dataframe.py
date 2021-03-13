@@ -3754,7 +3754,26 @@ def test_values():
 
 
 def test_values_extension_array():
-    from dask.array.utils import assert_eq
+    from dask.array.utils import assert_eq, assert_eq_shape
+
+    def assert_eq_with_na(delayed, expected):
+        "Simplified version of `dask.array.utils.assert_eq` that treats `pd.NA` values as equal"
+        meta = delayed._meta
+        x = delayed.compute()
+
+        assert meta.ndim == x.ndim == expected.ndim
+        assert type(meta) == type(x) == type(expected)
+        assert x.dtype == meta.dtype == expected.dtype
+        assert_eq_shape(x.shape, expected.shape, check_nan=True)
+        assert_eq_shape(delayed.shape, expected.shape, check_nan=False)
+
+        if x.dtype != "O":
+            np.testing.assert_allclose(x, expected, equal_nan=True)
+        else:
+            assert all(
+                pd.isna([a, b]).all() if pd.isna([a, b]).any() else a == b
+                for (a, b) in zip(x.flat, expected.flat)
+            )
 
     # NOTE: based on the list of pandas extension types at
     # https://pandas.pydata.org/docs/user_guide/basics.html#dtypes
@@ -3775,17 +3794,10 @@ def test_values_extension_array():
     )
     ddf = dd.from_pandas(df, 2)
 
-    # HACK: compare the arrays as strings, since `assert_eq` and its NumPy relatives
-    # don't know how to handle pandas NA values. Because the dtype ends up being `object`,
-    # it's just doing elementwise comparison, and NA != NA, but also NA is not NaN.
-    assert str(df.to_numpy()) == str(ddf.values.compute()), "Stringified values are not equal"
-
-    assert_eq(df.index.values, ddf.index.values)
+    assert_eq_with_na(ddf.values, df.to_numpy())
+    assert_eq(ddf.index.values, df.index.values)
     for column in df.columns:
-        # FIXME fails on the `null_bool` column with `TypeError: boolean value of NA is ambiguous`
-        # from `pandas/_libs/missing.pyx:360` (`__bool__` method on `NAType`). Again, NumPy is doing
-        # elementwise == here, which doesn't work the way we want it to on NAs.
-        assert_eq(df[column].to_numpy(), ddf[column].values, equal_nan=True)
+        assert_eq_with_na(ddf[column].values, df[column].to_numpy())
 
 
 def test_copy():
