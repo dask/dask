@@ -3644,7 +3644,7 @@ def test_setitem_extended_API():
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.copy(), chunks=(2, 3))
 
-    check_each_op = 1 ## False
+    check_each_op = 1  ## False
 
     value = -1
     for index in (
@@ -3789,6 +3789,15 @@ def test_setitem_extended_API():
     dx[...] = da.from_array(x.copy(), chunks=(2, 3))
     assert_eq(x, dx.compute())
 
+    dx = da.ones((4, 4), chunks=(2, 2))
+    index = da.from_array([0, 1, 2], chunks=(2,))
+    index = da.where(index > 0)[0]
+    dx[index] = 99
+    res = dx.compute()
+    assert_eq(res[0], np.ones((4,)))
+    assert_eq(res[1], np.array([99] * 4))
+    assert_eq(res[2], np.array([99] * 4))
+
 
 def test_setitem_on_read_only_blocks():
     # Outputs of broadcast_trick-style functions contain read-only
@@ -3883,12 +3892,6 @@ def test_setitem_errs():
     # RHS has extra leading size 1 dimensions compared to LHS
     x = np.arange(12).reshape((3, 4))
     dx = da.from_array(x, chunks=(2, 3))
-
-    # Integer array index with unknown chunk sizes
-    index = da.from_array([0, 1, 2], chunks=(2,))
-    i = da.where(index < 3)[0]
-    with pytest.raises(ValueError):
-        dx[i] = 99
 
 
 def test_zero_slice_dtypes():

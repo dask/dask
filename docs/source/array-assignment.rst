@@ -10,7 +10,7 @@ particular, it supports combinations of the following:
 * Indexing by slices: ``x[2::-1] = y``
 * Indexing by a list of integers: ``x[[0, -1, 1]] = y``
 * Indexing by a 1-d :class:`numpy` array of integers: ``x[np.arange(3)] = y``
-* Indexing by a 1-d :class:`~dask.array.Array` of integers: ``x[da.arange(3)] = y``, ``x[da.from_array([0, -1, 1])] = y``, 
+* Indexing by a 1-d :class:`~dask.array.Array` of integers: ``x[da.arange(3)] = y``, ``x[da.from_array([0, -1, 1])] = y``, ``x[da.where(np.array([1, 2, 3]) < 3)[0]] = y``
 * Indexing by a list of booleans: ``x[[False, True, True]] = y``
 * Indexing by a 1-d :class:`numpy` array of booleans: ``x[np.arange(3) > 0] = y``
 
@@ -22,8 +22,6 @@ It also supports:
 However, it does not currently support the following:
 
 * Indexing with lists in multiple axes: ``x[[1, 2, 3], [3, 1, 2]] = y``
-* Indexing with an :class:`~dask.array.Array` of integers that has
-  unknown size: ``x[da.where(np.array([1, 2, 3]) < 3)[0]] = y``
 
 
 .. _array.assignment.broadcasting:
@@ -74,8 +72,8 @@ array with masked values:
     [-- -- -- 3.0 4.0 5.0]]
 
 If, and only if, a single broadcastable :class:`~dask.array.Array` of
-booleans is provided then masked array assignment is not possble. In
-this case the data underlying the mask are assigned:
+booleans is provided then masked array assignment does not yet work as
+expected. In this case the data underlying the mask are assigned:
 
 .. code-block:: python
 
@@ -85,7 +83,7 @@ this case the data underlying the mask are assigned:
    [[  0   1   2   3   4   5]
     [  6   7 -99 -99 -99 -99]]
 
-Note that masked assignments are possible when a boolean
+Note that masked assignments do work when a boolean
 :class:`~dask.array.Array` index used in a tuple, or implicit tuple,
 of indices:
 

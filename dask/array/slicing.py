@@ -1611,67 +1611,6 @@ def setitem_array(out_name, array, indices, value):
 
     """
 
-#    @functools.lru_cache()
-#    def indices_from_1d_int_index(dim, size, loc0, loc1):
-#        """The positions of integer index elements between loc0 and loc1.
-#
-#        The index is the input assignment index that is defined in the
-#        namespace of the caller.
-#
-#        It is assumed that index elements in numpy arrays have already
-#        been posified.
-#
-#        Negative index elements in dask arrays that lie in the range
-#        [loc-size,loc1-size) are treated as if they were in the range
-#        [loc0,loc1). Such index elements are posified in `setitem` at
-#        compute time.
-#
-#        Parameters
-#        ----------
-#        dim : `int`
-#           The dimension position of the index that is used as a proxy
-#           for the non-hashable index to define LRU cache key.
-#        size : `int`
-#            The full size of the dimension.
-#        loc0 : `int`
-#            The start index of the block along the dimension.
-#        loc1 : `int`
-#            The stop index of the block along the dimension.
-#
-#        Returns
-#        -------
-#        numpy array or dask array
-#            If index is a numpy array then a numpy array is
-#            returned.
-#
-#            If index is dask array then a dask array with one chunk is
-#            returned.
-#
-#        """
-#        if is_dask_collection(index):
-#            i = np.where(
-#                ((loc0 <= index) & (index < loc1))
-#                | ((loc0 - size <= index) & (index < loc1 - size)),
-#                index, size + loc0 
-#            )[0]
-#            i = concatenate_array_chunks(i)
-# #           try:
-# #               i = np.where(
-# #                   ((loc0 <= index) & (index < loc1))
-# #                   | ((loc0 - size <= index) & (index < loc1 - size))
-# #               )[0]
-# #           except ValueError as e:
-# #               raise ValueError(
-# #                   f"Unknown size ({index.size}) of integer "
-# #                   f"indices for dimension {dim}"
-# #               ) from e
-# #
-# #           i = concatenate_array_chunks(i)
-#        else:
-#            i = np.where((loc0 <= index) & (index < loc1))[0]
-#
-#        return i
-
     @functools.lru_cache()
     def block_index_from_1d_index(dim, size, loc0, loc1, is_bool):
         """The positions of index elements in the range values loc0 and loc1.
@@ -1693,6 +1632,8 @@ def setitem_array(out_name, array, indices, value):
             The start index of the block along the dimension.
         loc1 : `int`
             The stop index of the block along the dimension.
+        is_bool : `bool`
+            Whether or not the index is of boolean data type.
 
         Returns
         -------
@@ -1706,22 +1647,34 @@ def setitem_array(out_name, array, indices, value):
 
         """
         if is_bool:
+            # Boolean array (dask or numpy)
             i = index[loc0:loc1]
         elif is_dask_collection(index):
             if math.isnan(index.size):
+                # Integer dask array with unknown size.
+                #
+                # The 1-argument where doesn't work, so use the
+                # 3-argument where and remmove place-hloder elements
+                # at compute time in `setitem`.
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
-                    index, size + loc0 
+                    index,
+                    size + loc0,
                 )
                 i = i - loc0
             else:
-                i = np.where((loc0 <= index) & (index < loc1))[0]
+                # Integer dask array with known size
+                i = np.where(
+                    ((loc0 <= index) & (index < loc1))
+                    | ((loc0 - size <= index) & (index < loc1 - size))
+                )[0]
                 i = index[i] - loc0
         else:
+            # Integer numpy array
             i = np.where((loc0 <= index) & (index < loc1))[0]
             i = index[i] - loc0
-            
+
         if is_dask_collection(i):
             # Return dask key intead of dask array
             i = concatenate_array_chunks(i)
@@ -1816,29 +1769,42 @@ def setitem_array(out_name, array, indices, value):
         """
         if is_dask_collection(index):
             if math.isnan(index.size):
+                # Integer dask array with unknown size.
+                #
+                # The 1-argument where doesn't work, so use the
+                # 3-argument where and convert to a boolean array. We
+                # know that index has the same size the full size of
+                # the dimension of the assignment value, so we can
+                # concatenate and set the chunks size, which allows
+                # the returned array, i, to be used as a __getitem__
+                # index of value.
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
-                    index, vsize
+                    index,
+                    vsize,
                 )
                 i = i < vsize
                 i = concatenate_array_chunks(i)
                 i._chunks = ((vsize,),)
             else:
+                # Integer dask array with known size
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size))
                 )[0]
                 i = concatenate_array_chunks(i)
         else:
+            # Integer numpy array
             i = np.where((loc0 <= index) & (index < loc1))[0]
-            
+
         return i
-    
+
     from ..core import flatten
 
     array_shape = array.shape
     value_shape = value.shape
+    value_ndim = len(value_shape)
 
     # Reformat input indices
     indices, indices_shape, reverse = parse_assignment_indices(indices, array_shape)
@@ -1882,7 +1848,7 @@ def setitem_array(out_name, array, indices, value):
     # array_common_shape and value_common_shape may be different if
     # there are any size 1 dimensions are being brodacast.
 
-    offset = len(indices_shape) - len(value_shape)
+    offset = len(indices_shape) - value_ndim
     if offset >= 0:
         # The array has the same number or more dimensions than the
         # assignment value
@@ -1908,19 +1874,18 @@ def setitem_array(out_name, array, indices, value):
     for i, (a, b) in enumerate(zip(array_common_shape, value_common_shape)):
         if b == 1:
             base_value_indices.append(slice(None))
-        elif a == b and b != 1:
+        elif a == b:
             base_value_indices.append(None)
             non_broadcast_dimensions.append(i)
-        elif math.isnan(a) and b != 1:
+        elif math.isnan(a):
             base_value_indices.append(None)
             non_broadcast_dimensions.append(i)
-        elif not math.isnan(a):
+        else:
             # Can't check  ...
             raise ValueError(
                 f"Can't broadcast data with shape {value_common_shape} "
                 f"across shape {tuple(indices_shape)}"
             )
-
     # Translate chunks tuple to a set of array locations in product
     # order
     chunks = array.chunks
@@ -2094,9 +2059,7 @@ def setitem_array(out_name, array, indices, value):
                 # Define index for use in `value_indices_from_1d_int_index`
                 index = indices[j]
                 value_indices[i] = value_indices_from_1d_int_index(
-#                    dim_1d_int_index, array_shape[j], *loc0_loc1
-                    dim_1d_int_index, array_shape[j], value_shape[i],
-                    *loc0_loc1                    
+                    dim_1d_int_index, array_shape[j], value_shape[i], *loc0_loc1
                 )
             else:
                 start = block_preceeding_sizes[j]
@@ -2116,11 +2079,11 @@ def setitem_array(out_name, array, indices, value):
 
             value_indices[i] = slice(start, stop, -1)
 
-        if value.ndim > len(indices):
+        if value_ndim > len(indices):
             # The assignment value has more dimensions than array, so
             # add a leading Ellipsis to the indices of value.
             value_indices.insert(0, Ellipsis)
-            
+
         # Create the part of the full assignment value that is to be
         # assigned to elements of this block and make sure that it has
         # just one chunk (so we can represent it with a single key in
@@ -2135,10 +2098,15 @@ def setitem_array(out_name, array, indices, value):
         dsk = merge(dict(v.dask), dsk)
 
         # Define the assignment function for this block.
-        dsk[out_key] = (setitem, in_key, v_key, block_indices,
-                        block_offsets, array_shape)
+        dsk[out_key] = (
+            setitem,
+            in_key,
+            v_key,
+            block_indices,
+            block_offsets,
+            array_shape,
+        )
 
-#    indices_from_1d_int_index.cache_clear()
     block_index_from_1d_index.cache_clear()
     block_index_shape_from_1d_bool_index.cache_clear()
     n_preceeding_from_1d_bool_index.cache_clear()
@@ -2168,7 +2136,8 @@ def setitem(x, v, indices, offsets, shape):
     offsets : list of `int`
         The offsets at which the chunk starts along each axis. Used
         for posifying numpy array indices.
-    shape ;
+    shape : tuple of `int`
+        The shape of the full array.
 
     Returns
     -------
@@ -2180,18 +2149,18 @@ def setitem(x, v, indices, offsets, shape):
     Examples
     --------
     >>> x = np.arange(8).reshape(2, 4)
-    >>> setitem(x, -99, [np.array([False, True])], [20, 30])
+    >>> setitem(x, -99, [np.array([False, True])], [20, 30], (40, 60))
     array([[  0,   1,   2,   3],
            [-99, -99, -99, -99]])
     >>> x
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7]])
 
-    >>> setitem(x, [-88, -99], [slice(None), np.array([1, 3])], [20, 30])
+    >>> setitem(x, [-88, -99], [slice(None), np.array([1, 3])], [20, 30], (40, 60))
     array([[  0, -88,   2, -99],
            [  4, -88,   6, -99]])
 
-    >>> setitem(x, -x, [slice(None)], [20, 30])
+    >>> setitem(x, -x, [slice(None)], [20, 30], (40, 60))
     array([[  0,  -1,  -2,  -3],
            [ -4,  -5,  -6,  -7]])
     >>> x
@@ -2201,7 +2170,7 @@ def setitem(x, v, indices, offsets, shape):
     >>> value = np.where(x < 0)[0]
     >>> value.size
     0
-    >>> y = setitem(x, value, [Ellipsis], [20, 30])
+    >>> y = setitem(x, value, [Ellipsis], [20, 30], (40, 60))
     >>> y is x
     True
 
@@ -2209,15 +2178,18 @@ def setitem(x, v, indices, offsets, shape):
     if not v.size:
         return x
 
-    # Normalize negative array indices
+    # Normalize integer array indices
     for i, (index, size, offset, full_size) in enumerate(
-            zip(indices, x.shape, offsets, shape)
+        zip(indices, x.shape, offsets, shape)
     ):
         if isinstance(index, np.ndarray) and index.dtype != bool:
+            # Strip out any place-holder values (see
+            # `block_index_from_1d_index`)
             index = index[np.where(index < full_size)[0]]
+            # Posify negative values
             index = np.where(index < 0, index + size + offset, index)
             indices[i] = index
-            
+
     # If x is not masked but v is, then turn the x into a masked
     # array.
     if not np.ma.isMA(x) and np.ma.isMA(v):
