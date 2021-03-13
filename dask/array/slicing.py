@@ -1548,10 +1548,9 @@ def concatenate_array_chunks(x):
 def setitem_array(out_name, array, indices, value):
     """Master function for array assignment.
 
-    This function is intended to be called by `Array.__setitem__`.
-
-    This function makes a new dask that assigns values to each block
-    that is touched by the indices, leaving other blocks
+    This function, that is intended to be called by
+    `Array.__setitem__`, creates a new dask that assigns values to
+    each block that is touched by the indices, leaving other blocks
     unchanged.
 
     Each block that overlaps the indices is assigned from the
@@ -1562,7 +1561,7 @@ def setitem_array(out_name, array, indices, value):
     the `Array.__setitem__` operation is computed.
 
     The part of the assignment value applies to block is created as a
-    slice of the full asignment value.
+    "getitem" slice of the full asignment value.
 
     Parameters
     ----------
@@ -1618,14 +1617,14 @@ def setitem_array(out_name, array, indices, value):
         The index is the input assignment index that is defined in the
         namespace of the caller.
 
-        The non-hashable dsk is output dask dictionary that is defined
-        in the namespace of the caller.
+        The non-hashable dsk is the output dask dictionary that is
+        defined in the namespace of the caller.
 
         Parameters
         ----------
         dim : `int`
            The dimension position of the index that is used as a proxy
-           for the non-hashable index to define LRU cache key.
+           for the non-hashable index to define the LRU cache key.
         size : `int`
             The full size of the dimension.
         loc0 : `int`
@@ -1650,12 +1649,15 @@ def setitem_array(out_name, array, indices, value):
             # Boolean array (dask or numpy)
             i = index[loc0:loc1]
         elif is_dask_collection(index):
+            # Check for positive values in [loc, loc1) and
+            # negative elements in [loc-size, loc-size)            
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
-                # The 1-argument where doesn't work, so use the
-                # 3-argument where and remmove place-hloder elements
-                # at compute time in `setitem`.
+                # The 1-argument "where" doesn't work, so use the
+                # 3-argument "where" to insert place-holder non-valid
+                # elements that will be removed in `setitem` at
+                # compute time.
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
@@ -1672,6 +1674,9 @@ def setitem_array(out_name, array, indices, value):
                 i = index[i] - loc0
         else:
             # Integer numpy array
+            #
+            # Check for positive values in [loc, loc1). It is assumed
+            # that negative elements have already been posified.
             i = np.where((loc0 <= index) & (index < loc1))[0]
             i = index[i] - loc0
 
@@ -1694,7 +1699,7 @@ def setitem_array(out_name, array, indices, value):
         ----------
         dim : `int`
            The dimension position of the index that is used as a proxy
-           for the non-hashable index to define LRU cache key.
+           for the non-hashable index to define the LRU cache key.
         loc0 : `int`
             The start index of the block along the dimension.
         loc1 : `int`
@@ -1722,7 +1727,7 @@ def setitem_array(out_name, array, indices, value):
         ----------
         dim : `int`
            The dimension position of the index that is used as a proxy
-           for the non-hashable index to define LRU cache key.
+           for the non-hashable index to define the LRU cache key.
         loc0 : `int`
             The start index of the block along the dimension.
 
@@ -1748,7 +1753,7 @@ def setitem_array(out_name, array, indices, value):
         ----------
         dim : `int`
            The dimension position of the index that is used as a proxy
-           for the non-hashable index to define LRU cache key.
+           for the non-hashable index to define the LRU cache key.
         size : `int`
             The full size of the dimension.
         vsize : `int`
@@ -1768,16 +1773,18 @@ def setitem_array(out_name, array, indices, value):
 
         """
         if is_dask_collection(index):
+            # Check for positive values in [loc, loc1) and
+            # negative elements in [loc-size, loc-size) 
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
-                # The 1-argument where doesn't work, so use the
-                # 3-argument where and convert to a boolean array. We
-                # know that index has the same size the full size of
-                # the dimension of the assignment value, so we can
-                # concatenate and set the chunks size, which allows
-                # the returned array, i, to be used as a __getitem__
-                # index of value.
+                # The 1-argument "where" doesn't work, so use the
+                # 3-argument "where" and convert to a boolean
+                # array. We know that index has the same size the full
+                # size of the dimension of the assignment value, so we
+                # can concatenate and set the chunks size, which
+                # allows the returned array, i, to be used as a
+                # __getitem__ index of value.
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
@@ -1795,7 +1802,10 @@ def setitem_array(out_name, array, indices, value):
                 )[0]
                 i = concatenate_array_chunks(i)
         else:
-            # Integer numpy array
+            # Integer numpy array.
+            #
+            # Check for positive values in [loc, loc1). It is assumed
+            # that negative elements have already been posified.
             i = np.where((loc0 <= index) & (index < loc1))[0]
 
         return i
@@ -1845,18 +1855,18 @@ def setitem_array(out_name, array, indices, value):
     #                           correspond to broadcast dimensions in
     #                           the assignment value.
     #
-    # array_common_shape and value_common_shape may be different if
-    # there are any size 1 dimensions are being brodacast.
-
+    # Note that array_common_shape and value_common_shape may be
+    # different if there are any size 1 dimensions being brodacast.
     offset = len(indices_shape) - value_ndim
     if offset >= 0:
         # The array has the same number or more dimensions than the
         # assignment value
         array_common_shape = indices_shape[offset:]
         value_common_shape = value_shape
+        value_offset = 0
         reverse = [i - offset for i in reverse if i >= offset]
     else:
-        # The array has fewer dimensions than the assignment value
+        # The assigmment value has more dimensions than the array
         value_offset = -offset
         array_common_shape = indices_shape
         value_common_shape = value_shape[value_offset:]
@@ -1896,18 +1906,9 @@ def setitem_array(out_name, array, indices, value):
     ]
     array_locations = product(*array_locations)
 
-    # Get the dask keys of the most recent layer of array and sort by
-    # chunk index, so that they correspond elementwise to the array
-    # locations.
-    #   ndim = len(array_shape)
-    #   if ndim > 1:
-    #       sort_key = itemgetter(*range(1, ndim))
-    #   elif ndim == 1:
-    #       sort_key = itemgetter(1)
-    #   else:
-    #       sort_key = None
-
-    in_keys = list(flatten(array.__dask_keys__()))  # , key=sort_key)
+    # Get the dask keys of the most recent layer in the same order as
+    # the array locations.
+    in_keys = list(flatten(array.__dask_keys__()))
 
     # Create a new "setitem" dask entry for each block in the array
     dsk = {}
@@ -1917,7 +1918,7 @@ def setitem_array(out_name, array, indices, value):
         # Now loop round each block dimension.
         #
         # If the block overlaps the indices then set the following
-        # (which will be used to define the new dask entry):
+        # (which will be used to define a new dask entry):
         #
         # block_indices: The indices that will be used to assign to
         #                this block.
@@ -2022,12 +2023,13 @@ def setitem_array(out_name, array, indices, value):
                     break
 
                 # Note: When the 1-d array index is a dask array then
-                #       we can't tell if this block overlaps it. If it
-                #       in fact doesn't overlap then the part of the
-                #       assignment value that cooresponds to this
-                #       block will have zero size which, at compute
-                #       time, will indicate to the `setitem` function
-                #       to pass the block through unchanged.
+                #       we can't tell if this block overlaps it, so we
+                #       assume that is does. If it in fact doesn't
+                #       overlap then the part of the assignment value
+                #       that cooresponds to this block will have zero
+                #       size which, at compute time, will indicate to
+                #       the `setitem` function to pass the block
+                #       through unchanged.
 
             # Still here? This block overlaps the index for this
             # dimension.
@@ -2042,7 +2044,7 @@ def setitem_array(out_name, array, indices, value):
 
         if not overlaps:
             # This block does not overlap the indices for all
-            # dimensions, so create a null dask entry.
+            # dimensions, so pass the block through unchanged.
             dsk[out_key] = in_key
             continue
 
@@ -2059,7 +2061,8 @@ def setitem_array(out_name, array, indices, value):
                 # Define index for use in `value_indices_from_1d_int_index`
                 index = indices[j]
                 value_indices[i] = value_indices_from_1d_int_index(
-                    dim_1d_int_index, array_shape[j], value_shape[i], *loc0_loc1
+                    dim_1d_int_index, array_shape[j],
+                    value_shape[i + value_offset], *loc0_loc1
                 )
             else:
                 start = block_preceeding_sizes[j]

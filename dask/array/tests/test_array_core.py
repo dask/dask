@@ -3780,6 +3780,12 @@ def test_setitem_extended_API():
     dx[...] = v
     assert_eq(x, dx.compute())
 
+    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
+    v = np.arange(12).reshape(1, 1, 6, 2)
+    x[:, [0, 1]] = v
+    dx[:, index] = v
+    assert_eq(x, dx.compute())
+        
     index = da.from_array([0, -1], chunks=(1,))
     x[[0, -1]] = 9999
     dx[index] = 9999
