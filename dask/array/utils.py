@@ -7,7 +7,6 @@ import os
 import warnings
 
 import numpy as np
-import pandas as pd
 from tlz import frequencies, concat
 
 from .core import Array
@@ -182,10 +181,7 @@ def allclose(a, b, equal_nan=False, **kwargs):
         return np.allclose(a, b, equal_nan=equal_nan, **kwargs)
     if equal_nan:
         return a.shape == b.shape and all(
-            # NOTE: use `pd.isna` instead of `np.isnan` to also handle
-            # pandas NA values which could slip in
-            pd.isna([a, b]).all() if pd.isna([a, b]).any() else a == b
-            for (a, b) in zip(a.flat, b.flat)
+            np.isnan(b) if np.isnan(a) else a == b for (a, b) in zip(a.flat, b.flat)
         )
     return (a == b).all()
 
