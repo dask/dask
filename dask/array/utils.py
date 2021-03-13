@@ -111,7 +111,10 @@ def meta_from_array(x, ndim=None, dtype=None):
             if (
                 any(
                     s in str(e)
-                    for s in ["invalid literal", "could not convert string to float",]
+                    for s in [
+                        "invalid literal",
+                        "could not convert string to float",
+                    ]
                 )
                 and meta.dtype.kind in "SU"
             ):

@@ -2523,7 +2523,12 @@ def test_drop_columns(columns):
     # Check both populated and empty list argument
     # https://github.com/dask/dask/issues/6870
 
-    df = pd.DataFrame({"a": [2, 4, 6, 8], "b": ["1a", "2b", "3c", "4d"],})
+    df = pd.DataFrame(
+        {
+            "a": [2, 4, 6, 8],
+            "b": ["1a", "2b", "3c", "4d"],
+        }
+    )
     ddf = dd.from_pandas(df, npartitions=2)
     ddf2 = ddf.drop(columns=columns)
     ddf["new"] = ddf["a"] + 1  # Check that ddf2 is not modified
@@ -2686,7 +2691,9 @@ def test_to_dask_array(input, dtype, na_value, meta, as_frame, lengths):
     assert result.chunks == expected_chunks
 
     assert_eq(
-        result, a.compute().to_numpy(dtype=dtype, na_value=na_value), equal_nan=True,
+        result,
+        a.compute().to_numpy(dtype=dtype, na_value=na_value),
+        equal_nan=True,
     )
 
 
