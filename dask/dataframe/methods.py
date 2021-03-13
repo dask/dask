@@ -3,7 +3,6 @@ import warnings
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
-from pandas.api.extensions import no_default as pd_no_default
 from tlz import partition
 
 from ._compat import PANDAS_GT_110
@@ -327,20 +326,21 @@ def size(x):
 
 
 def to_numpy(df, _dtype, na_value):
-    # callers use the "__no_default__" string instead of `pd_no_default`,
-    # since `pd_no_default` isn't consistently pickleable or tokenizeable
-    # https://github.com/pandas-dev/pandas/issues/40397
-    from .core import no_default
-
-    try:
-        if na_value == no_default:  # `==` not `is`, since it could be pickled
-            na_value = pd_no_default
-    except Exception:
-        # could be pd.NA, where __bool__ will raise an error
-        pass
-
     kwargs = {"dtype": _dtype, "copy": False}
+
     if PANDAS_GT_110:
+        # callers use the "__no_default__" string instead of `pd_no_default`,
+        # since `pd_no_default` isn't consistently pickleable or tokenizeable
+        # https://github.com/pandas-dev/pandas/issues/40397
+        from .core import no_default
+        from pandas.api.extensions import no_default as pd_no_default
+
+        try:
+            if na_value == no_default:  # `==` not `is`, since it could be pickled
+                na_value = pd_no_default
+        except Exception:
+            # could be pd.NA, where __bool__ will raise an error
+            pass
         kwargs["na_value"] = na_value
     return df.to_numpy(**kwargs)
 
