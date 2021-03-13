@@ -3768,16 +3768,9 @@ def test_values_extension_array():
     )
     ddf = dd.from_pandas(df, 2)
 
-    # HACK: compare the arrays as strings, since `assert_eq` and its NumPy relatives
-    # don't know how to handle pandas NA values. Because the dtype ends up being `object`,
-    # it's just doing elementwise comparison, and NA != NA, but also NA is not NaN.
-    assert str(df.to_numpy()) == str(ddf.values.compute()), "Stringified values are not equal"
-
-    assert_eq(df.index.values, ddf.index.values)
+    assert_eq(df.to_numpy(), ddf.values, equal_nan=True)
+    assert_eq(df.index.to_numpy(), ddf.index.values)
     for column in df.columns:
-        # FIXME fails on the `null_bool` column with `TypeError: boolean value of NA is ambiguous`
-        # from `pandas/_libs/missing.pyx:360` (`__bool__` method on `NAType`). Again, NumPy is doing
-        # elementwise == here, which doesn't work the way we want it to on NAs.
         assert_eq(df[column].to_numpy(), ddf[column].values, equal_nan=True)
 
 
@@ -4093,7 +4086,10 @@ def test_cumulative_multiple_columns():
 
 
 @pytest.mark.parametrize("func", [np.asarray, M.to_records])
-def test_map_partition_array(func):
+@pytest.mark.parametrize(
+    "pre", [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]
+)
+def test_map_partition_array(func, pre):
     from dask.array.utils import assert_eq
 
     df = pd.DataFrame(
@@ -4102,17 +4098,16 @@ def test_map_partition_array(func):
     )
     ddf = dd.from_pandas(df, npartitions=2)
 
-    for pre in [lambda a: a, lambda a: a.x, lambda a: a.y, lambda a: a.index]:
+    try:
+        expected = func(pre(df))
+    except Exception:
+        return
 
-        try:
-            expected = func(pre(df))
-        except Exception:
-            continue
-        x = pre(ddf).map_partitions(func)
-        assert_eq(x, expected)
+    x = pre(ddf).map_partitions(func)
+    assert_eq(x, expected)
 
-        assert isinstance(x, da.Array)
-        assert x.chunks[0] == (np.nan, np.nan)
+    assert isinstance(x, da.Array)
+    assert x.chunks[0] == (np.nan, np.nan)
 
 
 def test_map_partition_sparse():

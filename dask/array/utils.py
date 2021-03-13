@@ -7,6 +7,7 @@ import os
 import warnings
 
 import numpy as np
+import pandas as pd
 from tlz import frequencies, concat
 
 from .core import Array
@@ -110,10 +111,7 @@ def meta_from_array(x, ndim=None, dtype=None):
             if (
                 any(
                     s in str(e)
-                    for s in [
-                        "invalid literal",
-                        "could not convert string to float",
-                    ]
+                    for s in ["invalid literal", "could not convert string to float",]
                 )
                 and meta.dtype.kind in "SU"
             ):
@@ -181,7 +179,10 @@ def allclose(a, b, equal_nan=False, **kwargs):
         return np.allclose(a, b, equal_nan=equal_nan, **kwargs)
     if equal_nan:
         return a.shape == b.shape and all(
-            np.isnan(b) if np.isnan(a) else a == b for (a, b) in zip(a.flat, b.flat)
+            # NOTE: use `pd.isna` instead of `np.isnan` to also handle
+            # pandas NA values which could slip in
+            pd.isna([a, b]).all() if pd.isna([a, b]).any() else a == b
+            for (a, b) in zip(a.flat, b.flat)
         )
     return (a == b).all()
 
