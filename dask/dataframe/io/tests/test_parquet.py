@@ -2906,14 +2906,20 @@ def test_multi_partition_none_index_false(tmpdir, engine):
     if pa.__version__ < LooseVersion("0.15.0"):
         pytest.skip("PyArrow>=0.15 Required.")
 
+    if engine.startswith("pyarrow"):
+        write_engine = "pyarrow"
+    else:
+        assert engine == "fastparquet"
+        write_engine = "fastparquet"
+
     # Write dataset without dast.to_parquet
     ddf1 = ddf.reset_index(drop=True)
     for i, part in enumerate(ddf1.partitions):
         path = tmpdir.join(f"test.{i}.parquet")
-        part.compute().to_parquet(str(path), engine="pyarrow")
+        part.compute().to_parquet(str(path), engine=write_engine)
 
     # Read back with index=False
-    ddf2 = dd.read_parquet(str(tmpdir), index=False)
+    ddf2 = dd.read_parquet(str(tmpdir), index=False, engine=engine)
     assert_eq(ddf1, ddf2)
 
 
