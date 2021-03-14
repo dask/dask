@@ -1051,81 +1051,6 @@ def histogramdd(sample, bins, range, weights=None, density=None):
                 "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
             )
 
-    # all possible bin configurations start as False
-    (
-        bins_scaler_single,
-        bins_scalar_seq,
-        bins_arr_single,
-        bins_arr_seq,
-    ) = (False,) * 4
-
-    # First check if bins is a single scalar
-    if isinstance(bins, Array):
-        bins_scaler_single = bins.ndim == 0
-    elif isinstance(bins, Delayed):
-        bins_scaler_single = bins._length is None or bins._length == 1
-    else:
-        bins_scaler_single = np.ndim(bins) == 0
-    if bins_scaler_single and range is None:
-        raise ValueError(
-            "If bins is not a sequence of bin edges "
-            "then range must be defined (not None)."
-        )
-
-    # Now check if bins is a sequence of scalars
-    if isinstance(bins, Array):
-        bins_scalar_seq = bins.ndim == 1 and bins.shape[0] == sample.shape[1]
-    if isinstance(bins, (list, tuple)):
-        if len(bins) != D:
-            raise ValueError(
-                f"Total number of scalar bins defintions ({len(bins)}) "
-                f"is incompatible with the dimensions of the sample ({D})"
-            )
-        if all(isinstance(b, int) for b in bins):
-            bins_scalar_seq = True
-        elif all(isinstance(b, Array) for b in bins):
-            bins_scalar_seq = all(b.ndim == 0 for b in bins)
-        elif all(isinstance(b, Delayed) for b in bins):
-            bins_scalar_seq = all(b._length is None or b._length == 1 for b in bins)
-
-    # Now check if bins is defined by a single or multiple arrays
-    if range is None:
-        # this would be a special case where we have a single array of
-        # bins where the total number of bins is 1 less than the
-        # dimensions of the histogram in each dimension. Definitely seems
-        # rare, but still possible.
-        if bins_scalar_seq:
-            bins_scalar_seq = False
-            bins_arr_single = True
-    if isinstance(bins, Array):
-        bins_arr_single = bins.ndim == 1
-    if isinstance(bins, (list, np.ndarray)):
-        bins_arr_single = np.ndim(bins) == 1
-        bins_arr_seq = np.ndim(bins) == 2
-        if not (bins_arr_single or bins_arr_seq):
-            raise ValueError(
-                "If bins is an array is must be 1 or 2 dimensional. "
-                f"Dimensionality is is {np.ndim(bins)}"
-            )
-        # if single array, check for increasing edges
-        if bins_arr_single:
-            bins = np.asarray(bins)
-            if not np.all(bins[1:] >= bins[:-1]):
-                raise ValueError("Bins sequence must be monotonically increasing.")
-        # if multiple arrays, check for increasing edges in each dimension
-        if bins_arr_seq:
-            if bins.shape[0] != D:
-                raise ValueError(
-                    f"The number of defined bin sequences ({bins.shape[0]}) "
-                    f"is incompatible with the dimensions of the data ({D})."
-                )
-            for i in _range(bins.shape[0]):
-                if not np.all(bins[i, 1:] >= bins[i, :-1]):
-                    raise ValueError("Bins sequences must be monotonically increasing.")
-
-    if not bins_scalar_seq:
-        raise ValueError("only bins_scalar_seq working right now")
-
     # ensure that the chunking of the sample and weights are compatible.
     if weights is not None and weights.chunks[0] != sample.chunks[0]:
         raise ValueError(
@@ -1140,10 +1065,11 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     assert len(bins_edges) == D
     (bins_ref, ranges_ref), deps = unpack_collections([bins_edges, range])
 
-    szeros = tuple(0 for _ in _range(D))
+    # make (D+1) dimension array, stacked for each chunk.
+    dzeros = tuple(0 for _ in _range(D))
     if weights is None:
         dsk = {
-            (name, i, *szeros): (_block_histogramdd, k, bins_ref, ranges_ref)
+            (name, i, *dzeros): (_block_histogramdd, k, bins_ref, ranges_ref)
             for i, k in enumerate(flatten(sample.__dask_keys__()))
         }
         dtype = np.histogramdd([])[0].dtype
@@ -1151,7 +1077,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
         a_keys = flatten(sample.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, *szeros): (_block_histogramdd, k, bins_ref, ranges_ref, w)
+            (name, i, *dzeros): (_block_histogramdd, k, bins_ref, ranges_ref, w)
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
