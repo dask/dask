@@ -1029,6 +1029,10 @@ def histogramdd(sample, bins, range, weights=None, density=None):
 
     """
 
+    # generate token and name for task
+    token = tokenize(sample, bins, range, weights, density)
+    name = "histogramdd-sum-" + token
+
     # N == total number of samples
     # D == total number of dimensions
     try:
@@ -1063,16 +1067,19 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     else:
         bins_scaler_single = np.ndim(bins) == 0
     if bins_scaler_single and range is None:
-        raise ValueError("If bins is not a sequence of bin edges "
-                         "then range must be defined (not None).")
+        raise ValueError(
+            "If bins is not a sequence of bin edges "
+            "then range must be defined (not None)."
+        )
 
     # Now check if bins is a sequence of scalars
     if isinstance(bins, Array):
         bins_scalar_seq = bins.ndim == 1 and bins.shape[0] == sample.shape[1]
     if isinstance(bins, (list, tuple)):
-        if len(bins) != sample.shape[1]:
+        if len(bins) != D:
             raise ValueError(
-                "number of bins axes is incompatible with the shape of the sample."
+                f"Total number of scalar bins defintions ({len(bins)}) "
+                f"is incompatible with the dimensions of the sample ({D})"
             )
         if all(isinstance(b, int) for b in bins):
             bins_scalar_seq = True
@@ -1081,7 +1088,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
         elif all(isinstance(b, Delayed) for b in bins):
             bins_scalar_seq = all(b._length is None or b._length == 1 for b in bins)
 
-    # Now check if single array of bins.
+    # Now check if bins is defined by a single or multiple arrays
     if range is None:
         # this would be a special case where we have a single array of
         # bins where the total number of bins is 1 less than the
@@ -1093,10 +1100,31 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     if isinstance(bins, Array):
         bins_arr_single = bins.ndim == 1
     if isinstance(bins, (list, np.ndarray)):
-        bins_arr_single = np.ndim(bins)
-        bins = np.asarray(bins)
-        if not np.all(bins[1:] >= bins[:-1]):
-            raise ValueError("Bins sequence must be monotonically increasing")
+        bins_arr_single = np.ndim(bins) == 1
+        bins_arr_seq = np.ndim(bins) == 2
+        if not (bins_arr_single or bins_arr_seq):
+            raise ValueError(
+                "If bins is an array is must be 1 or 2 dimensional. "
+                f"Dimensionality is is {np.ndim(bins)}"
+            )
+        # if single array, check for increasing edges
+        if bins_arr_single:
+            bins = np.asarray(bins)
+            if not np.all(bins[1:] >= bins[:-1]):
+                raise ValueError("Bins sequence must be monotonically increasing.")
+        # if multiple arrays, check for increasing edges in each dimension
+        if bins_arr_seq:
+            if bins.shape[0] != D:
+                raise ValueError(
+                    f"The number of defined bin sequences ({bins.shape[0]}) "
+                    f"is incompatible with the dimensions of the data ({D})."
+                )
+            for i in _range(bins.shape[0]):
+                if not np.all(bins[i, 1:] >= bins[i, :-1]):
+                    raise ValueError("Bins sequences must be monotonically increasing.")
+
+    if not bins_scalar_seq:
+        raise ValueError("only bins_scalar_seq working right now")
 
     # ensure that the chunking of the sample and weights are compatible.
     if weights is not None and weights.chunks[0] != sample.chunks[0]:
@@ -1104,10 +1132,6 @@ def histogramdd(sample, bins, range, weights=None, density=None):
             "Input array and weights must have the same shape "
             "and chunk structure along the first dimension."
         )
-
-    # generate token and name for task
-    token = tokenize(sample, bins, range, weights, density)
-    name = "histogramdd-sum-" + token
 
     bins_edges = [
         _linspace_from_delayed(r[0], r[1], b + 1) for b, r in zip(bins, range)
