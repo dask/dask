@@ -1049,37 +1049,37 @@ def histogramdd(sample, bins, range, weights=None, density=None):
 
     # all possible bin configurations start as False
     (
-        single_scalar_bins,
-        seq_scalar_bins,
-        single_arr_bins,
-        seq_arr_bins,
-    ) = False
+        bins_scaler_single,
+        bins_scalar_seq,
+        bins_arr_single,
+        bins_arr_seq,
+    ) = (False,) * 4
 
     # First check if bins is a single scalar
     if isinstance(bins, Array):
-        single_scalar_bins = bins.ndim == 0
+        bins_scaler_single = bins.ndim == 0
     elif isinstance(bins, Delayed):
-        single_scalar_bins = bins._length is None or bins._length == 1
+        bins_scaler_single = bins._length is None or bins._length == 1
     else:
-        single_scalar_bins = np.ndim(bins) == 0
-    if single_scalar_bins and range is None:
+        bins_scaler_single = np.ndim(bins) == 0
+    if bins_scaler_single and range is None:
         raise ValueError("If bins is not a sequence of bin edges "
                          "then range must be defined (not None).")
 
     # Now check if bins is a sequence of scalars
     if isinstance(bins, Array):
-        seq_scalar_bins = bins.ndim == 1 and bins.shape[0] == sample.shape[1]
+        bins_scalar_seq = bins.ndim == 1 and bins.shape[0] == sample.shape[1]
     if isinstance(bins, (list, tuple)):
         if len(bins) != sample.shape[1]:
             raise ValueError(
                 "number of bins axes is incompatible with the shape of the sample."
             )
         if all(isinstance(b, int) for b in bins):
-            seq_scalar_bins = True
+            bins_scalar_seq = True
         elif all(isinstance(b, Array) for b in bins):
-            seq_scalar_bins = all(b.ndim == 0 for b in bins)
+            bins_scalar_seq = all(b.ndim == 0 for b in bins)
         elif all(isinstance(b, Delayed) for b in bins):
-            seq_scalar_bins = all(b._length is None or b._length == 1 for b in bins)
+            bins_scalar_seq = all(b._length is None or b._length == 1 for b in bins)
 
     # Now check if single array of bins.
     if range is None:
@@ -1087,13 +1087,13 @@ def histogramdd(sample, bins, range, weights=None, density=None):
         # bins where the total number of bins is 1 less than the
         # dimensions of the histogram in each dimension. Definitely seems
         # rare, but still possible.
-        if seq_scalar_bins:
-            seq_scalar_bins = False
-            single_arr_bins = True
+        if bins_scalar_seq:
+            bins_scalar_seq = False
+            bins_arr_single = True
     if isinstance(bins, Array):
-        single_arr_bins = bins.ndim == 1
-    if isinstance(bins, (list, tuple, np.ndarray)):
-        single_arr_bins = np.ndim(bins)
+        bins_arr_single = bins.ndim == 1
+    if isinstance(bins, (list, np.ndarray)):
+        bins_arr_single = np.ndim(bins)
         bins = np.asarray(bins)
         if not np.all(bins[1:] >= bins[:-1]):
             raise ValueError("Bins sequence must be monotonically increasing")
