@@ -7,6 +7,17 @@ from .core import keys_in_tasks
 from .utils import apply, insert, stringify, stringify_collection_keys
 from .highlevelgraph import Layer
 
+# TODO: Make sure dask.blockwise does not require any
+# imports beyond minimum dependencies
+from .blockwise import Blockwise, BlockwiseIODeps, blockwise_token
+
+
+#
+##
+###  General Utilities
+##
+#
+
 
 class CallableLazyImport:
     """Function Wrapper for Lazy Importing"""
@@ -19,6 +30,80 @@ class CallableLazyImport:
     def __call__(self, *args, **kwargs):
         func = getattr(import_module(self.module), self.name)
         return func(*args, **kwargs)
+
+
+#
+##
+###  Array Layers & Utilities
+##
+#
+
+
+class CreateArrayDeps(BlockwiseIODeps):
+    """Index-chunk mapping for BlockwiseCreateArray"""
+
+    def __init__(self, chunks: tuple):
+        self.chunks = chunks
+
+    def __getitem__(self, idx: tuple):
+        return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+
+
+class BlockwiseCreateArray(Blockwise):
+    """
+    Specialized Blockwise Layer for array creation routines.
+
+    Enables HighLevelGraph optimizations.
+
+    Parameters
+    ----------
+    name: string
+        The output name.
+    func : callable
+        Function to apply to populate individual blocks. This function should take
+        an iterable containing the dimensions of the given block.
+    shape: iterable
+        Iterable containing the overall shape of the array.
+    chunks: iterable
+        Iterable containing the chunk sizes along each dimension of array.
+    """
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+    ):
+        # self.name = name
+        io_name = "blockwise-create-" + name
+
+        # Define "blockwise" graph
+        dsk = {name: (func, blockwise_token(0))}
+
+        out_ind = tuple(range(len(shape)))
+        self.nchunks = tuple(len(chunk) for chunk in chunks)
+        super().__init__(
+            name,
+            out_ind,
+            dsk,
+            [(io_name, out_ind)],
+            {io_name: self.nchunks},
+            io_deps={
+                io_name: (
+                    "dask.layers",
+                    "CreateArrayDeps",
+                    chunks,
+                )
+            },
+        )
+
+
+#
+##
+###  DataFrame Layers & Utilities
+##
+#
 
 
 class SimpleShuffleLayer(Layer):
