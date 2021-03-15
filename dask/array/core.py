@@ -3548,7 +3548,6 @@ def unify_chunks(*args, **kwargs):
     arginds = [
         (asanyarray(a) if ind is not None else a, ind) for a, ind in partition(2, args)
     ]  # [x, ij, y, jk]
-    args = list(concat(arginds))  # [(x, ij), (y, jk)]
     warn = kwargs.get("warn", True)
 
     arrays, inds = zip(*arginds)
