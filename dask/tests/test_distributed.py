@@ -11,6 +11,7 @@ from tornado import gen
 
 import dask
 from dask import persist, delayed, compute
+import dask.bag as db
 from dask.delayed import Delayed
 from dask.utils import tmpdir, get_named_args
 from distributed import futures_of
@@ -116,7 +117,6 @@ def test_fused_blockwise_dataframe_merge(c, fuse):
 
 
 def test_futures_to_delayed_bag(c):
-    db = pytest.importorskip("dask.bag")
     L = [1, 2, 3]
 
     futures = c.scatter([L, L])
@@ -285,6 +285,71 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
         z = await c.compute(z)
 
     assert_eq(z, np.ones(10) * 4.0)
+
+
+@pytest.mark.parametrize(
+    "io",
+    [
+        "ones",
+        "zeros",
+        "full",
+    ],
+)
+@pytest.mark.parametrize("fuse", [True, False])
+def test_blockwise_array_creation(c, io, fuse):
+    np = pytest.importorskip("numpy")
+    da = pytest.importorskip("dask.array")
+
+    chunks = (5, 2)
+    shape = (10, 4)
+
+    if io == "ones":
+        darr = da.ones(shape, chunks=chunks)
+        narr = np.ones(shape)
+    elif io == "zeros":
+        darr = da.zeros(shape, chunks=chunks)
+        narr = np.zeros(shape)
+    elif io == "full":
+        darr = da.full(shape, 10, chunks=chunks)
+        narr = np.full(shape, 10)
+
+    darr += 2
+    narr += 2
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        darr.compute()
+        da.assert_eq(darr, narr)
+
+
+@gen_cluster(client=True)
+async def test_blockwise_numpy_args(c, s, a, b):
+    """Test pack/unpack of blockwise that includes a NumPy literal argument"""
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def fn(x, dt):
+        assert type(dt) is np.uint16
+        return x.astype(dt)
+
+    arr = da.blockwise(
+        fn, "x", da.ones(1000), "x", np.uint16(42), None, dtype=np.uint16
+    )
+    res = await c.compute(arr.sum(), optimize_graph=False)
+    assert res == 1000
+
+
+@gen_cluster(client=True)
+async def test_blockwise_numpy_kwargs(c, s, a, b):
+    """Test pack/unpack of blockwise that includes a NumPy literal keyword argument"""
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def fn(x, dt=None):
+        assert type(dt) is np.uint16
+        return x.astype(dt)
+
+    arr = da.blockwise(fn, "x", da.ones(1000), "x", dtype=np.uint16, dt=np.uint16(42))
+    res = await c.compute(arr.sum(), optimize_graph=False)
+    assert res == 1000
 
 
 @gen_cluster(client=True)

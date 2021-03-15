@@ -3,7 +3,6 @@ import math
 
 import tlz as toolz
 import warnings
-from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path

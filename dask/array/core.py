@@ -18,6 +18,7 @@ from threading import Lock
 from tlz import partition, concat, first, groupby, accumulate, frequencies
 from tlz.curried import pluck
 import numpy as np
+from fsspec import get_mapper
 
 from . import chunk
 from .. import config, compute
@@ -3218,8 +3219,6 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        from ..bytes.core import get_mapper
-
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
@@ -3305,8 +3304,6 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        from ..bytes.core import get_mapper
-
         mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
@@ -4106,7 +4103,7 @@ def asarray(a, **kwargs):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
@@ -4146,7 +4143,7 @@ def asanyarray(a):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asanyarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)

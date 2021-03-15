@@ -1,3 +1,4 @@
+from dask.blockwise import Blockwise, blockwise_token
 import os
 from collections.abc import Set
 
@@ -215,3 +216,27 @@ def test_highlevelgraph_dicts_deprecation():
         layers = {"a": MaterializedLayer({"x": 1, "y": (inc, "x")})}
         hg = HighLevelGraph(layers, {"a": set()})
         assert hg.dicts == layers
+
+
+def test_len_does_not_materialize():
+    a = {"x": 1}
+    b = Blockwise(
+        output="b",
+        output_indices=tuple("ij"),
+        dsk={"b": [[blockwise_token(0)]]},
+        indices=(),
+        numblocks={},
+        new_axes={"i": (1, 1, 1), "j": (1, 1)},
+    )
+    assert len(b) == len(b.get_output_keys())
+
+    layers = {"a": a, "b": b}
+    dependencies = {"a": set(), "b": {"a"}}
+    hg = HighLevelGraph(layers, dependencies)
+
+    assert hg.layers["a"].is_materialized()
+    assert not hg.layers["b"].is_materialized()
+
+    assert len(hg) == len(a) + len(b) == 7
+
+    assert not hg.layers["b"].is_materialized()
