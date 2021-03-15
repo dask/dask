@@ -3148,9 +3148,12 @@ Dask Name: {name}, {task} tasks""".format(
                 )
             kwargs["dropna"] = dropna
 
-        meta = self._meta.value_counts()
-        if normalize:
-            meta /= self._meta.sum()
+        meta = self._meta.value_counts(normalize=normalize)
+
+        if split_out > 1 and normalize:
+            aggregate_kwargs["length"] = (
+                len(self) if dropna is False else len(self.dropna())
+            )
 
         return aca(
             self,
