@@ -98,6 +98,7 @@ Top level user functions:
    greater
    greater_equal
    histogram
+   histogramdd
    hstack
    hypot
    imag
