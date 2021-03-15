@@ -601,7 +601,7 @@ class HighLevelGraph(Mapping):
         layer : Mapping
             The graph layer itself
         dependencies : List of Dask collections
-            A lit of other dask collections (like arrays or dataframes) that
+            A list of other dask collections (like arrays or dataframes) that
             have graphs themselves
 
         Examples
