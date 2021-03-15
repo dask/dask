@@ -1,5 +1,5 @@
 import tlz as toolz
-import importlib
+from importlib import import_module
 
 from .core import keys_in_tasks
 from .utils import insert, stringify, stringify_collection_keys
@@ -7,8 +7,8 @@ from .highlevelgraph import Layer
 
 
 def run_ext_function(func, *args):
-    if isinstance(func, tuple):
-        func = getattr(importlib(func[0]), func[1])
+    if isinstance(func, dict):
+        func = getattr(import_module(func["__module__"]), func["__name__"])
     return func(*args)
 
 
@@ -111,13 +111,6 @@ class ShuffleGraph(SimpleShuffleGraph):
     @property
     def layer_materialize_class(self):
         return "ShuffleGraph"
-
-    def __dask_distributed_pack__(self, *args, **kwargs):
-        ret = super().__dask_distributed_pack__(*args, **kwargs)
-        ret["inputs"] = self.inputs
-        ret["stage"] = self.stage
-        ret["nsplits"] = self.nsplits
-        return ret
 
     @staticmethod
     def _construct_graph(

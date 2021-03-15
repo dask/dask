@@ -134,9 +134,12 @@ class SimpleShuffleLayer(SimpleShuffleGraph):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
-            "concat_func": (_concat.__module__, "_concat"),
-            "getitem_func": ("operator", "getitem"),
-            "shuffle_group_func": (shuffle_group.__module__, "shuffle_group"),
+            "concat_func": {"__module__": _concat.__module__, "__name__": "_concat"},
+            "getitem_func": {"__module__": "operator", "__name__": "getitem"},
+            "shuffle_group_func": {
+                "__module__": shuffle_group.__module__,
+                "__name__": "shuffle_group",
+            },
         }
 
     def _keys_to_parts(self, keys):
@@ -301,6 +304,13 @@ class ShuffleLayer(SimpleShuffleLayer, ShuffleGraph):
         ]
 
         return (ShuffleLayer, tuple(getattr(self, attr) for attr in attrs))
+
+    def __dask_distributed_pack__(self, *args, **kwargs):
+        ret = super().__dask_distributed_pack__(*args, **kwargs)
+        ret["inputs"] = self.inputs
+        ret["stage"] = self.stage
+        ret["nsplits"] = self.nsplits
+        return ret
 
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
