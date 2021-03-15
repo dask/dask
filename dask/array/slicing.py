@@ -1831,16 +1831,19 @@ def setitem_array(out_name, array, indices, value):
     # Set variables needed when creating the part of the assignment
     # value that applies to each block.
     #
-    #  offset: The additive offset needed to map a dimension position
-    #          in the assignmment value to the corresponding dimension
-    #          position in the array. A positive means the dimension
-    #          position is further to the right in the array.
+    #  offset: The additive offset to the assignment value dimension
+    #          positions that results in the positions of the
+    #          corresponding dimensions in the array. offset is a
+    #          non-negative integer, and a positive value means that
+    #          the array has more dimensions than the assignment
+    #          value.
     #
-    #  value_offset: The additive offset needed to map a dimension
-    #                position in the array to the corresponding
-    #                dimension position in the assignment value. A
-    #                positive value means the dimension position is
-    #                further to the right in the assignment value.
+    #  value_offset: The additive offset to the array dimension
+    #                positions that results in the positions of the
+    #                corresponding dimensions in the assignment
+    #                value. value_offset is a non-negative integer,
+    #                and a positive value means that the assignment
+    #                value has more dimensions than the array.
     #
     #          For example:
     #
@@ -2068,7 +2071,7 @@ def setitem_array(out_name, array, indices, value):
         # dimensions and so needs to have some of its elements
         # assigned.
 
-        # Initialise the indices of the assgnment value that define
+        # Initialise the indices of the assignment value that define
         # the parts of it which are to be assigned to this block
         value_indices = base_value_indices[:]
         for i in non_broadcast_dimensions:
@@ -2093,7 +2096,7 @@ def setitem_array(out_name, array, indices, value):
 
         # If required as a consequence of reformatting slice objects
         # in the original indices to have a positive steps, reverse
-        # the indices to assgnment value.
+        # the indices to assignment value.
         for i in reverse:
             size = value_common_shape[i]
             start, stop, step = value_indices[i].indices(size)
