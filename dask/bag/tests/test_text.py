@@ -119,3 +119,21 @@ def test_errors():
         result = read_text(".test.foo", encoding="ascii", errors="ignore")
         result = result.compute(scheduler="sync")
         assert result == ["Jos\n", "Alice"]
+
+
+def test_complex_delimiter():
+    longstr = "abc\ndef\n123\n$$$$\ndog\ncat\nfish\n\n\r\n$$$$hello"
+    with filetexts({".test.delim.txt": longstr}):
+        assert read_text(".test.delim.txt", linedelimiter="$$$$").count().compute() == 3
+        assert (
+            read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2)
+            .count()
+            .compute()
+            == 3
+        )
+        vals = read_text(".test.delim.txt", linedelimiter="$$$$").compute()
+        assert vals[-1] == "hello"
+        assert vals[0].endswith("$$$$")
+        vals = read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2).compute()
+        assert vals[-1] == "hello"
+        assert vals[0].endswith("$$$$")
