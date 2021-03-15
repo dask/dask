@@ -3769,7 +3769,6 @@ def test_setitem_extended_API():
     x[1:5:2, [7, 5]] = np.ma.masked_all((2, 2))
     dx[1:5:2, [7, 5]] = np.ma.masked_all((2, 2))
 
-    dx.visualize('/home/david/new.svg')
     dx = dx.persist()
     assert_eq(x, dx.compute())
     assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
