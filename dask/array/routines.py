@@ -1173,9 +1173,9 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         width_divider = np.ones(n.shape)
         for i in _range(D):
             shape = np.ones(D, int)
-            shape[i] = bin_width_divider.shape[i]
+            shape[i] = width_divider.shape[i]
             width_divider *= np.diff(edges[i]).reshape(shape)
-        width_divider = asarray(bin_width_divider, chunks=n.chunks)
+        width_divider = asarray(width_divider, chunks=n.chunks)
         return n / width_divider / n.sum(), edges
 
     return n, edges
