@@ -948,7 +948,7 @@ def _block_histogramdd(sample, bins, range=None, weights=None):
     return np.histogramdd(sample, bins, range=range, weights=weights)[0][np.newaxis]
 
 
-def histogramdd(sample, bins, range, weights=None, density=None):
+def histogramdd(sample, bins, range=None, normed=None, weights=None, density=None):
     """Histogram data in multiple dimensions
 
     Dask version of :func:`numpy.histogramdd`.
@@ -959,10 +959,10 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     compatible with this function. If weights are used, they must be
     chunked along the 0th axis identically to the input sample.
 
-    For example, A "good" setup for a three dimensional histogram,
-    where the sample shape is (8, 3) and weights are shape (8,),
-    sample chunks would be ((4, 4), (3,)) and the weights chunks would
-    be ((4, 4),).
+    A proper example setup for a three dimensional histogram, where
+    the sample shape is (8, 3) and weights are shape (8,), sample
+    chunks would be ((4, 4), (3,)) and the weights chunks would be
+    ((4, 4),); a table of the structure:
 
     .. code-block::
 
@@ -1017,11 +1017,25 @@ def histogramdd(sample, bins, range, weights=None, density=None):
         bin widths.
 
     range : sequence of pairs, optional
-        Axes limits in each dimension (xmin, xmax)
+        A sequence of length D, each an optional (min, max) tuple
+        giving the outer bin edges to be used if the edges are not
+        given explicitly in `bins`. Unlike :func:`numpy.histogramdd`,
+        if `bins` not does defines bin edges, this argument is
+        required. This function will not automatically use the min and
+        max of of the value in a given dimension because the input
+        data may be lazy in dask.
+    normed : bool, optional
+        An alias for the density argument that behaves identically. To
+        avoid confusion with the broken argument to `histogram`,
+        `density` should be preferred.
     weights : dask Array, optional
-        Optional weights associated with the data. (TODO)
-    density : bool
-        Convert bins to values of a PDF (TODO)
+        An array of values `w_i` weighing each sample in the input
+        data. The chunks of the the weights must be identical to the
+        chunking along the 0th axis of the data sample.
+    density : bool, optional
+        If False (default), the returned array represents the number
+        of samples in each bin. If True, the returned array represents
+        the probability density function at each bin.
 
     See Also
     --------
@@ -1043,7 +1057,7 @@ def histogramdd(sample, bins, range, weights=None, density=None):
         sample = atleast_2d(sample).T
         N, D = sample.shape
 
-    # Check for bad bins/range/weights
+    # Require only Array or Delayed objects for bins, range, and weights.
     for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
         if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
             raise TypeError(
@@ -1051,19 +1065,46 @@ def histogramdd(sample, bins, range, weights=None, density=None):
                 "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
             )
 
-    # ensure that the chunking of the sample and weights are compatible.
+    # Require that the chunking of the sample and weights are compatible.
     if weights is not None and weights.chunks[0] != sample.chunks[0]:
         raise ValueError(
             "Input array and weights must have the same shape "
             "and chunk structure along the first dimension."
         )
 
-    bins_edges = [
-        _linspace_from_delayed(r[0], r[1], b + 1) for b, r in zip(bins, range)
-    ]
-    ## total number of bin edge arrays must be the total number of dimensions
-    assert len(bins_edges) == D
-    (bins_ref, ranges_ref), deps = unpack_collections([bins_edges, range])
+    # If we can call len on bins then it must be a sequence, we
+    # require that it's compatible with the dimensions of the data.
+    try:
+        M = len(bins)
+        if M != D:
+            raise ValueError(
+                "The dimension of bins must be equal to the dimension of the sample."
+            )
+    except TypeError:
+        # In this case bins must be a single scalar (possibly
+        # delayed), we expand it to the total number of dimensions.
+        bins = D * [bins]
+
+    if range is not None and len(range) != D:
+        raise ValueError(
+            "range argument requires one entry, a min max pair, per dimension."
+        )
+
+    dask_coll_in_bins = any([is_dask_collection(entry) for entry in bins])
+    dask_coll_in_range = False
+    if range is not None:
+        dask_coll_in_range = any([is_dask_collection(entry) for entry in range])
+
+    if not dask_coll_in_bins and not dask_coll_in_range:
+        if all(isinstance(b, int) for b in bins) and all(len(r) == 2 for r in range):
+            edges = [
+                _linspace_from_delayed(r[0], r[1], b + 1) for b, r in zip(bins, range)
+            ]
+        else:
+            edges = [np.asarray(b) for b in bins]
+            range = (None,) * D
+
+    (bins_ref, ranges_ref), deps = unpack_collections([edges, range])
 
     # make (D+1) dimension array, stacked for each chunk.
     dzeros = tuple(0 for _ in _range(D))
@@ -1088,15 +1129,24 @@ def histogramdd(sample, bins, range, weights=None, density=None):
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
 
     nchunks_in_sample = len(list(flatten(sample.__dask_keys__())))
-    all_nbins = tuple((b.size - 1,) for b in bins_edges)
+    all_nbins = tuple((b.size - 1,) for b in edges)
     stacked_chunks = ((1,) * nchunks_in_sample, *all_nbins)
     mapped = Array(graph, name, stacked_chunks, dtype=dtype)
     # finally sum over sample chunk providing the final result array.
     n = mapped.sum(axis=0)
 
     # TODO: density operation (dividing by bin widths)
+    # Logic used in NumPy to handle aliasing the `normed` argument.
+    if normed is None:
+        if density is None:
+            density = False
+    elif density is None:
+        # an explicit normed argument was passed, alias it to the new name
+        density = normed
+    else:
+        raise TypeError("Cannot specify both 'normed' and 'density'")
 
-    return n, bins_edges
+    return n, edges
 
 
 @derived_from(np)

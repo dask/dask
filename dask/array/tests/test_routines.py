@@ -695,17 +695,6 @@ def test_histogram_normed_deprecation():
     assert "deprecated" in str(info.value).lower()
 
 
-def test_histogramdd():
-    # test for normal input
-    n1, n2 = 20000, 3
-    x = da.random.standard_normal(size=(n1, n2), chunks="128 KiB")
-    bins = (5, 7, 6)
-    ranges = ((-3, 3), (-3.2, 3.2), (-2.9, 2.9))
-    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
-    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges)
-    assert_eq(a1, a2)
-
-
 @pytest.mark.parametrize(
     "bins, hist_range",
     [
@@ -807,6 +796,70 @@ def test_histogram_delayed_n_bins_raises_with_density():
         NotImplementedError, match="`bins` cannot be a scalar Dask object"
     ):
         da.histogram(data, bins=da.array(10), range=[0, 1], density=True)
+
+
+def test_histogramdd():
+    n1, n2 = 800, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=(200, 3))
+    bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
+    (a1, b1) = da.histogramdd(x, bins=bins)
+    (a2, b2) = np.histogramdd(x, bins=bins)
+    assert_eq(a1, a2)
+    assert a1.sum() == n1
+    assert a2.sum() == n1
+    assert same_keys(da.histogramdd(x, bins=bins)[0], a1)
+
+
+def test_histogramdd_alternative_bins_range():
+    # test for normal input
+    n1, n2 = 600, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=((200, 200, 200), (3,)))
+    bins = (3, 5, 4)
+    ranges = ((0, 1),) * len(bins)
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges)
+    assert_eq(a1, a2)
+    bins = 4
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges)
+    assert_eq(a1, a2)
+
+    assert a1.sum() == n1
+    assert a2.sum() == n1
+    assert same_keys(da.histogramdd(x, bins=bins, range=ranges)[0], a1)
+
+
+def test_histogramdd_weighted():
+    # test for normal input
+    n1, n2 = 600, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=((200, 200, 200), (3,)))
+    w = da.random.uniform(0.5, 0.8, size=(n1,), chunks=200)
+    bins = (3, 5, 4)
+    ranges = ((0, 1),) * len(bins)
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w)
+    assert_eq(a1, a2)
+    bins = 4
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w)
+    assert_eq(a1, a2)
+
+
+def test_histogramdd_raises_incompat_bins_or_range():
+    data = da.random.random(size=(10, 4), chunks=(5, 4))
+    bins = (2, 3, 4)
+    ranges = ((0, 1),) * len(bins)
+    with pytest.raises(
+        ValueError,
+        match="The dimension of bins must be equal to the dimension of the sample.",
+    ):
+        da.histogramdd(data, bins=bins, range=ranges)
+    bins = (2, 3, 4, 5)
+    with pytest.raises(
+        ValueError,
+        match="range argument requires one entry, a min max pair, per dimension.",
+    ):
+        da.histogramdd(data, bins=bins, range=ranges)
 
 
 def test_cov():
