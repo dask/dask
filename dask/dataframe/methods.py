@@ -304,17 +304,19 @@ def unique(x, series_name=None):
     return out
 
 
-def value_counts_combine(x, **groupby_kwargs):
-    # sort, ascending, and normalize don't actually matter until the agg step
+def value_counts_combine(
+    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
+):
+    # sort, ascending, normalize, and total_length don't actually matter until the agg step
     return x.groupby(level=0, **groupby_kwargs).sum()
 
 
 def value_counts_aggregate(
-    x, sort=True, ascending=False, normalize=False, length=None, **groupby_kwargs
+    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
 ):
     out = value_counts_combine(x, **groupby_kwargs)
     if normalize:
-        out /= length if length is not None else out.sum()
+        out /= total_length if total_length is not None else out.sum()
     if sort:
         return out.sort_values(ascending=ascending)
     return out
