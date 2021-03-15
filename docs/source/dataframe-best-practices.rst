@@ -162,7 +162,7 @@ A common situation is that you load lots of data into reasonably sized
 partitions (Dask's defaults make decent choices), but then you filter down your
 dataset to only a small fraction of the original.  At this point, it is wise to
 regroup your many small partitions into a few larger ones.  You can do this by
-using the ``repartition`` method:
+using the :py:class:`dask.dataframe.DataFrame.repartition` method:
 
 .. code-block:: python
 
