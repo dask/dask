@@ -11,9 +11,10 @@ from .highlevelgraph import Layer
 class CallableLazyImport:
     """Function Wrapper for Lazy Importing"""
 
-    def __init__(self, module, name):
-        self.module = module
-        self.name = name
+    def __init__(self, function_path):
+        split_path = function_path.split(".")
+        self.module = ".".join(split_path[:-1])
+        self.name = split_path[-1]
 
     def __call__(self, *args, **kwargs):
         func = getattr(import_module(self.module), self.name)
@@ -70,10 +71,8 @@ class SimpleShuffleLayer(Layer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
-        self.concat_func = CallableLazyImport("dask.dataframe.core", "_concat")
-        self.shuffle_group_func = CallableLazyImport(
-            "dask.dataframe.shuffle", "shuffle_group"
-        )
+        self.concat_func = "dask.dataframe.core._concat"
+        self.shuffle_group_func = "dask.dataframe.shuffle.shuffle_group"
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -189,8 +188,6 @@ class SimpleShuffleLayer(Layer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
-            "concat_func": self.concat_func,
-            "shuffle_group_func": self.shuffle_group_func,
         }
 
     @classmethod
@@ -205,7 +202,7 @@ class SimpleShuffleLayer(Layer):
             state["inputs"] = list(state["inputs"])
 
         # Materialize the layer
-        layer_dsk = cls(**state)._construct_graph()
+        layer_dsk = dict(cls(**state))
 
         # Convert all keys to strings and dump tasks
         layer_dsk = {
@@ -224,6 +221,10 @@ class SimpleShuffleLayer(Layer):
         shuffle_group_name = "group-" + self.name
         shuffle_split_name = "split-" + self.name
 
+        # Convert function path to CallableLazyImport objects
+        concat_func = CallableLazyImport(self.concat_func)
+        shuffle_group_func = CallableLazyImport(self.shuffle_group_func)
+
         dsk = {}
         for part_out in self.parts_out:
             _concat_list = [
@@ -231,7 +232,7 @@ class SimpleShuffleLayer(Layer):
                 for part_in in range(self.npartitions_input)
             ]
             dsk[(self.name, part_out)] = (
-                self.concat_func,
+                concat_func,
                 _concat_list,
                 self.ignore_index,
             )
@@ -243,7 +244,7 @@ class SimpleShuffleLayer(Layer):
                 )
                 if (shuffle_group_name, _part_in) not in dsk:
                     dsk[(shuffle_group_name, _part_in)] = (
-                        self.shuffle_group_func,
+                        shuffle_group_func,
                         (self.name_input, _part_in),
                         self.column,
                         0,
@@ -393,6 +394,10 @@ class ShuffleLayer(SimpleShuffleLayer):
         shuffle_group_name = "group-" + self.name
         shuffle_split_name = "split-" + self.name
 
+        # Convert function path to CallableLazyImport objects
+        concat_func = CallableLazyImport(self.concat_func)
+        shuffle_group_func = CallableLazyImport(self.shuffle_group_func)
+
         dsk = {}
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
         for part in self.parts_out:
@@ -408,7 +413,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
             # concatenate those pieces together, with their friends
             dsk[(self.name, part)] = (
-                self.concat_func,
+                concat_func,
                 _concat_list,
                 self.ignore_index,
             )
@@ -437,7 +442,7 @@ class ShuffleLayer(SimpleShuffleLayer):
 
                     # Convert partition into dict of dataframe pieces
                     dsk[(shuffle_group_name, _inp)] = (
-                        self.shuffle_group_func,
+                        shuffle_group_func,
                         input_key,
                         self.column,
                         self.stage,
@@ -505,13 +510,9 @@ class BroadcastJoinLayer(Layer):
             self.left_on = (list, tuple(self.left_on))
         if isinstance(self.right_on, list):
             self.right_on = (list, tuple(self.right_on))
-        self.merge_chunk_func = CallableLazyImport(
-            "dask.dataframe.multi", "_merge_chunk_wrapper"
-        )
-        self.concat_func = CallableLazyImport("dask.dataframe.multi", "_concat_wrapper")
-        self.split_partition_func = CallableLazyImport(
-            "dask.dataframe.multi", "_split_partition"
-        )
+        self.merge_chunk_func = "dask.dataframe.multi._merge_chunk_wrapper"
+        self.concat_func = "dask.dataframe.multi._concat_wrapper"
+        self.split_partition_func = "dask.dataframe.multi._split_partition"
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -580,14 +581,19 @@ class BroadcastJoinLayer(Layer):
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        dsk.update(toolz.valmap(dumps_task, raw))
+        keys = raw.keys() | dsk.keys()
+        deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
-        dependencies.update(
-            {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
-        )
+        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
 
-        if state["annotations"]:
-            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
+        # dsk.update(toolz.valmap(dumps_task, raw))
+
+        # dependencies.update(
+        #     {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
+        # )
+
+        # if state["annotations"]:
+        #     cls.unpack_annotations(annotations, state["annotations"], raw.keys())
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -682,6 +688,11 @@ class BroadcastJoinLayer(Layer):
         inter_name = "inter-" + self.name
         split_name = "split-" + self.name
 
+        # Convert function path to CallableLazyImport objects
+        split_partition_func = CallableLazyImport(self.split_partition_func)
+        concat_func = CallableLazyImport(self.concat_func)
+        merge_chunk_func = CallableLazyImport(self.merge_chunk_func)
+
         # Get broadcast "plan"
         bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
         bcast_side = "left" if self.lhs_npartitions < self.rhs_npartitions else "right"
@@ -696,7 +707,7 @@ class BroadcastJoinLayer(Layer):
             # Split each "other" partition by hash
             if self.how != "inner":
                 dsk[(split_name, i)] = (
-                    self.split_partition_func,
+                    split_partition_func,
                     (other_name, i),
                     other_on,
                     bcast_size,
@@ -729,13 +740,13 @@ class BroadcastJoinLayer(Layer):
                 inter_key = (inter_name, i, j)
                 dsk[inter_key] = (
                     apply,
-                    self.merge_chunk_func,
+                    merge_chunk_func,
                     _merge_args,
                     self.merge_kwargs,
                 )
                 _concat_list.append(inter_key)
 
             # Concatenate the merged results for each output partition
-            dsk[(self.name, i)] = (self.concat_func, _concat_list)
+            dsk[(self.name, i)] = (concat_func, _concat_list)
 
         return dsk
