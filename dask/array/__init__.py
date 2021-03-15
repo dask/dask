@@ -85,6 +85,12 @@ try:
         fliplr,
         einsum,
         average,
+        triu,
+        tril,
+        tril_indices,
+        tril_indices_from,
+        triu_indices,
+        triu_indices_from,
     )
     from .reshape import reshape
     from .ufunc import (
@@ -233,8 +239,7 @@ try:
         indices,
         diag,
         eye,
-        triu,
-        tril,
+        tri,
         fromfunction,
         tile,
         repeat,

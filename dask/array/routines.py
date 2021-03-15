@@ -16,7 +16,7 @@ from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
-from .creation import arange, diag, empty, indices
+from .creation import arange, diag, empty, indices, tri, zeros
 from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -1714,3 +1714,43 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
 @derived_from(np)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=False)
+
+
+@derived_from(np)
+def tril(m, k=0):
+    m = asarray(m)
+    mask = tri(*m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:])
+
+    return where(mask, m, zeros(1, dtype=m.dtype))
+
+
+@derived_from(np)
+def triu(m, k=0):
+    m = asarray(m)
+    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool, chunks=m.chunks[-2:])
+
+    return where(mask, zeros(1, dtype=m.dtype), m)
+
+
+@derived_from(np)
+def tril_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(tri(n, m, k=k, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def tril_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return tril_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)
+
+
+@derived_from(np)
+def triu_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(~tri(n, m, k=k - 1, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def triu_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return triu_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)

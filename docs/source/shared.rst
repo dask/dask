@@ -141,8 +141,8 @@ The shared memory scheduler has some notable limitations:
 4.  The multiprocessing scheduler must serialize data between workers and the
     central process, which can be expensive
 5.  The multiprocessing scheduler cannot transfer data directly between worker
-    processes; all data routes through the master process.
+    processes; all data routes through the main process.
 
 
 
-.. _`Download scheduling script`: https://github.com/dask/dask/tree/master/docs/source/scripts/scheduling.py
+.. _`Download scheduling script`: https://github.com/dask/dask/tree/main/docs/source/scripts/scheduling.py

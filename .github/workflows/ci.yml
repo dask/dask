@@ -9,7 +9,7 @@ jobs:
       fail-fast: false
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        python-version: ["3.6", "3.7", "3.8"]
+        python-version: ["3.7", "3.8", "3.9"]
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
@@ -37,6 +37,13 @@ jobs:
         run: |
           conda uninstall --force numpy
           python -m pip install --no-deps numpy==1.20
+
+      - name: Hack around https://github.com/ipython/ipython/issues/12197
+        # This upstream issue causes an interpreter crash when running
+        # test_base.py::test_tokenize_object_with_recursion_error_returns_uuid
+        shell: bash -l {0}
+        if: ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.9' }}
+        run: conda uninstall ipython
 
       - name: Install
         shell: bash -l {0}

@@ -118,6 +118,12 @@ functions = [
         ),
     ),
     pytest.param(
+        lambda x: np.exp(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
         lambda x: np.fix(x),
         marks=pytest.mark.skipif(
             not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
@@ -1340,3 +1346,24 @@ def test_percentiles_with_unknown_chunk_sizes():
     assert 0.1 < a < 0.9
     assert 0.1 < b < 0.9
     assert a < b
+
+
+@pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
+@pytest.mark.parametrize("x_chunks", [(3, 5), (2, 3), (1, 2), (1, 1)])
+def test_index_with_int_dask_array(x_chunks, idx_chunks):
+    # test data is crafted to stress use cases:
+    # - pick from different chunks of x out of order
+    # - a chunk of x contains no matches
+    # - only one chunk of x
+    x = cupy.array(
+        [[10, 20, 30, 40, 50], [60, 70, 80, 90, 100], [110, 120, 130, 140, 150]]
+    )
+    idx = cupy.array([3, 0, 1])
+    expect = cupy.array([[40, 10, 20], [90, 60, 70], [140, 110, 120]])
+
+    x = da.from_array(x, chunks=x_chunks)
+    if idx_chunks is not None:
+        idx = da.from_array(idx, chunks=idx_chunks)
+
+    assert_eq(x[:, idx], expect)
+    assert_eq(x.T[idx, :], expect.T)

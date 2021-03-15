@@ -148,8 +148,11 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return Scalar(dsk, name or self._name, self._meta, self.divisions)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return Scalar(dsk, name, self._meta, self.divisions)
 
     @property
     def _meta_nonempty(self):
@@ -326,8 +329,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __dask_postpersist__(self):
         return self._rebuild, ()
 
-    def _rebuild(self, dsk, name=None):
-        return type(self)(dsk, name or self._name, self._meta, self.divisions)
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return type(self)(dsk, name, self._meta, self.divisions)
 
     @property
     def _constructor(self):
@@ -1211,7 +1217,7 @@ Dask Name: {name}, {task} tasks"""
         ):
             raise ValueError(
                 "Please provide exactly one of ``npartitions=``, ``freq=``, "
-                "``divisions=``, ``partitions_size=`` keyword arguments"
+                "``divisions=``, ``partition_size=`` keyword arguments"
             )
 
         if partition_size is not None:
@@ -4168,6 +4174,7 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
+        broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -4223,6 +4230,14 @@ class DataFrame(_Frame):
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
+        broadcast: boolean or float, optional
+            Whether to use a broadcast-based join in lieu of a shuffle-based
+            join for supported cases.  By default, a simple heuristic will be
+            used to select the underlying algorithm. If a floating-point value
+            is specified, that number will be used as the ``broadcast_bias``
+            within the simple heuristic (a large number makes Dask more likely
+            to choose the ``broacast_join`` code path). See ``broadcast_join``
+            for more information.
 
         Notes
         -----
@@ -4264,6 +4279,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             indicator=indicator,
             shuffle=shuffle,
+            broadcast=broadcast,
         )
 
     @derived_from(pd.DataFrame)  # doctest: +SKIP

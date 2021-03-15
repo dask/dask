@@ -10,6 +10,7 @@ dependencies:
   - pandas
   # test dependencies
   - pytest
+  - pytest-rerunfailures
   - pytest-xdist
   - moto
   - flask
@@ -18,6 +19,7 @@ dependencies:
   - pytables
   - zarr
   - tiledb-py
+  - xarray
   - sqlalchemy
   - pyarrow
   - jsonschema
