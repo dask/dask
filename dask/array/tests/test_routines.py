@@ -845,6 +845,16 @@ def test_histogramdd_weighted():
     assert_eq(a1, a2)
 
 
+def test_histogramdd_density():
+    n1, n2 = 800, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=(200, 3))
+    bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
+    (a1, b1) = da.histogramdd(x, bins=bins, density=True)
+    (a2, b2) = np.histogramdd(x, bins=bins, density=True)
+    assert_eq(a1, a2)
+    assert same_keys(da.histogramdd(x, bins=bins, density=True)[0], a1)
+
+
 def test_histogramdd_raises_incompat_bins_or_range():
     data = da.random.random(size=(10, 4), chunks=(5, 4))
     bins = (2, 3, 4)

@@ -1158,8 +1158,6 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # finally sum over sample chunk providing the final result array.
     n = mapped.sum(axis=0)
 
-    # TODO: density operation (dividing by bin widths)
-    # Logic used in NumPy to handle aliasing the `normed` argument.
     if normed is None:
         if density is None:
             density = False
@@ -1168,6 +1166,17 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         density = normed
     else:
         raise TypeError("Cannot specify both 'normed' and 'density'")
+
+    if density:
+        # compute array of values to divide by the bin width along
+        # each dimension.
+        width_divider = np.ones(n.shape)
+        for i in _range(D):
+            shape = np.ones(D, int)
+            shape[i] = bin_width_divider.shape[i]
+            width_divider *= np.diff(edges[i]).reshape(shape)
+        width_divider = asarray(bin_width_divider, chunks=n.chunks)
+        return n / width_divider / n.sum(), edges
 
     return n, edges
 
