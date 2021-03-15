@@ -5181,12 +5181,10 @@ def from_npy_stack(dirname, mmap_mode="r"):
     ]
     dsk = dict(zip(keys, values))
 
-    return Array(
-        dsk,
-        name,
-        chunks,
-        meta=np.ndarray(shape=(0,) * len(chunks), dtype=dtype).view(np.memmap),
-    )
+    result = Array(dsk, name, chunks, dtype)
+    result._meta = result._meta.view(type=np.memmap)
+    # ^ passing a memmap object as `meta` gets turned back into plain ndarray; override it
+    return result
 
 
 def new_da_object(dsk, name, chunks, meta=None, dtype=None):
