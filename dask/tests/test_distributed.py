@@ -388,16 +388,7 @@ def get_start_modules(dask_scheduler):
     return plugin.start_modules
 
 
-@pytest.mark.parametrize(
-    "optimize_graph",
-    [
-        # This passes because we materialize the graph on the client
-        True,
-        # This fails because we send a HighLevelGraph to the scheduler and end up
-        # importing libraries like pandas when unpacking the layer
-        pytest.param(False, marks=pytest.mark.xfail()),
-    ],
-)
+@pytest.mark.parametrize("optimize_graph", [True, False])
 def test_scheduler_highlevel_graph_unpack_import(optimize_graph, cleanup):
     # Test to highlight that in some cases we import modules like pandas
     # on the scheduler when unpacking some HighLevelGraphs.
