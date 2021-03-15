@@ -951,17 +951,16 @@ def _block_histogramdd(sample, bins, range=None, weights=None):
 def histogramdd(sample, bins, range=None, normed=None, weights=None, density=None):
     """Blocked variant of :func:`numpy.histogramdd`.
 
-    Chunking of the input data (:code:`sample`) is only allowed along
-    the 0th (row) axis (the axis corresponding to the total number of
+    Chunking of the input data (``sample``) is only allowed along the
+    0th (row) axis (the axis corresponding to the total number of
     samples). Data chunked along the 1st axis (column) axis is not
     compatible with this function. If weights are used, they must be
     chunked along the 0th axis identically to the input sample.
 
     A proper example setup for a three dimensional histogram, where
-    the sample shape is :code:`(8, 3)` and weights are shape
-    :code:`(8,)`, sample chunks would be :code:`((4, 4), (3,))` and
-    the weights chunks would be :code:`((4, 4),)`; a table of the
-    structure:
+    the sample shape is ``(8, 3)`` and weights are shape ``(8,)``,
+    sample chunks would be ``((4, 4), (3,))`` and the weights chunks
+    would be ``((4, 4),)`` a table of the structure:
 
     .. code-block::
 
@@ -981,10 +980,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         +-------+-----+-----------+   +-------+-----+-----+
 
     If the sample 0th dimension and weight 0th dimension are chunked
-    differently, a ValueError will be raised. If a coordinate grouping
-    ((x, y, z) trio) are separated by a chunk boundry, then a
-    ValueError will be raised. We suggest that you rechunk your data
-    if it is of that form.
+    differently, a ``ValueError`` will be raised. If coordinate
+    groupings ((x, y, z) trios) are separated by a chunk boundry, then
+    a ``ValueError`` will be raised. We suggest that you rechunk your
+    data if it is of that form.
 
     Parameters
     ----------
@@ -999,17 +998,15 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         * When a sequence of dask Arrays, each element in the sequence
           is the array of values for a single coordinate.
 
-    bins : int, sequence of ints, dask.array.Array, or sequence of dask.array.Array
+    bins : sequence of arrays describing bin edge, int, or sequence of ints
         The bin specification:
 
         * A sequence of arrays describing the monotonically increasing
           bin edges along each dimension.
-        * A single array describing the monotonically increasing bin
-          edges that will be used for all dimensions.
         * A single int describing the total number of bins that will
-          be used in each dimensions.
-        * A sequence of ints describing the total numbeer of bins to
           be used in each dimension.
+        * A sequence of ints describing the total number of bins to be
+          used in each dimension.
 
         When bins are described by arrays, the rightmost edge is
         included. Bins described by arrays also allows for non-uniform
@@ -1017,8 +1014,8 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     range : sequence of pairs, optional
         A sequence of length D, each a (min, max) tuple giving the
         outer bin edges to be used if the edges are not given
-        explicitly in `bins`. If defined, this argument is required to
-        have an entry for each dimension. Unlike
+        explicitly in ``bins``. If defined, this argument is required
+        to have an entry for each dimension. Unlike
         :func:`numpy.histogramdd`, if `bins` does not define bin
         edges, this argument is required (this function will not
         automatically use the min and max of of the value in a given
@@ -1028,17 +1025,44 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         avoid confusion with the broken argument to `histogram`,
         `density` should be preferred.
     weights : dask Array, optional
-        An array of values `w_i` weighing each sample in the input
-        data. The chunks of the the weights must be identical to the
-        chunking along the 0th axis of the data sample.
+        An array of values weighing each sample in the input data. The
+        chunks of the the weights must be identical to the chunking
+        along the 0th axis of the data sample.
     density : bool, optional
-        If False (default), the returned array represents the number
-        of samples in each bin. If True, the returned array represents
-        the probability density function at each bin.
+        If ``False`` (default), the returned array represents the
+        number of samples in each bin. If ``True``, the returned array
+        represents the probability density function at each bin.
 
     See Also
     --------
     histogram
+
+    Examples
+    --------
+    Computing the histogram in 5 blocks using different bin edges
+    along each dimension:
+
+    >>> import dask.array as da
+    >>> x = da.random.uniform(0, 1, size=(1000, 3), chunks=(200, 3))
+    >>> edges = [
+    ...     np.linspace(0, 1, 5), # 4 bins in 1st dim
+    ...     np.linspace(0, 1, 6), # 5 in the 2nd
+    ...     np.linspace(0, 1, 4), # 3 in the 3rd
+    ... ]
+    >>> h, edges = da.histogramdd(x, bins=edges)
+    >>> result = h.compute()
+    >>> result.shape
+    (4, 5, 3)
+
+    Defining the bins by total number and their ranges, along with
+    using weights:
+
+    >>> bins = (4, 5, 3)
+    >>> ranges = ((0, 1),) * 3
+    >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
+    >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    >>> np.isclose(h.sum().compute(), w.sum().compute())
+    True
 
     """
 
