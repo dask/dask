@@ -72,7 +72,7 @@ how to set up Dask on a variety of local and distributed hardware.
       ``Scheduler`` and ``Worker`` objects from Python as part of a distributed
       Tornado TCP application.  This page is useful for those building custom
       frameworks.
-    - :doc:`Docker <setup/docker>` containers are available and may be useful
+    - :doc:`Docker <setup/docker>` images are available and may be useful
       in some of the solutions above.
     - :doc:`Cloud <setup/cloud>` for current recommendations on how to
       deploy Dask and Jupyter on common cloud providers like Amazon, Google, or
