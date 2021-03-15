@@ -3148,8 +3148,6 @@ Dask Name: {name}, {task} tasks""".format(
                 )
             kwargs["dropna"] = dropna
 
-        meta = self._meta.value_counts(normalize=normalize)
-
         if split_out > 1 and normalize:
             aggregate_kwargs["length"] = (
                 len(self) if dropna is False else len(self.dropna())
@@ -3160,7 +3158,7 @@ Dask Name: {name}, {task} tasks""".format(
             chunk=M.value_counts,
             aggregate=methods.value_counts_aggregate,
             combine=methods.value_counts_combine,
-            meta=meta,
+            meta=self._meta.value_counts(normalize=normalize),
             token="value-counts",
             split_every=split_every,
             split_out=split_out,
