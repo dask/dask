@@ -55,6 +55,7 @@ from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .optimize import optimize
+from ._compat import PANDAS_VERSION
 from .utils import (
     meta_nonempty,
     make_meta,
@@ -1452,7 +1453,7 @@ Dask Name: {name}, {task} tasks"""
         if not PANDAS_GT_110 and na_value is not no_default:
             raise NotImplementedError(
                 "na_value is not a valid argument for to_dask_array"
-                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+                f"if pandas < 1.1.0. Pandas version is {PANDAS_VERSION.vstring}"
             )
 
         if lengths is True:
@@ -3151,7 +3152,7 @@ Dask Name: {name}, {task} tasks""".format(
             if not PANDAS_GT_110:
                 raise NotImplementedError(
                     "dropna is not a valid argument for dask.dataframe.value_counts "
-                    f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+                    f"if pandas < 1.1.0. Pandas version is {PANDAS_VERSION.vstring}"
                 )
             kwargs["dropna"] = dropna
 

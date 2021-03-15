@@ -29,6 +29,7 @@ from dask.dataframe.core import (
 from dask.dataframe import methods
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
 from dask.dataframe.core import no_default
+from dask.dataframe._compat import PANDAS_VERSION
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -2632,7 +2633,8 @@ def test_to_dask_array_unknown(as_frame):
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_110, reason=f"No extension arrays in pandas version {pd.__version__}"
+    not PANDAS_GT_110,
+    reason=f"No extension arrays in pandas version {PANDAS_VERSION.vstring}",
 )
 @pytest.mark.parametrize("lengths", [None, [2, 3], True])
 @pytest.mark.parametrize("as_frame", [False, True])
@@ -3768,7 +3770,8 @@ def test_values():
 
 
 @pytest.mark.skipif(
-    not PANDAS_GT_110, reason=f"No extension arrays in pandas version {pd.__version__}"
+    not PANDAS_GT_110,
+    reason=f"No extension arrays in pandas version {PANDAS_VERSION.vstring}",
 )
 def test_values_extension_array():
     from dask.array.utils import assert_eq, assert_eq_shape
