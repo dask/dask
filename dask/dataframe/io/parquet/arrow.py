@@ -23,6 +23,7 @@ from .utils import (
     _analyze_paths,
     _flatten_filters,
     _row_groups_to_parts,
+    _sort_and_analyze_paths,
 )
 
 
@@ -968,8 +969,7 @@ class ArrowDatasetEngine(Engine):
                 if gather_statistics is None:
                     gather_statistics = True
         elif len(paths) > 1:
-            paths = sorted(paths, key=natural_sort_key)
-            base, fns = _analyze_paths(paths, fs)
+            paths, base, fns = _sort_and_analyze_paths(paths, fs)
             meta_path = fs.sep.join([base, "_metadata"])
             if "_metadata" in fns:
                 # Pyarrow cannot handle "_metadata" when `paths` is a list
@@ -1612,8 +1612,7 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         kwargs["validate_schema"] = False
     if len(paths) > 1:
         # This is a list of files
-        paths = sorted(paths, key=natural_sort_key)
-        base, fns = _analyze_paths(paths, fs)
+        paths, base, fns = _sort_and_analyze_paths(paths, fs)
         proxy_metadata = None
         if "_metadata" in fns:
             # We have a _metadata file. PyArrow cannot handle
@@ -1639,7 +1638,7 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         #       expensive in storage systems like S3.
         allpaths = fs.glob(paths[0] + fs.sep + "*")
         allpaths = sorted(allpaths, key=natural_sort_key)
-        base, fns = _analyze_paths(allpaths, fs)
+        _, base, fns = _sort_and_analyze_paths(allpaths, fs)
         dataset = pq.ParquetDataset(paths[0], filesystem=fs, filters=filters, **kwargs)
     else:
         # This is a single file.  No danger in gathering statistics

@@ -24,13 +24,12 @@ except ImportError:
 from .utils import (
     _parse_pandas_metadata,
     _normalize_index_columns,
-    _analyze_paths,
     _flatten_filters,
     _row_groups_to_parts,
+    _sort_and_analyze_paths,
 )
 from ..utils import _meta_from_dtypes
 from ...utils import UNKNOWN_CATEGORIES
-from ....utils import natural_sort_key
 from ...methods import concat
 
 
@@ -117,8 +116,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     """
     parts = []
     if len(paths) > 1:
-        paths = sorted(paths, key=natural_sort_key)
-        base, fns = _analyze_paths(paths, fs)
+        paths, base, fns = _sort_and_analyze_paths(paths, fs)
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
@@ -149,8 +147,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     elif fs.isdir(paths[0]):
         # This is a directory, check for _metadata, then _common_metadata
         paths = fs.glob(paths[0] + fs.sep + "*")
-        paths = sorted(paths, key=natural_sort_key)
-        base, fns = _analyze_paths(paths, fs)
+        paths, base, fns = _sort_and_analyze_paths(paths, fs)
         if "_metadata" in fns:
             # Using _metadata file (best-case scenario)
             pf = ParquetFile(
