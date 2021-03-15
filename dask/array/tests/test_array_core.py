@@ -3678,6 +3678,7 @@ def test_setitem_extended_API():
             (slice(None, 2), slice(None, 3)),
             (slice(None), [6, 1, 3]),
             (slice(1, 3), slice(1, 4)),
+            (slice(None), [9, 8, 8]),
         ],
         [
             range(6),
@@ -3687,6 +3688,7 @@ def test_setitem_extended_API():
             [-50, -51, -52],
             [-60, -61, -62],
             [[-70, -71, -72]],
+            [-80, -81, 91],
         ],
     ):
         x[index] = value
