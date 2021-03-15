@@ -75,9 +75,21 @@ config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4
 concatenate_lookup = Dispatch("concatenate")
 tensordot_lookup = Dispatch("tensordot")
 einsum_lookup = Dispatch("einsum")
-concatenate_lookup.register((object, np.ndarray), np.concatenate)
+concatenate_lookup.register(object, np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 einsum_lookup.register((object, np.ndarray), np.einsum)
+
+
+@concatenate_lookup.register(np.ndarray)
+def _concatenate_preserve_subclasses(arrays, **kwargs):
+    result = np.concatenate(arrays, **kwargs)
+    types = set(map(type, arrays))
+    if len(types) == 1:
+        result_type = types.pop()
+        if not isinstance(result, result_type):
+            result = result.view(type=result_type)
+    return result
+
 
 unknown_chunk_message = (
     "\n\n"
@@ -5169,7 +5181,12 @@ def from_npy_stack(dirname, mmap_mode="r"):
     ]
     dsk = dict(zip(keys, values))
 
-    return Array(dsk, name, chunks, dtype)
+    return Array(
+        dsk,
+        name,
+        chunks,
+        meta=np.ndarray(shape=(0,) * len(chunks), dtype=dtype).view(np.memmap),
+    )
 
 
 def new_da_object(dsk, name, chunks, meta=None, dtype=None):
