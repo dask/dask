@@ -530,6 +530,8 @@ def test_bincount():
     e = da.bincount(d, minlength=6)
     assert_eq(e, np.bincount(x, minlength=6))
     assert same_keys(da.bincount(d, minlength=6), e)
+    assert e.shape == (6,)  # shape equal to minlength
+    assert e.chunks == ((6,),)
 
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
