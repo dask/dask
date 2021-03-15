@@ -536,6 +536,9 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
+    expected_output = np.array([0, 2, 2, 0, 0, 1])
+    assert_eq(e[0:].compute(), expected_output)  # can bincount result be sliced
+
 
 @pytest.mark.parametrize(
     "weights",
