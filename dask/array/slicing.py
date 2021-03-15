@@ -1387,21 +1387,6 @@ def parse_assignment_indices(indices, shape):
     ([3, slice(3, 8, 1)], [5], [1])
 
     """
-    # Set TODO variables needed when creating the part of the assignment
-    # value that applies to each block.
-    #
-    # indices_shape: The shape implied by the indices. E.g. indices of
-    #                (slice(0,2), 5, [8,4,2,1], [True,False,True])
-    #                will have shape [2,4,3]. Note that integer
-    #                indices are not included in the shape. A shape
-    #                element of nan means that the the corresponding
-    #                index is a dask array whose shape is not
-    #                currently known.
-    #
-    # reverse: TODO
-    indices_shape = []
-    reverse = []
-
     if not isinstance(indices, tuple):
         indices = (indices,)
 
@@ -1425,7 +1410,11 @@ def parse_assignment_indices(indices, shape):
                 f"numpy or dask array index: {index!r}"
             )
 
+    # Inititalize output variables
+    indices_shape = []
+    reverse = []
     parsed_indices = list(normalize_index(indices, shape))
+
     n_lists = 0
 
     for i, (index, size) in enumerate(zip(parsed_indices, shape)):
@@ -1506,6 +1495,11 @@ def parse_assignment_indices(indices, shape):
                     f"dimension {i}; dimension is {size} but "
                     f"corresponding boolean dimension is {index_size}"
                 )
+
+            # Posify an integer dask array (integer numpy arrays were
+            # posified in `normalize_index`)
+            if is_dask_collection(index) and index.dtype != bool:
+                index = np.where(index < 0, index + size, index)
 
             indices_shape.append(index_size)
 
@@ -1615,7 +1609,8 @@ def setitem_array(out_name, array, indices, value):
         """The positions of index elements in the range values loc0 and loc1.
 
         The index is the input assignment index that is defined in the
-        namespace of the caller.
+        namespace of the caller. It is assumed that negative elements
+        of an integer array have already been posified.
 
         The non-hashable dsk is the output dask dictionary that is
         defined in the namespace of the caller.
@@ -1649,35 +1644,22 @@ def setitem_array(out_name, array, indices, value):
             # Boolean array (dask or numpy)
             i = index[loc0:loc1]
         elif is_dask_collection(index):
-            # Check for positive values in [loc, loc1) and
-            # negative elements in [loc0-size, loc1-size)
-            if math.isnan(index.size):
-                # Integer dask array with unknown size.
-                #
-                # The 1-argument "where" won't work, so use the
-                # 3-argument "where" to insert place-holder elements
-                # that will be searched for and removed in the
-                # `setitem` function at compute time. The place-holder
-                # value must be the size of the block, i.e. loc1-loc0.
-                i = np.where(
-                    ((loc0 <= index) & (index < loc1))
-                    | ((loc0 - size <= index) & (index < loc1 - size)),
-                    index,
-                    loc1,
-                )
-                i -= loc0
-            else:
-                # Integer dask array with known size
-                i = np.where(
-                    ((loc0 <= index) & (index < loc1))
-                    | ((loc0 - size <= index) & (index < loc1 - size))
-                )[0]
-                i = index[i] - loc0
+            # Integer dask array
+            #
+            # Check for values in [loc0,loc1).
+            #
+            # Use the 3-argument "where" to insert place-holder
+            # elements that will be searched for and removed in the
+            # `setitem` function at compute time. The place-holder
+            # value must be the size of the block, i.e. loc1-loc0. We
+            # can't use a 1-argument "where" here because that won't
+            # work if index has unknown chunk sizes.
+            i = np.where((loc0 <= index) & (index < loc1), index, loc1)
+            i -= loc0
         else:
             # Integer numpy array
             #
-            # Check for positive values in [loc, loc1). It is assumed
-            # that negative elements have already been posified.
+            # Check for positive values in [loc0,loc1).
             i = np.where((loc0 <= index) & (index < loc1))[0]
             i = index[i] - loc0
 
@@ -1748,7 +1730,8 @@ def setitem_array(out_name, array, indices, value):
         """Value indices for index elements between loc0 and loc1.
 
         The index is the input assignment index that is defined in the
-        namespace of the caller.
+        namespace of the caller. It is assumed that negative elements
+        have already been posified.
 
         Parameters
         ----------
@@ -1774,39 +1757,28 @@ def setitem_array(out_name, array, indices, value):
 
         """
         if is_dask_collection(index):
-            # Check for positive values in [loc, loc1) and
-            # negative elements in [loc0-size, loc1-size)
+            # Check for values in [loc0,loc1)
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
                 # The 1-argument "where" won't work, so use the
                 # 3-argument "where" and convert to a boolean
-                # array. We know that index has the same size as the
-                # full size of the dimension of the assignment value,
-                # so we can concatenate the resulting boolean index
-                # and set the chunk size, which allows the returned
-                # array to be used as a __getitem__ index of value.
-                i = np.where(
-                    ((loc0 <= index) & (index < loc1))
-                    | ((loc0 - size <= index) & (index < loc1 - size)),
-                    index,
-                    vsize,
-                )
-                i = i < vsize
+                # array. We concatenate the resulting boolean index
+                # and set the chunk size (which must be the full size
+                # of the dimension of the assignment value) which
+                # allows the returned array to be used as a
+                # __getitem__ index of value.
+                i = np.where((loc0 <= index) & (index < loc1), True, False)
                 i = concatenate_array_chunks(i)
                 i._chunks = ((vsize,),)
             else:
                 # Integer dask array with known size
-                i = np.where(
-                    ((loc0 <= index) & (index < loc1))
-                    | ((loc0 - size <= index) & (index < loc1 - size))
-                )[0]
+                i = np.where((loc0 <= index) & (index < loc1))[0]
                 i = concatenate_array_chunks(i)
         else:
             # Integer numpy array.
             #
-            # Check for positive values in [loc, loc1). It is assumed
-            # that negative elements have already been posified.
+            # Check for values in [loc0,loc1).
             i = np.where((loc0 <= index) & (index < loc1))[0]
 
         return i
@@ -2158,7 +2130,7 @@ def setitem(x, v, indices, offsets):
         numpy array instead.
 
         If a 1-d numpy array index contains the non-valid value of the
-        size of the corresponding dimension in x, then those index
+        size of the corresponding dimension of x, then those index
         elements will be removed prior to the assignment (see
         `block_index_from_1d_index` function).
     offsets : list of `int`
@@ -2213,8 +2185,6 @@ def setitem(x, v, indices, offsets):
         if isinstance(index, np.ndarray) and index.dtype != bool:
             # Strip out any non-valid place-holder values
             index = index[np.where(index < block_size)[0]]
-            # Posify negative values
-            index = np.where(index < 0, index + block_size + offset, index)
             indices[i] = index
 
     # If x is not masked but v is, then turn the x into a masked
