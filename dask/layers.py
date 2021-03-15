@@ -1,4 +1,5 @@
 import tlz as toolz
+import importlib
 
 from .core import keys_in_tasks
 from .utils import insert, stringify, stringify_collection_keys
@@ -6,16 +7,12 @@ from .highlevelgraph import Layer
 
 
 def run_ext_function(func, *args):
-    if isinstance(func, bytes):
-        # Distributed worker will need to deserialize
-        # the function if it is `bytes`
-        import pickle
-
-        return pickle.loads(func)(*args)
+    if isinstance(func, tuple):
+        func = getattr(importlib(func[0]), func[1])
     return func(*args)
 
 
-class SimpleShuffleLayer(Layer):
+class SimpleShuffleGraph(Layer):
     """Layer-materialization class for shuffle.SimpleShuffleLayer"""
 
     def __init__(self, annotations=None):
@@ -23,11 +20,11 @@ class SimpleShuffleLayer(Layer):
 
     @property
     def layer_materialize_module(self):
-        return SimpleShuffleLayer.__module__
+        return SimpleShuffleGraph.__module__
 
     @property
     def layer_materialize_class(self):
-        return "SimpleShuffleLayer"
+        return "SimpleShuffleGraph"
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
@@ -108,12 +105,12 @@ class SimpleShuffleLayer(Layer):
         return dsk
 
 
-class ShuffleLayer(SimpleShuffleLayer):
+class ShuffleGraph(SimpleShuffleGraph):
     """Layer-materialization class for shuffle.ShuffleLayer"""
 
     @property
     def layer_materialize_class(self):
-        return "ShuffleLayer"
+        return "ShuffleGraph"
 
     def __dask_distributed_pack__(self, *args, **kwargs):
         ret = super().__dask_distributed_pack__(*args, **kwargs)

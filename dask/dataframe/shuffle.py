@@ -20,15 +20,12 @@ from ..sizeof import sizeof
 from ..utils import digit, insert, M
 from .utils import hash_object_dispatch, group_split_dispatch
 from . import methods
-from ..layers import (
-    SimpleShuffleLayer as _SimpleShuffleLayer,
-    ShuffleLayer as _ShuffleLayer,
-)
+from ..layers import SimpleShuffleGraph, ShuffleGraph
 
 logger = logging.getLogger(__name__)
 
 
-class SimpleShuffleLayer(_SimpleShuffleLayer):
+class SimpleShuffleLayer(SimpleShuffleGraph):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -127,7 +124,6 @@ class SimpleShuffleLayer(_SimpleShuffleLayer):
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
         from distributed.protocol.serialize import to_serialize
-        from distributed.worker import dumps_function
 
         return {
             "name": self.name,
@@ -138,9 +134,9 @@ class SimpleShuffleLayer(_SimpleShuffleLayer):
             "name_input": self.name_input,
             "meta_input": to_serialize(self.meta_input),
             "parts_out": list(self.parts_out),
-            "concat_func": dumps_function(_concat),
-            "getitem_func": dumps_function(operator.getitem),
-            "shuffle_group_func": dumps_function(shuffle_group),
+            "concat_func": (_concat.__module__, "_concat"),
+            "getitem_func": ("operator", "getitem"),
+            "shuffle_group_func": (shuffle_group.__module__, "shuffle_group"),
         }
 
     def _keys_to_parts(self, keys):
@@ -201,7 +197,7 @@ class SimpleShuffleLayer(_SimpleShuffleLayer):
 
     def _construct_graph(self):
         """Construct graph for a simple shuffle operation."""
-        return _SimpleShuffleLayer._construct_graph(
+        return SimpleShuffleGraph._construct_graph(
             name=self.name,
             column=self.column,
             npartitions=self.npartitions,
@@ -216,7 +212,7 @@ class SimpleShuffleLayer(_SimpleShuffleLayer):
         )
 
 
-class ShuffleLayer(SimpleShuffleLayer, _ShuffleLayer):
+class ShuffleLayer(SimpleShuffleLayer, ShuffleGraph):
     """Shuffle-stage HighLevelGraph layer
 
     High-level graph layer corresponding to a single stage of
@@ -342,7 +338,7 @@ class ShuffleLayer(SimpleShuffleLayer, _ShuffleLayer):
 
     def _construct_graph(self):
         """Construct graph for a "rearrange-by-column" stage."""
-        return _ShuffleLayer._construct_graph(
+        return ShuffleGraph._construct_graph(
             name=self.name,
             column=self.column,
             npartitions=self.npartitions,
