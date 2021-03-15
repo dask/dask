@@ -286,8 +286,8 @@ class FastParquetEngine(Engine):
         index_cols,
         filters,
     ):
-        # Cannot gather_statistics if our `parts` is alreadey a list
-        # of paths, or if we are building a multiindex (for now).
+        # Cannot gather_statistics if our `parts` is already a list
+        # of paths, or if we are building a multi-index (for now).
         # We also don't "need" to gather statistics if we don't
         # want to apply any filters or calculate divisions.
         if (
