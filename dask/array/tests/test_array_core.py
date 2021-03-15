@@ -3644,7 +3644,7 @@ def test_setitem_extended_API():
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x.copy(), chunks=(2, 3))
 
-    check_each_op = 1  ## False
+    check_each_op = False
 
     value = -1
     for index in (

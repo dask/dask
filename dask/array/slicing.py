@@ -1663,7 +1663,7 @@ def setitem_array(out_name, array, indices, value):
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
                     index,
-                    loc1, 
+                    loc1,
                 )
                 i -= loc0
             else:
@@ -2124,13 +2124,7 @@ def setitem_array(out_name, array, indices, value):
         dsk = merge(dict(v.dask), dsk)
 
         # Define the assignment function for this block.
-        dsk[out_key] = (
-            setitem,
-            in_key,
-            v_key,
-            block_indices,
-            block_offsets
-        )
+        dsk[out_key] = (setitem, in_key, v_key, block_indices, block_offsets)
 
     block_index_from_1d_index.cache_clear()
     block_index_shape_from_1d_bool_index.cache_clear()
@@ -2156,14 +2150,14 @@ def setitem(x, v, indices, offsets):
         v. One index per axis. An integer index is assumed to have
         already been posified, but a numpy array index is posified in
         this function (see offsets).
-    
+
         Note that an individual index can not be a `list`, use a 1-d
         numpy array instead.
-        
-        If a 1-d numpy array index contains any non-valid values of
-        the size of the corresponding dimension in x, then those index
-        elements will be removed prior to the index being used in the
-        assignment (see the `block_index_from_1d_index` function).
+
+        If a 1-d numpy array index contains the non-valid value of the
+        size of the corresponding dimension in x, then those index
+        elements will be removed prior to the assignment (see
+        `block_index_from_1d_index` function).
     offsets : list of `int`
         The offsets at which the chunk starts along each axis. Used
         for posifying 1-d numpy array indices.
@@ -2200,17 +2194,19 @@ def setitem(x, v, indices, offsets):
     array([[  0, -99,   2, -88],
            [  4, -99,   6, -88]])
 
-    >>> value = np.where(x < 0)[0] value.size 0 y = setitem(x, value,
-    >>> [Ellipsis], [20, 30]) y is x True
+    >>> value = np.where(x < 0)[0]
+    >>> value.size
+    0
+    >>> y = setitem(x, value, [Ellipsis], [20, 30])
+    >>> y is x
+    True
 
     """
     if not v.size:
         return x
 
     # Normalize integer array indices
-    for i, (index, block_size, offset) in enumerate(
-        zip(indices, x.shape, offsets)
-    ):
+    for i, (index, block_size, offset) in enumerate(zip(indices, x.shape, offsets)):
         if isinstance(index, np.ndarray) and index.dtype != bool:
             # Strip out any non-valid place-holder values
             index = index[np.where(index < block_size)[0]]
