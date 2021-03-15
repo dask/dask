@@ -1650,21 +1650,22 @@ def setitem_array(out_name, array, indices, value):
             i = index[loc0:loc1]
         elif is_dask_collection(index):
             # Check for positive values in [loc, loc1) and
-            # negative elements in [loc-size, loc-size)
+            # negative elements in [loc0-size, loc1-size)
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
                 # The 1-argument "where" won't work, so use the
-                # 3-argument "where" to insert place-holder non-valid
-                # elements that will be removed in `setitem` at
-                # compute time.
+                # 3-argument "where" to insert place-holder elements
+                # that will be searched for and removed in the
+                # `setitem` function at compute time. The place-holder
+                # value must be the size of the block, i.e. loc1-loc0.
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
                     index,
-                    size + loc0,
+                    loc1, 
                 )
-                i = i - loc0
+                i -= loc0
             else:
                 # Integer dask array with known size
                 i = np.where(
@@ -1774,17 +1775,17 @@ def setitem_array(out_name, array, indices, value):
         """
         if is_dask_collection(index):
             # Check for positive values in [loc, loc1) and
-            # negative elements in [loc-size, loc-size)
+            # negative elements in [loc0-size, loc1-size)
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
                 # The 1-argument "where" won't work, so use the
                 # 3-argument "where" and convert to a boolean
-                # array. We know that index has the same size the full
-                # size of the dimension of the assignment value, so we
-                # can concatenate and set the chunk size, which allows
-                # the returned array to be used as a __getitem__ index
-                # of value.
+                # array. We know that index has the same size as the
+                # full size of the dimension of the assignment value,
+                # so we can concatenate the resulting boolean index
+                # and set the chunk size, which allows the returned
+                # array to be used as a __getitem__ index of value.
                 i = np.where(
                     ((loc0 <= index) & (index < loc1))
                     | ((loc0 - size <= index) & (index < loc1 - size)),
@@ -1830,10 +1831,25 @@ def setitem_array(out_name, array, indices, value):
     # Set variables needed when creating the part of the assignment
     # value that applies to each block.
     #
-    #  offset: The difference in the relative positions of a dimension
-    #          in the assignment value and the corresponding dimension
-    #          in the array. A positive value means the dimension
+    #  offset: The additive offset needed to map a dimension position
+    #          in the assignmment value to the corresponding dimension
+    #          position in the array. A positive means the dimension
     #          position is further to the right in the array.
+    #
+    #  value_offset: The additive offset needed to map a dimension
+    #                position in the array to the corresponding
+    #                dimension position in the assignment value. A
+    #                positive value means the dimension position is
+    #                further to the right in the assignment value.
+    #
+    #          For example:
+    #
+    #          array shape   value shape   offset  value_offset
+    #          ------------  ------------  ------  ------------
+    #          (3, 4)        (3, 4)        0       0
+    #          (1, 1, 3, 4)  (3, 4)        2       0
+    #          (3, 4)        (1, 1, 3, 4)  0       2
+    #          ------------  ------------  ------  ------------
     #
     #  array_common_shape: The shape of those dimensions of array
     #                      which correspond to dimensions of the
@@ -2059,7 +2075,7 @@ def setitem_array(out_name, array, indices, value):
             j = i + offset
             if j == dim_1d_int_index:
                 # Index is a 1-d integer array
-
+                #
                 # Define index in the current namespace for use in
                 # `value_indices_from_1d_int_index`
                 index = indices[j]
@@ -2075,9 +2091,9 @@ def setitem_array(out_name, array, indices, value):
                 start = block_preceeding_sizes[j]
                 value_indices[i] = slice(start, start + block_indices_shape[j])
 
-        # If required, and as a consequence of reformatting slice
-        # objects in the original indices to have a positive steps,
-        # reverse the indices to assgnment value.
+        # If required as a consequence of reformatting slice objects
+        # in the original indices to have a positive steps, reverse
+        # the indices to assgnment value.
         for i in reverse:
             size = value_common_shape[i]
             start, stop, step = value_indices[i].indices(size)
@@ -2113,8 +2129,7 @@ def setitem_array(out_name, array, indices, value):
             in_key,
             v_key,
             block_indices,
-            block_offsets,
-            array_shape,
+            block_offsets
         )
 
     block_index_from_1d_index.cache_clear()
@@ -2125,7 +2140,7 @@ def setitem_array(out_name, array, indices, value):
     return dsk
 
 
-def setitem(x, v, indices, offsets, shape):
+def setitem(x, v, indices, offsets):
     """Chunk function of `setitem_array`.
 
     Assign v to indices of x.
@@ -2137,17 +2152,21 @@ def setitem(x, v, indices, offsets, shape):
     v : numpy array
         The values which will be assigned.
     indices : list of `slice`, `int`, or numpy array
-        The indices describing the elements of x to be assigned
-        from v. One index per axis. An integer index is assumed to
-        have already been posified, but a numpy array index is
-        posified in this function (see offsets). Note that an
-        individual index can not be a `list`, use a numpy array
-        instead.
+        The indices describing the elements of x to be assigned from
+        v. One index per axis. An integer index is assumed to have
+        already been posified, but a numpy array index is posified in
+        this function (see offsets).
+    
+        Note that an individual index can not be a `list`, use a 1-d
+        numpy array instead.
+        
+        If a 1-d numpy array index contains any non-valid values of
+        the size of the corresponding dimension in x, then those index
+        elements will be removed prior to the index being used in the
+        assignment (see the `block_index_from_1d_index` function).
     offsets : list of `int`
         The offsets at which the chunk starts along each axis. Used
-        for posifying numpy array indices.
-    shape : tuple of `int`
-        The shape of the full array.
+        for posifying 1-d numpy array indices.
 
     Returns
     -------
@@ -2166,38 +2185,37 @@ def setitem(x, v, indices, offsets, shape):
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7]])
 
-    >>> setitem(x, [-88, -99], [slice(None), np.array([1, 3])], [20, 30], (40, 60))
+    >>> setitem(x, [-88, -99], [slice(None), np.array([1, 3])], [20, 30])
     array([[  0, -88,   2, -99],
            [  4, -88,   6, -99]])
 
-    >>> setitem(x, -x, [slice(None)], [20, 30], (40, 60))
+    >>> setitem(x, -x, [slice(None)], [20, 30])
     array([[  0,  -1,  -2,  -3],
            [ -4,  -5,  -6,  -7]])
     >>> x
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7]])
 
-    >>> value = np.where(x < 0)[0]
-    >>> value.size
-    0
-    >>> y = setitem(x, value, [Ellipsis], [20, 30], (40, 60))
-    >>> y is x
-    True
+    >>> setitem(x, [-88, -99], [slice(None), np.array([4, 4, 3, 4, 1, 4])], [20, 30])
+    array([[  0, -99,   2, -88],
+           [  4, -99,   6, -88]])
+
+    >>> value = np.where(x < 0)[0] value.size 0 y = setitem(x, value,
+    >>> [Ellipsis], [20, 30]) y is x True
 
     """
     if not v.size:
         return x
 
     # Normalize integer array indices
-    for i, (index, size, offset, full_size) in enumerate(
-        zip(indices, x.shape, offsets, shape)
+    for i, (index, block_size, offset) in enumerate(
+        zip(indices, x.shape, offsets)
     ):
         if isinstance(index, np.ndarray) and index.dtype != bool:
-            # Strip out any place-holder values (see
-            # `block_index_from_1d_index`)
-            index = index[np.where(index < full_size)[0]]
+            # Strip out any non-valid place-holder values
+            index = index[np.where(index < block_size)[0]]
             # Posify negative values
-            index = np.where(index < 0, index + size + offset, index)
+            index = np.where(index < 0, index + block_size + offset, index)
             indices[i] = index
 
     # If x is not masked but v is, then turn the x into a masked

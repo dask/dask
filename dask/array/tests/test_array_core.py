@@ -3781,7 +3781,7 @@ def test_setitem_extended_API():
     assert_eq(x, dx.compute())
 
     index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
-    v = np.arange(12).reshape(1, 1, 6, 2)
+    v = -np.arange(12).reshape(1, 1, 6, 2)
     x[:, [0, 1]] = v
     dx[:, index] = v
     assert_eq(x, dx.compute())
