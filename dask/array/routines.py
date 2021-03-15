@@ -997,16 +997,19 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
           (coordinate in D dimensional space).
         * When a sequence of dask Arrays, each element in the sequence
           is the array of values for a single coordinate.
-
     bins : sequence of arrays describing bin edge, int, or sequence of ints
-        The bin specification:
+        The bin specification.
+
+        The possible binning configurations are:
 
         * A sequence of arrays describing the monotonically increasing
           bin edges along each dimension.
         * A single int describing the total number of bins that will
-          be used in each dimension.
+          be used in each dimension (this requires the ``range``
+          argument to be defined).
         * A sequence of ints describing the total number of bins to be
-          used in each dimension.
+          used in each dimension (this requires the ``range`` argument
+          to be defined).
 
         When bins are described by arrays, the rightmost edge is
         included. Bins described by arrays also allows for non-uniform
@@ -1058,7 +1061,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     using weights:
 
     >>> bins = (4, 5, 3)
-    >>> ranges = ((0, 1),) * 3
+    >>> ranges = ((0, 1),) * 3  # expands to ((0, 1), (0, 1), (0, 1))
     >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
     >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
     >>> np.isclose(h.sum().compute(), w.sum().compute())
@@ -1087,6 +1090,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
                 "Dask types besides Array and Delayed are not supported "
                 "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
             )
+
+    # Require data to be chunked along the first axis only.
+    if sample.shape[1:] != sample.chunksize[1:]:
+        raise ValueError("Input array can only be chunked along the 0th axis")
 
     # Require that the chunking of the sample and weights are compatible.
     if weights is not None and weights.chunks[0] != sample.chunks[0]:

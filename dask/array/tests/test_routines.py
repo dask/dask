@@ -855,6 +855,15 @@ def test_histogramdd_density():
     assert same_keys(da.histogramdd(x, bins=bins, density=True)[0], a1)
 
 
+def test_histogramdd_raises_incompat_sample_chuks():
+    data = da.random.random(size=(10, 3), chunks=(5, 1))
+    with pytest.raises(
+            ValueError,
+            match="Input array can only be chunked along the 0th axis"
+    ):
+        da.histogramdd(data, bins=10, range=((0, 1),) * 3)
+
+
 def test_histogramdd_raises_incompat_bins_or_range():
     data = da.random.random(size=(10, 4), chunks=(5, 4))
     bins = (2, 3, 4)
