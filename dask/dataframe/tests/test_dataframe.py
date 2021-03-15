@@ -2642,6 +2642,8 @@ def test_to_dask_array_unknown(as_frame):
     "input_func, dtype, na_value, meta",
     [
         (
+            # NOTE: we wrap the input in a lambda so importing this file works with old verions of pandas,
+            # where `pd.arrays` doesn't exist
             lambda: [1, 2, 3, 4, 5],
             None,
             no_default,
