@@ -1438,13 +1438,13 @@ Dask Name: {name}, {task} tasks"""
             each partition.
         na_value : Any, optional
             The value to use for missing values. The default value depends
-            on `dtype` and the dtypes of the DataFrame columns.
+            on ``dtype`` and the dtypes of the DataFrame columns.
 
             Requires pandas >= 1.1.0.
         meta : object, optional
             An optional `meta` parameter can be passed for dask to override the
             default metadata on the returned dask array.
-            Should not be used outside of advanced cases; setting `dtype`
+            Should not be used outside of advanced cases; setting ``dtype``
             is preferred.
 
         Returns
