@@ -949,9 +949,7 @@ def _block_histogramdd(sample, bins, range=None, weights=None):
 
 
 def histogramdd(sample, bins, range=None, normed=None, weights=None, density=None):
-    """Histogram data in multiple dimensions
-
-    Dask version of :func:`numpy.histogramdd`.
+    """Blocked variant of :func:`numpy.histogramdd`.
 
     Chunking of the input data (:code:`sample`) is only allowed along
     the 0th (row) axis (the axis corresponding to the total number of
@@ -960,9 +958,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     chunked along the 0th axis identically to the input sample.
 
     A proper example setup for a three dimensional histogram, where
-    the sample shape is (8, 3) and weights are shape (8,), sample
-    chunks would be ((4, 4), (3,)) and the weights chunks would be
-    ((4, 4),); a table of the structure:
+    the sample shape is :code:`(8, 3)` and weights are shape
+    :code:`(8,)`, sample chunks would be :code:`((4, 4), (3,))` and
+    the weights chunks would be :code:`((4, 4),)`; a table of the
+    structure:
 
     .. code-block::
 
@@ -1015,15 +1014,15 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         When bins are described by arrays, the rightmost edge is
         included. Bins described by arrays also allows for non-uniform
         bin widths.
-
     range : sequence of pairs, optional
-        A sequence of length D, each an optional (min, max) tuple
-        giving the outer bin edges to be used if the edges are not
-        given explicitly in `bins`. Unlike :func:`numpy.histogramdd`,
-        if `bins` not does defines bin edges, this argument is
-        required. This function will not automatically use the min and
-        max of of the value in a given dimension because the input
-        data may be lazy in dask.
+        A sequence of length D, each a (min, max) tuple giving the
+        outer bin edges to be used if the edges are not given
+        explicitly in `bins`. If defined, this argument is required to
+        have an entry for each dimension. Unlike
+        :func:`numpy.histogramdd`, if `bins` does not define bin
+        edges, this argument is required (this function will not
+        automatically use the min and max of of the value in a given
+        dimension because the input data may be lazy in dask).
     normed : bool, optional
         An alias for the density argument that behaves identically. To
         avoid confusion with the broken argument to `histogram`,
