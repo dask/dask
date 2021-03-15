@@ -1069,6 +1069,16 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
     """
 
+    # logic used in numpy.histogramdd to handle normed/density.
+    if normed is None:
+        if density is None:
+            density = False
+    elif density is None:
+        # an explicit normed argument was passed, alias it to the new name
+        density = normed
+    else:
+        raise TypeError("Cannot specify both 'normed' and 'density'")
+
     # generate token and name for task
     token = tokenize(sample, bins, range, weights, density)
     name = "histogramdd-sum-" + token
@@ -1120,19 +1130,24 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
             "range argument requires one entry, a min max pair, per dimension."
         )
 
-    dask_coll_in_bins = any([is_dask_collection(entry) for entry in bins])
-    dask_coll_in_range = False
-    if range is not None:
-        dask_coll_in_range = any([is_dask_collection(entry) for entry in range])
+    dask_coll_in_bins = any([is_dask_collection(b) for b in bins])
+    dask_coll_in_range = (
+        any([is_dask_collection(r) for r in range]) if range is not None else False
+    )
 
+    # No dask collections passed to bins=... or range=...
     if not dask_coll_in_bins and not dask_coll_in_range:
+        # We have integer bins and tuple ranges
         if all(isinstance(b, int) for b in bins) and all(len(r) == 2 for r in range):
-            edges = [
-                _linspace_from_delayed(r[0], r[1], b + 1) for b, r in zip(bins, range)
-            ]
+            edges = [np.linspace(r[0], r[1], b + 1) for b, r in zip(bins, range)]
+        # We have arrays of bin edges
         else:
             edges = [np.asarray(b) for b in bins]
-            range = (None,) * D
+        range = (None,) * D
+    else:
+        raise NotImplementedError(
+            "Dask collections as bins=... or range=... is not implemented yet."
+        )
 
     (bins_ref, ranges_ref), deps = unpack_collections([edges, range])
 
@@ -1158,21 +1173,12 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         deps += (weights,)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
 
-    nchunks_in_sample = len(list(flatten(sample.__dask_keys__())))
+    nchunks = len(list(flatten(sample.__dask_keys__())))
     all_nbins = tuple((b.size - 1,) for b in edges)
-    stacked_chunks = ((1,) * nchunks_in_sample, *all_nbins)
+    stacked_chunks = ((1,) * nchunks, *all_nbins)
     mapped = Array(graph, name, stacked_chunks, dtype=dtype)
     # finally sum over sample chunk providing the final result array.
     n = mapped.sum(axis=0)
-
-    if normed is None:
-        if density is None:
-            density = False
-    elif density is None:
-        # an explicit normed argument was passed, alias it to the new name
-        density = normed
-    else:
-        raise TypeError("Cannot specify both 'normed' and 'density'")
 
     if density:
         # compute array of values to divide by the bin width along
