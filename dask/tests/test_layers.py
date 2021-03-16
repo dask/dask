@@ -72,10 +72,8 @@ def _array_creation():
 )
 @pytest.mark.parametrize("optimize_graph", [True, False])
 def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop):
-    # Test to highlight that in some cases we import modules like pandas
-    # on the scheduler when unpacking some HighLevelGraphs.
-    # This is a problem because numpy/pandas may not be installed in the
-    # process where the scheduler is running -- leading to an ImportError.
+    # Test that array/dataframe-specific modules are not imported
+    # on the scheduler when an HLG layers are unpacked/materialized.
 
     with cluster(scheduler_kwargs={"plugins": [SchedulerImportCheck(lib)]}) as (
         scheduler,
