@@ -643,10 +643,10 @@ def bincount(x, weights=None, minlength=0, split_every=None):
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
     if weights is not None:
-        meta = np.bincount([1], weights=[1])
+        meta = np.array(np.bincount([1], weights=[1]), like=x._meta, dtype="int64")
         args.extend([weights, "i"])
     else:
-        meta = np.bincount([])
+        meta = np.array(np.bincount([]), like=x._meta, dtype="int64")
 
     if minlength == 0:
         output_size = np.nan
@@ -672,10 +672,10 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         split_every=split_every,
         concatenate=False,
     )
-    output._meta = meta
     output._chunks = tuple(
         (output_size,) if i in axis else c for i, c in enumerate(chunked_counts.chunks)
     )
+    output._meta = meta
     return output
 
 
