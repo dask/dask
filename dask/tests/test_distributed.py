@@ -403,8 +403,8 @@ def _array_creation():
 def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop):
     # Test to highlight that in some cases we import modules like pandas
     # on the scheduler when unpacking some HighLevelGraphs.
-    # This is a problem because pandas may not be installed in the process
-    # where the scheduler is running -- leading to an ImportError.
+    # This is a problem because numpy/pandas may not be installed in the
+    # process where the scheduler is running -- leading to an ImportError.
 
     with cluster(scheduler_kwargs={"plugins": [SchedulerImportCheck(lib)]}) as (
         scheduler,
@@ -419,9 +419,9 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop):
             start_modules = c.run_on_scheduler(get_start_modules)
             new_modules = end_modules - start_modules
 
-            # Check that the scheduler didn't start with the
-            # problematic library (otherwise we arent testing anything)
+            # Check that the scheduler didn't start with `lib`
+            # (otherwise we arent testing anything)
             assert not any(module.startswith(lib) for module in start_modules)
 
-            # Check whether we imported pandas on the scheduler
+            # Check whether we imported `lib` on the scheduler
             assert not any(module.startswith(lib) for module in new_modules)
