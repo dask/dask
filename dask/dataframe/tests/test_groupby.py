@@ -2501,3 +2501,43 @@ def test_empty_partitions_with_value_counts():
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby("A")["B"].value_counts()
     assert_eq(expected, actual)
+
+
+class NotTypeError(Exception):
+    pass
+
+
+@pytest.mark.parametrize("enforce_type", ["type-enforced", "in-message"])
+@pytest.mark.parametrize("error_type", [NotTypeError, TypeError])
+@pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
+def test_groupby_type_error(scheduler, enforce_type, error_type):
+    """
+    Checks two issues:
+
+    1. Is the `groupby().apply`'d function called twice, but with a missing column on the second call?
+    2. Is a TypeError (and only a TypeError) thrown from the first call swallowed and hidden
+
+    TypeErrors are handled differently due to this code in pandas:
+    https://github.com/pandas-dev/pandas/blob/v1.3.0.dev0/pandas/core/groupby/groupby.py#L892-L905
+
+    """
+    pdf = pd.DataFrame(data={"col1": ["A", "A"], "col2": [3, 4]})
+
+    def f(records):
+        # does "col1" exist? in the bug case it exists in the first call, but not the second
+        assert records.head(1)["col1"].item() == "A"
+        raise error_type("Uh Oh")
+
+    with dask.config.set(scheduler=scheduler):
+        ddf = dd.from_pandas(pdf, npartitions=2)
+
+        with pytest.raises(Exception) as exc_info:
+            ddf.groupby(["col1"]).apply(f, meta=int).compute()
+
+    if enforce_type == "in-message":
+        error_msg = str(exc_info.getrepr(style="native"))
+        # does the root exception at least show up in the stack trace?
+        assert str(error_type.__name__) in error_msg
+    else:
+        # is the correct error type raised?
+        assert isinstance(exc_info.value, error_type)
