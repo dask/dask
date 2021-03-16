@@ -3347,7 +3347,7 @@ def test_roundtrip_rename_columns(tmpdir, engine):
     assert_eq(df1, ddf2.compute())
 
 
-def test_pyarrow_custom_metadata(tmpdir, engine):
+def test_custom_metadata(tmpdir, engine):
     # Write a parquet dataset with custom metadata
 
     # Define custom metadata
