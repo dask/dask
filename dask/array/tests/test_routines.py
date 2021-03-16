@@ -813,7 +813,7 @@ def test_histogramdd():
 
 
 def test_histogramdd_seq_of_arrays():
-    n1 = 800, 2
+    n1 = 800
     x = da.random.uniform(size=(n1,), chunks=200)
     y = da.random.uniform(size=(n1,), chunks=200)
     bx = [0.0, 0.25, 0.75, 1.0]
