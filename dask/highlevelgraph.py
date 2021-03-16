@@ -855,6 +855,8 @@ class HighLevelGraph(Mapping):
                 ret_layers[layer_name] = culled_layer
                 ret_key_deps.update(culled_deps)
 
+        # Converting dict_keys to a real set lets Python optimise the set
+        # intersection to iterate over the smaller of the two sets.
         ret_layers_keys = set(ret_layers.keys())
         ret_dependencies = {
             layer_name: ret_layers_keys & self.dependencies[layer_name]
