@@ -945,7 +945,7 @@ def _block_histogramdd(sample, bins, range=None, weights=None):
         NumPy array with an additional outer dimension.
 
     """
-    return np.histogramdd(sample, bins, range=range, weights=weights)[0][np.newaxis]
+    return np.histogramdd(sample, bins, range=range, weights=weights)[0:1]
 
 
 def histogramdd(sample, bins, range=None, normed=None, weights=None, density=None):
@@ -996,8 +996,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         * When a (N, D) dask Array, each row is an entry in the sample
           (coordinate in D dimensional space).
         * When a sequence of dask Arrays, each element in the sequence
-          is the array of values for a single coordinate.
-    bins : sequence of arrays describing bin edge, int, or sequence of ints
+          is the array of values for a single coordinate. This type of
+          input will be automatically rechunked along the column axis
+          if necessary. This may induce a runtime increase.
+    bins : sequence of arrays describing bin edges, int, or sequence of ints
         The bin specification.
 
         The possible binning configurations are:
@@ -1081,7 +1083,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
     # generate token and name for task
     token = tokenize(sample, bins, range, weights, density)
-    name = "histogramdd-sum-" + token
+    name = f"histogramdd-sum-{token}"
 
     # N == total number of samples
     # D == total number of dimensions
@@ -1092,6 +1094,9 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         # If we have a sequence of 1D arrays
         sample = atleast_2d(sample).T
         N, D = sample.shape
+        # rechunk if necessary
+        if sample.chunksize[1] != D:
+            sample = sample.rechunk((sample.chunksize[1], D))
 
     # Require only Array or Delayed objects for bins, range, and weights.
     for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
@@ -1112,23 +1117,27 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
             "and chunk structure along the first dimension."
         )
 
-    # If we can call len on bins then it must be a sequence, we
-    # require that it's compatible with the dimensions of the data.
-    try:
-        M = len(bins)
-        if M != D:
+    # if bins is a list, tuple, or array_like then make sure the
+    # length is the same as the number dimensions.
+    if isinstance(bins, (list, tuple)) or is_arraylike(bins):
+        if len(bins) != D:
             raise ValueError(
                 "The dimension of bins must be equal to the dimension of the sample."
             )
-    except TypeError:
-        # In this case bins must be a single scalar (possibly
-        # delayed), we expand it to the total number of dimensions.
-        bins = D * [bins]
+    else:
+        # if not then bins must be a single scalar (possibly delayed),
+        # we expand it to the total number of dimensions.
+        bins = (bins,) * D
 
-    if range is not None and len(range) != D:
-        raise ValueError(
-            "range argument requires one entry, a min max pair, per dimension."
-        )
+    # if range is defined, check that it's the right length and also a
+    # sequence of pairs.
+    if range is not None:
+        if len(range) != D:
+            raise ValueError(
+                "range argument requires one entry, a min max pair, per dimension."
+            )
+        if not all(len(r) == 2 for r in range):
+            raise ValueError("range argument should be a sequence of pairs")
 
     dask_coll_in_bins = any([is_dask_collection(b) for b in bins])
     dask_coll_in_range = (
@@ -1143,19 +1152,33 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         # We have arrays of bin edges
         else:
             edges = [np.asarray(b) for b in bins]
+        # at this point we've converted bins + range combinations to
+        # edge arrays, so we can null the range argument later passed
+        # to the callable in the graph (_block_histogramdd).
         range = (None,) * D
     else:
         raise NotImplementedError(
-            "Dask collections as bins=... or range=... is not implemented yet."
+            "Passing dask collections to bins=... or range=... is not supported."
         )
 
+    # This call is for potential compatibility with delayed bin
+    # configurations. For non-delayed bin confurations this returns
+    # the concrete objects and deps is an empty tuple.
     (bins_ref, ranges_ref), deps = unpack_collections([edges, range])
 
-    # make (D+1) dimension array, stacked for each chunk.
-    dzeros = tuple(0 for _ in _range(D))
+    # With dsk below, we will construct a (D + 1) dimensional array
+    # stacked for each chunk. For example, if the histogram is going
+    # to be 3 dimensions, this creates a stack of cubes (1 cube for
+    # each sample chunk) that will be collapsed into a final cube (the
+    # result).
+
+    # This tuple of zeros represents the chunk index along the columns
+    # (we only allow chunking along the rows).
+    column_zeros = tuple(0 for _ in _range(D))
+
     if weights is None:
         dsk = {
-            (name, i, *dzeros): (_block_histogramdd, k, bins_ref, ranges_ref)
+            (name, i, *column_zeros): (_block_histogramdd, k, bins_ref, ranges_ref)
             for i, k in enumerate(flatten(sample.__dask_keys__()))
         }
         dtype = np.histogramdd([])[0].dtype
@@ -1163,7 +1186,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         a_keys = flatten(sample.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, *dzeros): (_block_histogramdd, k, bins_ref, ranges_ref, w)
+            (name, i, *column_zeros): (_block_histogramdd, k, bins_ref, ranges_ref, w)
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
@@ -1177,7 +1200,9 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     all_nbins = tuple((b.size - 1,) for b in edges)
     stacked_chunks = ((1,) * nchunks, *all_nbins)
     mapped = Array(graph, name, stacked_chunks, dtype=dtype)
-    # finally sum over sample chunk providing the final result array.
+
+    # Finally, sum over chunks providing to get the final D
+    # dimensional result array.
     n = mapped.sum(axis=0)
 
     if density:

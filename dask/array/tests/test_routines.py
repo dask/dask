@@ -804,10 +804,23 @@ def test_histogramdd():
     bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
     (a1, b1) = da.histogramdd(x, bins=bins)
     (a2, b2) = np.histogramdd(x, bins=bins)
+    (a3, b3) = np.histogramdd(x.compute(), bins=bins)
     assert_eq(a1, a2)
+    assert_eq(a1, a3)
     assert a1.sum() == n1
     assert a2.sum() == n1
     assert same_keys(da.histogramdd(x, bins=bins)[0], a1)
+
+
+def test_histogramdd_seq_of_arrays():
+    n1 = 800, 2
+    x = da.random.uniform(size=(n1,), chunks=200)
+    y = da.random.uniform(size=(n1,), chunks=200)
+    bx = [0.0, 0.25, 0.75, 1.0]
+    by = [0.0, 0.30, 0.70, 0.8, 1.0]
+    (a1, b1) = da.histogramdd([x, y], bins=[bx, by])
+    (a2, b2) = np.histogramdd([x, y], bins=[bx, by])
+    assert_eq(a1, a2)
 
 
 def test_histogramdd_alternative_bins_range():
@@ -865,19 +878,31 @@ def test_histogramdd_raises_incompat_sample_chuks():
 
 def test_histogramdd_raises_incompat_bins_or_range():
     data = da.random.random(size=(10, 4), chunks=(5, 4))
-    bins = (2, 3, 4)
+    bins = (2, 3, 4, 5)
     ranges = ((0, 1),) * len(bins)
+
+    # bad number of bins defined (should be data.shape[1])
+    bins = (2, 3, 4)
     with pytest.raises(
         ValueError,
         match="The dimension of bins must be equal to the dimension of the sample.",
     ):
         da.histogramdd(data, bins=bins, range=ranges)
+
+    # one range per dimension is required.
     bins = (2, 3, 4, 5)
+    ranges = ((0, 1),) * 3
     with pytest.raises(
         ValueError,
         match="range argument requires one entry, a min max pair, per dimension.",
     ):
         da.histogramdd(data, bins=bins, range=ranges)
+
+    # has range elements that are not pairs
+    with pytest.raises(
+        ValueError, match="range argument should be a sequence of pairs"
+    ):
+        da.histogramdd(data, bins=bins, range=((0, 1), (0, 1, 2), 3, 5))
 
 
 def test_cov():
