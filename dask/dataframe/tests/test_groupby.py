@@ -2501,3 +2501,48 @@ def test_empty_partitions_with_value_counts():
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby("A")["B"].value_counts()
     assert_eq(expected, actual)
+
+
+def test_groupy_grouper_not_implemented():
+    # DataFrame
+    pdf = pd.DataFrame(
+        {
+            "a": [1, 2, 3, 4, 5],
+            "b": ["1985", "1985", "1990", "1990", "1990"],
+        },
+    )
+    pdf["b"] = pd.to_datetime(pdf["b"], format="%Y")
+
+    ddf = dd.from_pandas(pdf, npartitions=3)
+
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(pd.Grouper(key="b", freq="y")).apply(
+            lambda x: x["a"].mean(), meta=pd.Series(dtype="float", name="b")
+        ).compute()
+
+    pdf2 = pd.DataFrame(
+        {
+            "Publish date": [
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-02"),
+                pd.Timestamp("2000-01-09"),
+                pd.Timestamp("2000-01-16"),
+            ],
+            "ID": [0, 1, 2, 3],
+            "Price": [10, 20, 30, 40],
+        }
+    )
+    ddf2 = dd.from_pandas(pdf2, npartitions=3)
+
+    with pytest.raises(NotImplementedError):
+        ddf2.groupby(pd.Grouper(key="Publish date", freq="1W")).mean().compute()
+
+    # Series
+    start, end = "2000-10-01 23:30:00", "2000-10-02 00:30:00"
+    rng = pd.date_range(start, end, freq="7min")
+    s = pd.Series(np.arange(len(rng)) * 3, index=rng)
+
+    ss = dd.from_pandas(s, npartitions=2)
+
+    with pytest.raises(NotImplementedError):
+        ss.groupby(pd.Grouper(freq="17min")).sum().compute()

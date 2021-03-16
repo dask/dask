@@ -3072,6 +3072,9 @@ Dask Name: {name}, {task} tasks""".format(
     def groupby(
         self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
     ):
+        if isinstance(by, pd.Grouper):
+            raise NotImplementedError("Dask does not support Pandas Grouper objects.")
+
         from dask.dataframe.groupby import SeriesGroupBy
 
         return SeriesGroupBy(
@@ -3960,6 +3963,9 @@ class DataFrame(_Frame):
     def groupby(
         self, by=None, group_keys=True, sort=None, observed=None, dropna=None, **kwargs
     ):
+        if isinstance(by, pd.Grouper):
+            raise NotImplementedError("Dask does not support Pandas Grouper objects.")
+
         from dask.dataframe.groupby import DataFrameGroupBy
 
         return DataFrameGroupBy(
