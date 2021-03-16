@@ -6,9 +6,6 @@ from importlib import import_module
 from .core import keys_in_tasks
 from .utils import apply, insert, stringify, stringify_collection_keys
 from .highlevelgraph import Layer
-
-# TODO: Make sure dask.blockwise does not require any
-# imports beyond minimum dependencies
 from .blockwise import Blockwise, BlockwiseIODeps, blockwise_token
 
 
