@@ -72,7 +72,6 @@ class BlockwiseCreateArray(Blockwise):
         shape,
         chunks,
     ):
-        # self.name = name
         io_name = "blockwise-create-" + name
 
         # Define "blockwise" graph
