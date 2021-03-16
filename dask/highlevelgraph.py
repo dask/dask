@@ -705,6 +705,9 @@ class HighLevelGraph(Mapping):
         except AttributeError:
             keys: set = set()
             for layer in self.layers.values():
+                # Note: don't use `keys |= ...`, because the RHS is a
+                # collections.abc.Set rather than a real set, and this will
+                # cause a whole new set to be constructed.
                 keys.update(layer.get_output_keys())
             self._all_external_keys = keys
             return keys
@@ -831,7 +834,11 @@ class HighLevelGraph(Mapping):
         ret_key_deps = {}
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
-            # Let's cull the layer to produce its part of `keys`
+            # Let's cull the layer to produce its part of `keys`.
+            # Note: use .intersection rather than & because the RHS is
+            # a collections.abc.Set rather than a real set, and using &
+            # would take time proportional to the size of the LHS, which
+            # if there is no culling can be much bigger than the RHS.
             output_keys = keys_set.intersection(layer.get_output_keys())
             if output_keys:
                 culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
