@@ -1583,9 +1583,9 @@ def setitem_array(out_name, array, indices, value):
 
         or
 
-            (setitem, key, v_key, block_indices, block_offsets)
+            (setitem, key, v_key, block_indices)
 
-        where key is an existing top-level key of array.
+        where key is an existing top-level dask key of array.
 
         The first case occurs when the block represented by key does
         not overlap the indices.
@@ -1593,9 +1593,8 @@ def setitem_array(out_name, array, indices, value):
         The second case occurs when the block represented by key does
         overlap the indices. setitem is the chunk assignment function;
         v_key is the dask key of the the part of the assignment value
-        that corresponds to the block; block_indices are the assigment
-        indices that apply to the block; and block_offsets are the
-        offsets at which the chunk starts along each axis.
+        that corresponds to the block; and block_indices are the
+        assigment indices that apply to the block.
 
         The dictionary also includes any additional key/value pairs
         needed to define v_key, as well as any any additional
@@ -1605,7 +1604,7 @@ def setitem_array(out_name, array, indices, value):
     """
 
     @functools.lru_cache()
-    def block_index_from_1d_index(dim, size, loc0, loc1, is_bool):
+    def block_index_from_1d_index(dim, loc0, loc1, is_bool):
         """The positions of index elements in the range values loc0 and loc1.
 
         The index is the input assignment index that is defined in the
@@ -1620,8 +1619,6 @@ def setitem_array(out_name, array, indices, value):
         dim : `int`
            The dimension position of the index that is used as a proxy
            for the non-hashable index to define the LRU cache key.
-        size : `int`
-            The full size of the dimension.
         loc0 : `int`
             The start index of the block along the dimension.
         loc1 : `int`
@@ -1726,7 +1723,7 @@ def setitem_array(out_name, array, indices, value):
         return np.sum(index[:loc0])
 
     @functools.lru_cache()
-    def value_indices_from_1d_int_index(dim, size, vsize, loc0, loc1):
+    def value_indices_from_1d_int_index(dim, vsize, loc0, loc1):
         """Value indices for index elements between loc0 and loc1.
 
         The index is the input assignment index that is defined in the
@@ -1738,8 +1735,6 @@ def setitem_array(out_name, array, indices, value):
         dim : `int`
            The dimension position of the index that is used as a proxy
            for the non-hashable index to define the LRU cache key.
-        size : `int`
-            The full size of the dimension.
         vsize : `int`
             The full size of the dimension of the assignment value.
         loc0 : `int`
@@ -1924,13 +1919,9 @@ def setitem_array(out_name, array, indices, value):
         #                         for reformatted indices. `None` is
         #                         used for dimensions with 1-d integer
         #                         arrays.
-        #
-        # block_offsets : The offset at which the block starts along
-        #                 each axis.
         block_indices = []
         block_indices_shape = []
         block_preceeding_sizes = []
-        block_offsets = []
 
         local_offset = offset
 
@@ -1992,9 +1983,7 @@ def setitem_array(out_name, array, indices, value):
             else:
                 # Index is a 1-d array
                 is_bool = index.dtype == bool
-                block_index = block_index_from_1d_index(
-                    dim, full_size, loc0, loc1, is_bool
-                )
+                block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
 
                 if is_bool:
                     block_index_size = block_index_shape_from_1d_bool_index(
@@ -2015,7 +2004,7 @@ def setitem_array(out_name, array, indices, value):
 
                 # Note: When the 1-d array index is a dask array then
                 #       we can't tell if this block overlaps it, so we
-                #       assume that is does. If it in fact doesn't
+                #       assume that it does. If it in fact doesn't
                 #       overlap then the part of the assignment value
                 #       that cooresponds to this block will have zero
                 #       size which, at compute time, will indicate to
@@ -2025,7 +2014,6 @@ def setitem_array(out_name, array, indices, value):
             # Still here? This block overlaps the index for this
             # dimension.
             block_indices.append(block_index)
-            block_offsets.append(loc0)
             if not integer_index:
                 block_indices_shape.append(block_index_size)
                 block_preceeding_sizes.append(n_preceeding)
@@ -2057,7 +2045,6 @@ def setitem_array(out_name, array, indices, value):
 
                 value_indices[i] = value_indices_from_1d_int_index(
                     dim_1d_int_index,
-                    array_shape[j],
                     value_shape[i + value_offset],
                     *loc0_loc1,
                 )
@@ -2066,9 +2053,9 @@ def setitem_array(out_name, array, indices, value):
                 start = block_preceeding_sizes[j]
                 value_indices[i] = slice(start, start + block_indices_shape[j])
 
-        # If required as a consequence of reformatting slice objects
-        # in the original indices to have a positive steps, reverse
-        # the indices to assignment value.
+        # If required as a consequence of reformatting any slice
+        # objects of the original indices to have a positive steps,
+        # reverse the indices to assignment value.
         for i in reverse:
             size = value_common_shape[i]
             start, stop, step = value_indices[i].indices(size)
@@ -2099,7 +2086,7 @@ def setitem_array(out_name, array, indices, value):
         dsk = merge(dict(v.dask), dsk)
 
         # Define the assignment function for this block.
-        dsk[out_key] = (setitem, in_key, v_key, block_indices, block_offsets)
+        dsk[out_key] = (setitem, in_key, v_key, block_indices)
 
     block_index_from_1d_index.cache_clear()
     block_index_shape_from_1d_bool_index.cache_clear()
@@ -2109,7 +2096,7 @@ def setitem_array(out_name, array, indices, value):
     return dsk
 
 
-def setitem(x, v, indices, offsets):
+def setitem(x, v, indices):
     """Chunk function of `setitem_array`.
 
     Assign v to indices of x.
@@ -2122,9 +2109,7 @@ def setitem(x, v, indices, offsets):
         The values which will be assigned.
     indices : list of `slice`, `int`, or numpy array
         The indices describing the elements of x to be assigned from
-        v. One index per axis. An integer index is assumed to have
-        already been posified, but a numpy array index is posified in
-        this function (see offsets).
+        v. One index per axis.
 
         Note that an individual index can not be a `list`, use a 1-d
         numpy array instead.
@@ -2133,9 +2118,6 @@ def setitem(x, v, indices, offsets):
         size of the corresponding dimension of x, then those index
         elements will be removed prior to the assignment (see
         `block_index_from_1d_index` function).
-    offsets : list of `int`
-        The offsets at which the chunk starts along each axis. Used
-        for posifying 1-d numpy array indices.
 
     Returns
     -------
@@ -2147,32 +2129,32 @@ def setitem(x, v, indices, offsets):
     Examples
     --------
     >>> x = np.arange(8).reshape(2, 4)
-    >>> setitem(x, -99, [np.array([False, True])], [20, 30], (40, 60))
+    >>> setitem(x, -99, [np.array([False, True])])
     array([[  0,   1,   2,   3],
            [-99, -99, -99, -99]])
     >>> x
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7]])
 
-    >>> setitem(x, [-88, -99], [slice(None), np.array([1, 3])], [20, 30])
+    >>> setitem(x, [-88, -99], [slice(None), np.array([1, 3])])
     array([[  0, -88,   2, -99],
            [  4, -88,   6, -99]])
 
-    >>> setitem(x, -x, [slice(None)], [20, 30])
+    >>> setitem(x, -x, [slice(None)])
     array([[  0,  -1,  -2,  -3],
            [ -4,  -5,  -6,  -7]])
     >>> x
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7]])
 
-    >>> setitem(x, [-88, -99], [slice(None), np.array([4, 4, 3, 4, 1, 4])], [20, 30])
+    >>> setitem(x, [-88, -99], [slice(None), np.array([4, 4, 3, 4, 1, 4])])
     array([[  0, -99,   2, -88],
            [  4, -99,   6, -88]])
 
     >>> value = np.where(x < 0)[0]
     >>> value.size
     0
-    >>> y = setitem(x, value, [Ellipsis], [20, 30])
+    >>> y = setitem(x, value, [Ellipsis])
     >>> y is x
     True
 
@@ -2181,7 +2163,7 @@ def setitem(x, v, indices, offsets):
         return x
 
     # Normalize integer array indices
-    for i, (index, block_size, offset) in enumerate(zip(indices, x.shape, offsets)):
+    for i, (index, block_size) in enumerate(zip(indices, x.shape)):
         if isinstance(index, np.ndarray) and index.dtype != bool:
             # Strip out any non-valid place-holder values
             index = index[np.where(index < block_size)[0]]
