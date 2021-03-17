@@ -670,7 +670,7 @@ class BroadcastJoinLayer(Layer):
         state.update(merge_kwargs)
 
         # Materialize the layer
-        raw = cls(**state).construct_graph(deserializing=True)
+        raw = cls(**state)._construct_graph(deserializing=True)
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
