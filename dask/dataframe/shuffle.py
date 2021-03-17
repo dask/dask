@@ -23,6 +23,98 @@ from ..layers import SimpleShuffleLayer, ShuffleLayer
 logger = logging.getLogger(__name__)
 
 
+def _calculate_divisions(
+    df, partition_col, repartition, npartitions, upsample=1.0, partition_size=128e6
+):
+    """
+    Utility function to calculate divisions for calls to `map_partitions`
+    """
+    sizes = df.map_partitions(sizeof) if repartition else []
+    divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
+    mins = partition_col.map_partitions(M.min)
+    maxes = partition_col.map_partitions(M.max)
+    divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+    divisions = methods.tolist(divisions)
+    if type(sizes) is not list:
+        sizes = methods.tolist(sizes)
+    mins = methods.tolist(mins)
+    maxes = methods.tolist(maxes)
+
+    empty_dataframe_detected = pd.isnull(divisions).all()
+    if repartition or empty_dataframe_detected:
+        total = sum(sizes)
+        npartitions = max(math.ceil(total / partition_size), 1)
+        npartitions = min(npartitions, df.npartitions)
+        n = len(divisions)
+        try:
+            divisions = np.interp(
+                x=np.linspace(0, n - 1, npartitions + 1),
+                xp=np.linspace(0, n - 1, n),
+                fp=divisions,
+            ).tolist()
+        except (TypeError, ValueError):  # str type
+            indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+            divisions = [divisions[i] for i in indexes]
+
+    mins = remove_nans(mins)
+    maxes = remove_nans(maxes)
+    if pd.api.types.is_categorical_dtype(partition_col.dtype):
+        dtype = partition_col.dtype
+        mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
+        maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
+
+    return divisions, mins, maxes
+
+
+def sort_values(
+    df,
+    value,
+    npartitions=None,
+    ascending=True,
+    upsample=1.0,
+    partition_size=128e6,
+    **kwargs,
+):
+    """ See _Frame.sort_values for docstring """
+    if not isinstance(value, str):
+        # support ["a"] as input
+        if isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
+            value = value[0]
+        else:
+            raise NotImplementedError(
+                "Dataframe only supports sorting by a single column which must "
+                "be passed as a string or a list of a single string.\n"
+                "You passed %s" % str(value)
+            )
+    if npartitions == "auto":
+        repartition = True
+        npartitions = max(100, df.npartitions)
+    else:
+        if npartitions is None:
+            npartitions = df.npartitions
+        repartition = False
+
+    sort_by_col = df[value]
+
+    divisions, mins, maxes = _calculate_divisions(
+        df, sort_by_col, repartition, npartitions, upsample, partition_size
+    )
+
+    if (
+        mins == sorted(mins)
+        and maxes == sorted(maxes)
+        and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+        and npartitions == df.npartitions
+    ):
+        # divisions are in the right place
+        divisions = mins + [maxes[-1]]
+        return df.map_partitions(M.sort_values, value)
+
+    df = rearrange_by_divisions(df, value, divisions)
+    df = df.map_partitions(M.sort_values, value)
+    return df
+
+
 def set_index(
     df,
     index,
@@ -67,39 +159,9 @@ def set_index(
         index2 = index
 
     if divisions is None:
-        sizes = df.map_partitions(sizeof) if repartition else []
-        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
-        mins = index2.map_partitions(M.min)
-        maxes = index2.map_partitions(M.max)
-        divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
-        divisions = methods.tolist(divisions)
-        if type(sizes) is not list:
-            sizes = methods.tolist(sizes)
-        mins = methods.tolist(mins)
-        maxes = methods.tolist(maxes)
-
-        empty_dataframe_detected = pd.isnull(divisions).all()
-        if repartition or empty_dataframe_detected:
-            total = sum(sizes)
-            npartitions = max(math.ceil(total / partition_size), 1)
-            npartitions = min(npartitions, df.npartitions)
-            n = len(divisions)
-            try:
-                divisions = np.interp(
-                    x=np.linspace(0, n - 1, npartitions + 1),
-                    xp=np.linspace(0, n - 1, n),
-                    fp=divisions,
-                ).tolist()
-            except (TypeError, ValueError):  # str type
-                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
-                divisions = [divisions[i] for i in indexes]
-
-        mins = remove_nans(mins)
-        maxes = remove_nans(maxes)
-        if pd.api.types.is_categorical_dtype(index2.dtype):
-            dtype = index2.dtype
-            mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
-            maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
+        divisions, mins, maxes = _calculate_divisions(
+            df, index2, repartition, npartitions, upsample, partition_size
+        )
 
         if (
             mins == sorted(mins)
