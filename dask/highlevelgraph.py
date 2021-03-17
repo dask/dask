@@ -859,7 +859,7 @@ class HighLevelGraph(Mapping):
         # intersection to iterate over the smaller of the two sets.
         ret_layers_keys = set(ret_layers.keys())
         ret_dependencies = {
-            layer_name: ret_layers_keys & self.dependencies[layer_name]
+            layer_name: self.dependencies[layer_name] & ret_layers_keys
             for layer_name in ret_layers
         }
 
