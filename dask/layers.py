@@ -1,7 +1,9 @@
 import tlz as toolz
 import operator
+import copy
 from collections import defaultdict
 
+from .base import tokenize
 from .core import keys_in_tasks
 from .utils import apply, insert, stringify, stringify_collection_keys
 from .highlevelgraph import Layer
@@ -104,7 +106,26 @@ class BlockwiseCreateArray(Blockwise):
 #
 
 
-class SimpleShuffleLayer(Layer):
+class DataFrameLayer(Layer):
+    """DataFrame-based HighLevelGraph Layer"""
+
+    def cull_columns(self, output_columns):
+        """Cull unnecessary columns from this layer
+        Given a list of required output columns, this method
+        returns a culled (by column) layer, and any column
+        dependencies for this layer.  A value of ``None`` for
+        ``output_columns`` means that the current layer (and
+        any dependent layers) cannot be culled by column. This
+        method should be overridden by specialized DataFrame
+        layers to enable column culling.
+        """
+
+        # Default behavior.
+        # Return: `culled_layer`, `dep_columns`
+        return self, None
+
+
+class SimpleShuffleLayer(DataFrameLayer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -552,7 +573,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return dsk
 
 
-class BroadcastJoinLayer(Layer):
+class BroadcastJoinLayer(DataFrameLayer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -847,3 +868,108 @@ class BroadcastJoinLayer(Layer):
             dsk[(self.name, i)] = (concat_func, _concat_list)
 
         return dsk
+
+
+class DataFrameIOLayer(Blockwise, DataFrameLayer):
+    """DataFrame-based Blockwise Layer with IO
+
+    Parameters
+    ----------
+    name : string
+        Name to use for the constructed layer.
+    columns : string, list or None
+        Field name(s) to read in as columns in the output.
+    inputs : list[tuple]
+        List of input-argument tuples. Each element will be
+        passed to ``io_func`` to construct a single output
+        partition.
+    io_func : callable
+        A callable function that takes in a single tuple
+        of arguments, and outputs a DataFrame partition.
+    """
+
+    def __init__(
+        self,
+        name,
+        columns,
+        inputs,
+        io_func,
+        part_ids=None,
+        label=None,
+        annotations=None,
+    ):
+        self.name = name
+        self.columns = columns
+        self.inputs = inputs
+        self.io_func = io_func
+        self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
+        self.label = label
+        self.annotations = annotations
+
+        # Define mapping between key index and "part"
+        io_arg_map = {(i,): self.inputs[i] for i in self.part_ids}
+
+        # Create Blockwise layer
+        dataframe_blockwise_io_layer(
+            io_func,
+            io_arg_map,
+            self.name,
+            len(self.part_ids),
+            constructor=super().__init__,
+            annotations=self.annotations,
+        )
+
+    def cull_columns(self, columns):
+        # Method inherited from `DataFrameLayer.cull_columns`
+        if columns and (self.columns is None or columns < set(self.columns)):
+            layer = DataFrameIOLayer(
+                (self.label or "subset-") + tokenize(self.name, columns),
+                list(columns),
+                self.inputs,
+                self.io_func,
+                part_ids=self.part_ids,
+                annotations=self.annotations,
+            )
+            if hasattr(layer.io_func, "columns"):
+                # Apply column-selection culling
+                layer.io_func = copy.deepcopy(layer.io_func)
+                layer.io_func.columns = columns
+            return layer, None
+        else:
+            # Default behavior
+            return self, None
+
+    def __repr__(self):
+        return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.part_ids), list(self.columns)
+        )
+
+
+def dataframe_blockwise_io_layer(
+    io_func, part_inputs, output_name, npartitions, constructor=None, annotations=None
+):
+    """Helper utility to construct a DataFrameIOLayer object
+
+    Parameters
+    ----------
+    io_func: callable
+        The function needed to generate data for each output partition.
+    part_inputs: dict
+        Mapping between collection keys and inputs to ``io_func``.  Each
+        element in ``part_inputs`` should be a tuple.
+    output_name: str
+        Name of the output ``Blockwise`` layer.
+    """
+
+    name = "blockwise-io-" + output_name
+    dsk = {output_name: (io_func, blockwise_token(0))}
+    constructor = constructor or Blockwise
+    return constructor(
+        output_name,
+        "i",
+        dsk,
+        [(name, "i")],
+        {name: (npartitions,)},
+        io_deps={name: part_inputs},
+        annotations=annotations,
+    )
