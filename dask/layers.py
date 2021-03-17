@@ -658,12 +658,11 @@ class BroadcastJoinLayer(Layer):
             "rhs_name": self.rhs_name,
             "rhs_npartitions": self.rhs_npartitions,
             "parts_out": self.parts_out,
-            "annotations": self.pack_annotations(),
             "merge_kwargs": _merge_kwargs,
         }
 
     @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
+    def __dask_distributed_unpack__(cls, state, dsk, dependencies):
         from distributed.worker import dumps_task
 
         # Expand merge_kwargs
