@@ -283,7 +283,7 @@ class SimpleShuffleLayer(Layer):
             state["inputs"] = list(state["inputs"])
 
         # Materialize the layer
-        layer_dsk = cls(**state).construct_graph(deserializing=True)
+        layer_dsk = cls(**state)._construct_graph(deserializing=True)
 
         # Convert all keys to strings and dump tasks
         layer_dsk = {
