@@ -1383,7 +1383,7 @@ def parse_assignment_indices(indices, shape):
     >>> parse_assignment_indices(([1, 2, 6, 5],), (8,))
     ([array([1, 2, 6, 5])], [4], [])
 
-    >>> parse_assignment_indices((7, 8), (3, slice(-1, 2, -1)))
+    >>> parse_assignment_indices((3, slice(-1, 2, -1)), (7, 8))
     ([3, slice(3, 8, 1)], [5], [1])
 
     """
@@ -1751,8 +1751,8 @@ def setitem_array(out_name, array, indices, value):
             If index is dask array then a dask array is returned.
 
         """
+        # Check for values in [loc0,loc1)
         if is_dask_collection(index):
-            # Check for values in [loc0,loc1)
             if math.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
@@ -1762,7 +1762,7 @@ def setitem_array(out_name, array, indices, value):
                 # and set the chunk size (which must be the full size
                 # of the dimension of the assignment value) which
                 # allows the returned array to be used as a
-                # __getitem__ index of value.
+                # __getitem__ index to the assignment value.
                 i = np.where((loc0 <= index) & (index < loc1), True, False)
                 i = concatenate_array_chunks(i)
                 i._chunks = ((vsize,),)
@@ -1772,8 +1772,6 @@ def setitem_array(out_name, array, indices, value):
                 i = concatenate_array_chunks(i)
         else:
             # Integer numpy array.
-            #
-            # Check for values in [loc0,loc1).
             i = np.where((loc0 <= index) & (index < loc1))[0]
 
         return i
@@ -1814,7 +1812,7 @@ def setitem_array(out_name, array, indices, value):
     #
     #          For example:
     #
-    #          array shape   value shape   offset  value_offset
+    #          array.shape   value.shape   offset  value_offset
     #          ------------  ------------  ------  ------------
     #          (3, 4)        (3, 4)        0       0
     #          (1, 1, 3, 4)  (3, 4)        2       0
@@ -2075,7 +2073,7 @@ def setitem_array(out_name, array, indices, value):
         # Create the part of the full assignment value that is to be
         # assigned to elements of this block and make sure that it has
         # just one chunk (so we can represent it with a single key in
-        # thex argument list of setitem).
+        # the argument list of setitem).
         v = value[tuple(value_indices)]
         v = concatenate_array_chunks(v)
         v_key = next(flatten(v.__dask_keys__()))
