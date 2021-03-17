@@ -1457,8 +1457,15 @@ class ArrowDatasetEngine(Engine):
             filters,
         )
 
-        # Check if we need to pass a fragment for each output partition
-        read_from_paths = read_from_paths or False
+        # Check if we need to pass a fragment for each output partition.
+        # By default, we will avoid passing fragments in the graph if there
+        # are more than ~32_000 column-chunks (this is a vague heuristic to
+        # avoid an excessive graph size).
+        partitions = partition_info.get("partitions", None)
+        if read_from_paths is None:
+            read_from_paths = (
+                len(metadata) * (len(schema.names) - len(partitions)) > 32_000
+            )
         pass_frags = (
             filters
             and (not read_from_paths)
@@ -1477,7 +1484,7 @@ class ArrowDatasetEngine(Engine):
             make_part_kwargs={
                 "fs": fs,
                 "partition_keys": partition_info.get("partition_keys", None),
-                "partition_obj": partition_info.get("partitions", None),
+                "partition_obj": partitions,
                 "data_path": data_path,
                 "frag_map": frag_map if pass_frags else None,
             },
@@ -1486,7 +1493,7 @@ class ArrowDatasetEngine(Engine):
         # Add common kwargs
         common_kwargs = {
             "partitioning": partition_info["partitioning"],
-            "partitions": partition_info["partitions"],
+            "partitions": partitions,
             "categories": categories,
             "filters": filters,
             "schema": schema,

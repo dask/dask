@@ -324,8 +324,8 @@ def test_blockwise_array_creation(c, io, fuse):
 @pytest.mark.parametrize(
     "io",
     [
-        # "parquet-pyarrow",
-        # "parquet-fastparquet",
+        "parquet-pyarrow",
+        "parquet-fastparquet",
         "csv",
     ],
 )
