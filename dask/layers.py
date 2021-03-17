@@ -948,7 +948,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
 def dataframe_blockwise_io_layer(
     io_func, part_inputs, output_name, npartitions, constructor=None, annotations=None
 ):
-    """Helper utility to construct a DataFrameIOLayer object
+    """Helper utility to initialize a DataFrameIOLayer
 
     Parameters
     ----------
