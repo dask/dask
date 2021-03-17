@@ -2503,7 +2503,7 @@ def test_empty_partitions_with_value_counts():
     assert_eq(expected, actual)
 
 
-def test_groupy_grouper_not_implemented():
+def test_groupby_grouper_not_implemented():
     # DataFrame
     pdf = pd.DataFrame(
         {
