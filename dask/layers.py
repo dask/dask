@@ -1,7 +1,6 @@
 import tlz as toolz
 import operator
 from collections import defaultdict
-from importlib import import_module
 
 from .core import keys_in_tasks
 from .utils import apply, insert, stringify, stringify_collection_keys
@@ -17,16 +16,19 @@ from .blockwise import Blockwise, BlockwiseIODeps, blockwise_token
 
 
 class CallableLazyImport:
-    """Function Wrapper for Lazy Importing"""
+    """Function Wrapper for Lazy Importing.
+
+    This Class should only be used when materializing a graph
+    on a distributed scheduler.
+    """
 
     def __init__(self, function_path):
-        split_path = function_path.split(".")
-        self.module = ".".join(split_path[:-1])
-        self.name = split_path[-1]
+        self.function_path = function_path
 
     def __call__(self, *args, **kwargs):
-        func = getattr(import_module(self.module), self.name)
-        return func(*args, **kwargs)
+        from distributed.utils import import_term
+
+        return import_term(self.function_path)(*args, **kwargs)
 
 
 #
@@ -152,8 +154,6 @@ class SimpleShuffleLayer(Layer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
-        self.concat_func = "dask.dataframe.core._concat"
-        self.shuffle_group_func = "dask.dataframe.shuffle.shuffle_group"
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -283,7 +283,7 @@ class SimpleShuffleLayer(Layer):
             state["inputs"] = list(state["inputs"])
 
         # Materialize the layer
-        layer_dsk = dict(cls(**state))
+        layer_dsk = cls(**state).construct_graph(deserializing=True)
 
         # Convert all keys to strings and dump tasks
         layer_dsk = {
@@ -296,15 +296,23 @@ class SimpleShuffleLayer(Layer):
 
         return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
 
-    def _construct_graph(self):
+    def _construct_graph(self, deserializing=False):
         """Construct graph for a simple shuffle operation."""
 
         shuffle_group_name = "group-" + self.name
         shuffle_split_name = "split-" + self.name
 
-        # Convert function path to CallableLazyImport objects
-        concat_func = CallableLazyImport(self.concat_func)
-        shuffle_group_func = CallableLazyImport(self.shuffle_group_func)
+        if deserializing:
+            # Use CallableLazyImport objects to avoid importing dataframe
+            # module on the scheduler
+            concat_func = CallableLazyImport("dask.dataframe.core._concat")
+            shuffle_group_func = CallableLazyImport(
+                "dask.dataframe.shuffle.shuffle_group"
+            )
+        else:
+            # Not running on distributed scheduler - Use explicit functions
+            from dask.dataframe.core import _concat as concat_func
+            from dask.dataframe.shuffle import shuffle_group as shuffle_group_func
 
         dsk = {}
         for part_out in self.parts_out:
@@ -469,15 +477,23 @@ class ShuffleLayer(SimpleShuffleLayer):
             parts_out=parts_out,
         )
 
-    def _construct_graph(self):
+    def _construct_graph(self, deserializing=False):
         """Construct graph for a "rearrange-by-column" stage."""
 
         shuffle_group_name = "group-" + self.name
         shuffle_split_name = "split-" + self.name
 
-        # Convert function path to CallableLazyImport objects
-        concat_func = CallableLazyImport(self.concat_func)
-        shuffle_group_func = CallableLazyImport(self.shuffle_group_func)
+        if deserializing:
+            # Use CallableLazyImport objects to avoid importing dataframe
+            # module on the scheduler
+            concat_func = CallableLazyImport("dask.dataframe.core._concat")
+            shuffle_group_func = CallableLazyImport(
+                "dask.dataframe.shuffle.shuffle_group"
+            )
+        else:
+            # Not running on distributed scheduler - Use explicit functions
+            from dask.dataframe.core import _concat as concat_func
+            from dask.dataframe.shuffle import shuffle_group as shuffle_group_func
 
         dsk = {}
         inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
@@ -591,9 +607,6 @@ class BroadcastJoinLayer(Layer):
             self.left_on = (list, tuple(self.left_on))
         if isinstance(self.right_on, list):
             self.right_on = (list, tuple(self.right_on))
-        self.merge_chunk_func = "dask.dataframe.multi._merge_chunk_wrapper"
-        self.concat_func = "dask.dataframe.multi._concat_wrapper"
-        self.split_partition_func = "dask.dataframe.multi._split_partition"
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -658,7 +671,7 @@ class BroadcastJoinLayer(Layer):
         state.update(merge_kwargs)
 
         # Materialize the layer
-        raw = dict(cls(**state))
+        raw = cls(**state).construct_graph(deserializing=True)
 
         # Convert all keys to strings and dump tasks
         raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
@@ -666,15 +679,6 @@ class BroadcastJoinLayer(Layer):
         deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
         return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
-
-        # dsk.update(toolz.valmap(dumps_task, raw))
-
-        # dependencies.update(
-        #     {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
-        # )
-
-        # if state["annotations"]:
-        #     cls.unpack_annotations(annotations, state["annotations"], raw.keys())
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
@@ -763,16 +767,29 @@ class BroadcastJoinLayer(Layer):
         else:
             return self, culled_deps
 
-    def _construct_graph(self):
+    def _construct_graph(self, deserializing=False):
         """Construct graph for a broadcast join operation."""
 
         inter_name = "inter-" + self.name
         split_name = "split-" + self.name
 
-        # Convert function path to CallableLazyImport objects
-        split_partition_func = CallableLazyImport(self.split_partition_func)
-        concat_func = CallableLazyImport(self.concat_func)
-        merge_chunk_func = CallableLazyImport(self.merge_chunk_func)
+        if deserializing:
+            # Use CallableLazyImport objects to avoid importing dataframe
+            # module on the scheduler
+            split_partition_func = CallableLazyImport(
+                "dask.dataframe.multi._split_partition"
+            )
+            concat_func = CallableLazyImport("dask.dataframe.multi._concat_wrapper")
+            merge_chunk_func = CallableLazyImport(
+                "dask.dataframe.multi._merge_chunk_wrapper"
+            )
+        else:
+            # Not running on distributed scheduler - Use explicit functions
+            from dask.dataframe.multi import (
+                _concat_wrapper as concat_func,
+                _merge_chunk_wrapper as merge_chunk_func,
+                _split_partition as split_partition_func,
+            )
 
         # Get broadcast "plan"
         bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
