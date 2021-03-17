@@ -17,7 +17,13 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
 from .creation import arange, diag, empty, indices, tri, zeros
-from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
+from .utils import (
+    safe_wraps,
+    validate_axis,
+    meta_from_array,
+    zeros_like_safe,
+    array_safe,
+)
 from .wrap import ones
 from .ufunc import multiply, sqrt
 
@@ -643,10 +649,10 @@ def bincount(x, weights=None, minlength=0, split_every=None):
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
     if weights is not None:
-        meta = np.array(np.bincount([1], weights=[1]), like=x._meta, dtype="int64")
+        meta = array_safe(np.bincount([1], weights=[1]), x._meta)
         args.extend([weights, "i"])
     else:
-        meta = np.array(np.bincount([]), like=x._meta, dtype="int64")
+        meta = array_safe(np.bincount([]), x._meta)
 
     if minlength == 0:
         output_size = np.nan
