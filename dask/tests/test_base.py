@@ -8,6 +8,8 @@ from collections import OrderedDict
 
 from tlz import merge, partial, compose, curry
 
+from unittest import mock
+
 import dask
 import dask.bag as db
 from dask import delayed
@@ -222,6 +224,86 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 def test_normalize_base():
     for i in [1, 1.1, "1", slice(1, 2, 3)]:
         assert normalize_token(i) is i
+
+
+def test_normalize_object():
+    import warnings
+
+    warnings.simplefilter("error")
+
+    o = object()
+
+    # Baseline config behavior: no explicitly set config value.
+    # Default behavior is equivalent to "ignore", i.e., proceed with non-
+    # deterministic normalization.
+    with mock.patch("uuid.uuid4") as mock_uuid4:
+        mock_uuid4.return_value = mock.Mock(hex="123")
+        assert normalize_token(o) == "123"
+
+    # Explicitly set config value to "ignore".
+    with dask.config.set(
+        {"normalize_token.handle_missing_dask_tokenize_method": "ignore"}
+    ):
+        with mock.patch("uuid.uuid4") as mock_uuid4:
+            mock_uuid4.return_value = mock.Mock(hex="123")
+            assert normalize_token(o) == "123"
+
+    # Explicitly set config value to "warn".
+    with dask.config.set(
+        {"normalize_token.handle_missing_dask_tokenize_method": "warn"}
+    ):
+        with mock.patch("uuid.uuid4") as mock_uuid4:
+            mock_uuid4.return_value = mock.Mock(hex="123")
+
+            with pytest.raises(UserWarning) as excinfo:
+                assert normalize_token(o) == "123"
+
+            assert "123" in str(excinfo.value)
+
+    # Explicitly set config value to "raise".
+    with dask.config.set(
+        {"normalize_token.handle_missing_dask_tokenize_method": "raise"}
+    ):
+        with mock.patch("uuid.uuid4") as mock_uuid4:
+            mock_uuid4.return_value = mock.Mock(hex="123")
+
+            with pytest.raises(TypeError) as excinfo:
+                normalize_token(o)
+
+            assert "__dask_tokenize__" in str(excinfo.value)
+
+    # Explicitly set config value to some unsupported value.
+    with dask.config.set(
+        {"normalize_token.handle_missing_dask_tokenize_method": "unsupported"}
+    ):
+        with pytest.raises(ValueError) as excinfo:
+            normalize_token(o)
+
+        assert "unsupported" in str(excinfo.value)
+
+    # Assert that objects, which have a corresponding `__dask_tokenize__` are
+    # unaffected by the config, and get normalized as per that method.
+    o2 = mock.Mock()
+    o2.__dask_tokenize__ = mock.Mock(return_value="abc")
+
+    for h in ["ignore", "warn", "raise"]:
+        with dask.config.set(
+            {"normalize_token.handle_missing_dask_tokenize_method": h}
+        ):
+            assert normalize_token(o2) == "abc"
+
+    # Assert that handling callables is unaffected by the config as it's logically distinct.
+    # Only one type of callables is tested here.
+    c = lambda: None
+
+    with mock.patch("cloudpickle.dumps") as mock_cloudpickle_dumps:
+        mock_cloudpickle_dumps.return_value = "678"
+
+        for h in ["ignore", "warn", "raise"]:
+            with dask.config.set(
+                {"normalize_token.handle_missing_dask_tokenize_method": h}
+            ):
+                assert normalize_token(c) == "678"
 
 
 @pytest.mark.skipif("not pd")

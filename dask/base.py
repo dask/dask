@@ -839,7 +839,42 @@ def normalize_object(o):
     method = getattr(o, "__dask_tokenize__", None)
     if method is not None:
         return method()
-    return normalize_function(o) if callable(o) else uuid.uuid4().hex
+
+    if callable(o):
+        return normalize_function(o)
+
+    handle_missing_dask_tokenize_method = config.get(
+        "normalize_token.handle_missing_dask_tokenize_method",
+        "ignore",
+    )
+
+    if handle_missing_dask_tokenize_method == "ignore":
+        return uuid.uuid4().hex
+
+    missing_dask_tokenize_method_msg = (
+        f"Object {str(o)} doesn't have a `__dask_tokenize__` method and "
+        "cannot be normalized deterministically."
+    )
+
+    if handle_missing_dask_tokenize_method == "warn":
+        normalized = uuid.uuid4().hex
+
+        import warnings
+
+        warnings.warn(
+            missing_dask_tokenize_method_msg
+            + f' Normalizing non-deterministically to "{normalized}".'
+        )
+
+        return normalized
+
+    if handle_missing_dask_tokenize_method == "raise":
+        raise TypeError(missing_dask_tokenize_method_msg)
+
+    raise ValueError(
+        f"Invalid value for config `normalize_token.handle_missing_dask_tokenize_method`. "
+        f'Expected one of ["ignore", "warn", "raise"]; got "{handle_missing_dask_tokenize_method}".'
+    )
 
 
 function_cache = {}
