@@ -353,6 +353,7 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
     with dask.config.set({"optimization.fuse.active": fuse}):
+        ddf.compute()
         dd.assert_eq(ddf, df, check_index=False)
 
 

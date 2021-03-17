@@ -490,7 +490,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        read_from_paths=None,
+        large_graph_objects=None,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
@@ -532,7 +532,7 @@ class ArrowDatasetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
-            read_from_paths,
+            large_graph_objects,
         )
 
         # Add `common_kwargs` to the first element of `parts`.
@@ -1152,7 +1152,7 @@ class ArrowDatasetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
-        read_from_paths,
+        large_graph_objects,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1210,7 +1210,7 @@ class ArrowDatasetEngine(Engine):
             partition_info,
             data_path,
             fs,
-            read_from_paths,
+            large_graph_objects,
         )
 
     @classmethod
@@ -1435,7 +1435,7 @@ class ArrowDatasetEngine(Engine):
         partition_info,
         data_path,
         fs,
-        read_from_paths,
+        large_graph_objects,
     ):
         """Process row-groups and statistics.
 
@@ -1458,17 +1458,12 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Check if we need to pass a fragment for each output partition.
-        # By default, we will avoid passing fragments in the graph if there
-        # are more than ~32_000 column-chunks (this is a vague heuristic to
-        # avoid an excessive graph size).
+        # By default, we will avoid passing fragments in the graph unless
+        # the user has specified `large_graph_objects=True`
         partitions = partition_info.get("partitions", None)
-        if read_from_paths is None:
-            read_from_paths = (
-                len(metadata) * (len(schema.names) - len(partitions)) > 32_000
-            )
         pass_frags = (
             filters
-            and (not read_from_paths)
+            and large_graph_objects
             and _need_fragments(filters, partition_info.get("partition_keys", None))
         )
 
@@ -1941,7 +1936,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         partition_info,
         data_path,
         fs,
-        read_from_paths,
+        large_graph_objects,
     ):
         """Process row-groups and statistics.
 

@@ -95,7 +95,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=None,
-    read_from_paths=None,
+    large_graph_objects=False,
     chunksize=None,
     **kwargs,
 ):
@@ -176,15 +176,12 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
-    read_from_paths : bool or None (default)
+    large_graph_objects : bool
         Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
-        Determines whether the engine should avoid inserting large pyarrow
-        (``ParquetFileFragment``) objects in the task graph.  If this option
-        is True, ``read_partition`` will need to regenerate the appropriate
-        fragment object from the path and row-group IDs.  This will reduce the
-        size of the task graph, but will add minor overhead to ``read_partition``.
-        By default (None), ``ArrowDatasetEngine`` will set this option to
-        ``False`` when there are filters.
+        If False, the default, the engine is not allowed to insert large/complex
+        objects in the task graph (e.g. ``ParquetFileFragment`` objects). For
+        smaller datasets (i.e. smaller graphs), setting this option to True
+        may improve performance.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -219,7 +216,7 @@ def read_parquet(
             engine=engine,
             gather_statistics=gather_statistics,
             split_row_groups=split_row_groups,
-            read_from_paths=read_from_paths,
+            large_graph_objects=large_graph_objects,
             chunksize=chunksize,
         )
         return df[columns]
@@ -238,7 +235,7 @@ def read_parquet(
         engine,
         gather_statistics,
         split_row_groups,
-        read_from_paths,
+        large_graph_objects,
         chunksize,
     )
 
@@ -266,7 +263,7 @@ def read_parquet(
         gather_statistics=True if chunksize else gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        read_from_paths=read_from_paths,
+        large_graph_objects=large_graph_objects,
         **kwargs,
     )
 
@@ -326,6 +323,11 @@ def read_parquet(
                 common_kwargs,
             ),
             label=label,
+            # If `large_graph_objects=True`, the engine
+            # is allowed pass complex (non-msgpack-serializable)
+            # objects in the graph.  For these cases, we should
+            # use pickle to serialize `parts` (to be safe)
+            require_pickle=large_graph_objects,
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 

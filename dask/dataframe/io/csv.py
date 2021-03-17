@@ -110,87 +110,6 @@ class CSVFunctionWrapper:
         return out[self.columns]
 
 
-class CSVSubgraph(Mapping):
-    """
-    Subgraph for reading CSV files.
-    """
-
-    def __init__(
-        self,
-        name,
-        reader,
-        blocks,
-        is_first,
-        head,
-        header,
-        kwargs,
-        dtypes,
-        columns,
-        enforce,
-        path,
-    ):
-        self.name = name
-        self.reader = reader
-        self.blocks = blocks
-        self.is_first = is_first
-        self.head = head  # example pandas DF for metadata
-        self.header = header  # prepend to all blocks
-        self.kwargs = kwargs
-        self.dtypes = dtypes
-        self.columns = columns
-        self.enforce = enforce
-        self.colname, self.paths = path or (None, None)
-
-    def __getitem__(self, key):
-        try:
-            name, i = key
-        except ValueError:
-            # too many / few values to unpack
-            raise KeyError(key) from None
-
-        if name != self.name:
-            raise KeyError(key)
-
-        if i < 0 or i >= len(self.blocks):
-            raise KeyError(key)
-
-        block = self.blocks[i]
-        if self.paths is not None:
-            path_info = (
-                self.colname,
-                self.paths[i],
-                sorted(list(self.head[self.colname].cat.categories)),
-            )
-        else:
-            path_info = None
-
-        write_header = False
-        rest_kwargs = self.kwargs.copy()
-        if not self.is_first[i]:
-            write_header = True
-            rest_kwargs.pop("skiprows", None)
-
-        return (
-            pandas_read_text,
-            self.reader,
-            block,
-            self.header,
-            rest_kwargs,
-            self.dtypes,
-            self.columns,
-            write_header,
-            self.enforce,
-            path_info,
-        )
-
-    def __len__(self):
-        return len(self.blocks)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield (self.name, i)
-
-
 def pandas_read_text(
     reader,
     b,
@@ -452,6 +371,7 @@ def text_blocks_to_pandas(
             kwargs,
         ),
         label=label,
+        require_pickle=True,
     )
     graph = HighLevelGraph({name: layer}, {name: set()})
     return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
