@@ -305,6 +305,8 @@ def test_normalize_object():
             ):
                 assert normalize_token(c) == "678"
 
+    warnings.resetwarnings()
+
 
 @pytest.mark.skipif("not pd")
 def test_tokenize_pandas():
