@@ -1156,11 +1156,16 @@ class Array(DaskMethodsMixin):
             if result is not None:
                 self = result
 
-        if hasattr(self, "dask") and name in self.dask.layers:
-            self.dask.layers[name].info["type"] = type(self)
-            self.dask.layers[name].info["chunk_type"] = type(meta)
-            self.dask.layers[name].info["chunks"] = chunks
-            self.dask.layers[name].info["dtype"] = dtype
+        try:
+            layer = self.dask.layers[name]
+        except (AttributeError, KeyError):
+            # self is no longer an Array after applying the plugins, OR
+            # a plugin replaced the HighLevelGraph with a plain dict, OR
+            # name is not the top layer's name (this can happen after the layer is
+            # manipulated, to avoid a collision)
+            pass
+        else:
+            layer.info.update({"type": type(self), "chunk_type": type(meta), "chunks": chunks, "dtype": dtype})
 
         return self
 
