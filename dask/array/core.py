@@ -57,6 +57,7 @@ from ..utils import (
 )
 from ..core import quote
 from ..delayed import delayed, Delayed
+from ..layers import BlockwiseCreateArray
 from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
@@ -66,7 +67,7 @@ from .slicing import (
     replace_ellipsis,
     cached_cumsum,
 )
-from .blockwise import blockwise, BlockwiseCreateArray
+from .blockwise import blockwise
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 

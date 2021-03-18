@@ -7,7 +7,6 @@ from operator import getitem
 
 import numpy as np
 
-from .blockwise import CreateArrayDeps
 from .core import (
     normalize_chunks,
     Array,
@@ -20,6 +19,7 @@ from .creation import arange
 from ..blockwise import Blockwise, blockwise_token
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
+from ..layers import CreateArrayDeps
 from ..utils import ignoring, random_state_data, derived_from, skip_doctest
 
 
