@@ -195,7 +195,7 @@ messy situations in everyday problems.
    logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
-.. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt
+.. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt
 
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues
