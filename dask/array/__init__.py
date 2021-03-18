@@ -224,6 +224,7 @@ try:
         reduction,
     )
     from .percentile import percentile
+    from . import lib
     from . import ma
     from . import random, linalg, overlap, fft, backends
     from .overlap import map_overlap
