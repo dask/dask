@@ -1,4 +1,5 @@
 import pytest
+import os
 
 distributed = pytest.importorskip("distributed")
 
@@ -35,7 +36,7 @@ def get_start_modules(dask_scheduler):
     return plugin.start_modules
 
 
-def _dataframe_shuffle():
+def _dataframe_shuffle(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
@@ -44,7 +45,7 @@ def _dataframe_shuffle():
     return dd.from_pandas(df, npartitions=2)
 
 
-def _dataframe_broadcast_join():
+def _dataframe_broadcast_join(tmpdir):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
@@ -55,11 +56,73 @@ def _dataframe_broadcast_join():
     return ddf1.merge(ddf2, how="left", broadcast=True)
 
 
-def _array_creation():
+def _array_creation(tmpdir):
     da = pytest.importorskip("dask.array")
 
     # Perform a computation using HLG-based array creation
     return da.ones((100,)) + da.zeros((100,))
+
+
+def _pq_pyarrow(tmpdir):
+    pytest.importorskip("pyarrow.parquet")
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    try:
+        import pyarrow.dataset as pa_ds
+    except ImportError:
+        # PyArrow version too old for Dataset API
+        pa_ds = None
+
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+        str(tmpdir),
+        engine="pyarrow",
+    )
+    filters = [(("a", "<=", 2))]
+
+    ddf1 = dd.read_parquet(str(tmpdir), engine="pyarrow", filters=filters)
+    if pa_ds:
+        # Need to test that layer serialization succeeds
+        # with "pyarrow-dataset" filtering (whether or not
+        # `large_graph_objects=True` is specified)
+        ddf2 = dd.read_parquet(
+            str(tmpdir),
+            engine="pyarrow-dataset",
+            filters=filters,
+            large_graph_objects=True,
+        )
+        ddf3 = dd.read_parquet(
+            str(tmpdir),
+            engine="pyarrow-dataset",
+            filters=filters,
+            large_graph_objects=False,
+        )
+        return (ddf1, ddf2, ddf3)
+    else:
+        return ddf1
+
+
+def _pq_fastparquet(tmpdir):
+    pytest.importorskip("fastparquet")
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2,).to_parquet(
+        str(tmpdir),
+        engine="fastparquet",
+    )
+    return dd.read_parquet(str(tmpdir), engine="fastparquet")
+
+
+def _read_csv(tmpdir):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    dd.from_pandas(
+        pd.DataFrame({"a": range(10)}),
+        npartitions=2,
+    ).to_csv(str(tmpdir))
+    return dd.read_csv(os.path.join(str(tmpdir), "*"))
 
 
 @pytest.mark.parametrize(
@@ -67,11 +130,14 @@ def _array_creation():
     [
         (_dataframe_shuffle, "pandas."),
         (_dataframe_broadcast_join, "pandas."),
+        (_pq_pyarrow, "pandas."),
+        (_pq_fastparquet, "pandas."),
+        (_read_csv, "pandas."),
         (_array_creation, "numpy."),
     ],
 )
 @pytest.mark.parametrize("optimize_graph", [True, False])
-def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop):
+def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, tmpdir):
     # Test that array/dataframe-specific modules are not imported
     # on the scheduler when an HLG layers are unpacked/materialized.
 
@@ -81,7 +147,7 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop):
     ):
         with Client(scheduler["address"], loop=loop) as c:
             # Perform a computation using a HighLevelGraph Layer
-            c.compute(op(), optimize_graph=optimize_graph)
+            c.compute(op(tmpdir), optimize_graph=optimize_graph)
 
             # Get the new modules which were imported on the scheduler during the computation
             end_modules = c.run_on_scheduler(lambda: set(sys.modules))
