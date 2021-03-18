@@ -962,28 +962,33 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     sample chunks would be ``((4, 4), (3,))`` and the weights chunks
     would be ``((4, 4),)`` a table of the structure:
 
-    .. code-block::
+    +-------------------------------+-------------------+
+    |             sample            |      weights      |
+    +=======+=====+=====+=====+=====+=======+=====+=====+
+    | chunk | row | `x` | `y` | `z` | chunk | row | `w` |
+    +-------+-----+-----+-----+-----+-------+-----+-----+
+    |       |   0 |   5 |   6 |   6 |       |   0 | 0.5 |
+    |       +-----+-----+-----+-----+       +-----+-----+
+    |       |   1 |   8 |   9 |   2 |       |   1 | 0.8 |
+    |   0   +-----+-----+-----+-----+   0   +-----+-----+
+    |       |   2 |   3 |   3 |   1 |       |   2 | 0.3 |
+    |       +-----+-----+-----+-----+       +-----+-----+
+    |       |   3 |   2 |   5 |   6 |       |   3 | 0.7 |
+    +-------+-----+-----+-----+-----+-------+-----+-----+
+    |       |   4 |   3 |   1 |   1 |       |   4 | 0.3 |
+    |       +-----+-----+-----+-----+       +-----+-----+
+    |       |   5 |   3 |   2 |   9 |       |   5 | 1.3 |
+    |   1   +-----+-----+-----+-----+   1   +-----+-----+
+    |       |   6 |   8 |   1 |   5 |       |   6 | 0.8 |
+    |       +-----+-----+-----+-----+       +-----+-----+
+    |       |   7 |   3 |   5 |   3 |       |   7 | 0.7 |
+    +-------+-----+-----+-----+-----+-------+-----+-----+
 
-                    sample                    weights
-        +-------+-----+-----------+   +-------+-----+-----+
-        | chunk | row |  x  y  z  |   | chunk | row |  w  |
-        +-------+-----+-----------+   +-------+-----+-----+
-        |       |   0 |  5  6  6  |   |       |   0 | 0.5 |
-        |   0   |   1 |  8  9  2  |   |   0   |   1 | 0.8 |
-        |       |   2 |  3  3  1  |   |       |   2 | 0.3 |
-        |       |   3 |  2  5  6  |   |       |   3 | 0.7 |
-        +-------+-----+-----------+   +-------+-----+-----+
-        |       |   4 |  3  1  1  |   |       |   4 | 0.3 |
-        |   1   |   5 |  3  2  9  |   |   1   |   5 | 1.3 |
-        |       |   6 |  8  1  5  |   |       |   6 | 0.8 |
-        |       |   7 |  3  5  3  |   |       |   7 | 0.7 |
-        +-------+-----+-----------+   +-------+-----+-----+
-
-    If the sample 0th dimension and weight 0th dimension are chunked
-    differently, a ``ValueError`` will be raised. If coordinate
-    groupings ((x, y, z) trios) are separated by a chunk boundry, then
-    a ``ValueError`` will be raised. We suggest that you rechunk your
-    data if it is of that form.
+    If the sample 0th dimension and weight 0th (row) dimension are
+    chunked differently, a ``ValueError`` will be raised. If
+    coordinate groupings ((x, y, z) trios) are separated by a chunk
+    boundry, then a ``ValueError`` will be raised. We suggest that you
+    rechunk your data if it is of that form.
 
     The chunks property of the data (and optional weights) are used to
     check for compatibility with the blocked algorithm (as described
