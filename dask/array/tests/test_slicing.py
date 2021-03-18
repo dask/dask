@@ -1019,7 +1019,7 @@ def test_setitem_with_different_chunks_preserves_shape(params):
     """
     array_size, chunk_size1, chunk_size2 = params
     x = da.zeros(array_size, chunks=chunk_size1)
-    mask = da.zeros(array_size, chunks=chunk_size2, dtype=bool)
+    mask = da.zeros(array_size, chunks=chunk_size2)
     x[mask] = 1
     result = x.compute()
     assert x.shape == result.shape

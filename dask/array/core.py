@@ -1649,7 +1649,7 @@ class Array(DaskMethodsMixin):
             value = np.ma.masked_all(())
 
         ## Use the "where" method for cases when key is an Array
-        if isinstance(key, Array) and key.dtype == bool:
+        if isinstance(key, Array): # and key.dtype == bool:
             from .routines import where
 
             if isinstance(value, Array) and value.ndim > 1:
