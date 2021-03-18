@@ -11,12 +11,15 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from importlib import import_module
 from numbers import Integral, Number
+from operator import add
 from threading import Lock
 from typing import Dict, Iterable, Mapping, Optional, TypeVar
 import uuid
 from weakref import WeakValueDictionary
 from functools import lru_cache
 from _thread import RLock
+
+from tlz import accumulate
 
 from .core import get_deps
 
@@ -1743,3 +1746,62 @@ class cached_property(_cached_property):
     def __set__(self, instance, val):
         """Raise an error when attempting to set a cached property."""
         raise AttributeError("Can't set attribute")
+
+
+class _HashIdWrapper:
+    """Hash and compare a wrapped object by identity instead of value"""
+
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __eq__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is other.wrapped
+
+    def __ne__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is not other.wrapped
+
+    def __hash__(self):
+        return id(self.wrapped)
+
+
+@functools.lru_cache()
+def _cumsum(seq, initial_zero):
+    if isinstance(seq, _HashIdWrapper):
+        seq = seq.wrapped
+    if initial_zero:
+        return tuple(accumulate(add, seq, 0))
+    else:
+        return tuple(accumulate(add, seq))
+
+
+def cached_cumsum(seq, initial_zero=False):
+    """Compute :meth:`toolz.accumulate` with caching.
+
+    Caching is by the identify of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist (generally
+    block sizes).
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to cumulatively sum.
+    initial_zero : bool, optional
+        If true, the return value is prefixed with a zero.
+
+    Returns
+    -------
+    tuple
+    """
+    if isinstance(seq, tuple):
+        # Look up by identity first, to avoid a linear-time __hash__
+        # if we've seen this tuple object before.
+        result = _cumsum(_HashIdWrapper(seq), initial_zero)
+    else:
+        # Construct a temporary tuple, and look up by value.
+        result = _cumsum(tuple(seq), initial_zero)
+    return result
