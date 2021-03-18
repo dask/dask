@@ -864,8 +864,23 @@ def test_histogramdd_density():
     bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
     (a1, b1) = da.histogramdd(x, bins=bins, density=True)
     (a2, b2) = np.histogramdd(x, bins=bins, density=True)
+    (a3, b3) = da.histogramdd(x, bins=bins, normed=True)
     assert_eq(a1, a2)
+    assert_eq(a1, a3)
     assert same_keys(da.histogramdd(x, bins=bins, density=True)[0], a1)
+
+
+def test_histogramdd_weighted_density():
+    n1, n2 = 1200, 4
+    x = da.random.standard_normal(size=(n1, n2), chunks=(200, 4))
+    w = da.random.uniform(0.5, 1.2, size=(n1,), chunks=200)
+    bins = (5, 6, 7, 8)
+    ranges = ((-4, 4),) * len(bins)
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
+    (a3, b3) = da.histogramdd(x, bins=bins, range=ranges, weights=w, normed=True)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
 
 
 def test_histogramdd_raises_incompat_sample_chuks():
@@ -903,6 +918,14 @@ def test_histogramdd_raises_incompat_bins_or_range():
         ValueError, match="range argument should be a sequence of pairs"
     ):
         da.histogramdd(data, bins=bins, range=((0, 1), (0, 1, 2), 3, 5))
+
+
+def test_histogramdd_raise_normed_and_density():
+    data = da.random.random(size=(10, 3), chunks=(5, 3))
+    bins = (4, 5, 6)
+    ranges = ((0, 1),) * 3
+    with pytest.raises(TypeError, match="Cannot specify both 'normed' and 'density'"):
+        da.histogramdd(data, bins=bins, range=ranges, normed=True, density=True)
 
 
 def test_cov():

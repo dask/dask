@@ -985,6 +985,12 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     a ``ValueError`` will be raised. We suggest that you rechunk your
     data if it is of that form.
 
+    The chunks property of the data (and optional weights) are used to
+    check for compatibility with the blocked algorithm (as described
+    above); therefore, you must call `to_dask_array` on a collection
+    from ``dask.dataframe``, i.e. :class:`dask.dataframe.Series` or
+    :class:`dask.dataframe.DataFrame`.
+
     Parameters
     ----------
     sample : dask.array.Array (N, D) or sequence of dask.array.Array
