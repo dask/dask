@@ -120,6 +120,7 @@ class CreateRandomArrayDeps(CreateArrayDeps):
     def __getitem__(self, idx: tuple):
         block_info = super().__getitem__(idx)
         n = 0
+        # TODO should be able to do this with one accumulate call
         for dim, index in enumerate(idx[:-1]):
             n += index * toolz.last(
                 toolz.accumulate(operator.mul, self.num_chunks[(dim + 1) :])
