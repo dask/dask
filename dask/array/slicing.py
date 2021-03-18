@@ -1930,7 +1930,6 @@ def setitem_array(out_name, array, indices, value):
         # Note which dimension, if any, has 1-d integer array index
         dim_1d_int_index = None
 
-        j = -1
         for dim, (index, full_size, (loc0, loc1)) in enumerate(
             zip(
                 indices,
@@ -1938,7 +1937,6 @@ def setitem_array(out_name, array, indices, value):
                 locations,
             )
         ):
-            j += 1
 
             integer_index = isinstance(index, int)
             if isinstance(index, slice):
