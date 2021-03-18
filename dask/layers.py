@@ -110,6 +110,102 @@ class BlockwiseCreateArray(Blockwise):
         )
 
 
+class CreateRandomArrayDeps(CreateArrayDeps):
+    """Index-block info mapping for BlockwiseCreateRandomArray"""
+
+    def __init__(self, chunks: tuple, seeds):
+        super().__init__(chunks)
+        self.seeds = seeds
+
+    def __getitem__(self, idx: tuple):
+        block_info = super().__getitem__(idx)
+        n = 0
+        for dim, index in enumerate(idx[:-1]):
+            n += index * toolz.last(
+                toolz.accumulate(operator.mul, self.num_chunks[(dim + 1) :])
+            )
+        n += idx[-1]
+        block_info["seed"] = self.seeds[n]
+        return block_info
+
+    @classmethod
+    def __dask_distributed_pack__(cls, module: str, name: str, *args):
+        from distributed.protocol import serialize
+
+        chunks, seeds = args
+        return (
+            module,
+            name,
+            chunks,
+            serialize(seeds),
+        )
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, module: str, name: str, *args):
+        from distributed.protocol import deserialize
+
+        chunks, seeds = args
+        return (
+            module,
+            name,
+            chunks,
+            deserialize(*seeds),
+        )
+
+
+class BlockwiseCreateRandomArray(Blockwise):
+    """
+    Specialized Blockwise Layer for random array creation routines.
+    Similar to BlockwiseCreateArray, but allows for passing of seed/randomstate data.
+
+    Enables HighLevelGraph optimizations.
+
+    Parameters
+    ----------
+    name: string
+        The output name.
+    func : callable
+        Function to apply to populate individual blocks. This function should take
+        an iterable containing the dimensions of the given block.
+    shape: iterable
+        Iterable containing the overall shape of the array.
+    chunks: iterable
+        Iterable containing the chunk sizes along each dimension of array.
+    """
+
+    def __init__(
+        self,
+        name,
+        func,
+        shape,
+        chunks,
+        seeds,
+    ):
+        # self.name = name
+        io_name = "blockwise-create-random-" + name
+
+        # Define "blockwise" graph
+        dsk = {name: (func, blockwise_token(0))}
+
+        out_ind = tuple(range(len(shape)))
+        self.nchunks = tuple(len(chunk) for chunk in chunks)
+        super().__init__(
+            name,
+            out_ind,
+            dsk,
+            [(io_name, out_ind)],
+            {io_name: self.nchunks},
+            io_deps={
+                io_name: (
+                    "dask.layers",
+                    "CreateRandomArrayDeps",
+                    chunks,
+                    seeds,
+                )
+            },
+        )
+
+
 #
 ##
 ###  DataFrame Layers & Utilities
