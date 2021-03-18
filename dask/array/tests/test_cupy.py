@@ -922,6 +922,7 @@ def test_cupy_sparse_concatenate(axis):
     assert (z.toarray() == z_expected.toarray()).all()
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
