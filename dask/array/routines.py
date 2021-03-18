@@ -648,10 +648,10 @@ def bincount(x, weights=None, minlength=0, split_every=None):
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
     if weights is not None:
-        meta = array_safe(np.bincount([1], weights=[1]), x._meta)
+        meta = array_safe(np.bincount([1], weights=[1]), like=meta_from_array(x))
         args.extend([weights, "i"])
     else:
-        meta = array_safe(np.bincount([]), x._meta)
+        meta = array_safe(np.bincount([]), like=meta_from_array(x))
 
     if minlength == 0:
         output_size = (np.nan,)
