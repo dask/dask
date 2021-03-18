@@ -645,7 +645,6 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         if weights.chunks != x.chunks:
             raise ValueError("Chunks of input array x and weights must match.")
 
-    axis = (0,)
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
     if weights is not None:
@@ -655,16 +654,16 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         meta = array_safe(np.bincount([]), x._meta)
 
     if minlength == 0:
-        output_size = np.nan
+        output_size = (np.nan,)
     else:
-        output_size = minlength
+        output_size = (minlength,)
 
     chunked_counts = blockwise(
         partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
     )
-    chunked_counts._chunks = tuple(
-        (output_size,) * len(c) if i in axis else c
-        for i, c in enumerate(chunked_counts.chunks)
+    chunked_counts._chunks = (
+        output_size * len(chunked_counts.chunks[0]),
+        *chunked_counts.chunks[1:],
     )
 
     from .reductions import _tree_reduce
@@ -672,15 +671,13 @@ def bincount(x, weights=None, minlength=0, split_every=None):
     output = _tree_reduce(
         chunked_counts,
         aggregate=partial(_bincount_agg, dtype=meta.dtype),
-        axis=axis,
+        axis=(0,),
         keepdims=True,
         dtype=meta.dtype,
         split_every=split_every,
         concatenate=False,
     )
-    output._chunks = tuple(
-        (output_size,) if i in axis else c for i, c in enumerate(chunked_counts.chunks)
-    )
+    output._chunks = (output_size, *chunked_counts.chunks[1:])
     output._meta = meta
     return output
 
