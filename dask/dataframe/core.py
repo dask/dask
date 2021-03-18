@@ -3134,7 +3134,7 @@ Dask Name: {name}, {task} tasks""".format(
         Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
         True.
         """
-        kwargs = {"sort": sort, "ascending": ascending, "normalize": normalize}
+        kwargs = {"sort": sort, "ascending": ascending}
 
         if dropna is not None:
             if not PANDAS_GT_110:
@@ -3144,8 +3144,9 @@ Dask Name: {name}, {task} tasks""".format(
                 )
             kwargs["dropna"] = dropna
 
+        aggregate_kwargs = {"normalize": normalize}
         if split_out > 1:
-            kwargs["total_length"] = (
+            aggregate_kwargs["total_length"] = (
                 len(self) if dropna is False else len(self.dropna())
             )
 
@@ -3159,6 +3160,7 @@ Dask Name: {name}, {task} tasks""".format(
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            aggregate_kwargs=aggregate_kwargs,
             **kwargs,
         )
 

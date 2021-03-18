@@ -304,10 +304,8 @@ def unique(x, series_name=None):
     return out
 
 
-def value_counts_combine(
-    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
-):
-    # sort, ascending, normalize, and total_length don't actually matter until the agg step
+def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
+    # sort and ascending don't actually matter until the agg step
     return x.groupby(level=0, **groupby_kwargs).sum()
 
 
