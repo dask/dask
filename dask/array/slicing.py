@@ -1523,7 +1523,6 @@ def concatenate_array_chunks(x):
         The concatenated dask array with one chunk.
 
     """
-    from ..core import flatten
     from .core import concatenate3, Array
 
     if x.npartitions == 1:
