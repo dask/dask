@@ -7,7 +7,7 @@ from tlz import curry
 
 from ..base import tokenize
 from ..utils import funcname
-from .blockwise import BlockwiseCreateArray
+from ..layers import BlockwiseCreateArray
 from .core import Array, normalize_chunks
 from .utils import (
     meta_from_array,
