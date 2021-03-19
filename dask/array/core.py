@@ -18,6 +18,7 @@ from threading import Lock
 from tlz import partition, concat, first, groupby, accumulate, frequencies
 from tlz.curried import pluck
 import numpy as np
+from fsspec import get_mapper
 
 from . import chunk
 from .. import config, compute
@@ -297,7 +298,7 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
 
 
 def _concatenate2(arrays, axes=[]):
-    """Recursively Concatenate nested lists of arrays along axes
+    """Recursively concatenate nested lists of arrays along axes
 
     Each entry in axes corresponds to each level of the nested list.  The
     length of axes should correspond to the level of nesting of arrays.
@@ -3218,8 +3219,6 @@ def from_zarr(
     if isinstance(url, zarr.Array):
         z = url
     elif isinstance(url, str):
-        from ..bytes.core import get_mapper
-
         mapper = get_mapper(url, **storage_options)
         z = zarr.Array(mapper, read_only=True, path=component, **kwargs)
     else:
@@ -3305,8 +3304,6 @@ def to_zarr(
     storage_options = storage_options or {}
 
     if isinstance(url, str):
-        from ..bytes.core import get_mapper
-
         mapper = get_mapper(url, **storage_options)
     else:
         # assume the object passed is already a mapper
@@ -3467,7 +3464,7 @@ def common_blockdim(blockdims):
 
     if np.isnan(sum(map(sum, blockdims))):
         raise ValueError(
-            "Arrays chunk sizes (%s) are unknown.\n\n"
+            "Arrays' chunk sizes (%s) are unknown.\n\n"
             "A possible solution:\n"
             "  x.compute_chunk_sizes()" % blockdims
         )
@@ -3551,7 +3548,6 @@ def unify_chunks(*args, **kwargs):
     arginds = [
         (asanyarray(a) if ind is not None else a, ind) for a, ind in partition(2, args)
     ]  # [x, ij, y, jk]
-    args = list(concat(arginds))  # [(x, ij), (y, jk)]
     warn = kwargs.get("warn", True)
 
     arrays, inds = zip(*arginds)
@@ -4106,7 +4102,7 @@ def asarray(a, **kwargs):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
@@ -4146,7 +4142,7 @@ def asanyarray(a):
         return a
     elif hasattr(a, "to_dask_array"):
         return a.to_dask_array()
-    elif type(a).__module__.startswith("xarray.") and hasattr(a, "data"):
+    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asanyarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)

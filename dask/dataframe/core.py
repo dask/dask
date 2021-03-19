@@ -3122,13 +3122,20 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def value_counts(
-        self, sort=None, ascending=False, dropna=None, split_every=None, split_out=1
+        self,
+        sort=None,
+        ascending=False,
+        dropna=None,
+        normalize=False,
+        split_every=None,
+        split_out=1,
     ):
         """
         Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
         True.
         """
         kwargs = {"sort": sort, "ascending": ascending}
+
         if dropna is not None:
             if not PANDAS_GT_110:
                 raise NotImplementedError(
@@ -3137,16 +3144,23 @@ Dask Name: {name}, {task} tasks""".format(
                 )
             kwargs["dropna"] = dropna
 
+        aggregate_kwargs = {"normalize": normalize}
+        if split_out > 1:
+            aggregate_kwargs["total_length"] = (
+                len(self) if dropna is False else len(self.dropna())
+            )
+
         return aca(
             self,
             chunk=M.value_counts,
             aggregate=methods.value_counts_aggregate,
             combine=methods.value_counts_combine,
-            meta=self._meta.value_counts(),
+            meta=self._meta.value_counts(normalize=normalize),
             token="value-counts",
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            aggregate_kwargs=aggregate_kwargs,
             **kwargs,
         )
 
@@ -3707,7 +3721,6 @@ class DataFrame(_Frame):
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
-            #
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
 
@@ -3815,6 +3828,39 @@ class DataFrame(_Frame):
     def select_dtypes(self, include=None, exclude=None):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
+
+    def sort_values(self, other, npartitions=None, ascending=True, **kwargs):
+        """Sort the dataset by a single column.
+
+        Sorting a parallel dataset requires expensive shuffles and is generally
+        not recommended. See ``set_index`` for implementation details.
+
+        Parameters
+        ----------
+        other: string
+        npartitions: int, None, or 'auto'
+            The ideal number of output partitions. If None, use the same as
+            the input. If 'auto' then decide by memory use.
+        ascending: bool, optional
+            Non ascending sort is not supported by Dask.
+            Defaults to True.
+
+        Examples
+        --------
+        >>> df2 = df.sort_values('x')  # doctest: +SKIP
+        """
+        if not ascending:
+            raise NotImplementedError("The ascending= keyword is not supported")
+
+        from .shuffle import sort_values
+
+        return sort_values(
+            self,
+            other,
+            ascending=ascending,
+            npartitions=npartitions,
+            **kwargs,
+        )
 
     def set_index(
         self,

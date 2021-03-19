@@ -101,7 +101,7 @@ pip or conda_
 
 ``pip``::
 
-  python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete,test]"
 
 ``conda``::
 
@@ -293,6 +293,14 @@ Dask uses Sphinx_ for documentation, hosted on https://readthedocs.org .
 Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
+
+The documentation is automatically built, and a live preview is available,
+for each pull request submitted to Dask. Additionally, you may also
+build the documentation yourself locally by following the instructions outlined
+below.
+
+How to build the Dask documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To build the documentation locally, clone this repository and install
 the necessary requirements using ``pip`` or ``conda``::

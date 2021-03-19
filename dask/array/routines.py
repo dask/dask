@@ -17,7 +17,13 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
 from .creation import arange, diag, empty, indices, tri, zeros
-from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
+from .utils import (
+    safe_wraps,
+    validate_axis,
+    meta_from_array,
+    zeros_like_safe,
+    array_safe,
+)
 from .wrap import ones
 from .ufunc import multiply, sqrt
 
@@ -642,13 +648,22 @@ def bincount(x, weights=None, minlength=0, split_every=None):
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
     if weights is not None:
-        meta = np.bincount([1], weights=[1])
+        meta = array_safe(np.bincount([1], weights=[1]), like=meta_from_array(x))
         args.extend([weights, "i"])
     else:
-        meta = np.bincount([])
+        meta = array_safe(np.bincount([]), like=meta_from_array(x))
+
+    if minlength == 0:
+        output_size = (np.nan,)
+    else:
+        output_size = (minlength,)
 
     chunked_counts = blockwise(
         partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
+    )
+    chunked_counts._chunks = (
+        output_size * len(chunked_counts.chunks[0]),
+        *chunked_counts.chunks[1:],
     )
 
     from .reductions import _tree_reduce
@@ -657,11 +672,12 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         chunked_counts,
         aggregate=partial(_bincount_agg, dtype=meta.dtype),
         axis=(0,),
-        keepdims=False,
+        keepdims=True,
         dtype=meta.dtype,
         split_every=split_every,
         concatenate=False,
     )
+    output._chunks = (output_size, *chunked_counts.chunks[1:])
     output._meta = meta
     return output
 

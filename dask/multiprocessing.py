@@ -8,6 +8,7 @@ import traceback
 from functools import partial
 from warnings import warn
 
+import cloudpickle
 from . import config
 from .system import CPU_COUNT
 from .local import reraise, get_async  # TODO: get better get
@@ -22,23 +23,8 @@ def _reduce_method_descriptor(m):
 # type(set.union) is used as a proxy to <class 'method_descriptor'>
 copyreg.pickle(type(set.union), _reduce_method_descriptor)
 
-
-try:
-    import cloudpickle
-
-    _dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-    _loads = cloudpickle.loads
-except ImportError:
-
-    def _dumps(obj, **kwargs):
-        try:
-            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL, **kwargs)
-        except (pickle.PicklingError, AttributeError) as exc:
-            raise ModuleNotFoundError(
-                "Please install cloudpickle to use the multiprocessing scheduler"
-            ) from exc
-
-    _loads = pickle.loads
+_dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+_loads = cloudpickle.loads
 
 
 def _process_get_id():
@@ -174,11 +160,9 @@ def get(
     num_workers : int
         Number of worker processes (defaults to number of cores)
     func_dumps : function
-        Function to use for function serialization
-        (defaults to cloudpickle.dumps if available, otherwise pickle.dumps)
+        Function to use for function serialization (defaults to cloudpickle.dumps)
     func_loads : function
-        Function to use for function deserialization
-        (defaults to cloudpickle.loads if available, otherwise pickle.loads)
+        Function to use for function deserialization (defaults to cloudpickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
     """

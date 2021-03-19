@@ -1046,6 +1046,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
     from .core import Array, blockwise, from_array
+    from .utils import asarray_safe
     from . import chunk
 
     assert 0 <= axis < x.ndim
@@ -1058,12 +1059,14 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     # Calculate the offset at which each chunk starts along axis
     # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
-    offset = np.roll(np.cumsum(x.chunks[axis]), 1)
+    offset = np.roll(np.cumsum(asarray_safe(x.chunks[axis], like=x._meta)), 1)
     offset[0] = 0
     offset = from_array(offset, chunks=1)
     # Tamper with the declared chunks of offset to make blockwise align it with
     # x[axis]
-    offset = Array(offset.dask, offset.name, (x.chunks[axis],), offset.dtype)
+    offset = Array(
+        offset.dask, offset.name, (x.chunks[axis],), offset.dtype, meta=x._meta
+    )
 
     # Define axis labels for blockwise
     x_axes = tuple(range(x.ndim))
@@ -1085,6 +1088,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
         x_size=x.shape[axis],
         axis=axis,
         dtype=x.dtype,
+        meta=x._meta,
     )
 
     # Aggregate on the chunks of x along axis
@@ -1099,6 +1103,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
         x_chunks=x.chunks[axis],
         axis=axis,
         dtype=x.dtype,
+        meta=x._meta,
     )
     return y
 
