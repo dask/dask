@@ -4556,20 +4556,20 @@ def test_dot():
     dask_df = dd.from_pandas(df, npartitions=1)
     dask_s2 = dd.from_pandas(s2, npartitions=1)
 
-    assert_eq(s1.dot(s2), dask_s1.dot(dask_s2).compute())
-    assert_eq(s1.dot(df), dask_s1.dot(dask_df).compute())
+    assert_eq(s1.dot(s2), dask_s1.dot(dask_s2))
+    assert_eq(s1.dot(df), dask_s1.dot(dask_df))
 
     # With partitions
     partitioned_s1 = dd.from_pandas(s1, npartitions=2)
     partitioned_df = dd.from_pandas(df, npartitions=2)
     partitioned_s2 = dd.from_pandas(s2, npartitions=2)
 
-    assert_eq(s1.dot(s2), partitioned_s1.dot(partitioned_s2).compute())
-    assert_eq(s1.dot(df), partitioned_s1.dot(partitioned_df).compute())
+    assert_eq(s1.dot(s2), partitioned_s1.dot(partitioned_s2))
+    assert_eq(s1.dot(df), partitioned_s1.dot(partitioned_df))
 
     # Test passing meta kwarg
     res = dask_s1.dot(dask_df, meta=pd.Series([1], name="test_series")).compute()
-    assert_eq(res.name, "test_series")
+    assert res.name == "test_series"
 
     # Test validation of second operand
     with pytest.raises(TypeError):
@@ -4577,6 +4577,7 @@ def test_dot():
 
 
 def test_dot_nan():
+    # Test that nan inputs match pandas' behavior
     s1 = pd.Series([1, 2, 3, 4])
     dask_s1 = dd.from_pandas(s1, npartitions=1)
 
@@ -4586,5 +4587,5 @@ def test_dot_nan():
     df = pd.DataFrame({"one": s1, "two": s2})
     dask_df = dd.from_pandas(df, npartitions=1)
 
-    assert np.isnan(dask_s1.dot(dask_s2).compute())
-    assert dask_s2.dot(dask_df).isnull().all().compute()
+    assert_eq(s1.dot(s2), dask_s1.dot(dask_s2))
+    assert_eq(s2.dot(df), dask_s2.dot(dask_df))
