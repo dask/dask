@@ -1,13 +1,12 @@
 Shared Memory
 =============
 
-The asynchronous scheduler requires an ``apply_async`` function and a
-``Queue``.  These determine the kind of worker and parallelism that we exploit.
-``apply_async`` functions can be found in the following places:
-
-*  ``multithreading.Pool().apply_async`` - uses multiple processes
-*  ``multithreading.pool.ThreadPool().apply_async`` - uses multiple threads
-*  ``dask.local.apply_sync`` - uses only the main thread (useful for debugging)
+The asynchronous scheduler accepts any ``concurrent.futures.Executor``
+instance. This includes instances of the ``ThreadPoolExecutor`` and
+``ProcessPoolExecutor`` defined in the Python standard library as well as any
+other subclass from a 3rd party library. Dask also defines its own
+``SynchronousExecutor`` for that simply runs functions on the main thread
+(useful for debugging).
 
 Full dask ``get`` functions exist in each of ``dask.threaded.get``,
 ``dask.multiprocessing.get`` and ``dask.get`` respectively.
