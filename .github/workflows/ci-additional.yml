@@ -49,7 +49,7 @@ jobs:
     needs: check-hdfs
     runs-on: "ubuntu-latest"
     if: |
-      needs.check.outputs.test-hefs == 'true'
+      needs.check.outputs.test-hdfs == 'true'
       || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
 
     steps:
