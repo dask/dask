@@ -451,74 +451,74 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
     )
 
 
-with ignoring(AttributeError):
+@derived_from(np)
+def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
+    if dtype is not None:
+        dt = dtype
+    else:
+        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+    return reduction(
+        a,
+        chunk.nanprod,
+        chunk.prod,
+        axis=axis,
+        keepdims=keepdims,
+        dtype=dt,
+        split_every=split_every,
+        out=out,
+    )
 
-    @derived_from(np)
-    def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        if dtype is not None:
-            dt = dtype
-        else:
-            dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
-        return reduction(
-            a,
-            chunk.nanprod,
-            chunk.prod,
-            axis=axis,
-            keepdims=keepdims,
-            dtype=dt,
-            split_every=split_every,
-            out=out,
-        )
 
-    @derived_from(np)
-    def nancumsum(x, axis, dtype=None, out=None, *, method="sequential"):
-        """Dask added an additional keyword-only argument ``method``.
+@derived_from(np)
+def nancumsum(x, axis, dtype=None, out=None, *, method="sequential"):
+    """Dask added an additional keyword-only argument ``method``.
 
-        method : {'sequential', 'blelloch'}, optional
-            Choose which method to use to perform the cumsum.  Default is 'sequential'.
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumsum.  Default is 'sequential'.
 
-            * 'sequential' performs the cumsum of each prior block before the current block.
-            * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
-              first taking the sum of each block and combines the sums via a binary tree.
-              This method may be faster or more memory efficient depending on workload,
-              scheduler, and hardware.  More benchmarking is necessary.
-        """
-        return cumreduction(
-            chunk.nancumsum,
-            operator.add,
-            0,
-            x,
-            axis,
-            dtype,
-            out=out,
-            method=method,
-            preop=np.nansum,
-        )
+        * 'sequential' performs the cumsum of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
+            first taking the sum of each block and combines the sums via a binary tree.
+            This method may be faster or more memory efficient depending on workload,
+            scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        chunk.nancumsum,
+        operator.add,
+        0,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.nansum,
+    )
 
-    @derived_from(np)
-    def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
-        """Dask added an additional keyword-only argument ``method``.
 
-        method : {'sequential', 'blelloch'}, optional
-            Choose which method to use to perform the cumprod.  Default is 'sequential'.
+@derived_from(np)
+def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
+    """Dask added an additional keyword-only argument ``method``.
 
-            * 'sequential' performs the cumprod of each prior block before the current block.
-            * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
-              taking the product of each block and combines the products via a binary tree.
-              This method may be faster or more memory efficient depending on workload,
-              scheduler, and hardware.  More benchmarking is necessary.
-        """
-        return cumreduction(
-            chunk.nancumprod,
-            operator.mul,
-            1,
-            x,
-            axis,
-            dtype,
-            out=out,
-            method=method,
-            preop=np.nanprod,
-        )
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumprod.  Default is 'sequential'.
+
+        * 'sequential' performs the cumprod of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
+            taking the product of each block and combines the products via a binary tree.
+            This method may be faster or more memory efficient depending on workload,
+            scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        chunk.nancumprod,
+        operator.mul,
+        1,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.nanprod,
+    )
 
 
 @derived_from(np)
@@ -676,10 +676,6 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
         concatenate=False,
         combine=partial(mean_combine, sum=chunk.nansum, numel=nannumel),
     )
-
-
-with ignoring(AttributeError):
-    nanmean = derived_from(np)(nanmean)
 
 
 def moment_chunk(
@@ -875,10 +871,6 @@ def nanvar(
     )
 
 
-with ignoring(AttributeError):
-    nanvar = derived_from(np)(nanvar)
-
-
 def _sqrt(a):
     o = np.sqrt(a)
     if isinstance(o, np.ma.masked_array) and not o.shape and o.mask.all():
@@ -936,10 +928,6 @@ def nanstd(
     if dtype and dtype != result.dtype:
         result = result.astype(dtype)
     return result
-
-
-with ignoring(AttributeError):
-    nanstd = derived_from(np)(nanstd)
 
 
 def _arg_combine(data, axis, argfunc, keepdims=False):

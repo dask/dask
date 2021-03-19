@@ -116,7 +116,7 @@ These optional dependencies and their minimum supported versions are listed belo
 |    xxhash     |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+
 
-* Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
+\* Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
 ``cytoolz``.
 
 

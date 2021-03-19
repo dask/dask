@@ -401,13 +401,6 @@ Other functions
 
 .. currentmodule:: dask.array
 
-.. autofunction:: from_array
-.. autofunction:: from_delayed
-.. autofunction:: store
-.. autofunction:: coarsen
-.. autofunction:: stack
-.. autofunction:: concatenate
-
 .. autofunction:: add
 .. autofunction:: all
 .. autofunction:: allclose
