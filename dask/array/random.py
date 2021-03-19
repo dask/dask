@@ -149,6 +149,7 @@ class RandomState:
                 size,
                 chunks,
                 seeds,
+                extra_chunks,
             )
             return Array(graph, name, chunks + extra_chunks, meta=meta)
 

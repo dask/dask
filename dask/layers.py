@@ -113,9 +113,10 @@ class BlockwiseCreateArray(Blockwise):
 class CreateRandomArrayDeps(CreateArrayDeps):
     """Index-block info mapping for BlockwiseCreateRandomArray"""
 
-    def __init__(self, chunks: tuple, seeds):
-        super().__init__(chunks)
+    def __init__(self, chunks: tuple, seeds: list, extra_chunks: tuple):
+        super().__init__(chunks + extra_chunks)
         self.seeds = seeds
+        self.extra_chunks = extra_chunks
 
     def __getitem__(self, idx: tuple):
         block_info = super().__getitem__(idx)
@@ -127,30 +128,38 @@ class CreateRandomArrayDeps(CreateArrayDeps):
             )
         n += idx[-1]
         block_info["seed"] = self.seeds[n]
+        # TODO make this cleaner
+        if self.extra_chunks:
+            block_info["chunk-shape"] = block_info["chunk-shape"][
+                : -len(self.extra_chunks)
+            ]
         return block_info
 
     @classmethod
     def __dask_distributed_pack__(cls, module: str, name: str, *args):
         from distributed.protocol import serialize
 
-        chunks, seeds = args
+        chunks, seeds, extra_chunks = args
         return (
             module,
             name,
             chunks,
             serialize(seeds),
+            extra_chunks,
         )
 
     @classmethod
     def __dask_distributed_unpack__(cls, module: str, name: str, *args):
         from distributed.protocol import deserialize
 
-        chunks, seeds = args
+        chunks, seeds, extra_chunks = args
+        # TODO: how to move deserialization to the worker
         return (
             module,
             name,
             chunks,
             deserialize(*seeds),
+            extra_chunks,
         )
 
 
@@ -181,6 +190,7 @@ class BlockwiseCreateRandomArray(Blockwise):
         shape,
         chunks,
         seeds,
+        extra_chunks,
     ):
         # self.name = name
         io_name = "blockwise-create-random-" + name
@@ -188,8 +198,8 @@ class BlockwiseCreateRandomArray(Blockwise):
         # Define "blockwise" graph
         dsk = {name: (func, blockwise_token(0))}
 
-        out_ind = tuple(range(len(shape)))
-        self.nchunks = tuple(len(chunk) for chunk in chunks)
+        out_ind = tuple(range(len(shape) + len(extra_chunks)))
+        self.nchunks = tuple(len(chunk) for chunk in chunks) + (1,) * len(extra_chunks)
         super().__init__(
             name,
             out_ind,
@@ -202,6 +212,7 @@ class BlockwiseCreateRandomArray(Blockwise):
                     "CreateRandomArrayDeps",
                     chunks,
                     seeds,
+                    extra_chunks,
                 )
             },
         )
