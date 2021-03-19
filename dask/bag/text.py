@@ -106,8 +106,10 @@ def read_text(
         )
         if files_per_partition is None:
             blocks = [
-                delayed(partial(file_to_blocks, include_path, delimiter=linedelimiter))(
-                    fil
+                delayed(list)(
+                    delayed(
+                        partial(file_to_blocks, include_path, delimiter=linedelimiter)
+                    )(fil)
                 )
                 for fil in files
             ]
