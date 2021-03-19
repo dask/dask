@@ -3122,13 +3122,20 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def value_counts(
-        self, sort=None, ascending=False, dropna=None, split_every=None, split_out=1
+        self,
+        sort=None,
+        ascending=False,
+        dropna=None,
+        normalize=False,
+        split_every=None,
+        split_out=1,
     ):
         """
         Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
         True.
         """
         kwargs = {"sort": sort, "ascending": ascending}
+
         if dropna is not None:
             if not PANDAS_GT_110:
                 raise NotImplementedError(
@@ -3137,16 +3144,23 @@ Dask Name: {name}, {task} tasks""".format(
                 )
             kwargs["dropna"] = dropna
 
+        aggregate_kwargs = {"normalize": normalize}
+        if split_out > 1:
+            aggregate_kwargs["total_length"] = (
+                len(self) if dropna is False else len(self.dropna())
+            )
+
         return aca(
             self,
             chunk=M.value_counts,
             aggregate=methods.value_counts_aggregate,
             combine=methods.value_counts_combine,
-            meta=self._meta.value_counts(),
+            meta=self._meta.value_counts(normalize=normalize),
             token="value-counts",
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            aggregate_kwargs=aggregate_kwargs,
             **kwargs,
         )
 
