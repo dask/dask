@@ -732,6 +732,13 @@ def test_reductions(split_every):
             bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
             assert_eq(dds.skew(), pds.skew() / bias_factor)
 
+        if scipy:
+            # pandas uses a bias factor for kurtosis, need to correct for that
+            n = pds.shape[0]
+            factor = ((n - 1) * (n + 1)) / ((n - 2) * (n - 3))
+            offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
+            assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
+
         with pytest.warns(None):
             # runtime warnings; https://github.com/dask/dask/issues/2381
             assert_eq(dds.std(split_every=split_every), pds.std())
@@ -988,6 +995,7 @@ def test_reductions_non_numeric_dtypes():
     check_raises(dds, pds, "var")
     check_raises(dds, pds, "sem")
     check_raises(dds, pds, "skew")
+    check_raises(dds, pds, "kurtosis")
     assert_eq(dds.nunique(), pds.nunique())
 
     for pds in [
@@ -1011,6 +1019,7 @@ def test_reductions_non_numeric_dtypes():
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
         check_raises(dds, pds, "skew")
+        check_raises(dds, pds, "kurtosis")
         assert_eq(dds.nunique(), pds.nunique())
 
     pds = pd.Series(pd.timedelta_range("1 days", freq="D", periods=5))
@@ -1021,6 +1030,7 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.count(), pds.count())
     # both pandas and dask skew calculations do not support timedelta
     check_raises(dds, pds, "skew")
+    check_raises(dds, pds, "kurtosis")
 
     # ToDo: pandas supports timedelta std, dask returns float64
     # assert_eq(dds.std(), pds.std())

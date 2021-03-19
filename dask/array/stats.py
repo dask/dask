@@ -263,8 +263,11 @@ def kurtosis(a, axis=0, fisher=True, bias=True, nan_policy="propagate"):
     if fisher:
         return vals - 3
     else:
+        if vals.ndim == 0:
+            # TODO: scalar, min is a workaround
+            return vals.min()
+
         return vals
-        # TODO: scalar; vals = vals.item()  # array scalar
 
 
 @derived_from(scipy.stats)
