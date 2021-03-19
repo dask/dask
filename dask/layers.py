@@ -89,8 +89,7 @@ class BlockwiseCreateArray(Blockwise):
             {io_name: self.nchunks},
             io_deps={
                 io_name: (
-                    "dask.layers",
-                    "CreateArrayDeps",
+                    "dask.layers.CreateArrayDeps",
                     chunks,
                 )
             },
