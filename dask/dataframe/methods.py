@@ -309,8 +309,12 @@ def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
     return x.groupby(level=0, **groupby_kwargs).sum()
 
 
-def value_counts_aggregate(x, sort=True, ascending=False, **groupby_kwargs):
+def value_counts_aggregate(
+    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
+):
     out = value_counts_combine(x, **groupby_kwargs)
+    if normalize:
+        out /= total_length if total_length is not None else out.sum()
     if sort:
         return out.sort_values(ascending=ascending)
     return out

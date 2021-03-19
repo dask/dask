@@ -1079,6 +1079,44 @@ def test_value_counts_with_dropna():
     assert result._name != result2._name
 
 
+def test_value_counts_with_normalize():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, 3, 1, 4]})
+    ddf = dd.from_pandas(df, npartitions=3)
+    result = ddf.x.value_counts(normalize=True)
+    expected = df.x.value_counts(normalize=True)
+    assert_eq(result, expected)
+
+    result2 = ddf.x.value_counts(split_every=2, normalize=True)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+    result3 = ddf.x.value_counts(split_out=2, normalize=True)
+    assert_eq(result3, expected)
+    assert result._name != result3._name
+
+
+@pytest.mark.skipif(not PANDAS_GT_110, reason="dropna implemented in pandas 1.1.0")
+def test_value_counts_with_normalize_and_dropna():
+    df = pd.DataFrame({"x": [1, 2, 1, 3, np.nan, 1, 4]})
+    ddf = dd.from_pandas(df, npartitions=3)
+
+    result = ddf.x.value_counts(dropna=False, normalize=True)
+    expected = df.x.value_counts(dropna=False, normalize=True)
+    assert_eq(result, expected)
+
+    result2 = ddf.x.value_counts(split_every=2, dropna=False, normalize=True)
+    assert_eq(result2, expected)
+    assert result._name != result2._name
+
+    result3 = ddf.x.value_counts(split_out=2, dropna=False, normalize=True)
+    assert_eq(result3, expected)
+    assert result._name != result3._name
+
+    result4 = ddf.x.value_counts(dropna=True, normalize=True, split_out=2)
+    expected4 = df.x.value_counts(dropna=True, normalize=True)
+    assert_eq(result4, expected4)
+
+
 def test_unique():
     pdf = pd.DataFrame(
         {
