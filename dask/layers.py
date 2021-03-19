@@ -153,15 +153,13 @@ class CreateRandomArrayDeps(CreateArrayDeps):
 
     @classmethod
     def __dask_distributed_unpack__(cls, module: str, name: str, *args):
-        from distributed.protocol import deserialize
-
         chunks, seeds, extra_chunks = args
         # TODO: how to move deserialization to the worker
         return (
             module,
             name,
             chunks,
-            deserialize(*seeds),
+            seeds,
             extra_chunks,
         )
 
