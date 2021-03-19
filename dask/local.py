@@ -439,35 +439,39 @@ def get_async(
             if state["waiting"] and not state["ready"]:
                 raise ValueError("Found no accessible jobs in dask")
 
-            def fire_task():
+            def fire_tasks():
                 """ Fire off a task to the thread pool """
-                # Choose a good task to compute
-                key = state["ready"].pop()
-                state["running"].add(key)
-                for f in pretask_cbs:
-                    f(key, dsk, state)
+                args = []
+                while state["ready"]:
+                    # Choose a good task to compute
+                    key = state["ready"].pop()
+                    state["running"].add(key)
+                    for f in pretask_cbs:
+                        f(key, dsk, state)
 
-                # Prep args to send
-                data = dict(
-                    (dep, state["cache"][dep]) for dep in get_dependencies(dsk, key)
-                )
-                args = (
-                    key,
-                    dumps((dsk[key], data)),
-                    dumps,
-                    loads,
-                    get_id,
-                    pack_exception,
-                )
+                    # Prep args to send
+                    data = dict(
+                        (dep, state["cache"][dep]) for dep in get_dependencies(dsk, key)
+                    )
+                    args.append(
+                        (
+                            key,
+                            dumps((dsk[key], data)),
+                            dumps,
+                            loads,
+                            get_id,
+                            pack_exception,
+                        )
+                    )
 
                 # Submit
-                fut = executor.submit(execute_task, *args)
-                fut.add_done_callback(queue.put)
+                for each_args in args:
+                    fut = executor.submit(execute_task, *each_args)
+                    fut.add_done_callback(queue.put)
 
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
-                while state["ready"]:
-                    fire_task()
+                fire_tasks()
                 future = queue_get(queue)
                 key, res_info, failed = future.result()
                 if failed:
