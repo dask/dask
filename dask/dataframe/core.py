@@ -2692,6 +2692,26 @@ Dask Name: {name}, {task} tasks"""
             [self, other], join="outer", interleave_partitions=interleave_partitions
         )
 
+    @derived_from(pd.Series)
+    def dot(self, other, meta=no_default):
+        if not isinstance(other, _Frame):
+            raise TypeError("The second operand must be a dask array or dask dataframe")
+
+        if isinstance(other, DataFrame):
+            s = self.map_partitions(M.dot, other, token="dot", meta=meta)
+            return s.groupby(by=s.index).apply(
+                lambda x: x.sum(skipna=False), meta=s._meta_nonempty
+            )
+
+        def _dot_series(*args, **kwargs):
+            # .sum() is invoked on each partition before being applied to all
+            # partitions. The return type is expected to be a series, not a numpy object
+            return pd.Series(M.dot(*args, **kwargs))
+
+        return self.map_partitions(_dot_series, other, token="dot", meta=meta).sum(
+            skipna=False
+        )
+
     @derived_from(pd.DataFrame)
     def align(self, other, join="outer", axis=None, fill_value=None):
         meta1, meta2 = _emulate(
