@@ -2160,6 +2160,119 @@ Dask Name: {name}, {task} tasks"""
         )
 
     @derived_from(pd.DataFrame)
+    def kurtosis(
+        self, axis=None, fisher=True, bias=True, nan_policy="propagate", out=None
+    ):
+        """
+        .. note::
+
+           This implementation follows the dask.array.stats implementation
+           of kurtosis and calculates kurtosis without taking into account
+           a bias term for finite sample size, which corresponds to the
+           default settings of the scipy.stats kurtosis calculation. This differs
+           from pandas.
+
+           Further, this method currently does not support filtering out NaN
+           values, which is again a difference to Pandas.
+        """
+        axis = self._validate_axis(axis)
+        _raise_if_object_series(self, "kurtosis")
+        meta = self._meta_nonempty.kurtosis()
+        if axis == 1:
+            result = map_partitions(
+                M.kurtosis,
+                self,
+                meta=meta,
+                token=self._token_prefix + "kurtosis",
+                axis=axis,
+                enforce_metadata=False,
+            )
+            return handle_out(out, result)
+        else:
+            if self.ndim == 1:
+                result = self._kurtosis_1d(
+                    self, fisher=fisher, bias=bias, nan_policy=nan_policy
+                )
+                return handle_out(out, result)
+            else:
+                result = self._kurtosis_numeric(
+                    fisher=fisher, bias=bias, nan_policy=nan_policy
+                )
+
+            if isinstance(self, DataFrame):
+                result.divisions = (self.columns.min(), self.columns.max())
+
+            return handle_out(out, result)
+
+    def _kurtosis_1d(self, column, fisher=True, bias=True, nan_policy="propagate"):
+        """1D version of the kurtosis calculation.
+
+        Uses the array version from da.stats in case we are passing in a single series
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        if pd.api.types.is_integer_dtype(column._meta_nonempty):
+            column = column.astype("f8")
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype("f8")
+
+        name = self._token_prefix + "kurtosis-1d-" + tokenize(column)
+
+        array_kurtosis = da_stats.kurtosis(
+            column.values, axis=0, fisher=fisher, bias=bias, nan_policy=nan_policy
+        )
+
+        layer = {
+            (name, 0): (methods.wrap_kurtosis_reduction, (array_kurtosis._name,), None)
+        }
+        graph = HighLevelGraph.from_collections(
+            name, layer, dependencies=[array_kurtosis]
+        )
+
+        return new_dd_object(
+            graph, name, column._meta_nonempty.kurtosis(), divisions=[None, None]
+        )
+
+    def _kurtosis_numeric(self, fisher=True, bias=True, nan_policy="propagate"):
+        """Method for dataframes with numeric columns.
+
+        Maps the array version from da.stats onto the numeric array of columns.
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype("f8")
+
+        array_kurtosis = da_stats.kurtosis(
+            array_values, axis=0, fisher=fisher, bias=bias, nan_policy=nan_policy
+        )
+
+        name = self._token_prefix + "kurtosis-numeric" + tokenize(num)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        kurtosis_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_kurtosis_name = (array_kurtosis._name,) + (0,) * len(kurtosis_shape)
+
+        layer = {
+            (name, 0): (methods.wrap_kurtosis_reduction, array_kurtosis_name, cols)
+        }
+        graph = HighLevelGraph.from_collections(
+            name, layer, dependencies=[array_kurtosis]
+        )
+
+        return new_dd_object(
+            graph, name, num._meta_nonempty.kurtosis(), divisions=[None, None]
+        )
+
+    @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
