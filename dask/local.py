@@ -447,13 +447,11 @@ def get_async(
                 for f in pretask_cbs:
                     f(key, dsk, state)
 
-                # Prep data to send
+                # Prep args to send
                 data = dict(
                     (dep, state["cache"][dep]) for dep in get_dependencies(dsk, key)
                 )
-                # Submit
-                fut = executor.submit(
-                    execute_task,
+                args = (
                     key,
                     dumps((dsk[key], data)),
                     dumps,
@@ -461,6 +459,9 @@ def get_async(
                     get_id,
                     pack_exception,
                 )
+
+                # Submit
+                fut = executor.submit(execute_task, *args)
                 fut.add_done_callback(queue.put)
 
             # Main loop, wait on tasks to finish, insert new ones
