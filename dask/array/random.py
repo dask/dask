@@ -93,8 +93,8 @@ class RandomState:
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        has_dask_array_dep = any(
-            isinstance(ar, Array) for ar in chain(args, kwargs.values())
+        has_array_dep = any(
+            isinstance(ar, (Array, np.ndarray)) for ar in chain(args, kwargs.values())
         )
         shapes = list(
             {
@@ -119,7 +119,7 @@ class RandomState:
         token = tokenize(seeds, size, chunks, args, kwargs)
         name = "{0}-{1}".format(funcname, token)
 
-        if not has_dask_array_dep:
+        if not has_array_dep:
             # If no dependencies are dask arrays, we can use blockwise with io_deps.
             small_args = []
             for ar in args:
