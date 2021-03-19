@@ -560,6 +560,9 @@ class gufunc:
         dimensions are to consist only of one chunk.
         Warning: enabling this can increase memory usage significantly.
         Defaults to ``False``.
+    meta: Optional, tuple, keyword only
+        tuple of empty ndarrays describing the shape and dtype of the output of the gufunc.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -586,6 +589,17 @@ class gufunc:
     >>> c.compute().shape
     (10, 20, 30, 40)
 
+    >>> a = da.ones((1, 5, 10), chunks=(-1, -1, -1))
+    >>> def stats(x):
+    ...     return np.atleast_1d(x.mean()), np.atleast_1d(x.max())
+    >>> meta = (np.array((), dtype=np.float64), np.array((), dtype=np.float64))
+    >>> gustats = da.gufunc(stats, signature="(i,j)->(),()", meta=meta)
+    >>> result = gustats(a)
+    >>> result[0].compute().shape
+    (1,)
+    >>> result[1].compute().shape
+    (1,)
+
     References
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
@@ -602,6 +616,7 @@ class gufunc:
         self.output_sizes = kwargs.pop("output_sizes", None)
         self.output_dtypes = kwargs.pop("output_dtypes", None)
         self.allow_rechunk = kwargs.pop("allow_rechunk", False)
+        self.meta = kwargs.pop("meta", None)
         if kwargs:
             raise TypeError("Unsupported keyword argument(s) provided")
 
@@ -637,6 +652,7 @@ class gufunc:
             output_sizes=self.output_sizes,
             output_dtypes=self.output_dtypes,
             allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
+            meta=self.meta,
             **kwargs,
         )
 
