@@ -146,7 +146,13 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return first, ()
 
     def __dask_postpersist__(self):
-        return Scalar, (self._name, self._meta, self.divisions)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return Scalar(dsk, name, self._meta, self.divisions)
 
     @property
     def _meta_nonempty(self):
@@ -321,7 +327,13 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return type(self), (self._name, self._meta, self.divisions)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        name = self._name
+        if rename:
+            name = rename.get(name, name)
+        return type(self)(dsk, name, self._meta, self.divisions)
 
     @property
     def _constructor(self):
@@ -1205,7 +1217,7 @@ Dask Name: {name}, {task} tasks"""
         ):
             raise ValueError(
                 "Please provide exactly one of ``npartitions=``, ``freq=``, "
-                "``divisions=``, ``partitions_size=`` keyword arguments"
+                "``divisions=``, ``partition_size=`` keyword arguments"
             )
 
         if partition_size is not None:
@@ -2441,7 +2453,7 @@ Dask Name: {name}, {task} tasks"""
         return self._cum_agg(
             "cumsum",
             chunk=M.cumsum,
-            aggregate=operator.add,
+            aggregate=methods.cumsum_aggregate,
             axis=axis,
             skipna=skipna,
             chunk_kwargs=dict(axis=axis, skipna=skipna),
@@ -2453,7 +2465,7 @@ Dask Name: {name}, {task} tasks"""
         return self._cum_agg(
             "cumprod",
             chunk=M.cumprod,
-            aggregate=operator.mul,
+            aggregate=methods.cumprod_aggregate,
             axis=axis,
             skipna=skipna,
             chunk_kwargs=dict(axis=axis, skipna=skipna),
@@ -3695,7 +3707,6 @@ class DataFrame(_Frame):
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
-            #
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
 
@@ -3803,6 +3814,39 @@ class DataFrame(_Frame):
     def select_dtypes(self, include=None, exclude=None):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
+
+    def sort_values(self, other, npartitions=None, ascending=True, **kwargs):
+        """Sort the dataset by a single column.
+
+        Sorting a parallel dataset requires expensive shuffles and is generally
+        not recommended. See ``set_index`` for implementation details.
+
+        Parameters
+        ----------
+        other: string
+        npartitions: int, None, or 'auto'
+            The ideal number of output partitions. If None, use the same as
+            the input. If 'auto' then decide by memory use.
+        ascending: bool, optional
+            Non ascending sort is not supported by Dask.
+            Defaults to True.
+
+        Examples
+        --------
+        >>> df2 = df.sort_values('x')  # doctest: +SKIP
+        """
+        if not ascending:
+            raise NotImplementedError("The ascending= keyword is not supported")
+
+        from .shuffle import sort_values
+
+        return sort_values(
+            self,
+            other,
+            ascending=ascending,
+            npartitions=npartitions,
+            **kwargs,
+        )
 
     def set_index(
         self,
@@ -4162,6 +4206,7 @@ class DataFrame(_Frame):
         indicator=False,
         npartitions=None,
         shuffle=None,
+        broadcast=None,
     ):
         """Merge the DataFrame with another DataFrame
 
@@ -4217,6 +4262,14 @@ class DataFrame(_Frame):
         shuffle: {'disk', 'tasks'}, optional
             Either ``'disk'`` for single-node operation or ``'tasks'`` for
             distributed operation.  Will be inferred by your current scheduler.
+        broadcast: boolean or float, optional
+            Whether to use a broadcast-based join in lieu of a shuffle-based
+            join for supported cases.  By default, a simple heuristic will be
+            used to select the underlying algorithm. If a floating-point value
+            is specified, that number will be used as the ``broadcast_bias``
+            within the simple heuristic (a large number makes Dask more likely
+            to choose the ``broacast_join`` code path). See ``broadcast_join``
+            for more information.
 
         Notes
         -----
@@ -4258,6 +4311,7 @@ class DataFrame(_Frame):
             npartitions=npartitions,
             indicator=indicator,
             shuffle=shuffle,
+            broadcast=broadcast,
         )
 
     @derived_from(pd.DataFrame)  # doctest: +SKIP

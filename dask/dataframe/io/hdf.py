@@ -7,8 +7,6 @@ from warnings import warn
 import pandas as pd
 from tlz import merge
 
-# this import checks for the importability of fsspec
-from ...bytes import read_bytes  # noqa
 from fsspec.utils import build_name_function, stringify_path
 
 from .io import _link
@@ -419,7 +417,7 @@ def read_hdf(
     chunksize=1000000,
     sorted_index=False,
     lock=True,
-    mode="a",
+    mode="r",
 ):
     """
     Read HDF files into a Dask DataFrame
@@ -447,7 +445,7 @@ def read_hdf(
         index (default is False).
     lock : boolean, optional
         Option to use a lock to prevent concurrency issues (default is True).
-    mode : {'a', 'r', 'r+'}, default 'a'. Mode to use when opening file(s).
+    mode : {'a', 'r', 'r+'}, default 'r'. Mode to use when opening file(s).
         'r'
             Read-only; no data can be modified.
         'a'

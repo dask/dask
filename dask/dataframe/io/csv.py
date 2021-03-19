@@ -7,6 +7,7 @@ try:
 except ImportError:
     psutil = None
 
+from fsspec.core import open as open_file, open_files
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -18,9 +19,7 @@ from pandas.api.types import (
 )
 
 from ...base import tokenize
-
-# this import checks for the importability of fsspec
-from ...bytes import read_bytes, open_file, open_files
+from ...bytes import read_bytes
 from ..core import new_dd_object
 from ...core import flatten
 from ...delayed import delayed
@@ -305,8 +304,6 @@ def text_blocks_to_pandas(
     # 2. contain 'category' for data inferred types
     categoricals = head.select_dtypes(include=["category"]).columns
 
-    known_categoricals = []
-    unknown_categoricals = categoricals
     if isinstance(specified_dtypes, Mapping):
         known_categoricals = [
             k
@@ -315,11 +312,7 @@ def text_blocks_to_pandas(
             and specified_dtypes.get(k).categories is not None
         ]
         unknown_categoricals = categoricals.difference(known_categoricals)
-    elif (
-        isinstance(specified_dtypes, CategoricalDtype)
-        and specified_dtypes.categories is None
-    ):
-        known_categoricals = []
+    else:
         unknown_categoricals = categoricals
 
     # Fixup the dtypes
@@ -553,7 +546,7 @@ def read_pandas(
             if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
                 head[c] = head[c].astype(float)
 
-    values = [[dsk.dask.values() for dsk in block] for block in values]
+    values = [[list(dsk.dask.values()) for dsk in block] for block in values]
 
     return text_blocks_to_pandas(
         reader,

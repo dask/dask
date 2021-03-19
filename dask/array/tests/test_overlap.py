@@ -20,6 +20,7 @@ from dask.array.overlap import (
     ensure_minimum_chunksize,
 )
 from dask.array.utils import assert_eq, same_keys
+from ..lib.stride_tricks import sliding_window_view
 
 
 def test_fractional_slice():
@@ -301,6 +302,10 @@ def test_map_overlap():
     y = x.map_overlap(lambda x: x + len(x), depth=np.int64(2), dtype=x.dtype)
     assert all([(type(s) is int) for s in y.shape])
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
+
+    x = da.ones((10, 10), chunks=(3, 4))
+    z = x.map_overlap(lambda x: x, depth={1: 5})
+    assert z.chunks[0] == x.chunks[0]  # don't rechunk the first dimension
 
     x = np.arange(16).reshape((4, 4))
     d = da.from_array(x, chunks=(2, 2))
@@ -780,3 +785,44 @@ def test_ensure_minimum_chunksize_raises_error():
     chunks = (5, 2, 1, 1)
     with pytest.raises(ValueError, match="overlapping depth 10 is larger than"):
         ensure_minimum_chunksize(10, chunks)
+
+
+@pytest.mark.parametrize(
+    "shape, chunks, window_shape, axis",
+    [
+        ((6, 7, 8), (6, (2, 2, 2, 1), 4), (3, 2), (1, 2)),  # chunks vary along axis
+        ((40, 30, 2), 5, (3,), (0,)),  # window < chunk
+        ((21,), 3, (7,), (0,)),  # window > chunk
+        ((9,), 3, 3, 0),  # window == chunk, axis is integer
+        ((9,), 3, 3, -1),  # axis=-1
+        ((9,), 3, 3, None),  # axis=None
+        ((9, 8), 3, (2, 4), None),  # axis=None
+        ((9,), 3, (3, 3, 3), (0, 0, 0)),  # axis is repeated
+        ((9,), 3, (3, 3), (0, -1)),  # axis is repeated, with -1
+        ((9,), 3, [3, 3], [0, -1]),  # list instead of tuple
+    ],
+)
+def test_sliding_window_view(shape, chunks, window_shape, axis):
+    from ..numpy_compat import sliding_window_view as np_sliding_window_view
+
+    arr = da.from_array(np.arange(np.prod(shape)).reshape(shape), chunks=chunks)
+    actual = sliding_window_view(arr, window_shape, axis)
+    expected = np_sliding_window_view(arr.compute(), window_shape, axis)
+    assert_eq(expected, actual)
+
+
+@pytest.mark.parametrize(
+    "window_shape, axis",
+    [
+        ((10,), 0),  # window > axis shape
+        ((2,), 3),  # axis > ndim
+        (-1, 0),  # window shape is negative
+        (2, (0, 1)),  # len(window shape) < len(axis)
+        (2, None),  # len(window shape) < len(axis)
+        (0, None),  # window_shape = 0
+    ],
+)
+def test_sliding_window_errors(window_shape, axis):
+    arr = da.zeros((4, 3))
+    with pytest.raises(ValueError):
+        sliding_window_view(arr, window_shape, axis)

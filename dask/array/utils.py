@@ -1,5 +1,6 @@
 import difflib
 import functools
+import itertools
 import math
 import numbers
 import os
@@ -10,7 +11,7 @@ from tlz import frequencies, concat
 
 from .core import Array
 from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, ignoring, is_arraylike
+from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
 
 try:
     AxisError = np.AxisError
@@ -22,7 +23,7 @@ except AttributeError:
 
 
 def normalize_to_array(x):
-    if "cupy" in str(type(x)):  # TODO: avoid explicit reference to cupy
+    if is_cupy_type(x):
         return x.get()
     else:
         return x
@@ -206,7 +207,7 @@ def _check_dsk(dsk):
 
     dsk.validate()
     assert all(isinstance(k, (tuple, str)) for k in dsk.layers)
-    freqs = frequencies(concat(dsk.dicts.values()))
+    freqs = frequencies(concat(dsk.layers.values()))
     non_one = {k: v for k, v in freqs.items() if v != 1}
     assert not non_one, non_one
 
@@ -220,7 +221,19 @@ def assert_eq_shape(a, b, check_nan=True):
             assert aa == bb
 
 
-def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
+def _check_chunks(x):
+    x = x.persist(scheduler="sync")
+    for idx in itertools.product(*(range(len(c)) for c in x.chunks)):
+        chunk = x.dask[(x.name,) + idx]
+        if not hasattr(chunk, "dtype"):
+            chunk = np.array(chunk, dtype="O")
+        expected_shape = tuple(c[i] for c, i in zip(x.chunks, idx))
+        assert_eq_shape(expected_shape, chunk.shape, check_nan=False)
+        assert chunk.dtype == x.dtype
+    return x
+
+
+def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=True):
     x_original = x
     x_meta = None
     x_computed = None
@@ -231,6 +244,9 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
         if check_graph:
             _check_dsk(x.dask)
         x_meta = getattr(x, "_meta", None)
+        if check_chunks:
+            # Replace x with persisted version to avoid computing it twice.
+            x = _check_chunks(x)
         x = x.compute(scheduler="sync")
         x_computed = x
         if hasattr(x, "todense"):
@@ -249,15 +265,23 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True):
     return x, adt, x_meta, x_computed
 
 
-def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwargs):
+def assert_eq(
+    a,
+    b,
+    check_shape=True,
+    check_graph=True,
+    check_meta=True,
+    check_chunks=True,
+    **kwargs,
+):
     a_original = a
     b_original = b
 
     a, adt, a_meta, a_computed = _get_dt_meta_computed(
-        a, check_shape=check_shape, check_graph=check_graph
+        a, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
     b, bdt, b_meta, b_computed = _get_dt_meta_computed(
-        b, check_shape=check_shape, check_graph=check_graph
+        b, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
 
     if str(adt) != str(bdt):
@@ -270,23 +294,50 @@ def assert_eq(a, b, check_shape=True, check_graph=True, check_meta=True, **kwarg
             )
 
     try:
-        assert a.shape == b.shape
+        assert (
+            a.shape == b.shape
+        ), f"a and b have different shapes (a: {a.shape}, b: {b.shape})"
         if check_meta:
             if hasattr(a, "_meta") and hasattr(b, "_meta"):
                 assert_eq(a._meta, b._meta)
             if hasattr(a_original, "_meta"):
-                assert a_original._meta.ndim == a.ndim
+                msg = (
+                    f"compute()-ing 'a' changes its number of dimensions "
+                    f"(before: {a_original._meta.ndim}, after: {a.ndim})"
+                )
+                assert a_original._meta.ndim == a.ndim, msg
                 if a_meta is not None:
-                    assert type(a_original._meta) == type(a_meta)
+                    msg = (
+                        f"compute()-ing 'a' changes its type "
+                        f"(before: {type(a_original._meta)}, after: {type(a_meta)})"
+                    )
+                    assert type(a_original._meta) == type(a_meta), msg
                     if not (np.isscalar(a_meta) or np.isscalar(a_computed)):
-                        assert type(a_meta) == type(a_computed)
+                        msg = (
+                            f"compute()-ing 'a' results in a different type than implied by its metadata "
+                            f"(meta: {type(a_meta)}, computed: {type(a_computed)})"
+                        )
+                        assert type(a_meta) == type(a_computed), msg
             if hasattr(b_original, "_meta"):
-                assert b_original._meta.ndim == b.ndim
+                msg = (
+                    f"compute()-ing 'b' changes its number of dimensions "
+                    f"(before: {b_original._meta.ndim}, after: {b.ndim})"
+                )
+                assert b_original._meta.ndim == b.ndim, msg
                 if b_meta is not None:
-                    assert type(b_original._meta) == type(b_meta)
+                    msg = (
+                        f"compute()-ing 'b' changes its type "
+                        f"(before: {type(b_original._meta)}, after: {type(b_meta)})"
+                    )
+                    assert type(b_original._meta) == type(b_meta), msg
                     if not (np.isscalar(b_meta) or np.isscalar(b_computed)):
-                        assert type(b_meta) == type(b_computed)
-        assert allclose(a, b, **kwargs)
+                        msg = (
+                            f"compute()-ing 'b' results in a different type than implied by its metadata "
+                            f"(meta: {type(b_meta)}, computed: {type(b_computed)})"
+                        )
+                        assert type(b_meta) == type(b_computed), msg
+        msg = "found values in 'a' and 'b' which differ by more than the allowed amount"
+        assert allclose(a, b, **kwargs), msg
         return True
     except TypeError:
         pass
@@ -312,6 +363,16 @@ def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
         return lambda x: x
 
 
+def _dtype_of(a):
+    """Determine dtype of an array-like."""
+    try:
+        # Check for the attribute before using asanyarray, because some types
+        # (notably sparse arrays) don't work with it.
+        return a.dtype
+    except AttributeError:
+        return np.asanyarray(a).dtype
+
+
 def empty_like_safe(a, shape, **kwargs):
     """
     Return np.empty_like(a, shape=shape, **kwargs) if the shape argument
@@ -321,6 +382,7 @@ def empty_like_safe(a, shape, **kwargs):
     try:
         return np.empty_like(a, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.empty(shape, **kwargs)
 
 
@@ -334,6 +396,7 @@ def full_like_safe(a, fill_value, shape, **kwargs):
     try:
         return np.full_like(a, fill_value, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.full(shape, fill_value, **kwargs)
 
 
@@ -346,6 +409,7 @@ def ones_like_safe(a, shape, **kwargs):
     try:
         return np.ones_like(a, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.ones(shape, **kwargs)
 
 
@@ -358,7 +422,68 @@ def zeros_like_safe(a, shape, **kwargs):
     try:
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
+        kwargs.setdefault("dtype", _dtype_of(a))
         return np.zeros(shape, **kwargs)
+
+
+def _array_like_safe(np_func, da_func, a, like, **kwargs):
+    if like is a and hasattr(a, "__array_function__"):
+        return a
+
+    if isinstance(like, Array):
+        return da_func(a, **kwargs)
+    elif isinstance(a, Array):
+        if is_cupy_type(a._meta):
+            a = a.compute(scheduler="sync")
+
+    try:
+        return np_func(a, like=meta_from_array(like), **kwargs)
+    except TypeError:
+        return np_func(a, **kwargs)
+
+
+def array_safe(a, like, **kwargs):
+    """
+    If `a` is `dask.array`, return `dask.array.asarray(a, **kwargs)`,
+    otherwise return `np.asarray(a, like=like, **kwargs)`, dispatching
+    the call to the library that implements the like array. Note that
+    when `a` is a `dask.Array` backed by `cupy.ndarray` but `like`
+    isn't, this function will call `a.compute(scheduler="sync")`
+    before `np.array`, as downstream libraries are unlikely to know how
+    to convert a `dask.Array` and CuPy doesn't implement `__array__` to
+    prevent implicit copies to host.
+    """
+    from .routines import array
+
+    return _array_like_safe(np.array, array, a, like, **kwargs)
+
+
+def asarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asarray(a, **kwargs),
+    otherwise return np.asarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asarray
+
+    return _array_like_safe(np.asarray, asarray, a, like, **kwargs)
+
+
+def asanyarray_safe(a, like, **kwargs):
+    """
+    If a is dask.array, return dask.array.asanyarray(a, **kwargs),
+    otherwise return np.asanyarray(a, like=like, **kwargs), dispatching
+    the call to the library that implements the like array. Note that
+    when a is a dask.Array but like isn't, this function will call
+    a.compute(scheduler="sync") before np.asanyarray, as downstream
+    libraries are unlikely to know how to convert a dask.Array.
+    """
+    from .core import asanyarray
+
+    return _array_like_safe(np.asanyarray, asanyarray, a, like, **kwargs)
 
 
 def validate_axis(axis, ndim):

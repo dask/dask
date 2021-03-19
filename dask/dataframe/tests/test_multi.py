@@ -2223,3 +2223,77 @@ def test_categorical_merge_retains_category_dtype():
     if dd._compat.PANDAS_GT_100:
         actual = actual_dask.compute()
         assert actual.A.dtype == "category"
+
+
+def test_categorical_merge_does_not_raise_setting_with_copy_warning():
+    # https://github.com/dask/dask/issues/7087
+    df1 = pd.DataFrame(data={"A": ["a", "b", "c"]}, index=["s", "v", "w"])
+    df2 = pd.DataFrame(data={"B": ["t", "d", "i"]}, index=["v", "w", "r"])
+
+    ddf1 = dd.from_pandas(df1, npartitions=1)
+
+    df2 = df2.astype({"B": "category"})
+    assert_eq(df1.join(df2), ddf1.join(df2))
+
+
+@pytest.mark.parametrize("how", ["inner", "left", "right"])
+@pytest.mark.parametrize("npartitions", [28, 32])
+@pytest.mark.parametrize("base", ["lg", "sm"])
+def test_merge_tasks_large_to_small(how, npartitions, base):
+
+    size_lg = 3000
+    size_sm = 300
+    npartitions_lg = 30
+    npartitions_sm = 3
+    broadcast_bias = 1.0  # Prioritize broadcast
+
+    lg = pd.DataFrame(
+        {
+            "x": np.random.choice(np.arange(100), size_lg),
+            "y": np.arange(size_lg),
+        }
+    )
+    ddf_lg = dd.from_pandas(lg, npartitions=npartitions_lg)
+
+    sm = pd.DataFrame(
+        {
+            "x": np.random.choice(np.arange(100), size_sm),
+            "y": np.arange(size_sm),
+        }
+    )
+    ddf_sm = dd.from_pandas(sm, npartitions=npartitions_sm)
+
+    if base == "lg":
+        left = lg
+        ddf_left = ddf_lg
+        right = sm
+        ddf_right = ddf_sm
+    else:
+        left = sm
+        ddf_left = ddf_sm
+        right = lg
+        ddf_right = ddf_lg
+
+    dd_result = dd.merge(
+        ddf_left,
+        ddf_right,
+        on="y",
+        how=how,
+        npartitions=npartitions,
+        broadcast=broadcast_bias,
+        shuffle="tasks",
+    )
+    pd_result = pd.merge(left, right, on="y", how=how)
+
+    # Make sure `on` dtypes match
+    dd_result["y"] = dd_result["y"].astype(np.int32)
+    pd_result["y"] = pd_result["y"].astype(np.int32)
+
+    if npartitions:
+        assert dd_result.npartitions == npartitions
+
+    assert_eq(
+        dd_result.compute().sort_values("y"),
+        pd_result.sort_values("y"),
+        check_index=False,
+    )

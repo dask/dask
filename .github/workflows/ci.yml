@@ -6,19 +6,21 @@ jobs:
   test:
     runs-on: ${{ matrix.os }}
     strategy:
-      fail-fast: true
+      fail-fast: false
       matrix:
         os: ["windows-latest", "ubuntu-latest", "macos-latest"]
-        python-version: ["3.6", "3.7", "3.8"]
+        python-version: ["3.7", "3.8", "3.9"]
 
     env:
       PYTHON_VERSION: ${{ matrix.python-version }}
       PARALLEL: "true"
-      COVERAGE: "false"
+      COVERAGE: "true"
 
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
+        with:
+          fetch-depth: 0  # Needed by codecov.io
 
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2
@@ -29,6 +31,20 @@ jobs:
           activate-environment: test-environment
           auto-activate-base: false
 
+      - name: Hack around https://github.com/dask/dask/issues/7189
+        shell: bash -l {0}
+        if: ${{ matrix.os == 'macos-latest' && matrix.python-version == '3.8' }}
+        run: |
+          conda uninstall --force numpy
+          python -m pip install --no-deps numpy==1.20
+
+      - name: Hack around https://github.com/ipython/ipython/issues/12197
+        # This upstream issue causes an interpreter crash when running
+        # test_base.py::test_tokenize_object_with_recursion_error_returns_uuid
+        shell: bash -l {0}
+        if: ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.9' }}
+        run: conda uninstall ipython
+
       - name: Install
         shell: bash -l {0}
         run: source continuous_integration/scripts/install.sh
@@ -36,8 +52,6 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
-      # TODO: Add coverage back
-      # - name: Coverage
-      #   shell: bash -l {0}
-      #   if: ${{ matrix.os == 'ubuntu-latest' &&  matrix.python-version == '3.8' }}
-      #   run: source continuous_integration/scripts/coverage.sh
+
+      - name: Coverage
+        uses: codecov/codecov-action@v1

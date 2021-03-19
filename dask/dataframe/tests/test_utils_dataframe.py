@@ -17,6 +17,7 @@ from dask.dataframe.utils import (
     is_series_like,
     is_index_like,
     PANDAS_GT_100,
+    PANDAS_GT_120,
 )
 
 import pytest
@@ -424,6 +425,32 @@ def test_is_dataframe_like(monkeypatch, frame_value_counts):
     assert is_index_like(ddf.index)
     assert not is_index_like(pd.Index)
 
+    # The following checks support of class wrappers, which
+    # requires the comparions of `x.__class__` instead of `type(x)`
+    class DataFrameWrapper:
+        __class__ = pd.DataFrame
+
+    wrap = DataFrameWrapper()
+    wrap.dtypes = None
+    wrap.columns = None
+    assert is_dataframe_like(wrap)
+
+    class SeriesWrapper:
+        __class__ = pd.Series
+
+    wrap = SeriesWrapper()
+    wrap.dtype = None
+    wrap.name = None
+    assert is_series_like(wrap)
+
+    class IndexWrapper:
+        __class__ = pd.Index
+
+    wrap = IndexWrapper()
+    wrap.dtype = None
+    wrap.name = None
+    assert is_index_like(wrap)
+
 
 def test_apply_and_enforce_message():
     def func():
@@ -444,3 +471,10 @@ def test_nonempty_series_sparse():
         dd.utils._nonempty_series(ser)
 
     assert len(w) == 0
+
+
+@pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
+def test_nonempty_series_nullable_float():
+    ser = pd.Series([], dtype="Float64")
+    non_empty = dd.utils._nonempty_series(ser)
+    assert non_empty.dtype == "Float64"

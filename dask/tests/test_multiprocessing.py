@@ -10,18 +10,7 @@ from dask import compute, delayed
 from dask.multiprocessing import get, _dumps, _loads, get_context, remote_exception
 from dask.utils_test import inc
 
-
-try:
-    import cloudpickle  # noqa: F401
-
-    has_cloudpickle = True
-except ImportError:
-    has_cloudpickle = False
-
-requires_cloudpickle = pytest.mark.skipif(
-    not has_cloudpickle, reason="requires cloudpickle"
-)
-not_cloudpickle = pytest.mark.skipif(has_cloudpickle, reason="cloudpickle is installed")
+import cloudpickle
 
 
 def unrelated_function_global(a):
@@ -41,7 +30,6 @@ def test_pickle_globals():
     assert b"numpy" not in b
 
 
-@requires_cloudpickle
 def test_pickle_locals():
     """Unrelated locals should not be included in serialized bytes"""
     np = pytest.importorskip("numpy")
@@ -58,29 +46,14 @@ def test_pickle_locals():
     assert b"unrelated_function_local" not in b
 
 
-@not_cloudpickle
-def test_pickle_kwargs():
-    """Test that out-of-band pickling works
-
-    Note cloudpickle does not support this argument:
-
-    https://github.com/cloudpipe/cloudpickle/issues/213
-    """
-    b = _dumps(my_small_function_global, fix_imports=True)
-    assert b"my_small_function_global" in b
-    assert b"unrelated_function_global" not in b
-    assert b"numpy" not in b
-    my_small_function_global_2 = _loads(b, fix_imports=True)
-    assert my_small_function_global_2(2, 3) == 5
-
-
 @pytest.mark.skipif(pickle.HIGHEST_PROTOCOL < 5, reason="requires pickle protocol 5")
+@pytest.mark.skipif(
+    cloudpickle.__version__ < LooseVersion("1.3.0"),
+    reason="requires cloudpickle >= 1.3.0",
+)
 def test_out_of_band_pickling():
     """Test that out-of-band pickling works"""
     np = pytest.importorskip("numpy")
-    if has_cloudpickle:
-        if cloudpickle.__version__ < LooseVersion("1.3.0"):
-            pytest.skip("when using cloudpickle, it must be version 1.3.0+")
 
     a = np.arange(5)
 
@@ -118,40 +91,22 @@ def test_remote_exception():
     assert "traceback-body" in str(a)
 
 
-@requires_cloudpickle
 def test_lambda_with_cloudpickle():
     dsk = {"x": 2, "y": (lambda x: x + 1, "x")}
     assert get(dsk, "y") == 3
-
-
-@not_cloudpickle
-def test_lambda_without_cloudpickle():
-    dsk = {"x": 2, "y": (lambda x: x + 1, "x")}
-    with pytest.raises(ModuleNotFoundError) as e:
-        get(dsk, "y")
-    assert "cloudpickle" in str(e.value)
 
 
 def lambda_result():
     return lambda x: x + 1
 
 
-@requires_cloudpickle
 def test_lambda_results_with_cloudpickle():
     dsk = {"x": (lambda_result,)}
     f = get(dsk, "x")
     assert f(2) == 3
 
 
-@not_cloudpickle
-def test_lambda_results_without_cloudpickle():
-    dsk = {"x": (lambda_result,)}
-    with pytest.raises(ModuleNotFoundError) as e:
-        get(dsk, "x")
-    assert "cloudpickle" in str(e.value)
-
-
-class NotUnpickleable(object):
+class NotUnpickleable:
     def __getstate__(self):
         return ()
 
@@ -200,7 +155,28 @@ def test_optimize_graph_false():
     assert len(keys) == 2
 
 
-@requires_cloudpickle
+def test_works_with_highlevel_graph():
+    """Previously `dask.multiprocessing.get` would accidentally forward
+    `HighLevelGraph` graphs through the dask optimization/scheduling routines,
+    resulting in odd errors. One way to trigger this was to have a
+    non-indexable object in a task. This is just a smoketest to ensure that
+    things work properly even if `HighLevelGraph` objects get passed to
+    `dask.multiprocessing.get`. See https://github.com/dask/dask/issues/7190.
+    """
+
+    class NoIndex:
+        def __init__(self, x):
+            self.x = x
+
+        def __getitem__(self, key):
+            raise Exception("Oh no!")
+
+    x = delayed(lambda x: x)(NoIndex(1))
+    (res,) = get(x.dask, x.__dask_keys__())
+    assert isinstance(res, NoIndex)
+    assert res.x == 1
+
+
 @pytest.mark.parametrize("random", ["numpy", "random"])
 def test_random_seeds(random):
     if random == "numpy":
@@ -237,7 +213,6 @@ def test_custom_context_used_python3_posix():
 
     We assume default is 'spawn', and therefore test for 'fork'.
     """
-    pytest.importorskip("cloudpickle")
     # We check for 'fork' by ensuring subprocess doesn't have modules only
     # parent process should have:
 
