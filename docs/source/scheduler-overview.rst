@@ -141,8 +141,8 @@ global pool set with ``dask.config.set``:
 
 .. code-block:: python
 
-    >>> from multiprocessing.pool import ThreadPool
-    >>> with dask.config.set(pool=ThreadPool(4)):
+    >>> from concurrent.futures import ThreadPoolExecutor
+    >>> with dask.config.set(pool=ThreadPoolExecutor(4)):
     ...     x.compute()
 
 The multiprocessing scheduler also supports `different contexts`_ ("spawn",

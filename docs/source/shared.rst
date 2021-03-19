@@ -80,8 +80,8 @@ mediated by using a global or contextual pool:
 
 .. code-block:: python
 
-   >>> from multiprocessing.pool import ThreadPool
-   >>> pool = ThreadPool()
+   >>> from concurrent.futures import ThreadPoolExecutor
+   >>> pool = ThreadPoolExecutor()
    >>> dask.config.set(pool=pool)  # set global threadpool
 
    or
