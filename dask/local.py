@@ -482,34 +482,28 @@ def get_async(
                     if not each_args:
                         break
                     fut = submit(batch_execute_tasks, each_args)
-                    fut.add_done_callback(queue_put)
-
-            def queue_put(fut):
-                """Get the Future's results and put them all in the Queue"""
-                it = fut.result()
-                for e in it:
-                    queue.put(e)
+                    fut.add_done_callback(queue.put)
 
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
                 fire_tasks()
-                key, res_info, failed = queue_get(queue)
-                if failed:
-                    exc, tb = loads(res_info)
-                    if rerun_exceptions_locally:
-                        data = dict(
-                            (dep, state["cache"][dep])
-                            for dep in get_dependencies(dsk, key)
-                        )
-                        task = dsk[key]
-                        _execute_task(task, data)  # Re-execute locally
-                    else:
-                        raise_exception(exc, tb)
-                res, worker_id = loads(res_info)
-                state["cache"][key] = res
-                finish_task(dsk, key, state, results, keyorder.get)
-                for f in posttask_cbs:
-                    f(key, res, dsk, state, worker_id)
+                for key, res_info, failed in queue_get(queue).result():
+                    if failed:
+                        exc, tb = loads(res_info)
+                        if rerun_exceptions_locally:
+                            data = dict(
+                                (dep, state["cache"][dep])
+                                for dep in get_dependencies(dsk, key)
+                            )
+                            task = dsk[key]
+                            _execute_task(task, data)  # Re-execute locally
+                        else:
+                            raise_exception(exc, tb)
+                    res, worker_id = loads(res_info)
+                    state["cache"][key] = res
+                    finish_task(dsk, key, state, results, keyorder.get)
+                    for f in posttask_cbs:
+                        f(key, res, dsk, state, worker_id)
 
             succeeded = True
 
