@@ -105,6 +105,7 @@ significantly on space and computation complexity.
 See the function ``inline_functions`` for more information.
 """
 from concurrent.futures import Executor, Future
+from functools import partial
 import os
 from queue import Queue, Empty
 
@@ -575,9 +576,19 @@ class MultiprocessingPoolExecutor(Executor):
         self._max_workers = len(pool._pool)
 
     def submit(self, fn, *args, **kwargs):
-        fut = Future()
-        self.pool.apply_async(fn, args, kwargs, fut.set_result, fut.set_exception)
-        return fut
+        return submit_apply_async(self.pool.apply_async, fn, *args, **kwargs)
+
+
+def submit_apply_async(apply_async, fn, *args, **kwargs):
+    fut = Future()
+    apply_async(fn, args, kwargs, fut.set_result, fut.set_exception)
+    return fut
+
+
+def get_apply_async(apply_async, num_workers, *args, **kwargs):
+    return get_async(
+        partial(submit_apply_async, apply_async), num_workers, *args, **kwargs
+    )
 
 
 def sortkey(item):
