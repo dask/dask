@@ -371,7 +371,7 @@ def get_async(
     """Asynchronous get function
 
     This is a general version of various asynchronous schedulers for dask.  It
-    takes a ``concurrent.futures.Executor`` to form a more
+    takes a ``concurrent.futures.Executor.submit`` function to form a more
     specific ``get`` method that walks through the dask array with parallel
     workers, avoiding repeat computation and minimizing memory use.
 
