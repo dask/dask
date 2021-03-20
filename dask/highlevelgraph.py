@@ -147,7 +147,7 @@ class Layer(collections.abc.Mapping):
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
-    def __dask_distributed_anno_pack__(self) -> Optional[Mapping[str, Any]]:
+    def __dask_distributed_annotations_pack__(self) -> Optional[Mapping[str, Any]]:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
@@ -927,7 +927,7 @@ class HighLevelGraph(Mapping):
         """Pack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the packaging to each layer in the high level graph
-        by calling .__dask_distributed_pack__() and .__dask_distributed_anno_pack__()
+        by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
         on each layer. If the layer doesn't implement packaging, we materialize the
         layer and pack it.
 
@@ -958,7 +958,7 @@ class HighLevelGraph(Mapping):
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.__dask_distributed_anno_pack__(),
+                    "annotations": layer.__dask_distributed_annotations_pack__(),
                 }
             )
         return dumps_msgpack({"layers": layers})
