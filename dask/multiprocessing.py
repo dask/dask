@@ -11,7 +11,7 @@ from warnings import warn
 import cloudpickle
 from . import config
 from .system import CPU_COUNT
-from .local import reraise, get_async  # TODO: get better get
+from .local import reraise, get_async
 from .optimization import fuse, cull
 from .utils import ensure_dict
 
