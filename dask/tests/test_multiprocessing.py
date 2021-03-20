@@ -24,7 +24,7 @@ def my_small_function_global(a, b):
 
 def test_pickle_globals():
     """ Unrelated globals should not be included in serialized bytes """
-    b = _dumps(my_small_function_global)
+    b, *_ = _dumps(my_small_function_global)
     assert b"my_small_function_global" in b
     assert b"unrelated_function_global" not in b
     assert b"numpy" not in b
@@ -40,7 +40,7 @@ def test_pickle_locals():
     def my_small_function_local(a, b):
         return a + b
 
-    b = _dumps(my_small_function_local)
+    b, *_ = _dumps(my_small_function_local)
     assert b"my_small_function_global" not in b
     assert b"my_small_function_local" in b
     assert b"unrelated_function_local" not in b
@@ -57,13 +57,13 @@ def test_out_of_band_pickling():
 
     a = np.arange(5)
 
-    l = []
-    b = _dumps(a, buffer_callback=l.append)
-    assert len(l) == 1
-    assert isinstance(l[0], pickle.PickleBuffer)
-    assert memoryview(l[0]) == memoryview(a)
+    l = _dumps(a)
+    assert len(l) == 2
+    assert isinstance(l[0], bytes)
+    assert isinstance(l[1], pickle.PickleBuffer)
+    assert memoryview(l[1]) == memoryview(a)
 
-    a2 = _loads(b, buffers=l)
+    a2 = _loads(l)
     assert np.all(a == a2)
 
 

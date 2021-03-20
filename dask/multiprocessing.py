@@ -1,10 +1,8 @@
 import copyreg
 import multiprocessing
 import os
-import pickle
 import sys
 import traceback
-from functools import partial
 from warnings import warn
 
 import cloudpickle
@@ -22,8 +20,21 @@ def _reduce_method_descriptor(m):
 # type(set.union) is used as a proxy to <class 'method_descriptor'>
 copyreg.pickle(type(set.union), _reduce_method_descriptor)
 
-_dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-_loads = cloudpickle.loads
+
+def _dumps(obj):
+    buffers = [None]
+    if cloudpickle.DEFAULT_PROTOCOL >= 5:
+        buffers[0] = cloudpickle.dumps(obj, buffer_callback=buffers.append)
+    else:
+        buffers[0] = cloudpickle.dumps(obj)
+    return buffers
+
+
+def _loads(buffers):
+    if len(buffers) > 1:
+        return cloudpickle.loads(buffers[0], buffers=buffers[1:])
+    else:
+        return cloudpickle.loads(buffers[0])
 
 
 def _process_get_id():
