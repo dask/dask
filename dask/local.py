@@ -480,10 +480,8 @@ def get_async(
                         )
                     )
 
-                # Batch computation
+                # Batch submit
                 chunksize = -(len(args) // -num_workers)
-
-                # Submit
                 for i in range(num_workers):
                     each_args = args[i * chunksize : (i + 1) * chunksize]
                     if not each_args:
