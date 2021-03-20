@@ -205,7 +205,8 @@ def get(
     try:
         # Run
         result = get_async(
-            pool,
+            pool.submit,
+            pool._max_workers,
             dsk3,
             keys,
             get_id=_process_get_id,

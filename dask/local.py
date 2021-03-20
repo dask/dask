@@ -112,7 +112,6 @@ from . import config
 from .core import flatten, reverse_dict, get_dependencies, has_tasks, _execute_task
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
-from .system import CPU_COUNT
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -355,7 +354,8 @@ The main function of the scheduler.  Get is the main entry point.
 
 
 def get_async(
-    executor,
+    submit,
+    num_workers,
     dsk,
     result,
     cache=None,
@@ -377,8 +377,10 @@ def get_async(
 
     Parameters
     ----------
-    executor : Executor
-        A ``concurrent.futures.Executor`` instance
+    submit : function
+        A ``concurrent.futures.Executor.submit`` function
+    num_workers : int
+        The number of active tasks we should have at any one time
     dsk : dict
         A dask dictionary specifying a workflow
     result : key or list of keys
@@ -418,12 +420,6 @@ def get_async(
         it = fut.result()
         for e in it:
             queue.put(e)
-
-    num_workers = (
-        getattr(executor, "_max_workers", None)
-        or config.get("num_workers", None)
-        or CPU_COUNT
-    )
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -492,7 +488,7 @@ def get_async(
                     each_args = args[i * chunksize : (i + 1) * chunksize]
                     if not each_args:
                         break
-                    fut = executor.submit(batch_execute_tasks, each_args)
+                    fut = submit(batch_execute_tasks, each_args)
                     fut.add_done_callback(queue_put)
 
             # Main loop, wait on tasks to finish, insert new ones
@@ -554,7 +550,14 @@ def get_sync(dsk, keys, **kwargs):
 
     Can be useful for debugging.
     """
-    return get_async(synchronous_executor, dsk, keys, **kwargs)
+    kwargs.pop("num_workers", None)  # if num_workers present, remove it
+    return get_async(
+        synchronous_executor.submit,
+        synchronous_executor._max_workers,
+        dsk,
+        keys,
+        **kwargs
+    )
 
 
 def sortkey(item):

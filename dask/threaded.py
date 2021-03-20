@@ -74,7 +74,8 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
                 pools[thread][num_workers] = pool
 
     results = get_async(
-        pool,
+        pool.submit,
+        pool._max_workers,
         dsk,
         result,
         cache=cache,
