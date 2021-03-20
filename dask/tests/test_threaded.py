@@ -57,7 +57,7 @@ def test_exceptions_rise_to_top():
 
 @pytest.mark.parametrize("pool_typ", [ThreadPool, ThreadPoolExecutor])
 def test_reuse_pool(pool_typ):
-    with pool_typ() as pool:
+    with pool_typ(CPU_COUNT) as pool:
         with dask.config.set(pool=pool):
             assert get({"x": (inc, 1)}, "x") == 2
             assert get({"x": (inc, 1)}, "x") == 2
