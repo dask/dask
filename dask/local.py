@@ -405,6 +405,10 @@ def get_async(
     """
     queue = Queue()
 
+    def queue_put(fut):
+        """Get the Future's result and put it in the Queue"""
+        queue.put(fut.result())
+
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
@@ -467,13 +471,12 @@ def get_async(
                 # Submit
                 for each_args in args:
                     fut = executor.submit(execute_task, *each_args)
-                    fut.add_done_callback(queue.put)
+                    fut.add_done_callback(queue_put)
 
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
                 fire_tasks()
-                future = queue_get(queue)
-                key, res_info, failed = future.result()
+                key, res_info, failed = queue_get(queue)
                 if failed:
                     exc, tb = loads(res_info)
                     if rerun_exceptions_locally:
