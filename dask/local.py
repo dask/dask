@@ -112,6 +112,7 @@ from . import config
 from .core import flatten, reverse_dict, get_dependencies, has_tasks, _execute_task
 from .order import order
 from .callbacks import unpack_callbacks, local_callbacks
+from .system import CPU_COUNT
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -228,6 +229,13 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
         result = pack_exception(e, dumps)
         failed = True
     return key, result, failed
+
+
+def batch_execute_tasks(it):
+    """
+    Batch computing of multiple tasks with `execute_task`
+    """
+    return [execute_task(*a) for a in it]
 
 
 def release_data(key, state, delete=True):
@@ -406,8 +414,16 @@ def get_async(
     queue = Queue()
 
     def queue_put(fut):
-        """Get the Future's result and put it in the Queue"""
-        queue.put(fut.result())
+        """Get the Future's results and put them all in the Queue"""
+        it = fut.result()
+        for e in it:
+            queue.put(e)
+
+    num_workers = (
+        getattr(executor, "_max_workers", None)
+        or config.get("num_workers", None)
+        or CPU_COUNT
+    )
 
     if isinstance(result, list):
         result_flat = set(flatten(result))
@@ -468,9 +484,15 @@ def get_async(
                         )
                     )
 
+                # Batch computation
+                chunksize = -(len(args) // -num_workers)
+
                 # Submit
-                for each_args in args:
-                    fut = executor.submit(execute_task, *each_args)
+                for i in range(num_workers):
+                    each_args = args[i * chunksize : (i + 1) * chunksize]
+                    if not each_args:
+                        break
+                    fut = executor.submit(batch_execute_tasks, each_args)
                     fut.add_done_callback(queue_put)
 
             # Main loop, wait on tasks to finish, insert new ones
@@ -513,6 +535,8 @@ GIL
 
 
 class SynchronousExecutor(Executor):
+    _max_workers = 1
+
     def submit(self, fn, *args, **kwargs):
         fut = Future()
         try:
