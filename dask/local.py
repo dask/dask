@@ -416,12 +416,6 @@ def get_async(
     """
     queue = Queue()
 
-    def queue_put(fut):
-        """Get the Future's results and put them all in the Queue"""
-        it = fut.result()
-        for e in it:
-            queue.put(e)
-
     if isinstance(result, list):
         result_flat = set(flatten(result))
     else:
@@ -489,6 +483,12 @@ def get_async(
                         break
                     fut = submit(batch_execute_tasks, each_args)
                     fut.add_done_callback(queue_put)
+
+            def queue_put(fut):
+                """Get the Future's results and put them all in the Queue"""
+                it = fut.result()
+                for e in it:
+                    queue.put(e)
 
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
