@@ -63,7 +63,8 @@ def test_reuse_pool(pool_typ):
             assert get({"x": (inc, 1)}, "x") == 2
 
 
-def test_pool_kwarg():
+@pytest.mark.parametrize("pool_typ", [ThreadPool, ThreadPoolExecutor])
+def test_pool_kwarg(pool_typ):
     def f():
         sleep(0.01)
         return threading.get_ident()
@@ -71,7 +72,7 @@ def test_pool_kwarg():
     dsk = {("x", i): (f,) for i in range(30)}
     dsk["x"] = (len, (set, [("x", i) for i in range(len(dsk))]))
 
-    with ThreadPoolExecutor(3) as pool:
+    with pool_typ(3) as pool:
         assert get(dsk, "x", pool=pool) == 3
 
 
