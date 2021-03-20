@@ -1,6 +1,7 @@
 from concurrent.futures import ProcessPoolExecutor
 import copyreg
 import multiprocessing
+import multiprocessing.pool
 import os
 import pickle
 import sys
@@ -11,7 +12,7 @@ from warnings import warn
 import cloudpickle
 from . import config
 from .system import CPU_COUNT
-from .local import reraise, get_async
+from .local import reraise, get_async, MultiprocessingPoolExecutor
 from .optimization import fuse, cull
 from .utils import ensure_dict
 
@@ -184,6 +185,8 @@ def get(
         )
         cleanup = True
     else:
+        if isinstance(pool, multiprocessing.pool.Pool):
+            pool = MultiprocessingPoolExecutor(pool)
         cleanup = False
 
     # Optimize Dask

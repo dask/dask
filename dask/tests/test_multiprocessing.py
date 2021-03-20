@@ -129,8 +129,9 @@ def test_unpicklable_args_generate_errors():
         get(dsk, "x")
 
 
-def test_reuse_pool():
-    with ProcessPoolExecutor() as pool:
+@pytest.mark.parametrize("pool_typ", [multiprocessing.Pool, ProcessPoolExecutor])
+def test_reuse_pool(pool_typ):
+    with pool_typ() as pool:
         with dask.config.set(pool=pool):
             assert get({"x": (inc, 1)}, "x") == 2
             assert get({"x": (inc, 1)}, "x") == 2

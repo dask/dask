@@ -2,6 +2,7 @@ from concurrent.futures import ThreadPoolExecutor
 import os
 import signal
 import threading
+from multiprocessing.pool import ThreadPool
 from time import time, sleep
 
 import pytest
@@ -54,8 +55,9 @@ def test_exceptions_rise_to_top():
     pytest.raises(ValueError, lambda: get(dsk, "y"))
 
 
-def test_reuse_pool():
-    with ThreadPoolExecutor() as pool:
+@pytest.mark.parametrize("pool_typ", [ThreadPool, ThreadPoolExecutor])
+def test_reuse_pool(pool_typ):
+    with pool_typ() as pool:
         with dask.config.set(pool=pool):
             assert get({"x": (inc, 1)}, "x") == 2
             assert get({"x": (inc, 1)}, "x") == 2

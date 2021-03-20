@@ -560,6 +560,28 @@ def get_sync(dsk, keys, **kwargs):
     )
 
 
+""" Adaptor for ``multiprocessing.Pool`` instances
+
+Usually we supply a ``concurrent.futures.Executor``.  Here we provide a wrapper
+class for ``multiprocessing.Pool`` instances so we can treat them like
+``concurrent.futures.Executor`` instances instead.
+
+This is mainly useful for legacy use cases or users that prefer
+``multiprocessing.Pool``.
+"""
+
+
+class MultiprocessingPoolExecutor(Executor):
+    def __init__(self, pool):
+        self.pool = pool
+        self._max_workers = len(pool._pool)
+
+    def submit(self, fn, *args, **kwargs):
+        fut = Future()
+        self.pool.apply_async(fn, args, kwargs, fut.set_result, fut.set_exception)
+        return fut
+
+
 def sortkey(item):
     """Sorting key function that is robust to different types
 

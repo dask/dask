@@ -7,12 +7,13 @@ import atexit
 import sys
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
+import multiprocessing.pool
 import threading
 from threading import current_thread, Lock
 
 from . import config
 from .system import CPU_COUNT
-from .local import get_async
+from .local import get_async, MultiprocessingPoolExecutor
 from .utils_test import inc, add  # noqa: F401
 
 
@@ -72,6 +73,8 @@ def get(dsk, result, cache=None, num_workers=None, pool=None, **kwargs):
                 pool = ThreadPoolExecutor(num_workers)
                 atexit.register(pool.shutdown)
                 pools[thread][num_workers] = pool
+        elif isinstance(pool, multiprocessing.pool.Pool):
+            pool = MultiprocessingPoolExecutor(pool)
 
     results = get_async(
         pool.submit,
