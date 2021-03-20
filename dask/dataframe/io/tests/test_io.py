@@ -2,8 +2,8 @@ import numpy as np
 import pandas as pd
 
 import pytest
+from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
-from multiprocessing.pool import ThreadPool
 
 import dask.array as da
 import dask.dataframe as dd
@@ -117,7 +117,6 @@ def test_from_array_with_record_dtype():
 
 def test_from_bcolz_multiple_threads():
     bcolz = pytest.importorskip("bcolz")
-    pool = ThreadPool(processes=5)
 
     def check(i):
         t = bcolz.ctable(
@@ -141,7 +140,8 @@ def test_from_bcolz_multiple_threads():
             dd.from_bcolz(t, chunksize=3).dask
         )
 
-    pool.map(check, range(5))
+    with ThreadPoolExecutor(5) as pool:
+        list(pool.map(check, range(5)))
 
 
 def test_from_bcolz():
