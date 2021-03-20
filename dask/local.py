@@ -381,7 +381,7 @@ def get_async(
     submit : function
         A ``concurrent.futures.Executor.submit`` function
     num_workers : int
-        The number of active tasks we should have at any one time
+        The number of workers that task submissions can be spread over
     dsk : dict
         A dask dictionary specifying a workflow
     result : key or list of keys
