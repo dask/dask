@@ -400,15 +400,15 @@ def get_async(
         scheduler. Default is to just raise the exception.
     raise_exception : callable, optional
         Function that takes an exception and a traceback, and raises an error.
+    callbacks : tuple or list of tuples, optional
+        Callbacks are passed in as tuples of length 5. Multiple sets of
+        callbacks may be passed in as a list of tuples. For more information,
+        see the dask.diagnostics documentation.
     dumps: callable, optional
         Function to serialize task data and results to communicate between
         worker and parent.  Defaults to identity.
     loads: callable, optional
         Inverse function of `dumps`.  Defaults to identity.
-    callbacks : tuple or list of tuples, optional
-        Callbacks are passed in as tuples of length 5. Multiple sets of
-        callbacks may be passed in as a list of tuples. For more information,
-        see the dask.diagnostics documentation.
 
     See Also
     --------
