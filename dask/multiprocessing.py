@@ -166,6 +166,8 @@ def get(
         Function to use for function deserialization (defaults to cloudpickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
+    pool : Executor or Pool
+        Some sort of `Executor` or `Pool` to use
     """
     pool = pool or config.get("pool", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
