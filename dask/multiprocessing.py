@@ -148,6 +148,7 @@ def get(
     func_dumps=None,
     optimize_graph=True,
     pool=None,
+    chunksize=None,
     **kwargs
 ):
     """Multiprocessed get function appropriate for Bags
@@ -168,7 +169,12 @@ def get(
         If True [default], `fuse` is applied to the graph before computation.
     pool : Executor or Pool
         Some sort of `Executor` or `Pool` to use
+    chunksize: int, optional
+        Size of chunks to use when dispatching work.
+        Defaults to 5 as some batching is helpful.
+        If -1, will be computed to evenly divide ready work across workers.
     """
+    chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
@@ -219,6 +225,7 @@ def get(
             loads=loads,
             pack_exception=pack_exception,
             raise_exception=reraise,
+            chunksize=chunksize,
             **kwargs
         )
     finally:
