@@ -367,6 +367,7 @@ def get_async(
     callbacks=None,
     dumps=identity,
     loads=identity,
+    chunksize=None,
     **kwargs
 ):
     """Asynchronous get function
@@ -409,11 +410,16 @@ def get_async(
         worker and parent.  Defaults to identity.
     loads: callable, optional
         Inverse function of `dumps`.  Defaults to identity.
+    chunksize: int, optional
+        Size of chunks to use when dispatching work. Defaults to 1.
+        If -1, will be computed to evenly divide ready work across workers.
 
     See Also
     --------
     threaded.get
     """
+    chunksize = chunksize or config.get("chunksize", 1)
+
     queue = Queue()
 
     if isinstance(result, list):
@@ -450,11 +456,19 @@ def get_async(
             if state["waiting"] and not state["ready"]:
                 raise ValueError("Found no accessible jobs in dask")
 
-            def fire_tasks():
+            def fire_tasks(chunksize):
                 """ Fire off a task to the thread pool """
+                # Determine chunksize and/or number of tasks to submit
+                nready = len(state["ready"])
+                if chunksize == -1:
+                    ntasks = nready
+                    chunksize = -(ntasks // -num_workers)
+                else:
+                    ntasks = min(nready, chunksize * num_workers)
+
                 # Prep all ready tasks for submission
                 args = []
-                for key in state["ready"]:
+                for i, key in zip(range(ntasks), state["ready"]):
                     # Notify task is running
                     state["running"].add(key)
                     for f in pretask_cbs:
@@ -474,11 +488,10 @@ def get_async(
                             pack_exception,
                         )
                     )
-                state["ready"].clear()
+                del state["ready"][:ntasks]
 
                 # Batch submit
-                chunksize = -(len(args) // -num_workers)
-                for i in range(num_workers):
+                for i in range(-(len(args) // -chunksize)):
                     each_args = args[i * chunksize : (i + 1) * chunksize]
                     if not each_args:
                         break
@@ -487,7 +500,7 @@ def get_async(
 
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
-                fire_tasks()
+                fire_tasks(chunksize)
                 for key, res_info, failed in queue_get(queue).result():
                     if failed:
                         exc, tb = loads(res_info)
