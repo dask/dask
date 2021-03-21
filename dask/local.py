@@ -452,10 +452,10 @@ def get_async(
 
             def fire_tasks():
                 """ Fire off a task to the thread pool """
+                # Prep all ready tasks for submission
                 args = []
-                while state["ready"]:
-                    # Choose a good task to compute
-                    key = state["ready"].pop()
+                for key in reversed(state["ready"]):
+                    # Notify task is running
                     state["running"].add(key)
                     for f in pretask_cbs:
                         f(key, dsk, state)
@@ -474,6 +474,7 @@ def get_async(
                             pack_exception,
                         )
                     )
+                state["ready"].clear()
 
                 # Batch submit
                 chunksize = -(len(args) // -num_workers)
