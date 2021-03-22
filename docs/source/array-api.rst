@@ -185,6 +185,7 @@ Top level user functions:
    rint
    roll
    rollaxis
+   rot90
    round
    sign
    signbit
@@ -584,6 +585,7 @@ Other functions
 .. autofunction:: rint
 .. autofunction:: roll
 .. autofunction:: rollaxis
+.. autofunction:: rot90
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
