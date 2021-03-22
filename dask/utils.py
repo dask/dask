@@ -1117,7 +1117,7 @@ def is_arraylike(x):
     array object (e.g. Python lists and tuples). It is meant for dask
     developers and developers of downstream libraries.
 
-    Note that this function is does not correspond with NumPy's
+    Note that this function does not correspond with NumPy's
     definition of array_like, which includes any object that can be
     coerced into an array (see definition in the NumPy glossary):
     https://numpy.org/doc/stable/glossary.html
