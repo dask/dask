@@ -1112,14 +1112,14 @@ def is_arraylike(x):
     """Is this object a numpy array or something similar?
 
     This function tests specifically for an object that already has
-    array attributes (e.g. np.ndarray, dask.array.Array), **NOT** for
-    something that can be coerced into an array object (e.g. Python
-    lists and tuples). It is meant for dask developers and developers
-    of downstream libraries.
+    array attributes (e.g. np.ndarray, dask.array.Array, cupy.ndarray,
+    sparse.COO), **NOT** for something that can be coerced into an
+    array object (e.g. Python lists and tuples). It is meant for dask
+    developers and developers of downstream libraries.
 
-    Note that this function is inconsistent with NumPy's definition of
-    array_like, which includes any object that can be coerced into an
-    array (see definition in the NumPy glossary):
+    Note that this function is does not correspond with NumPy's
+    definition of array_like, which includes any object that can be
+    coerced into an array (see definition in the NumPy glossary):
     https://numpy.org/doc/stable/glossary.html
 
     Examples
