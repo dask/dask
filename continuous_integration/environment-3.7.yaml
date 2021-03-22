@@ -5,22 +5,28 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7
-  - numpy=1.17
-  - pandas=1.1
+  - numpy=1.15
+  - pandas=0.25
   # test dependencies
   - pytest
   - pytest-cov
+  - pytest-rerunfailures
   - pytest-xdist
   - moto
   - flask
-  - fastparquet
+  # Issue with conda package for NumPy 1.15
+  # See fastparquet-444
+  # - fastparquet
   - h5py
   - pytables
   - zarr
   - tiledb-py
+  - xarray
   - fsspec
-  - sqlalchemy
-  - pyarrow=1.0
+  # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
+  # along with other issues https://github.com/pandas-dev/pandas/issues/40467
+  - sqlalchemy<1.4.0
+  - pyarrow=0.14
   - coverage
   - jsonschema
   # other -- IO

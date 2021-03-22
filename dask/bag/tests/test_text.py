@@ -84,6 +84,18 @@ def test_read_text(fmt, bs, encoding, include_path):
         assert "".join(line for block in L for line in block) == expected
 
 
+def test_read_text_unicode_no_collection():
+    data = b"abcd\xc3\xa9"
+    fn = "./data.txt"
+    with open(fn, "wb") as f:
+        f.write(b"\n".join([data, data]))
+
+    f = read_text(fn, collection=False)
+
+    result = f[0].compute()
+    assert len(result) == 2
+
+
 def test_files_per_partition():
     files3 = {"{:02}.txt".format(n): "line from {:02}" for n in range(20)}
     with filetexts(files3):
@@ -119,3 +131,21 @@ def test_errors():
         result = read_text(".test.foo", encoding="ascii", errors="ignore")
         result = result.compute(scheduler="sync")
         assert result == ["Jos\n", "Alice"]
+
+
+def test_complex_delimiter():
+    longstr = "abc\ndef\n123\n$$$$\ndog\ncat\nfish\n\n\r\n$$$$hello"
+    with filetexts({".test.delim.txt": longstr}):
+        assert read_text(".test.delim.txt", linedelimiter="$$$$").count().compute() == 3
+        assert (
+            read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2)
+            .count()
+            .compute()
+            == 3
+        )
+        vals = read_text(".test.delim.txt", linedelimiter="$$$$").compute()
+        assert vals[-1] == "hello"
+        assert vals[0].endswith("$$$$")
+        vals = read_text(".test.delim.txt", linedelimiter="$$$$", blocksize=2).compute()
+        assert vals[-1] == "hello"
+        assert vals[0].endswith("$$$$")

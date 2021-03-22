@@ -6,9 +6,10 @@ import sys
 import time
 from collections import OrderedDict
 
-from tlz import merge
+from tlz import merge, partial, compose, curry
 
 import dask
+import dask.bag as db
 from dask import delayed
 from dask.base import (
     compute,
@@ -37,9 +38,7 @@ from dask.utils_test import dec, inc, import_or_none
 from dask.diagnostics import Profiler
 
 
-tz = pytest.importorskip("tlz")
 da = import_or_none("dask.array")
-db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
 np = import_or_none("numpy")
 sp = import_or_none("scipy.sparse")
@@ -59,39 +58,24 @@ def f3(a):
 
 
 def test_normalize_function():
-
     assert normalize_function(f2)
 
     assert normalize_function(lambda a: a)
 
-    assert normalize_function(tz.partial(f2, b=2)) == normalize_function(
-        tz.partial(f2, b=2)
-    )
+    assert normalize_function(partial(f2, b=2)) == normalize_function(partial(f2, b=2))
 
-    assert normalize_function(tz.partial(f2, b=2)) != normalize_function(
-        tz.partial(f2, b=3)
-    )
+    assert normalize_function(partial(f2, b=2)) != normalize_function(partial(f2, b=3))
 
-    assert normalize_function(tz.partial(f1, b=2)) != normalize_function(
-        tz.partial(f2, b=2)
-    )
+    assert normalize_function(partial(f1, b=2)) != normalize_function(partial(f2, b=2))
 
-    assert normalize_function(tz.compose(f2, f3)) == normalize_function(
-        tz.compose(f2, f3)
-    )
+    assert normalize_function(compose(f2, f3)) == normalize_function(compose(f2, f3))
 
-    assert normalize_function(tz.compose(f2, f3)) != normalize_function(
-        tz.compose(f2, f1)
-    )
+    assert normalize_function(compose(f2, f3)) != normalize_function(compose(f2, f1))
 
-    assert normalize_function(tz.curry(f2)) == normalize_function(tz.curry(f2))
-    assert normalize_function(tz.curry(f2)) != normalize_function(tz.curry(f1))
-    assert normalize_function(tz.curry(f2, b=1)) == normalize_function(
-        tz.curry(f2, b=1)
-    )
-    assert normalize_function(tz.curry(f2, b=1)) != normalize_function(
-        tz.curry(f2, b=2)
-    )
+    assert normalize_function(curry(f2)) == normalize_function(curry(f2))
+    assert normalize_function(curry(f2)) != normalize_function(curry(f1))
+    assert normalize_function(curry(f2, b=1)) == normalize_function(curry(f2, b=1))
+    assert normalize_function(curry(f2, b=1)) != normalize_function(curry(f2, b=2))
 
 
 def test_tokenize():
@@ -225,7 +209,7 @@ def test_tokenize_numpy_ufunc_consistent():
 
 
 def test_tokenize_partial_func_args_kwargs_consistent():
-    f = tz.partial(f3, f2, c=f1)
+    f = partial(f3, f2, c=f1)
     res = normalize_token(f)
     sol = (
         b"cdask.tests.test_base\nf3\np0\n.",
@@ -741,7 +725,6 @@ def test_custom_collection():
     assert z3.compute() == (70,)
 
 
-@pytest.mark.skipif("not db")
 def test_compute_no_opt():
     # Bag does `fuse` by default. Test that with `optimize_graph=False` that
     # doesn't get called. We check this by using a callback to track the keys
@@ -749,8 +732,8 @@ def test_compute_no_opt():
     from dask.callbacks import Callback
 
     b = db.from_sequence(range(100), npartitions=4)
-    add1 = tz.partial(add, 1)
-    mul2 = tz.partial(mul, 2)
+    add1 = partial(add, 1)
+    mul2 = partial(mul, 2)
     o = b.map(add1).map(mul2)
     # Check that with the kwarg, the optimization doesn't happen
     keys = []
@@ -908,7 +891,7 @@ def test_compute_dataframe_invalid_unicode():
     dd.from_pandas(df, npartitions=4)
 
 
-@pytest.mark.skipif("not da or not db")
+@pytest.mark.skipif("not da")
 def test_compute_array_bag():
     x = da.arange(5, chunks=2)
     b = db.from_sequence([1, 2, 3])
@@ -1001,7 +984,6 @@ def test_visualize_order():
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():
-    pytest.importorskip("cloudpickle")
     from textwrap import dedent
 
     defn = dedent(
@@ -1197,7 +1179,7 @@ def test_persist_delayedattr():
     assert xx.compute() == 1
 
 
-@pytest.mark.skipif("not da or not db")
+@pytest.mark.skipif("not da")
 def test_persist_array_bag():
     x = da.arange(5, chunks=2) + 1
     b = db.from_sequence([1, 2, 3]).map(inc)
@@ -1219,7 +1201,6 @@ def test_persist_array_bag():
     assert list(b) == list(bb)
 
 
-@pytest.mark.skipif("not db")
 def test_persist_bag():
     a = db.from_sequence([1, 2, 3], npartitions=2).map(lambda x: x * 2)
     assert len(a.__dask_graph__()) == 4
@@ -1229,7 +1210,6 @@ def test_persist_bag():
     db.utils.assert_eq(a, b)
 
 
-@pytest.mark.skipif("not db")
 def test_persist_item():
     a = db.from_sequence([1, 2, 3], npartitions=2).map(lambda x: x * 2).min()
     assert len(a.__dask_graph__()) == 7
@@ -1239,7 +1219,6 @@ def test_persist_item():
     db.utils.assert_eq(a, b)
 
 
-@pytest.mark.skipif("not db")
 def test_persist_bag_rename():
     a = db.from_sequence([1, 2, 3], npartitions=2)
     rebuild, args = a.__dask_postpersist__()
@@ -1251,7 +1230,6 @@ def test_persist_bag_rename():
     db.utils.assert_eq(b, [4, 5, 6])
 
 
-@pytest.mark.skipif("not db")
 def test_persist_item_change_name():
     a = db.from_sequence([1, 2, 3]).min()
     rebuild, args = a.__dask_postpersist__()
@@ -1270,7 +1248,6 @@ def test_normalize_function_limited_size():
 
 def test_optimize_globals():
     da = pytest.importorskip("dask.array")
-    db = pytest.importorskip("dask.bag")
 
     x = da.ones(10, chunks=(5,))
 
@@ -1282,7 +1259,7 @@ def test_optimize_globals():
     assert_eq(x + 1, np.ones(10) + 1)
 
     with dask.config.set(array_optimize=optimize_double):
-        assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2)
+        assert_eq(x + 1, (np.ones(10) * 2 + 1) * 2, check_chunks=False)
 
     assert_eq(x + 1, np.ones(10) + 1)
 
@@ -1358,10 +1335,10 @@ def test_callable_scheduler():
     assert called[0]
 
 
+@pytest.mark.flaky(reruns=10, reruns_delay=5)
 @pytest.mark.slow
 @pytest.mark.parametrize("scheduler", ["threads", "processes"])
 def test_num_workers_config(scheduler):
-    pytest.importorskip("cloudpickle")
     # Regression test for issue #4082
 
     f = delayed(pure=False)(time.sleep)

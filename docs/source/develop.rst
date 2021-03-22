@@ -8,9 +8,9 @@ This page provides resources on how best to contribute.
 .. note:: Dask strives to be a welcoming community of individuals with diverse
    backgrounds. For more information on our values, please see our
    `code of conduct
-   <https://github.com/dask/governance/blob/master/code-of-conduct.md>`_
+   <https://github.com/dask/governance/blob/main/code-of-conduct.md>`_
    and
-   `diversity statement <https://github.com/dask/governance/blob/master/diversity.md>`_
+   `diversity statement <https://github.com/dask/governance/blob/main/diversity.md>`_
 
 Where to ask for help
 ---------------------
@@ -101,7 +101,7 @@ pip or conda_
 
 ``pip``::
 
-  python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete,test]"
 
 ``conda``::
 
@@ -130,7 +130,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.6, 3.7, and 3.8.
+Dask supports Python versions 3.7, 3.8, and 3.9.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -243,7 +243,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
+Docstrings are tested under Python 3.8 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
@@ -293,6 +293,14 @@ Dask uses Sphinx_ for documentation, hosted on https://readthedocs.org .
 Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
+
+The documentation is automatically built, and a live preview is available,
+for each pull request submitted to Dask. Additionally, you may also
+build the documentation yourself locally by following the instructions outlined
+below.
+
+How to build the Dask documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To build the documentation locally, clone this repository and install
 the necessary requirements using ``pip`` or ``conda``::

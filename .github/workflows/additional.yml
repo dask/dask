@@ -1,4 +1,4 @@
-name: CI Additional
+name: Additional
 
 on: [push, pull_request]
 
@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: ["mindeps-array-dataframe", "mindeps-bag-delayed"]
+        environment: ["mindeps-array-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
     steps:
       - name: Checkout source
@@ -31,9 +31,26 @@ jobs:
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
 
+  check-hdfs:
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push' || github.event_name == 'pull_request'
+    outputs:
+      test-hdfs: ${{ steps.detect-trigger.outputs.trigger-found }}
+    steps:
+      - uses: actions/checkout@v2
+        with:
+          fetch-depth: 2
+      - uses: xarray-contrib/ci-trigger@v1
+        id: detect-trigger
+        with:
+          keyword: "test-hdfs"
+
   hdfs:
+    needs: check-hdfs
     runs-on: "ubuntu-latest"
-    if: "contains(github.event.head_commit.message, 'test-hdfs') || github.event_name != 'pull_request'"
+    if: |
+      needs.check-hdfs.outputs.test-hdfs == 'true'
+      || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
 
     steps:
       - name: Checkout source
@@ -79,7 +96,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.6", "3.7", "3.8"]
+        python-version: ["3.7", "3.8", "3.9"]
     steps:
       - name: Checkout source
         uses: actions/checkout@v2

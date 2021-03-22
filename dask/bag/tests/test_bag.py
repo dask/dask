@@ -34,9 +34,6 @@ from dask.utils import filetexts, tmpfile, tmpdir
 from dask.utils_test import inc, add
 
 
-# Needed to pickle the lambda functions used in this test suite
-pytest.importorskip("cloudpickle")
-
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
 L = list(range(5)) * 3
@@ -633,7 +630,7 @@ def test_from_url():
     a = db.from_url(["http://google.com", "http://github.com"])
     assert a.npartitions == 2
 
-    b = db.from_url("http://raw.githubusercontent.com/dask/dask/master/README.rst")
+    b = db.from_url("http://raw.githubusercontent.com/dask/dask/main/README.rst")
     assert b.npartitions == 1
     assert b"Dask\n" in b.take(10)
 

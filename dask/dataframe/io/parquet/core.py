@@ -3,7 +3,6 @@ import math
 
 import tlz as toolz
 import warnings
-from ....bytes import core  # noqa
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
@@ -681,6 +680,7 @@ def create_metadata_file(
     split_every=32,
     compute=True,
     compute_kwargs=None,
+    fs=None,
 ):
     """Construct a global _metadata file from a list of parquet files.
 
@@ -722,6 +722,12 @@ def create_metadata_file(
         then a ``dask.delayed`` object is returned for future computation.
     compute_kwargs : dict, optional
         Options to be passed in to the compute method
+    fs : fsspec object, optional
+        File-system instance to use for file handling. If prefixes have
+        been removed from the elements of ``paths`` before calling this
+        function, an ``fs`` argument must be provided to ensure correct
+        behavior on remote file systems ("naked" paths cannot be used
+        to infer file-system information).
     """
 
     # Get engine.
@@ -735,7 +741,12 @@ def create_metadata_file(
         engine = get_engine(engine)
 
     # Process input path list
-    fs, _, paths = get_fs_token_paths(paths, mode="rb", storage_options=storage_options)
+    if fs is None:
+        # Only do this if an fsspec file-system object is not
+        # already defined. The prefixes may already be stripped.
+        fs, _, paths = get_fs_token_paths(
+            paths, mode="rb", storage_options=storage_options
+        )
     paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
     ap_kwargs = {"root": root_dir} if root_dir else {}
     root_dir, fns = _analyze_paths(paths, fs, **ap_kwargs)

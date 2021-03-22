@@ -6,14 +6,15 @@ import pytest
 
 import dask
 from dask import delayed
+import dask.bag as db
 from dask.base import clone_key
+from dask.blockwise import Blockwise
 from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on
 from dask.highlevelgraph import HighLevelGraph
 from dask.tests.test_base import Tuple
 from dask.utils_test import import_or_none
 
 da = import_or_none("dask.array")
-db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
 pd = import_or_none("pandas")
 
@@ -53,6 +54,22 @@ def assert_no_common_keys(a, b, omit=None, *, layers: bool) -> None:
         if layers:
             assert not dsk1.layers.keys() & dsk2.layers.keys()
             assert not dsk1.dependencies.keys() & dsk2.dependencies.keys()
+
+
+def assert_did_not_materialize(cloned, orig):
+    """Test that all layers of the original collection exist in the cloned collection
+    too and that Blockwise layers have not been materialized
+    """
+    olayers = orig.__dask_graph__().layers
+    clayers = cloned.__dask_graph__().layers
+    for k, v in olayers.items():
+        try:
+            cv = clayers[k]
+        except KeyError:
+            cv = clayers[clone_key(k, 0)]
+        if isinstance(v, Blockwise):
+            assert not v.is_materialized()
+            assert not cv.is_materialized()
 
 
 # Generic hashables
@@ -109,7 +126,7 @@ def test_checkpoint(layers):
     assert cnt.n == 5
 
 
-@pytest.mark.skipif("not da or not db or not dd")
+@pytest.mark.skipif("not da or not dd")
 def test_checkpoint_collections():
     colls, cnt = collections_with_node_counters()
     cp = checkpoint(*colls)
@@ -133,7 +150,7 @@ def test_wait_on_many(layers):
     assert cnt.n == 5
 
 
-@pytest.mark.skipif("not da or not db or not dd")
+@pytest.mark.skipif("not da or not dd")
 def test_wait_on_collections():
     colls, cnt = collections_with_node_counters()
 
@@ -257,7 +274,7 @@ def test_bind(layers):
     assert cnt.n == 9
 
 
-@pytest.mark.skipif("not da or not db or not dd")
+@pytest.mark.skipif("not da or not dd")
 @pytest.mark.parametrize("func", [bind, clone])
 def test_bind_clone_collections(func):
     @delayed
@@ -294,11 +311,35 @@ def test_bind_clone_collections(func):
             children=(d2, a3, b3, b4, ddf3, ddf4, ddf5),
             parents=parent,
             omit=(d1, a1, b2, ddf2),
+            seed=0,
         )
     else:
         d2c, a3c, b3c, b4c, ddf3c, ddf4c, ddf5c = clone(
-            d2, a3, b3, b4, ddf3, ddf4, ddf5, omit=(d1, a1, b2, ddf2)
+            d2,
+            a3,
+            b3,
+            b4,
+            ddf3,
+            ddf4,
+            ddf5,
+            omit=(d1, a1, b2, ddf2),
+            seed=0,
         )
+
+    assert_did_not_materialize(d2c, d2)
+    assert_did_not_materialize(a3c, a3)
+    assert_did_not_materialize(b3c, b3)
+    assert_did_not_materialize(b4c, b4)
+    assert_did_not_materialize(ddf3c, ddf3)
+    assert_did_not_materialize(ddf4c, ddf4)
+    assert_did_not_materialize(ddf5c, ddf5)
+
+    assert_no_common_keys(d2c, d2, omit=d1, layers=True)
+    assert_no_common_keys(a3c, a3, omit=a1, layers=True)
+    assert_no_common_keys(b3c, b3, omit=b2, layers=True)
+    assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
+    assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
+    assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
 
     assert d2.compute() == d2c.compute()
     assert cnt.n == 4 or func is clone
@@ -314,13 +355,6 @@ def test_bind_clone_collections(func):
     assert cnt.n == 32 or func is clone  # dd.utils.assert_eq calls compute() twice
     dd.utils.assert_eq(ddf5c, ddf5)
     assert cnt.n == 36 or func is clone
-
-    assert_no_common_keys(d2c, d2, omit=d1, layers=True)
-    assert_no_common_keys(a3c, a3, omit=a1, layers=True)
-    assert_no_common_keys(b3c, b3, omit=b2, layers=True)
-    assert_no_common_keys(ddf3c, ddf3, omit=ddf2, layers=True)
-    assert_no_common_keys(ddf4c, ddf4, omit=ddf2, layers=True)
-    assert_no_common_keys(ddf5c, ddf5, omit=ddf2, layers=True)
 
 
 @pytest.mark.parametrize(

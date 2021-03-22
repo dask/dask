@@ -1217,7 +1217,7 @@ Dask Name: {name}, {task} tasks"""
         ):
             raise ValueError(
                 "Please provide exactly one of ``npartitions=``, ``freq=``, "
-                "``divisions=``, ``partitions_size=`` keyword arguments"
+                "``divisions=``, ``partition_size=`` keyword arguments"
             )
 
         if partition_size is not None:
@@ -2160,6 +2160,119 @@ Dask Name: {name}, {task} tasks"""
         )
 
     @derived_from(pd.DataFrame)
+    def kurtosis(
+        self, axis=None, fisher=True, bias=True, nan_policy="propagate", out=None
+    ):
+        """
+        .. note::
+
+           This implementation follows the dask.array.stats implementation
+           of kurtosis and calculates kurtosis without taking into account
+           a bias term for finite sample size, which corresponds to the
+           default settings of the scipy.stats kurtosis calculation. This differs
+           from pandas.
+
+           Further, this method currently does not support filtering out NaN
+           values, which is again a difference to Pandas.
+        """
+        axis = self._validate_axis(axis)
+        _raise_if_object_series(self, "kurtosis")
+        meta = self._meta_nonempty.kurtosis()
+        if axis == 1:
+            result = map_partitions(
+                M.kurtosis,
+                self,
+                meta=meta,
+                token=self._token_prefix + "kurtosis",
+                axis=axis,
+                enforce_metadata=False,
+            )
+            return handle_out(out, result)
+        else:
+            if self.ndim == 1:
+                result = self._kurtosis_1d(
+                    self, fisher=fisher, bias=bias, nan_policy=nan_policy
+                )
+                return handle_out(out, result)
+            else:
+                result = self._kurtosis_numeric(
+                    fisher=fisher, bias=bias, nan_policy=nan_policy
+                )
+
+            if isinstance(self, DataFrame):
+                result.divisions = (self.columns.min(), self.columns.max())
+
+            return handle_out(out, result)
+
+    def _kurtosis_1d(self, column, fisher=True, bias=True, nan_policy="propagate"):
+        """1D version of the kurtosis calculation.
+
+        Uses the array version from da.stats in case we are passing in a single series
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        if pd.api.types.is_integer_dtype(column._meta_nonempty):
+            column = column.astype("f8")
+
+        if not np.issubdtype(column.dtype, np.number):
+            column = column.astype("f8")
+
+        name = self._token_prefix + "kurtosis-1d-" + tokenize(column)
+
+        array_kurtosis = da_stats.kurtosis(
+            column.values, axis=0, fisher=fisher, bias=bias, nan_policy=nan_policy
+        )
+
+        layer = {
+            (name, 0): (methods.wrap_kurtosis_reduction, (array_kurtosis._name,), None)
+        }
+        graph = HighLevelGraph.from_collections(
+            name, layer, dependencies=[array_kurtosis]
+        )
+
+        return new_dd_object(
+            graph, name, column._meta_nonempty.kurtosis(), divisions=[None, None]
+        )
+
+    def _kurtosis_numeric(self, fisher=True, bias=True, nan_policy="propagate"):
+        """Method for dataframes with numeric columns.
+
+        Maps the array version from da.stats onto the numeric array of columns.
+        """
+        # import depends on scipy, not installed by default
+        from ..array import stats as da_stats
+
+        num = self.select_dtypes(include=["number", "bool"], exclude=[np.timedelta64])
+
+        values_dtype = num.values.dtype
+        array_values = num.values
+
+        if not np.issubdtype(values_dtype, np.number):
+            array_values = num.values.astype("f8")
+
+        array_kurtosis = da_stats.kurtosis(
+            array_values, axis=0, fisher=fisher, bias=bias, nan_policy=nan_policy
+        )
+
+        name = self._token_prefix + "kurtosis-numeric" + tokenize(num)
+        cols = num._meta.columns if is_dataframe_like(num) else None
+
+        kurtosis_shape = num._meta_nonempty.values.var(axis=0).shape
+        array_kurtosis_name = (array_kurtosis._name,) + (0,) * len(kurtosis_shape)
+
+        layer = {
+            (name, 0): (methods.wrap_kurtosis_reduction, array_kurtosis_name, cols)
+        }
+        graph = HighLevelGraph.from_collections(
+            name, layer, dependencies=[array_kurtosis]
+        )
+
+        return new_dd_object(
+            graph, name, num._meta_nonempty.kurtosis(), divisions=[None, None]
+        )
+
+    @derived_from(pd.DataFrame)
     def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
@@ -2577,6 +2690,26 @@ Dask Name: {name}, {task} tasks"""
 
         return concat(
             [self, other], join="outer", interleave_partitions=interleave_partitions
+        )
+
+    @derived_from(pd.Series)
+    def dot(self, other, meta=no_default):
+        if not isinstance(other, _Frame):
+            raise TypeError("The second operand must be a dask array or dask dataframe")
+
+        if isinstance(other, DataFrame):
+            s = self.map_partitions(M.dot, other, token="dot", meta=meta)
+            return s.groupby(by=s.index).apply(
+                lambda x: x.sum(skipna=False), meta=s._meta_nonempty
+            )
+
+        def _dot_series(*args, **kwargs):
+            # .sum() is invoked on each partition before being applied to all
+            # partitions. The return type is expected to be a series, not a numpy object
+            return pd.Series(M.dot(*args, **kwargs))
+
+        return self.map_partitions(_dot_series, other, token="dot", meta=meta).sum(
+            skipna=False
         )
 
     @derived_from(pd.DataFrame)
@@ -3122,13 +3255,20 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def value_counts(
-        self, sort=None, ascending=False, dropna=None, split_every=None, split_out=1
+        self,
+        sort=None,
+        ascending=False,
+        dropna=None,
+        normalize=False,
+        split_every=None,
+        split_out=1,
     ):
         """
         Note: dropna is only supported in pandas >= 1.1.0, in which case it defaults to
         True.
         """
         kwargs = {"sort": sort, "ascending": ascending}
+
         if dropna is not None:
             if not PANDAS_GT_110:
                 raise NotImplementedError(
@@ -3137,16 +3277,23 @@ Dask Name: {name}, {task} tasks""".format(
                 )
             kwargs["dropna"] = dropna
 
+        aggregate_kwargs = {"normalize": normalize}
+        if split_out > 1:
+            aggregate_kwargs["total_length"] = (
+                len(self) if dropna is False else len(self.dropna())
+            )
+
         return aca(
             self,
             chunk=M.value_counts,
             aggregate=methods.value_counts_aggregate,
             combine=methods.value_counts_combine,
-            meta=self._meta.value_counts(),
+            meta=self._meta.value_counts(normalize=normalize),
             token="value-counts",
             split_every=split_every,
             split_out=split_out,
             split_out_setup=split_out_on_index,
+            aggregate_kwargs=aggregate_kwargs,
             **kwargs,
         )
 
@@ -3707,7 +3854,6 @@ class DataFrame(_Frame):
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
-            #
             if self.divisions != key.divisions:
                 from .multi import _maybe_align_partitions
 
@@ -3815,6 +3961,39 @@ class DataFrame(_Frame):
     def select_dtypes(self, include=None, exclude=None):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
+
+    def sort_values(self, other, npartitions=None, ascending=True, **kwargs):
+        """Sort the dataset by a single column.
+
+        Sorting a parallel dataset requires expensive shuffles and is generally
+        not recommended. See ``set_index`` for implementation details.
+
+        Parameters
+        ----------
+        other: string
+        npartitions: int, None, or 'auto'
+            The ideal number of output partitions. If None, use the same as
+            the input. If 'auto' then decide by memory use.
+        ascending: bool, optional
+            Non ascending sort is not supported by Dask.
+            Defaults to True.
+
+        Examples
+        --------
+        >>> df2 = df.sort_values('x')  # doctest: +SKIP
+        """
+        if not ascending:
+            raise NotImplementedError("The ascending= keyword is not supported")
+
+        from .shuffle import sort_values
+
+        return sort_values(
+            self,
+            other,
+            ascending=ascending,
+            npartitions=npartitions,
+            **kwargs,
+        )
 
     def set_index(
         self,

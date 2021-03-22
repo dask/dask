@@ -106,7 +106,11 @@ def _write_partitioned(
             ]
         )
         subtable = pa.Table.from_pandas(
-            subgroup, preserve_index=preserve_index, schema=subschema, safe=False
+            subgroup,
+            nthreads=1,
+            preserve_index=preserve_index,
+            schema=subschema,
+            safe=False,
         )
         prefix = fs.sep.join([root_path, subdir])
         fs.mkdirs(prefix, exist_ok=True)
@@ -811,7 +815,9 @@ class ArrowDatasetEngine(Engine):
     def _pandas_to_arrow_table(
         cls, df: pd.DataFrame, preserve_index=False, schema=None
     ) -> pa.Table:
-        table = pa.Table.from_pandas(df, preserve_index=preserve_index, schema=schema)
+        table = pa.Table.from_pandas(
+            df, nthreads=1, preserve_index=preserve_index, schema=schema
+        )
         return table
 
     @classmethod
@@ -1778,6 +1784,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     root_dir=base,
                     engine=cls,
                     out_dir=False,
+                    fs=fs,
                 )
                 if schema is None:
                     schema = metadata.schema.to_arrow_schema()

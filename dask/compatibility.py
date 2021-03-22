@@ -8,17 +8,6 @@ from .utils import apply  # noqa
 unicode = str  # noqa
 
 try:
-    from dataclasses import is_dataclass, fields as dataclass_fields
-except ImportError:
-    # Python < 3.7
-    def is_dataclass(x):
-        return False
-
-    def dataclass_fields(x):
-        return []
-
-
-try:
     from math import prod
 except ImportError:
     # Python < 3.8
