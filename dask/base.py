@@ -1,6 +1,7 @@
 from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import is_dataclass, fields
+from distutils.version import LooseVersion
 from functools import partial
 from hashlib import md5
 from numbers import Number
@@ -895,6 +896,8 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
+    PANDAS_GT_130 = LooseVersion(pd.__version__) >= LooseVersion("1.3.0")
+
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
@@ -939,7 +942,11 @@ def register_pandas():
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
         mgr = df._data
-        if hasattr(mgr, "arrays"):
+
+        if PANDAS_GT_130:
+            # for compat with ArrayManager, pandas 1.3.0 introduced a `.arrays`
+            # attribute that returns the column arrays/block arrays for both
+            # BlockManager and ArrayManager
             data = list(mgr.arrays)
         else:
             data = [block.values for block in mgr.blocks]
