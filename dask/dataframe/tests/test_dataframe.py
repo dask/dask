@@ -1634,13 +1634,22 @@ def test_combine():
 
     first = lambda a, b: a
 
+    # You can add series with strings and nans but you can't add scalars 'a' + np.NaN
+    str_add = lambda a, b: a + b if a is not np.nan else a
+
     # DataFrame
-    for dda, ddb, a, b in [
-        (ddf1, ddf2, df1, df2),
-        (ddf1.A, ddf2.A, df1.A, df2.A),
-        (ddf1.B, ddf2.B, df1.B, df2.B),
+    for dda, ddb, a, b, runs in [
+        (ddf1, ddf2, df1, df2, [(add, None), (first, None)]),
+        (ddf1.A, ddf2.A, df1.A, df2.A, [(add, None), (add, 100), (first, None)]),
+        (
+            ddf1.B,
+            ddf2.B,
+            df1.B,
+            df2.B,
+            [(str_add, None), (str_add, "d"), (first, None)],
+        ),
     ]:
-        for func, fill_value in [(add, None), (add, 100), (first, None)]:
+        for func, fill_value in runs:
             sol = a.combine(b, func, fill_value=fill_value)
             assert_eq(dda.combine(ddb, func, fill_value=fill_value), sol)
             assert_eq(dda.combine(b, func, fill_value=fill_value), sol)
