@@ -474,9 +474,6 @@ def test_describe_empty():
         ddf_len0.describe(percentiles_method="dask").compute()
 
     with pytest.raises(ValueError):
-        ddf_len0.describe(percentiles_method="dask").compute()
-
-    with pytest.raises(ValueError):
         ddf_nocols.describe(percentiles_method="dask").compute()
 
 
