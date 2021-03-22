@@ -3615,7 +3615,7 @@ def test_setitem_2d():
     assert_eq(x, dx)
 
 
-def test_setitem_extended_API():
+def test_setitem_extended_API_0d():
     # 0-d array
     x = np.array(9)
     dx = da.from_array(9)
@@ -3628,6 +3628,8 @@ def test_setitem_extended_API():
     dx[...] = -11
     assert_eq(x, dx.compute())
 
+
+def test_setitem_extended_API_1d():
     # 1-d array
     x = np.arange(10)
     dx = da.from_array(x.copy(), chunks=(4, 6))
@@ -3640,146 +3642,147 @@ def test_setitem_extended_API():
     dx[...] = -11
     assert_eq(x, dx.compute())
 
+
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        [Ellipsis, -1],
+        [(slice(None, None, 2), slice(None, None, -1)), -1],
+        [slice(1, None, 2), -1],
+        [[4, 3, 1], -1],
+        [(Ellipsis, 4), -1],
+        [5, -1],
+        [(slice(None), 2), range(6)],
+        [3, range(10)],
+        [(slice(None), [3, 5, 6]), [-30, -31, -32]],
+        [([-1, 0, 1], 2), [-30, -31, -32]],
+        [(slice(None, 2), slice(None, 3)), [-50, -51, -52]],
+        [(slice(None), [6, 1, 3]), [-60, -61, -62]],
+        [(slice(1, 3), slice(1, 4)), [[-70, -71, -72]]],
+        [(slice(None), [9, 8, 8]), [-80, -81, 91]],
+        [([True, False, False, False, True, False], 2), -1],
+        [(3, [True, True, False, True, True, False, True, False, True, True]), -1],
+        [(np.array([False, False, True, True, False, False]), slice(5, 7)), -1],
+        [
+            (
+                4,
+                da.from_array(
+                    [False, False, True, True, False, False, True, False, False, True]
+                ),
+            ),
+            -1,
+        ],
+    ],
+)
+def test_setitem_extended_API_2d_01(index, value):
     # 2-d array
     x = np.ma.arange(60).reshape((6, 10))
-    dx = da.from_array(x.copy(), chunks=(2, 3))
+    dx = da.from_array(x, chunks=(2, 3))
+    dx[index] = value
+    x[index] = value
+    assert_eq(x, dx.compute())
 
-    check_each_op = False
 
-    value = -1
-    for index in (
-        (slice(None, None, 2), slice(None, None, -1)),
-        slice(1, None, 2),
-        [4, 3, 1],
-        (Ellipsis, 4),
-        5,
-        ([True, False, False, False, True, False], 2),
-        (3, [True, True, False, True, True, False, True, False, True, True]),
-        (np.array([False, False, True, True, False, False]), slice(5, 7)),
-        (
-            4,
-            da.from_array(
-                [False, False, True, True, False, False, True, False, False, True]
-            ),
-        ),
-    ):
-        x[index] = value
-        dx[index] = value
-        if check_each_op:
-            print("index=", index)
-            assert_eq(x, dx.compute())
+def test_setitem_extended_API_2d_02():
+    # Cases:
+    # * RHS and/or indices are a function of the LHS
+    # * Indices have unknown chunk sizes
+    # * RHS has extra leading size 1 dimensions compared to LHS
+    x = np.arange(60).reshape((6, 10))
+    chunks = (2, 3)
 
-    for index, value in zip(
-        [
-            (slice(None), 2),
-            3,
-            (slice(None), [3, 5, 6]),
-            ([-1, 0, 1], 2),
-            (slice(None, 2), slice(None, 3)),
-            (slice(None), [6, 1, 3]),
-            (slice(1, 3), slice(1, 4)),
-            (slice(None), [9, 8, 8]),
-        ],
-        [
-            range(6),
-            range(10),
-            [-30, -31, -32],
-            [-30, -31, -32],
-            [-50, -51, -52],
-            [-60, -61, -62],
-            [[-70, -71, -72]],
-            [-80, -81, 91],
-        ],
-    ):
-        x[index] = value
-        dx[index] = value
-        if check_each_op:
-            print("index=", index)
-            assert_eq(x, dx.compute())
-
-    x[2:4, x[0] > 3] = -5
+    dx = da.from_array(x, chunks=chunks)
     dx[2:4, dx[0] > 3] = -5
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[2:4, x[0] > 3] = -5
+    assert_eq(x, dx.compute())
 
-    x[2, x[0] < -2] = -7
+    dx = da.from_array(x, chunks=chunks)
     dx[2, dx[0] < -2] = -7
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[2, x[0] < -2] = -7
+    assert_eq(x, dx.compute())
 
-    x[x % 2 == 0] = -8
+    dx = da.from_array(x, chunks=chunks)
     dx[dx % 2 == 0] = -8
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[x % 2 == 0] = -8
+    assert_eq(x, dx.compute())
 
-    x[3:5, 5:1:-2] = -x[:2, 4:1:-2]
+    dx = da.from_array(x, chunks=chunks)
+    dx[dx % 2 == 0] = -8
+    x[x % 2 == 0] = -8
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
     dx[3:5, 5:1:-2] = -dx[:2, 4:1:-2]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[3:5, 5:1:-2] = -x[:2, 4:1:-2]
+    assert_eq(x, dx.compute())
 
-    x[0, 1:3] = -x[0, 4:2:-1]
+    dx = da.from_array(x, chunks=chunks)
     dx[0, 1:3] = -dx[0, 4:2:-1]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[0, 1:3] = -x[0, 4:2:-1]
+    assert_eq(x, dx.compute())
 
-    x[...] = x
+    dx = da.from_array(x, chunks=chunks)
     dx[...] = dx
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[...] = x
+    assert_eq(x, dx.compute())
 
-    x[...] = x[...]
+    dx = da.from_array(x, chunks=chunks)
     dx[...] = dx[...]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[...] = x[...]
+    assert_eq(x, dx.compute())
 
-    x[0] = x[-1]
+    dx = da.from_array(x, chunks=chunks)
     dx[0] = dx[-1]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[0] = x[-1]
+    assert_eq(x, dx.compute())
 
-    x[0, :] = x[-2, :]
+    dx = da.from_array(x, chunks=chunks)
     dx[0, :] = dx[-2, :]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[0, :] = x[-2, :]
+    assert_eq(x, dx.compute())
 
-    x[:, 1] = x[:, -3]
+    dx = da.from_array(x, chunks=chunks)
     dx[:, 1] = dx[:, -3]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[:, 1] = x[:, -3]
+    assert_eq(x, dx.compute())
 
     index = da.from_array([0, 2], chunks=(2,))
-    x[[0, 2], 8] = [99, 88]
+    dx = da.from_array(x, chunks=chunks)
     dx[index, 8] = [99, 88]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[[0, 2], 8] = [99, 88]
+    assert_eq(x, dx.compute())
 
-    x[:, [0, 2]] = x[:, :2]
+    dx = da.from_array(x, chunks=chunks)
     dx[:, index] = dx[:, :2]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[:, [0, 2]] = x[:, :2]
+    assert_eq(x, dx.compute())
 
     index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
-    x[index.compute(), 7] = [-23, -33]
+    dx = da.from_array(x, chunks=chunks)
     dx[index, 7] = [-23, -33]
-    if check_each_op:
-        assert_eq(x, dx.compute())
+    x[index.compute(), 7] = [-23, -33]
+    assert_eq(x, dx.compute())
+
+    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
+    dx = da.from_array(x, chunks=chunks)
+    dx[(index,)] = -34
+    x[(index.compute(),)] = -34
+    assert_eq(x, dx.compute())
 
     index = index - 4
-    x[index.compute(), 7] = [-43, -53]
+    dx = da.from_array(x, chunks=chunks)
     dx[index, 7] = [-43, -53]
-    if check_each_op:
-        assert_eq(x, dx.compute())
-
-    # Masking
-    x[1, 1:7:2] = np.ma.masked
-    dx[1, 1:7:2] = np.ma.masked
-
-    x[1:5:2, [7, 5]] = np.ma.masked_all((2, 2))
-    dx[1:5:2, [7, 5]] = np.ma.masked_all((2, 2))
-
-    dx = dx.persist()
+    x[index.compute(), 7] = [-43, -53]
     assert_eq(x, dx.compute())
-    assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
+
+    index = da.from_array([0, -1], chunks=(1,))
+    x[[0, -1]] = 9999
+    dx[(index,)] = 9999
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=(-1, -1))
+    dx[...] = da.from_array(x, chunks=chunks)
+    assert_eq(x, dx.compute())
 
     # RHS has extra leading size 1 dimensions compared to LHS
     dx = da.from_array(x.copy(), chunks=(2, 3))
@@ -3794,23 +3797,22 @@ def test_setitem_extended_API():
     dx[:, index] = v
     assert_eq(x, dx.compute())
 
-    index = da.from_array([0, -1], chunks=(1,))
-    x[[0, -1]] = 9999
-    dx[index] = 9999
-    assert_eq(x, dx.compute())
 
-    dx = da.from_array(x.copy(), chunks=(-1, -1))
-    dx[...] = da.from_array(x.copy(), chunks=(2, 3))
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        [(1, slice(1, 7, 2)), np.ma.masked],
+        [(slice(1, 5, 2), [7, 5]), np.ma.masked_all((2, 2))],
+    ],
+)
+def test_setitem_extended_API_2d_mask(index, value):
+    x = np.ma.arange(60).reshape((6, 10))
+    dx = da.from_array(x.data, chunks=(2, 3))
+    dx[index] = value
+    x[index] = value
+    dx = dx.persist()
     assert_eq(x, dx.compute())
-
-    dx = da.ones((4, 4), chunks=(2, 2))
-    index = da.from_array([0, 1, 2], chunks=(2,))
-    index = da.where(index > 0)[0]
-    dx[index] = 99
-    res = dx.compute()
-    assert_eq(res[0], np.ones((4,)))
-    assert_eq(res[1], np.array([99] * 4))
-    assert_eq(res[2], np.array([99] * 4))
+    assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
 
 
 def test_setitem_on_read_only_blocks():
