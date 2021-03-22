@@ -108,19 +108,19 @@ class BlockwiseCreateArray(Blockwise):
 class DataFrameLayer(Layer):
     """DataFrame-based HighLevelGraph Layer"""
 
-    def cull_columns(self, output_columns):
-        """Cull unnecessary columns from this layer
+    def project_columns(self, output_columns):
+        """Produce a column projection for this layer.
         Given a list of required output columns, this method
-        returns a culled (by column) layer, and any column
+        returns a tuple with the projected layer, and any column
         dependencies for this layer.  A value of ``None`` for
         ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be culled by column. This
-        method should be overridden by specialized DataFrame
-        layers to enable column culling.
+        any dependent layers) cannot be projected. This method
+        should be overridden by specialized DataFrame layers
+        to enable column projection.
         """
 
         # Default behavior.
-        # Return: `culled_layer`, `dep_columns`
+        # Return: `projected_layer`, `dep_columns`
         return self, None
 
 
@@ -949,8 +949,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
             annotations=self.annotations,
         )
 
-    def cull_columns(self, columns):
-        # Method inherited from `DataFrameLayer.cull_columns`
+    def project_columns(self, columns):
+        # Method inherited from `DataFrameLayer.project_columns`
         if columns and (self.columns is None or columns < set(self.columns)):
             layer = DataFrameIOLayer(
                 (self.label or "subset-") + tokenize(self.name, columns),
@@ -962,7 +962,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 require_pickle=self.require_pickle,
             )
             if hasattr(layer.io_func, "columns"):
-                # Apply column-selection culling
+                # Apply column projection
                 layer.io_func = copy.deepcopy(layer.io_func)
                 layer.io_func.columns = columns
             return layer, None

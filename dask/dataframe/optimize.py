@@ -44,7 +44,7 @@ def optimize(dsk, keys, **kwargs):
 
 def optimize_dataframe_getitem(dsk, keys):
     # This optimization looks for all `DataFrameLayer` instances,
-    # and calls `cull_columns` on any layers that directly precede
+    # and calls `project_columns` on any layers that directly precede
     # a (qualified) `getitem` operation. In the future, we can
     # search for `getitem` operations instead, and work backwards
     # through multiple adjacent `DataFrameLayer`s. This approach
@@ -96,9 +96,9 @@ def optimize_dataframe_getitem(dsk, keys):
             columns |= set(block_columns)
             update_blocks[dep] = block
 
-        # Cull columns and update blocks
+        # Project columns and update blocks
         old = layers[k]
-        new = old.cull_columns(columns)[0]
+        new = old.project_columns(columns)[0]
         if new.name != old.name:
             columns = list(columns)
             assert len(update_blocks)
