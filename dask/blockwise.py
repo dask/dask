@@ -166,6 +166,20 @@ def blockwise(
     return subgraph
 
 
+class ConcatAxesWrapper:
+    def __init__(self, func):
+        self.func = func
+
+    def __call__(self, *args, **kwargs):
+        from dask.array.core import concatenate_axes as concatenate
+
+        _args = list(args)
+        for i, arg in enumerate(args):
+            if isinstance(arg, dict) and "tups" in arg:
+                _args[i] = concatenate(arg["tups"], arg["axes"])
+        return self.func(*_args, **kwargs)
+
+
 class Blockwise(Layer):
     """Tensor Operation
 
@@ -363,7 +377,10 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        func = dumps_function(dsk[0])
+        # Serialize subgraphcallable function.
+        # Wrap in `ConcatAxesWrapper` if we are concatenating axes.
+        func = ConcatAxesWrapper(dsk[0]) if self.concatenate else dsk[0]
+        func = dumps_function(func)
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -839,7 +856,7 @@ def make_blockwise_graph(
                 _args = io_dep_map.__dask_distributed_unpack__(*_args)
             io_arg_mappings[arg] = io_dep_map(*_args[1:])
 
-    if concatenate is True:
+    if concatenate is True and not deserializing:
         from dask.array.core import concatenate_axes as concatenate
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
@@ -891,7 +908,14 @@ def make_blockwise_graph(
                         deps.update(flatten(tups))
 
                     if concatenate:
-                        tups = (concatenate, tups, axes)
+                        if deserializing:
+                            # Using `ConcatAxesWrapper` to deal
+                            # with axes concatenation
+                            tups = {"tups": tups, "axes": axes}
+                        else:
+                            # Not materializing on the scheduler.
+                            # Inline concatenate task allowed.
+                            tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
                     if arg not in io_deps:
