@@ -2,7 +2,7 @@ Prometheus Monitoring
 -----------------------
 
 Prometheus_ is a widely popular tool for monitoring and alerting a wide variety of systems. Dask.distributed exposes
-scheduler and worker metrics in a prometheus text based format. Metrics are available at ``http://scheduler-address:8787/metrics``.
+scheduler and worker metrics in a prometheus text based format. Metrics are available at ``http://scheduler-address:8787/metrics`` when the ``prometheus_client`` package has been installed.
 
 .. _Prometheus: https://prometheus.io
 
