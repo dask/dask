@@ -16,7 +16,7 @@ from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
-from .creation import arange, diag, empty, indices, tri, zeros
+from .creation import arange, diag, empty, indices, tri
 from .utils import (
     safe_wraps,
     validate_axis,
@@ -1722,19 +1722,29 @@ def average(a, axis=None, weights=None, returned=False):
 @derived_from(np)
 def tril(m, k=0):
     from .utils import asarray_safe
-    m = asarray_safe(m, like=m)
-    mask = tri(*m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m))
 
-    return where(mask, m, zeros_like_safe(m, shape=(1, )))
+    m = asarray_safe(m, like=m)
+    mask = tri(
+        *m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m)
+    )
+
+    return where(mask, m, zeros_like_safe(m, shape=(1,)))
 
 
 @derived_from(np)
 def triu(m, k=0):
     from .utils import asarray_safe
-    m = asarray_safe(m, like=m)
-    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m))
 
-    return where(mask, zeros_like_safe(m, shape=(1, )), m)
+    m = asarray_safe(m, like=m)
+    mask = tri(
+        *m.shape[-2:],
+        k=k - 1,
+        dtype=bool,
+        chunks=m.chunks[-2:],
+        like=meta_from_array(m),
+    )
+
+    return where(mask, zeros_like_safe(m, shape=(1,)), m)
 
 
 @derived_from(np)

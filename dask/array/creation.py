@@ -397,7 +397,14 @@ def arange(*args, **kwargs):
     for i, bs in enumerate(chunks[0]):
         blockstart = start + (elem_count * step)
         blockstop = start + ((elem_count + bs) * step)
-        task = (partial(chunk.arange, like=like), blockstart, blockstop, step, bs, dtype)
+        task = (
+            partial(chunk.arange, like=like),
+            blockstart,
+            blockstop,
+            step,
+            bs,
+            dtype,
+        )
         dsk[(name, i)] = task
         elem_count += bs
 

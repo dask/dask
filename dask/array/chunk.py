@@ -261,6 +261,7 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
 
 def arange(start, stop, step, length, dtype, like=None):
     from .utils import arange_safe
+
     res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
 
