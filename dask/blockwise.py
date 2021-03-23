@@ -166,9 +166,11 @@ def blockwise(
     return subgraph
 
 
-class ConcatAxesWrapper:
-    def __init__(self, func):
-        self.func = func
+class SubgraphCallableConcatAxes:
+    """SubgraphCallable Wrapper to Concatenate Axes"""
+
+    def __init__(self, subgraphcallable):
+        self.subgraphcallable = subgraphcallable
 
     def __call__(self, *args, **kwargs):
         from dask.array.core import concatenate_axes as concatenate
@@ -177,7 +179,7 @@ class ConcatAxesWrapper:
         for i, arg in enumerate(args):
             if isinstance(arg, dict) and "tups" in arg:
                 _args[i] = concatenate(arg["tups"], arg["axes"])
-        return self.func(*_args, **kwargs)
+        return self.subgraphcallable(*_args, **kwargs)
 
 
 class Blockwise(Layer):
@@ -378,8 +380,8 @@ class Blockwise(Layer):
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
         # Serialize subgraphcallable function.
-        # Wrap in `ConcatAxesWrapper` if we are concatenating axes.
-        func = ConcatAxesWrapper(dsk[0]) if self.concatenate else dsk[0]
+        # Wrap in `SubgraphCallableConcatAxes` if we are concatenating axes.
+        func = SubgraphCallableConcatAxes(dsk[0]) if self.concatenate else dsk[0]
         func = dumps_function(func)
         func_future_args = dsk[1:]
 
@@ -909,7 +911,7 @@ def make_blockwise_graph(
 
                     if concatenate:
                         if deserializing:
-                            # Using `ConcatAxesWrapper` to deal
+                            # Using `SubgraphCallableConcatAxes` to deal
                             # with axes concatenation
                             tups = {"tups": tups, "axes": axes}
                         else:
