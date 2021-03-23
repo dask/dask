@@ -207,6 +207,39 @@ def fliplr(m):
     return flip(m, 1)
 
 
+@derived_from(np)
+def rot90(m, k=1, axes=(0, 1)):
+    axes = tuple(axes)
+    if len(axes) != 2:
+        raise ValueError("len(axes) must be 2.")
+
+    m = asanyarray(m)
+
+    if axes[0] == axes[1] or np.absolute(axes[0] - axes[1]) == m.ndim:
+        raise ValueError("Axes must be different.")
+
+    if axes[0] >= m.ndim or axes[0] < -m.ndim or axes[1] >= m.ndim or axes[1] < -m.ndim:
+        raise ValueError(
+            "Axes={} out of range for array of ndim={}.".format(axes, m.ndim)
+        )
+
+    k %= 4
+
+    if k == 0:
+        return m[:]
+    if k == 2:
+        return flip(flip(m, axes[0]), axes[1])
+
+    axes_list = list(range(0, m.ndim))
+    (axes_list[axes[0]], axes_list[axes[1]]) = (axes_list[axes[1]], axes_list[axes[0]])
+
+    if k == 1:
+        return transpose(flip(m, axes[1]), axes_list)
+    else:
+        # k == 3
+        return flip(transpose(m, axes_list), axes[1])
+
+
 alphabet = "abcdefghijklmnopqrstuvwxyz"
 ALPHABET = alphabet.upper()
 
