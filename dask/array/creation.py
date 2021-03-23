@@ -378,6 +378,9 @@ def arange(*args, **kwargs):
 
     num = int(max(np.ceil((stop - start) / step), 0))
 
+    like = kwargs.pop("like", None)
+    meta = meta_from_array(like) if like is not None else None
+
     dtype = kwargs.pop("dtype", None)
     if dtype is None:
         dtype = np.arange(start, stop, step * num if num else step).dtype
@@ -394,11 +397,11 @@ def arange(*args, **kwargs):
     for i, bs in enumerate(chunks[0]):
         blockstart = start + (elem_count * step)
         blockstop = start + ((elem_count + bs) * step)
-        task = (chunk.arange, blockstart, blockstop, step, bs, dtype)
+        task = (partial(chunk.arange, like=like), blockstart, blockstop, step, bs, dtype)
         dsk[(name, i)] = task
         elem_count += bs
 
-    return Array(dsk, name, chunks, dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype, meta=meta)
 
 
 @derived_from(np)
@@ -677,7 +680,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 
 @derived_from(np)
-def tri(N, M=None, k=0, dtype=float, chunks="auto"):
+def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
@@ -685,9 +688,9 @@ def tri(N, M=None, k=0, dtype=float, chunks="auto"):
 
     chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
 
-    m = greater_equal.outer(
-        arange(N, chunks=chunks[0][0], dtype=_min_int(0, N)),
-        arange(-k, M - k, chunks=chunks[1][0], dtype=_min_int(-k, M - k)),
+    m = greater_equal(
+        arange(N, chunks=chunks[0][0], dtype=_min_int(0, N), like=like).reshape(1, N).T,
+        arange(-k, M - k, chunks=chunks[1][0], dtype=_min_int(-k, M - k), like=like),
     )
 
     # Avoid making a copy if the requested type is already bool

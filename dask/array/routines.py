@@ -1721,18 +1721,20 @@ def average(a, axis=None, weights=None, returned=False):
 
 @derived_from(np)
 def tril(m, k=0):
-    m = asarray(m)
-    mask = tri(*m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:])
+    from .utils import asarray_safe
+    m = asarray_safe(m, like=m)
+    mask = tri(*m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m))
 
-    return where(mask, m, zeros(1, dtype=m.dtype))
+    return where(mask, m, zeros_like_safe(m, shape=(1, )))
 
 
 @derived_from(np)
 def triu(m, k=0):
-    m = asarray(m)
-    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool, chunks=m.chunks[-2:])
+    from .utils import asarray_safe
+    m = asarray_safe(m, like=m)
+    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m))
 
-    return where(mask, zeros(1, dtype=m.dtype), m)
+    return where(mask, zeros_like_safe(m, shape=(1, )), m)
 
 
 @derived_from(np)
