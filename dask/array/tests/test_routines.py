@@ -245,7 +245,7 @@ def test_rot90(kwargs, shape):
             with pytest.raises(ValueError):
                 da_func(da_a, **kwargs)
         else:
-            for k in range(4):
+            for k in range(-3, 9):
                 np_r = np_func(np_a, k=k, **kwargs)
                 da_r = da_func(da_a, k=k, **kwargs)
                 assert_eq(np_r, da_r)
