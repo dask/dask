@@ -91,6 +91,7 @@ try:
         tril_indices_from,
         triu_indices,
         triu_indices_from,
+        rot90,
     )
     from .reshape import reshape
     from .ufunc import (
