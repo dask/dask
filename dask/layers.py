@@ -209,8 +209,7 @@ class BlockwiseCreateRandomArray(Blockwise):
             {io_name: self.nchunks},
             io_deps={
                 io_name: (
-                    "dask.layers",
-                    "CreateRandomArrayDeps",
+                    "dask.layers.CreateRandomArrayDeps",
                     chunks,
                     seeds,
                     extra_chunks,
