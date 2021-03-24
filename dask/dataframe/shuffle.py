@@ -109,7 +109,6 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        divisions = mins + [maxes[-1]]
         return df.map_partitions(M.sort_values, by)
 
     df = rearrange_by_divisions(df, by, divisions)
