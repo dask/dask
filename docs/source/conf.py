@@ -306,8 +306,8 @@ intersphinx_mapping = {
         "https://pandas.pydata.org/pandas-docs/stable/objects.inv",
     ),
     "numpy": (
-        "https://docs.scipy.org/doc/numpy/",
-        "https://docs.scipy.org/doc/numpy/objects.inv",
+        "https://numpy.org/doc/stable/",
+        "https://numpy.org/doc/stable/objects.inv",
     ),
     "asyncssh": (
         "https://asyncssh.readthedocs.io/en/latest/",
