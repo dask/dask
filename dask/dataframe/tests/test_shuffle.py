@@ -1115,7 +1115,7 @@ def test_set_index_overlap_2():
     ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
 
     assert_eq(ddf1, ddf2)
-    assert ddf2.npartitions == 8
+    assert ddf2.npartitions == 3
 
 
 def test_shuffle_hlg_layer():
@@ -1197,7 +1197,7 @@ def test_set_index_nan_partition():
     a_gt3_sorted = d[d.a > 3].set_index(
         "a", sorted=True
     )  # Set sorted index with 1 null partition
-    assert a_gt3_sorted.divisions == (4, 4, 7, 9)
+    assert a_gt3_sorted.divisions == (4, 7, 9)
     assert_eq(a_gt3_sorted, a_gt3)
 
 

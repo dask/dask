@@ -914,6 +914,51 @@ def fix_overlap(ddf, overlap):
     return new_dd_object(graph, name, ddf._meta, ddf.divisions)
 
 
+def fix_duplicate_divisions(df):
+    """Remove duplicate `divisions` (which are not allowed generally, and correspond to empty partitions anyway) by
+    concatenating runs of partitions with the same `min` division"""
+    divisions = df.divisions
+    if df.known_divisions and len(np.unique(divisions)) != len(divisions):
+        dsk = {}
+        name = "dedupe-divisions-%s" % tokenize(df)
+        deduped_partition_idx = 0
+        partition_idx = 0
+        deduped_divisions = []
+        found_dupes = False
+        while partition_idx < df.npartitions:
+            start_partition_idx = partition_idx
+            division = divisions[start_partition_idx]
+            partition_idx += 1
+            # Identify all partitions whose `min` division equals `cur_partition_idx`'s
+            while (
+                partition_idx < df.npartitions and divisions[partition_idx] == division
+            ):
+                partition_idx += 1
+
+            # If any were found, concat them all together at index `cur_partition_idx`
+            if partition_idx > start_partition_idx + 1:
+                found_dupes = True
+                dsk[(name, deduped_partition_idx)] = (
+                    methods.concat,
+                    [
+                        (df._name, idx)
+                        for idx in range(start_partition_idx, partition_idx)
+                    ],
+                )
+            else:
+                dsk[(name, deduped_partition_idx)] = (df._name, start_partition_idx)
+
+            deduped_divisions.append(division)
+            deduped_partition_idx += 1
+
+        if found_dupes:
+            deduped_divisions.append(divisions[-1])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+            return new_dd_object(graph, name, df._meta, deduped_divisions)
+
+    return df
+
+
 def compute_and_set_sorted_divisions(df, **kwargs):
     """Given a _Frame with index already monotonically increasing but divisions unknown, compute and set the
     divisions"""
@@ -946,6 +991,18 @@ def compute_and_set_sorted_divisions(df, **kwargs):
 
     df.divisions = tuple(mins) + (list(maxs)[-1],)
 
+    mins, maxs = tuple(
+        zip(
+            *[
+                (m, M)
+                for i, (m, M) in enumerate(zip(mins, maxs))
+                if df.divisions[i] != df.divisions[i + 1] or i + 1 == df.npartitions
+            ]
+        )
+    )
+
+    # drop+concatenate partitions with the same starting division value
+    df = fix_duplicate_divisions(df)
     overlap = [i for i in range(1, len(mins)) if mins[i] == maxs[i - 1]]
     return fix_overlap(df, overlap) if overlap else df
 
