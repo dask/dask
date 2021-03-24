@@ -1192,7 +1192,5 @@ def test_set_index_nan_partition():
 )
 def test_sort_values(npartitions):
     df = pd.DataFrame({"a": np.random.randint(0, 10, 100)})
-
     ddf = dd.from_pandas(df, npartitions=npartitions)
-
     assert_eq(ddf.sort_values("a"), df.sort_values("a"))
