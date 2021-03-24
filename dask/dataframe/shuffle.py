@@ -75,7 +75,7 @@ def sort_values(
     partition_size=128e6,
     **kwargs,
 ):
-    """ See _Frame.sort_values for docstring """
+    """ See DataFrame.sort_values for docstring """
     if not ascending:
         raise NotImplementedError("The ascending= keyword is not supported")
     if not isinstance(by, str):
