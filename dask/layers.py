@@ -870,7 +870,13 @@ class BroadcastJoinLayer(DataFrameLayer):
 
 
 class MaterializedIODeps(BlockwiseIODeps):
-    """Partially-materialized IO-Dep Wrapper"""
+    """Partially-materialized IO-Dep Wrapper
+
+    This class will always call `serialize` on each element of the
+    IO dependencies during distributed execution. Therefore, the
+    IO function will need to use `deserialize` if it is passed
+    a tuple with "serialized" as the first element.
+    """
 
     def __init__(self, parts):
         self.parts = parts
@@ -880,12 +886,11 @@ class MaterializedIODeps(BlockwiseIODeps):
 
     @classmethod
     def __dask_distributed_pack__(cls, cls_path: str, parts: dict):
-        import pickle
+        from distributed.protocol import serialize
 
         packed_parts = {}
         for k, v in parts.items():
-            packed_parts[k] = pickle.dumps(v)
-
+            packed_parts[k] = ("serialized",) + serialize(v)
         return (cls_path, packed_parts)
 
 
@@ -915,7 +920,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         part_ids=None,
         label=None,
-        require_pickle=False,
+        serialize=False,
         annotations=None,
     ):
         self.name = name
@@ -925,7 +930,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
         self.label = label
         self.annotations = annotations
-        self.require_pickle = require_pickle
+        self.serialize = serialize
 
         # Define mapping between key index and "part"
         io_arg_map = {(i,): self.inputs[i] for i in self.part_ids}
@@ -933,7 +938,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         # Wrap io_arg_map to in MaterializedIODeps if it is
         # expected to contain objects than cannot be serialized
         # with msgpack
-        if require_pickle:
+        if serialize:
             io_arg_map = (
                 "dask.layers.MaterializedIODeps",
                 io_arg_map,
@@ -959,7 +964,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 self.io_func,
                 part_ids=self.part_ids,
                 annotations=self.annotations,
-                require_pickle=self.require_pickle,
+                serialize=self.serialize,
             )
             if hasattr(layer.io_func, "columns"):
                 # Apply column projection

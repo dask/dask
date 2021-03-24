@@ -1,6 +1,5 @@
 from distutils.version import LooseVersion
 import math
-import pickle
 
 import tlz as toolz
 import warnings
@@ -68,8 +67,11 @@ class ParquetFunctionWrapper:
 
     def __call__(self, part):
 
-        if isinstance(part, bytes):
-            part = pickle.loads(part)
+        # May need to deserialize in distributed
+        if isinstance(part, tuple) and part[0] == "serialized":
+            from distributed.protocol import deserialize
+
+            part = deserialize(*part[1:])
 
         if not isinstance(part, list):
             part = [part]
@@ -326,8 +328,8 @@ def read_parquet(
             # If `large_graph_objects=True`, the engine
             # is allowed pass complex (non-msgpack-serializable)
             # objects in the graph.  For these cases, we should
-            # use pickle to serialize `parts` (to be safe)
-            require_pickle=large_graph_objects,
+            # call `serialize` on `parts` (to be safe)
+            serialize=large_graph_objects,
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 

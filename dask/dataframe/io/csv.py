@@ -3,7 +3,6 @@ from io import BytesIO
 from warnings import warn, catch_warnings, simplefilter
 from ...layers import DataFrameIOLayer
 from ...highlevelgraph import HighLevelGraph
-import pickle
 
 try:
     import psutil
@@ -64,9 +63,11 @@ class CSVFunctionWrapper:
 
     def __call__(self, part):
 
-        # Need to unpickle in distributed
-        if isinstance(part, bytes):
-            part = pickle.loads(part)
+        # May need to deserialize in distributed
+        if isinstance(part, tuple) and part[0] == "serialized":
+            from distributed.protocol import deserialize
+
+            part = deserialize(*part[1:])
 
         # Part will be a 3-element tuple
         block, path, is_first = part
@@ -371,7 +372,7 @@ def text_blocks_to_pandas(
             kwargs,
         ),
         label=label,
-        require_pickle=True,
+        serialize=True,
     )
     graph = HighLevelGraph({name: layer}, {name: set()})
     return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
