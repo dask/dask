@@ -17,11 +17,13 @@ jobs:
       - name: Setup Conda Environment
         # TODO replace with label as soon as it's available
         # https://github.com/conda-incubator/setup-miniconda/issues/106
-        uses: conda-incubator/setup-miniconda@77b16ed746da28724c61e1f1ad23395a4b695ef5
+        uses: conda-incubator/setup-miniconda@723ab12c1d66bb893c5ac701f8e387f00b24549e
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
+          channels: conda-forge,defaults
+          channel-priority: true
           python-version: "3.7"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
@@ -81,11 +83,13 @@ jobs:
       - name: Setup Conda Environment
         # TODO replace with label as soon as it's available
         # https://github.com/conda-incubator/setup-miniconda/issues/106
-        uses: conda-incubator/setup-miniconda@77b16ed746da28724c61e1f1ad23395a4b695ef5
+        uses: conda-incubator/setup-miniconda@723ab12c1d66bb893c5ac701f8e387f00b24549e
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
+          channels: conda-forge,defaults
+          channel-priority: true
           python-version: "3.8"
           environment-file: continuous_integration/environment-latest.yaml
           activate-environment: test-environment
@@ -112,11 +116,13 @@ jobs:
       - name: Setup Conda
         # TODO replace with label as soon as it's available
         # https://github.com/conda-incubator/setup-miniconda/issues/106
-        uses: conda-incubator/setup-miniconda@77b16ed746da28724c61e1f1ad23395a4b695ef5
+        uses: conda-incubator/setup-miniconda@723ab12c1d66bb893c5ac701f8e387f00b24549e
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
+          channels: conda-forge,defaults
+          channel-priority: true
           python-version: "3.7"
           activate-environment: test-environment
           auto-activate-base: false
