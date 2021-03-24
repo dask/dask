@@ -20,7 +20,6 @@ from .utils import (
     _parse_pandas_metadata,
     _normalize_index_columns,
     Engine,
-    _analyze_paths,
     _flatten_filters,
     _row_groups_to_parts,
     _sort_and_analyze_paths,
@@ -952,7 +951,7 @@ class ArrowDatasetEngine(Engine):
 
             # Use _analyze_paths to avoid relative-path
             # problems (see GH#5608)
-            base, fns = _analyze_paths(paths, fs)
+            paths, base, fns = _sort_and_analyze_paths(paths, fs)
             paths = fs.sep.join([base, fns[0]])
 
             meta_path = fs.sep.join([paths, "_metadata"])
@@ -1637,8 +1636,7 @@ def _get_dataset_object(paths, fs, filters, dataset_kwargs):
         #       existence of _metadata.  Listing may be much more
         #       expensive in storage systems like S3.
         allpaths = fs.glob(paths[0] + fs.sep + "*")
-        allpaths = sorted(allpaths, key=natural_sort_key)
-        _, base, fns = _sort_and_analyze_paths(allpaths, fs)
+        allpaths, base, fns = _sort_and_analyze_paths(allpaths, fs)
         dataset = pq.ParquetDataset(paths[0], filesystem=fs, filters=filters, **kwargs)
     else:
         # This is a single file.  No danger in gathering statistics
