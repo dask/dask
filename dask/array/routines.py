@@ -23,6 +23,7 @@ from .utils import (
     meta_from_array,
     zeros_like_safe,
     array_safe,
+    asarray_safe,
 )
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -684,8 +685,6 @@ def bincount(x, weights=None, minlength=0, split_every=None):
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    from .utils import asarray_safe
-
     bins = asarray_safe(bins, like=meta_from_array(a))
     dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
@@ -1721,8 +1720,6 @@ def average(a, axis=None, weights=None, returned=False):
 
 @derived_from(np)
 def tril(m, k=0):
-    from .utils import asarray_safe
-
     m = asarray_safe(m, like=m)
     mask = tri(
         *m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m)
@@ -1733,8 +1730,6 @@ def tril(m, k=0):
 
 @derived_from(np)
 def triu(m, k=0):
-    from .utils import asarray_safe
-
     m = asarray_safe(m, like=m)
     mask = tri(
         *m.shape[-2:],
