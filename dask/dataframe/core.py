@@ -3982,9 +3982,6 @@ class DataFrame(_Frame):
         --------
         >>> df2 = df.sort_values('x')  # doctest: +SKIP
         """
-        if not ascending:
-            raise NotImplementedError("The ascending= keyword is not supported")
-
         from .shuffle import sort_values
 
         return sort_values(

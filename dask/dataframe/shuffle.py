@@ -76,6 +76,8 @@ def sort_values(
     **kwargs,
 ):
     """ See _Frame.sort_values for docstring """
+    if not ascending:
+        raise NotImplementedError("The ascending= keyword is not supported")
     if not isinstance(value, str):
         # support ["a"] as input
         if isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
