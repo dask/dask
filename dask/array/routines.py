@@ -17,7 +17,13 @@ from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
 from .creation import arange, diag, empty, indices, tri, zeros
-from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
+from .utils import (
+    safe_wraps,
+    validate_axis,
+    meta_from_array,
+    zeros_like_safe,
+    array_safe,
+)
 from .wrap import ones
 from .ufunc import multiply, sqrt
 
@@ -198,6 +204,39 @@ def flipud(m):
 @derived_from(np)
 def fliplr(m):
     return flip(m, 1)
+
+
+@derived_from(np)
+def rot90(m, k=1, axes=(0, 1)):
+    axes = tuple(axes)
+    if len(axes) != 2:
+        raise ValueError("len(axes) must be 2.")
+
+    m = asanyarray(m)
+
+    if axes[0] == axes[1] or np.absolute(axes[0] - axes[1]) == m.ndim:
+        raise ValueError("Axes must be different.")
+
+    if axes[0] >= m.ndim or axes[0] < -m.ndim or axes[1] >= m.ndim or axes[1] < -m.ndim:
+        raise ValueError(
+            "Axes={} out of range for array of ndim={}.".format(axes, m.ndim)
+        )
+
+    k %= 4
+
+    if k == 0:
+        return m[:]
+    if k == 2:
+        return flip(flip(m, axes[0]), axes[1])
+
+    axes_list = list(range(0, m.ndim))
+    (axes_list[axes[0]], axes_list[axes[1]]) = (axes_list[axes[1]], axes_list[axes[0]])
+
+    if k == 1:
+        return transpose(flip(m, axes[1]), axes_list)
+    else:
+        # k == 3
+        return flip(transpose(m, axes_list), axes[1])
 
 
 alphabet = "abcdefghijklmnopqrstuvwxyz"
@@ -641,13 +680,22 @@ def bincount(x, weights=None, minlength=0, split_every=None):
     token = tokenize(x, weights, minlength)
     args = [x, "i"]
     if weights is not None:
-        meta = np.bincount([1], weights=[1])
+        meta = array_safe(np.bincount([1], weights=[1]), like=meta_from_array(x))
         args.extend([weights, "i"])
     else:
-        meta = np.bincount([])
+        meta = array_safe(np.bincount([]), like=meta_from_array(x))
+
+    if minlength == 0:
+        output_size = (np.nan,)
+    else:
+        output_size = (minlength,)
 
     chunked_counts = blockwise(
         partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
+    )
+    chunked_counts._chunks = (
+        output_size * len(chunked_counts.chunks[0]),
+        *chunked_counts.chunks[1:],
     )
 
     from .reductions import _tree_reduce
@@ -656,11 +704,12 @@ def bincount(x, weights=None, minlength=0, split_every=None):
         chunked_counts,
         aggregate=partial(_bincount_agg, dtype=meta.dtype),
         axis=(0,),
-        keepdims=False,
+        keepdims=True,
         dtype=meta.dtype,
         split_every=split_every,
         concatenate=False,
     )
+    output._chunks = (output_size, *chunked_counts.chunks[1:])
     output._meta = meta
     return output
 

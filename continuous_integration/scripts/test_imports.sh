@@ -14,7 +14,7 @@ test_import () {
     conda env remove -n test-imports
 }
 
-test_import ""                                "import dask, dask.base, dask.multiprocessing, dask.threaded, dask.optimization, dask.bag, dask.delayed, dask.graph_manipulation"
+test_import ""                                "import dask, dask.base, dask.multiprocessing, dask.threaded, dask.optimization, dask.bag, dask.delayed, dask.graph_manipulation, dask.layers"
 test_import "numpy"                           "import dask.array"
 test_import "pandas"                          "import dask.dataframe"
 test_import "bokeh"                           "import dask.diagnostics"

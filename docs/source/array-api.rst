@@ -185,6 +185,7 @@ Top level user functions:
    rint
    roll
    rollaxis
+   rot90
    round
    sign
    signbit
@@ -355,6 +356,7 @@ Slightly Overlapping Computations
 .. autosummary::
    overlap.overlap
    overlap.map_overlap
+   lib.stride_tricks.sliding_window_view
    overlap.trim_internal
    overlap.trim_overlap
 
@@ -583,6 +585,7 @@ Other functions
 .. autofunction:: rint
 .. autofunction:: roll
 .. autofunction:: rollaxis
+.. autofunction:: rot90
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit

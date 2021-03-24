@@ -94,7 +94,7 @@ def sanitize_index(ind):
 
 def slice_array(out_name, in_name, blockdims, index, itemsize):
     """
-    Master function for array slicing
+    Main function for array slicing
 
     This function makes a new dask that slices blocks along every
     dimension and aggregates (via cartesian product) each dimension's
