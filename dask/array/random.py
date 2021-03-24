@@ -19,12 +19,29 @@ from .creation import arange
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..layers import BlockwiseCreateRandomArray
-from ..utils import ignoring, random_state_data, derived_from, skip_doctest
+from ..utils import (
+    ignoring,
+    is_arraylike,
+    random_state_data,
+    derived_from,
+    skip_doctest,
+)
 
 
 def _get_from_random_array_deps(random_state, func, args, kwargs, block_info):
+    seed = block_info["seed"]
+    # TODO: how to make this more idiomatic?
+    if not is_arraylike(seed):
+        import distributed.protocol
+
+        # Why do I need to import this to get numpy deserialization working?
+        # It seems like it should already be (lazily) registered
+        import distributed.protocol.numpy
+
+        seed = distributed.protocol.deserialize(seed.header, seed.frames)
+
     return _apply_random(
-        random_state, func, block_info["seed"], block_info["chunk-shape"], args, kwargs
+        random_state, func, seed, block_info["chunk-shape"], args, kwargs
     )
 
 

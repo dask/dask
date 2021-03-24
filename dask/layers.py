@@ -139,25 +139,23 @@ class CreateRandomArrayDeps(CreateArrayDeps):
         return block_info
 
     @classmethod
-    def __dask_distributed_pack__(cls, module: str, name: str, *args):
-        from distributed.protocol import serialize
+    def __dask_distributed_pack__(cls, module: str, *args):
+        from distributed.protocol import to_serialize
 
         chunks, seeds, extra_chunks = args
         return (
             module,
-            name,
             chunks,
-            serialize(seeds),
+            [to_serialize(s) for s in seeds],
             extra_chunks,
         )
 
     @classmethod
-    def __dask_distributed_unpack__(cls, module: str, name: str, *args):
+    def __dask_distributed_unpack__(cls, module: str, *args):
         chunks, seeds, extra_chunks = args
         # TODO: how to move deserialization to the worker
         return (
             module,
-            name,
             chunks,
             seeds,
             extra_chunks,
