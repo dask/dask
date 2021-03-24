@@ -91,6 +91,7 @@ try:
         tril_indices_from,
         triu_indices,
         triu_indices_from,
+        rot90,
     )
     from .reshape import reshape
     from .ufunc import (
@@ -224,6 +225,7 @@ try:
         reduction,
     )
     from .percentile import percentile
+    from . import lib
     from . import ma
     from . import random, linalg, overlap, fft, backends
     from .overlap import map_overlap

@@ -222,6 +222,36 @@ def test_flip(funcname, kwargs, shape):
 
 
 @pytest.mark.parametrize(
+    "kwargs",
+    [{}, {"axes": (1, 0)}, {"axes": (2, 3)}, {"axes": (0, 1, 2)}, {"axes": (1, 1)}],
+)
+@pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
+def test_rot90(kwargs, shape):
+    axes = kwargs.get("axes", (0, 1))
+    np_a = np.random.random(shape)
+    da_a = da.from_array(np_a, chunks=1)
+
+    np_func = getattr(np, "rot90")
+    da_func = getattr(da, "rot90")
+
+    try:
+        for axis in axes[:2]:
+            range(np_a.ndim)[axis]
+    except IndexError:
+        with pytest.raises(ValueError):
+            da_func(da_a, **kwargs)
+    else:
+        if len(axes) != 2 or axes[0] == axes[1]:
+            with pytest.raises(ValueError):
+                da_func(da_a, **kwargs)
+        else:
+            for k in range(-3, 9):
+                np_r = np_func(np_a, k=k, **kwargs)
+                da_r = da_func(da_a, k=k, **kwargs)
+                assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize(
     "x_shape, y_shape, x_chunks, y_chunks",
     [
         [(), (), (), ()],
@@ -530,9 +560,14 @@ def test_bincount():
     e = da.bincount(d, minlength=6)
     assert_eq(e, np.bincount(x, minlength=6))
     assert same_keys(da.bincount(d, minlength=6), e)
+    assert e.shape == (6,)  # shape equal to minlength
+    assert e.chunks == ((6,),)
 
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
+
+    expected_output = np.array([0, 2, 2, 0, 0, 1])
+    assert_eq(e[0:], expected_output)  # can bincount result be sliced
 
 
 @pytest.mark.parametrize(

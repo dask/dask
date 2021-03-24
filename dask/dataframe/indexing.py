@@ -118,7 +118,7 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_element(iindexer, cindexer)
         else:
             if isinstance(iindexer, (list, np.ndarray)):
-                # applying map_pattition to each partitions
+                # applying map_partitions to each partition
                 # results in duplicated NaN rows
                 msg = "Cannot index with list against unknown division"
                 raise KeyError(msg)
