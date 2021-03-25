@@ -147,10 +147,11 @@ def test_read_csv(hdfs):
 
 def test_read_text(hdfs):
     import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
 
-    pool = mp.get_context("spawn").Pool(2)
+    ctx = mp.get_context("spawn")
 
-    with pool:
+    with ProcessPoolExecutor(2, ctx) as pool:
         with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
             f.write("Alice 100\nBob 200\nCharlie 300".encode())
 
