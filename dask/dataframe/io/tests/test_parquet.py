@@ -2241,6 +2241,22 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
     assert_eq(ddf, ddf2, check_divisions=False)
+    assert ddf.divisions == tuple(range(0, 420, 30))
+    if statistics is False or statistics is None and read_engine.startswith("pyarrow"):
+        assert ddf2.divisions == (None,) * 14
+    else:
+        assert ddf2.divisions == tuple(range(0, 420, 30))
+
+
+@write_read_engines()
+def test_statistics_nometa(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine, write_metadata_file=False)
+
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=True)
+    assert_eq(ddf, ddf2)
+    assert ddf.divisions == tuple(range(0, 420, 30))
+    assert ddf2.divisions == tuple(range(0, 420, 30))
 
 
 @pytest.mark.parametrize("schema", ["infer", None])
