@@ -240,12 +240,15 @@ shape and dtype attributes and implements NumPy slicing syntax.
 Memory mapping
 --------------
 
-Memory mapping can be a highly effective method to access raw binary data since it has
-nearly zero overhead if the data is already in the file system cache. This example
-creates a Dask array that is backed by memory-mapped chunks. For optimal
-compatibility with :code:`dask.distributed`, it wraps the function that creates the memory map
-using :code:`dask.delayed` so that it is always executed on the node and process where
-the data is actually being accessed.
+Memory mapping can be a highly effective method to access raw binary data since
+it has nearly zero overhead if the data is already in the file system cache. For
+a threaded scheduler, creating a Dask array from a raw binary file can be as simple as
+:code:`a = da.from_array(np.memmap(filename, shape=shape, dtype=dtype, mode='r'))`.
+
+For multiprocessing or distributed schedulers, the memory map for each array
+chunk should be created on the correct worker process and not on the main
+process to avoid data transfer through the cluster. This can be achieved by
+wrapping the function that creates the memory map using :code:`dask.delayed`.
 
 .. code-block:: python
 
@@ -317,12 +320,13 @@ the data is actually being accessed.
            Dask array matching :code:`shape` and :code:`dtype`, backed by
            memory-mapped chunks.
        '''
+       load = dask.delayed(mmap_load_chunk)
        chunks = []
        for index in range(0, shape[0], blocksize):
            # Truncate the last chunk if necessary
            chunk_size = min(blocksize, shape[0] - index)
            chunk = dask.array.from_delayed(
-               dask.delayed(mmap_load_chunk)(
+               load(
                    filename,
                    shape=shape,
                    dtype=dtype,
