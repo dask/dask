@@ -39,12 +39,12 @@ class BlockwiseIODeps:
         )
 
     @classmethod
-    def __dask_distributed_pack__(cls, module: str, name: str, *args):
-        return (module, name, *args)
+    def __dask_distributed_pack__(cls, cls_path: str, *args):
+        return (cls_path, *args)
 
     @classmethod
-    def __dask_distributed_unpack__(cls, module: str, name: str, *args):
-        return (module, name, *args)
+    def __dask_distributed_unpack__(cls, cls_path: str, *args):
+        return (cls_path, *args)
 
 
 def subs(task, substitution):
@@ -393,10 +393,8 @@ class Blockwise(Layer):
             if isinstance(input_map, tuple):
                 # Use the `__dask_distributed_pack__` definition for the
                 # specified `BlockwiseIODeps` subclass
-                io_dep_map = getattr(
-                    import_allowed_module(input_map[0]),
-                    input_map[1],
-                )
+                module_name, attr_name = input_map[0].rsplit(".", 1)
+                io_dep_map = getattr(import_allowed_module(module_name), attr_name)
                 packed_io_deps[name] = io_dep_map.__dask_distributed_pack__(*input_map)
             else:
                 packed_io_deps[name] = input_map
@@ -835,10 +833,11 @@ def make_blockwise_graph(
     for arg, val in io_deps.items():
         if isinstance(val, tuple):
             _args = io_deps[arg]
-            io_dep_map = getattr(import_allowed_module(_args[0]), _args[1])
+            module_name, attr_name = _args[0].rsplit(".", 1)
+            io_dep_map = getattr(import_allowed_module(module_name), attr_name)
             if deserializing:
                 _args = io_dep_map.__dask_distributed_unpack__(*_args)
-            io_arg_mappings[arg] = io_dep_map(*_args[2:])
+            io_arg_mappings[arg] = io_dep_map(*_args[1:])
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
