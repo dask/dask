@@ -16,13 +16,14 @@ from ..delayed import unpack_collections, Delayed
 from ..highlevelgraph import HighLevelGraph
 from ..utils import funcname, derived_from, is_arraylike
 from . import chunk
-from .creation import arange, diag, empty, indices, tri, zeros
+from .creation import arange, diag, empty, indices, tri
 from .utils import (
     safe_wraps,
     validate_axis,
     meta_from_array,
     zeros_like_safe,
     array_safe,
+    asarray_safe,
 )
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -716,8 +717,6 @@ def bincount(x, weights=None, minlength=0, split_every=None):
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    from .utils import asarray_safe
-
     bins = asarray_safe(bins, like=meta_from_array(a))
     dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
@@ -1753,18 +1752,26 @@ def average(a, axis=None, weights=None, returned=False):
 
 @derived_from(np)
 def tril(m, k=0):
-    m = asarray(m)
-    mask = tri(*m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:])
+    m = asarray_safe(m, like=m)
+    mask = tri(
+        *m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m)
+    )
 
-    return where(mask, m, zeros(1, dtype=m.dtype))
+    return where(mask, m, zeros_like_safe(m, shape=(1,)))
 
 
 @derived_from(np)
 def triu(m, k=0):
-    m = asarray(m)
-    mask = tri(*m.shape[-2:], k=k - 1, dtype=bool, chunks=m.chunks[-2:])
+    m = asarray_safe(m, like=m)
+    mask = tri(
+        *m.shape[-2:],
+        k=k - 1,
+        dtype=bool,
+        chunks=m.chunks[-2:],
+        like=meta_from_array(m),
+    )
 
-    return where(mask, zeros(1, dtype=m.dtype), m)
+    return where(mask, zeros_like_safe(m, shape=(1,)), m)
 
 
 @derived_from(np)
