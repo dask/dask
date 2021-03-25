@@ -426,6 +426,21 @@ def zeros_like_safe(a, shape, **kwargs):
         return np.zeros(shape, **kwargs)
 
 
+def arange_safe(*args, like, **kwargs):
+    """
+    Use the `like=` from `np.arange` to create a new array dispatching
+    to the downstream library. If that fails, falls back to the
+    default NumPy behavior, resulting in a `numpy.ndarray`.
+    """
+    if like is None:
+        return np.arange(*args, **kwargs)
+    else:
+        try:
+            return np.arange(*args, like=meta_from_array(like), **kwargs)
+        except TypeError:
+            return np.arange(*args, **kwargs)
+
+
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if like is a and hasattr(a, "__array_function__"):
         return a
