@@ -398,6 +398,7 @@ def concat(
     join="outer",
     uniform=False,
     filter_warning=True,
+    ignore_order=False,
     ignore_index=False,
     **kwargs
 ):
@@ -416,8 +417,11 @@ def concat(
         True if all arguments have the same columns and dtypes (but not
         necessarily categories). Default is False.
     ignore_index : bool, optional
-        Whether to allow index values to be ignored/droped during
+        Whether to allow index values to be ignored/dropped during
         concatenation. Default is False.
+    ignore_order : bool, optional
+        Whether to ignore the order when doing the union of categoricals.
+        Default is False.
     """
     if len(dfs) == 1:
         return dfs[0]
@@ -430,6 +434,7 @@ def concat(
             uniform=uniform,
             filter_warning=filter_warning,
             ignore_index=ignore_index,
+            ignore_order=ignore_order,
             **kwargs
         )
 
@@ -441,6 +446,7 @@ def concat_pandas(
     join="outer",
     uniform=False,
     filter_warning=True,
+    ignore_order=False,
     ignore_index=False,
     **kwargs
 ):
@@ -453,7 +459,9 @@ def concat_pandas(
             for i in range(1, len(dfs)):
                 if not isinstance(dfs[i], pd.CategoricalIndex):
                     dfs[i] = dfs[i].astype("category")
-            return pd.CategoricalIndex(union_categoricals(dfs), name=dfs[0].name)
+            return pd.CategoricalIndex(
+                union_categoricals(dfs, ignore_order=ignore_order), name=dfs[0].name
+            )
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]
             if all(
@@ -545,7 +553,7 @@ def concat_pandas(
                             codes, sample.cat.categories, sample.cat.ordered
                         )
                         parts.append(data)
-                out[col] = union_categoricals(parts)
+                out[col] = union_categoricals(parts, ignore_order=ignore_order)
                 # Pandas resets index type on assignment if frame is empty
                 # https://github.com/pandas-dev/pandas/issues/17101
                 if not len(temp_ind):
@@ -562,7 +570,11 @@ def concat_pandas(
         if is_categorical_dtype(dfs2[0].dtype):
             if ind is None:
                 ind = concat([df.index for df in dfs2])
-            return pd.Series(union_categoricals(dfs2), index=ind, name=dfs2[0].name)
+            return pd.Series(
+                union_categoricals(dfs2, ignore_order=ignore_order),
+                index=ind,
+                name=dfs2[0].name,
+            )
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter("ignore", FutureWarning)
