@@ -44,7 +44,6 @@ from .core import (
 )
 
 from .einsumfuncs import einsum  # noqa
-from .numpy_compat import _unravel_index_keyword
 
 
 @derived_from(np)
@@ -1463,7 +1462,7 @@ def unravel_index(indices, shape, order="C"):
                 dtype=np.intp,
                 chunks=(((len(shape),),) + indices.chunks),
                 new_axis=0,
-                func_kwargs={_unravel_index_keyword: shape, "order": order},
+                func_kwargs={"shape": shape, "order": order},
             )
         )
     else:
