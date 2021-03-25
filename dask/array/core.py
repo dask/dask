@@ -60,7 +60,7 @@ from ..delayed import delayed, Delayed
 from .. import threaded, core
 from ..sizeof import sizeof
 from ..highlevelgraph import HighLevelGraph
-from .numpy_compat import _Recurser, _make_sliced_dtype
+from .numpy_compat import _Recurser
 from .slicing import (
     slice_array,
     replace_ellipsis,
@@ -1674,7 +1674,14 @@ class Array(DaskMethodsMixin):
             if isinstance(index, str):
                 dt = self.dtype[index]
             else:
-                dt = _make_sliced_dtype(self.dtype, index)
+                dt = np.dtype(
+                    {
+                        "names": index,
+                        "formats": [self.dtype.fields[name][0] for name in index],
+                        "offsets": [self.dtype.fields[name][1] for name in index],
+                        "itemsize": self.dtype.itemsize,
+                    }
+                )
 
             if dt.shape:
                 new_axis = list(range(self.ndim, self.ndim + len(dt.shape)))

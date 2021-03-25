@@ -8,9 +8,9 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-    "array": ["numpy >= 1.15.1"],
+    "array": ["numpy >= 1.16"],
     "bag": [],  # keeping for backwards compatibility
-    "dataframe": ["numpy >= 1.15.1", "pandas >= 0.25.0"],
+    "dataframe": ["numpy >= 1.16", "pandas >= 0.25.0"],
     "distributed": ["distributed >= 2021.03.0"],
     "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
     "delayed": [],  # keeping for backwards compatibility
