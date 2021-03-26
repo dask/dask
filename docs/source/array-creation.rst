@@ -242,7 +242,7 @@ Memory mapping
 
 Memory mapping can be a highly effective method to access raw binary data since
 it has nearly zero overhead if the data is already in the file system cache. For
-a threaded scheduler, creating a Dask array from a raw binary file can be as simple as
+the threaded scheduler, creating a Dask array from a raw binary file can be as simple as
 :code:`a = da.from_array(np.memmap(filename, shape=shape, dtype=dtype, mode='r'))`.
 
 For multiprocessing or distributed schedulers, the memory map for each array
