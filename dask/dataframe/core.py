@@ -1184,8 +1184,9 @@ Dask Name: {name}, {task} tasks"""
 
             .. warning::
                If you want, e.g., monthly partitions, then you should use
-               ``freq="MS"`` (and not ``freq="M"``), since the divisions indicate
-               the minimum of a partition (same holds for quarterly and yearly).
+               ``freq="MS"`` (month start) and not ``freq="M"`` (month end)
+               since the divisions indicate the minimum of a partition
+               (same holds for quarterly and yearly).
 
         force : bool, default False
             Allows the expansion of the existing divisions.
