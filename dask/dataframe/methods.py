@@ -575,7 +575,11 @@ def concat_pandas(
 
 
 tolist_dispatch = Dispatch("tolist")
+is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 
+def is_categorical_dtype(obj):
+    func = is_categorical_dtype_dispatch.dispatch(type(obj))
+    return func(obj)
 
 def tolist(obj):
     func = tolist_dispatch.dispatch(type(obj))
@@ -586,6 +590,10 @@ def tolist(obj):
 def tolist_pandas(obj):
     return obj.tolist()
 
+
+@tolist_dispatch.register((pd.Series, pd.Index, pd.CategoricalDtype))
+def is_categorical_dtype_pandas(obj):
+    return pd.api.types.is_categorical_dtype(obj)
 
 # cuDF may try to import old dispatch functions
 hash_df = hash_object_dispatch
