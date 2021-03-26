@@ -3,7 +3,7 @@ import pandas as pd
 
 from .core import Series, DataFrame, map_partitions, apply_concat_apply
 from . import methods
-from .utils import is_categorical_dtype, is_scalar, has_known_categories
+from .utils import is_scalar, has_known_categories
 from ..utils import M
 import sys
 from pandas.api.types import is_list_like
@@ -130,7 +130,7 @@ def get_dummies(
     )
 
     if isinstance(data, Series):
-        if not is_categorical_dtype(data):
+        if not methods.is_categorical_dtype(data):
             raise NotImplementedError(not_cat_msg)
         if not has_known_categories(data):
             raise NotImplementedError(unknown_cat_msg)
@@ -140,7 +140,7 @@ def get_dummies(
                 raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=["category"]).columns
         else:
-            if not all(is_categorical_dtype(data[c]) for c in columns):
+            if not all(methods.is_categorical_dtype(data[c]) for c in columns):
                 raise NotImplementedError(not_cat_msg)
 
         if not all(has_known_categories(data[c]) for c in columns):
@@ -213,7 +213,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         raise ValueError("'index' must be the name of an existing column")
     if not is_scalar(columns) or columns is None:
         raise ValueError("'columns' must be the name of an existing column")
-    if not is_categorical_dtype(df[columns]):
+    if not methods.is_categorical_dtype(df[columns]):
         raise ValueError("'columns' must be category dtype")
     if not has_known_categories(df[columns]):
         raise ValueError(
