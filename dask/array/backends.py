@@ -62,9 +62,17 @@ def register_scipy_sparse():
 
     def _concatenate(L, axis=0):
         if axis == 0:
-            return scipy.sparse.vstack(L)
+            m = scipy.sparse.vstack(L)
+            if isinstance(L[0], scipy.sparse.csc_matrix):
+                return m.tocsc()
+            else:
+                return m
         elif axis == 1:
-            return scipy.sparse.hstack(L)
+            m = scipy.sparse.hstack(L)
+            if isinstance(L[0], scipy.sparse.csr_matrix):
+                return m.tocsr()
+            else:
+                return m
         else:
             msg = (
                 "Can only concatenate scipy sparse matrices for axis in "

@@ -4990,10 +4990,8 @@ def test_scipy_sparse_sum(fmt, axis):
     expected = np.full(((M + m - 1) // m, (N + n - 1) // n), "%s_matrix" % fmt)
     assert_eq(block_typenames, expected)
 
-    xx = x.compute()
-    # All spmatrices come out of Dask as COOs, since that's the only(?) format that can easily
-    # concatenate along either axis
-    assert isinstance(xx, coo_matrix)
+    xx = x.compute(scheduler="sync")
+    assert isinstance(xx, fmt_cls)
     assert (spmat != xx).nnz == 0
 
     dask_sum = x.sum(axis=axis).compute()
