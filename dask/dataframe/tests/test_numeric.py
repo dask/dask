@@ -15,7 +15,7 @@ def test_to_numeric_on_scalars(arg):
 
 
 def test_to_numeric_on_dask_array():
-    arg = from_array(["1.0", "2", -3, 5.1])
+    arg = from_array(["1.0", "2", "-3", "5.1"])
     expected = np.array([1.0, 2.0, -3.0, 5.1])
     output = to_numeric(arg)
     assert isinstance(output, Array)
