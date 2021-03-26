@@ -591,7 +591,7 @@ def tolist_pandas(obj):
     return obj.tolist()
 
 
-@tolist_dispatch.register((pd.Series, pd.Index, pd.CategoricalDtype))
+@is_categorical_dtype_dispatch.register((pd.Series, pd.Index, pd.api.extensions.ExtensionDtype, np.dtype))
 def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
 
