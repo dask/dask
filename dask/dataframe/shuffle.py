@@ -68,23 +68,25 @@ def _calculate_divisions(
 
 def sort_values(
     df,
-    value,
+    by,
     npartitions=None,
     ascending=True,
     upsample=1.0,
     partition_size=128e6,
     **kwargs,
 ):
-    """ See _Frame.sort_values for docstring """
-    if not isinstance(value, str):
+    """ See DataFrame.sort_values for docstring """
+    if not ascending:
+        raise NotImplementedError("The ascending= keyword is not supported")
+    if not isinstance(by, str):
         # support ["a"] as input
-        if isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
-            value = value[0]
+        if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
+            by = by[0]
         else:
             raise NotImplementedError(
                 "Dataframe only supports sorting by a single column which must "
                 "be passed as a string or a list of a single string.\n"
-                "You passed %s" % str(value)
+                "You passed %s" % str(by)
             )
     if npartitions == "auto":
         repartition = True
@@ -94,7 +96,7 @@ def sort_values(
             npartitions = df.npartitions
         repartition = False
 
-    sort_by_col = df[value]
+    sort_by_col = df[by]
 
     divisions, mins, maxes = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
@@ -107,11 +109,10 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        divisions = mins + [maxes[-1]]
-        return df.map_partitions(M.sort_values, value)
+        return df.map_partitions(M.sort_values, by)
 
-    df = rearrange_by_divisions(df, value, divisions)
-    df = df.map_partitions(M.sort_values, value)
+    df = rearrange_by_divisions(df, by, divisions)
+    df = df.map_partitions(M.sort_values, by)
     return df
 
 

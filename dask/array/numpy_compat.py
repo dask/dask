@@ -5,7 +5,6 @@ import warnings
 
 from ..utils import derived_from
 
-_numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
 _numpy_117 = LooseVersion(np.__version__) >= "1.17.0"
 _numpy_118 = LooseVersion(np.__version__) >= "1.18.0"
 _numpy_120 = LooseVersion(np.__version__) >= "1.20.0"
@@ -45,35 +44,6 @@ except TypeError:
     ma_divide = np.ma.core._DomainedBinaryOperation(
         divide, np.ma.core._DomainSafeDivide(), 0, 1
     )
-
-
-def _make_sliced_dtype_np_ge_16(dtype, index):
-    # This was briefly added in 1.14.0
-    # https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
-    # which was then reverted in 1.14.1 with
-    # https://github.com/numpy/numpy/pull/10411
-    # And then was finally released with
-    # https://github.com/numpy/numpy/pull/12447
-    # in version 1.16.0
-    new = {
-        "names": index,
-        "formats": [dtype.fields[name][0] for name in index],
-        "offsets": [dtype.fields[name][1] for name in index],
-        "itemsize": dtype.itemsize,
-    }
-    return np.dtype(new)
-
-
-def _make_sliced_dtype_np_lt_14(dtype, index):
-    # For numpy < 1.14
-    dt = np.dtype([(name, dtype[name]) for name in index])
-    return dt
-
-
-if LooseVersion(np.__version__) >= LooseVersion("1.16.0"):
-    _make_sliced_dtype = _make_sliced_dtype_np_ge_16
-else:
-    _make_sliced_dtype = _make_sliced_dtype_np_lt_14
 
 
 class _Recurser:
@@ -156,12 +126,6 @@ class _Recurser:
             # yield from ...
             for v in self.walk(xi, index + (i,)):
                 yield v
-
-
-if _numpy_116:
-    _unravel_index_keyword = "shape"
-else:
-    _unravel_index_keyword = "dims"
 
 
 # Implementation taken directly from numpy:
