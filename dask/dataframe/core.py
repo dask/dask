@@ -1181,6 +1181,12 @@ Dask Name: {name}, {task} tasks"""
         freq : str, pd.Timedelta
             A period on which to partition timeseries data like ``'7D'`` or
             ``'12h'`` or ``pd.Timedelta(hours=12)``.  Assumes a datetime index.
+
+            .. warning::
+               If you want, e.g., monthly partitions, then you should use
+               ``freq="MS"`` (and not ``freq="M"``), since the divisions indicate
+               the minimum of a partition (same holds for quarterly and yearly).
+
         force : bool, default False
             Allows the expansion of the existing divisions.
             If False then the new divisions' lower and upper bounds must be
