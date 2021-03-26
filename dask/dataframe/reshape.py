@@ -213,7 +213,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         raise ValueError("'index' must be the name of an existing column")
     if not is_scalar(columns) or columns is None:
         raise ValueError("'columns' must be the name of an existing column")
-    if not is_categorical_dtype(df[columns]):
+    if not methods.is_categorical_dtype(df[columns]):
         raise ValueError("'columns' must be category dtype")
     if not has_known_categories(df[columns]):
         raise ValueError(
