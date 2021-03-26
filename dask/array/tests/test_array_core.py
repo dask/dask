@@ -4578,41 +4578,79 @@ def test_dask_array_holds_scipy_sparse_containers():
     assert (zz == xx.T).all()
 
 
-@pytest.mark.parametrize(
-    "axis,stack,spmatrix", [(0, "vstack", "csr"), (1, "hstack", "coo")]
-)
-def test_scipy_sparse_concatenate(axis, stack, spmatrix):
+@pytest.mark.parametrize("fmt", ["csr", "csc", "coo"])
+@pytest.mark.parametrize("axis", [0, 1])
+def test_scipy_sparse_concatenate(fmt, axis):
     pytest.importorskip("scipy.sparse")
     import scipy.sparse
+    from scipy.sparse import coo_matrix, csc_matrix, csr_matrix, random
 
-    rs = da.random.RandomState(RandomState=np.random.RandomState)
+    fmt_map = {
+        "coo": coo_matrix,
+        "csc": csc_matrix,
+        "csr": csr_matrix,
+    }
+    fmt_cls = fmt_map[fmt]
 
-    xs = []
-    ys = []
-    for i in range(2):
-        x = rs.random((1000, 10), chunks=(100, 10))
-        x[x < 0.9] = 0
-        xs.append(x)
-        ys.append(x.map_blocks(scipy.sparse.csr_matrix))
+    M, N = 100, 100
+    m, n = 20, 10
+    dsks = []
+    spms = []
+    for _ in range(5):
+        if fmt == "coo":
+            spm = random(M, N, format="csr")
+            dsk = da.from_array(spm, chunks=(m, n), asarray=False).map_blocks(
+                coo_matrix
+            )
+            spm = spm.tocoo()
+        else:
+            spm = random(M, N, format=fmt)
+            assert isinstance(spm, fmt_cls)
+            dsk = da.from_array(spm, chunks=(m, n), asarray=False)
 
-    z = da.concatenate(ys, axis=axis)
-    zz = z.compute()
+        dsks.append(dsk)
+        spms.append(spm)
 
-    if spmatrix == "coo":
-        spmatrix = scipy.sparse.coo_matrix
-    else:
-        spmatrix = scipy.sparse.csr_matrix
+        # Verify _meta is the expected scipy.sparse.spmatrix subtype
+        assert isinstance(dsk._meta, fmt_cls)
 
-    assert isinstance(zz, spmatrix)
+        # Verify all blocks are the expected scipy.sparse.spmatrix subtype
+        block_typenames = dsk.map_blocks(
+            lambda c: np.array([[type(c).__name__]]), dtype=object
+        ).compute()
+        expected = np.full(((M + m - 1) // m, (N + n - 1) // n), "%s_matrix" % fmt)
+        assert_eq(block_typenames, expected)
 
-    if stack == "vstack":
+    concatd = da.concatenate(dsks, axis=axis)
+    computed = concatd.compute()
+    # da.concatenate always preserves spmatrix type
+    assert isinstance(computed, fmt_cls)
+
+    # Compare da.concatenate to scipy.sparse.{hstack,vstack} and da.{hstack,vstack}
+    if axis == 0:
         sp_concatenate = scipy.sparse.vstack
+        da_stack = da.vstack
     else:
         sp_concatenate = scipy.sparse.hstack
+        da_stack = da.hstack
 
-    z_expected = sp_concatenate([scipy.sparse.csr_matrix(e.compute()) for e in xs])
+    sp_concatenated = sp_concatenate(spms)
+    assert (computed != sp_concatenated).nnz == 0
 
-    assert (zz != z_expected).nnz == 0
+    stacked = da_stack(dsks)
+    computed = stacked.compute()
+    # scipy.sparse stacks sometimes coerce CSR/CSC to COO; dask stacks always preserve spmatrix type
+    expected_stack_types = {
+        (0, "csc"): (csc_matrix, coo_matrix),
+        (1, "csr"): (csr_matrix, coo_matrix),
+    }
+    expected_dask_type, expected_scipy_type = expected_stack_types.get(
+        (axis, fmt), (fmt_cls, fmt_cls)
+    )
+    assert type(stacked._meta) == expected_dask_type
+    assert type(sp_concatenated) == expected_scipy_type
+
+    assert (computed != sp_concatenated).nnz == 0
 
 
 def test_3851():
@@ -4977,23 +5015,28 @@ def test_scipy_sparse_sum(fmt, axis):
     M, N = 100, 100
     m, n = 20, 10
     if fmt == "coo":
-        spmat = random(M, N, format="csr")
-        x = da.from_array(spmat, chunks=(m, n), asarray=False).map_blocks(coo_matrix)
+        spm = random(M, N, format="csr")
+        dsk = da.from_array(spm, chunks=(m, n), asarray=False).map_blocks(coo_matrix)
     else:
-        spmat = random(M, N, format=fmt)
-        assert isinstance(spmat, fmt_cls)
-        x = da.from_array(spmat, chunks=(m, n), asarray=False)
+        spm = random(M, N, format=fmt)
+        assert isinstance(spm, fmt_cls)
+        dsk = da.from_array(spm, chunks=(m, n), asarray=False)
 
-    block_typenames = x.map_blocks(
+    block_typenames = dsk.map_blocks(
         lambda c: np.array([[type(c).__name__]]), dtype=object
     ).compute()
     expected = np.full(((M + m - 1) // m, (N + n - 1) // n), "%s_matrix" % fmt)
     assert_eq(block_typenames, expected)
 
-    xx = x.compute(scheduler="sync")
-    assert isinstance(xx, fmt_cls)
-    assert (spmat != xx).nnz == 0
+    computed = dsk.compute(scheduler="sync")
+    assert isinstance(computed, fmt_cls)
+    assert (spm != computed).nnz == 0
 
-    dask_sum = x.sum(axis=axis).compute()
-    spmat_sum = spmat.sum(axis=axis)
-    assert_almost_equal(dask_sum, spmat_sum)
+    dsk_sum = dsk.sum(axis=axis)
+    assert isinstance(dsk_sum, da.Array)
+    if axis:
+        assert isinstance(dsk_sum._meta, np.matrix)
+
+    computed = dsk_sum.compute()
+    spm_sum = spm.sum(axis=axis)
+    assert_almost_equal(computed, spm_sum)
