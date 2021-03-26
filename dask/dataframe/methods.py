@@ -578,6 +578,7 @@ tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 
 def is_categorical_dtype(obj):
+    obj = getattr(obj, "dtype", obj)
     func = is_categorical_dtype_dispatch.dispatch(type(obj))
     return func(obj)
 
