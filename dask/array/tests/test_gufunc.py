@@ -626,3 +626,22 @@ def test_apply_gufunc_with_meta():
     expected = stats(a.compute())
     assert_eq(expected[0], result[0])
     assert_eq(expected[1], result[1])
+
+
+def test_as_gufunc_with_meta():
+    stack = da.ones((1, 50, 60), chunks=(1, -1, -1))
+    expected = (stack, stack.max())
+
+    meta = (np.array((), dtype=np.float64), np.array((), dtype=np.float64))
+
+    @da.as_gufunc(signature="(i,j) ->(i,j), ()", meta=meta)
+    def array_and_max(arr):
+        return arr, np.atleast_1d(arr.max())
+
+    result = array_and_max(stack)
+    assert_eq(expected[0], result[0])
+
+    # Because `np.max` returns a scalar instead of an `np.ndarray`, we cast
+    # the expected output to a `np.ndarray`, as `meta` defines the output
+    # should be.
+    assert_eq(np.array([expected[1].compute()]), result[1].compute())
