@@ -2010,7 +2010,7 @@ def test_repartition_freq_divisions():
         assert div == div.round("15s")
     assert ddf2.divisions[0] == df.index.min()
     assert ddf2.divisions[-1] == df.index.max()
-    assert_eq(ddf2, ddf2)
+    assert_eq(ddf2, df)
 
 
 def test_repartition_freq_errors():
@@ -2024,14 +2024,42 @@ def test_repartition_freq_errors():
 
 
 def test_repartition_freq_month():
-    ts = pd.date_range("2015-01-01 00:00", " 2015-05-01 23:50", freq="10min")
+    ts = pd.date_range("2015-01-01 00:00", "2015-05-01 23:50", freq="10min")
     df = pd.DataFrame(
         np.random.randint(0, 100, size=(len(ts), 4)), columns=list("ABCD"), index=ts
     )
-    ddf = dd.from_pandas(df, npartitions=1).repartition(freq="1M")
+    ddf = dd.from_pandas(df, npartitions=1).repartition(freq="MS")
 
     assert_eq(df, ddf)
-    assert 2 < ddf.npartitions <= 6
+
+    assert ddf.divisions == (
+        pd.Timestamp("2015-1-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-2-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-3-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-4-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-5-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-5-1 23:50:00", freq="10T"),
+    )
+
+    assert ddf.npartitions == 5
+
+
+def test_repartition_freq_day():
+    index = [
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-2"),
+        pd.Timestamp("2020-1-2"),
+    ]
+    pdf = pd.DataFrame(index=index, data={"foo": "foo"})
+    ddf = dd.from_pandas(pdf, npartitions=1).repartition(freq="D")
+    assert_eq(ddf, pdf)
+    assert ddf.npartitions == 2
+    assert ddf.divisions == (
+        pd.Timestamp("2020-1-1", freq="D"),
+        pd.Timestamp("2020-1-2", freq="D"),
+        pd.Timestamp("2020-1-2"),
+    )
 
 
 def test_repartition_input_errors():
