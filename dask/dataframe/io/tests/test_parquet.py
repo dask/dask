@@ -13,7 +13,11 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_121,
+    PANDAS_GT_130,
+)
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -917,6 +921,13 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     ],
 )
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
+    if (
+        PANDAS_GT_130
+        and engine == "fastparquet"
+        and read_kwargs.get("categories", None)
+    ):
+        pytest.xfail("https://github.com/dask/fastparquet/issues/577")
+
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = "index"

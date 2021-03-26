@@ -74,11 +74,6 @@ def test_futures_to_delayed_dataframe(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
 
-    from dask.array.numpy_compat import _numpy_120
-
-    if _numpy_120:
-        pytest.skip("https://github.com/dask/dask/issues/7170")
-
     df = pd.DataFrame({"x": [1, 2, 3]})
 
     futures = c.scatter([df, df])
