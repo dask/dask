@@ -16,7 +16,6 @@ import dask.dataframe as dd
 from dask.dataframe._compat import (
     PANDAS_GT_110,
     PANDAS_GT_121,
-    PANDAS_GT_123,
     PANDAS_GT_130,
 )
 from dask.dataframe.utils import assert_eq
@@ -978,9 +977,6 @@ def test_categories_unnamed_index(tmpdir, engine):
 
     if engine.startswith("pyarrow") and pa.__version__ < LooseVersion("0.15.0"):
         pytest.skip("PyArrow>=0.15 Required.")
-
-    if engine == "fastparquet" and PANDAS_GT_123:
-        pytest.skip("https://github.com/dask/fastparquet/issues/576")
 
     tmpdir = str(tmpdir)
 
