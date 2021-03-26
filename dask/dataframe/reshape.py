@@ -140,7 +140,6 @@ def get_dummies(
                 raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=["category"]).columns
         else:
-            breakpoint()
             if not all(methods.is_categorical_dtype(data[c]) for c in columns):
                 raise NotImplementedError(not_cat_msg)
 
