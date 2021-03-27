@@ -40,7 +40,8 @@ Local Threads
    import dask
    dask.config.set(scheduler='threads')  # overwrite default with threaded scheduler
 
-The threaded scheduler executes computations with a local ``multiprocessing.pool.ThreadPool``.
+The threaded scheduler executes computations with a local
+``concurrent.futures.ThreadPoolExecutor``.
 It is lightweight and requires no setup.
 It introduces very little task overhead (around 50us per task)
 and, because everything occurs in the same process,
@@ -72,7 +73,8 @@ Local Processes
    dask.config.set(scheduler='processes')  # overwrite default with multiprocessing scheduler
 
 
-The multiprocessing scheduler executes computations with a local ``multiprocessing.Pool``.
+The multiprocessing scheduler executes computations with a local
+``concurrent.futures.ProcessPoolExecutor``.
 It is lightweight to use and requires no setup.
 Every task and all of its dependencies are shipped to a local process,
 executed, and then their result is shipped back to the main process.
@@ -189,8 +191,8 @@ or specify the desired number of workers:
 
 .. code-block:: python
 
-   from multiprocessing.pool import ThreadPool
-   with dask.config.set(pool=ThreadPool(4)):
+   from concurrent.futures import ThreadPoolExecutor
+   with dask.config.set(pool=ThreadPoolExecutor(4)):
        ...
 
    with dask.config.set(num_workers=4):
