@@ -38,8 +38,8 @@ Selecting Threads, Processes, or Single Threaded
 You can select between these options by specifying one of the following three
 values to the ``scheduler=`` keyword:
 
--  ``"threads"``: Uses a ThreadPool in the local process
--  ``"processes"``: Uses a ProcessPool to spread work between processes
+-  ``"threads"``: Uses a ThreadPoolExecutor in the local process
+-  ``"processes"``: Uses a ProcessPoolExecutor to spread work between processes
 -  ``"single-threaded"``: Uses a for-loop in the current thread
 
 You can specify these options in any of the following ways:

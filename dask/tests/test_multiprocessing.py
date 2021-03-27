@@ -1,3 +1,4 @@
+from concurrent.futures import ProcessPoolExecutor
 from distutils.version import LooseVersion
 import sys
 import multiprocessing
@@ -8,6 +9,7 @@ import pytest
 import dask
 from dask import compute, delayed
 from dask.multiprocessing import get, _dumps, _loads, get_context, remote_exception
+from dask.system import CPU_COUNT
 from dask.utils_test import inc
 
 import cloudpickle
@@ -128,8 +130,9 @@ def test_unpicklable_args_generate_errors():
         get(dsk, "x")
 
 
-def test_reuse_pool():
-    with multiprocessing.Pool() as pool:
+@pytest.mark.parametrize("pool_typ", [multiprocessing.Pool, ProcessPoolExecutor])
+def test_reuse_pool(pool_typ):
+    with pool_typ(CPU_COUNT) as pool:
         with dask.config.set(pool=pool):
             assert get({"x": (inc, 1)}, "x") == 2
             assert get({"x": (inc, 1)}, "x") == 2

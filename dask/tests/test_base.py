@@ -1344,9 +1344,9 @@ def test_num_workers_config(scheduler):
     f = delayed(pure=False)(time.sleep)
     # Be generous with the initial sleep times, as process have been observed
     # to take >0.5s to spin up
-    a = [f(1.0), f(1.0), f(1.0), f(0.1)]
     num_workers = 3
-    with dask.config.set(num_workers=num_workers), Profiler() as prof:
+    a = [f(1.0) for i in range(num_workers)]
+    with dask.config.set(num_workers=num_workers, chunksize=1), Profiler() as prof:
         compute(*a, scheduler=scheduler)
 
     workers = {i.worker_id for i in prof.results}
