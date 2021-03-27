@@ -166,22 +166,6 @@ def blockwise(
     return subgraph
 
 
-class SubgraphCallableConcatAxes:
-    """SubgraphCallable Wrapper to Concatenate Axes"""
-
-    def __init__(self, subgraphcallable):
-        self.subgraphcallable = subgraphcallable
-
-    def __call__(self, *args, **kwargs):
-        from dask.array.core import concatenate_axes as concatenate
-
-        _args = list(args)
-        for i, arg in enumerate(args):
-            if isinstance(arg, dict) and "tups" in arg:
-                _args[i] = concatenate(arg["tups"], arg["axes"])
-        return self.subgraphcallable(*_args, **kwargs)
-
-
 class Blockwise(Layer):
     """Tensor Operation
 
@@ -379,10 +363,7 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        # Serialize subgraphcallable function.
-        # Wrap in `SubgraphCallableConcatAxes` if we are concatenating axes.
-        func = SubgraphCallableConcatAxes(dsk[0]) if self.concatenate else dsk[0]
-        func = dumps_function(func)
+        func = dumps_function(dsk[0])
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -436,6 +417,8 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from .layers import SerializedFunction
+
         # Make sure we convert list items back from tuples in `indices`.
         # The msgpack serialization will have converted lists into
         # tuples, and tuples may be stringified during graph
@@ -446,7 +429,7 @@ class Blockwise(Layer):
         ]
 
         layer_dsk, layer_deps = make_blockwise_graph(
-            state["func"],
+            SerializedFunction(state["func"]),
             state["output"],
             state["output_indices"],
             *indices,
@@ -840,8 +823,8 @@ def make_blockwise_graph(
         key_deps = {}
 
     if deserializing:
-        from distributed.worker import warn_dumps, dumps_function
         from distributed.protocol.serialize import import_allowed_module
+        from distributed.protocol import to_serialize
     else:
         from importlib import import_module as import_allowed_module
 
@@ -858,7 +841,7 @@ def make_blockwise_graph(
                 _args = io_dep_map.__dask_distributed_unpack__(*_args)
             io_arg_mappings[arg] = io_dep_map(*_args[1:])
 
-    if concatenate is True and not deserializing:
+    if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
     # Dictionary mapping {i: 3, j: 4, ...} for i, j, ... the dimensions
@@ -910,14 +893,7 @@ def make_blockwise_graph(
                         deps.update(flatten(tups))
 
                     if concatenate:
-                        if deserializing:
-                            # Using `SubgraphCallableConcatAxes` to deal
-                            # with axes concatenation
-                            tups = {"tups": tups, "axes": axes}
-                        else:
-                            # Not materializing on the scheduler.
-                            # Inline concatenate task allowed.
-                            tups = (concatenate, tups, axes)
+                        tups = (concatenate, tups, axes)
                 else:
                     tups = (arg,) + arg_coords
                     if arg not in io_deps:
@@ -943,21 +919,12 @@ def make_blockwise_graph(
         if deserializing:
             deps.update(func_future_args)
             args += list(func_future_args)
-            if kwargs:
-                val = {
-                    "function": dumps_function(apply),
-                    "args": warn_dumps(args),
-                    "kwargs": warn_dumps(kwargs2),
-                }
-            else:
-                val = {"function": func, "args": warn_dumps(args)}
+        if kwargs:
+            val = (apply, func, args, kwargs2)
         else:
-            if kwargs:
-                val = (apply, func, args, kwargs2)
-            else:
-                args.insert(0, func)
-                val = tuple(args)
-        dsk[out_key] = val
+            args.insert(0, func)
+            val = tuple(args)
+        dsk[out_key] = to_serialize(val) if deserializing else val
         if return_key_deps:
             key_deps[out_key] = deps
 
