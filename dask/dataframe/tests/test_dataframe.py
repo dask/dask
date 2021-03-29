@@ -28,6 +28,8 @@ from dask.dataframe.core import (
 )
 from dask.dataframe import methods
 from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
+from dask.dataframe.core import no_default
+from dask.dataframe._compat import PANDAS_VERSION
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -2646,13 +2648,13 @@ def test_to_timestamp():
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
 
@@ -2702,30 +2704,86 @@ def test_to_dask_array_unknown(as_frame):
     assert all(np.isnan(x) for x in result)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_110,
+    reason=f"No extension arrays in pandas version {PANDAS_VERSION.vstring}",
+)
+@pytest.mark.parametrize("lengths", [None, [2, 3], True])
+@pytest.mark.parametrize("as_frame", [False, True])
 @pytest.mark.parametrize(
-    "lengths,as_frame,meta",
+    "input_func, dtype, na_value, meta",
     [
-        ([2, 3], False, None),
-        (True, False, None),
-        (True, False, np.array([], dtype="f4")),
+        (
+            # NOTE: we wrap the input in a lambda so importing this file works with old verions of pandas,
+            # where `pd.arrays` doesn't exist
+            lambda: [1, 2, 3, 4, 5],
+            None,
+            no_default,
+            None,
+        ),
+        (
+            lambda: [1, 2, 3, 4, 5],
+            "float32",
+            no_default,
+            None,
+        ),
+        (
+            lambda: [1, 2, 3, 4, 5],
+            float,
+            no_default,
+            np.array([], dtype="f4"),
+        ),
+        (
+            lambda: pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]),
+            None,
+            no_default,
+            None,
+        ),
+        (
+            lambda: pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]),
+            int,
+            0,
+            None,
+        ),
+        (
+            lambda: pd.arrays.SparseArray([np.nan, 1, 2, np.nan, 1]),
+            None,
+            0.0,
+            np.array([], dtype="float64"),
+        ),
     ],
 )
-def test_to_dask_array(meta, as_frame, lengths):
-    s = pd.Series([1, 2, 3, 4, 5], name="foo", dtype="i4")
-    a = dd.from_pandas(s, chunksize=2)
+def test_to_dask_array(input_func, dtype, na_value, meta, as_frame, lengths):
+    from pandas.api.extensions import no_default as pd_no_default
+
+    series = pd.Series(input_func(), name="foo")
+    a = dd.from_pandas(series, chunksize=2)
 
     if as_frame:
         a = a.to_frame()
 
-    result = a.to_dask_array(lengths=lengths, meta=meta)
+    result = a.to_dask_array(lengths=lengths, dtype=dtype, na_value=na_value, meta=meta)
     assert isinstance(result, da.Array)
 
-    expected_chunks = ((2, 3),)
+    if lengths:
+        expected_chunks = ((2, 3),)
+    else:
+        expected_chunks = ((np.nan, np.nan),)
 
     if as_frame:
         expected_chunks = expected_chunks + ((1,),)
 
     assert result.chunks == expected_chunks
+
+    # translate dask `no_default` to pandas `no_default`
+    if na_value is no_default:
+        na_value = pd_no_default
+
+    da.utils.assert_eq(
+        result,
+        a.compute().to_numpy(dtype=dtype, na_value=na_value),
+        equal_nan=True,
+    )
 
 
 def test_apply():
@@ -3770,18 +3828,65 @@ def test_split_out_value_counts(split_every):
 
 
 def test_values():
-    from dask.array.utils import assert_eq
-
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [2, 3, 4, 5]},
         index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
     )
     ddf = dd.from_pandas(df, 2)
 
-    assert_eq(df.values, ddf.values)
-    assert_eq(df.x.values, ddf.x.values)
-    assert_eq(df.y.values, ddf.y.values)
-    assert_eq(df.index.values, ddf.index.values)
+    da.utils.assert_eq(df.values, ddf.values)
+    da.utils.assert_eq(df.x.values, ddf.x.values)
+    da.utils.assert_eq(df.y.values, ddf.y.values)
+    da.utils.assert_eq(df.index.values, ddf.index.values)
+
+
+@pytest.mark.skipif(
+    not PANDAS_GT_110,
+    reason=f"No extension arrays in pandas version {PANDAS_VERSION.vstring}",
+)
+def test_values_extension_array():
+    def assert_eq_with_na(delayed, expected):
+        "Simplified version of `dask.array.utils.assert_eq` that treats `pd.NA` values as equal"
+        meta = delayed._meta
+        x = delayed.compute()
+
+        assert meta.ndim == x.ndim == expected.ndim
+        assert type(meta) == type(x) == type(expected)
+        assert x.dtype == meta.dtype == expected.dtype
+        da.utils.assert_eq_shape(x.shape, expected.shape, check_nan=True)
+        da.utils.assert_eq_shape(delayed.shape, expected.shape, check_nan=False)
+
+        if x.dtype != "O":
+            np.testing.assert_allclose(x, expected, equal_nan=True)
+        else:
+            assert all(
+                pd.isna([a, b]).all() if pd.isna([a, b]).any() else a == b
+                for (a, b) in zip(x.flat, expected.flat)
+            )
+
+    # NOTE: based on the list of pandas extension types at
+    # https://pandas.pydata.org/docs/user_guide/basics.html#dtypes
+    df = pd.DataFrame(
+        {
+            "datetime_tz": pd.array(
+                ["2020-01-01", "2020-02-01", "2020-03-01"],
+                dtype="datetime64[ns, US/Mountain]",
+            ),
+            "categorical": pd.Series(["a", "b", "a"], dtype="category"),
+            "period": pd.period_range("1/1/2021", "3/1/2021", freq="M"),
+            "sparse": pd.arrays.SparseArray([np.nan, np.nan, 1]),
+            "interval": pd.arrays.IntervalArray(pd.interval_range(start=0, end=3)),
+            "null_int": pd.array([1, 2, np.nan], dtype=pd.Int64Dtype()),
+            "string": pd.array(["foo", "bar", "baz"], dtype="string"),
+            "null_bool": pd.array([True, np.nan, False], dtype="boolean"),
+        }
+    )
+    ddf = dd.from_pandas(df, 2)
+
+    assert_eq_with_na(ddf.values, df.to_numpy())
+    da.utils.assert_eq(ddf.index.values, df.index.values)
+    for column in df.columns:
+        assert_eq_with_na(ddf[column].values, df[column].to_numpy())
 
 
 def test_copy():
@@ -4097,8 +4202,6 @@ def test_cumulative_multiple_columns():
 
 @pytest.mark.parametrize("func", [np.asarray, M.to_records])
 def test_map_partition_array(func):
-    from dask.array.utils import assert_eq
-
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4, 5], "y": [6.0, 7.0, 8.0, 9.0, 10.0]},
         index=["a", "b", "c", "d", "e"],
@@ -4112,7 +4215,7 @@ def test_map_partition_array(func):
         except Exception:
             continue
         x = pre(ddf).map_partitions(func)
-        assert_eq(x, expected)
+        da.utils.assert_eq(x, expected)
 
         assert isinstance(x, da.Array)
         assert x.chunks[0] == (np.nan, np.nan)

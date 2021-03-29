@@ -18,6 +18,7 @@ from .core import (
 )
 from .methods import drop_columns, concat
 from .shuffle import shuffle
+from ._compat import PANDAS_VERSION
 from .utils import (
     make_meta,
     insert_meta_param_description,
@@ -1598,7 +1599,7 @@ class _GroupBy:
         if not PANDAS_GT_110 and self.dropna:
             raise NotImplementedError(
                 "dropna is not a valid argument for dask.groupby.agg"
-                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+                f"if pandas < 1.1.0. Pandas version is {PANDAS_VERSION.vstring}"
             )
 
         return aca(
