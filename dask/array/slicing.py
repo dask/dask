@@ -1753,7 +1753,7 @@ def setitem_array(out_name, array, indices, value):
         """
         # Check for values in [loc0,loc1)
         if is_dask_collection(index):
-            if math.isnan(index.size):
+            if np.isnan(index.size):
                 # Integer dask array with unknown size.
                 #
                 # The 1-argument "where" won't work, so use the
