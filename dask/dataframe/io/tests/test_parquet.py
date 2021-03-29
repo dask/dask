@@ -13,7 +13,11 @@ import pytest
 import dask
 import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
+from dask.dataframe._compat import (
+    PANDAS_GT_110,
+    PANDAS_GT_121,
+    PANDAS_GT_130,
+)
 from dask.dataframe.utils import assert_eq
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
@@ -917,6 +921,13 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     ],
 )
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
+    if (
+        PANDAS_GT_130
+        and engine == "fastparquet"
+        and read_kwargs.get("categories", None)
+    ):
+        pytest.xfail("https://github.com/dask/fastparquet/issues/577")
+
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = "index"
@@ -2241,6 +2252,22 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
     assert_eq(ddf, ddf2, check_divisions=False)
+    assert ddf.divisions == tuple(range(0, 420, 30))
+    if statistics is False or statistics is None and read_engine.startswith("pyarrow"):
+        assert ddf2.divisions == (None,) * 14
+    else:
+        assert ddf2.divisions == tuple(range(0, 420, 30))
+
+
+@write_read_engines()
+def test_statistics_nometa(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine, write_metadata_file=False)
+
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=True)
+    assert_eq(ddf, ddf2)
+    assert ddf.divisions == tuple(range(0, 420, 30))
+    assert ddf2.divisions == tuple(range(0, 420, 30))
 
 
 @pytest.mark.parametrize("schema", ["infer", None])

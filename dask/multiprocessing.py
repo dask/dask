@@ -1,5 +1,7 @@
+from concurrent.futures import ProcessPoolExecutor
 import copyreg
 import multiprocessing
+import multiprocessing.pool
 import os
 import pickle
 import sys
@@ -10,7 +12,7 @@ from warnings import warn
 import cloudpickle
 from . import config
 from .system import CPU_COUNT
-from .local import reraise, get_async  # TODO: get better get
+from .local import reraise, get_async, MultiprocessingPoolExecutor
 from .optimization import fuse, cull
 from .utils import ensure_dict
 
@@ -146,6 +148,7 @@ def get(
     func_dumps=None,
     optimize_graph=True,
     pool=None,
+    chunksize=None,
     **kwargs
 ):
     """Multiprocessed get function appropriate for Bags
@@ -164,7 +167,14 @@ def get(
         Function to use for function deserialization (defaults to cloudpickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
+    pool : Executor or Pool
+        Some sort of `Executor` or `Pool` to use
+    chunksize: int, optional
+        Size of chunks to use when dispatching work.
+        Defaults to 5 as some batching is helpful.
+        If -1, will be computed to evenly divide ready work across workers.
     """
+    chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
@@ -178,9 +188,13 @@ def get(
             # https://github.com/dask/dask/issues/6640.
             os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
-        pool = context.Pool(num_workers, initializer=initialize_worker_process)
+        pool = ProcessPoolExecutor(
+            num_workers, mp_context=context, initializer=initialize_worker_process
+        )
         cleanup = True
     else:
+        if isinstance(pool, multiprocessing.pool.Pool):
+            pool = MultiprocessingPoolExecutor(pool)
         cleanup = False
 
     # Optimize Dask
@@ -202,8 +216,8 @@ def get(
     try:
         # Run
         result = get_async(
-            pool.apply_async,
-            len(pool._pool),
+            pool.submit,
+            pool._max_workers,
             dsk3,
             keys,
             get_id=_process_get_id,
@@ -211,11 +225,12 @@ def get(
             loads=loads,
             pack_exception=pack_exception,
             raise_exception=reraise,
+            chunksize=chunksize,
             **kwargs
         )
     finally:
         if cleanup:
-            pool.close()
+            pool.shutdown()
     return result
 
 

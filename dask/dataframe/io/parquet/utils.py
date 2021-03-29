@@ -3,6 +3,7 @@ import re
 import pandas as pd
 
 from ....core import flatten
+from ....utils import natural_sort_key
 
 
 class Engine:
@@ -389,6 +390,12 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
         index_names = data_index
 
     return column_names, index_names
+
+
+def _sort_and_analyze_paths(file_list, fs, root=False):
+    file_list = sorted(file_list, key=natural_sort_key)
+    base, fns = _analyze_paths(file_list, fs, root=root)
+    return file_list, base, fns
 
 
 def _analyze_paths(file_list, fs, root=False):
