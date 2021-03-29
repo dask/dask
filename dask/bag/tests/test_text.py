@@ -1,13 +1,14 @@
-import pytest
 from functools import partial
+
+import pytest
+from fsspec.compression import compr
 from tlz import concat
 
 import dask
 from dask import compute
-from dask.utils import filetexts
-from dask.bytes import utils
 from dask.bag.text import read_text
-from fsspec.compression import compr
+from dask.bytes import utils
+from dask.utils import filetexts
 
 compute = partial(compute, scheduler="sync")
 

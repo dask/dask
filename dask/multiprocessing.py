@@ -1,4 +1,3 @@
-from concurrent.futures import ProcessPoolExecutor
 import copyreg
 import multiprocessing
 import multiprocessing.pool
@@ -6,14 +5,16 @@ import os
 import pickle
 import sys
 import traceback
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from warnings import warn
 
 import cloudpickle
+
 from . import config
+from .local import MultiprocessingPoolExecutor, get_async, reraise
+from .optimization import cull, fuse
 from .system import CPU_COUNT
-from .local import reraise, get_async, MultiprocessingPoolExecutor
-from .optimization import fuse, cull
 from .utils import ensure_dict
 
 

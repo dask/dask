@@ -1,5 +1,6 @@
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 import pytest
+
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 
 distributed = pytest.importorskip("distributed")
 
@@ -7,25 +8,19 @@ import asyncio
 from functools import partial
 from operator import add
 
+from distributed import futures_of
+from distributed.client import wait
+from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cluster_fixture  # noqa F401
+from distributed.utils_test import loop  # noqa F401
+from distributed.utils_test import cluster, gen_cluster, inc, varying
 from tornado import gen
 
 import dask
-from dask import persist, delayed, compute
 import dask.bag as db
+from dask import compute, delayed, persist
 from dask.delayed import Delayed
-from dask.utils import tmpdir, get_named_args
-from distributed import futures_of
-from distributed.client import wait
-from distributed.utils_test import (  # noqa F401
-    gen_cluster,
-    inc,
-    cluster,
-    cluster_fixture,
-    loop,
-    client as c,
-    varying,
-)
-
+from dask.utils import get_named_args, tmpdir
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)

@@ -2,13 +2,12 @@ import os
 import posixpath
 
 import pytest
+from fsspec.core import get_fs_token_paths, open_files
 from tlz import concat
-from fsspec.core import open_files, get_fs_token_paths
 
 import dask
 import dask.bag as db
 from dask.bytes.core import read_bytes
-
 
 try:
     import distributed
@@ -191,8 +190,8 @@ def test_read_text_unicode(hdfs):
 @require_pyarrow
 def test_parquet_pyarrow(hdfs):
     dd = pytest.importorskip("dask.dataframe")
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     fn = "%s/test.parquet" % basedir
     hdfs_fn = "hdfs://%s" % fn

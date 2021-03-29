@@ -7,11 +7,11 @@ import os
 import warnings
 
 import numpy as np
-from tlz import frequencies, concat
+from tlz import concat, frequencies
 
-from .core import Array
 from ..highlevelgraph import HighLevelGraph
 from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
+from .core import Array
 
 try:
     AxisError = np.AxisError

@@ -1,25 +1,24 @@
-from datetime import datetime, timedelta
 import functools
 import inspect
 import os
+import re
 import shutil
 import sys
 import tempfile
-import re
-from errno import ENOENT
+import uuid
+from _thread import RLock
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta
+from errno import ENOENT
+from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
 from typing import Dict, Iterable, Mapping, Optional, TypeVar
-import uuid
 from weakref import WeakValueDictionary
-from functools import lru_cache
-from _thread import RLock
 
 from .core import get_deps
-
 
 K = TypeVar("K")
 V = TypeVar("V")

@@ -1,6 +1,6 @@
-from itertools import zip_longest
 import os
 import warnings
+from itertools import zip_longest
 
 import pytest
 
@@ -9,9 +9,10 @@ np = pytest.importorskip("numpy")
 import itertools
 
 import dask.array as da
-from dask.array.utils import assert_eq as _assert_eq, same_keys
-from dask.core import get_deps
 import dask.config as config
+from dask.array.utils import assert_eq as _assert_eq
+from dask.array.utils import same_keys
+from dask.core import get_deps
 
 
 def assert_eq(a, b):

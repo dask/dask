@@ -5,8 +5,8 @@ from operator import add
 import pytest
 
 import dask
-from dask import delayed
 import dask.bag as db
+from dask import delayed
 from dask.base import clone_key
 from dask.blockwise import Blockwise
 from dask.graph_manipulation import bind, checkpoint, chunks, clone, wait_on

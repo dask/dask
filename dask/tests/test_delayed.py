@@ -1,18 +1,18 @@
-from collections import namedtuple
-from operator import add, setitem
-from functools import partial
 import pickle
-from random import random
 import types
+from collections import namedtuple
+from functools import partial
+from operator import add, setitem
+from random import random
 
-import pytest
 import cloudpickle
+import pytest
 from tlz import merge
 
 import dask
 import dask.bag as db
 from dask import compute
-from dask.delayed import delayed, to_task_dask, Delayed
+from dask.delayed import Delayed, delayed, to_task_dask
 from dask.utils_test import inc
 
 try:
