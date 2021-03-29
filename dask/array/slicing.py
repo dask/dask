@@ -2125,14 +2125,14 @@ def setitem(x, v, indices):
     Examples
     --------
     >>> x = np.arange(8).reshape(2, 4)
-    >>> setitem(x, -99, [np.array([False, True])])
+    >>> setitem(x, np.array(-99), [np.array([False, True])])
     array([[  0,   1,   2,   3],
            [-99, -99, -99, -99]])
     >>> x
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7]])
 
-    >>> setitem(x, [-88, -99], [slice(None), np.array([1, 3])])
+    >>> setitem(x, np.array([-88, -99]), [slice(None), np.array([1, 3])])
     array([[  0, -88,   2, -99],
            [  4, -88,   6, -99]])
 
@@ -2143,7 +2143,7 @@ def setitem(x, v, indices):
     array([[ 0,  1,  2,  3],
            [ 4,  5,  6,  7]])
 
-    >>> setitem(x, [-88, -99], [slice(None), np.array([4, 4, 3, 4, 1, 4])])
+    >>> setitem(x, np.array([-88, -99]), [slice(None), np.array([4, 4, 3, 4, 1, 4])])
     array([[  0, -99,   2, -88],
            [  4, -99,   6, -88]])
 
