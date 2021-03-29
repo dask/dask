@@ -24,6 +24,7 @@ from .utils import (
     zeros_like_safe,
     array_safe,
     asarray_safe,
+    empty_like_safe,
 )
 from .wrap import ones
 from .ufunc import multiply, sqrt
@@ -1046,7 +1047,7 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     if return_counts:
         dt.append(("counts", np.intp))
 
-    r = np.empty(u.shape, dtype=dt)
+    r = empty_like_safe(u, u.shape, dtype=dt)
     r["values"] = u
     if return_inverse:
         r["inverse"] = np.arange(len(r), dtype=np.intp)
