@@ -59,7 +59,6 @@ from ..utils import (
     typename,
 )
 from . import chunk
-from .blockwise import blockwise
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 from .numpy_compat import _Recurser
 from .slicing import cached_cumsum, replace_ellipsis, slice_array
@@ -5183,4 +5182,5 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
         return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
 
 
+from .blockwise import blockwise
 from .utils import compute_meta, meta_from_array
