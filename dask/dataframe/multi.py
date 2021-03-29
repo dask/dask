@@ -1130,7 +1130,7 @@ def concat(
         By default a warning is raised if any input has unknown divisions.
         Set to True to disable this warning.
     ignore_order : bool, default False
-        Wether to ignore order when doing the union of categoricals.
+        Whether to ignore order when doing the union of categoricals.
 
     Notes
     -----

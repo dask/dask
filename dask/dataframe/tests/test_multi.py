@@ -2143,17 +2143,22 @@ def test_groupby_concat_cudf(engine):
     assert_eq(res_dd.compute().sort_index(), res.sort_index())
 
 
-def test_concat_ignore_order():
+@pytest.mark.parametrize("ordered", [True, False])
+def test_concat_ignore_order(ordered):
     pdf1 = pd.DataFrame(
         {
             "x": pd.Categorical(
-                ["a", "b", "c", "a"], categories=["a", "b", "c"], ordered=True
+                ["a", "b", "c", "a"], categories=["a", "b", "c"], ordered=ordered
             )
         }
     )
     ddf1 = dd.from_pandas(pdf1, 2)
     pdf2 = pd.DataFrame(
-        {"x": pd.Categorical(["c", "b", "a"], categories=["c", "b", "a"], ordered=True)}
+        {
+            "x": pd.Categorical(
+                ["c", "b", "a"], categories=["c", "b", "a"], ordered=ordered
+            )
+        }
     )
     ddf2 = dd.from_pandas(pdf2, 2)
     expected = pd.concat([pdf1, pdf2])
