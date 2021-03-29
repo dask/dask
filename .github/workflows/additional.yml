@@ -20,7 +20,6 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channels: conda-forge,defaults
           channel-priority: true
           python-version: "3.7"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
@@ -84,7 +83,6 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channels: conda-forge,defaults
           channel-priority: true
           python-version: "3.8"
           environment-file: continuous_integration/environment-latest.yaml
@@ -115,7 +113,6 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channels: conda-forge,defaults
           channel-priority: true
           python-version: "3.7"
           activate-environment: test-environment
