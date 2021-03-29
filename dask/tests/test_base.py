@@ -199,8 +199,8 @@ def test_tokenize_numpy_memmap_no_filename():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_ufunc_consistent():
-    assert tokenize(np.sin) == "02106e2c67daf452fb480d264e0dac21"
-    assert tokenize(np.cos) == "c99e52e912e4379882a9a4b387957a0b"
+    assert tokenize(np.sin) == "17c145f71d7f1bcf31b1693795a01c0d"
+    assert tokenize(np.cos) == "ebd679a0380854b824f8620fd8d0eccc"
 
     # Make a ufunc that isn't in the numpy namespace. Similar to
     # any found in other packages.
@@ -333,12 +333,56 @@ def test_tokenize_method():
     a, b = Foo(1), Foo(2)
     assert tokenize(a) == tokenize(a)
     assert tokenize(a) != tokenize(b)
+    assert tokenize(a) == tokenize(Foo(1))
 
     # dispatch takes precedence
     before = tokenize(a)
     normalize_token.register(Foo, lambda self: self.x + 1)
     after = tokenize(a)
     assert before != after
+
+
+def test_tokenize_method_nested():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+
+        def __dask_tokenize__(self):
+            return self.x
+
+    class Bar(object):
+        def __init__(self, y):
+            self.y = y
+
+        def __dask_tokenize__(self):
+            return self.y
+
+    foo1a, foo1b = Foo(1), Foo(1)
+    bar1a, bar1b = Bar(foo1a), Bar(foo1b)
+    assert tokenize(bar1a) == tokenize(bar1b)
+    foo2 = Foo(2)
+    bar2 = Bar(foo2)
+    assert tokenize(bar1a) != tokenize(bar2)
+
+
+def test_tokenize_same_key_different_type():
+    class Foo(object):
+        def __init__(self, x):
+            self.x = x
+
+        def __dask_tokenize__(self):
+            return self.x
+
+    class Bar(object):
+        def __init__(self, y):
+            self.y = y
+
+        def __dask_tokenize__(self):
+            return self.y
+
+    foo = Foo(1)
+    bar = Bar(1)
+    assert tokenize(foo) != tokenize(bar)
 
 
 @pytest.mark.skipif("not np")
@@ -355,6 +399,18 @@ def test_tokenize_sequences():
 
 def test_tokenize_dict():
     assert tokenize({"x": 1, 1: "x"}) == tokenize({"x": 1, 1: "x"})
+
+
+def test_tokenize_dict_items_collision():
+    assert tokenize({"x": 1, 1: "x"}) != tokenize([("x", 1), (1, "x")])
+
+
+def test_tokenize_set_list_collision():
+    assert tokenize([1, 2, 3]) != tokenize({1, 2, 3})
+
+
+def test_tokenize_list_set_collision():
+    assert tokenize({1, "x"}) != tokenize([1, "x"])
 
 
 def test_tokenize_set():
