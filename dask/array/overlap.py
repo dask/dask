@@ -775,6 +775,10 @@ def map_overlap(
     depth = coerce(args, depth, coerce_depth)
     boundary = coerce(args, boundary, coerce_boundary)
 
+    # Escape to map_blocks if depth is zero (a more efficient computation)
+    if all(depth_val == 0 for depth_val in depth[0].values()):
+        return map_blocks(func, *args, **kwargs)
+
     # Align chunks in each array to a common size
     if align_arrays:
         # Reverse unification order to allow block broadcasting
