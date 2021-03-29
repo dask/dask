@@ -1875,6 +1875,31 @@ class SeriesGroupBy(_GroupBy):
         super().__init__(df, by=by, slice=slice, **observed, **kwargs)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
+    def nlargest(self, n=5, keep="first", split_every=None, split_out=1):
+        name = self._meta.obj.name
+        num_records = len(self.obj)
+        return aca(
+            [self.obj, self.index]
+            if not isinstance(self.index, list)
+            else [self.obj] + self.index,
+            chunk=_nlargest_chunk,
+            chunk_kwargs={"n": n, "keep": keep, "name": name},
+            aggregate=_nlargest_aggregate,
+            aggregate_kwargs={
+                "n": n,
+                "keep": keep,
+                "name": name,
+                "index": self.index,
+                "len": num_records,
+            },
+            token="series-groupby-nlargest",
+            split_every=split_every,
+            split_out=split_out,
+            split_out_setup=split_out_on_index,
+            sort=self.sort,
+        )
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
         """
         Examples
@@ -1948,6 +1973,77 @@ class SeriesGroupBy(_GroupBy):
             split_every=split_every,
             split_out=split_out,
         )
+
+
+def _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name):
+    num_indices = len(indices)
+    df_grouped = series_grouped.to_frame().reset_index()
+
+    all_missing_columns = []
+
+    if num_indices == 1 and name in indices:
+        temp = df[indices].iloc[:, 0]
+        all_missing_columns.append(temp)
+    else:
+        for i in range(num_indices):
+            if indices[i] != name:
+                temp = df[indices].iloc[:, i]
+                all_missing_columns.append(temp)
+
+    all_missing_columns.append(df.index)
+
+    return df_grouped.set_index(all_missing_columns)[name]
+
+
+def _nlargest_chunk(df, *index, **kwargs):
+    n = kwargs.pop("n")
+    keep = kwargs.pop("keep")
+    name = kwargs.pop("name")
+    if isinstance(index, str):
+        indices = [index]
+    else:
+        indices = list(index)
+    series_grouped = df.groupby(indices)[name].nlargest(n=n, keep=keep)
+    if isinstance(series_grouped.index, pd.RangeIndex):
+        return _convert_RangeIndex_to_MultiIndex(series_grouped, df, indices, name)
+    else:
+        if name in indices and len(indices) != 1:
+            return series_grouped.reset_index(name, drop=True)
+        return series_grouped
+
+
+def _nlargest_aggregate(df, **kwargs):
+    n = kwargs.pop("n")
+    keep = kwargs.pop("keep")
+    name = kwargs.pop("name")
+    index = kwargs.pop("index")
+    num_records = kwargs.pop("len")
+    if isinstance(index, str):
+        indices = [index]
+    else:
+        indices = list(index)
+    if len(indices) == 1 and name in indices:
+        name_backup = name
+        name = "temp"
+        df = df.to_frame()
+        df.columns = [name]
+    df = df.reset_index()
+    level_num = list(df.columns).index(name) - 1
+    df.index = df["level_{0}".format(level_num)].rename(None)
+    df = df.sort_index()
+    ret = df.groupby(indices)[name].nlargest(n=n, keep=keep)
+    if (
+        type(ret.index) in [pd.RangeIndex, pd.Int64Index]
+        and len(ret) == len(df) != num_records
+    ):
+        ret = _convert_RangeIndex_to_MultiIndex(ret, df, indices, name)
+        if name in indices:
+            indices[indices.index(name)] = df[name]
+            indices.append(df.index)
+            return ret.to_frame().reset_index().set_index(indices)[name]
+    if ret.name == "temp":
+        ret.name = name_backup
+    return ret.sort_index()
 
 
 def _unique_aggregate(series_gb, name=None):

@@ -4,6 +4,9 @@ import warnings
 import numpy as np
 import pandas as pd
 
+import itertools as it
+
+import sys
 import pytest
 
 import dask
@@ -403,6 +406,53 @@ def test_groupby_get_group():
         # Series
         assert_eq(ddgrouped.a.get_group(3), pdgrouped.a.get_group(3))
         assert_eq(ddgrouped.a.get_group(2), pdgrouped.a.get_group(2))
+
+
+params = [
+    [1, 2, 3, 4],
+    [
+        "location",
+        "category",
+        "percent",
+        "total",
+        ["location", "category"],
+        ["category", "location"],
+        ["location", "percent"],
+        ["percent", "location"],
+        ["category", "percent"],
+        ["percent", "category"],
+        ["location", "category", "percent"],
+        ["location", "percent", "category"],
+        ["category", "location", "percent"],
+        ["category", "percent", "location"],
+        ["percent", "location", "category"],
+        ["percent", "category", "location"],
+    ],
+    ["percent", "category", "total"],
+    ["first", "last", "all"],
+]
+
+
+@pytest.mark.xfail(
+    sys.version_info[0] == 3
+    and sys.version_info[1] == 6
+    and PANDAS_VERSION == "0.23.4",
+    reason="nlargest() behaves differently with an older version of pandas (0.23.4) on Python 3.6 "
+    "with an unexpected keyword argument 'axis'",
+    strict=False,
+)
+@pytest.mark.parametrize("n, indices, name, keep", list(it.product(*params)))
+def test_dataframe_groupby_nlargest(n, indices, name, keep):
+    data = {}
+    data["location"] = ["A", "A", "A", "B", "C", "C", "D", "D", "D", "D", "D"]
+    data["category"] = [5, 5, 5, 3, 2, 4, 2, 3, 2, 5, 2]
+    data["percent"] = [100, 100, 100, 100, 50, 13, 75, 59, 13, 4, 75]
+    data["total"] = [45, 34, 66, 26, 72, 9, 52, 70, 60, 11, 9]
+    df = pd.DataFrame.from_dict(data)
+    dask_df = dd.from_pandas(df, npartitions=3)
+    expected = dask_df.groupby(indices)[name].nlargest(n=n, keep=keep).compute()
+    pd_val = df.groupby(indices)[name].nlargest(n=n, keep=keep)
+    assert_eq(pd_val, expected)
 
 
 def test_dataframe_groupby_nunique():
