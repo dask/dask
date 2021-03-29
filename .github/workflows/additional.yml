@@ -15,9 +15,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Conda Environment
-        # TODO replace with label as soon as it's available
-        # https://github.com/conda-incubator/setup-miniconda/issues/106
-        uses: conda-incubator/setup-miniconda@723ab12c1d66bb893c5ac701f8e387f00b24549e
+        uses: conda-incubator/setup-miniconda@v2
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -81,9 +79,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Conda Environment
-        # TODO replace with label as soon as it's available
-        # https://github.com/conda-incubator/setup-miniconda/issues/106
-        uses: conda-incubator/setup-miniconda@723ab12c1d66bb893c5ac701f8e387f00b24549e
+        uses: conda-incubator/setup-miniconda@v2
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
@@ -114,9 +110,7 @@ jobs:
         uses: actions/checkout@v2
 
       - name: Setup Conda
-        # TODO replace with label as soon as it's available
-        # https://github.com/conda-incubator/setup-miniconda/issues/106
-        uses: conda-incubator/setup-miniconda@723ab12c1d66bb893c5ac701f8e387f00b24549e
+        uses: conda-incubator/setup-miniconda@v2
         with:
           miniforge-variant: Mambaforge
           miniforge-version: latest
