@@ -7,7 +7,13 @@ np = pytest.importorskip("numpy")
 
 import dask.array as da
 from dask.utils import ignoring
-from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
+from dask.array.utils import (
+    assert_eq,
+    assert_eq_iter,
+    same_keys,
+    AxisError,
+    IS_NEP18_ACTIVE,
+)
 
 
 def test_array():
@@ -1656,6 +1662,252 @@ def test_aligned_coarsen_chunks(chunks, divisor):
     # check that the only indivisible chunk is the last
     if any_remainders.sum() == 1:
         assert any_remainders[-1] == 1
+
+
+def test_array_split():
+
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+    # Note: 'assert_eq' seems to expect a return type of array, #
+    # or at least something the allows for a .all() comparison  #
+    # hence the use of `assert_eq_siter` function:              #
+    # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
+
+    na = np.random.randint(10, size=(10, 10, 2))
+    dar = da.from_array(na, chunks=(3, 3, 1))
+    print("test")
+
+    ## axis test ##
+    assert_eq_iter(np.array_split(na, 1, axis=0), da.array_split(dar, 1, axis=0))
+    assert_eq_iter(np.array_split(na, 3, axis=-3), da.array_split(dar, 3, axis=-3))
+    assert_eq_iter(np.array_split(na, 2, axis=-2), da.array_split(dar, 2, axis=-2))
+    assert_eq_iter(np.array_split(na, 5, axis=1), da.array_split(dar, 5, axis=1))
+    assert_eq_iter(np.array_split(na, 4, axis=2), da.array_split(dar, 4, axis=2))
+    assert_eq_iter(np.array_split(na, 2, axis=-1), da.array_split(dar, 2, axis=-1))
+
+    ## array_like arguments ##
+    assert_eq_iter(
+        np.array_split(na, [2, 3, 5, 10]), da.array_split(dar, [2, 3, 5, 10])
+    )
+    assert_eq_iter(np.array_split(na, (3, 4) * 4), da.array_split(dar, (3, 4) * 4))
+    assert_eq_iter(
+        np.array_split(na, np.array([-2, -5, -6]), axis=-1),
+        da.array_split(dar, np.array([-2, -5, -6]), axis=-1),
+    )
+
+    # numpy.split_array will do some quirks contray to the docs i.e. force ints and accept array_like.
+    # for sake of bearing with the conduct tests to see if dask.array_split does the same
+    assert_eq_iter(np.array_split(na, 3.4123), da.array_split(dar, 3.4123))
+    assert_eq_iter(
+        np.array_split((1, 2, 3) * 10, bytes(123)),
+        da.array_split((1, 2, 3) * 10, bytes(123)),
+    )
+
+    # When exceeding dim
+    with pytest.raises(IndexError):
+        da.array_split(dar, 4, axis=3)
+    with pytest.raises(IndexError):
+        da.array_split(dar, 4, axis=-4)
+
+    # When an int argument is <= 0
+    with pytest.raises(ValueError):
+        da.array_split(dar, 0)
+    with pytest.raises(ValueError):
+        da.array_split(dar, -3)
+
+    # When arbitary types are passed (because lots of type forcing is going on)
+    with pytest.raises(TypeError):
+        da.array_split(dar, "3")
+    with pytest.raises(TypeError):
+        da.array_split(dar, None)
+
+
+def test_split():
+    n3 = np.random.randint(10, size=(10,) * 3)
+    d3 = da.from_array(n3, chunks=(3,) * 3)
+
+    ## axis test ##
+    assert_eq_iter(np.split(n3, 1, axis=0), da.split(d3, 1, axis=0))
+    assert_eq_iter(np.split(n3, 2, axis=-3), da.split(d3, 2, axis=-3))
+    assert_eq_iter(np.split(n3, 5, axis=-2), da.split(d3, 5, axis=-2))
+    assert_eq_iter(np.split(n3, 5, axis=1), da.split(d3, 5, axis=1))
+    assert_eq_iter(np.split(n3, 2, axis=2), da.split(d3, 2, axis=2))
+    assert_eq_iter(np.split(n3, 1, axis=-1), da.split(d3, 1, axis=-1))
+
+    ## array_like arguments ##
+    assert_eq_iter(np.split(n3, [2, 3, 5, 10]), da.split(d3, [2, 3, 5, 10]))
+    assert_eq_iter(np.split(n3, (3, 4) * 4), da.split(d3, (3, 4) * 4))
+    assert_eq_iter(
+        np.split(n3, np.array([-2, -5, -6]), axis=-1),
+        da.split(d3, np.array([-2, -5, -6]), axis=-1),
+    )
+
+    # When exceeding dim
+    with pytest.raises(IndexError):
+        da.split(d3, 4, axis=3)
+    with pytest.raises(IndexError):
+        da.split(d3, 4, axis=-4)
+
+    # When an int argument is < 0
+    with pytest.raises(ValueError):
+        da.split(d3, -3)
+
+    # When arbitary types are passed (because lots of type forcing is going on)
+    with pytest.raises(TypeError):
+        da.split(d3, "3")
+    with pytest.raises(TypeError):
+        da.split(d3, None)
+
+    # When input results in uneven splits
+    with pytest.raises(ValueError):
+        da.split(d3, 4)
+    with pytest.raises(ValueError):
+        da.split(d3, 3, axis=1)
+    with pytest.raises(ValueError):
+        da.split(d3, 3, axis=2)
+
+    # When an int argument is == 0
+    with pytest.raises(ZeroDivisionError):
+        da.split(d3, 0)
+
+
+def test_hsplit():
+    d0 = da.random.randint(10, size=(1,), chunks=(1,))
+    n1 = np.random.randint(10, size=(10,))
+    d1 = da.from_array(n1, chunks=(3,))
+    n2 = np.random.randint(10, size=(10,) * 2)
+    d2 = da.from_array(n2, chunks=(3,) * 2)
+    n3 = np.random.randint(10, size=(10,) * 3)
+    d3 = da.from_array(n3, chunks=(3,) * 3)
+
+    assert_eq_iter(np.hsplit(n1, 1), da.hsplit(d1, 1))
+    assert_eq_iter(np.hsplit(n2, 2), da.hsplit(d2, 2))
+    assert_eq_iter(np.hsplit(n3, 5), da.hsplit(d3, 5))
+
+    assert_eq_iter(np.hsplit(n1, [2, 3, 5, 10]), da.hsplit(d1, [2, 3, 5, 10]))
+    assert_eq_iter(np.hsplit(n2, (3, 4) * 4), da.hsplit(d2, (3, 4) * 4))
+    assert_eq_iter(
+        np.hsplit(n3, np.array([-2, -5, -6])),
+        da.hsplit(d3, np.array([-2, -5, -6])),
+    )
+
+    # When an int argument is < 0
+    with pytest.raises(ValueError):
+        da.hsplit(d3, -3)
+
+    # When arbitary types are passed (because lots of type forcing is going on)
+    with pytest.raises(TypeError):
+        da.hsplit(d3, "3")
+    with pytest.raises(TypeError):
+        da.hsplit(d3, None)
+
+    # When input results in uneven splits
+    with pytest.raises(ValueError):
+        da.hsplit(d1, 4)
+    with pytest.raises(ValueError):
+        da.hsplit(d2, 3)
+    with pytest.raises(ValueError):
+        da.hsplit(d3, 3)
+
+    # When an int argument is == 0
+    with pytest.raises(ZeroDivisionError):
+        da.hsplit(d3, 0)
+
+    # When dim too small
+    with pytest.raises(ValueError):
+        da.hsplit(d0, 1)
+
+
+def test_vsplit():
+    d0 = da.random.randint(10, size=(1,), chunks=(1))
+    d1 = da.random.randint(10, size=(10,), chunks=(3,))
+    n2 = np.random.randint(10, size=(10,) * 2)
+    d2 = da.from_array(n2, chunks=(3,) * 2)
+    n3 = np.random.randint(10, size=(10,) * 3)
+    d3 = da.from_array(n3, chunks=(3,) * 3)
+
+    assert_eq_iter(np.vsplit(n2, 1), da.vsplit(d2, 1))
+    assert_eq_iter(np.vsplit(n3, 2), da.vsplit(d3, 2))
+    assert_eq_iter(np.vsplit(n2, 5), da.vsplit(d2, 5))
+
+    assert_eq_iter(np.vsplit(n2, [2, 3, 5, 10]), da.vsplit(d2, [2, 3, 5, 10]))
+    assert_eq_iter(np.vsplit(n2, (3, 4) * 4), da.vsplit(d2, (3, 4) * 4))
+    assert_eq_iter(
+        np.vsplit(n3, np.array([-2, -5, -6])),
+        da.vsplit(d3, np.array([-2, -5, -6])),
+    )
+
+    # When an int argument is < 0
+    with pytest.raises(ValueError):
+        da.vsplit(d3, -3)
+
+    # When arbitary types are passed (because lots of type forcing is going on)
+    with pytest.raises(TypeError):
+        da.vsplit(d3, "3")
+    with pytest.raises(TypeError):
+        da.vsplit(d3, None)
+
+    # When input results in uneven splits
+    with pytest.raises(ValueError):
+        da.vsplit(d1, 4)
+    with pytest.raises(ValueError):
+        da.vsplit(d2, 3)
+    with pytest.raises(ValueError):
+        da.vsplit(d3, 3)
+
+    # When an int argument is == 0
+    with pytest.raises(ZeroDivisionError):
+        da.vsplit(d3, 0)
+
+    # When dim is too small
+    with pytest.raises(ValueError):
+        da.vsplit(d0, 1)
+        da.vsplit(d1, 1)
+
+
+def test_dsplit():
+    d0 = da.random.randint(10, size=(1,), chunks=(1))
+    d1 = da.random.randint(10, size=(10,), chunks=(3,))
+    d2 = da.random.randint(10, size=(10,) * 2, chunks=(3,) * 2)
+    n3 = np.random.randint(10, size=(10, 10, 10))
+    d3 = da.from_array(n3, chunks=(3, 3, 3))
+
+    assert_eq_iter(np.dsplit(n3, 1), da.dsplit(d3, 1))
+    assert_eq_iter(np.dsplit(n3, 2), da.dsplit(d3, 2))
+    assert_eq_iter(np.dsplit(n3, 5), da.dsplit(d3, 5))
+
+    assert_eq_iter(np.dsplit(n3, [2, 3, 5, 10]), da.dsplit(d3, [2, 3, 5, 10]))
+    assert_eq_iter(np.dsplit(n3, (3, 4) * 4), da.dsplit(d3, (3, 4) * 4))
+    assert_eq_iter(
+        np.dsplit(n3, np.array([-2, -5, -6])),
+        da.dsplit(d3, np.array([-2, -5, -6])),
+    )
+
+    # When an int argument is < 0
+    with pytest.raises(ValueError):
+        da.dsplit(d3, -3)
+
+    # When arbitary types are passed (because lots of type forcing is going on)
+    with pytest.raises(TypeError):
+        da.dsplit(d3, "3")
+    with pytest.raises(TypeError):
+        da.dsplit(d3, None)
+
+    # When input results in uneven splits
+    with pytest.raises(ValueError):
+        da.dsplit(d1, 4)
+    with pytest.raises(ValueError):
+        da.dsplit(d2, 3)
+    with pytest.raises(ValueError):
+        da.dsplit(d3, 3)
+
+    # When an int argument is == 0
+    with pytest.raises(ZeroDivisionError):
+        da.dsplit(d3, 0)
+    # When dim is too small
+    with pytest.raises(ValueError):
+        da.dsplit(d0, 1)
+        da.dsplit(d1, 1)
+        da.dsplit(d2, 1)
 
 
 def test_insert():

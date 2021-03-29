@@ -352,6 +352,31 @@ def assert_eq(
     return True
 
 
+def assert_eq_iter(a, b):
+    """
+    For use on iterators containing ndarrays and dask.Arrays
+
+    function to check if two iterables are equal in all respects
+    except that in locations where `a` contains a ndarray
+    `b` contains an equal Dask.core.Array instead.
+    """
+    assert len(a) == len(b)
+    for x, y in zip(a, b):
+        if isinstance(x, np.ndarray):
+            assert isinstance(y, Array)
+            assert_eq(x, y)
+        elif type(x) is type(y):
+            try:
+                if x == y:
+                    continue
+            except ValueError:
+                pass
+            assert_eq_iter(x, y)
+        else:
+            return False
+    return True
+
+
 def safe_wraps(wrapped, assigned=functools.WRAPPER_ASSIGNMENTS):
     """Like functools.wraps, but safe to use even if wrapped is not a function.
 
