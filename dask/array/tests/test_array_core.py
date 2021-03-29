@@ -3674,7 +3674,7 @@ def test_setitem_extended_API_1d():
         ],
     ],
 )
-def test_setitem_extended_API_2d_01(index, value):
+def test_setitem_extended_API_2d(index, value):
     # 2-d array
     x = np.ma.arange(60).reshape((6, 10))
     dx = da.from_array(x, chunks=(2, 3))
@@ -3683,7 +3683,7 @@ def test_setitem_extended_API_2d_01(index, value):
     assert_eq(x, dx.compute())
 
 
-def test_setitem_extended_API_2d_02():
+def test_setitem_extended_API_2d_rhs_func_of_lhs():
     # Cases:
     # * RHS and/or indices are a function of the LHS
     # * Indices have unknown chunk sizes
