@@ -2691,8 +2691,6 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
     """
-    if dtype and not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
     if chunks is None:
         raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
     if isinstance(chunks, list):
@@ -2738,6 +2736,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     chunks = tuple("auto" if isinstance(c, str) and c != "auto" else c for c in chunks)
 
     if any(c == "auto" for c in chunks):
+        if dtype and not isinstance(getattr(dtype, "itemsize", None), int):
+            dtype = np.dtype(dtype)
         chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
 
     if shape is not None:
@@ -2833,7 +2833,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     if dtype is None:
         raise TypeError("DType must be known for auto-chunking")
 
-    if dtype.hasobject:
+    if getattr(dtype, "hasobject", False):
         raise NotImplementedError(
             "Can not use auto rechunking with object dtype. "
             "We are unable to estimate the size in bytes of object data"
@@ -4287,7 +4287,7 @@ def elemwise(op, *args, **kwargs):
         # them just like other arrays, and if necessary cast the result of op
         # to match.
         vals = [
-            np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
+            meta_from_array(a, ndim=max(1, a.ndim))
             if not is_scalar_for_elemwise(a)
             else a
             for a in args

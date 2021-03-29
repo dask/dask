@@ -73,3 +73,19 @@ def test_meta_from_array_type_inputs():
     assert_eq(x, x)
 
     assert da.from_array(np.ones(5).astype(np.int32), meta=np.ndarray).dtype == np.int32
+
+
+def test_meta_from_pandas_array():
+    pd = pytest.importorskip(
+        "pandas", minversion="1.1.0", reason="Extension dtypes require pandas > 1.1.0"
+    )
+    x = pd.array([1, pd.NA, 3], dtype=pd.Int32Dtype())
+    meta = meta_from_array(x)
+    assert type(meta) is type(x)
+    assert meta.dtype == x.dtype
+    assert meta.ndim == x.ndim
+
+    with pytest.raises(
+        TypeError, match=r"Reshaping a 1D array of type .* to 2D failed"
+    ):
+        meta_from_array(x, ndim=2)

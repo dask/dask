@@ -3872,6 +3872,18 @@ def test_normalize_chunks_nan():
     assert "auto" in str(info.value)
 
 
+def test_normalize_chunks_pandas_dtype():
+    pd = pytest.importorskip(
+        "pandas", minversion="1.1.0", reason="Extension dtypes require pandas > 1.1.0"
+    )
+    assert normalize_chunks(3, (4, 6)) == ((3, 1), (3, 3))
+    assert normalize_chunks(3, (4, 6), dtype=pd.CategoricalDtype()) == ((3, 1), (3, 3))
+    assert normalize_chunks(("auto", None), (5, 5), dtype=pd.CategoricalDtype()) == (
+        (5,),
+        (5,),
+    )
+
+
 def test_from_zarr_unique_name():
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
