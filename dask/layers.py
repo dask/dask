@@ -31,16 +31,6 @@ class CallableLazyImport:
         return import_term(self.function_path)(*args, **kwargs)
 
 
-class SerializedFunction:
-    def __init__(self, func):
-        self.func = func
-
-    def __call__(self, *args, **kwargs):
-        from distributed.worker import loads_function
-
-        return loads_function(self.func)(*args, **kwargs)
-
-
 #
 ##
 ###  Array Layers & Utilities

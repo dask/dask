@@ -342,10 +342,10 @@ class Blockwise(Layer):
     def __dask_distributed_pack__(
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
-        from distributed.worker import dumps_function
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
         from distributed.protocol.serialize import import_allowed_module
+        from distributed.protocol import to_serialize
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
@@ -363,7 +363,7 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        func = dumps_function(dsk[0])
+        func = to_serialize(dsk[0])
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -417,8 +417,6 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from .layers import SerializedFunction
-
         # Make sure we convert list items back from tuples in `indices`.
         # The msgpack serialization will have converted lists into
         # tuples, and tuples may be stringified during graph
@@ -429,7 +427,7 @@ class Blockwise(Layer):
         ]
 
         layer_dsk, layer_deps = make_blockwise_graph(
-            SerializedFunction(state["func"]),
+            state["func"],
             state["output"],
             state["output_indices"],
             *indices,
@@ -824,7 +822,7 @@ def make_blockwise_graph(
 
     if deserializing:
         from distributed.protocol.serialize import import_allowed_module
-        from distributed.protocol import to_serialize
+        from distributed.protocol import Serialized, serialize
     else:
         from importlib import import_module as import_allowed_module
 
@@ -924,7 +922,7 @@ def make_blockwise_graph(
         else:
             args.insert(0, func)
             val = tuple(args)
-        dsk[out_key] = to_serialize(val) if deserializing else val
+        dsk[out_key] = Serialized(*serialize(val)) if deserializing else val
         if return_key_deps:
             key_deps[out_key] = deps
 
