@@ -3779,9 +3779,13 @@ def test_values():
     ddf = dd.from_pandas(df, 2)
 
     assert_eq(df.values, ddf.values)
+    assert isinstance(ddf.values._meta, type(df.values))
     assert_eq(df.x.values, ddf.x.values)
+    assert isinstance(ddf.x.values._meta, type(df.x.values))
     assert_eq(df.y.values, ddf.y.values)
+    assert isinstance(ddf.y.values._meta, type(df.y.values))
     assert_eq(df.index.values, ddf.index.values)
+    assert isinstance(ddf.index.values._meta, type(df.index.values))
 
 
 def test_copy():
