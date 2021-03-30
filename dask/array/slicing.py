@@ -2129,31 +2129,26 @@ def setitem(x, v, indices):
     array([[  0,   1,   2,   3],
            [-99, -99, -99, -99]])
     >>> x
-    array([[ 0,  1,  2,  3],
-           [ 4,  5,  6,  7]])
-
+    array([[0, 1, 2, 3],
+           [4, 5, 6, 7]])
     >>> setitem(x, np.array([-88, -99]), [slice(None), np.array([1, 3])])
     array([[  0, -88,   2, -99],
            [  4, -88,   6, -99]])
-
     >>> setitem(x, -x, [slice(None)])
-    array([[  0,  -1,  -2,  -3],
-           [ -4,  -5,  -6,  -7]])
+    array([[ 0, -1, -2, -3],
+           [-4, -5, -6, -7]])
     >>> x
-    array([[ 0,  1,  2,  3],
-           [ 4,  5,  6,  7]])
-
+    array([[0, 1, 2, 3],
+           [4, 5, 6, 7]])
     >>> setitem(x, np.array([-88, -99]), [slice(None), np.array([4, 4, 3, 4, 1, 4])])
     array([[  0, -99,   2, -88],
            [  4, -99,   6, -88]])
-
     >>> value = np.where(x < 0)[0]
     >>> value.size
     0
     >>> y = setitem(x, value, [Ellipsis])
     >>> y is x
     True
-
     """
     if not v.size:
         return x
