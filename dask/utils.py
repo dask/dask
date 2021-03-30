@@ -1386,34 +1386,35 @@ def format_time_ago(n: datetime) -> str:
     return "Just now"
 
 
-def format_bytes(n):
+def format_bytes(n: int) -> str:
     """Format bytes as text
 
     >>> from dask.utils import format_bytes
     >>> format_bytes(1)
     '1 B'
     >>> format_bytes(1234)
-    '1.23 kB'
+    '1.21 kiB'
     >>> format_bytes(12345678)
-    '12.35 MB'
+    '11.77 MiB'
     >>> format_bytes(1234567890)
-    '1.23 GB'
+    '1.15 GiB'
     >>> format_bytes(1234567890000)
-    '1.23 TB'
+    '1.12 TiB'
     >>> format_bytes(1234567890000000)
-    '1.23 PB'
+    '1.10 PiB'
+
+    For all values < 2**60, the output is always <= 10 characters.
     """
-    if n > 1e15:
-        return "%0.2f PB" % (n / 1e15)
-    if n > 1e12:
-        return "%0.2f TB" % (n / 1e12)
-    if n > 1e9:
-        return "%0.2f GB" % (n / 1e9)
-    if n > 1e6:
-        return "%0.2f MB" % (n / 1e6)
-    if n > 1e3:
-        return "%0.2f kB" % (n / 1000)
-    return "%d B" % n
+    for prefix, k in (
+        ("Pi", 2 ** 50),
+        ("Ti", 2 ** 40),
+        ("Gi", 2 ** 30),
+        ("Mi", 2 ** 20),
+        ("ki", 2 ** 10),
+    ):
+        if n >= k * 0.9:
+            return f"{n / k:.2f} {prefix}B"
+    return f"{n} B"
 
 
 timedelta_sizes = {
