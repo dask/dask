@@ -1107,7 +1107,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         N, D = sample.shape
         # rechunk if necessary
         if sample.chunksize[1] != D:
-            sample = sample.rechunk((sample.chunksize[1], D))
+            sample = sample.rechunk((sample.chunksize[0], D))
 
     # Require only Array or Delayed objects for bins, range, and weights.
     for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
