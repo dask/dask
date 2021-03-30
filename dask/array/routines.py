@@ -1092,6 +1092,19 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     else:
         raise TypeError("Cannot specify both 'normed' and 'density'")
 
+    # check if any dask collections (dc) were passed to bins= or
+    # range= these are unsupported.
+    dc_bins = is_dask_collection(bins)
+    if isinstance(bins, (list, tuple)):
+        dc_bins = dc_bins or any([is_dask_collection(b) for b in bins])
+    dc_range = (
+        any([is_dask_collection(r) for r in range]) if range is not None else False
+    )
+    if dc_bins or dc_range:
+        raise NotImplementedError(
+            "Passing dask collections to bins=... or range=... is not supported."
+        )
+
     # generate token and name for task
     token = tokenize(sample, bins, range, weights, density)
     name = f"histogramdd-sum-{token}"
@@ -1128,17 +1141,13 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
             "and chunk structure along the first dimension."
         )
 
-    # if bins is a list, tuple, or array_like then make sure the
-    # length is the same as the number dimensions.
-    if isinstance(bins, (list, tuple)) or is_arraylike(bins):
+    # if bins is a list, tuple, then make sure the length is the same
+    # as the number dimensions.
+    if isinstance(bins, (list, tuple)):
         if len(bins) != D:
             raise ValueError(
                 "The dimension of bins must be equal to the dimension of the sample."
             )
-    else:
-        # if not then bins must be a single scalar (possibly delayed),
-        # we expand it to the total number of dimensions.
-        bins = (bins,) * D
 
     # if range is defined, check that it's the right length and also a
     # sequence of pairs.
@@ -1150,32 +1159,14 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         if not all(len(r) == 2 for r in range):
             raise ValueError("range argument should be a sequence of pairs")
 
-    dask_coll_in_bins = any([is_dask_collection(b) for b in bins])
-    dask_coll_in_range = (
-        any([is_dask_collection(r) for r in range]) if range is not None else False
-    )
-
-    # No dask collections passed to bins=... or range=...
-    if not dask_coll_in_bins and not dask_coll_in_range:
-        # We have integer bins and tuple ranges
-        if all(isinstance(b, int) for b in bins) and all(len(r) == 2 for r in range):
-            edges = [np.linspace(r[0], r[1], b + 1) for b, r in zip(bins, range)]
-        # We have arrays of bin edges
-        else:
-            edges = [np.asarray(b) for b in bins]
-        # at this point we've converted bins + range combinations to
-        # edge arrays, so we can null the range argument later passed
-        # to the callable in the graph (_block_histogramdd).
-        range = (None,) * D
+    # we will return the edges to mimic the NumPy API (we also use the
+    # edges later as a way to calculate the total number of bins).
+    if isinstance(bins, int):
+        bins = (bins,) * D
+    if all(isinstance(b, int) for b in bins) and all(len(r) == 2 for r in range):
+        edges = [np.linspace(r[0], r[1], b + 1) for b, r in zip(bins, range)]
     else:
-        raise NotImplementedError(
-            "Passing dask collections to bins=... or range=... is not supported."
-        )
-
-    # This call is for potential compatibility with delayed bin
-    # configurations. For non-delayed bin confurations this returns
-    # the concrete objects and deps is an empty tuple.
-    (bins_ref, ranges_ref), deps = unpack_collections([edges, range])
+        edges = [np.asarray(b) for b in bins]
 
     # With dsk below, we will construct a (D + 1) dimensional array
     # stacked for each chunk. For example, if the histogram is going
@@ -1189,7 +1180,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
     if weights is None:
         dsk = {
-            (name, i, *column_zeros): (_block_histogramdd, k, bins_ref, ranges_ref)
+            (name, i, *column_zeros): (_block_histogramdd, k, bins, range)
             for i, k in enumerate(flatten(sample.__dask_keys__()))
         }
         dtype = np.histogramdd([])[0].dtype
@@ -1197,12 +1188,12 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         a_keys = flatten(sample.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
-            (name, i, *column_zeros): (_block_histogramdd, k, bins_ref, ranges_ref, w)
+            (name, i, *column_zeros): (_block_histogramdd, k, bins, range, w)
             for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
 
-    deps = (sample,) + deps
+    deps = (sample,)
     if weights is not None:
         deps += (weights,)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
