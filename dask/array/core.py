@@ -1642,7 +1642,7 @@ class Array(DaskMethodsMixin):
         return self._scalarfunc(complex)
 
     def __index__(self):
-        return self._scalarfunc(int)
+        return self._scalarfunc(operator.index)
 
     def __setitem__(self, key, value):
         if value is np.ma.masked:
