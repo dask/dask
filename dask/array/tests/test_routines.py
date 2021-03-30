@@ -858,6 +858,19 @@ def test_histogramdd_weighted():
     assert_eq(a1, a2)
 
 
+def test_histogramdd_trigger_rechunk():
+    n = 600
+    x = da.random.uniform(0, 1, size=(n,), chunks=200)
+    y = da.random.uniform(0, 1, size=(n,), chunks=200)
+    bins = (6, 7)
+    ranges = ((0, 1),) * len(bins)
+    (a1, b1) = da.histogramdd([x, y], bins=bins, range=ranges)
+    (a2, b2) = np.histogramdd([x, y], bins=bins, range=ranges)
+    (a3, b3) = np.histogramdd([x.compute(), y.compute()], bins=bins, range=ranges)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+
+
 def test_histogramdd_density():
     n1, n2 = 800, 3
     x = da.random.uniform(0, 1, size=(n1, n2), chunks=(200, 3))
