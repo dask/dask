@@ -2946,7 +2946,7 @@ def test_memmap():
 
                 np.save(fn_2, target)
 
-                assert_eq(np.load(fn_2, mmap_mode="r"), x)
+                assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
             finally:
                 target._mmap.close()
 
