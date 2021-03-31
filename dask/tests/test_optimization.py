@@ -5,19 +5,19 @@ from functools import partial
 import pytest
 
 import dask
-from dask.utils_test import add, inc
 from dask.core import get_dependencies
 from dask.local import get_sync
 from dask.optimization import (
+    SubgraphCallable,
     cull,
+    functions_of,
     fuse,
+    fuse_linear,
     inline,
     inline_functions,
-    functions_of,
-    fuse_linear,
-    SubgraphCallable,
 )
-from dask.utils import partial_by_order, apply
+from dask.utils import apply, partial_by_order
+from dask.utils_test import add, inc
 
 
 def double(x):

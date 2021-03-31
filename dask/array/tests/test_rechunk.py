@@ -1,17 +1,26 @@
-from itertools import product
 import warnings
+from itertools import product
 
 import pytest
 
 np = pytest.importorskip("numpy")
 
 import dask
-from dask.utils import funcname
-from dask.array.utils import assert_eq
-from dask.array.rechunk import intersect_chunks, rechunk, normalize_chunks
-from dask.array.rechunk import cumdims_label, _breakpoints, _intersect_1d, _old_to_new
-from dask.array.rechunk import plan_rechunk, divide_to_width, merge_to_number
 import dask.array as da
+from dask.array.rechunk import (
+    _breakpoints,
+    _intersect_1d,
+    _old_to_new,
+    cumdims_label,
+    divide_to_width,
+    intersect_chunks,
+    merge_to_number,
+    normalize_chunks,
+    plan_rechunk,
+    rechunk,
+)
+from dask.array.utils import assert_eq
+from dask.utils import funcname
 
 
 def test_rechunk_internals_1():

@@ -1,5 +1,6 @@
-import dask
 import pytest
+
+import dask
 
 
 def test_mimesis():

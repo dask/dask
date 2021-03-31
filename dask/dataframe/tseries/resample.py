@@ -1,12 +1,12 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
-from ..core import DataFrame, Series
 from ...base import tokenize
-from ...utils import derived_from
 from ...highlevelgraph import HighLevelGraph
+from ...utils import derived_from
 from .. import methods
+from ..core import DataFrame, Series
 
 
 def getnanos(rule):

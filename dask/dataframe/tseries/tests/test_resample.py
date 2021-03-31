@@ -3,8 +3,8 @@ from itertools import product
 import pandas as pd
 import pytest
 
-from dask.dataframe.utils import assert_eq
 import dask.dataframe as dd
+from dask.dataframe.utils import assert_eq
 
 CHECK_FREQ = {}
 if dd._compat.PANDAS_GT_110:
@@ -170,8 +170,9 @@ def test_unknown_divisions_error():
 
 
 def test_resample_index_name():
-    import numpy as np
     from datetime import datetime, timedelta
+
+    import numpy as np
 
     date_today = datetime.now()
     days = pd.date_range(date_today, date_today + timedelta(20), freq="D")

@@ -1,13 +1,12 @@
-import numpy as np
 import re
 
+import numpy as np
 from tlz import concat, merge, unique
 
-from .core import Array, asarray, blockwise, getitem, apply_infer_dtype
-from .utils import meta_from_array
-from ..highlevelgraph import HighLevelGraph
 from ..core import flatten
-
+from ..highlevelgraph import HighLevelGraph
+from .core import Array, apply_infer_dtype, asarray, blockwise, getitem
+from .utils import meta_from_array
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:

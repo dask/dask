@@ -1,30 +1,30 @@
-from functools import partial
-from collections import defaultdict
-from datetime import datetime
 import json
 import warnings
+from collections import defaultdict
+from datetime import datetime
 from distutils.version import LooseVersion
+from functools import partial
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
-from ....utils import getargspec, natural_sort_key
-from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
-from ...utils import clear_known_categories
-from ....core import flatten
+
 from dask import delayed
 
+from ....core import flatten
+from ....utils import getargspec, natural_sort_key
+from ...utils import clear_known_categories
+from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from .core import create_metadata_file
 from .utils import (
-    _parse_pandas_metadata,
-    _normalize_index_columns,
     Engine,
     _flatten_filters,
+    _normalize_index_columns,
+    _parse_pandas_metadata,
     _row_groups_to_parts,
     _sort_and_analyze_paths,
 )
-
 
 # Check PyArrow version for feature support
 preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")

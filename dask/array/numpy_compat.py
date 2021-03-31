@@ -1,7 +1,7 @@
+import warnings
 from distutils.version import LooseVersion
 
 import numpy as np
-import warnings
 
 from ..utils import derived_from
 

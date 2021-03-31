@@ -1,12 +1,13 @@
+import sys
+
 import numpy as np
 import pandas as pd
-
-from .core import Series, DataFrame, map_partitions, apply_concat_apply
-from . import methods
-from .utils import is_scalar, has_known_categories
-from ..utils import M
-import sys
 from pandas.api.types import is_list_like
+
+from ..utils import M
+from . import methods
+from .core import DataFrame, Series, apply_concat_apply, map_partitions
+from .utils import has_known_categories, is_scalar
 
 ###############################################################
 # Dummies

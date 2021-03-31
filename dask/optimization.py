@@ -4,13 +4,13 @@ from enum import Enum
 
 from . import config, core, utils
 from .core import (
-    istask,
+    flatten,
     get_dependencies,
+    ishashable,
+    istask,
+    reverse_dict,
     subs,
     toposort,
-    flatten,
-    reverse_dict,
-    ishashable,
 )
 from .utils_test import add, inc  # noqa: F401
 

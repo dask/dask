@@ -1,10 +1,10 @@
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
-from dask.array import from_array, Array
+from dask.array import Array, from_array
+from dask.dataframe import Series, from_pandas, to_numeric
 from dask.delayed import Delayed
-from dask.dataframe import from_pandas, Series, to_numeric
 
 
 @pytest.mark.parametrize("arg", ["5", 5, "5 "])

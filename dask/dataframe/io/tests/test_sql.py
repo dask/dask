@@ -1,5 +1,5 @@
-from contextlib import contextmanager
 import io
+from contextlib import contextmanager
 
 import pytest
 
@@ -38,7 +38,7 @@ def db():
 
 
 def test_empty(db):
-    from sqlalchemy import create_engine, MetaData, Table, Column, Integer
+    from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 
     with tmpfile() as f:
         uri = "sqlite:///%s" % f
@@ -77,7 +77,7 @@ def test_passing_engine_as_uri_raises_helpful_error(db):
     reason="Requires a postgres server. Sqlite does not support multiple schemas."
 )
 def test_empty_other_schema():
-    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, event, DDL
+    from sqlalchemy import DDL, Column, Integer, MetaData, Table, create_engine, event
 
     # Database configurations.
     pg_host = "localhost"

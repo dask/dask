@@ -5,14 +5,14 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from tlz import partition
 
-from .utils import (
-    is_series_like,
-    is_index_like,
-    is_dataframe_like,
-    hash_object_dispatch,
-    group_split_dispatch,
-)
 from ..utils import Dispatch
+from .utils import (
+    group_split_dispatch,
+    hash_object_dispatch,
+    is_dataframe_like,
+    is_index_like,
+    is_series_like,
+)
 
 # ---------------------------------
 # indexing

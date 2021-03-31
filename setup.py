@@ -2,7 +2,9 @@
 
 import sys
 from os.path import exists
+
 from setuptools import setup
+
 import versioneer
 
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If

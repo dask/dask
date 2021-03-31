@@ -6,9 +6,8 @@ import numpy as np
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
 from dask.dataframe._compat import PANDAS_GT_120
-
+from dask.dataframe.utils import assert_eq
 
 _BASE_UFUNCS = [
     "conj",

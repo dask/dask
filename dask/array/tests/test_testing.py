@@ -1,7 +1,7 @@
 import sys
 
-import pytest
 import numpy as np
+import pytest
 
 import dask.array as da
 from dask.array.utils import assert_eq

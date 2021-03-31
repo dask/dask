@@ -1,18 +1,19 @@
 from collections import defaultdict
-import pandas as pd
-from tlz import partition_all
 from numbers import Integral
 
-from ..base import tokenize, compute_as_if_collection
+import pandas as pd
+from tlz import partition_all
+
+from ..base import compute_as_if_collection, tokenize
+from ..utils import Dispatch
+from . import methods
 from .accessor import Accessor
 from .utils import (
-    has_known_categories,
     clear_known_categories,
-    is_scalar,
+    has_known_categories,
     is_categorical_dtype,
+    is_scalar,
 )
-from . import methods
-from ..utils import Dispatch
 
 
 def _categorize_block(df, categories, index):

@@ -1,5 +1,4 @@
 from . import config, datasets
-
 from .core import istask
 from .local import get_sync as get
 
@@ -9,12 +8,12 @@ except ImportError:
     pass
 try:
     from .base import (
-        visualize,
         annotate,
         compute,
-        persist,
-        optimize,
         is_dask_collection,
+        optimize,
+        persist,
+        visualize,
     )
 except ImportError:
     pass

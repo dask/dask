@@ -1,20 +1,19 @@
-from distutils.version import LooseVersion
 import math
+import warnings
+from distutils.version import LooseVersion
 
 import tlz as toolz
-import warnings
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
-from .utils import _sort_and_analyze_paths
-from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....delayed import Delayed
-from ....utils import import_required, natural_sort_key, parse_bytes, apply
+from ....highlevelgraph import HighLevelGraph, Layer
+from ....utils import apply, import_required, natural_sort_key, parse_bytes
+from ...core import DataFrame, new_dd_object
 from ...methods import concat
-from ....highlevelgraph import Layer, HighLevelGraph
-
+from .utils import _sort_and_analyze_paths
 
 try:
     import snappy

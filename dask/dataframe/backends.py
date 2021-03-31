@@ -1,7 +1,6 @@
+from .core import get_parallel_type, make_meta, meta_nonempty
 from .methods import concat_dispatch
-from .core import get_parallel_type, meta_nonempty, make_meta
-from .utils import hash_object_dispatch, group_split_dispatch
-
+from .utils import group_split_dispatch, hash_object_dispatch
 
 ######################################
 # cuDF: Pandas Dataframes on the GPU #

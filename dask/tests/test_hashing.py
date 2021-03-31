@@ -1,7 +1,6 @@
 import pytest
 
-from dask.hashing import hashers, hash_buffer, hash_buffer_hex
-
+from dask.hashing import hash_buffer, hash_buffer_hex, hashers
 
 np = pytest.importorskip("numpy")
 

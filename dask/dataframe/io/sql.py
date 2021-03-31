@@ -3,9 +3,10 @@ import pandas as pd
 
 import dask
 from dask.delayed import tokenize
-from .io import from_delayed, from_pandas
+
 from ... import delayed
 from .. import methods
+from .io import from_delayed, from_pandas
 
 
 def read_sql_table(

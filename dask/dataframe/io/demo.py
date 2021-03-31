@@ -1,10 +1,10 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 
-from ..core import tokenize, DataFrame
-from .io import from_delayed
 from ...delayed import delayed
 from ...utils import random_state_data
+from ..core import DataFrame, tokenize
+from .io import from_delayed
 
 __all__ = ["make_timeseries"]
 

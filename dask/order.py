@@ -77,7 +77,8 @@ Work towards *small goals* with *big steps*.
 """
 from collections import defaultdict
 from math import log
-from .core import get_dependencies, reverse_dict, get_deps, getcycle  # noqa: F401
+
+from .core import get_dependencies, get_deps, getcycle, reverse_dict  # noqa: F401
 from .utils_test import add, inc  # noqa: F401
 
 

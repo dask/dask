@@ -1,30 +1,30 @@
 from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
-from operator import add, getitem
 from numbers import Integral, Number
+from operator import add, getitem
 
 import numpy as np
 from tlz import accumulate, sliding_window
 
-from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 from ..utils import derived_from
 from . import chunk
 from .core import (
     Array,
     asarray,
+    block,
+    broadcast_arrays,
+    broadcast_to,
+    cached_cumsum,
+    concatenate,
     normalize_chunks,
     stack,
-    concatenate,
-    block,
-    broadcast_to,
-    broadcast_arrays,
-    cached_cumsum,
 )
-from .ufunc import rint, greater_equal
-from .wrap import empty, ones, zeros, full
+from .ufunc import greater_equal, rint
 from .utils import AxisError, meta_from_array, zeros_like_safe
+from .wrap import empty, full, ones, zeros
 
 
 def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):

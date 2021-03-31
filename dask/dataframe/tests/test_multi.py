@@ -1,29 +1,28 @@
 import warnings
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
+import pytest
 
+import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
-    align_partitions,
-    merge_indexed_dataframes,
-    hash_join,
-    concat_indexed_dataframes,
     _maybe_align_partitions,
+    align_partitions,
+    concat_indexed_dataframes,
+    hash_join,
+    merge_indexed_dataframes,
 )
 from dask.dataframe.utils import (
-    assert_eq,
     assert_divisions,
-    make_meta,
-    has_known_categories,
+    assert_eq,
     clear_known_categories,
+    has_known_categories,
+    make_meta,
 )
-
-import pytest
 
 
 def test_align_partitions():

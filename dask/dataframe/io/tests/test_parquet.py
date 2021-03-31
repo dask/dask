@@ -1,5 +1,5 @@
-import math
 import glob
+import math
 import os
 import sys
 import warnings
@@ -11,19 +11,14 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe._compat import (
-    PANDAS_GT_110,
-    PANDAS_GT_121,
-    PANDAS_GT_130,
-)
-from dask.dataframe.utils import assert_eq
+import dask.multiprocessing
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
+from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
-from dask.dataframe.io.parquet.core import ParquetSubgraph
+from dask.dataframe.utils import assert_eq
 from dask.utils import natural_sort_key, parse_bytes
-
 
 try:
     import fastparquet

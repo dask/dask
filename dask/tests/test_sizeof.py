@@ -3,7 +3,7 @@ from array import array
 
 import pytest
 
-from dask.sizeof import sizeof, getsizeof
+from dask.sizeof import getsizeof, sizeof
 from dask.utils import funcname
 
 

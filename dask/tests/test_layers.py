@@ -4,7 +4,7 @@ distributed = pytest.importorskip("distributed")
 
 import sys
 
-from distributed import SchedulerPlugin, Client
+from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
 

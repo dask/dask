@@ -1,11 +1,12 @@
 import os
-import pytest
 import subprocess
 import sys
 import time
-import fsspec
-from fsspec.core import open_files
 from distutils.version import LooseVersion
+
+import fsspec
+import pytest
+from fsspec.core import open_files
 
 import dask.bag as db
 from dask.utils import tmpdir

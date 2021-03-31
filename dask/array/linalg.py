@@ -5,14 +5,14 @@ import numpy as np
 import tlz as toolz
 
 from ..base import tokenize, wait
-from ..delayed import delayed
 from ..blockwise import blockwise
+from ..delayed import delayed
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, apply
-from .core import dotmany, Array, concatenate, from_delayed
+from ..utils import apply, derived_from
+from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
-from .utils import meta_from_array, svd_flip, ones_like_safe
+from .utils import meta_from_array, ones_like_safe, svd_flip
 
 
 def _cumsum_blocks(it):

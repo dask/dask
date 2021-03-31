@@ -17,14 +17,14 @@ import tlz as toolz
 
 from .base import clone_key, get_name_from_key
 from .compatibility import prod
-from .core import reverse_dict, flatten, keys_in_tasks
+from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import (
+    apply,
     ensure_dict,
     homogeneous_deepmap,
-    apply,
     stringify,
     stringify_collection_keys,
 )
@@ -342,10 +342,10 @@ class Blockwise(Layer):
     def __dask_distributed_pack__(
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
-        from distributed.worker import dumps_function
+        from distributed.protocol.serialize import import_allowed_module
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
-        from distributed.protocol.serialize import import_allowed_module
+        from distributed.worker import dumps_function
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
@@ -821,8 +821,8 @@ def make_blockwise_graph(
         key_deps = {}
 
     if deserializing:
-        from distributed.worker import warn_dumps, dumps_function
         from distributed.protocol.serialize import import_allowed_module
+        from distributed.worker import dumps_function, warn_dumps
     else:
         from importlib import import_module as import_allowed_module
 

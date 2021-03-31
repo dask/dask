@@ -11,7 +11,6 @@ from dask.array.ufunc import da_frompyfunc
 from dask.array.utils import assert_eq
 from dask.base import tokenize
 
-
 DISCLAIMER = """
 This docstring was copied from numpy.{name}.
 

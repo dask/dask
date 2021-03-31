@@ -1,13 +1,12 @@
 from distutils.version import LooseVersion
 
+import numpy as np
 import pandas as pd
 import pytest
-import numpy as np
 
 import dask.dataframe as dd
-from dask.dataframe.utils import assert_eq
 from dask.dataframe._compat import PANDAS_GT_130
-
+from dask.dataframe.utils import assert_eq
 
 N = 40
 df = pd.DataFrame(

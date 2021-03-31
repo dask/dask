@@ -53,47 +53,46 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
-from functools import wraps, partial
-import warnings
 import math
 import pickle
+import warnings
+from functools import partial, wraps
 
-from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal, is_categorical_dtype, union_categoricals
+from pandas.api.types import is_categorical_dtype, is_dtype_equal, union_categoricals
+from tlz import first, merge_sorted, unique
 
-from ..base import tokenize, is_dask_collection
+from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..layers import BroadcastJoinLayer
-from ..utils import apply
+from ..utils import M, apply
+from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
-    _Frame,
     DataFrame,
-    Series,
-    map_partitions,
     Index,
+    Series,
+    _concat,
+    _Frame,
     _maybe_from_pandas,
-    new_dd_object,
     is_broadcastable,
+    map_partitions,
+    new_dd_object,
     prefix_reduction,
     suffix_reduction,
-    _concat,
 )
 from .io import from_pandas
-from . import methods
-from .shuffle import shuffle, rearrange_by_divisions, partitioning_index, shuffle_group
+from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
 from .utils import (
-    strip_unknown_categories,
-    is_series_like,
     asciitable,
-    is_dataframe_like,
-    make_meta,
-    hash_object_dispatch,
     group_split_dispatch,
+    hash_object_dispatch,
+    is_dataframe_like,
+    is_series_like,
+    make_meta,
+    strip_unknown_categories,
 )
-from ..utils import M
 
 
 def align_partitions(*dfs):

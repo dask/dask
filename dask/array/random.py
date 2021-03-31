@@ -6,18 +6,18 @@ from operator import getitem
 
 import numpy as np
 
+from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..utils import derived_from, ignoring, random_state_data, skip_doctest
 from .core import (
-    normalize_chunks,
     Array,
-    slices_from_chunks,
     asarray,
     broadcast_shapes,
     broadcast_to,
+    normalize_chunks,
+    slices_from_chunks,
 )
 from .creation import arange
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, derived_from, skip_doctest
 
 
 def doc_wraps(func):

@@ -9,10 +9,9 @@ try:
 except ImportError:
     scipy = None
 
+from ..utils import derived_from, skip_doctest
 from .core import concatenate as _concatenate
 from .creation import arange as _arange
-from ..utils import derived_from, skip_doctest
-
 
 chunk_error = (
     "Dask array only supports taking an FFT along an axis that \n"

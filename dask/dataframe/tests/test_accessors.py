@@ -2,7 +2,6 @@ import contextlib
 
 import pytest
 
-
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq

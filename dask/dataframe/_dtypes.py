@@ -1,4 +1,5 @@
 import pandas as pd
+
 from ._compat import PANDAS_GT_100
 from .extensions import make_array_nonempty, make_scalar
 

@@ -2,9 +2,10 @@ import pytest
 
 pytest.importorskip("numpy")
 
-from dask.array.wrap import ones
-import dask.array as da
 import numpy as np
+
+import dask.array as da
+from dask.array.wrap import ones
 
 
 def test_ones():

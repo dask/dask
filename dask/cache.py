@@ -1,7 +1,8 @@
-from .callbacks import Callback
-from timeit import default_timer
-from numbers import Number
 import sys
+from numbers import Number
+from timeit import default_timer
+
+from .callbacks import Callback
 
 overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
 

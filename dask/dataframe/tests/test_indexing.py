@@ -1,15 +1,12 @@
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 import pytest
 
 import dask
 import dask.dataframe as dd
-
-from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120
+from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.indexing import _coerce_loc_index
 from dask.dataframe.utils import assert_eq, make_meta
-
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),

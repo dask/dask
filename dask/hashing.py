@@ -1,7 +1,6 @@
 import binascii
 import hashlib
 
-
 hashers = []  # In decreasing performance order
 
 

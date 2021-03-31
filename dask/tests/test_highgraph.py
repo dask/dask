@@ -1,12 +1,12 @@
-from dask.blockwise import Blockwise, blockwise_token
 import os
 from collections.abc import Set
 
 import pytest
 
 import dask
+from dask.blockwise import Blockwise, blockwise_token
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer, Layer
 
 
 def test_visualize(tmpdir):

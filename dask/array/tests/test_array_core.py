@@ -4,54 +4,50 @@ import pytest
 
 np = pytest.importorskip("numpy")
 
+import operator
 import os
 import time
-from io import StringIO
-import operator
-from operator import add, sub, getitem
-from threading import Lock
 import warnings
+from io import StringIO
+from operator import add, getitem, sub
+from threading import Lock
 
-from tlz import merge, countby, concat
+from numpy import nancumprod, nancumsum
+from tlz import concat, countby, merge
 from tlz.curried import identity
 
 import dask
 import dask.array as da
 import dask.dataframe
-from dask.base import tokenize, compute_as_if_collection
-from dask.delayed import Delayed, delayed
-from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
-from dask.utils_test import inc, dec
-
 from dask.array.core import (
-    getem,
-    getter,
-    dotmany,
-    concatenate3,
     Array,
-    stack,
-    concatenate,
-    from_array,
+    blockdims_from_blockshape,
+    broadcast_chunks,
     broadcast_shapes,
     broadcast_to,
-    blockdims_from_blockshape,
-    store,
-    optimize,
-    from_func,
-    normalize_chunks,
-    broadcast_chunks,
-    from_delayed,
     common_blockdim,
+    concatenate,
+    concatenate3,
     concatenate_axes,
-)
-from dask.blockwise import (
-    make_blockwise_graph as top,
-    broadcast_dimensions,
-    optimize_blockwise,
+    dotmany,
+    from_array,
+    from_delayed,
+    from_func,
+    getem,
+    getter,
+    normalize_chunks,
+    optimize,
+    stack,
+    store,
 )
 from dask.array.utils import assert_eq, same_keys
-
-from numpy import nancumsum, nancumprod
+from dask.base import compute_as_if_collection, tokenize
+from dask.blockwise import broadcast_dimensions
+from dask.blockwise import make_blockwise_graph as top
+from dask.blockwise import optimize_blockwise
+from dask.delayed import Delayed, delayed
+from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
+from dask.utils_test import dec, inc
 
 
 def test_getem():
@@ -2791,7 +2787,7 @@ def test_point_slicing():
 
 
 def test_point_slicing_with_full_slice():
-    from dask.array.core import _vindex_transpose, _get_axis
+    from dask.array.core import _get_axis, _vindex_transpose
 
     x = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
     d = da.from_array(x, chunks=(2, 3, 3, 4))
@@ -3325,7 +3321,7 @@ def test_from_array_names():
     ],
 )
 def test_array_picklable(array):
-    from pickle import loads, dumps
+    from pickle import dumps, loads
 
     a2 = loads(dumps(array))
     assert_eq(array, a2)

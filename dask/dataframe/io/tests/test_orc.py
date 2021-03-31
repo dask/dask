@@ -5,9 +5,9 @@ from distutils.version import LooseVersion
 
 import pytest
 
+import dask.dataframe as dd
 from dask.dataframe import read_orc
 from dask.dataframe.utils import assert_eq
-import dask.dataframe as dd
 
 pytest.importorskip("pyarrow.orc")
 

@@ -1,42 +1,41 @@
 import os
-import pytest
-from operator import add, mul
 import subprocess
 import sys
 import time
 from collections import OrderedDict
+from operator import add, mul
 
-from tlz import merge, partial, compose, curry
+import pytest
+from tlz import compose, curry, merge, partial
 
 import dask
 import dask.bag as db
 from dask import delayed
 from dask.base import (
-    compute,
-    tokenize,
-    normalize_token,
-    normalize_function,
-    visualize,
-    persist,
-    function_cache,
-    is_dask_collection,
     DaskMethodsMixin,
-    optimize,
-    unpack_collections,
-    named_schedulers,
-    get_scheduler,
+    clone_key,
     collections_to_dsk,
+    compute,
+    function_cache,
     get_collection_names,
     get_name_from_key,
+    get_scheduler,
+    is_dask_collection,
+    named_schedulers,
+    normalize_function,
+    normalize_token,
+    optimize,
+    persist,
     replace_name_in_key,
-    clone_key,
+    tokenize,
+    unpack_collections,
+    visualize,
 )
 from dask.core import literal
 from dask.delayed import Delayed
-from dask.utils import tmpdir, tmpfile
-from dask.utils_test import dec, inc, import_or_none
 from dask.diagnostics import Profiler
-
+from dask.utils import tmpdir, tmpfile
+from dask.utils_test import dec, import_or_none, inc
 
 da = import_or_none("dask.array")
 dd = import_or_none("dask.dataframe")

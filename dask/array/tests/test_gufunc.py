@@ -1,18 +1,17 @@
+import numpy as np
 import pytest
 from numpy.testing import assert_equal
-import dask.array as da
-from dask.array.utils import assert_eq
-import numpy as np
 
+import dask.array as da
 from dask.array.core import Array
 from dask.array.gufunc import (
     _parse_gufunc_signature,
     _validate_normalize_axes,
     apply_gufunc,
-    gufunc,
     as_gufunc,
+    gufunc,
 )
-from dask.array.utils import IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 
 # Copied from `numpy.lib.test_test_function_base.py`:

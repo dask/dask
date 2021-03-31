@@ -2,13 +2,12 @@ import random
 from bisect import bisect_left
 from distutils.version import LooseVersion
 from itertools import cycle
-from operator import itemgetter, add
+from operator import add, itemgetter
 
-from tlz import groupby, unique, accumulate, pluck
+from tlz import accumulate, groupby, pluck, unique
 
-from ..utils import funcname, import_required, apply
 from ..core import istask
-
+from ..utils import apply, funcname, import_required
 
 _BOKEH_MISSING_MSG = "Diagnostics plots require `bokeh` to be installed"
 

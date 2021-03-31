@@ -6,11 +6,11 @@ import numpy as np
 
 import dask
 import dask.array as da
-from dask.utils import key_split
 from dask.array.core import Array
-from dask.array.random import random, exponential, normal
+from dask.array.random import exponential, normal, random
 from dask.array.utils import assert_eq
 from dask.multiprocessing import _dumps, _loads
+from dask.utils import key_split
 
 
 def test_RandomState():

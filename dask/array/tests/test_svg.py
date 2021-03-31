@@ -1,7 +1,9 @@
+import xml.etree.ElementTree
+
+import pytest
+
 import dask.array as da
 from dask.array.svg import draw_sizes
-import xml.etree.ElementTree
-import pytest
 
 
 def parses(text):

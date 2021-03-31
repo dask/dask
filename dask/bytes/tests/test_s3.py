@@ -1,12 +1,12 @@
 import io
 import os
-from contextlib import contextmanager
-from functools import partial
-from distutils.version import LooseVersion
 import shlex
 import subprocess
 import sys
 import time
+from contextlib import contextmanager
+from distutils.version import LooseVersion
+from functools import partial
 
 import pytest
 
@@ -16,15 +16,14 @@ moto = pytest.importorskip("moto", minversion="1.3.14")
 pytest.importorskip("flask")  # server mode needs flask too
 requests = pytest.importorskip("requests")
 
-from tlz import concat, valmap
+from fsspec.compression import compr
 from fsspec.core import open_files
+from s3fs import S3FileSystem as DaskS3FileSystem
+from tlz import concat, valmap
 
 from dask import compute
 from dask.bytes.core import read_bytes
-from s3fs import S3FileSystem as DaskS3FileSystem
 from dask.bytes.utils import compress
-from fsspec.compression import compr
-
 
 compute = partial(compute, scheduler="sync")
 

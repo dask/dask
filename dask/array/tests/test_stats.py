@@ -2,11 +2,11 @@ import pytest
 
 scipy = pytest.importorskip("scipy")
 import numpy as np
+
 import dask.array as da
-from dask.array.utils import assert_eq
-from dask.delayed import Delayed
 import dask.array.stats
-from dask.array.utils import allclose
+from dask.array.utils import allclose, assert_eq
+from dask.delayed import Delayed
 
 
 @pytest.mark.parametrize(

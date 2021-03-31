@@ -9,66 +9,59 @@ import uuid
 import warnings
 from bisect import bisect
 from collections.abc import Iterable, Iterator, Mapping
-from functools import partial, wraps, reduce
+from functools import partial, reduce, wraps
 from itertools import product, zip_longest
-from numbers import Number, Integral
+from numbers import Integral, Number
 from operator import add, getitem, mul
 from threading import Lock
 
-from tlz import partition, concat, first, groupby, accumulate, frequencies
-from tlz.curried import pluck
 import numpy as np
 from fsspec import get_mapper
+from tlz import accumulate, concat, first, frequencies, groupby, partition
+from tlz.curried import pluck
 
-from . import chunk
-from .. import config, compute
+from .. import compute, config, core, threaded
 from ..base import (
     DaskMethodsMixin,
-    tokenize,
-    dont_optimize,
     compute_as_if_collection,
-    persist,
+    dont_optimize,
     is_dask_collection,
+    persist,
+    tokenize,
 )
 from ..blockwise import broadcast_dimensions
 from ..context import globalmethod
+from ..core import quote
+from ..delayed import Delayed, delayed
+from ..highlevelgraph import HighLevelGraph
+from ..sizeof import sizeof
 from ..utils import (
-    ndeepmap,
-    ignoring,
+    Dispatch,
+    IndexCallable,
+    M,
+    SerializableLock,
+    cached_property,
     concrete,
     derived_from,
-    is_integer,
-    IndexCallable,
-    funcname,
-    SerializableLock,
-    Dispatch,
     factors,
-    parse_bytes,
-    has_keyword,
-    M,
-    ndimlist,
     format_bytes,
-    typename,
+    funcname,
+    has_keyword,
+    ignoring,
     is_arraylike,
     is_dataframe_like,
-    is_series_like,
     is_index_like,
-    cached_property,
+    is_integer,
+    is_series_like,
+    ndeepmap,
+    ndimlist,
+    parse_bytes,
+    typename,
 )
-from ..core import quote
-from ..delayed import delayed, Delayed
-from .. import threaded, core
-from ..sizeof import sizeof
-from ..highlevelgraph import HighLevelGraph
-from .numpy_compat import _Recurser
-from .slicing import (
-    slice_array,
-    replace_ellipsis,
-    cached_cumsum,
-)
-from .blockwise import blockwise
+from . import chunk
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
-
+from .numpy_compat import _Recurser
+from .slicing import cached_cumsum, replace_ellipsis, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -151,8 +144,7 @@ def getter_inline(a, b, asarray=True, lock=None):
     return getter(a, b, asarray=asarray, lock=lock)
 
 
-from .optimization import optimize, fuse_slice
-
+from .optimization import fuse_slice, optimize
 
 # __array_function__ dict for mapping aliases and mismatching names
 _HANDLED_FUNCTIONS = {}
@@ -1697,8 +1689,8 @@ class Array(DaskMethodsMixin):
 
         from .slicing import (
             normalize_index,
-            slice_with_int_dask_array,
             slice_with_bool_dask_array,
+            slice_with_int_dask_array,
         )
 
         index2 = normalize_index(index, self.shape)
@@ -3397,7 +3389,7 @@ def from_delayed(value, shape, dtype=None, meta=None, name=None):
     >>> array.compute()
     array([1., 1., 1., 1., 1.])
     """
-    from ..delayed import delayed, Delayed
+    from ..delayed import Delayed, delayed
 
     if not isinstance(value, Delayed) and hasattr(value, "key"):
         value = delayed(value)
@@ -5190,4 +5182,5 @@ def new_da_object(dsk, name, chunks, meta=None, dtype=None):
         return Array(dsk, name=name, chunks=chunks, meta=meta, dtype=dtype)
 
 
-from .utils import meta_from_array, compute_meta
+from .blockwise import blockwise
+from .utils import compute_meta, meta_from_array

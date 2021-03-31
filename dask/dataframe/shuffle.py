@@ -2,23 +2,22 @@ import contextlib
 import logging
 import math
 import shutil
-import uuid
 import tempfile
+import uuid
 
-import tlz as toolz
 import numpy as np
 import pandas as pd
-
-from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+import tlz as toolz
 
 from .. import base, config
-from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
+from ..base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
+from ..layers import ShuffleLayer, SimpleShuffleLayer
 from ..sizeof import sizeof
-from ..utils import digit, M
-from .utils import hash_object_dispatch, group_split_dispatch
+from ..utils import M, digit
 from . import methods
-from ..layers import SimpleShuffleLayer, ShuffleLayer
+from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from .utils import group_split_dispatch, hash_object_dispatch
 
 logger = logging.getLogger(__name__)
 

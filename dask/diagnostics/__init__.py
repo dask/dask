@@ -1,4 +1,4 @@
 from ..callbacks import Callback
-from .profile import Profiler, ResourceProfiler, CacheProfiler
-from .progress import ProgressBar
+from .profile import CacheProfiler, Profiler, ResourceProfiler
 from .profile_visualize import visualize
+from .progress import ProgressBar

@@ -1,21 +1,18 @@
-from itertools import product
+import bisect
+import functools
 import math
+import warnings
+from itertools import product
 from numbers import Integral, Number
 from operator import add, getitem, itemgetter
-import warnings
-import functools
-import bisect
 
 import numpy as np
-from tlz import memoize, merge, pluck, concat, accumulate
+from tlz import accumulate, concat, memoize, merge, pluck
 
-from ..utils import is_arraylike
-from .. import core
-from .. import config
-from .. import utils
+from .. import config, core, utils
+from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..base import tokenize, is_dask_collection
-
+from ..utils import is_arraylike
 
 colon = slice(None, None, None)
 
@@ -1045,9 +1042,9 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
+    from . import chunk
     from .core import Array, blockwise, from_array
     from .utils import asarray_safe
-    from . import chunk
 
     assert 0 <= axis < x.ndim
 

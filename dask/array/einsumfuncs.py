@@ -1,8 +1,8 @@
 import numpy as np
 from numpy.compat import basestring
 
-from .core import blockwise, asarray, einsum_lookup
 from ..utils import derived_from
+from .core import asarray, blockwise, einsum_lookup
 
 einsum_symbols = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
 einsum_symbols_set = set(einsum_symbols)

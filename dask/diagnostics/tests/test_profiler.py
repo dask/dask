@@ -1,12 +1,13 @@
-from operator import add, mul
 import os
-from time import sleep
 from distutils.version import LooseVersion
+from operator import add, mul
+from time import sleep
 
-from dask.diagnostics import Profiler, ResourceProfiler, CacheProfiler
-from dask.threaded import get
-from dask.utils import ignoring, tmpfile, apply
 import pytest
+
+from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
+from dask.threaded import get
+from dask.utils import apply, ignoring, tmpfile
 
 try:
     import bokeh
@@ -361,8 +362,9 @@ def test_saves_file():
 @pytest.mark.skipif("not bokeh")
 @ignore_abc_warning
 def test_get_colors():
-    from dask.diagnostics.profile_visualize import get_colors
     from bokeh.palettes import Blues5, Viridis
+
+    from dask.diagnostics.profile_visualize import get_colors
 
     # 256-color palettes were added in bokeh 1.4.0
     if LooseVersion(bokeh.__version__) >= "1.4.0":

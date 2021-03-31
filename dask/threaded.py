@@ -4,17 +4,17 @@ A threaded shared-memory scheduler
 See local.py
 """
 import atexit
+import multiprocessing.pool
 import sys
+import threading
 from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
-import multiprocessing.pool
-import threading
-from threading import current_thread, Lock
+from threading import Lock, current_thread
 
 from . import config
+from .local import MultiprocessingPoolExecutor, get_async
 from .system import CPU_COUNT
-from .local import get_async, MultiprocessingPoolExecutor
-from .utils_test import inc, add  # noqa: F401
+from .utils_test import add, inc  # noqa: F401
 
 
 def _thread_get_id():

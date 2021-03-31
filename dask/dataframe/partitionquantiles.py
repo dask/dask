@@ -69,14 +69,14 @@ increase the sample size for each partition.
 
 """
 import math
+
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_datetime64tz_dtype
-
 from tlz import merge, merge_sorted, take
 
-from ..utils import is_cupy_type, random_state_data
 from ..base import tokenize
+from ..utils import is_cupy_type, random_state_data
 from .core import Series
 from .utils import is_categorical_dtype
 

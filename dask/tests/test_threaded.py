@@ -1,16 +1,16 @@
-from concurrent.futures import ThreadPoolExecutor
 import os
 import signal
 import threading
+from concurrent.futures import ThreadPoolExecutor
 from multiprocessing.pool import ThreadPool
-from time import time, sleep
+from time import sleep, time
 
 import pytest
 
 import dask
 from dask.system import CPU_COUNT
 from dask.threaded import get
-from dask.utils_test import inc, add
+from dask.utils_test import add, inc
 
 
 def test_get():

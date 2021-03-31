@@ -1,15 +1,14 @@
 import ast
 import base64
 import builtins
-from collections.abc import Mapping
 import json
 import os
 import sys
 import threading
 import warnings
+from collections.abc import Mapping
 
 import yaml
-
 
 no_default = "__no_default__"
 

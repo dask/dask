@@ -1,6 +1,7 @@
 import warnings
 
-from fsspec.core import open as fs_open_file, open_files as fs_open_files
+from fsspec.core import open as fs_open_file
+from fsspec.core import open_files as fs_open_files
 
 from .core import read_bytes
 

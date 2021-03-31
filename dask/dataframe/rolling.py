@@ -1,18 +1,18 @@
 import datetime
 import inspect
+from numbers import Integral
 
 import pandas as pd
 from pandas.api.types import is_datetime64_any_dtype
 from pandas.core.window import Rolling as pd_Rolling
-from numbers import Integral
 
 from ..base import tokenize
-from ..utils import M, funcname, derived_from, has_keyword
 from ..highlevelgraph import HighLevelGraph
+from ..utils import M, derived_from, funcname, has_keyword
+from . import methods
 from ._compat import PANDAS_VERSION
 from .core import _emulate
 from .utils import make_meta
-from . import methods
 
 
 def overlap_chunk(

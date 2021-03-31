@@ -1,13 +1,13 @@
-from contextlib import contextmanager
 import os
+from contextlib import contextmanager
 
 import pytest
 
 pytest.importorskip("skimage")
-from dask.array.image import imread as da_imread
 import numpy as np
 from skimage.io import imsave
 
+from dask.array.image import imread as da_imread
 from dask.utils import tmpdir
 
 

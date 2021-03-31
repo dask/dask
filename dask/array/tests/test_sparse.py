@@ -7,7 +7,7 @@ import pytest
 import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_117
-from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 sparse = pytest.importorskip("sparse")
 if sparse:

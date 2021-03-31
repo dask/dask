@@ -1,9 +1,9 @@
 import io
 import uuid
 
-from fsspec.core import open_files, get_fs_token_paths, OpenFile
-from fsspec.utils import tokenize as fs_tokenize, read_block
-
+from fsspec.core import OpenFile, get_fs_token_paths, open_files
+from fsspec.utils import read_block
+from fsspec.utils import tokenize as fs_tokenize
 
 from ..highlevelgraph import HighLevelGraph
 
@@ -89,9 +89,9 @@ def read_avro(urlpath, blocksize=100000000, storage_options=None, compression=No
         Compression format of the targe(s), like 'gzip'. Should only be used
         with blocksize=None.
     """
-    from dask.utils import import_required
-    from dask import delayed, compute
+    from dask import compute, delayed
     from dask.bag import from_delayed
+    from dask.utils import import_required
 
     import_required(
         "fastavro", "fastavro is a required dependency for using bag.read_avro()."

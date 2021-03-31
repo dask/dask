@@ -1,22 +1,20 @@
+import os
 from math import ceil
 from operator import getitem
-import os
 from threading import Lock
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from tlz import merge
 
-from ...base import tokenize
 from ... import array as da
+from ...base import tokenize
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
-
-from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
-from ..shuffle import set_partition
-from ..utils import insert_meta_param_description, check_meta, make_meta, is_series_like
-
 from ...utils import M, ensure_dict
+from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
+from ..shuffle import set_partition
+from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
 
 lock = Lock()
 
@@ -259,8 +257,9 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
     if lock is True:
         lock = Lock()
 
-    import dask.array as da
     import bcolz
+
+    import dask.array as da
 
     if isinstance(x, str):
         x = bcolz.ctable(rootdir=x)

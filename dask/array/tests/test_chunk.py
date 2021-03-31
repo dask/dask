@@ -4,8 +4,8 @@ pytest.importorskip("numpy")
 
 import numpy as np
 
-from dask.array.chunk import coarsen, keepdims_wrapper
 import dask.array as da
+from dask.array.chunk import coarsen, keepdims_wrapper
 
 
 def test_keepdims_wrapper_no_axis():

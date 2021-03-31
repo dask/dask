@@ -1,6 +1,6 @@
-from io import BytesIO
-import os
 import gzip
+import os
+from io import BytesIO
 from time import sleep
 from unittest import mock
 
@@ -9,24 +9,24 @@ import pytest
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 
+from fsspec.compression import compr
 from tlz import partition_all, valmap
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
-from dask.core import flatten
-from dask.dataframe.io.csv import (
-    text_blocks_to_pandas,
-    pandas_read_text,
-    auto_blocksize,
-    block_mask,
-)
-from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
-from dask.utils import filetexts, filetext, tmpfile, tmpdir
-from fsspec.compression import compr
+from dask.core import flatten
+from dask.dataframe._compat import tm
+from dask.dataframe.io.csv import (
+    auto_blocksize,
+    block_mask,
+    pandas_read_text,
+    text_blocks_to_pandas,
+)
+from dask.dataframe.utils import assert_eq, has_known_categories
+from dask.utils import filetext, filetexts, tmpdir, tmpfile
 
 # List of available compression format for test_read_csv_compression
 compression_fmts = [fmt for fmt in compr] + [None]

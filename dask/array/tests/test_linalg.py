@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg
 
 import dask.array as da
-from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
+from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
 from dask.array.utils import assert_eq, same_keys, svd_flip
 
 

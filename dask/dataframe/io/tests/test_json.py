@@ -6,8 +6,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.dataframe.utils import assert_eq
-from dask.utils import tmpfile, tmpdir
-
+from dask.utils import tmpdir, tmpfile
 
 df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 ddf = dd.from_pandas(df, npartitions=2)
