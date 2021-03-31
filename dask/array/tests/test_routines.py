@@ -6,8 +6,8 @@ import pytest
 np = pytest.importorskip("numpy")
 
 import dask.array as da
+from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
 from dask.utils import ignoring
-from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 
 
 def test_array():

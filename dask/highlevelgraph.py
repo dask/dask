@@ -1,25 +1,25 @@
 import abc
 import collections.abc
+import copy
 import warnings
 from typing import (
     AbstractSet,
     Any,
     Dict,
     Hashable,
+    Iterable,
+    Mapping,
     MutableMapping,
     Optional,
-    Mapping,
-    Iterable,
     Tuple,
 )
-import copy
 
 import tlz as toolz
 
 from . import config
-from .utils import ensure_dict, ignoring, stringify
 from .base import clone_key, flatten, is_dask_collection
-from .core import reverse_dict, keys_in_tasks
+from .core import keys_in_tasks, reverse_dict
+from .utils import ensure_dict, ignoring, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -337,9 +337,9 @@ class Layer(collections.abc.Mapping):
             Scheduler compatible state of the layer
         """
         from distributed.client import Future
-        from distributed.utils_comm import unpack_remotedata, subs_multiple
-        from distributed.worker import dumps_task
         from distributed.utils import CancelledError
+        from distributed.utils_comm import subs_multiple, unpack_remotedata
+        from distributed.worker import dumps_task
 
         dsk = dict(self)
 
@@ -1036,7 +1036,7 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from .dot import graphviz, name, label
+    from .dot import graphviz, label, name
 
     if data_attributes is None:
         data_attributes = {}

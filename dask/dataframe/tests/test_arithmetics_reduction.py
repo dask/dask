@@ -1,17 +1,13 @@
-from datetime import datetime
 import warnings
+from datetime import datetime
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_120, PANDAS_VERSION
-from dask.dataframe.utils import (
-    assert_eq,
-    assert_dask_graph,
-    make_meta,
-)
+from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
 
 try:
     import scipy

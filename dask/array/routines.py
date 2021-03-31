@@ -2,49 +2,47 @@ import inspect
 import math
 import warnings
 from collections.abc import Iterable
-from functools import wraps, partial
-from numbers import Real, Integral
+from functools import partial, wraps
+from numbers import Integral, Real
 from typing import List, Tuple
 
 import numpy as np
-from tlz import concat, sliding_window, interleave
+from tlz import concat, interleave, sliding_window
 
+from ..base import is_dask_collection, tokenize
 from ..compatibility import apply
 from ..core import flatten
-from ..base import tokenize, is_dask_collection
-from ..delayed import unpack_collections, Delayed
+from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import funcname, derived_from, is_arraylike
+from ..utils import derived_from, funcname, is_arraylike
 from . import chunk
-from .creation import arange, diag, empty, indices, tri
-from .utils import (
-    safe_wraps,
-    validate_axis,
-    meta_from_array,
-    zeros_like_safe,
-    array_safe,
-    asarray_safe,
-)
-from .wrap import ones
-from .ufunc import multiply, sqrt
-
 from .core import (
     Array,
-    map_blocks,
-    elemwise,
-    asarray,
     asanyarray,
-    concatenate,
-    stack,
+    asarray,
     blockwise,
     broadcast_shapes,
-    is_scalar_for_elemwise,
     broadcast_to,
-    tensordot_lookup,
+    concatenate,
+    elemwise,
     implements,
+    is_scalar_for_elemwise,
+    map_blocks,
+    stack,
+    tensordot_lookup,
 )
-
+from .creation import arange, diag, empty, indices, tri
 from .einsumfuncs import einsum  # noqa
+from .ufunc import multiply, sqrt
+from .utils import (
+    array_safe,
+    asarray_safe,
+    meta_from_array,
+    safe_wraps,
+    validate_axis,
+    zeros_like_safe,
+)
+from .wrap import ones
 
 # save built-in for histogram functions which use range as a kwarg.
 _range = range

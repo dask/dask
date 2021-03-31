@@ -1,11 +1,10 @@
-import pytest
 import numpy as np
+import pytest
 
 import dask.array as da
-from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 from .test_dispatch import EncapsulateNDArray, WrappedArray
-
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"

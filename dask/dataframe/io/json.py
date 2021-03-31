@@ -1,11 +1,12 @@
 import io
+
 import pandas as pd
 from fsspec.core import open_files
 
-from ...core import flatten
 from ...base import compute as dask_compute
-from ...delayed import delayed
 from ...bytes import read_bytes
+from ...core import flatten
+from ...delayed import delayed
 from ..utils import insert_meta_param_description, make_meta
 from .io import from_delayed
 

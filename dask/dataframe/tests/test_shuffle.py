@@ -1,35 +1,34 @@
-from concurrent.futures import ProcessPoolExecutor
-from functools import partial
 import itertools
+import multiprocessing as mp
 import os
+import pickle
 import random
+import string
 import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from copy import copy
+from functools import partial
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 import pytest
-import pickle
-import numpy as np
-import string
-import multiprocessing as mp
-from copy import copy
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm, assert_categorical_equal
 from dask import delayed
 from dask.base import compute_as_if_collection
-from dask.optimization import cull
+from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
-    shuffle,
+    maybe_buffered_partd,
     partitioning_index,
     rearrange_by_column,
     rearrange_by_divisions,
-    maybe_buffered_partd,
     remove_nans,
+    shuffle,
 )
 from dask.dataframe.utils import assert_eq, make_meta
-from dask.dataframe._compat import PANDAS_GT_120
+from dask.optimization import cull
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),

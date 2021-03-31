@@ -5,9 +5,9 @@ import pytest
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
-from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.gufunc import apply_gufunc
+from dask.array.numpy_compat import _numpy_120
+from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
 from dask.sizeof import sizeof
 
 cupy = pytest.importorskip("cupy")

@@ -7,36 +7,36 @@ import pytest
 from tlz import curry
 
 from dask import get
-from dask.utils import (
-    getargspec,
-    takes_multiple_arguments,
-    Dispatch,
-    random_state_data,
-    memory_repr,
-    methodcaller,
-    M,
-    skip_doctest,
-    SerializableLock,
-    funcname,
-    ndeepmap,
-    ensure_dict,
-    extra_titles,
-    asciitable,
-    itemgetter,
-    partial_by_order,
-    has_keyword,
-    derived_from,
-    parse_timedelta,
-    parse_bytes,
-    is_arraylike,
-    iter_chunks,
-    stringify,
-    stringify_collection_keys,
-    format_bytes,
-)
-from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
+from dask.utils import (
+    Dispatch,
+    M,
+    SerializableLock,
+    asciitable,
+    derived_from,
+    ensure_dict,
+    extra_titles,
+    format_bytes,
+    funcname,
+    getargspec,
+    has_keyword,
+    is_arraylike,
+    itemgetter,
+    iter_chunks,
+    memory_repr,
+    methodcaller,
+    ndeepmap,
+    parse_bytes,
+    parse_timedelta,
+    partial_by_order,
+    random_state_data,
+    skip_doctest,
+    stringify,
+    stringify_collection_keys,
+    takes_multiple_arguments,
+)
+from dask.utils_test import inc
 
 
 def test_getargspec():

@@ -3,7 +3,6 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-
 from dask.dataframe._compat import tm
 from dask.dataframe.utils import assert_eq, make_meta
 
