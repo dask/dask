@@ -2942,7 +2942,7 @@ def test_memmap():
 
                 x.store(target)
 
-                assert_eq(target, x)
+                assert_eq(target, x, check_type=False)
 
                 np.save(fn_2, target)
 
