@@ -294,6 +294,11 @@ def test_asymmetric_overlap_boundary_exception():
 
 
 def test_map_overlap():
+    x = da.from_array(np.arange(10), chunks=5)
+    y = x.map_overlap(lambda x: x + 1, depth=0)
+    assert len(y.dask) == 2 * x.numblocks[0]  # depth=0 --> map_blocks
+    assert_eq(y, np.arange(10) + 1)
+
     x = da.arange(10, chunks=5)
     y = x.map_overlap(lambda x: x + len(x), depth=2, dtype=x.dtype)
     assert_eq(y, np.arange(10) + 5 + 2 + 2)
