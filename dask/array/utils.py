@@ -294,14 +294,16 @@ def assert_eq(
                 "string repr are different" + os.linesep + os.linesep.join(diff)
             )
 
-    if check_type:
-        assert type(a) == type(
-            b
-        ), f"a and b have different types (a: {type(a)}, b: {type(b)})"
     try:
         assert (
             a.shape == b.shape
         ), f"a and b have different shapes (a: {a.shape}, b: {b.shape})"
+        if check_type:
+            _a = a if a.shape else a.item()
+            _b = b if b.shape else b.item()
+            assert type(_a) == type(
+                _b
+            ), f"a and b have different types (a: {type(_a)}, b: {type(_b)})"
         if check_meta:
             if hasattr(a, "_meta") and hasattr(b, "_meta"):
                 assert_eq(a._meta, b._meta)
