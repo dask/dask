@@ -640,7 +640,6 @@ class gufunc:
         )
 
     def __call__(self, *args, **kwargs):
-        allow_rechunk = self.allow_rechunk or kwargs.pop("allow_rechunk", False)
         return apply_gufunc(
             self.pyfunc,
             self.signature,
@@ -651,7 +650,7 @@ class gufunc:
             keepdims=self.keepdims,
             output_sizes=self.output_sizes,
             output_dtypes=self.output_dtypes,
-            allow_rechunk=allow_rechunk,
+            allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
             meta=self.meta,
             **kwargs,
         )
