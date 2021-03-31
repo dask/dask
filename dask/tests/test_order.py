@@ -1,8 +1,8 @@
 import pytest
 
 import dask
-from dask.order import ndependencies, order
 from dask.core import get_deps
+from dask.order import ndependencies, order
 from dask.utils_test import add, inc
 
 

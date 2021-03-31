@@ -4,12 +4,12 @@ from operator import mul
 
 import numpy as np
 
-from .core import Array
-from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M
+from .core import Array
+from .utils import meta_from_array
 
 
 def reshape_rechunk(inshape, outshape, inchunks):

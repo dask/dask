@@ -1,7 +1,8 @@
-import pytest
 import numpy as np
+import pytest
+
 import dask.array as da
-from dask.array.reshape import reshape_rechunk, expand_tuple, contract_tuple
+from dask.array.reshape import contract_tuple, expand_tuple, reshape_rechunk
 from dask.array.utils import assert_eq
 
 

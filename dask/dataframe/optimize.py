@@ -2,11 +2,12 @@
 import operator
 
 from dask.base import tokenize
-from ..optimization import cull, fuse
+
 from .. import config, core
+from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
+from ..optimization import cull, fuse
 from ..utils import ensure_dict
-from ..blockwise import optimize_blockwise, fuse_roots, Blockwise
 
 
 def optimize(dsk, keys, **kwargs):

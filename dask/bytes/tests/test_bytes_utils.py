@@ -4,10 +4,10 @@ import pathlib
 
 import pytest
 from fsspec.utils import (
-    seek_delimiter,
     infer_storage_options,
-    stringify_path,
     read_block,
+    seek_delimiter,
+    stringify_path,
 )
 
 

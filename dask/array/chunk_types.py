@@ -1,6 +1,5 @@
 import numpy as np
 
-
 # Start list of valid chunk types, to be added to with guarded imports
 _HANDLED_CHUNK_TYPES = [np.ndarray, np.ma.MaskedArray]
 

@@ -104,17 +104,16 @@ significantly on space and computation complexity.
 
 See the function ``inline_functions`` for more information.
 """
+import os
 from concurrent.futures import Executor, Future
 from functools import partial
-import os
-from queue import Queue, Empty
+from queue import Empty, Queue
 
 from . import config
-from .core import flatten, reverse_dict, get_dependencies, has_tasks, _execute_task
+from .callbacks import local_callbacks, unpack_callbacks
+from .core import _execute_task, flatten, get_dependencies, has_tasks, reverse_dict
 from .order import order
-from .callbacks import unpack_callbacks, local_callbacks
 from .utils_test import add, inc  # noqa: F401
-
 
 if os.name == "nt":
     # Python 3 windows Queue.get doesn't handle interrupts properly. To

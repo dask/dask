@@ -7,19 +7,20 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask.array as da
 from dask.array.overlap import (
+    boundaries,
+    constant,
+    ensure_minimum_chunksize,
     fractional_slice,
     getitem,
-    trim_internal,
-    overlap_internal,
     nearest,
-    constant,
-    boundaries,
-    reflect,
-    periodic,
     overlap,
-    ensure_minimum_chunksize,
+    overlap_internal,
+    periodic,
+    reflect,
+    trim_internal,
 )
 from dask.array.utils import assert_eq, same_keys
+
 from ..lib.stride_tricks import sliding_window_view
 
 

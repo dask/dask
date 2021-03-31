@@ -1,4 +1,3 @@
-from concurrent.futures import ProcessPoolExecutor
 import gc
 import math
 import os
@@ -6,33 +5,33 @@ import random
 import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
+from concurrent.futures import ProcessPoolExecutor
 from gzip import GzipFile
 from itertools import repeat
 
 import partd
 import pytest
-from tlz import merge, join, identity, valmap, groupby, pluck, unique
+from tlz import groupby, identity, join, merge, pluck, unique, valmap
 
 import dask
 import dask.bag as db
 from dask.bag.core import (
     Bag,
+    collect,
+    from_delayed,
+    inline_singleton_lists,
     lazify,
     lazify_task,
-    collect,
+    optimize,
+    partition,
     reduceby,
     reify,
-    partition,
-    inline_singleton_lists,
-    optimize,
-    from_delayed,
     total_mem_usage,
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
-from dask.utils import filetexts, tmpfile, tmpdir
-from dask.utils_test import inc, add
-
+from dask.utils import filetexts, tmpdir, tmpfile
+from dask.utils_test import add, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -1388,7 +1387,7 @@ def test_empty():
 
 
 def test_bag_picklable():
-    from pickle import loads, dumps
+    from pickle import dumps, loads
 
     b = db.from_sequence(range(100))
     b2 = loads(dumps(b))

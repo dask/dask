@@ -1,7 +1,7 @@
 import operator
 
-import pytest
 import numpy as np
+import pytest
 
 import dask.array as da
 from dask.array import Array

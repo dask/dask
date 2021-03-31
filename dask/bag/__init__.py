@@ -1,21 +1,20 @@
 try:
+    from ..base import compute
+    from .avro import read_avro
+    from .core import Bag, Item
+    from .core import bag_map as map
+    from .core import bag_range as range
+    from .core import bag_zip as zip
     from .core import (
-        Bag,
-        Item,
-        from_sequence,
-        from_url,
-        to_textfiles,
         concat,
         from_delayed,
+        from_sequence,
+        from_url,
         map_partitions,
-        bag_range as range,
-        bag_zip as zip,
-        bag_map as map,
+        to_textfiles,
     )
     from .text import read_text
     from .utils import assert_eq
-    from .avro import read_avro
-    from ..base import compute
 except ImportError as e:
     msg = (
         "Dask bag requirements are not installed.\n\n"

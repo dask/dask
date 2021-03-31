@@ -1,13 +1,13 @@
 import random
+from copy import deepcopy
 from itertools import product
 
 import numpy as np
 import pytest
 
 import dask.array as da
-from dask.base import tokenize
 from dask.array.utils import assert_eq
-from copy import deepcopy
+from dask.base import tokenize
 
 pytest.importorskip("dask.array.ma")
 

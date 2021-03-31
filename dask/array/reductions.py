@@ -1,35 +1,35 @@
 import builtins
-from collections.abc import Iterable
 import operator
+from collections.abc import Iterable
 from functools import partial
 from itertools import product, repeat
-from math import factorial, log, ceil, log2
-
-import numpy as np
+from math import ceil, factorial, log, log2
 from numbers import Integral, Number
 
-from tlz import compose, partition_all, get, accumulate, pluck, drop
+import numpy as np
+from tlz import accumulate, compose, drop, get, partition_all, pluck
 
-from . import chunk
-from .core import _concatenate2, Array, handle_out, implements
-from .blockwise import blockwise
-from ..blockwise import lol_tuples
-from .creation import arange, diagonal
-from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
-from .wrap import zeros, ones
-from .numpy_compat import ma_divide, divide as np_divide
+from .. import config
 from ..base import tokenize
+from ..blockwise import lol_tuples
 from ..highlevelgraph import HighLevelGraph
 from ..utils import (
-    ignoring,
-    funcname,
     Dispatch,
     deepmap,
-    getargspec,
     derived_from,
+    funcname,
+    getargspec,
+    ignoring,
     is_series_like,
 )
-from .. import config
+from . import chunk
+from .blockwise import blockwise
+from .core import Array, _concatenate2, handle_out, implements
+from .creation import arange, diagonal
+from .numpy_compat import divide as np_divide
+from .numpy_compat import ma_divide
+from .utils import compute_meta, full_like_safe, is_arraylike, validate_axis
+from .wrap import ones, zeros
 
 # Generic functions to support chunks of different types
 empty_lookup = Dispatch("empty")
