@@ -1,8 +1,11 @@
 dataframe:
   - dask/dataframe/*
+  - dask/dataframe/**/*
 
 array:
   - dask/array/*
+  - dask/array/**/*
 
 io:
-  - dask/**/io*
+  - dask/dataframe/io/*
+  - dask/dataframe/io/**/*
