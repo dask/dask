@@ -1080,7 +1080,6 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                     join,
                     uniform,
                     filter_warning,
-                    False,
                     kwargs,
                 )
             i += 1
