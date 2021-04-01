@@ -17,8 +17,8 @@ from dask.multiprocessing import (
     _loads,
     get,
     get_context,
-    remote_exception,
     initialize_worker_process,
+    remote_exception,
 )
 from dask.system import CPU_COUNT
 from dask.utils_test import inc
