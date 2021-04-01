@@ -1003,7 +1003,7 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **k
     dsk = dict(
         (
             (name, i),
-            (methods.concat, part, axis, join, uniform, filter_warning, ignore_order),
+            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
         )
         for i, part in enumerate(parts2)
     )
