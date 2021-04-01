@@ -969,9 +969,7 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
         for i in range(dfs[0].npartitions)
     }
     kwargs.update({"ignore_order": ignore_order})
-    meta = methods.concat(
-        [df._meta for df in dfs], axis=1, **kwargs
-    )
+    meta = methods.concat([df._meta for df in dfs], axis=1, **kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
