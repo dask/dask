@@ -398,7 +398,6 @@ def concat(
     join="outer",
     uniform=False,
     filter_warning=True,
-    ignore_order=False,
     ignore_index=False,
     **kwargs
 ):
@@ -426,6 +425,7 @@ def concat(
     if len(dfs) == 1:
         return dfs[0]
     else:
+        ignore_order = kwargs.get("ignore_order", False)
         func = concat_dispatch.dispatch(type(dfs[0]))
         return func(
             dfs,
@@ -446,12 +446,13 @@ def concat_pandas(
     join="outer",
     uniform=False,
     filter_warning=True,
-    ignore_order=False,
     ignore_index=False,
     **kwargs
 ):
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, **kwargs)
+
+    ignore_order = kwargs.get("ignore_order", False)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
