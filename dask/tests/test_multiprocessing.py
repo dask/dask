@@ -12,7 +12,14 @@ import pytest
 
 import dask
 from dask import compute, delayed
-from dask.multiprocessing import _dumps, _loads, get, get_context, remote_exception
+from dask.multiprocessing import (
+    _dumps,
+    _loads,
+    get,
+    get_context,
+    remote_exception,
+    initialize_worker_process,
+)
 from dask.system import CPU_COUNT
 from dask.utils_test import inc
 
@@ -274,23 +281,27 @@ def test_get_context_always_default():
             assert get_context() is multiprocessing
 
 
-def test_worker_shutdown_follows_normal_shutdown_process(tmpdir):
-    """Processes managed by multiprocessing/ProcessPoolExecutor don't follow the
-    normal interpreter shutdown procedure by default (since multiprocessing
-    kills workers with SIGTERM). We register our own signal handler to fix that,
-    ensuring that atexit hooks are always called. This matters both for
-    users of the multiprocessing scheduler, as well as distributed's `LocalCluster`,
-    since that also uses `multiprocessing` to manage workers (and also uses
+def register_atexit_handler(path):
+    atexit.register(lambda: os.remove(path))
+    return "ok"
+
+
+def test_initialize_worker_process_ensures_shutdown_follows_normal_shutdown_process(
+    tmpdir,
+):
+    """Processes managed by multiprocessing don't follow the normal interpreter
+    shutdown procedure by default (since multiprocessing kills workers with
+    SIGTERM). We register our own signal handler to fix that, ensuring that
+    atexit hooks are always called. This matters both for users of the
+    multiprocessing scheduler, as well as distributed's `LocalCluster`, since
+    that also uses `multiprocessing` to manage workers (and also uses
     `dask.multiprocessing.initialize_worker_process`).
     """
     path = str(tmpdir.join("test_file"))
     with open(path, "wb") as f:
         f.write(b"testing")
 
-    def register_atexit_handler(path):
-        atexit.register(lambda: os.remove(path))
-        return "ok"
-
-    assert get({"x": (register_atexit_handler, path)}, "x") == "ok"
+    with multiprocessing.Pool(1, initializer=initialize_worker_process) as pool:
+        pool.apply(register_atexit_handler, (path,))
 
     assert not os.path.exists(path)
