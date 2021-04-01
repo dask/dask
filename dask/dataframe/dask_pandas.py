@@ -4,8 +4,13 @@ import numpy as np
 import pandas as pd
 from pandas.api.types import union_categoricals
 
-from .categorical import categorical_dtype_dispatch, is_categorical_dtype_dispatch
-from .methods import concat, concat_dispatch, tolist_dispatch
+from .categorical import categorical_dtype_dispatch
+from .methods import (
+    concat,
+    concat_dispatch,
+    is_categorical_dtype_dispatch,
+    tolist_dispatch,
+)
 from .utils import group_split_dispatch, hash_object_dispatch, is_categorical_dtype
 
 ##########
