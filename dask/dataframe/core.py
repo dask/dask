@@ -33,7 +33,6 @@ from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..utils import (
-    Dispatch,
     IndexCallable,
     M,
     OperatorMethodMixin,
@@ -55,6 +54,7 @@ from ..utils import (
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
+from .dispatch import get_parallel_type
 from .optimize import optimize
 from .utils import (
     PANDAS_GT_100,
@@ -6634,34 +6634,6 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ["..."] * npartitions, index=index, name=s.name)
-
-
-get_parallel_type = Dispatch("get_parallel_type")
-
-
-@get_parallel_type.register(pd.Series)
-def get_parallel_type_series(_):
-    return Series
-
-
-@get_parallel_type.register(pd.DataFrame)
-def get_parallel_type_dataframe(_):
-    return DataFrame
-
-
-@get_parallel_type.register(pd.Index)
-def get_parallel_type_index(_):
-    return Index
-
-
-@get_parallel_type.register(_Frame)
-def get_parallel_type_frame(o):
-    return get_parallel_type(o._meta)
-
-
-@get_parallel_type.register(object)
-def get_parallel_type_object(_):
-    return Scalar
 
 
 def has_parallel_type(x):

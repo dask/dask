@@ -1,6 +1,6 @@
 try:
     from ..base import compute
-    from . import backends, dask_pandas, rolling
+    from . import backends, dispatch, pandas_backend, rolling
     from .core import (
         DataFrame,
         Index,

@@ -4,14 +4,8 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
-from ..utils import Dispatch
-from .utils import (
-    group_split_dispatch,
-    hash_object_dispatch,
-    is_dataframe_like,
-    is_index_like,
-    is_series_like,
-)
+from .dispatch import concat, tolist
+from .utils import is_dataframe_like, is_index_like, is_series_like
 
 # ---------------------------------
 # indexing
@@ -381,79 +375,6 @@ def pivot_count(df, index, columns, values):
     return pd.pivot_table(
         df, index=index, columns=columns, values=values, aggfunc="count", dropna=False
     ).astype(np.float64)
-
-
-# ---------------------------------
-# concat
-# ---------------------------------
-
-
-concat_dispatch = Dispatch("concat")
-
-
-def concat(
-    dfs,
-    axis=0,
-    join="outer",
-    uniform=False,
-    filter_warning=True,
-    ignore_index=False,
-    **kwargs
-):
-    """Concatenate, handling some edge cases:
-
-    - Unions categoricals between partitions
-    - Ignores empty partitions
-
-    Parameters
-    ----------
-    dfs : list of DataFrame, Series, or Index
-    axis : int or str, optional
-    join : str, optional
-    uniform : bool, optional
-        Whether to treat ``dfs[0]`` as representative of ``dfs[1:]``. Set to
-        True if all arguments have the same columns and dtypes (but not
-        necessarily categories). Default is False.
-    ignore_index : bool, optional
-        Whether to allow index values to be ignored/dropped during
-        concatenation. Default is False.
-    ignore_order : bool, optional
-        Whether to ignore the order when doing the union of categoricals.
-        Default is False.
-    """
-    if len(dfs) == 1:
-        return dfs[0]
-    else:
-        func = concat_dispatch.dispatch(type(dfs[0]))
-        return func(
-            dfs,
-            axis=axis,
-            join=join,
-            uniform=uniform,
-            filter_warning=filter_warning,
-            ignore_index=ignore_index,
-            **kwargs
-        )
-
-
-tolist_dispatch = Dispatch("tolist")
-is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
-
-
-def is_categorical_dtype(obj):
-    obj = getattr(obj, "dtype", obj)
-    func = is_categorical_dtype_dispatch.dispatch(type(obj))
-    return func(obj)
-
-
-def tolist(obj):
-    func = tolist_dispatch.dispatch(type(obj))
-    return func(obj)
-
-
-# cuDF may try to import old dispatch functions
-hash_df = hash_object_dispatch
-group_split = group_split_dispatch
 
 
 def assign_index(df, ind):

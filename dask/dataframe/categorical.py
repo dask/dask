@@ -5,15 +5,10 @@ import pandas as pd
 from tlz import partition_all
 
 from ..base import compute_as_if_collection, tokenize
-from ..utils import Dispatch
 from . import methods
 from .accessor import Accessor
-from .utils import (
-    clear_known_categories,
-    has_known_categories,
-    is_categorical_dtype,
-    is_scalar,
-)
+from .dispatch import categorical_dtype, is_categorical_dtype
+from .utils import clear_known_categories, has_known_categories, is_scalar
 
 
 def _categorize_block(df, categories, index):
@@ -274,11 +269,3 @@ class CategoricalAccessor(Accessor):
             meta=meta,
             token="cat-set_categories",
         )
-
-
-categorical_dtype_dispatch = Dispatch("CategoricalDtype")
-
-
-def categorical_dtype(meta, categories=None, ordered=False):
-    func = categorical_dtype_dispatch.dispatch(type(meta))
-    return func(categories=categories, ordered=ordered)

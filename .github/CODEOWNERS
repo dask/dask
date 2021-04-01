@@ -1,2 +1,2 @@
 # Automatically request reviews
-dask/dataframe/dask_pandas.py    @kkraus14 @jakirkham @rjzamora
+dask/dataframe/dispatch.py    @dask/dataframe
