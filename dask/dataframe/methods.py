@@ -398,7 +398,6 @@ def concat(
     join="outer",
     uniform=False,
     filter_warning=True,
-    ignore_order=False,
     ignore_index=False,
     **kwargs
 ):
@@ -434,7 +433,6 @@ def concat(
             uniform=uniform,
             filter_warning=filter_warning,
             ignore_index=ignore_index,
-            ignore_order=ignore_order,
             **kwargs
         )
 
@@ -446,10 +444,11 @@ def concat_pandas(
     join="outer",
     uniform=False,
     filter_warning=True,
-    ignore_order=False,
     ignore_index=False,
     **kwargs
 ):
+    ignore_order = kwargs.pop("ignore_order", False)
+
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, **kwargs)
 

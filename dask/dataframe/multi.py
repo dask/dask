@@ -958,7 +958,7 @@ def merge_asof(
 def concat_and_check(dfs, ignore_order=False):
     if len(set(map(len, dfs))) != 1:
         raise ValueError("Concatenated DataFrames of different lengths")
-    return methods.concat(dfs, ignore_order=ignore_order, axis=1)
+    return methods.concat(dfs, axis=1, ignore_order=ignore_order)
 
 
 def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
@@ -968,10 +968,8 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
         (name, i): (concat_and_check, [(df._name, i) for df in dfs], ignore_order)
         for i in range(dfs[0].npartitions)
     }
-
-    meta = methods.concat(
-        [df._meta for df in dfs], axis=1, ignore_order=ignore_order, **kwargs
-    )
+    kwargs.update({"ignore_order": ignore_order})
+    meta = methods.concat([df._meta for df in dfs], axis=1, **kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
@@ -980,12 +978,12 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
 def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
     """ Concatenate indexed dataframes together along the index """
     warn = axis != 0
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
         [df._meta for df in dfs],
         axis=axis,
         join=join,
         filter_warning=warn,
-        ignore_order=ignore_order,
         **kwargs,
     )
     empties = [strip_unknown_categories(df._meta) for df in dfs]
@@ -1005,7 +1003,7 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **k
     dsk = dict(
         (
             (name, i),
-            (methods.concat, part, axis, join, uniform, filter_warning, ignore_order),
+            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
         )
         for i, part in enumerate(parts2)
     )
@@ -1019,12 +1017,14 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     """Concatenate partitions on axis=0 by doing a simple stack"""
     # Use _meta_nonempty as pandas.concat will incorrectly cast float to datetime
     # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
+
+    kwargs.update({"ignore_order": ignore_order})
+
     meta = make_meta(
         methods.concat(
             [df._meta_nonempty for df in dfs],
             join=join,
             filter_warning=False,
-            ignore_order=ignore_order,
             **kwargs,
         )
     )
@@ -1075,13 +1075,10 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 dsk[(name, i)] = key
             else:
                 dsk[(name, i)] = (
+                    apply,
                     methods.concat,
-                    [empty, key],
-                    0,
-                    join,
-                    uniform,
-                    filter_warning,
-                    ignore_order,
+                    [[empty, key], 0, join, uniform, filter_warning],
+                    kwargs,
                 )
             i += 1
 
@@ -1188,6 +1185,7 @@ def concat(
     ... ], interleave_partitions=True).dtype
     CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
     """
+
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
