@@ -6285,7 +6285,7 @@ def repartition_freq(df, freq=None):
 def _map_freq_to_period_start(freq):
     """Ensure that the frequency pertains to the **start** of a period.
 
-    If e.g. `freq='M'`, then divisions start at:
+    If e.g. `freq='M'`, then the divisions are:
         - 2021-31-1 00:00:00 (start of February partition)
         - 2021-2-28 00:00:00 (start of March partition)
         - ...
@@ -6316,6 +6316,7 @@ def _map_freq_to_period_start(freq):
             return new_offset_type(n=offset.n, **kwargs).freqstr
         except AttributeError:
             return freq
+    return freq
 
 
 def repartition_size(df, size):

@@ -2079,9 +2079,12 @@ def test_repartition_freq_day():
     "freq, expected_freq",
     [
         ("M", "MS"),
+        ("MS", "MS"),
         ("2M", "2MS"),
         ("Q", "QS-JAN"),
         ("2Q", "2QS-JAN"),
+        ("BQ", "BQS-JAN"),
+        ("2BQ", "2BQS-JAN"),
         ("SM", "SMS-15"),
         ("A", "AS-JAN"),
         ("A-FEB", "AS-MAR"),
