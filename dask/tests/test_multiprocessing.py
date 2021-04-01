@@ -1,4 +1,6 @@
+import atexit
 import multiprocessing
+import os
 import pickle
 import sys
 from concurrent.futures import ProcessPoolExecutor
@@ -270,3 +272,25 @@ def test_get_context_always_default():
     with pytest.warns(UserWarning):
         with dask.config.set({"multiprocessing.context": "forkserver"}):
             assert get_context() is multiprocessing
+
+
+def test_worker_shutdown_follows_normal_shutdown_process(tmpdir):
+    """Processes managed by multiprocessing/ProcessPoolExecutor don't follow the
+    normal interpreter shutdown procedure by default (since multiprocessing
+    kills workers with SIGTERM). We register our own signal handler to fix that,
+    ensuring that atexit hooks are always called. This matters both for
+    users of the multiprocessing scheduler, as well as distributed's `LocalCluster`,
+    since that also uses `multiprocessing` to manage workers (and also uses
+    `dask.multiprocessing.initialize_worker_process`).
+    """
+    path = str(tmpdir.join("test_file"))
+    with open(path, "wb") as f:
+        f.write(b"testing")
+
+    def register_atexit_handler(path):
+        atexit.register(lambda: os.remove(path))
+        return "ok"
+
+    assert get({"x": (register_atexit_handler, path)}, "x") == "ok"
+
+    assert not os.path.exists(path)

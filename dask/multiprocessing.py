@@ -3,6 +3,7 @@ import multiprocessing
 import multiprocessing.pool
 import os
 import pickle
+import signal
 import sys
 import traceback
 from concurrent.futures import ProcessPoolExecutor
@@ -244,3 +245,7 @@ def initialize_worker_process():
     np = sys.modules.get("numpy")
     if np is not None:
         np.random.seed()
+
+    # Ensure that shutdown of the worker process follows the normal python
+    # shutdown procedure (including calling `atexit` hooks, etc...).
+    signal.signal(signal.SIGTERM, lambda signum, frame: sys.exit())
