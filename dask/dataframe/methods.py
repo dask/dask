@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
+from .dispatch import is_categorical_dtype  # noqa
 from .dispatch import concat, tolist
 from .utils import is_dataframe_like, is_index_like, is_series_like
 

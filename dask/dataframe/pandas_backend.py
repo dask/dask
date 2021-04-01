@@ -33,7 +33,6 @@ from .utils import (
     _nonempty_scalar,
     _scalar_from_dtype,
     is_categorical_dtype,
-    is_scalar,
 )
 
 

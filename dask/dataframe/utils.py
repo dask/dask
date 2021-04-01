@@ -28,6 +28,7 @@ from . import methods
 
 # include these here for compat
 from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
+from .dispatch import make_meta, meta_nonempty  # noqa
 from .extensions import make_scalar
 
 

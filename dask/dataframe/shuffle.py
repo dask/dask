@@ -17,7 +17,7 @@ from ..sizeof import sizeof
 from ..utils import M, digit
 from . import methods
 from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
-from .utils import group_split_dispatch, hash_object_dispatch
+from .dispatch import group_split_dispatch, hash_object_dispatch
 
 logger = logging.getLogger(__name__)
 

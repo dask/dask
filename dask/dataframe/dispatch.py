@@ -1,4 +1,4 @@
-from .utils import Dispatch
+from ..utils import Dispatch
 
 make_meta = Dispatch("make_meta")
 meta_nonempty = Dispatch("meta_nonempty")

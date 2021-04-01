@@ -54,7 +54,13 @@ from ..utils import (
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
-from .dispatch import get_parallel_type
+from .dispatch import (
+    get_parallel_type,
+    group_split_dispatch,
+    hash_object_dispatch,
+    make_meta,
+    meta_nonempty,
+)
 from .optimize import optimize
 from .utils import (
     PANDAS_GT_100,
@@ -62,17 +68,13 @@ from .utils import (
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
-    group_split_dispatch,
     has_known_categories,
-    hash_object_dispatch,
     index_summary,
     insert_meta_param_description,
     is_categorical_dtype,
     is_dataframe_like,
     is_index_like,
     is_series_like,
-    make_meta,
-    meta_nonempty,
     raise_on_meta_error,
     valid_divisions,
 )

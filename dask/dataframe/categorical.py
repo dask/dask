@@ -2,13 +2,14 @@ from collections import defaultdict
 from numbers import Integral
 
 import pandas as pd
+from pandas.api.types import is_scalar
 from tlz import partition_all
 
 from ..base import compute_as_if_collection, tokenize
 from . import methods
 from .accessor import Accessor
 from .dispatch import categorical_dtype, is_categorical_dtype
-from .utils import clear_known_categories, has_known_categories, is_scalar
+from .utils import clear_known_categories, has_known_categories
 
 
 def _categorize_block(df, categories, index):
