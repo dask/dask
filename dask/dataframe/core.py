@@ -6304,19 +6304,20 @@ def _map_freq_to_period_start(freq):
     offset = pd.tseries.frequencies.to_offset(freq)
     offset_type_name = type(offset).__name__
 
-    if offset_type_name.endswith("End"):
-        new_offset = offset_type_name[: -len("End")] + "Begin"
-        try:
-            new_offset_type = getattr(pd.tseries.offsets, new_offset)
-            kwargs = {}
-            if hasattr(new_offset_type, "startingMonth"):
-                kwargs["startingMonth"] = (offset.startingMonth + 1) % 12
-            if hasattr(new_offset_type, "month"):
-                kwargs["month"] = (offset.month + 1) % 12
-            return new_offset_type(n=offset.n, **kwargs).freqstr
-        except AttributeError:
-            return freq
-    return freq
+    if not offset_type_name.endswith("End"):
+        return freq
+
+    new_offset = offset_type_name[: -len("End")] + "Begin"
+    try:
+        new_offset_type = getattr(pd.tseries.offsets, new_offset)
+        kwargs = {}
+        if hasattr(new_offset_type, "startingMonth"):
+            kwargs["startingMonth"] = (offset.startingMonth + 1) % 12
+        if hasattr(new_offset_type, "month"):
+            kwargs["month"] = (offset.month + 1) % 12
+        return new_offset_type(n=offset.n, **kwargs).freqstr
+    except AttributeError:
+        return freq
 
 
 def repartition_size(df, size):
