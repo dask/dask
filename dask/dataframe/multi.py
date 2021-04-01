@@ -1019,6 +1019,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
 
     kwargs.update({"ignore_order": ignore_order})
+
     meta = make_meta(
         methods.concat(
             [df._meta_nonempty for df in dfs],
@@ -1074,12 +1075,9 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 dsk[(name, i)] = key
             else:
                 dsk[(name, i)] = (
+                    apply,
                     methods.concat,
-                    [empty, key],
-                    0,
-                    join,
-                    uniform,
-                    filter_warning,
+                    [[empty, key], 0, join, uniform, filter_warning],
                     kwargs,
                 )
             i += 1
@@ -1187,6 +1185,7 @@ def concat(
     ... ], interleave_partitions=True).dtype
     CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
     """
+
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
