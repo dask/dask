@@ -425,7 +425,7 @@ def concat(
     if len(dfs) == 1:
         return dfs[0]
     else:
-        ignore_order = kwargs.get("ignore_order", False)
+        ignore_order = kwargs.pop("ignore_order", False)
         func = concat_dispatch.dispatch(type(dfs[0]))
         return func(
             dfs,
