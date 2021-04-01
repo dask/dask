@@ -282,8 +282,3 @@ categorical_dtype_dispatch = Dispatch("CategoricalDtype")
 def categorical_dtype(meta, categories=None, ordered=False):
     func = categorical_dtype_dispatch.dispatch(type(meta))
     return func(categories=categories, ordered=ordered)
-
-
-@categorical_dtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def categorical_dtype_pandas(categories=None, ordered=False):
-    return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)

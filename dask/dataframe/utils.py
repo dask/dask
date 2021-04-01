@@ -468,32 +468,7 @@ def _nonempty_index(idx):
 
 
 hash_object_dispatch = Dispatch("hash_object_dispatch")
-
-
-@hash_object_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def hash_object_pandas(
-    obj, index=True, encoding="utf8", hash_key=None, categorize=True
-):
-    return pd.util.hash_pandas_object(
-        obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
-    )
-
-
 group_split_dispatch = Dispatch("group_split_dispatch")
-
-
-@group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def group_split_pandas(df, c, k, ignore_index=False):
-    indexer, locations = pd._libs.algos.groupsort_indexer(
-        c.astype(np.int64, copy=False), k
-    )
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [
-        df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
-        for a, b in zip(locations[:-1], locations[1:])
-    ]
-    return dict(zip(range(k), parts))
 
 
 _simple_fake_mapping = {
