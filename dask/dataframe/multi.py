@@ -958,7 +958,7 @@ def merge_asof(
 def concat_and_check(dfs, ignore_order=False):
     if len(set(map(len, dfs))) != 1:
         raise ValueError("Concatenated DataFrames of different lengths")
-    return methods.concat(dfs, ignore_order=ignore_order, axis=1)
+    return methods.concat(dfs, axis=1, ignore_order=ignore_order)
 
 
 def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
@@ -968,9 +968,9 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
         (name, i): (concat_and_check, [(df._name, i) for df in dfs], ignore_order)
         for i in range(dfs[0].npartitions)
     }
-
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
-        [df._meta for df in dfs], axis=1, ignore_order=ignore_order, **kwargs
+        [df._meta for df in dfs], axis=1, **kwargs
     )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
@@ -980,12 +980,12 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
 def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
     """ Concatenate indexed dataframes together along the index """
     warn = axis != 0
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
         [df._meta for df in dfs],
         axis=axis,
         join=join,
         filter_warning=warn,
-        ignore_order=ignore_order,
         **kwargs,
     )
     empties = [strip_unknown_categories(df._meta) for df in dfs]
@@ -1019,12 +1019,13 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
     """Concatenate partitions on axis=0 by doing a simple stack"""
     # Use _meta_nonempty as pandas.concat will incorrectly cast float to datetime
     # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
+
+    kwargs.update({"ignore_order": ignore_order})
     meta = make_meta(
         methods.concat(
             [df._meta_nonempty for df in dfs],
             join=join,
             filter_warning=False,
-            ignore_order=ignore_order,
             **kwargs,
         )
     )
@@ -1081,7 +1082,8 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                     join,
                     uniform,
                     filter_warning,
-                    ignore_order,
+                    False,
+                    kwargs,
                 )
             i += 1
 
