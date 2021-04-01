@@ -449,10 +449,10 @@ def concat_pandas(
     ignore_index=False,
     **kwargs
 ):
+    ignore_order = kwargs.pop("ignore_order", False)
+
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, **kwargs)
-
-    ignore_order = kwargs.pop("ignore_order", False)
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
