@@ -337,6 +337,13 @@ def test_map_overlap():
     )
 
 
+def test_map_overlap_escapes_to_map_blocks_when_depth_is_zero():
+    x = da.arange(10, chunks=5)
+    y = x.map_overlap(lambda x: x + 1, depth=0)
+    assert len(y.dask) == 2 * x.numblocks[0]  # depth=0 --> map_blocks
+    assert_eq(y, np.arange(10) + 1)
+
+
 @pytest.mark.parametrize(
     "boundary", [None, "reflect", "periodic", "nearest", "none", 0]
 )
