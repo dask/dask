@@ -9,25 +9,22 @@ from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_scalar  # noqa: F401
 from pandas.api.types import is_categorical_dtype
 
 from ..base import is_dask_collection
 from ..core import get_deps
 from ..local import get_sync
-
-# include these here for compat
 from ..utils import is_arraylike  # noqa: F401
 from ..utils import asciitable
 from ..utils import is_dataframe_like as dask_is_dataframe_like
 from ..utils import is_index_like as dask_is_index_like
 from ..utils import is_series_like as dask_is_series_like
 from ..utils import typename
-from . import _dtypes  # noqa: F401
+from . import _dtypes  # noqa: F401 register pandas extension types
 from . import methods
 from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
 from .dispatch import make_meta, meta_nonempty  # noqa : F401
-
-# register pandas extension types
 from .extensions import make_scalar
 
 

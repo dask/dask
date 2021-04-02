@@ -8,7 +8,11 @@ from tlz import partition_all
 from ..base import compute_as_if_collection, tokenize
 from . import methods
 from .accessor import Accessor
-from .dispatch import categorical_dtype, is_categorical_dtype
+from .dispatch import (  # noqa: F401
+    categorical_dtype,
+    categorical_dtype_dispatch,
+    is_categorical_dtype,
+)
 from .utils import clear_known_categories, has_known_categories
 
 

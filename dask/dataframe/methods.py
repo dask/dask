@@ -4,9 +4,22 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
-from .dispatch import is_categorical_dtype  # noqa
-from .dispatch import concat, group_split_dispatch, hash_object_dispatch, tolist
+#  preserve compatibility while moving dispatch objects
+from .dispatch import (  # noqa: F401
+    concat,
+    concat_dispatch,
+    group_split_dispatch,
+    hash_object_dispatch,
+    is_categorical_dtype,
+    is_categorical_dtype_dispatch,
+    tolist,
+    tolist_dispatch,
+)
 from .utils import is_dataframe_like, is_index_like, is_series_like
+
+# cuDF may try to import old dispatch functions
+hash_df = hash_object_dispatch
+group_split = group_split_dispatch
 
 # ---------------------------------
 # indexing
@@ -382,8 +395,3 @@ def assign_index(df, ind):
     df = df.copy()
     df.index = ind
     return df
-
-
-# cuDF may try to import old dispatch functions
-hash_df = hash_object_dispatch
-group_split = group_split_dispatch
