@@ -272,6 +272,7 @@ def assert_eq(
     check_graph=True,
     check_meta=True,
     check_chunks=True,
+    check_type=True,
     **kwargs,
 ):
     a_original = a
@@ -297,6 +298,12 @@ def assert_eq(
         assert (
             a.shape == b.shape
         ), f"a and b have different shapes (a: {a.shape}, b: {b.shape})"
+        if check_type:
+            _a = a if a.shape else a.item()
+            _b = b if b.shape else b.item()
+            assert type(_a) == type(
+                _b
+            ), f"a and b have different types (a: {type(_a)}, b: {type(_b)})"
         if check_meta:
             if hasattr(a, "_meta") and hasattr(b, "_meta"):
                 assert_eq(a._meta, b._meta)
