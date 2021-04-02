@@ -1,3 +1,9 @@
+"""
+Dispatch in dask.dataframe.
+
+Also see extension.py
+"""
+
 from ..utils import Dispatch
 
 make_meta = Dispatch("make_meta")
@@ -70,8 +76,3 @@ def categorical_dtype(meta, categories=None, ordered=False):
 def tolist(obj):
     func = tolist_dispatch.dispatch(type(obj))
     return func(obj)
-
-
-# cuDF may try to import old dispatch functions
-hash_df = hash_object_dispatch
-group_split = group_split_dispatch

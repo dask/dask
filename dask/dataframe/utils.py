@@ -14,22 +14,48 @@ from pandas.api.types import is_categorical_dtype
 from ..base import is_dask_collection
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import (
-    asciitable,
-    is_dataframe_like,
-    is_index_like,
-    is_series_like,
-    typename,
-)
-
-# register pandas extension types
-from . import _dtypes  # noqa: F401
-from . import methods
 
 # include these here for compat
+from ..utils import is_arraylike  # noqa: F401
+from ..utils import asciitable
+from ..utils import is_dataframe_like as dask_is_dataframe_like
+from ..utils import is_index_like as dask_is_index_like
+from ..utils import is_series_like as dask_is_series_like
+from ..utils import typename
+from . import _dtypes  # noqa: F401
+from . import methods
 from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
-from .dispatch import make_meta, meta_nonempty  # noqa
+from .dispatch import make_meta, meta_nonempty  # noqa : F401
+
+# register pandas extension types
 from .extensions import make_scalar
+
+
+def is_integer_na_dtype(t):
+    dtype = getattr(t, "dtype", t)
+    types = (
+        pd.Int8Dtype,
+        pd.Int16Dtype,
+        pd.Int32Dtype,
+        pd.Int64Dtype,
+        pd.UInt8Dtype,
+        pd.UInt16Dtype,
+        pd.UInt32Dtype,
+        pd.UInt64Dtype,
+    )
+    return isinstance(dtype, types)
+
+
+def is_float_na_dtype(t):
+    if not PANDAS_GT_120:
+        return False
+
+    dtype = getattr(t, "dtype", t)
+    types = (
+        pd.Float32Dtype,
+        pd.Float64Dtype,
+    )
+    return isinstance(dtype, types)
 
 
 def shard_df_on_index(df, divisions):
@@ -277,19 +303,6 @@ def _scalar_from_dtype(dtype):
         raise TypeError("Can't handle dtype: {0}".format(dtype))
 
 
-@make_scalar.register(np.dtype)
-def _(dtype):
-    return _scalar_from_dtype(dtype)
-
-
-@make_scalar.register(pd.Timestamp)
-@make_scalar.register(pd.Timedelta)
-@make_scalar.register(pd.Period)
-@make_scalar.register(pd.Interval)
-def _(x):
-    return x
-
-
 def _nonempty_scalar(x):
     if type(x) in make_scalar._lookup:
         return make_scalar(x)
@@ -299,6 +312,18 @@ def _nonempty_scalar(x):
         return make_scalar(dtype)
 
     raise TypeError("Can't handle meta of type '{0}'".format(typename(type(x))))
+
+
+def is_dataframe_like(df):
+    return dask_is_dataframe_like(df)
+
+
+def is_series_like(s):
+    return dask_is_series_like(s)
+
+
+def is_index_like(s):
+    return dask_is_index_like(s)
 
 
 def check_meta(x, meta, funcname=None, numeric_equal=True):
