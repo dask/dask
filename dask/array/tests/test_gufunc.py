@@ -586,11 +586,10 @@ def test_apply_gufunc_via_numba_02():
         for i in range(x.shape[0]):
             res[0] += x[i]
 
-    a = da.random.normal(size=(20, 30), chunks=5)
+    a = da.random.normal(size=(20, 30), chunks=30)
 
     x = a.sum(axis=0, keepdims=True)
-    y = mysum(a, axis=0, keepdims=True, allow_rechunk=True)
-
+    y = mysum(a, axis=0, keepdims=True)
     assert_eq(x, y)
 
 
