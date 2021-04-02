@@ -98,6 +98,7 @@ Top level user functions:
    greater
    greater_equal
    histogram
+   histogramdd
    hstack
    hypot
    imag
@@ -500,6 +501,7 @@ Other functions
 .. autofunction:: greater
 .. autofunction:: greater_equal
 .. autofunction:: histogram
+.. autofunction:: histogramdd
 .. autofunction:: hstack
 .. autofunction:: hypot
 .. autofunction:: imag

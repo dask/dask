@@ -115,6 +115,7 @@ try:
         flipud,
         gradient,
         histogram,
+        histogramdd,
         hstack,
         insert,
         isclose,
