@@ -1,6 +1,25 @@
 Changelog
 =========
 
+2021.04.0
+---------
+
+Released on April 2, 2021
+
+- Adding support for multidimensional histograms with ``dask.array.histogramdd`` (:pr:`7387`) `Doug Davis`_
+- Update docs on number of threads and workers in default ``LocalCluster`` (:pr:`7497`) `cameron16`_
+- Add labels automatically when certain files are touched in a PR (:pr:`7506`) `Julia Signell`_
+- Extract ``ignore_order`` from ``kwargs`` (:pr:`7500`) `GALI PREM SAGAR`_
+- Only provide installation instructions when distributed is missing (:pr:`7498`) `Matthew Rocklin`_
+- Start adding ``isort`` (:pr:`7370`) `Julia Signell`_
+- Add ``ignore_order`` parameter in ``dd.concat`` (:pr:`7473`) `Daniel Mesejo-León`_
+- Use powers-of-two when displaying RAM (:pr:`7484`) `Guido Imperiale`_
+- Added License Classifier (:pr:`7485`) `Tom Augspurger`_
+- Replace conda with mamba (:pr:`7227`) `Guido Imperiale`_
+- Fix typo in array docs (:pr:`7478`) `James Lamb`_
+- Use ``concurrent.futures`` in local scheduler (:pr:`6322`) `John A Kirkham`_
+
+
 2021.03.1
 ---------
 
@@ -4109,3 +4128,5 @@ Other
 .. _`Tom White`: https://github.com/tomwhite
 .. _`Eoin Shanaghy`: https://github.com/eoinsha
 .. _`Nick Vazquez`: https://github.com/nickvazz
+.. _`cameron16`: https://github.com/cameron16
+.. _`Daniel Mesejo-León`: https://github.com/mesejo
