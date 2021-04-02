@@ -782,6 +782,10 @@ def map_overlap(
         inds = [list(reversed(range(x.ndim))) for x in args]
         _, args = unify_chunks(*list(concat(zip(args, inds))), warn=False)
 
+    # Escape to map_blocks if depth is zero (a more efficient computation)
+    if all([all(depth_val == 0 for depth_val in d.values()) for d in depth]):
+        return map_blocks(func, *args, **kwargs)
+
     for i, x in enumerate(args):
         for j in range(x.ndim):
             if isinstance(depth[i][j], tuple) and boundary[i][j] != "none":
