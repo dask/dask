@@ -4740,8 +4740,8 @@ def concatenate3(arrays):
 
     if IS_NEP18_ACTIVE and not all(
         NDARRAY_ARRAY_FUNCTION
-        is getattr(arr, "__array_function__", NDARRAY_ARRAY_FUNCTION)
-        for arr in arrays
+        is getattr(type(arr), "__array_function__", NDARRAY_ARRAY_FUNCTION)
+        for arr in core.flatten(arrays, container=(list, tuple))
     ):
         try:
             x = unpack_singleton(arrays)
@@ -4767,7 +4767,9 @@ def concatenate3(arrays):
 
     result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
-    for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
+    for (idx, arr) in zip(
+        slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
+    ):
         if hasattr(arr, "ndim"):
             while arr.ndim < ndim:
                 arr = arr[None, ...]

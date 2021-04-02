@@ -1,4 +1,5 @@
 import copy
+from unittest import mock
 
 import pytest
 
@@ -48,6 +49,8 @@ from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
+
+from .test_dispatch import EncapsulateNDArray
 
 
 def test_getem():
@@ -2640,6 +2643,24 @@ def test_concatenate3_2():
             ]
         ),
     )
+
+
+@pytest.mark.parametrize("one_d", [True, False])
+@mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
+def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
+    x = EncapsulateNDArray(np.arange(10))
+    concat = [x, x] if one_d else [[x[None]], [x[None]]]
+    result = concatenate3(concat)
+    assert type(result) is type(x)
+    mock_concatenate2.assert_called()
+    mock_concatenate2.reset_mock()
+
+    # When all the inputs are supported by plain `np.concatenate`, we should take the concatenate3
+    # fastpath of allocating the full array up front and writing blocks into it.
+    concat = [x.arr, x.arr] if one_d else [[x.arr[None]], [x.arr[None]]]
+    plain_np_result = concatenate3(concat)
+    mock_concatenate2.assert_not_called()
+    assert type(plain_np_result) is np.ndarray
 
 
 def test_map_blocks3():
