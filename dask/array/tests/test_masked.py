@@ -131,7 +131,7 @@ def test_mixed_concatenate(func):
 
     dd = func(d)
     ss = func(s)
-    assert_eq(dd, ss, check_meta=False)
+    assert_eq(dd, ss, check_meta=False, check_type=False)
 
 
 @pytest.mark.parametrize("func", functions)
@@ -146,7 +146,7 @@ def test_mixed_random(func):
     dd = func(d)
     ss = func(s)
 
-    assert_eq(dd, ss, check_meta=False)
+    assert_eq(dd, ss, check_meta=False, check_type=False)
 
 
 def test_mixed_output_type():
