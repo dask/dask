@@ -798,6 +798,149 @@ def test_histogram_delayed_n_bins_raises_with_density():
         da.histogram(data, bins=da.array(10), range=[0, 1], density=True)
 
 
+def test_histogramdd():
+    n1, n2 = 800, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=(200, 3))
+    bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
+    (a1, b1) = da.histogramdd(x, bins=bins)
+    (a2, b2) = np.histogramdd(x, bins=bins)
+    (a3, b3) = np.histogramdd(x.compute(), bins=bins)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+    assert a1.sum() == n1
+    assert a2.sum() == n1
+    assert same_keys(da.histogramdd(x, bins=bins)[0], a1)
+
+
+def test_histogramdd_seq_of_arrays():
+    n1 = 800
+    x = da.random.uniform(size=(n1,), chunks=200)
+    y = da.random.uniform(size=(n1,), chunks=200)
+    bx = [0.0, 0.25, 0.75, 1.0]
+    by = [0.0, 0.30, 0.70, 0.8, 1.0]
+    (a1, b1) = da.histogramdd([x, y], bins=[bx, by])
+    (a2, b2) = np.histogramdd([x, y], bins=[bx, by])
+    assert_eq(a1, a2)
+
+
+def test_histogramdd_alternative_bins_range():
+    # test for normal input
+    n1, n2 = 600, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=((200, 200, 200), (3,)))
+    bins = (3, 5, 4)
+    ranges = ((0, 1),) * len(bins)
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges)
+    assert_eq(a1, a2)
+    bins = 4
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges)
+    assert_eq(a1, a2)
+
+    assert a1.sum() == n1
+    assert a2.sum() == n1
+    assert same_keys(da.histogramdd(x, bins=bins, range=ranges)[0], a1)
+
+
+def test_histogramdd_weighted():
+    # test for normal input
+    n1, n2 = 600, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=((200, 200, 200), (3,)))
+    w = da.random.uniform(0.5, 0.8, size=(n1,), chunks=200)
+    bins = (3, 5, 4)
+    ranges = ((0, 1),) * len(bins)
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w)
+    assert_eq(a1, a2)
+    bins = 4
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w)
+    assert_eq(a1, a2)
+
+
+def test_histogramdd_trigger_rechunk():
+    n = 600
+    x = da.random.uniform(0, 1, size=(n,), chunks=200)
+    y = da.random.uniform(0, 1, size=(n,), chunks=200)
+    bins = (6, 7)
+    ranges = ((0, 1),) * len(bins)
+    (a1, b1) = da.histogramdd([x, y], bins=bins, range=ranges)
+    (a2, b2) = np.histogramdd([x, y], bins=bins, range=ranges)
+    (a3, b3) = np.histogramdd([x.compute(), y.compute()], bins=bins, range=ranges)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+
+
+def test_histogramdd_density():
+    n1, n2 = 800, 3
+    x = da.random.uniform(0, 1, size=(n1, n2), chunks=(200, 3))
+    bins = [[0, 0.5, 1], [0, 0.25, 0.85, 1], [0, 0.5, 0.8, 1]]
+    (a1, b1) = da.histogramdd(x, bins=bins, density=True)
+    (a2, b2) = np.histogramdd(x, bins=bins, density=True)
+    (a3, b3) = da.histogramdd(x, bins=bins, normed=True)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+    assert same_keys(da.histogramdd(x, bins=bins, density=True)[0], a1)
+
+
+def test_histogramdd_weighted_density():
+    n1, n2 = 1200, 4
+    x = da.random.standard_normal(size=(n1, n2), chunks=(200, 4))
+    w = da.random.uniform(0.5, 1.2, size=(n1,), chunks=200)
+    bins = (5, 6, 7, 8)
+    ranges = ((-4, 4),) * len(bins)
+    (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
+    (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w, density=True)
+    (a3, b3) = da.histogramdd(x, bins=bins, range=ranges, weights=w, normed=True)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+
+
+def test_histogramdd_raises_incompat_sample_chuks():
+    data = da.random.random(size=(10, 3), chunks=(5, 1))
+    with pytest.raises(
+        ValueError, match="Input array can only be chunked along the 0th axis"
+    ):
+        da.histogramdd(data, bins=10, range=((0, 1),) * 3)
+
+
+def test_histogramdd_raises_incompat_bins_or_range():
+    data = da.random.random(size=(10, 4), chunks=(5, 4))
+    bins = (2, 3, 4, 5)
+    ranges = ((0, 1),) * len(bins)
+
+    # bad number of bins defined (should be data.shape[1])
+    bins = (2, 3, 4)
+    with pytest.raises(
+        ValueError,
+        match="The dimension of bins must be equal to the dimension of the sample.",
+    ):
+        da.histogramdd(data, bins=bins, range=ranges)
+
+    # one range per dimension is required.
+    bins = (2, 3, 4, 5)
+    ranges = ((0, 1),) * 3
+    with pytest.raises(
+        ValueError,
+        match="range argument requires one entry, a min max pair, per dimension.",
+    ):
+        da.histogramdd(data, bins=bins, range=ranges)
+
+    # has range elements that are not pairs
+    with pytest.raises(
+        ValueError, match="range argument should be a sequence of pairs"
+    ):
+        da.histogramdd(data, bins=bins, range=((0, 1), (0, 1, 2), 3, 5))
+
+
+def test_histogramdd_raise_normed_and_density():
+    data = da.random.random(size=(10, 3), chunks=(5, 3))
+    bins = (4, 5, 6)
+    ranges = ((0, 1),) * 3
+    with pytest.raises(TypeError, match="Cannot specify both 'normed' and 'density'"):
+        da.histogramdd(data, bins=bins, range=ranges, normed=True, density=True)
+
+
 def test_cov():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
