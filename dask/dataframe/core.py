@@ -6315,7 +6315,8 @@ def _map_freq_to_period_start(freq):
             anchor = "-" + anchor
         else:
             anchor = ""
-        return f"{offset.n if offset.n != 1 else ''}{new_offset_type._prefix}{anchor}"
+        n = str(offset.n) if offset.n != 1 else ""
+        return f"{n}{new_offset_type._prefix}{anchor}"
     except AttributeError:
         return freq
 
