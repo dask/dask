@@ -761,7 +761,8 @@ def test_reductions(split_every):
             dds.prod(skipna=False, split_every=split_every), pds.prod(skipna=False)
         )
         assert_eq(
-            dds.product(skipna=False, split_every=split_every), pds.product(skipna=False)
+            dds.product(skipna=False, split_every=split_every),
+            pds.product(skipna=False),
         )
         assert_eq(dds.min(skipna=False, split_every=split_every), pds.min(skipna=False))
         assert_eq(dds.max(skipna=False, split_every=split_every), pds.max(skipna=False))
@@ -832,7 +833,9 @@ def test_reductions_timedelta(split_every):
         (pd.Series([1, 2.5, 6]), None, None),
     ],
 )
-@pytest.mark.parametrize("redfunc", ["sum", "prod", "product", "min", "max", "mean", "var", "std"])
+@pytest.mark.parametrize(
+    "redfunc", ["sum", "prod", "product", "min", "max", "mean", "var", "std"]
+)
 def test_reductions_out(frame, axis, out, redfunc):
     dsk_in = dd.from_pandas(frame, 3)
     dsk_out = dd.from_pandas(pd.Series([0]), 1).sum()
@@ -1077,7 +1080,9 @@ def test_reductions_frame(split_every):
     for axis in [0, 1, "index", "columns"]:
         assert_eq(ddf1.sum(axis=axis, split_every=split_every), pdf1.sum(axis=axis))
         assert_eq(ddf1.prod(axis=axis, split_every=split_every), pdf1.prod(axis=axis))
-        assert_eq(ddf1.product(axis=axis, split_every=split_every), pdf1.product(axis=axis))
+        assert_eq(
+            ddf1.product(axis=axis, split_every=split_every), pdf1.product(axis=axis)
+        )
         assert_eq(ddf1.min(axis=axis, split_every=split_every), pdf1.min(axis=axis))
         assert_eq(ddf1.max(axis=axis, split_every=split_every), pdf1.max(axis=axis))
         assert_eq(ddf1.count(axis=axis, split_every=split_every), pdf1.count(axis=axis))

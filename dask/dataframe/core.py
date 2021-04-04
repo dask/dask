@@ -1739,8 +1739,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             return result
 
-    product = prod      # aliased dd.product
-                        # Issue #1259
+    product = prod  # aliased dd.product
 
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False, out=None):
