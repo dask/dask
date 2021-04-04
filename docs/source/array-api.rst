@@ -448,12 +448,10 @@ Other functions
 .. autofunction:: broadcast_arrays
 .. autofunction:: broadcast_to
 .. autofunction:: cbrt
-.. autofunction:: coarsen
 .. autofunction:: ceil
 .. autofunction:: choose
 .. autofunction:: clip
 .. autofunction:: compress
-.. autofunction:: concatenate
 .. autofunction:: conj
 .. autofunction:: copysign
 .. autofunction:: corrcoef
@@ -597,7 +595,6 @@ Other functions
 .. autofunction:: sqrt
 .. autofunction:: square
 .. autofunction:: squeeze
-.. autofunction:: stack
 .. autofunction:: std
 .. autofunction:: subtract
 .. autofunction:: sum
@@ -665,12 +662,9 @@ Other functions
 
 .. currentmodule:: dask.array
 
-.. autofunction:: from_array
-.. autofunction:: from_delayed
 .. autofunction:: from_npy_stack
 .. autofunction:: from_zarr
 .. autofunction:: from_tiledb
-.. autofunction:: store
 .. autofunction:: to_hdf5
 .. autofunction:: to_zarr
 .. autofunction:: to_npy_stack

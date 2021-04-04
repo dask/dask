@@ -117,7 +117,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 
 * Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
-``cytoolz``.
+  ``cytoolz``.
 
 
 Test
