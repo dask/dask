@@ -97,8 +97,25 @@ def meta_from_array(x, ndim=None, dtype=None):
                 meta = meta.sum()
             else:
                 meta = meta.reshape((0,) * ndim)
-    except Exception:
-        meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
+    except Exception as exc:
+        try:
+            meta = np.empty((0,) * ndim, dtype=dtype or x.dtype)
+        except TypeError:
+            used_dtype = dtype or x.dtype
+            msg = (
+                f"Reshaping a {getattr(x, 'ndim', '?')}D array of type {type(x)} to {ndim}D "
+                f"failed with the error: {exc}\n"
+                f"Additionally, constructing a NumPy array with dtype={used_dtype} failed, "
+                "since it is not a NumPy data type."
+            )
+            if any("pandas" in typ.__module__ for typ in type(used_dtype).__mro__):  # looking for `pd.ExtensionDtype`
+                msg += (
+                    "\nIf you derived this Dask Array from a Dask DataFrame, "
+                    "consider using `.to_dask_array()` instead of `.values`. "
+                    "This will force conversion of Pandas ExtensionArrays (which only support 1D) "
+                    "to NumPy arrays (which support ND)."
+                )
+            raise TypeError(msg)
 
     if np.isscalar(meta):
         meta = np.array(meta)

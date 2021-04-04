@@ -69,9 +69,21 @@ config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4
 concatenate_lookup = Dispatch("concatenate")
 tensordot_lookup = Dispatch("tensordot")
 einsum_lookup = Dispatch("einsum")
-concatenate_lookup.register((object, np.ndarray), np.concatenate)
+concatenate_lookup.register(object, np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
 einsum_lookup.register((object, np.ndarray), np.einsum)
+
+
+@concatenate_lookup.register(np.ndarray)
+def _concatenate_preserve_subclasses(arrays, **kwargs):
+    result = np.concatenate(arrays, **kwargs)
+    types = set(map(type, arrays))
+    if len(types) == 1:
+        result_type = types.pop()
+        if not isinstance(result, result_type):
+            result = result.view(type=result_type)
+    return result
+
 
 unknown_chunk_message = (
     "\n\n"
@@ -2679,8 +2691,6 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     >>> normalize_chunks((), shape=(0, 0))
     ((0,), (0,))
     """
-    if dtype and not isinstance(dtype, np.dtype):
-        dtype = np.dtype(dtype)
     if chunks is None:
         raise ValueError(CHUNKS_NONE_ERROR_MESSAGE)
     if isinstance(chunks, list):
@@ -2726,6 +2736,8 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     chunks = tuple("auto" if isinstance(c, str) and c != "auto" else c for c in chunks)
 
     if any(c == "auto" for c in chunks):
+        if dtype and not isinstance(getattr(dtype, "itemsize", None), int):
+            dtype = np.dtype(dtype)
         chunks = auto_chunks(chunks, shape, limit, dtype, previous_chunks)
 
     if shape is not None:
@@ -2821,7 +2833,7 @@ def auto_chunks(chunks, shape, limit, dtype, previous_chunks=None):
     if dtype is None:
         raise TypeError("DType must be known for auto-chunking")
 
-    if dtype.hasobject:
+    if getattr(dtype, "hasobject", False):
         raise NotImplementedError(
             "Can not use auto rechunking with object dtype. "
             "We are unable to estimate the size in bytes of object data"
@@ -4270,7 +4282,7 @@ def elemwise(op, *args, **kwargs):
         # them just like other arrays, and if necessary cast the result of op
         # to match.
         vals = [
-            np.empty((1,) * max(1, a.ndim), dtype=a.dtype)
+            meta_from_array(a, ndim=max(1, a.ndim))
             if not is_scalar_for_elemwise(a)
             else a
             for a in args
@@ -5164,7 +5176,10 @@ def from_npy_stack(dirname, mmap_mode="r"):
     ]
     dsk = dict(zip(keys, values))
 
-    return Array(dsk, name, chunks, dtype)
+    result = Array(dsk, name, chunks, dtype)
+    result._meta = result._meta.view(type=np.memmap)
+    # ^ passing a memmap object as `meta` gets turned back into plain ndarray; override it
+    return result
 
 
 def new_da_object(dsk, name, chunks, meta=None, dtype=None):

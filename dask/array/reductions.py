@@ -340,10 +340,18 @@ def partial_reduce(
         return Array(graph, name, out_chunks, meta=meta)
 
 
+def example_like(arr, constructor=np.empty):
+    # TODO why not just use `arr._meta` always?
+    try:
+        return constructor((1,), dtype=arr.dtype)
+    except TypeError:
+        return arr._meta
+
+
 @derived_from(np)
 def sum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is None:
-        dtype = getattr(np.zeros(1, dtype=a.dtype).sum(), "dtype", object)
+        dtype = getattr(example_like(a, constructor=np.zeros).sum(), "dtype", object)
     result = reduction(
         a,
         chunk.sum,
@@ -362,7 +370,7 @@ def prod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.empty((1,), dtype=a.dtype).prod(), "dtype", object)
+        dt = getattr(example_like(a).prod(), "dtype", object)
     return reduction(
         a,
         chunk.prod,
@@ -438,7 +446,7 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(chunk.nansum(example_like(a)), "dtype", object)
     return reduction(
         a,
         chunk.nansum,
@@ -458,7 +466,7 @@ with ignoring(AttributeError):
         if dtype is not None:
             dt = dtype
         else:
-            dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+            dt = getattr(chunk.nansum(example_like(a)), "dtype", object)
         return reduction(
             a,
             chunk.nanprod,
@@ -643,7 +651,7 @@ def mean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
     elif a.dtype == object:
         dt = object
     else:
-        dt = getattr(np.mean(np.zeros(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.mean(example_like(a, constructor=np.zeros)), "dtype", object)
     return reduction(
         a,
         mean_chunk,
@@ -663,7 +671,7 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.mean(np.empty(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.mean(example_like(a)), "dtype", object)
     return reduction(
         a,
         partial(mean_chunk, sum=chunk.nansum, numel=nannumel),
@@ -817,7 +825,7 @@ def moment(
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.var(example_like(a, constructor=np.ones)), "dtype", object)
     return reduction(
         a,
         partial(moment_chunk, order=order),
@@ -837,7 +845,7 @@ def var(a, axis=None, dtype=None, keepdims=False, ddof=0, split_every=None, out=
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.var(example_like(a, constructor=np.ones)), "dtype", object)
     return reduction(
         a,
         moment_chunk,
@@ -860,7 +868,7 @@ def nanvar(
     if dtype is not None:
         dt = dtype
     else:
-        dt = getattr(np.var(np.ones(shape=(1,), dtype=a.dtype)), "dtype", object)
+        dt = getattr(np.var(example_like(a, constructor=np.ones)), "dtype", object)
     return reduction(
         a,
         partial(moment_chunk, sum=chunk.nansum, numel=nannumel),
@@ -1065,7 +1073,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     )
     # The dtype of `tmp` doesn't actually matter, just need to provide something
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    tmp = Array(graph, name, chunks, dtype=x.dtype)
+    tmp = Array(graph, name, chunks, meta=x._meta)
     dtype = np.argmin([1]).dtype
     result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
     return handle_out(out, result)
@@ -1343,7 +1351,7 @@ def cumreduction(
         x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
-        dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
+        dtype = getattr(func(example_like(x)), "dtype", object)
     assert isinstance(axis, Integral)
     axis = validate_axis(axis, x.ndim)
 

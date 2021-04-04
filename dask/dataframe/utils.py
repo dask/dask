@@ -580,7 +580,9 @@ def _nonempty_series(s, idx=None):
             data = pd.SparseArray([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
-        data = pd.array([entry, entry], dtype=dtype)
+        data = pd.array(
+            [pd.Interval(entry, entry), pd.Interval(entry, entry)], dtype=dtype
+        )
     elif type(dtype) in make_array_nonempty._lookup:
         data = make_array_nonempty(dtype)
     else:
