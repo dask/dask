@@ -3373,3 +3373,42 @@ def test_roundtrip_rename_columns(tmpdir, engine):
     df1.columns = ["d", "e", "f"]
 
     assert_eq(df1, ddf2.compute())
+
+
+def test_filtered_column_subset(tmpdir, engine):
+    df = pd.DataFrame({"col": range(20), "part": ["A", "B"] * 10})
+    ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(tmpdir, partition_on=["part"], engine=engine)
+
+    # # Filtered on a partition column
+    ddf2 = dd.read_parquet(tmpdir, filters=[[("part", "=", "A")]], engine=engine)
+    expected = df.astype({"part": "category"})
+    expected = expected[expected["part"] == "A"]
+
+    # length does column selection under the hood
+    assert len(ddf2) == 10
+    # explicit column selection
+    assert_eq(ddf2["col"].compute(), expected["col"])
+    assert_eq(ddf2["col"].sum().compute(), expected["col"].sum())
+    # full dataframe
+    assert_eq(ddf2.compute(), expected)
+
+    # # Filtered on a normal column
+    ddf2 = dd.read_parquet(tmpdir, filters=[[("col", ">=", 5)]], engine=engine)
+    expected = df.astype({"part": "category"})
+    expected = expected[expected["col"] >= 5]
+
+    if engine == "pyarrow-dataset":
+        # length does column selection under the hood
+        assert len(ddf2) == 15
+        # explicit column selection
+        assert_eq(ddf2["col"].compute(), expected["col"])
+        assert_eq(ddf2["col"].sum().compute(), expected["col"].sum())
+        # full dataframe
+        assert_eq(ddf2.compute(), expected)
+    else:
+        # not actually filtered
+        assert len(ddf2) == 20
+        assert_eq(ddf2["col"].compute(), df["col"])
+        assert_eq(ddf2["col"].sum().compute(), df["col"].sum())
+        assert_eq(ddf2.compute(), df.astype({"part": "category"}))
