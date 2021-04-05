@@ -24,7 +24,7 @@ def register_chunk_type(type):
     However, for multiple duck array types to interoperate properly, they need to
     properly defer to each other in arithmetic operations and NumPy functions/ufuncs
     according to a well-defined type casting hierarchy (
-    `see NEP 13<https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy>`_
+    `see NEP 13 <https://numpy.org/neps/nep-0013-ufunc-overrides.html#type-casting-hierarchy>`__
     ). In an effort to maintain this hierarchy, Dask defers to all other duck array
     types except those in its internal registry. By default, this registry contains
 
