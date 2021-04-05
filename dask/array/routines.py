@@ -425,26 +425,8 @@ def _inner_apply_along_axis(arr, func1d, func1d_axis, func1d_args, func1d_kwargs
 @derived_from(np)
 def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs):
     """
-    Apply a function to 1-D slices along the given axis. This is
-    a blocked variant of :func:`numpy.apply_along_axis` implemented via
+    This is a blocked variant of :func:`numpy.apply_along_axis` implemented via
     :func:`dask.array.map_blocks`
-
-    Parameters
-    ----------
-    func1d : callable
-        Function to apply to 1-D slices of the array along the given axis
-    axis : int
-        Axis along which func1d will be applied
-    arr : dask array
-        Dask array to which ``func1d`` will be applied
-    args : any
-        Additional arguments to ``func1d``.
-    dtype : str or dtype, optional
-        The dtype of the output of ``func1d``.
-    shape : tuple, optional
-        The shape of the output of ``func1d``.
-    kwargs : any
-        Additional keyword arguments for ``func1d``.
 
     Notes
     -----

@@ -60,7 +60,6 @@ Dataframe
     DataFrame.isna
     DataFrame.isnull
     DataFrame.items
-    DataFrame.iteritems
     DataFrame.iterrows
     DataFrame.itertuples
     DataFrame.join
