@@ -749,8 +749,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     Parameters
     ----------
-    a : array_like
-        Input data. The histogram is computed over the flattened array.
+    a : dask.array.Array
+        Input data; the histogram is computed over the flattened
+        array. If the ``weights`` argument is used, the chunks of
+        ``a`` are accessed to check chunking compatibility between
+        ``a`` and ``weights``. If ``weights`` is ``None``, a
+        :py:class:`dask.dataframe.Series` object can be passed as
+        input data.
     bins : int or sequence of scalars, optional
         Either an iterable specifying the ``bins`` or the number of ``bins``
         and a ``range`` argument is required as computing ``min`` and ``max``
@@ -771,7 +776,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     normed : bool, optional
         This is equivalent to the ``density`` argument, but produces incorrect
         results for unequal bin widths. It should not be used.
-    weights : array_like, optional
+    weights : dask.array.Array, optional
         A dask.array.Array of weights, of the same block structure as ``a``.  Each value in
         ``a`` only contributes its associated weight towards the bin count
         (instead of 1). If ``density`` is True, the weights are
@@ -788,6 +793,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         If ``density`` is True, ``bins`` cannot be a single-number delayed
         value. It must be a concrete number, or a (possibly-delayed)
         array/sequence of the bin edges.
+
     Returns
     -------
     hist : dask Array
@@ -795,7 +801,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         description of the possible semantics.
     bin_edges : dask Array of dtype float
         Return the bin edges ``(length(hist)+1)``.
-
 
     Examples
     --------
@@ -1038,10 +1043,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         An alias for the density argument that behaves identically. To
         avoid confusion with the broken argument to `histogram`,
         `density` should be preferred.
-    weights : dask Array, optional
+    weights : dask.array.Array, optional
         An array of values weighing each sample in the input data. The
-        chunks of the the weights must be identical to the chunking
-        along the 0th axis of the data sample.
+        chunks of the weights must be identical to the chunking along
+        the 0th (row) axis of the data sample.
     density : bool, optional
         If ``False`` (default), the returned array represents the
         number of samples in each bin. If ``True``, the returned array
@@ -1216,7 +1221,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         width_divider = asarray(width_divider, chunks=n.chunks)
         return n / width_divider / n.sum(), edges
 
-    return n, edges
+    return n, [asarray(entry) for entry in edges]
 
 
 @derived_from(np)
