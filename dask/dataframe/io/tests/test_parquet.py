@@ -3515,6 +3515,57 @@ def test_to_parquet_overwrite_raises(tmpdir, engine):
     with pytest.raises(ValueError):
         dd.to_parquet(ddf, tmpdir, engine=engine, append=True, overwrite=True)
 
+    # https://github.com/dask/dask/issues/7466
+    # Check that overwrite=True will raise an error if read/write to the same
+    # location happens within the same task graph
+    # Prepare data
+    A = np.random.rand(1, 10)
+    B = np.random.rand(1, 10)
+    cols = np.arange(0, A.shape[1])
+    cols = [str(col) for col in cols]
+
+    ddf = dd.from_pandas(pd.DataFrame(A, columns=cols), npartitions=2)
+    ddf2 = dd.from_pandas(pd.DataFrame(B, columns=cols), npartitions=2)
+
+    dd.to_parquet(
+        ddf,
+        tmpdir,
+        engine="auto",
+        compression="default",
+        write_index=True,
+        overwrite=True,
+        append=False,
+    )
+
+    # Test that reading and writing to the same location raises ValueError
+    ddf = dd.read_parquet(tmpdir)
+
+    with pytest.raises(ValueError):
+        dd.to_parquet(
+            ddf,
+            tmpdir,
+            engine="auto",
+            compression="default",
+            write_index=True,
+            overwrite=True,
+            append=False,
+        )
+
+    # Test the same, except that the read happens in a different layer
+    # from the write
+    ddf3 = ddf + ddf2
+
+    with pytest.raises(ValueError):
+        dd.to_parquet(
+            ddf3,
+            tmpdir,
+            engine="auto",
+            compression="default",
+            write_index=True,
+            overwrite=True,
+            append=False,
+        )
+
 
 def test_dir_filter(tmpdir, engine):
     # github #6898
