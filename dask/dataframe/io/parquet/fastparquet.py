@@ -893,9 +893,19 @@ class FastParquetEngine(Engine):
         return_metadata,
         fmd=None,
         compression=None,
+        custom_metadata=None,
         **kwargs,
     ):
+        # Update key/value metadata if necessary
         fmd = copy.copy(fmd)
+        if custom_metadata and fmd is not None:
+            fmd.key_value_metadata.extend(
+                [
+                    fastparquet.parquet_thrift.KeyValue(key=key, value=value)
+                    for key, value in custom_metadata.items()
+                ]
+            )
+
         if not len(df):
             # Write nothing for empty partitions
             rgs = []
