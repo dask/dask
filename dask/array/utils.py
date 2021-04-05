@@ -382,9 +382,9 @@ def _dtype_of(a):
 
 def empty_like_safe(a, shape, **kwargs):
     """
-    Return np.empty_like(a, shape=shape, **kwargs) if the shape argument
+    Return ``np.empty_like(a, shape=shape, **kwargs)`` if the shape argument
     is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning np.empty(shape, **kwargs).
+    using the old behavior, returning ``np.empty(shape, **kwargs)``.
     """
     try:
         return np.empty_like(a, shape=shape, **kwargs)
@@ -395,10 +395,10 @@ def empty_like_safe(a, shape, **kwargs):
 
 def full_like_safe(a, fill_value, shape, **kwargs):
     """
-    Return np.full_like(a, fill_value, shape=shape, **kwargs) if the
+    Return ``np.full_like(a, fill_value, shape=shape, **kwargs)`` if the
     shape argument is supported (requires NumPy >= 1.17), otherwise
     falls back to using the old behavior, returning
-    np.full(shape, fill_value, **kwargs).
+    ``np.full(shape, fill_value, **kwargs)``.
     """
     try:
         return np.full_like(a, fill_value, shape=shape, **kwargs)
@@ -409,9 +409,9 @@ def full_like_safe(a, fill_value, shape, **kwargs):
 
 def ones_like_safe(a, shape, **kwargs):
     """
-    Return np.ones_like(a, shape=shape, **kwargs) if the shape argument
+    Return ``np.ones_like(a, shape=shape, **kwargs)`` if the shape argument
     is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning np.ones(shape, **kwargs).
+    using the old behavior, returning ``np.ones(shape, **kwargs)``.
     """
     try:
         return np.ones_like(a, shape=shape, **kwargs)
@@ -422,9 +422,9 @@ def ones_like_safe(a, shape, **kwargs):
 
 def zeros_like_safe(a, shape, **kwargs):
     """
-    Return np.zeros_like(a, shape=shape, **kwargs) if the shape argument
+    Return ``np.zeros_like(a, shape=shape, **kwargs)`` if the shape argument
     is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning np.zeros(shape, **kwargs).
+    using the old behavior, returning ``np.zeros(shape, **kwargs)``.
     """
     try:
         return np.zeros_like(a, shape=shape, **kwargs)
