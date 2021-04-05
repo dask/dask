@@ -834,6 +834,7 @@ class ArrowDatasetEngine(Engine):
         index_cols=None,
         schema=None,
         head=False,
+        custom_metadata=None,
         **kwargs,
     ):
         _meta = None
@@ -845,6 +846,10 @@ class ArrowDatasetEngine(Engine):
             index_cols = []
 
         t = cls._pandas_to_arrow_table(df, preserve_index=preserve_index, schema=schema)
+        if custom_metadata:
+            _md = t.schema.metadata
+            _md.update(custom_metadata)
+            t = t.replace_schema_metadata(metadata=_md)
 
         if partition_on:
             md_list = _write_partitioned(
