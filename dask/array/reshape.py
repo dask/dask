@@ -49,7 +49,7 @@ def reshape_rechunk(inshape, outshape, inchunks):
             if all(len(inchunks[i]) == inshape[i] for i in range(ii)):
                 for i in range(ii + 1):
                     result_inchunks[i] = inchunks[i]
-                result_outchunks[oi] = inchunks[i] * np.prod(
+                result_outchunks[oi] = inchunks[ii] * np.prod(
                     list(map(len, inchunks[ileft:ii]))
                 )
             else:
