@@ -835,6 +835,33 @@ def test_append_different_columns(tmpdir, engine):
     assert "Appended dtypes" in str(excinfo.value)
 
 
+def test_append_dict_column(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/7492
+
+    if engine == "fastparquet":
+        pytest.xfail("Fastparquet engine is missing dict-column support")
+
+    tmp = str(tmpdir)
+    dts = pd.date_range("2020-01-01", "2021-01-01")
+    df = pd.DataFrame(
+        {"value": [{"x": x} for x in range(len(dts))]},
+        index=dts,
+    )
+    ddf1 = dd.from_pandas(df, npartitions=1)
+
+    # Write ddf1 to tmp, and then append it again
+    ddf1.to_parquet(tmp, append=True, engine=engine)
+    ddf1.to_parquet(tmp, append=True, engine=engine, ignore_divisions=True)
+
+    # Read back all data (ddf1 + ddf1)
+    ddf2 = dd.read_parquet(tmp, engine=engine)
+
+    # Check computed result
+    expect = pd.concat([df, df])
+    result = ddf2.compute()
+    assert_eq(expect, result)
+
+
 @write_read_engines_xfail
 def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
