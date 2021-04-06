@@ -32,6 +32,7 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
+from ..optimization import SubgraphCallable
 from ..utils import (
     Dispatch,
     IndexCallable,
@@ -5642,17 +5643,22 @@ def map_partitions(
         dsk = dict(dsk)
 
         for k, v in dsk.items():
-            vv = v
-            v = v[0]
+            subgraph = v[0]
             number = k[-1]
             assert isinstance(number, int)
             info = {"number": number, "division": divisions[number]}
-            v = copy.copy(v)  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__dummy__": info})
-            v.dsk[key] = task
-            dsk[k] = (v,) + vv[1:]
+            # Replace the __dummy__ keyword argument with `info`
+            subgraph_dsk = copy.copy(subgraph.dsk)
+            [(key, task)] = subgraph_dsk.items()
+            subgraph_dsk[key] = subs(task, {"__dummy__": info})
+            dsk[k] = (
+                SubgraphCallable(
+                    dsk=subgraph_dsk,
+                    outkey=subgraph.outkey,
+                    inkeys=subgraph.inkeys,
+                    name=f"{subgraph.name}-info-{tokenize(info)}",
+                ),
+            ) + v[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
