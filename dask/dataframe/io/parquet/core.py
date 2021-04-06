@@ -486,7 +486,7 @@ def to_parquet(
     Examples
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
-    >>> dd.to_parquet(df, '/path/to/output/',...)  # doctest: +SKIP
+    >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
 
     See Also
     --------
