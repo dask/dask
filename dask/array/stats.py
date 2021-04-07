@@ -30,28 +30,28 @@ Some differences
 import math
 
 import numpy as np
+
 import dask.array as da
+from dask import delayed
 from dask.array.ufunc import wrap_elemwise
 from dask.utils import derived_from
-from dask import delayed
 
 try:
     import scipy.stats
 except ImportError as e:
     raise ImportError("`dask.array.stats` requires `scipy` to be installed.") from e
-from scipy.stats import distributions
 from scipy import special
+from scipy.stats import distributions
 from scipy.stats.stats import (
-    Ttest_indResult,
-    Ttest_1sampResult,
-    Ttest_relResult,
-    Power_divergenceResult,
-    NormaltestResult,
-    SkewtestResult,
-    KurtosistestResult,
     F_onewayResult,
+    KurtosistestResult,
+    NormaltestResult,
+    Power_divergenceResult,
+    SkewtestResult,
+    Ttest_1sampResult,
+    Ttest_indResult,
+    Ttest_relResult,
 )
-
 
 __all__ = [
     "ttest_ind",

@@ -97,7 +97,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |   murmurhash  |          |                   Faster hashing of arrays                   |
 +---------------+----------+--------------------------------------------------------------+
-|     numpy     | >=1.15.1 |                   Required for dask.array                    |
+|     numpy     | >=1.16   |                   Required for dask.array                    |
 +---------------+----------+--------------------------------------------------------------+
 |     pandas    | >=0.25.0 |                  Required for dask.dataframe                 |
 +---------------+----------+--------------------------------------------------------------+
@@ -116,7 +116,7 @@ These optional dependencies and their minimum supported versions are listed belo
 |    xxhash     |          |                  Faster hashing of arrays                    |
 +---------------+----------+--------------------------------------------------------------+
 
-* Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
+\* Note that ``toolz`` is a mandatory dependency but it can be transparently replaced with
 ``cytoolz``.
 
 

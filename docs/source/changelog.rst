@@ -1,6 +1,93 @@
 Changelog
 =========
 
+2021.04.0
+---------
+
+Released on April 2, 2021
+
+- Adding support for multidimensional histograms with ``dask.array.histogramdd`` (:pr:`7387`) `Doug Davis`_
+- Update docs on number of threads and workers in default ``LocalCluster`` (:pr:`7497`) `cameron16`_
+- Add labels automatically when certain files are touched in a PR (:pr:`7506`) `Julia Signell`_
+- Extract ``ignore_order`` from ``kwargs`` (:pr:`7500`) `GALI PREM SAGAR`_
+- Only provide installation instructions when distributed is missing (:pr:`7498`) `Matthew Rocklin`_
+- Start adding ``isort`` (:pr:`7370`) `Julia Signell`_
+- Add ``ignore_order`` parameter in ``dd.concat`` (:pr:`7473`) `Daniel Mesejo-León`_
+- Use powers-of-two when displaying RAM (:pr:`7484`) `Guido Imperiale`_
+- Added License Classifier (:pr:`7485`) `Tom Augspurger`_
+- Replace conda with mamba (:pr:`7227`) `Guido Imperiale`_
+- Fix typo in array docs (:pr:`7478`) `James Lamb`_
+- Use ``concurrent.futures`` in local scheduler (:pr:`6322`) `John A Kirkham`_
+
+
+2021.03.1
+---------
+
+Released on March 26, 2021
+
+- Add a dispatch for ``is_categorical_dtype`` to handle non-pandas objects (:pr:`7469`) `brandon-b-miller`_
+- Use ``multiprocessing.Pool`` in ``test_read_text`` (:pr:`7472`) `John A Kirkham`_
+- Add missing ``meta`` kwarg to gufunc class (:pr:`7423`) `Peter Andreas Entschev`_
+- Example for memory-mapped Dask array (:pr:`7380`) `Dieter Weber`_
+- Fix NumPy upstream failures ``xfail`` pandas and fastparquet failures (:pr:`7441`) `Julia Signell`_
+- Fix bug in repartition with freq (:pr:`7357`) `Ruben van de Geer`_
+- Fix ``__array_function__`` dispatching for ``tril``/``triu`` (:pr:`7457`) `Peter Andreas Entschev`_
+- Use ``concurrent.futures.Executors`` in a few tests (:pr:`7429`) `John A Kirkham`_
+- Require NumPy >=1.16 (:pr:`7383`) `Guido Imperiale`_
+- Minor ``sort_values`` housekeeping (:pr:`7462`) `Ryan Williams`_
+- Ensure natural sort order in parquet part paths (:pr:`7249`) `Ryan Williams`_
+- Remove global env mutation upon running ``test_config.py`` (:pr:`7464`) `Hristo`_
+- Update NumPy intersphinx URL (:pr:`7460`) `Gabe Joseph`_
+- Add ``rot90`` (:pr:`7440`) `Trevor Manz`_
+- Update docs for required package for endpoint (:pr:`7454`) `Nick Vazquez`_
+- Master -> main in ``slice_array`` docstring (:pr:`7453`) `Gabe Joseph`_
+- Expand ``dask.utils.is_arraylike`` docstring (:pr:`7445`) `Doug Davis`_
+- Simplify ``BlockwiseIODeps`` importing (:pr:`7420`) `Richard (Rick) Zamora`_
+- Update layer annotation packing method (:pr:`7430`) `James Bourbeau`_
+- Drop duplicate test in ``test_describe_empty`` (:pr:`7431`) `John A Kirkham`_
+- Add ``Series.dot`` method to dataframe module (:pr:`7236`) `Madhu94`_
+- Added df ``kurtosis``-method and testing (:pr:`7273`) `Jan Borchmann`_
+- Avoid quadratic-time performance for HLG culling (:pr:`7403`) `Bruce Merry`_
+- Temporarily skip problematic ``sparse`` test (:pr:`7421`) `James Bourbeau`_
+- Update some CI workflow names (:pr:`7422`) `James Bourbeau`_
+- Fix HDFS test (:pr:`7418`) `Julia Signell`_
+- Make changelog subtitles match the hierarchy (:pr:`7419`) `Julia Signell`_
+- Add support for normalize in ``value_counts`` (:pr:`7342`) `Julia Signell`_
+- Avoid unnecessary imports for HLG Layer unpacking and materialization (:pr:`7381`) `Richard (Rick) Zamora`_
+- Bincount fix slicing (:pr:`7391`) `Genevieve Buckley`_
+- Add ``sliding_window_view`` (:pr:`7234`) `Deepak Cherian`_
+- Fix typo in ``docs/source/develop.rst`` (:pr:`7414`) `Hristo`_
+- Switch documentation builds for PRs to readthedocs (:pr:`7397`) `James Bourbeau`_
+- Adds ``sort_values`` to dask.DataFrame (:pr:`7286`) `gerrymanoim`_
+- Pin ``sqlalchemy<1.4.0`` in CI (:pr:`7405`) `James Bourbeau`_
+- Comment fixes (:pr:`7215`) `Ryan Williams`_
+- Dead code removal / fixes (:pr:`7388`) `Ryan Williams`_
+- Use single thread for ``pa.Table.from_pandas`` calls (:pr:`7347`) `Richard (Rick) Zamora`_
+- Replace ``'container'`` with ``'image'`` (:pr:`7389`) `James Lamb`_
+- DOC hyperlink repartition (:pr:`7394`) `Ray Bell`_
+- Pass delimiter to ``fsspec`` in ``bag.read_text`` (:pr:`7349`) `Martin Durant`_
+- Update ``read_hdf`` default mode to ``"r"`` (:pr:`7039`) `rs9w33`_
+- Embed literals in ``SubgraphCallable`` when packing ``Blockwise`` (:pr:`7353`) `Mads R. B. Kristensen`_
+- Update ``test_hdf.py`` to not reuse file handlers (:pr:`7044`) `rs9w33`_
+- Require additional dependencies: cloudpickle, partd, fsspec, toolz (:pr:`7345`) `Julia Signell`_
+- Prepare ``Blockwise`` + IO infrastructure (:pr:`7281`) `Richard (Rick) Zamora`_
+- Remove duplicated imports from ``test_slicing.py`` (:pr:`7365`) `Hristo`_
+- Add test deps for pip development (:pr:`7360`) `Julia Signell`_
+- Support int slicing for non-NumPy arrays (:pr:`7364`) `Peter Andreas Entschev`_
+- Automatically cancel previous CI builds (:pr:`7348`) `James Bourbeau`_
+- ``dask.array.asarray`` should handle case where ``xarray`` class is in top-level namespace (:pr:`7335`) `Tom White`_
+- ``HighLevelGraph`` length without materializing layers (:pr:`7274`) `Gabe Joseph`_
+- Drop support for Python 3.6 (:pr:`7006`) `James Bourbeau`_
+- Fix fsspec usage in ``create_metadata_file`` (:pr:`7295`) `Richard (Rick) Zamora`_
+- Change default branch from master to main (:pr:`7198`) `Julia Signell`_
+- Add Xarray to CI software environment (:pr:`7338`) `James Bourbeau`_
+- Update repartition argument name in error text (:pr:`7336`) `Eoin Shanaghy`_
+- Run upstream tests based on commit message (:pr:`7329`) `James Bourbeau`_
+- Use ``pytest.register_assert_rewrite`` on util modules (:pr:`7278`) `Bruce Merry`_
+- Add example on using specific chunk sizes in ``from_array()`` (:pr:`7330`) `James Lamb`_
+- Move NumPy skip into test (:pr:`7247`) `Julia Signell`_
+
+
 2021.03.0
 ---------
 
@@ -4032,3 +4119,14 @@ Other
 .. _`Sinclair Target`: https://github.com/sinclairtarget
 .. _`Ashwin Srinath`: https://github.com/shwina
 .. _`David Hassell`: https://github.com/davidhassell
+.. _`brandon-b-miller`: https://github.com/brandon-b-miller
+.. _`Hristo`: https://github.com/hristog
+.. _`Trevor Manz`: https://github.com/manzt
+.. _`Madhu94`: https://github.com/Madhu94
+.. _`gerrymanoim`: https://github.com/gerrymanoim
+.. _`rs9w33`: https://github.com/rs9w33
+.. _`Tom White`: https://github.com/tomwhite
+.. _`Eoin Shanaghy`: https://github.com/eoinsha
+.. _`Nick Vazquez`: https://github.com/nickvazz
+.. _`cameron16`: https://github.com/cameron16
+.. _`Daniel Mesejo-León`: https://github.com/mesejo

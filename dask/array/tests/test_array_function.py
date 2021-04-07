@@ -1,11 +1,10 @@
-import pytest
 import numpy as np
+import pytest
 
 import dask.array as da
-from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 from .test_dispatch import EncapsulateNDArray, WrappedArray
-
 
 missing_arrfunc_cond = not IS_NEP18_ACTIVE
 missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
@@ -152,7 +151,7 @@ def test_unregistered_func(func):
     y = da.from_array(x, chunks=(50, 50))
 
     # Check if it's an equivalent array
-    assert_eq(x, y, check_meta=False)
+    assert_eq(x, y, check_meta=False, check_type=False)
 
     # Perform two NumPy functions, one on the
     # Encapsulated array
@@ -163,7 +162,7 @@ def test_unregistered_func(func):
     yy = func(y)
 
     # Check that they are equivalent arrays.
-    assert_eq(xx, yy, check_meta=False)
+    assert_eq(xx, yy, check_meta=False, check_type=False)
 
 
 def test_non_existent_func():

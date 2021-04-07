@@ -1,21 +1,19 @@
-from fnmatch import fnmatch
-from glob import glob
 import os
 import uuid
+from fnmatch import fnmatch
+from glob import glob
 from warnings import warn
 
 import pandas as pd
+from fsspec.utils import build_name_function, stringify_path
 from tlz import merge
 
-from fsspec.utils import build_name_function, stringify_path
-
-from .io import _link
-from ...base import get_scheduler
-from ..core import DataFrame, new_dd_object
 from ... import config, multiprocessing
-from ...base import tokenize, compute_as_if_collection
+from ...base import compute_as_if_collection, get_scheduler, tokenize
 from ...delayed import Delayed, delayed
 from ...utils import get_scheduler_lock
+from ..core import DataFrame, new_dd_object
+from .io import _link
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):

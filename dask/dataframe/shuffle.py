@@ -2,23 +2,22 @@ import contextlib
 import logging
 import math
 import shutil
-import uuid
 import tempfile
+import uuid
 
-import tlz as toolz
 import numpy as np
 import pandas as pd
-
-from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+import tlz as toolz
 
 from .. import base, config
-from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
+from ..base import compute, compute_as_if_collection, is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
+from ..layers import ShuffleLayer, SimpleShuffleLayer
 from ..sizeof import sizeof
-from ..utils import digit, M
-from .utils import hash_object_dispatch, group_split_dispatch
+from ..utils import M, digit
 from . import methods
-from ..layers import SimpleShuffleLayer, ShuffleLayer
+from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from .utils import group_split_dispatch, hash_object_dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -68,23 +67,25 @@ def _calculate_divisions(
 
 def sort_values(
     df,
-    value,
+    by,
     npartitions=None,
     ascending=True,
     upsample=1.0,
     partition_size=128e6,
     **kwargs,
 ):
-    """ See _Frame.sort_values for docstring """
-    if not isinstance(value, str):
+    """ See DataFrame.sort_values for docstring """
+    if not ascending:
+        raise NotImplementedError("The ascending= keyword is not supported")
+    if not isinstance(by, str):
         # support ["a"] as input
-        if isinstance(value, list) and len(value) == 1 and isinstance(value[0], str):
-            value = value[0]
+        if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
+            by = by[0]
         else:
             raise NotImplementedError(
                 "Dataframe only supports sorting by a single column which must "
                 "be passed as a string or a list of a single string.\n"
-                "You passed %s" % str(value)
+                "You passed %s" % str(by)
             )
     if npartitions == "auto":
         repartition = True
@@ -94,7 +95,7 @@ def sort_values(
             npartitions = df.npartitions
         repartition = False
 
-    sort_by_col = df[value]
+    sort_by_col = df[by]
 
     divisions, mins, maxes = _calculate_divisions(
         df, sort_by_col, repartition, npartitions, upsample, partition_size
@@ -107,11 +108,10 @@ def sort_values(
         and npartitions == df.npartitions
     ):
         # divisions are in the right place
-        divisions = mins + [maxes[-1]]
-        return df.map_partitions(M.sort_values, value)
+        return df.map_partitions(M.sort_values, by)
 
-    df = rearrange_by_divisions(df, value, divisions)
-    df = df.map_partitions(M.sort_values, value)
+    df = rearrange_by_divisions(df, by, divisions)
+    df = df.map_partitions(M.sort_values, by)
     return df
 
 

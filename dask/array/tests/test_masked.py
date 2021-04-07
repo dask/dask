@@ -1,13 +1,13 @@
 import random
+from copy import deepcopy
 from itertools import product
 
 import numpy as np
 import pytest
 
 import dask.array as da
-from dask.base import tokenize
 from dask.array.utils import assert_eq
-from copy import deepcopy
+from dask.base import tokenize
 
 pytest.importorskip("dask.array.ma")
 
@@ -131,7 +131,7 @@ def test_mixed_concatenate(func):
 
     dd = func(d)
     ss = func(s)
-    assert_eq(dd, ss, check_meta=False)
+    assert_eq(dd, ss, check_meta=False, check_type=False)
 
 
 @pytest.mark.parametrize("func", functions)
@@ -146,7 +146,7 @@ def test_mixed_random(func):
     dd = func(d)
     ss = func(s)
 
-    assert_eq(dd, ss, check_meta=False)
+    assert_eq(dd, ss, check_meta=False, check_type=False)
 
 
 def test_mixed_output_type():

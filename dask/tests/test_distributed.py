@@ -1,4 +1,3 @@
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 import pytest
 
 distributed = pytest.importorskip("distributed")
@@ -9,23 +8,19 @@ from operator import add
 
 from tornado import gen
 
-import dask
-from dask import persist, delayed, compute
-import dask.bag as db
-from dask.delayed import Delayed
-from dask.utils import tmpdir, get_named_args
 from distributed import futures_of
 from distributed.client import wait
-from distributed.utils_test import (  # noqa F401
-    gen_cluster,
-    inc,
-    cluster,
-    cluster_fixture,
-    loop,
-    client as c,
-    varying,
-)
+from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cluster_fixture  # noqa F401
+from distributed.utils_test import loop  # noqa F401
+from distributed.utils_test import cluster, gen_cluster, inc, varying
 
+import dask
+import dask.bag as db
+from dask import compute, delayed, persist
+from dask.delayed import Delayed
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.utils import get_named_args, tmpdir
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
@@ -73,11 +68,6 @@ def test_persist_nested(c):
 def test_futures_to_delayed_dataframe(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-
-    from dask.array.numpy_compat import _numpy_120
-
-    if _numpy_120:
-        pytest.skip("https://github.com/dask/dask/issues/7170")
 
     df = pd.DataFrame({"x": [1, 2, 3]})
 

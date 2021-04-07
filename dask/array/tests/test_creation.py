@@ -9,8 +9,8 @@ from tlz import concat
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
-from dask.array.utils import assert_eq, same_keys, AxisError
 from dask.array.numpy_compat import _numpy_117, _numpy_118
+from dask.array.utils import AxisError, assert_eq, same_keys
 
 
 @pytest.mark.parametrize(

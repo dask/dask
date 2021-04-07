@@ -53,47 +53,46 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
-from functools import wraps, partial
-import warnings
 import math
 import pickle
+import warnings
+from functools import partial, wraps
 
-from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal, is_categorical_dtype, union_categoricals
+from pandas.api.types import is_categorical_dtype, is_dtype_equal, union_categoricals
+from tlz import first, merge_sorted, unique
 
-from ..base import tokenize, is_dask_collection
+from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..layers import BroadcastJoinLayer
-from ..utils import apply
+from ..utils import M, apply
+from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
-    _Frame,
     DataFrame,
-    Series,
-    map_partitions,
     Index,
+    Series,
+    _concat,
+    _Frame,
     _maybe_from_pandas,
-    new_dd_object,
     is_broadcastable,
+    map_partitions,
+    new_dd_object,
     prefix_reduction,
     suffix_reduction,
-    _concat,
 )
 from .io import from_pandas
-from . import methods
-from .shuffle import shuffle, rearrange_by_divisions, partitioning_index, shuffle_group
+from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
 from .utils import (
-    strip_unknown_categories,
-    is_series_like,
     asciitable,
-    is_dataframe_like,
-    make_meta,
-    hash_object_dispatch,
     group_split_dispatch,
+    hash_object_dispatch,
+    is_dataframe_like,
+    is_series_like,
+    make_meta,
+    strip_unknown_categories,
 )
-from ..utils import M
 
 
 def align_partitions(*dfs):
@@ -956,31 +955,36 @@ def merge_asof(
 ###############################################################
 
 
-def concat_and_check(dfs):
+def concat_and_check(dfs, ignore_order=False):
     if len(set(map(len, dfs))) != 1:
         raise ValueError("Concatenated DataFrames of different lengths")
-    return methods.concat(dfs, axis=1)
+    return methods.concat(dfs, axis=1, ignore_order=ignore_order)
 
 
-def concat_unindexed_dataframes(dfs, **kwargs):
+def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
     name = "concat-" + tokenize(*dfs)
 
     dsk = {
-        (name, i): (concat_and_check, [(df._name, i) for df in dfs])
+        (name, i): (concat_and_check, [(df._name, i) for df in dfs], ignore_order)
         for i in range(dfs[0].npartitions)
     }
-
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat([df._meta for df in dfs], axis=1, **kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
 
 
-def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
+def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
     """ Concatenate indexed dataframes together along the index """
     warn = axis != 0
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
-        [df._meta for df in dfs], axis=axis, join=join, filter_warning=warn, **kwargs
+        [df._meta for df in dfs],
+        axis=axis,
+        join=join,
+        filter_warning=warn,
+        **kwargs,
     )
     empties = [strip_unknown_categories(df._meta) for df in dfs]
 
@@ -997,7 +1001,10 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
     uniform = False
 
     dsk = dict(
-        ((name, i), (methods.concat, part, axis, join, uniform, filter_warning))
+        (
+            (name, i),
+            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
+        )
         for i, part in enumerate(parts2)
     )
     for df in dfs2:
@@ -1006,13 +1013,19 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def stack_partitions(dfs, divisions, join="outer", **kwargs):
+def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs):
     """Concatenate partitions on axis=0 by doing a simple stack"""
     # Use _meta_nonempty as pandas.concat will incorrectly cast float to datetime
     # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
+
+    kwargs.update({"ignore_order": ignore_order})
+
     meta = make_meta(
         methods.concat(
-            [df._meta_nonempty for df in dfs], join=join, filter_warning=False, **kwargs
+            [df._meta_nonempty for df in dfs],
+            join=join,
+            filter_warning=False,
+            **kwargs,
         )
     )
     empty = strip_unknown_categories(meta)
@@ -1054,11 +1067,19 @@ def stack_partitions(dfs, divisions, join="outer", **kwargs):
         except (ValueError, TypeError):
             match = False
 
+        filter_warning = True
+        uniform = False
+
         for key in df.__dask_keys__():
             if match:
                 dsk[(name, i)] = key
             else:
-                dsk[(name, i)] = (methods.concat, [empty, key], 0, join)
+                dsk[(name, i)] = (
+                    apply,
+                    methods.concat,
+                    [[empty, key], 0, join, uniform, filter_warning],
+                    kwargs,
+                )
             i += 1
 
     return new_dd_object(dsk, name, meta, divisions)
@@ -1070,6 +1091,7 @@ def concat(
     join="outer",
     interleave_partitions=False,
     ignore_unknown_divisions=False,
+    ignore_order=False,
     **kwargs,
 ):
     """Concatenate DataFrames along rows.
@@ -1103,6 +1125,8 @@ def concat(
     ignore_unknown_divisions : bool, default False
         By default a warning is raised if any input has unknown divisions.
         Set to True to disable this warning.
+    ignore_order : bool, default False
+        Whether to ignore order when doing the union of categoricals.
 
     Notes
     -----
@@ -1161,6 +1185,7 @@ def concat(
     ... ], interleave_partitions=True).dtype
     CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
     """
+
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
@@ -1180,7 +1205,9 @@ def concat(
 
     if axis == 1:
         if all(df.known_divisions for df in dasks):
-            return concat_indexed_dataframes(dfs, axis=axis, join=join, **kwargs)
+            return concat_indexed_dataframes(
+                dfs, axis=axis, join=join, ignore_order=ignore_order, **kwargs
+            )
         elif (
             len(dasks) == len(dfs)
             and all(not df.known_divisions for df in dfs)
@@ -1193,7 +1220,7 @@ def concat(
                     " are \n aligned. This assumption is not generally "
                     "safe."
                 )
-            return concat_unindexed_dataframes(dfs, **kwargs)
+            return concat_unindexed_dataframes(dfs, ignore_order=ignore_order, **kwargs)
         else:
             raise ValueError(
                 "Unable to concatenate DataFrame with unknown "
@@ -1211,15 +1238,23 @@ def concat(
                     # remove last to concatenate with next
                     divisions += df.divisions[:-1]
                 divisions += dfs[-1].divisions
-                return stack_partitions(dfs, divisions, join=join, **kwargs)
+                return stack_partitions(
+                    dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+                )
             elif interleave_partitions:
-                return concat_indexed_dataframes(dfs, join=join, **kwargs)
+                return concat_indexed_dataframes(
+                    dfs, join=join, ignore_order=ignore_order, **kwargs
+                )
             else:
                 divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-                return stack_partitions(dfs, divisions, join=join, **kwargs)
+                return stack_partitions(
+                    dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+                )
         else:
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return stack_partitions(dfs, divisions, join=join, **kwargs)
+            return stack_partitions(
+                dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+            )
 
 
 def _contains_index_name(df, columns_or_index):
