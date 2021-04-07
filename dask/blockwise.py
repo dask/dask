@@ -363,7 +363,7 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        func = to_serialize(dsk[0])
+        func = to_serialize(dsk[0])  # if self.concatenate else dumps_function(dsk[0])
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -821,8 +821,7 @@ def make_blockwise_graph(
         key_deps = {}
 
     if deserializing:
-        from distributed.protocol.serialize import import_allowed_module
-        from distributed.protocol import Serialized, serialize
+        from distributed.protocol.serialize import import_allowed_module, to_serialize
     else:
         from importlib import import_module as import_allowed_module
 
@@ -922,7 +921,7 @@ def make_blockwise_graph(
         else:
             args.insert(0, func)
             val = tuple(args)
-        dsk[out_key] = Serialized(*serialize(val)) if deserializing else val
+        dsk[out_key] = to_serialize(val, task=True) if deserializing else val
         if return_key_deps:
             key_deps[out_key] = deps
 
