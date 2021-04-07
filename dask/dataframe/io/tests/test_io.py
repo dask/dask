@@ -1,20 +1,17 @@
+from concurrent.futures import ThreadPoolExecutor
+from threading import Lock
+
 import numpy as np
 import pandas as pd
-
 import pytest
-from threading import Lock
-from multiprocessing.pool import ThreadPool
 
 import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
-from dask.delayed import Delayed, delayed
-
-from dask.utils import tmpfile
-
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
-
+from dask.delayed import Delayed, delayed
+from dask.utils import tmpfile
 
 ####################
 # Arrays and BColz #
@@ -117,7 +114,6 @@ def test_from_array_with_record_dtype():
 
 def test_from_bcolz_multiple_threads():
     bcolz = pytest.importorskip("bcolz")
-    pool = ThreadPool(processes=5)
 
     def check(i):
         t = bcolz.ctable(
@@ -141,7 +137,8 @@ def test_from_bcolz_multiple_threads():
             dd.from_bcolz(t, chunksize=3).dask
         )
 
-    pool.map(check, range(5))
+    with ThreadPoolExecutor(5) as pool:
+        list(pool.map(check, range(5)))
 
 
 def test_from_bcolz():
@@ -529,7 +526,9 @@ def test_to_records():
     )
     ddf = dd.from_pandas(df, 2)
 
-    assert_eq(df.to_records(), ddf.to_records())
+    assert_eq(
+        df.to_records(), ddf.to_records(), check_type=False
+    )  # TODO: make check_type pass
 
 
 @pytest.mark.parametrize("lengths", [[2, 2], True])
@@ -544,7 +543,7 @@ def test_to_records_with_lengths(lengths):
     ddf = dd.from_pandas(df, 2)
 
     result = ddf.to_records(lengths=lengths)
-    assert_eq(df.to_records(), result)
+    assert_eq(df.to_records(), result, check_type=False)  # TODO: make check_type pass
 
     assert isinstance(result, da.Array)
 

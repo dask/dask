@@ -1,33 +1,34 @@
 import itertools
+import multiprocessing as mp
 import os
+import pickle
 import random
+import string
 import tempfile
+from concurrent.futures import ProcessPoolExecutor
+from copy import copy
+from functools import partial
 from unittest import mock
 
+import numpy as np
 import pandas as pd
 import pytest
-import pickle
-import numpy as np
-import string
-import multiprocessing as mp
-from copy import copy
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm, assert_categorical_equal
 from dask import delayed
 from dask.base import compute_as_if_collection
-from dask.optimization import cull
+from dask.dataframe._compat import PANDAS_GT_120, assert_categorical_equal, tm
 from dask.dataframe.shuffle import (
-    shuffle,
+    maybe_buffered_partd,
     partitioning_index,
     rearrange_by_column,
     rearrange_by_divisions,
-    maybe_buffered_partd,
     remove_nans,
+    shuffle,
 )
 from dask.dataframe.utils import assert_eq, make_meta
-from dask.dataframe._compat import PANDAS_GT_120
+from dask.optimization import cull
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [1, 4, 7]}, index=[0, 1, 3]),
@@ -432,15 +433,14 @@ def test_set_index_consistent_divisions():
     ddf = ddf.clear_divisions()
 
     ctx = mp.get_context("spawn")
-    pool = ctx.Pool(processes=8)
-    with pool:
-        results = [pool.apply_async(_set_index, (ddf, "x")) for _ in range(100)]
-        divisions_set = set(result.get() for result in results)
+    with ProcessPoolExecutor(8, ctx) as pool:
+        func = partial(_set_index, df=ddf, idx="x")
+        divisions_set = set(pool.map(func, range(100)))
     assert len(divisions_set) == 1
 
 
-def _set_index(df, *args, **kwargs):
-    return df.set_index(*args, **kwargs).divisions
+def _set_index(i, df, idx):
+    return df.set_index(idx).divisions
 
 
 @pytest.mark.parametrize("shuffle", ["disk", "tasks"])
@@ -1192,7 +1192,5 @@ def test_set_index_nan_partition():
 )
 def test_sort_values(npartitions):
     df = pd.DataFrame({"a": np.random.randint(0, 10, 100)})
-
     ddf = dd.from_pandas(df, npartitions=npartitions)
-
     assert_eq(ddf.sort_values("a"), df.sort_values("a"))

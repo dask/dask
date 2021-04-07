@@ -108,8 +108,8 @@ def register_numpy():
 
 @sizeof.register_lazy("pandas")
 def register_pandas():
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     def object_size(x):
         if not len(x):

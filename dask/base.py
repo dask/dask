@@ -1,27 +1,28 @@
+import inspect
+import os
+import pickle
+import threading
+import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
-from dataclasses import is_dataclass, fields
+from dataclasses import fields, is_dataclass
 from distutils.version import LooseVersion
 from functools import partial
 from hashlib import md5
 from numbers import Number
 from operator import getitem
 from typing import Iterator, Mapping, Set
-import inspect
-import pickle
-import os
-import threading
-import uuid
 
-from tlz import merge, groupby, curry, identity
+from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from .context import thread_state
-from .core import flatten, quote, get as simple_get, literal
-from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict, apply, key_split
 from . import config, local, threaded
-
+from .context import thread_state
+from .core import flatten
+from .core import get as simple_get
+from .core import literal, quote
+from .hashing import hash_buffer_hex
+from .utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
     "DaskMethodsMixin",
@@ -286,7 +287,7 @@ class DaskMethodsMixin:
 
     def __await__(self):
         try:
-            from distributed import wait, futures_of
+            from distributed import futures_of, wait
         except ImportError as e:
             raise ImportError(
                 "Using async/await with dask requires the `distributed` package"
@@ -647,8 +648,9 @@ def visualize(*args, **kwargs):
     color = kwargs.get("color")
 
     if color == "order":
-        from .order import order
         import matplotlib.pyplot as plt
+
+        from .order import order
 
         o = order(dsk)
         try:

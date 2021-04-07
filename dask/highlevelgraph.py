@@ -1,25 +1,25 @@
 import abc
 import collections.abc
+import copy
 import warnings
 from typing import (
     AbstractSet,
     Any,
     Dict,
     Hashable,
+    Iterable,
+    Mapping,
     MutableMapping,
     Optional,
-    Mapping,
-    Iterable,
     Tuple,
 )
-import copy
 
 import tlz as toolz
 
 from . import config
-from .utils import ensure_dict, ignoring, stringify
 from .base import clone_key, flatten, is_dask_collection
-from .core import reverse_dict, keys_in_tasks
+from .core import keys_in_tasks, reverse_dict
+from .utils import ensure_dict, ignoring, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -147,7 +147,7 @@ class Layer(collections.abc.Mapping):
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
-    def __dask_distributed_anno_pack__(self) -> Optional[Mapping[str, Any]]:
+    def __dask_distributed_annotations_pack__(self) -> Optional[Mapping[str, Any]]:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
@@ -337,9 +337,9 @@ class Layer(collections.abc.Mapping):
             Scheduler compatible state of the layer
         """
         from distributed.client import Future
-        from distributed.utils_comm import unpack_remotedata, subs_multiple
-        from distributed.worker import dumps_task
         from distributed.utils import CancelledError
+        from distributed.utils_comm import subs_multiple, unpack_remotedata
+        from distributed.worker import dumps_task
 
         dsk = dict(self)
 
@@ -923,11 +923,13 @@ class HighLevelGraph(Mapping):
                     f"expected {repr(dependencies[k])}"
                 )
 
-    def __dask_distributed_pack__(self, client, client_keys: Iterable[Hashable]) -> Any:
+    def __dask_distributed_pack__(
+        self, client, client_keys: Iterable[Hashable]
+    ) -> dict:
         """Pack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the packaging to each layer in the high level graph
-        by calling .__dask_distributed_pack__() and .__dask_distributed_anno_pack__()
+        by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
         on each layer. If the layer doesn't implement packaging, we materialize the
         layer and pack it.
 
@@ -940,11 +942,9 @@ class HighLevelGraph(Mapping):
 
         Returns
         -------
-        data: list of header and payload
-            Packed high level graph serialized by dumps_msgpack
+        data: dict
+            Packed high level graph layers
         """
-        from distributed.protocol.core import dumps_msgpack
-
         # Dump each layer (in topological order)
         layers = []
         for layer in (self.layers[name] for name in self._toposort_layers()):
@@ -958,13 +958,13 @@ class HighLevelGraph(Mapping):
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.__dask_distributed_anno_pack__(),
+                    "annotations": layer.__dask_distributed_annotations_pack__(),
                 }
             )
-        return dumps_msgpack({"layers": layers})
+        return {"layers": layers}
 
     @staticmethod
-    def __dask_distributed_unpack__(packed_hlg, annotations: Mapping[str, Any]) -> Dict:
+    def __dask_distributed_unpack__(hlg: dict, annotations: Mapping[str, Any]) -> Dict:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -973,8 +973,8 @@ class HighLevelGraph(Mapping):
 
         Parameters
         ----------
-        packed_hlg : list of header and payload
-            Packed high level graph serialized by dumps_msgpack
+        hlg: dict
+            Packed high level graph layers
         annotations : dict
             A top-level annotations object which may be partially populated,
             and which may be further filled by annotations from the layers
@@ -990,10 +990,8 @@ class HighLevelGraph(Mapping):
             annotations: Dict[str, Any]
                 Annotations for `dsk`
         """
-        from distributed.protocol.core import loads_msgpack
         from distributed.protocol.serialize import import_allowed_module
 
-        hlg = loads_msgpack(*packed_hlg)
         dsk = {}
         deps = {}
         anno = {}
@@ -1036,7 +1034,7 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from .dot import graphviz, name, label
+    from .dot import graphviz, label, name
 
     if data_attributes is None:
         data_attributes = {}

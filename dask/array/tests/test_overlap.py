@@ -7,19 +7,20 @@ from numpy.testing import assert_array_almost_equal, assert_array_equal
 
 import dask.array as da
 from dask.array.overlap import (
+    boundaries,
+    constant,
+    ensure_minimum_chunksize,
     fractional_slice,
     getitem,
-    trim_internal,
-    overlap_internal,
     nearest,
-    constant,
-    boundaries,
-    reflect,
-    periodic,
     overlap,
-    ensure_minimum_chunksize,
+    overlap_internal,
+    periodic,
+    reflect,
+    trim_internal,
 )
 from dask.array.utils import assert_eq, same_keys
+
 from ..lib.stride_tricks import sliding_window_view
 
 
@@ -336,6 +337,13 @@ def test_map_overlap():
     )
 
 
+def test_map_overlap_escapes_to_map_blocks_when_depth_is_zero():
+    x = da.arange(10, chunks=5)
+    y = x.map_overlap(lambda x: x + 1, depth=0)
+    assert len(y.dask) == 2 * x.numblocks[0]  # depth=0 --> map_blocks
+    assert_eq(y, np.arange(10) + 1)
+
+
 @pytest.mark.parametrize(
     "boundary", [None, "reflect", "periodic", "nearest", "none", 0]
 )
@@ -388,7 +396,7 @@ def test_map_overlap_multiarray_defaults():
     z = da.map_overlap(lambda x, y: x + y, x, y)
     # func should be called twice and get (5,) and (1, 5) arrays of ones each time
     assert_eq(z.shape, (1, 10))
-    assert_eq(z.sum(), 20)
+    assert_eq(z.sum(), 20.0)
 
 
 def test_map_overlap_multiarray_different_depths():
@@ -403,12 +411,12 @@ def test_map_overlap_multiarray_different_depths():
     # Check that the number of elements added
     # to arrays in overlap works as expected
     # when depths differ for each array
-    assert_eq(run([0, 0]), 10)
-    assert_eq(run([0, 1]), 12)
-    assert_eq(run([1, 1]), 14)
-    assert_eq(run([1, 2]), 16)
-    assert_eq(run([0, 5]), 20)
-    assert_eq(run([5, 5]), 30)
+    assert run([0, 0]) == 10
+    assert run([0, 1]) == 12
+    assert run([1, 1]) == 14
+    assert run([1, 2]) == 16
+    assert run([0, 5]) == 20
+    assert run([5, 5]) == 30
 
     # Ensure that depth > chunk size results in error
     with pytest.raises(ValueError):
@@ -437,7 +445,7 @@ def test_map_overlap_multiarray_block_broadcast():
     assert_eq(z, z)
     assert z.shape == (2, 2)
     # func call will receive (8,) and (10, 8) arrays for each of 4 blocks
-    assert_eq(z.sum(), 4 * (10 * 8 + 8))
+    assert_eq(z.sum(), 4.0 * (10 * 8 + 8))
 
 
 def test_map_overlap_multiarray_variadic():

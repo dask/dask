@@ -27,7 +27,7 @@ from .base import (
 from .blockwise import blockwise
 from .core import flatten
 from .delayed import Delayed, delayed
-from .highlevelgraph import MaterializedLayer, HighLevelGraph, Layer
+from .highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 
 __all__ = ("bind", "checkpoint", "clone", "wait_on")
 
