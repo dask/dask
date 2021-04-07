@@ -71,8 +71,8 @@ def dask_config_to_html(key, value, schema, prefix=""):
         except KeyError:
             description = "No Comment"
 
-        if 'dask.' in prefix:
-            prefix = prefix.replace('dask.', '')
+        if "dask." in prefix:
+            prefix = prefix.replace("dask.", "")
 
         key = prefix + key
         value = str(value)
