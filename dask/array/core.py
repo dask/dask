@@ -61,7 +61,7 @@ from ..utils import (
 from . import chunk
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 from .numpy_compat import _Recurser
-from .slicing import cached_cumsum, replace_ellipsis, slice_array
+from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -1633,10 +1633,17 @@ class Array(DaskMethodsMixin):
     def __complex__(self):
         return self._scalarfunc(complex)
 
-    def __setitem__(self, key, value):
-        from .routines import where
+    def __index__(self):
+        return self._scalarfunc(operator.index)
 
+    def __setitem__(self, key, value):
+        if value is np.ma.masked:
+            value = np.ma.masked_all(())
+
+        ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
+            from .routines import where
+
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
             try:
@@ -1652,11 +1659,22 @@ class Array(DaskMethodsMixin):
             self.dask = y.dask
             self._name = y.name
             self._chunks = y.chunks
-            return self
-        else:
-            raise NotImplementedError(
-                "Item assignment with %s not supported" % type(key)
-            )
+            return
+
+        # Still here? Then apply the assignment to other type of
+        # indices via the `setitem_array` function.
+        value = asanyarray(value)
+
+        out = "setitem-" + tokenize(self, key, value)
+        dsk = setitem_array(out, self, key, value)
+
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
+        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype)
+
+        self._meta = y._meta
+        self.dask = y.dask
+        self._name = y.name
+        self._chunks = y.chunks
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
