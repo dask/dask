@@ -2,25 +2,25 @@ import re
 
 import numpy as np
 import pandas as pd
+import pytest
+
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    shard_df_on_index,
-    meta_nonempty,
-    make_meta,
-    raise_on_meta_error,
-    check_meta,
-    check_matching_columns,
-    UNKNOWN_CATEGORIES,
-    is_dataframe_like,
-    is_series_like,
-    is_index_like,
     PANDAS_GT_100,
     PANDAS_GT_120,
+    UNKNOWN_CATEGORIES,
+    check_matching_columns,
+    check_meta,
+    is_dataframe_like,
+    is_index_like,
+    is_series_like,
+    make_meta,
+    meta_nonempty,
+    raise_on_meta_error,
+    shard_df_on_index,
 )
-
-import pytest
 
 
 def test_shard_df_on_index():

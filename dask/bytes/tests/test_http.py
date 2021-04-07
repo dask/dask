@@ -1,13 +1,14 @@
 import os
-import pytest
 import subprocess
 import sys
 import time
-import fsspec
 from distutils.version import LooseVersion
 
-from dask.bytes.core import open_files
-from dask.bytes._compatibility import FSSPEC_042
+import fsspec
+import pytest
+from fsspec.core import open_files
+
+import dask.bag as db
 from dask.utils import tmpdir
 
 files = ["a", "b"]
@@ -121,10 +122,7 @@ def test_errors(dir_server):
             f.read()
     f = open_files("http://nohost/")[0]
 
-    if FSSPEC_042:
-        expected = FileNotFoundError
-    else:
-        expected = requests.exceptions.RequestException
+    expected = FileNotFoundError
 
     with pytest.raises(expected):
         with f as f:
@@ -179,7 +177,6 @@ def test_parquet():
 @pytest.mark.network
 def test_bag():
     # This test pulls from different hosts
-    db = pytest.importorskip("dask.bag")
     urls = [
         "https://raw.githubusercontent.com/weierophinney/pastebin/"
         "master/public/js-src/dojox/data/tests/stores/patterns.csv",
@@ -190,10 +187,6 @@ def test_bag():
     b.compute()
 
 
-@pytest.mark.xfail(
-    LooseVersion(fsspec.__version__) <= "0.4.1",
-    reason="https://github.com/dask/dask/pull/5231",
-)
 @pytest.mark.network
 def test_read_csv():
     dd = pytest.importorskip("dask.dataframe")

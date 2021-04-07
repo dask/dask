@@ -48,7 +48,7 @@ Design
    :align: right
 
 Dask arrays coordinate many NumPy arrays (or "duck arrays" that are
-sufficiently NumPy-like in API such as CuPy or Spare arrays) arranged into a
+sufficiently NumPy-like in API such as CuPy or Sparse arrays) arranged into a
 grid. These arrays may live on disk or on other machines.
 
 New duck array chunk types (types below Dask on

@@ -1,16 +1,18 @@
-from collections import namedtuple
-from operator import add, setitem
-from functools import partial
 import pickle
-from random import random
 import types
+from collections import namedtuple
+from functools import partial
+from operator import add, setitem
+from random import random
 
-from tlz import merge
+import cloudpickle
 import pytest
+from tlz import merge
 
 import dask
+import dask.bag as db
 from dask import compute
-from dask.delayed import delayed, to_task_dask, Delayed
+from dask.delayed import Delayed, delayed, to_task_dask
 from dask.utils_test import inc
 
 try:
@@ -442,7 +444,6 @@ def test_array_delayed():
 
 
 def test_array_bag_delayed():
-    db = pytest.importorskip("dask.bag")
     da = pytest.importorskip("dask.array")
     np = pytest.importorskip("numpy")
 
@@ -671,7 +672,6 @@ def test_pickle(f):
     "f", [delayed(modlevel_eager), modlevel_delayed1, modlevel_delayed2]
 )
 def test_cloudpickle(f):
-    cloudpickle = pytest.importorskip("cloudpickle")
     d = f(2)
     d = cloudpickle.loads(cloudpickle.dumps(d, protocol=pickle.HIGHEST_PROTOCOL))
     assert d.compute() == 3

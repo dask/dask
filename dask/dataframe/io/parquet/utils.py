@@ -3,6 +3,7 @@ import re
 import pandas as pd
 
 from ....core import flatten
+from ....utils import natural_sort_key
 
 
 class Engine:
@@ -391,6 +392,12 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     return column_names, index_names
 
 
+def _sort_and_analyze_paths(file_list, fs, root=False):
+    file_list = sorted(file_list, key=natural_sort_key)
+    base, fns = _analyze_paths(file_list, fs, root=root)
+    return file_list, base, fns
+
+
 def _analyze_paths(file_list, fs, root=False):
     """Consolidate list of file-paths into parquet relative paths
 
@@ -462,14 +469,12 @@ def _analyze_paths(file_list, fs, root=False):
                     break
             basepath = basepath[:j]
         l = len(basepath)
-
     else:
         basepath = _join_path(root).split("/")
         l = len(basepath)
         assert all(
             p[:l] == basepath for p in path_parts_list
         ), "All paths must begin with the given root"
-    l = len(basepath)
     out_list = []
     for path_parts in path_parts_list:
         out_list.append(

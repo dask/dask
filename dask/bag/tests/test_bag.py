@@ -1,41 +1,37 @@
 import gc
 import math
-import multiprocessing
 import os
 import random
 import weakref
 from bz2 import BZ2File
 from collections.abc import Iterator
+from concurrent.futures import ProcessPoolExecutor
 from gzip import GzipFile
 from itertools import repeat
 
 import partd
 import pytest
-from tlz import merge, join, identity, valmap, groupby, pluck, unique
+from tlz import groupby, identity, join, merge, pluck, unique, valmap
 
 import dask
 import dask.bag as db
 from dask.bag.core import (
     Bag,
+    collect,
+    from_delayed,
+    inline_singleton_lists,
     lazify,
     lazify_task,
-    collect,
+    optimize,
+    partition,
     reduceby,
     reify,
-    partition,
-    inline_singleton_lists,
-    optimize,
-    from_delayed,
     total_mem_usage,
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
-from dask.utils import filetexts, tmpfile, tmpdir
-from dask.utils_test import inc, add
-
-
-# Needed to pickle the lambda functions used in this test suite
-pytest.importorskip("cloudpickle")
+from dask.utils import filetexts, tmpdir, tmpfile
+from dask.utils_test import add, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
 
@@ -633,7 +629,7 @@ def test_from_url():
     a = db.from_url(["http://google.com", "http://github.com"])
     assert a.npartitions == 2
 
-    b = db.from_url("http://raw.githubusercontent.com/dask/dask/master/README.rst")
+    b = db.from_url("http://raw.githubusercontent.com/dask/dask/main/README.rst")
     assert b.npartitions == 1
     assert b"Dask\n" in b.take(10)
 
@@ -1391,7 +1387,7 @@ def test_empty():
 
 
 def test_bag_picklable():
-    from pickle import loads, dumps
+    from pickle import dumps, loads
 
     b = db.from_sequence(range(100))
     b2 = loads(dumps(b))
@@ -1456,9 +1452,7 @@ def test_temporary_directory(tmpdir):
 
     # We use a pool to avoid a race condition between the pool close
     # cleaning up files, and the assert below.
-    pool = multiprocessing.Pool(4)
-
-    with pool:
+    with ProcessPoolExecutor(4) as pool:
         with dask.config.set(temporary_directory=str(tmpdir), pool=pool):
             b2 = b.groupby(lambda x: x % 2)
             b2.compute()

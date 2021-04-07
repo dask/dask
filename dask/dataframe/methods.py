@@ -5,14 +5,14 @@ import pandas as pd
 from pandas.api.types import is_categorical_dtype, union_categoricals
 from tlz import partition
 
-from .utils import (
-    is_series_like,
-    is_index_like,
-    is_dataframe_like,
-    hash_object_dispatch,
-    group_split_dispatch,
-)
 from ..utils import Dispatch
+from .utils import (
+    group_split_dispatch,
+    hash_object_dispatch,
+    is_dataframe_like,
+    is_index_like,
+    is_series_like,
+)
 
 # ---------------------------------
 # indexing
@@ -133,6 +133,13 @@ def wrap_skew_reduction(array_skew, index):
         return pd.Series(array_skew, index=index)
 
     return array_skew
+
+
+def wrap_kurtosis_reduction(array_kurtosis, index):
+    if isinstance(array_kurtosis, np.ndarray) or isinstance(array_kurtosis, list):
+        return pd.Series(array_kurtosis, index=index)
+
+    return array_kurtosis
 
 
 def var_mixed_concat(numeric_var, timedelta_var, columns):
@@ -309,8 +316,12 @@ def value_counts_combine(x, sort=True, ascending=False, **groupby_kwargs):
     return x.groupby(level=0, **groupby_kwargs).sum()
 
 
-def value_counts_aggregate(x, sort=True, ascending=False, **groupby_kwargs):
+def value_counts_aggregate(
+    x, sort=True, ascending=False, normalize=False, total_length=None, **groupby_kwargs
+):
     out = value_counts_combine(x, **groupby_kwargs)
+    if normalize:
+        out /= total_length if total_length is not None else out.sum()
     if sort:
         return out.sort_values(ascending=ascending)
     return out
@@ -405,8 +416,11 @@ def concat(
         True if all arguments have the same columns and dtypes (but not
         necessarily categories). Default is False.
     ignore_index : bool, optional
-        Whether to allow index values to be ignored/droped during
+        Whether to allow index values to be ignored/dropped during
         concatenation. Default is False.
+    ignore_order : bool, optional
+        Whether to ignore the order when doing the union of categoricals.
+        Default is False.
     """
     if len(dfs) == 1:
         return dfs[0]
@@ -433,6 +447,8 @@ def concat_pandas(
     ignore_index=False,
     **kwargs
 ):
+    ignore_order = kwargs.pop("ignore_order", False)
+
     if axis == 1:
         return pd.concat(dfs, axis=axis, join=join, **kwargs)
 
@@ -442,7 +458,9 @@ def concat_pandas(
             for i in range(1, len(dfs)):
                 if not isinstance(dfs[i], pd.CategoricalIndex):
                     dfs[i] = dfs[i].astype("category")
-            return pd.CategoricalIndex(union_categoricals(dfs), name=dfs[0].name)
+            return pd.CategoricalIndex(
+                union_categoricals(dfs, ignore_order=ignore_order), name=dfs[0].name
+            )
         elif isinstance(dfs[0], pd.MultiIndex):
             first, rest = dfs[0], dfs[1:]
             if all(
@@ -534,7 +552,7 @@ def concat_pandas(
                             codes, sample.cat.categories, sample.cat.ordered
                         )
                         parts.append(data)
-                out[col] = union_categoricals(parts)
+                out[col] = union_categoricals(parts, ignore_order=ignore_order)
                 # Pandas resets index type on assignment if frame is empty
                 # https://github.com/pandas-dev/pandas/issues/17101
                 if not len(temp_ind):
@@ -551,7 +569,11 @@ def concat_pandas(
         if is_categorical_dtype(dfs2[0].dtype):
             if ind is None:
                 ind = concat([df.index for df in dfs2])
-            return pd.Series(union_categoricals(dfs2), index=ind, name=dfs2[0].name)
+            return pd.Series(
+                union_categoricals(dfs2, ignore_order=ignore_order),
+                index=ind,
+                name=dfs2[0].name,
+            )
         with warnings.catch_warnings():
             if filter_warning:
                 warnings.simplefilter("ignore", FutureWarning)
@@ -564,6 +586,13 @@ def concat_pandas(
 
 
 tolist_dispatch = Dispatch("tolist")
+is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
+
+
+def is_categorical_dtype(obj):
+    obj = getattr(obj, "dtype", obj)
+    func = is_categorical_dtype_dispatch.dispatch(type(obj))
+    return func(obj)
 
 
 def tolist(obj):
@@ -574,6 +603,13 @@ def tolist(obj):
 @tolist_dispatch.register((pd.Series, pd.Index, pd.Categorical))
 def tolist_pandas(obj):
     return obj.tolist()
+
+
+@is_categorical_dtype_dispatch.register(
+    (pd.Series, pd.Index, pd.api.extensions.ExtensionDtype, np.dtype)
+)
+def is_categorical_dtype_pandas(obj):
+    return pd.api.types.is_categorical_dtype(obj)
 
 
 # cuDF may try to import old dispatch functions

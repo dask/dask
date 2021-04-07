@@ -2,16 +2,16 @@ from functools import partial
 from itertools import product
 
 import numpy as np
-
 from tlz import curry
 
 from ..base import tokenize
+from ..layers import BlockwiseCreateArray
 from ..utils import funcname
 from .core import Array, normalize_chunks
 from .utils import (
-    meta_from_array,
     empty_like_safe,
     full_like_safe,
+    meta_from_array,
     ones_like_safe,
     zeros_like_safe,
 )
@@ -68,14 +68,15 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     chunks = parsed["chunks"]
     name = parsed["name"]
     kwargs = parsed["kwargs"]
-
-    keys = product([name], *[range(len(bd)) for bd in chunks])
-    shapes = product(*chunks)
     func = partial(func, dtype=dtype, **kwargs)
-    vals = ((func,) + (s,) + args for s in shapes)
 
-    dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
+    graph = BlockwiseCreateArray(
+        name,
+        func,
+        shape,
+        chunks,
+    )
+    return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
 def wrap_func_like(func, *args, **kwargs):

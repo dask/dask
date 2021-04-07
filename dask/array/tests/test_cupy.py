@@ -5,9 +5,9 @@ import pytest
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_120
-from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.gufunc import apply_gufunc
+from dask.array.numpy_compat import _numpy_120
+from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
 from dask.sizeof import sizeof
 
 cupy = pytest.importorskip("cupy")
@@ -922,6 +922,7 @@ def test_cupy_sparse_concatenate(axis):
     assert (z.toarray() == z_expected.toarray()).all()
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
@@ -1346,3 +1347,24 @@ def test_percentiles_with_unknown_chunk_sizes():
     assert 0.1 < a < 0.9
     assert 0.1 < b < 0.9
     assert a < b
+
+
+@pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
+@pytest.mark.parametrize("x_chunks", [(3, 5), (2, 3), (1, 2), (1, 1)])
+def test_index_with_int_dask_array(x_chunks, idx_chunks):
+    # test data is crafted to stress use cases:
+    # - pick from different chunks of x out of order
+    # - a chunk of x contains no matches
+    # - only one chunk of x
+    x = cupy.array(
+        [[10, 20, 30, 40, 50], [60, 70, 80, 90, 100], [110, 120, 130, 140, 150]]
+    )
+    idx = cupy.array([3, 0, 1])
+    expect = cupy.array([[40, 10, 20], [90, 60, 70], [140, 110, 120]])
+
+    x = da.from_array(x, chunks=x_chunks)
+    if idx_chunks is not None:
+        idx = da.from_array(idx, chunks=idx_chunks)
+
+    assert_eq(x[:, idx], expect)
+    assert_eq(x.T[idx, :], expect.T)

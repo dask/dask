@@ -7,7 +7,7 @@ import pytest
 import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_117
-from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 sparse = pytest.importorskip("sparse")
 if sparse:
@@ -23,15 +23,21 @@ functions = [
     lambda x: 2 * x,
     lambda x: x / 2,
     lambda x: x ** 2,
-    pytest.param(lambda x: x + x),
-    pytest.param(lambda x: x * x),
-    pytest.param(lambda x: x[0]),
-    pytest.param(lambda x: x[:, 1]),
-    pytest.param(lambda x: x[:1, None, 1:3]),
+    lambda x: x + x,
+    lambda x: x * x,
+    lambda x: x[0],
+    lambda x: x[:, 1],
+    lambda x: x[:1, None, 1:3],
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
-    pytest.param(lambda x: x.sum()),
-    pytest.param(lambda x: x.mean()),
+    lambda x: x.sum(),
+    pytest.param(
+        lambda x: x.mean(),
+        marks=pytest.mark.skipif(
+            sparse.__version__ >= LooseVersion("0.12.0"),
+            reason="https://github.com/dask/dask/issues/7169",
+        ),
+    ),
     lambda x: x.moment(order=0),
     pytest.param(
         lambda x: x.std(),
@@ -45,14 +51,12 @@ functions = [
             reason="fixed in https://github.com/pydata/sparse/pull/243"
         ),
     ),
-    pytest.param(lambda x: x.dot(np.arange(x.shape[-1]))),
-    pytest.param(lambda x: x.dot(np.eye(x.shape[-1]))),
-    pytest.param(
-        lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
-    ),
-    pytest.param(lambda x: x.sum(axis=0)),
-    pytest.param(lambda x: x.max(axis=0)),
-    pytest.param(lambda x: x.sum(axis=(1, 2))),
+    lambda x: x.dot(np.arange(x.shape[-1])),
+    lambda x: x.dot(np.eye(x.shape[-1])),
+    lambda x: da.tensordot(x, np.ones(x.shape[:2]), axes=[(0, 1), (0, 1)]),
+    lambda x: x.sum(axis=0),
+    lambda x: x.max(axis=0),
+    lambda x: x.sum(axis=(1, 2)),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
     lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=True),
@@ -62,7 +66,7 @@ functions = [
     lambda x: abs(x),
     lambda x: x > 0.5,
     lambda x: x.rechunk((4, 4, 4)),
-    pytest.param(lambda x: x.rechunk((2, 2, 1))),
+    lambda x: x.rechunk((2, 2, 1)),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
 ]

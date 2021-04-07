@@ -1,25 +1,25 @@
 import abc
 import collections.abc
+import copy
 import warnings
 from typing import (
     AbstractSet,
     Any,
     Dict,
     Hashable,
+    Iterable,
+    Mapping,
     MutableMapping,
     Optional,
-    Mapping,
-    Iterable,
     Tuple,
 )
-import copy
 
 import tlz as toolz
 
 from . import config
-from .utils import ensure_dict, ignoring, stringify
 from .base import clone_key, flatten, is_dask_collection
-from .core import reverse_dict, keys_in_tasks
+from .core import keys_in_tasks, reverse_dict
+from .utils import ensure_dict, ignoring, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -147,7 +147,7 @@ class Layer(collections.abc.Mapping):
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
-    def __dask_distributed_anno_pack__(self) -> Optional[Mapping[str, Any]]:
+    def __dask_distributed_annotations_pack__(self) -> Optional[Mapping[str, Any]]:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
@@ -337,9 +337,9 @@ class Layer(collections.abc.Mapping):
             Scheduler compatible state of the layer
         """
         from distributed.client import Future
-        from distributed.utils_comm import unpack_remotedata, subs_multiple
-        from distributed.worker import dumps_task
         from distributed.utils import CancelledError
+        from distributed.utils_comm import subs_multiple, unpack_remotedata
+        from distributed.worker import dumps_task
 
         dsk = dict(self)
 
@@ -593,7 +593,7 @@ class HighLevelGraph(Mapping):
         layer : Mapping
             The graph layer itself
         dependencies : List of Dask collections
-            A lit of other dask collections (like arrays or dataframes) that
+            A list of other dask collections (like arrays or dataframes) that
             have graphs themselves
 
         Examples
@@ -653,8 +653,13 @@ class HighLevelGraph(Mapping):
 
         raise KeyError(key)
 
-    def __len__(self):
-        return len(self.to_dict())
+    def __len__(self) -> int:
+        # NOTE: this will double-count keys that are duplicated between layers, so it's
+        # possible that `len(hlg) > len(hlg.to_dict())`. However, duplicate keys should
+        # not occur through normal use, and their existence would usually be a bug.
+        # So we ignore this case in favor of better performance.
+        # https://github.com/dask/dask/issues/7271
+        return sum(len(layer) for layer in self.layers.values())
 
     def __iter__(self):
         return iter(self.to_dict())
@@ -700,7 +705,10 @@ class HighLevelGraph(Mapping):
         except AttributeError:
             keys: set = set()
             for layer in self.layers.values():
-                keys |= layer.get_output_keys()
+                # Note: don't use `keys |= ...`, because the RHS is a
+                # collections.abc.Set rather than a real set, and this will
+                # cause a whole new set to be constructed.
+                keys.update(layer.get_output_keys())
             self._all_external_keys = keys
             return keys
 
@@ -785,17 +793,22 @@ class HighLevelGraph(Mapping):
         sorted: list
             List of layer names sorted topologically
         """
-        dependencies = copy.deepcopy(self.dependencies)
-        ready = {k for k, v in dependencies.items() if len(v) == 0}
+        degree = {k: len(v) for k, v in self.dependencies.items()}
+        reverse_deps = {k: [] for k in self.dependencies}
+        ready = []
+        for k, v in self.dependencies.items():
+            for dep in v:
+                reverse_deps[dep].append(k)
+            if not v:
+                ready.append(k)
         ret = []
         while len(ready) > 0:
             layer = ready.pop()
             ret.append(layer)
-            del dependencies[layer]
-            for k, v in dependencies.items():
-                v.discard(layer)
-                if len(v) == 0:
-                    ready.add(k)
+            for rdep in reverse_deps[layer]:
+                degree[rdep] -= 1
+                if degree[rdep] == 0:
+                    ready.append(rdep)
         return ret
 
     def cull(self, keys: Iterable) -> "HighLevelGraph":
@@ -821,8 +834,12 @@ class HighLevelGraph(Mapping):
         ret_key_deps = {}
         for layer_name in reversed(self._toposort_layers()):
             layer = self.layers[layer_name]
-            # Let's cull the layer to produce its part of `keys`
-            output_keys = keys_set & layer.get_output_keys()
+            # Let's cull the layer to produce its part of `keys`.
+            # Note: use .intersection rather than & because the RHS is
+            # a collections.abc.Set rather than a real set, and using &
+            # would take time proportional to the size of the LHS, which
+            # if there is no culling can be much bigger than the RHS.
+            output_keys = keys_set.intersection(layer.get_output_keys())
             if output_keys:
                 culled_layer, culled_deps = layer.cull(output_keys, all_ext_keys)
                 # Update `keys` with all layer's external key dependencies, which
@@ -838,8 +855,11 @@ class HighLevelGraph(Mapping):
                 ret_layers[layer_name] = culled_layer
                 ret_key_deps.update(culled_deps)
 
+        # Converting dict_keys to a real set lets Python optimise the set
+        # intersection to iterate over the smaller of the two sets.
+        ret_layers_keys = set(ret_layers.keys())
         ret_dependencies = {
-            layer_name: self.dependencies[layer_name] & ret_layers.keys()
+            layer_name: self.dependencies[layer_name] & ret_layers_keys
             for layer_name in ret_layers
         }
 
@@ -903,11 +923,13 @@ class HighLevelGraph(Mapping):
                     f"expected {repr(dependencies[k])}"
                 )
 
-    def __dask_distributed_pack__(self, client, client_keys: Iterable[Hashable]) -> Any:
+    def __dask_distributed_pack__(
+        self, client, client_keys: Iterable[Hashable]
+    ) -> dict:
         """Pack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the packaging to each layer in the high level graph
-        by calling .__dask_distributed_pack__() and .__dask_distributed_anno_pack__()
+        by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
         on each layer. If the layer doesn't implement packaging, we materialize the
         layer and pack it.
 
@@ -920,11 +942,9 @@ class HighLevelGraph(Mapping):
 
         Returns
         -------
-        data: list of header and payload
-            Packed high level graph serialized by dumps_msgpack
+        data: dict
+            Packed high level graph layers
         """
-        from distributed.protocol.core import dumps_msgpack
-
         # Dump each layer (in topological order)
         layers = []
         for layer in (self.layers[name] for name in self._toposort_layers()):
@@ -938,13 +958,13 @@ class HighLevelGraph(Mapping):
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.__dask_distributed_anno_pack__(),
+                    "annotations": layer.__dask_distributed_annotations_pack__(),
                 }
             )
-        return dumps_msgpack({"layers": layers})
+        return {"layers": layers}
 
     @staticmethod
-    def __dask_distributed_unpack__(packed_hlg, annotations: Mapping[str, Any]) -> Dict:
+    def __dask_distributed_unpack__(hlg: dict, annotations: Mapping[str, Any]) -> Dict:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -953,8 +973,8 @@ class HighLevelGraph(Mapping):
 
         Parameters
         ----------
-        packed_hlg : list of header and payload
-            Packed high level graph serialized by dumps_msgpack
+        hlg: dict
+            Packed high level graph layers
         annotations : dict
             A top-level annotations object which may be partially populated,
             and which may be further filled by annotations from the layers
@@ -970,10 +990,8 @@ class HighLevelGraph(Mapping):
             annotations: Dict[str, Any]
                 Annotations for `dsk`
         """
-        from distributed.protocol.core import loads_msgpack
         from distributed.protocol.serialize import import_allowed_module
 
-        hlg = loads_msgpack(*packed_hlg)
         dsk = {}
         deps = {}
         anno = {}
@@ -1016,7 +1034,7 @@ def to_graphviz(
     edge_attr=None,
     **kwargs,
 ):
-    from .dot import graphviz, name, label
+    from .dot import graphviz, label, name
 
     if data_attributes is None:
         data_attributes = {}

@@ -1,24 +1,26 @@
 import warnings
-from operator import getitem
 from itertools import product
 from numbers import Integral
-from tlz import merge, pipe, concat, partial, get
+from operator import getitem
+
+import numpy as np
+from tlz import concat, get, merge, partial, pipe
 from tlz.curried import map
 
-from . import chunk
+from ..base import tokenize
+from ..core import flatten
+from ..highlevelgraph import HighLevelGraph
+from ..utils import concrete, derived_from
+from . import chunk, numpy_compat
 from .core import (
     Array,
-    map_blocks,
     concatenate,
     concatenate3,
+    map_blocks,
     reshapelist,
     unify_chunks,
 )
 from .creation import empty_like, full_like
-from ..highlevelgraph import HighLevelGraph
-from ..base import tokenize
-from ..core import flatten
-from ..utils import concrete
 
 
 def fractional_slice(task, axes):
@@ -780,6 +782,10 @@ def map_overlap(
         inds = [list(reversed(range(x.ndim))) for x in args]
         _, args = unify_chunks(*list(concat(zip(args, inds))), warn=False)
 
+    # Escape to map_blocks if depth is zero (a more efficient computation)
+    if all([all(depth_val == 0 for depth_val in d.values()) for d in depth]):
+        return map_blocks(func, *args, **kwargs)
+
     for i, x in enumerate(args):
         for j in range(x.ndim):
             if isinstance(depth[i][j], tuple) and boundary[i][j] != "none":
@@ -841,3 +847,65 @@ def coerce_boundary(ndim, boundary):
     if isinstance(boundary, dict):
         boundary = {ax: boundary.get(ax, default) for ax in range(ndim)}
     return boundary
+
+
+@derived_from(numpy_compat)
+def sliding_window_view(x, window_shape, axis=None):
+    from numpy.core.numeric import normalize_axis_tuple
+
+    window_shape = tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
+
+    window_shape_array = np.array(window_shape)
+    if np.any(window_shape_array <= 0):
+        raise ValueError("`window_shape` must contain values > 0")
+
+    if axis is None:
+        axis = tuple(range(x.ndim))
+        if len(window_shape) != len(axis):
+            raise ValueError(
+                f"Since axis is `None`, must provide "
+                f"window_shape for all dimensions of `x`; "
+                f"got {len(window_shape)} window_shape elements "
+                f"and `x.ndim` is {x.ndim}."
+            )
+    else:
+        axis = normalize_axis_tuple(axis, x.ndim, allow_duplicate=True)
+        if len(window_shape) != len(axis):
+            raise ValueError(
+                f"Must provide matching length window_shape and "
+                f"axis; got {len(window_shape)} window_shape "
+                f"elements and {len(axis)} axes elements."
+            )
+
+    depths = [0] * x.ndim
+    for ax, window in zip(axis, window_shape):
+        depths[ax] += window - 1
+
+    # Ensure that each chunk is big enough to leave at least a size-1 chunk
+    # after windowing (this is only really necessary for the last chunk).
+    safe_chunks = tuple(
+        ensure_minimum_chunksize(d + 1, c) for d, c in zip(depths, x.chunks)
+    )
+    x = x.rechunk(safe_chunks)
+
+    # result.shape = x_shape_trimmed + window_shape,
+    # where x_shape_trimmed is x.shape with every entry
+    # reduced by one less than the corresponding window size.
+    # trim chunks to match x_shape_trimmed
+    newchunks = tuple(c[:-1] + (c[-1] - d,) for d, c in zip(depths, x.chunks)) + tuple(
+        (window,) for window in window_shape
+    )
+
+    return map_overlap(
+        numpy_compat.sliding_window_view,
+        x,
+        depth=tuple((0, d) for d in depths),  # Overlap on +ve side only
+        boundary="none",
+        meta=x._meta,
+        new_axis=range(x.ndim, x.ndim + len(axis)),
+        chunks=newchunks,
+        trim=False,
+        align_arrays=False,
+        window_shape=window_shape,
+        axis=axis,
+    )

@@ -8,9 +8,9 @@ This page provides resources on how best to contribute.
 .. note:: Dask strives to be a welcoming community of individuals with diverse
    backgrounds. For more information on our values, please see our
    `code of conduct
-   <https://github.com/dask/governance/blob/master/code-of-conduct.md>`_
+   <https://github.com/dask/governance/blob/main/code-of-conduct.md>`_
    and
-   `diversity statement <https://github.com/dask/governance/blob/master/diversity.md>`_
+   `diversity statement <https://github.com/dask/governance/blob/main/diversity.md>`_
 
 Where to ask for help
 ---------------------
@@ -101,7 +101,7 @@ pip or conda_
 
 ``pip``::
 
-  python -m pip install -e ".[complete]"
+  python -m pip install -e ".[complete,test]"
 
 ``conda``::
 
@@ -130,7 +130,7 @@ language support, testing, documentation, and style.
 Python Versions
 ~~~~~~~~~~~~~~~
 
-Dask supports Python versions 3.6, 3.7, and 3.8.
+Dask supports Python versions 3.7, 3.8, and 3.9.
 Name changes are handled by the :file:`dask/compatibility.py` file.
 
 Test
@@ -243,7 +243,7 @@ after the line.
 
 .. _numpydoc: https://numpydoc.readthedocs.io/en/latest/format.html#docstring-standard
 
-Docstrings are currently tested under Python 3.6 on Travis.ci.  You can test
+Docstrings are tested under Python 3.8 on GitHub Actions. You can test
 docstrings with pytest as follows::
 
    py.test dask --doctest-modules
@@ -256,24 +256,26 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
-`Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent code
-format throughout the project. ``black`` and ``flake8`` can be installed with
-``pip``::
+Dask uses `Black <https://black.readthedocs.io/en/stable/>`_,
+`Flake8 <http://flake8.pycqa.org/en/latest/>`_, and
+`isort <https://pycqa.github.io/isort/>`_ to ensure a consistent code
+format throughout the project. ``black``, ``flake8``, and ``isort`` can
+be installed with ``pip``::
 
-   python -m pip install black flake8
+   python -m pip install black flake8 isort
 
 and then run from the root of the Dask repository::
 
    black dask
    flake8 dask
+   isort dask
 
 to auto-format your code. Additionally, many editors have plugins that will
-apply ``black`` as you edit files.
+apply ``black`` and ``isort`` as you edit files.
 
 Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``black`` and ``flake8`` when you make a git commit. This
-can be done by installing ``pre-commit``::
+to automatically run ``black``, ``flake8``, and ``isort`` when you make a git
+commit. This can be done by installing ``pre-commit``::
 
    python -m pip install pre-commit
 
@@ -281,9 +283,9 @@ and then running::
 
    pre-commit install
 
-from the root of the Dask repository. Now ``black`` and ``flake8`` will be run
-each time you commit changes. You can skip these checks with
-``git commit --no-verify``.
+from the root of the Dask repository. Now ``black``, ``flake8``, and ``isort``
+will be run each time you commit changes. You can skip these checks with
+``git commit --no-verify`` or with the short version ``git commit -n``.
 
 
 Contributing to Documentation
@@ -293,6 +295,14 @@ Dask uses Sphinx_ for documentation, hosted on https://readthedocs.org .
 Documentation is maintained in the RestructuredText markup language (``.rst``
 files) in ``dask/docs/source``.  The documentation consists both of prose
 and API documentation.
+
+The documentation is automatically built, and a live preview is available,
+for each pull request submitted to Dask. Additionally, you may also
+build the documentation yourself locally by following the instructions outlined
+below.
+
+How to build the Dask documentation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 To build the documentation locally, clone this repository and install
 the necessary requirements using ``pip`` or ``conda``::

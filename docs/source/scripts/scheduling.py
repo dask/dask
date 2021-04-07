@@ -1,8 +1,10 @@
-from time import time
-import dask
-from dask import threaded, multiprocessing, local
 from random import randint
+from time import time
+
 import matplotlib.pyplot as plt
+
+import dask
+from dask import local, multiprocessing, threaded
 
 
 def noop(x):

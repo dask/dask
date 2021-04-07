@@ -1,20 +1,18 @@
-from itertools import product
+import bisect
+import functools
 import math
+import warnings
+from itertools import product
 from numbers import Integral, Number
 from operator import add, getitem, itemgetter
-import warnings
-import functools
-import bisect
 
 import numpy as np
-from tlz import memoize, merge, pluck, concat, accumulate
+from tlz import accumulate, concat, memoize, merge, pluck
 
-from ..utils import is_arraylike
-from .. import core
-from .. import config
-from .. import utils
+from .. import config, core, utils
+from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..base import tokenize, is_dask_collection
+from ..utils import is_arraylike
 
 colon = slice(None, None, None)
 
@@ -97,7 +95,7 @@ def sanitize_index(ind):
 
 def slice_array(out_name, in_name, blockdims, index, itemsize):
     """
-    Master function for array slicing
+    Main function for array slicing
 
     This function makes a new dask that slices blocks along every
     dimension and aggregates (via cartesian product) each dimension's
@@ -1048,8 +1046,9 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
-    from .core import Array, blockwise, from_array
     from . import chunk
+    from .core import Array, blockwise, from_array
+    from .utils import asarray_safe
 
     assert 0 <= axis < x.ndim
 
@@ -1061,12 +1060,14 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     # Calculate the offset at which each chunk starts along axis
     # e.g. chunks=(..., (5, 3, 4), ...) -> offset=[0, 5, 8]
-    offset = np.roll(np.cumsum(x.chunks[axis]), 1)
+    offset = np.roll(np.cumsum(asarray_safe(x.chunks[axis], like=x._meta)), 1)
     offset[0] = 0
     offset = from_array(offset, chunks=1)
     # Tamper with the declared chunks of offset to make blockwise align it with
     # x[axis]
-    offset = Array(offset.dask, offset.name, (x.chunks[axis],), offset.dtype)
+    offset = Array(
+        offset.dask, offset.name, (x.chunks[axis],), offset.dtype, meta=x._meta
+    )
 
     # Define axis labels for blockwise
     x_axes = tuple(range(x.ndim))
@@ -1088,6 +1089,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
         x_size=x.shape[axis],
         axis=axis,
         dtype=x.dtype,
+        meta=x._meta,
     )
 
     # Aggregate on the chunks of x along axis
@@ -1102,6 +1104,7 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
         x_chunks=x.chunks[axis],
         axis=axis,
         dtype=x.dtype,
+        meta=x._meta,
     )
     return y
 
@@ -1524,7 +1527,7 @@ def concatenate_array_chunks(x):
         The concatenated dask array with one chunk.
 
     """
-    from .core import concatenate3, Array
+    from .core import Array, concatenate3
 
     if x.npartitions == 1:
         return x

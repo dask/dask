@@ -1,42 +1,37 @@
-from distutils.version import LooseVersion
-from collections import defaultdict
-
-from collections import OrderedDict
 import copy
 import json
 import pickle
 import warnings
-
-import tlz as toolz
+from collections import OrderedDict, defaultdict
+from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
+import tlz as toolz
 
 try:
     import fastparquet
     from fastparquet import ParquetFile
-    from fastparquet.util import get_file_scheme
-    from fastparquet.util import ex_from_sep, val_to_num, groupby_types
-    from fastparquet.writer import partition_on_columns, make_part_file
+    from fastparquet.util import ex_from_sep, get_file_scheme, groupby_types, val_to_num
+    from fastparquet.writer import make_part_file, partition_on_columns
 except ImportError:
     pass
 
-from .utils import (
-    _parse_pandas_metadata,
-    _normalize_index_columns,
-    _analyze_paths,
-    _flatten_filters,
-    _row_groups_to_parts,
-)
-from ..utils import _meta_from_dtypes
-from ...utils import UNKNOWN_CATEGORIES
 from ...methods import concat
-
+from ...utils import UNKNOWN_CATEGORIES
+from ..utils import _meta_from_dtypes
 
 #########################
 # Fastparquet interface #
 #########################
-from .utils import Engine
+from .utils import (
+    Engine,
+    _flatten_filters,
+    _normalize_index_columns,
+    _parse_pandas_metadata,
+    _row_groups_to_parts,
+    _sort_and_analyze_paths,
+)
 
 
 def _paths_to_cats(paths, file_scheme):
@@ -116,7 +111,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     """
     parts = []
     if len(paths) > 1:
-        base, fns = _analyze_paths(paths, fs)
+        paths, base, fns = _sort_and_analyze_paths(paths, fs)
         if gather_statistics is not False:
             # This scans all the files, allowing index/divisions
             # and filtering
@@ -147,7 +142,7 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
     elif fs.isdir(paths[0]):
         # This is a directory, check for _metadata, then _common_metadata
         paths = fs.glob(paths[0] + fs.sep + "*")
-        base, fns = _analyze_paths(paths, fs)
+        paths, base, fns = _sort_and_analyze_paths(paths, fs)
         if "_metadata" in fns:
             # Using _metadata file (best-case scenario)
             pf = ParquetFile(
@@ -286,8 +281,8 @@ class FastParquetEngine(Engine):
         index_cols,
         filters,
     ):
-        # Cannot gather_statistics if our `parts` is alreadey a list
-        # of paths, or if we are building a multiindex (for now).
+        # Cannot gather_statistics if our `parts` is already a list
+        # of paths, or if we are building a multi-index (for now).
         # We also don't "need" to gather statistics if we don't
         # want to apply any filters or calculate divisions.
         if (
@@ -898,9 +893,19 @@ class FastParquetEngine(Engine):
         return_metadata,
         fmd=None,
         compression=None,
+        custom_metadata=None,
         **kwargs,
     ):
+        # Update key/value metadata if necessary
         fmd = copy.copy(fmd)
+        if custom_metadata and fmd is not None:
+            fmd.key_value_metadata.extend(
+                [
+                    fastparquet.parquet_thrift.KeyValue(key=key, value=value)
+                    for key, value in custom_metadata.items()
+                ]
+            )
+
         if not len(df):
             # Write nothing for empty partitions
             rgs = []
