@@ -941,6 +941,25 @@ def test_histogramdd_raise_normed_and_density():
         da.histogramdd(data, bins=bins, range=ranges, normed=True, density=True)
 
 
+def test_histogramdd_edges():
+    data = da.random.random(size=(10, 3), chunks=(5, 3))
+    edges = [
+        np.array([0.1, 0.3, 0.8, 1.0]),
+        np.array([0.2, 0.3, 0.8, 0.9]),
+        np.array([0.1, 0.5, 0.7]),
+    ]
+    # passing bins as an array of bin edges.
+    a1, b1 = da.histogramdd(data, bins=edges)
+    a2, b2 = np.histogramdd(data.compute(), bins=edges)
+    for ib1, ib2 in zip(b1, b2):
+        assert_eq(ib1, ib2)
+    # passing bins as an int with range definitions
+    a1, b1 = da.histogramdd(data, bins=5, range=((0, 1),) * 3)
+    a2, b2 = np.histogramdd(data.compute(), bins=5, range=((0, 1),) * 3)
+    for ib1, ib2 in zip(b1, b2):
+        assert_eq(ib1, ib2)
+
+
 def test_cov():
     x = np.arange(56).reshape((7, 8))
     d = da.from_array(x, chunks=(4, 4))
