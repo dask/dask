@@ -3816,11 +3816,11 @@ def test_setitem_on_read_only_blocks():
     dx = da.empty((4, 6), dtype=float, chunks=(2, 2))
     dx[0] = 99
 
-    assert_eq(dx[0, 0].compute(), 99)
+    assert_eq(dx[0, 0], 99.0)
 
     dx[0:2] = 88
 
-    assert_eq(dx[0, 0].compute(), 88)
+    assert_eq(dx[0, 0], 88.0)
 
 
 def test_setitem_errs():
