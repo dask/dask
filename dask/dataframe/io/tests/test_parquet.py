@@ -840,6 +840,8 @@ def test_append_dict_column(tmpdir, engine):
 
     if engine == "fastparquet":
         pytest.xfail("Fastparquet engine is missing dict-column support")
+    elif pa.__version__ < LooseVersion("1.0.1"):
+        pytest.skip("PyArrow>=1.0.1 Required.")
 
     tmp = str(tmpdir)
     dts = pd.date_range("2020-01-01", "2021-01-01")
