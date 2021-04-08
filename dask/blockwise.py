@@ -1,5 +1,8 @@
+import inspect
 import itertools
 import os
+import warnings
+from functools import partial
 from itertools import product
 from typing import (
     Any,
@@ -346,6 +349,7 @@ class Blockwise(Layer):
         from distributed.protocol.serialize import import_allowed_module
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
+        from distributed.worker import dumps_function
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
@@ -363,7 +367,8 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        func = to_serialize(dsk[0])
+        # Dump the function if
+        func = to_serialize(dsk[0]) if self.concatenate else dumps_function(dsk[0])
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -822,6 +827,19 @@ def make_blockwise_graph(
 
     if deserializing:
         from distributed.protocol.serialize import import_allowed_module, to_serialize
+        from distributed.worker import dumps_function
+
+        if "iterate_collection" in inspect.getargspec(to_serialize).args:
+            # See: https://github.com/dask/distributed/pull/4641
+            _to_serialize = partial(to_serialize, iterate_collection=True)
+        else:
+            _to_serialize = to_serialize
+            warnings.warn(
+                "The current version of to_serialize/Serialize does not support the "
+                "'iterate_collection' argument.  For better nested-serialization "
+                "handling, update to a newer version of distributed. Otherwise, "
+                "deserialization and run-time errors on the worker are likely!"
+            )
     else:
         from importlib import import_module as import_allowed_module
 
@@ -916,12 +934,30 @@ def make_blockwise_graph(
         if deserializing:
             deps.update(func_future_args)
             args += list(func_future_args)
-        if kwargs:
-            val = (apply, func, args, kwargs2)
+
+        if deserializing and not concatenate:
+            # Construct a function/args/kwargs dict if we
+            # do not have a nested task (i.e. concatenate=False).
+            # TODO: Avoid using the iterate_collection-version
+            # of to_serialize if we know that are no embeded
+            # Serialized/Serialize objects in args and/or kwargs.
+            if kwargs:
+                dsk[out_key] = {
+                    "function": dumps_function(apply),
+                    "args": _to_serialize(args),
+                    "kwargs": _to_serialize(kwargs2),
+                }
+            else:
+                dsk[out_key] = {"function": func, "args": _to_serialize(args)}
         else:
-            args.insert(0, func)
-            val = tuple(args)
-        dsk[out_key] = to_serialize(val, task=True) if deserializing else val
+            if kwargs:
+                val = (apply, func, args, kwargs2)
+            else:
+                args.insert(0, func)
+                val = tuple(args)
+            # May still need to serialize (if concatenate=True)
+            dsk[out_key] = _to_serialize(val) if deserializing else val
+
         if return_key_deps:
             key_deps[out_key] = deps
 
