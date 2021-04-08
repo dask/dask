@@ -2877,6 +2877,42 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
 
 
+@pytest.mark.parametrize(
+    "write_cols",
+    [["part", "col"], ["part", "kind", "col"]],
+)
+def test_partitioned_column_overlap(tmpdir, engine, write_cols):
+
+    tmpdir.mkdir("part=a")
+    tmpdir.mkdir("part=b")
+    path0 = str(tmpdir.mkdir("part=a/kind=x"))
+    path1 = str(tmpdir.mkdir("part=b/kind=x"))
+    path0 = os.path.join(path0, "data.parquet")
+    path1 = os.path.join(path1, "data.parquet")
+
+    _df1 = pd.DataFrame({"part": "a", "kind": "x", "col": range(5)})
+    _df2 = pd.DataFrame({"part": "b", "kind": "x", "col": range(5)})
+    df1 = _df1[write_cols]
+    df2 = _df2[write_cols]
+    df1.to_parquet(path0, index=False)
+    df2.to_parquet(path1, index=False)
+
+    if engine == "fastparquet":
+        path = [path0, path1]
+    else:
+        path = str(tmpdir)
+
+    if write_cols == ["part", "kind", "col"]:
+        result = dd.read_parquet(path, engine=engine)
+        expect = pd.concat([_df1, _df2], ignore_index=True)
+        assert_eq(result, expect, check_index=False)
+    else:
+        # For now, partial overlap between partition columns and
+        # real columns is not allowed
+        with pytest.raises(ValueError):
+            dd.read_parquet(path, engine=engine)
+
+
 @fp_pandas_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
 
