@@ -367,7 +367,8 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        # Dump the function if
+        # Dump the function if concatenate is False, because
+        # we will not need to construct a nested task
         func = to_serialize(dsk[0]) if self.concatenate else dumps_function(dsk[0])
         func_future_args = dsk[1:]
 
