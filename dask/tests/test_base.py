@@ -242,44 +242,32 @@ def test_normalize_base():
 def test_tokenize_object():
     o = object()
 
-    with mock.patch("uuid.uuid4") as mock_uuid4:
-        mock_uuid4.return_value = mock.Mock(hex="123")
+    with dask.config.set({"tokenize.allow-random": True}):
+        # Subsequent, non-deterministic tokenization returns different tokens.
+        assert normalize_token(o) != normalize_token(o)
 
-        # Baseline config behavior: no explicitly set config value.
-        # Default behavior is equivalent to "True", i.e., proceed with non-
-        # deterministic normalization.
-        assert normalize_token(o) == "123"
-
-        # Explicitly set the "tokenize.allow-random" config value to "True".
-        with dask.config.set({"tokenize.allow-random": True}):
-            assert normalize_token(o) == "123"
-
-    # Explicitly set the "tokenize.allow-random" config value to "False".
     with dask.config.set({"tokenize.allow-random": False}):
         with pytest.raises(RuntimeError) as excinfo:
             normalize_token(o)
 
         assert "cannot be deterministically hashed" in str(excinfo.value)
 
+    # Assert that objects which have a corresponding `__dask_tokenize__`
+    # method are unaffected by the config, and get normalized as per that
+    # method.
     o2 = mock.Mock()
     o2.__dask_tokenize__ = mock.Mock(return_value="abc")
+    for allow_random in [True, False]:
+        with dask.config.set({"tokenize.allow-random": allow_random}):
+            assert normalize_token(o2) == "abc"
 
+    # Assert that handling callables is unaffected by the config as it's
+    # logically distinct.
     c = lambda: None
-
     with mock.patch("cloudpickle.dumps") as mock_cloudpickle_dumps:
         mock_cloudpickle_dumps.return_value = "678"
-
-        for allow_random in [True, False]:
-            # Assert that objects which have a corresponding `__dask_tokenize__`
-            # method are unaffected by the config, and get normalized as per that
-            # method.
-            with dask.config.set({"tokenize.allow-random": allow_random}):
-                assert normalize_token(o2) == "abc"
-
-            # Assert that handling callables is unaffected by the config as it's logically distinct.
-            # Only one type of callables is tested here.
-            with dask.config.set({"tokenize.allow-random": allow_random}):
-                assert normalize_token(c) == "678"
+        with dask.config.set({"tokenize.allow-random": allow_random}):
+            assert normalize_token(c) == "678"
 
 
 @pytest.mark.skipif("not pd")
