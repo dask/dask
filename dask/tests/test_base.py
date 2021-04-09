@@ -255,22 +255,22 @@ def test_tokenize_object():
     # Assert that objects which have a corresponding `__dask_tokenize__`
     # method are unaffected by the config, and get normalized as per that
     # method.
-    o2 = mock.Mock()
+    # Subsequent, deterministic tokenization returns the same tokens.
+    o2 = mock.MagicMock()
     o2.__dask_tokenize__ = mock.Mock(return_value="abc")
 
     for allow_random in [True, False]:
         with dask.config.set({"tokenize.allow-random": allow_random}):
-            assert normalize_token(o2) == "abc"
+            assert normalize_token(o2) == normalize_token(o2) == "abc"
 
     # Assert that handling callables is unaffected by the config as it's
     # logically distinct.
+    # As above, subsequent, deterministic tokenization returns the same tokens.
     c = lambda: None
 
     for allow_random in [True, False]:
-        with mock.patch("cloudpickle.dumps") as mock_cloudpickle_dumps:
-            mock_cloudpickle_dumps.return_value = "678"
-            with dask.config.set({"tokenize.allow-random": allow_random}):
-                assert normalize_token(c) == "678"
+        with dask.config.set({"tokenize.allow-random": allow_random}):
+            assert normalize_token(c) == normalize_token(c)
 
 
 @pytest.mark.skipif("not pd")
