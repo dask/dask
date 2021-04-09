@@ -245,7 +245,7 @@ def test_normalize_object():
         with pytest.raises(RuntimeError) as excinfo:
             normalize_token(o)
 
-        assert "__dask_tokenize__" in str(excinfo.value)
+        assert "cannot be deterministically hashed" in str(excinfo.value)
 
     o2 = mock.Mock()
     o2.__dask_tokenize__ = mock.Mock(return_value="abc")

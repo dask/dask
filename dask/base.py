@@ -850,8 +850,9 @@ def normalize_object(o):
         return uuid.uuid4().hex
 
     raise RuntimeError(
-        f"Object {str(o)} doesn't have a `__dask_tokenize__` method and "
-        "cannot be normalized deterministically."
+        f"Object {str(o)} cannot be deterministically hashed. Please, see "
+        "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "
+        "for more information"
     )
 
 
