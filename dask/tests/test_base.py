@@ -127,15 +127,30 @@ def test_tokenize_numpy_scalar_string_rep():
 
 @pytest.mark.skipif("not np")
 def test_tokenize_numpy_array_on_object_dtype():
-    assert tokenize(np.array(["a", "aa", "aaa"], dtype=object)) == tokenize(
-        np.array(["a", "aa", "aaa"], dtype=object)
-    )
+    a = np.array(["a", "aa", "aaa"], dtype=object)
+    assert tokenize(a) == tokenize(a)
     assert tokenize(np.array(["a", None, "aaa"], dtype=object)) == tokenize(
         np.array(["a", None, "aaa"], dtype=object)
     )
     assert tokenize(
         np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object)
     ) == tokenize(np.array([(1, "a"), (1, None), (1, "aaa")], dtype=object))
+
+    with mock.patch("dask.base.hash_buffer_hex") as mock_hash_buffer_hex:
+        # Emulate failure of ``dask.base.hash_buffer_hex``, in order to trigger
+        # fallback to non-deterministic behavior.
+        mock_hash_buffer_hex.side_effect = UnicodeDecodeError
+
+        with dask.config.set({"tokenize.allow-random": True}):
+            # As a fallback from a failed buffer hashing, the resulting hash
+            # is a non-deterministic UUID4.
+            assert tokenize(a) != tokenize(a)
+
+        with dask.config.set({"tokenize.allow-random": False}):
+            with pytest.raises(RuntimeError) as excinfo:
+                assert tokenize(a) is None
+
+        assert "cannot be deterministically hashed" in str(excinfo.value)
 
 
 @pytest.mark.skipif("not np")
@@ -225,7 +240,7 @@ def test_normalize_base():
         assert normalize_token(i) is i
 
 
-def test_normalize_object():
+def test_tokenize_object():
     o = object()
 
     with mock.patch("uuid.uuid4") as mock_uuid4:
@@ -482,11 +497,18 @@ def test_tokenize_dense_sparse_array(cls_name):
     assert tokenize(a) != tokenize(b)
 
 
-def test_tokenize_object_with_recursion_error_returns_uuid():
+def test_tokenize_object_with_recursion_error():
     cycle = dict(a=None)
     cycle["a"] = cycle
 
-    assert len(tokenize(cycle)) == 32
+    with dask.config.set({"tokenize.allow-random": True}):
+        assert len(tokenize(cycle)) == 32
+
+    with dask.config.set({"tokenize.allow-random": False}):
+        with pytest.raises(RuntimeError) as excinfo:
+            tokenize(cycle)
+
+    assert "cannot be deterministically hashed" in str(excinfo.value)
 
 
 def test_is_dask_collection():
