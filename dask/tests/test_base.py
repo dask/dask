@@ -4,11 +4,10 @@ import sys
 import time
 from collections import OrderedDict
 from operator import add, mul
+from unittest import mock
 
 import pytest
 from tlz import compose, curry, merge, partial
-
-from unittest import mock
 
 import dask
 import dask.bag as db
