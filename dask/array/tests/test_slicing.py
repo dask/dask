@@ -7,20 +7,20 @@ from tlz import merge
 np = pytest.importorskip("numpy")
 
 import dask
-from dask import config
 import dask.array as da
+from dask import config
 from dask.array.slicing import (
     _sanitize_index_element,
     _slice_1d,
     cached_cumsum,
-    new_blockdim,
-    sanitize_index,
-    slice_array,
-    take,
-    normalize_index,
-    slicing_plan,
     make_block_sorted_slices,
+    new_blockdim,
+    normalize_index,
+    sanitize_index,
     shuffle_slice,
+    slice_array,
+    slicing_plan,
+    take,
 )
 from dask.array.utils import assert_eq, same_keys
 

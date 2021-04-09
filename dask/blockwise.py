@@ -17,14 +17,14 @@ import tlz as toolz
 
 from .base import clone_key, get_name_from_key
 from .compatibility import prod
-from .core import reverse_dict, flatten, keys_in_tasks
+from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import (
+    apply,
     ensure_dict,
     homogeneous_deepmap,
-    apply,
     stringify,
     stringify_collection_keys,
 )
@@ -39,12 +39,12 @@ class BlockwiseIODeps:
         )
 
     @classmethod
-    def __dask_distributed_pack__(cls, module: str, name: str, *args):
-        return (module, name, *args)
+    def __dask_distributed_pack__(cls, cls_path: str, *args):
+        return (cls_path, *args)
 
     @classmethod
-    def __dask_distributed_unpack__(cls, module: str, name: str, *args):
-        return (module, name, *args)
+    def __dask_distributed_unpack__(cls, cls_path: str, *args):
+        return (cls_path, *args)
 
 
 def subs(task, substitution):
@@ -342,10 +342,10 @@ class Blockwise(Layer):
     def __dask_distributed_pack__(
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
-        from distributed.worker import dumps_function
+        from distributed.protocol.serialize import import_allowed_module
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
-        from distributed.protocol.serialize import import_allowed_module
+        from distributed.worker import dumps_function
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
@@ -393,10 +393,8 @@ class Blockwise(Layer):
             if isinstance(input_map, tuple):
                 # Use the `__dask_distributed_pack__` definition for the
                 # specified `BlockwiseIODeps` subclass
-                io_dep_map = getattr(
-                    import_allowed_module(input_map[0]),
-                    input_map[1],
-                )
+                module_name, attr_name = input_map[0].rsplit(".", 1)
+                io_dep_map = getattr(import_allowed_module(module_name), attr_name)
                 packed_io_deps[name] = io_dep_map.__dask_distributed_pack__(*input_map)
             else:
                 packed_io_deps[name] = input_map
@@ -823,8 +821,8 @@ def make_blockwise_graph(
         key_deps = {}
 
     if deserializing:
-        from distributed.worker import warn_dumps, dumps_function
         from distributed.protocol.serialize import import_allowed_module
+        from distributed.worker import dumps_function, warn_dumps
     else:
         from importlib import import_module as import_allowed_module
 
@@ -835,10 +833,11 @@ def make_blockwise_graph(
     for arg, val in io_deps.items():
         if isinstance(val, tuple):
             _args = io_deps[arg]
-            io_dep_map = getattr(import_allowed_module(_args[0]), _args[1])
+            module_name, attr_name = _args[0].rsplit(".", 1)
+            io_dep_map = getattr(import_allowed_module(module_name), attr_name)
             if deserializing:
                 _args = io_dep_map.__dask_distributed_unpack__(*_args)
-            io_arg_mappings[arg] = io_dep_map(*_args[2:])
+            io_arg_mappings[arg] = io_dep_map(*_args[1:])
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate

@@ -1,20 +1,19 @@
-from distutils.version import LooseVersion
 import math
+import warnings
+from distutils.version import LooseVersion
 
 import tlz as toolz
-import warnings
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 
-from .utils import _analyze_paths
-from ...core import DataFrame, new_dd_object
 from ....base import tokenize
 from ....delayed import Delayed
-from ....utils import import_required, natural_sort_key, parse_bytes, apply
+from ....highlevelgraph import HighLevelGraph, Layer
+from ....utils import apply, import_required, natural_sort_key, parse_bytes
+from ...core import DataFrame, new_dd_object
 from ...methods import concat
-from ....highlevelgraph import Layer, HighLevelGraph
-
+from .utils import _sort_and_analyze_paths
 
 try:
     import snappy
@@ -411,6 +410,7 @@ def to_parquet(
     ignore_divisions=False,
     partition_on=None,
     storage_options=None,
+    custom_metadata=None,
     write_metadata_file=True,
     compute=True,
     compute_kwargs=None,
@@ -459,6 +459,10 @@ def to_parquet(
         there will be no global groupby.
     storage_options : dict, optional
         Key/value pairs to be passed on to the file-system backend, if any.
+    custom_metadata : dict, optional
+        Custom key/value metadata to include in all footer metadata (and
+        in the global "_metadata" file, if applicable).  Note that the custom
+        metadata may not contain the reserved b"pandas" key.
     write_metadata_file : bool, optional
         Whether to write the special "_metadata" file.
     compute : bool, optional
@@ -482,7 +486,7 @@ def to_parquet(
     Examples
     --------
     >>> df = dd.read_csv(...)  # doctest: +SKIP
-    >>> dd.to_parquet(df, '/path/to/output/',...)  # doctest: +SKIP
+    >>> df.to_parquet('/path/to/output/', ...)  # doctest: +SKIP
 
     See Also
     --------
@@ -629,6 +633,15 @@ def to_parquet(
     kwargs_pass["compression"] = compression
     kwargs_pass["index_cols"] = index_cols
     kwargs_pass["schema"] = schema
+    if custom_metadata:
+        if b"pandas" in custom_metadata.keys():
+            raise ValueError(
+                "User-defined key/value metadata (custom_metadata) can not "
+                "contain a b'pandas' key.  This key is reserved by Pandas, "
+                "and overwriting the corresponding value can render the "
+                "entire dataset unreadable."
+            )
+        kwargs_pass["custom_metadata"] = custom_metadata
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,
@@ -747,9 +760,8 @@ def create_metadata_file(
         fs, _, paths = get_fs_token_paths(
             paths, mode="rb", storage_options=storage_options
         )
-    paths = sorted(paths, key=natural_sort_key)  # numeric rather than glob ordering
     ap_kwargs = {"root": root_dir} if root_dir else {}
-    root_dir, fns = _analyze_paths(paths, fs, **ap_kwargs)
+    paths, root_dir, fns = _sort_and_analyze_paths(paths, fs, **ap_kwargs)
     out_dir = root_dir if out_dir is None else out_dir
 
     # Start constructing a raw graph

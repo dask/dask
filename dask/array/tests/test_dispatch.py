@@ -1,7 +1,7 @@
 import operator
 
-import pytest
 import numpy as np
+import pytest
 
 import dask.array as da
 from dask.array import Array
@@ -232,7 +232,7 @@ def test_direct_deferral_wrapping_override():
     setattr(b, "__dask_graph__", None)
     res = a + da.from_array(b)
     assert isinstance(res, da.Array)
-    assert_eq(res, 2 * np.arange(4))
+    assert_eq(res, 2 * np.arange(4), check_type=False)
 
 
 class UnknownScalarThatUnderstandsArrayOps(np.lib.mixins.NDArrayOperatorsMixin):

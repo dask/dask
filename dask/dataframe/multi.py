@@ -53,49 +53,46 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
-from functools import wraps, partial
-import warnings
 import math
-import operator
-from collections import defaultdict
 import pickle
+import warnings
+from functools import partial, wraps
 
-from tlz import merge_sorted, unique, first, valmap
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal, is_categorical_dtype, union_categoricals
+from pandas.api.types import is_categorical_dtype, is_dtype_equal, union_categoricals
+from tlz import first, merge_sorted, unique
 
-from ..core import keys_in_tasks
-from ..base import tokenize, is_dask_collection
-from ..highlevelgraph import HighLevelGraph, Layer
-from ..utils import apply, stringify, stringify_collection_keys
+from ..base import is_dask_collection, tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..layers import BroadcastJoinLayer
+from ..utils import M, apply
+from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
-    _Frame,
     DataFrame,
-    Series,
-    map_partitions,
     Index,
+    Series,
+    _concat,
+    _Frame,
     _maybe_from_pandas,
-    new_dd_object,
     is_broadcastable,
+    map_partitions,
+    new_dd_object,
     prefix_reduction,
     suffix_reduction,
-    _concat,
 )
 from .io import from_pandas
-from . import methods
-from .shuffle import shuffle, rearrange_by_divisions, partitioning_index, shuffle_group
+from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
 from .utils import (
-    strip_unknown_categories,
-    is_series_like,
     asciitable,
-    is_dataframe_like,
-    make_meta,
-    hash_object_dispatch,
     group_split_dispatch,
+    hash_object_dispatch,
+    is_dataframe_like,
+    is_series_like,
+    make_meta,
+    strip_unknown_categories,
 )
-from ..utils import M
 
 
 def align_partitions(*dfs):
@@ -958,31 +955,36 @@ def merge_asof(
 ###############################################################
 
 
-def concat_and_check(dfs):
+def concat_and_check(dfs, ignore_order=False):
     if len(set(map(len, dfs))) != 1:
         raise ValueError("Concatenated DataFrames of different lengths")
-    return methods.concat(dfs, axis=1)
+    return methods.concat(dfs, axis=1, ignore_order=ignore_order)
 
 
-def concat_unindexed_dataframes(dfs, **kwargs):
+def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
     name = "concat-" + tokenize(*dfs)
 
     dsk = {
-        (name, i): (concat_and_check, [(df._name, i) for df in dfs])
+        (name, i): (concat_and_check, [(df._name, i) for df in dfs], ignore_order)
         for i in range(dfs[0].npartitions)
     }
-
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat([df._meta for df in dfs], axis=1, **kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
 
 
-def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
+def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
     """ Concatenate indexed dataframes together along the index """
     warn = axis != 0
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
-        [df._meta for df in dfs], axis=axis, join=join, filter_warning=warn, **kwargs
+        [df._meta for df in dfs],
+        axis=axis,
+        join=join,
+        filter_warning=warn,
+        **kwargs,
     )
     empties = [strip_unknown_categories(df._meta) for df in dfs]
 
@@ -999,7 +1001,10 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
     uniform = False
 
     dsk = dict(
-        ((name, i), (methods.concat, part, axis, join, uniform, filter_warning))
+        (
+            (name, i),
+            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
+        )
         for i, part in enumerate(parts2)
     )
     for df in dfs2:
@@ -1008,13 +1013,19 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def stack_partitions(dfs, divisions, join="outer", **kwargs):
+def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs):
     """Concatenate partitions on axis=0 by doing a simple stack"""
     # Use _meta_nonempty as pandas.concat will incorrectly cast float to datetime
     # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
+
+    kwargs.update({"ignore_order": ignore_order})
+
     meta = make_meta(
         methods.concat(
-            [df._meta_nonempty for df in dfs], join=join, filter_warning=False, **kwargs
+            [df._meta_nonempty for df in dfs],
+            join=join,
+            filter_warning=False,
+            **kwargs,
         )
     )
     empty = strip_unknown_categories(meta)
@@ -1056,11 +1067,19 @@ def stack_partitions(dfs, divisions, join="outer", **kwargs):
         except (ValueError, TypeError):
             match = False
 
+        filter_warning = True
+        uniform = False
+
         for key in df.__dask_keys__():
             if match:
                 dsk[(name, i)] = key
             else:
-                dsk[(name, i)] = (methods.concat, [empty, key], 0, join)
+                dsk[(name, i)] = (
+                    apply,
+                    methods.concat,
+                    [[empty, key], 0, join, uniform, filter_warning],
+                    kwargs,
+                )
             i += 1
 
     return new_dd_object(dsk, name, meta, divisions)
@@ -1072,6 +1091,7 @@ def concat(
     join="outer",
     interleave_partitions=False,
     ignore_unknown_divisions=False,
+    ignore_order=False,
     **kwargs,
 ):
     """Concatenate DataFrames along rows.
@@ -1105,6 +1125,8 @@ def concat(
     ignore_unknown_divisions : bool, default False
         By default a warning is raised if any input has unknown divisions.
         Set to True to disable this warning.
+    ignore_order : bool, default False
+        Whether to ignore order when doing the union of categoricals.
 
     Notes
     -----
@@ -1163,6 +1185,7 @@ def concat(
     ... ], interleave_partitions=True).dtype
     CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
     """
+
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
@@ -1182,7 +1205,9 @@ def concat(
 
     if axis == 1:
         if all(df.known_divisions for df in dasks):
-            return concat_indexed_dataframes(dfs, axis=axis, join=join, **kwargs)
+            return concat_indexed_dataframes(
+                dfs, axis=axis, join=join, ignore_order=ignore_order, **kwargs
+            )
         elif (
             len(dasks) == len(dfs)
             and all(not df.known_divisions for df in dfs)
@@ -1195,7 +1220,7 @@ def concat(
                     " are \n aligned. This assumption is not generally "
                     "safe."
                 )
-            return concat_unindexed_dataframes(dfs, **kwargs)
+            return concat_unindexed_dataframes(dfs, ignore_order=ignore_order, **kwargs)
         else:
             raise ValueError(
                 "Unable to concatenate DataFrame with unknown "
@@ -1213,298 +1238,23 @@ def concat(
                     # remove last to concatenate with next
                     divisions += df.divisions[:-1]
                 divisions += dfs[-1].divisions
-                return stack_partitions(dfs, divisions, join=join, **kwargs)
+                return stack_partitions(
+                    dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+                )
             elif interleave_partitions:
-                return concat_indexed_dataframes(dfs, join=join, **kwargs)
+                return concat_indexed_dataframes(
+                    dfs, join=join, ignore_order=ignore_order, **kwargs
+                )
             else:
                 divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-                return stack_partitions(dfs, divisions, join=join, **kwargs)
+                return stack_partitions(
+                    dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+                )
         else:
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return stack_partitions(dfs, divisions, join=join, **kwargs)
-
-
-class BroadcastJoinLayer(Layer):
-    """Broadcast-based Join Layer
-
-    High-level graph layer for a join operation requiring the
-    smaller collection to be broadcasted to every partition of
-    the larger collection.
-
-    Parameters
-    ----------
-    name : str
-        Name of new (joined) output collection.
-    lhs_name: string
-        "Left" DataFrame collection to join.
-    lhs_npartitions: int
-        Number of partitions in "left" DataFrame collection.
-    rhs_name: string
-        "Right" DataFrame collection to join.
-    rhs_npartitions: int
-        Number of partitions in "right" DataFrame collection.
-    parts_out : list of int (optional)
-        List of required output-partition indices.
-    annotations : dict (optional)
-        Layer annotations.
-    **merge_kwargs : **dict
-        Keyword arguments to be passed to chunkwise merge func.
-    """
-
-    def __init__(
-        self,
-        name,
-        npartitions,
-        lhs_name,
-        lhs_npartitions,
-        rhs_name,
-        rhs_npartitions,
-        parts_out=None,
-        annotations=None,
-        **merge_kwargs,
-    ):
-        super().__init__(annotations=annotations)
-        self.name = name
-        self.npartitions = npartitions
-        self.lhs_name = lhs_name
-        self.lhs_npartitions = lhs_npartitions
-        self.rhs_name = rhs_name
-        self.rhs_npartitions = rhs_npartitions
-        self.parts_out = parts_out or set(range(self.npartitions))
-        self.merge_kwargs = merge_kwargs
-        self.how = self.merge_kwargs.get("how")
-        self.left_on = self.merge_kwargs.get("left_on")
-        self.right_on = self.merge_kwargs.get("right_on")
-        if isinstance(self.left_on, list):
-            self.left_on = (list, tuple(self.left_on))
-        if isinstance(self.right_on, list):
-            self.right_on = (list, tuple(self.right_on))
-
-    def get_output_keys(self):
-        return {(self.name, part) for part in self.parts_out}
-
-    def __repr__(self):
-        return "BroadcastJoinLayer<name='{}', how={}, lhs={}, rhs={}>".format(
-            self.name, self.how, self.lhs_name, self.rhs_name
-        )
-
-    def is_materialized(self):
-        return hasattr(self, "_cached_dict")
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def __dask_distributed_pack__(self, client):
-
-        # Pickle complex merge_kwargs elements. Also
-        # tuples, which may be confused with keys.
-        _merge_kwargs = {}
-        for k, v in self.merge_kwargs.items():
-            if not isinstance(v, (str, list, bool)):
-                _merge_kwargs[k] = pickle.dumps(v)
-            else:
-                _merge_kwargs[k] = v
-
-        return {
-            "name": self.name,
-            "npartitions": self.npartitions,
-            "lhs_name": self.lhs_name,
-            "lhs_npartitions": self.lhs_npartitions,
-            "rhs_name": self.rhs_name,
-            "rhs_npartitions": self.rhs_npartitions,
-            "parts_out": self.parts_out,
-            "annotations": self.pack_annotations(),
-            "merge_kwargs": _merge_kwargs,
-        }
-
-    @classmethod
-    def __dask_distributed_unpack__(cls, state, dsk, dependencies, annotations):
-        from distributed.worker import dumps_task
-
-        # Expand merge_kwargs
-        merge_kwargs = state.pop("merge_kwargs", {})
-        state.update(merge_kwargs)
-
-        # Materialize the layer
-        raw = dict(cls(**state))
-
-        # Convert all keys to strings and dump tasks
-        raw = {stringify(k): stringify_collection_keys(v) for k, v in raw.items()}
-        dsk.update(valmap(dumps_task, raw))
-
-        dependencies.update(
-            {k: keys_in_tasks(dsk, [v], as_list=True) for k, v in raw.items()}
-        )
-
-        if state["annotations"]:
-            cls.unpack_annotations(annotations, state["annotations"], raw.keys())
-
-    def _keys_to_parts(self, keys):
-        """Simple utility to convert keys to partition indices."""
-        parts = set()
-        for key in keys:
-            try:
-                _name, _part = key
-            except ValueError:
-                continue
-            if _name != self.name:
-                continue
-            parts.add(_part)
-        return parts
-
-    @property
-    def _broadcast_plan(self):
-        # Return structure (tuple):
-        # (
-        #     <broadcasted-collection-name>,
-        #     <broadcasted-collection-npartitions>,
-        #     <other-collection-npartitions>,
-        #     <other-collection-on>,
-        # )
-        if self.lhs_npartitions < self.rhs_npartitions:
-            # Broadcasting the left
-            return (
-                self.lhs_name,
-                self.lhs_npartitions,
-                self.rhs_name,
-                self.right_on,
+            return stack_partitions(
+                dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
             )
-        else:
-            # Broadcasting the right
-            return (
-                self.rhs_name,
-                self.rhs_npartitions,
-                self.lhs_name,
-                self.left_on,
-            )
-
-    def _cull_dependencies(self, keys, parts_out=None):
-        """Determine the necessary dependencies to produce `keys`.
-
-        For a broadcast join, output partitions always depend on
-        all partitions of the broadcasted collection, but only one
-        partition of the "other" collecction.
-        """
-        # Get broadcast info
-        bcast_name, bcast_size, other_name = self._broadcast_plan[:3]
-
-        deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_parts(keys)
-        for part in parts_out:
-            deps[(self.name, part)] |= {(bcast_name, i) for i in range(bcast_size)}
-            deps[(self.name, part)] |= {
-                (other_name, part),
-            }
-        return deps
-
-    def _cull(self, parts_out):
-        return BroadcastJoinLayer(
-            self.name,
-            self.npartitions,
-            self.lhs_name,
-            self.lhs_npartitions,
-            self.rhs_name,
-            self.rhs_npartitions,
-            self.merge_kwargs,
-            annotations=self.annotations,
-            parts_out=parts_out,
-        )
-
-    def cull(self, keys, all_keys):
-        """Cull a BroadcastJoinLayer HighLevelGraph layer.
-
-        The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
-        Therefore, "culling" the layer only requires us to reset this
-        parameter.
-        """
-        parts_out = self._keys_to_parts(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != set(self.parts_out):
-            culled_layer = self._cull(parts_out)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
-
-    def _construct_graph(self):
-        """Construct graph for a broadcast join operation."""
-
-        inter_name = "inter-" + self.name
-        split_name = "split-" + self.name
-
-        # Get broadcast "plan"
-        bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
-        bcast_side = "left" if self.lhs_npartitions < self.rhs_npartitions else "right"
-
-        # Loop over output partitions, which should be a 1:1
-        # mapping with the input partitions of "other".
-        # Culling should allow us to avoid generating tasks for
-        # any output partitions that are not requested (via `parts_out`)
-        dsk = {}
-        for i in self.parts_out:
-
-            # Split each "other" partition by hash
-            if self.how != "inner":
-                dsk[(split_name, i)] = (
-                    _split_partition,
-                    (other_name, i),
-                    other_on,
-                    bcast_size,
-                )
-
-            # For each partition of "other", we need to join
-            # to each partition of "bcast". If it is a "left"
-            # or "right" join, there should be a unique mapping
-            # between the local splits of "other" and the
-            # partitions of "bcast" (which means we need an
-            # additional `getitem` operation to isolate the
-            # correct split of each "other" partition).
-            _concat_list = []
-            for j in range(bcast_size):
-                # Specify arg list for `merge_chunk`
-                _merge_args = [
-                    (
-                        operator.getitem,
-                        (split_name, i),
-                        j,
-                    )
-                    if self.how != "inner"
-                    else (other_name, i),
-                    (bcast_name, j),
-                ]
-                if bcast_side == "left":
-                    # If the left is broadcasted, the
-                    # arg list needs to be reversed
-                    _merge_args.reverse()
-                inter_key = (inter_name, i, j)
-                dsk[inter_key] = (
-                    apply,
-                    _merge_chunk_wrapper,
-                    _merge_args,
-                    self.merge_kwargs,
-                )
-                _concat_list.append(inter_key)
-
-            # Concatenate the merged results for each output partition
-            dsk[(self.name, i)] = (_concat_wrapper, _concat_list)
-
-        return dsk
 
 
 def _contains_index_name(df, columns_or_index):
