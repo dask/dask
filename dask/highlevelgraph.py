@@ -964,7 +964,7 @@ class HighLevelGraph(Mapping):
         return {"layers": layers}
 
     @staticmethod
-    def __dask_distributed_unpack__(hlg: dict, annotations: Mapping[str, Any]) -> Dict:
+    def __dask_distributed_unpack__(hlg: dict) -> Dict:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -975,10 +975,6 @@ class HighLevelGraph(Mapping):
         ----------
         hlg: dict
             Packed high level graph layers
-        annotations : dict
-            A top-level annotations object which may be partially populated,
-            and which may be further filled by annotations from the layers
-            of the packed_hlg.
 
         Returns
         -------
@@ -1015,11 +1011,7 @@ class HighLevelGraph(Mapping):
                 deps[k] = deps.get(k, set()) | v
 
             # Unpack the annotations
-            if annotations and layer["annotations"]:
-                layer_annotations = {**layer["annotations"], **annotations}
-            else:
-                layer_annotations = annotations or layer["annotations"] or None
-            unpack_anno(anno, layer_annotations, unpacked_layer["dsk"].keys())
+            unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
 
         return {"dsk": dsk, "deps": deps, "annotations": anno}
 
