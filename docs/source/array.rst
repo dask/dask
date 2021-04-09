@@ -15,6 +15,7 @@ Array
    array-stats.rst
    array-linear-operator.rst
    array-slicing.rst
+   array-assignment.rst
    array-stack.rst
    array-gufunc.rst
 
