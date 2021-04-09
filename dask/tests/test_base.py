@@ -147,7 +147,7 @@ def test_tokenize_numpy_array_on_object_dtype():
 
         with dask.config.set({"tokenize.allow-random": False}):
             with pytest.raises(RuntimeError) as excinfo:
-                assert tokenize(a) is None
+                tokenize(a)
 
         assert "cannot be deterministically hashed" in str(excinfo.value)
 
