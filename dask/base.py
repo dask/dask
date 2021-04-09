@@ -1038,7 +1038,8 @@ def register_numpy():
                         data = uuid.uuid4().hex
                     else:
                         raise RuntimeError(
-                            f"``np.ndarray`` {str(x)} cannot be deterministically hashed. Please, see "
+                            f"``np.ndarray`` with object ``dtype`` {str(x)} cannot "
+                            "be deterministically hashed. Please, see "
                             "https://docs.dask.org/en/latest/custom-collections.html#implementing-deterministic-hashing "  # noqa: E501
                             "for more information"
                         )
