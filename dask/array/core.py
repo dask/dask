@@ -4122,7 +4122,7 @@ def asarray(a, **kwargs):
     elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a)
+        return stack(a, **kwargs)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
     return from_array(a, getitem=getter_inline, **kwargs)
@@ -4657,7 +4657,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     """
     from . import wrap
 
-    seq = [asarray(a) for a in seq]
+    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to stack")
