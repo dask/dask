@@ -1421,7 +1421,7 @@ class ArrowDatasetEngine(Engine):
             return None  # This partition was filtered
         return {
             "piece": (
-                frag_map[(full_path, rg_list[0])] if frag_map else full_path,
+                frag_map[(full_path, rg_list[0] or 0)] if frag_map else full_path,
                 rg_list,
                 pkeys,
             ),

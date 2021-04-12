@@ -584,7 +584,7 @@ def _row_groups_to_parts(
 
                 part = make_part_func(
                     filename,
-                    rg_list,
+                    rg_list if i_end - i < len(row_groups) else [None],
                     **make_part_kwargs,
                 )
                 if part is None:
@@ -604,7 +604,7 @@ def _row_groups_to_parts(
 
             part = make_part_func(
                 filename,
-                row_groups,
+                [None],
                 **make_part_kwargs,
             )
             if part is None:
