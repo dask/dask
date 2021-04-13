@@ -14,6 +14,7 @@ from operator import add, getitem, sub
 from threading import Lock
 
 from numpy import nancumprod, nancumsum
+from numpy.testing import assert_array_equal
 from tlz import concat, countby, merge
 from tlz.curried import identity
 
@@ -3286,6 +3287,71 @@ def test_from_delayed_meta():
 def test_A_property():
     x = da.ones(5, chunks=(2,))
     assert x.A is x
+
+
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
+def test_A_property_matrix():
+    x = da.ones((5, 5), chunks=(2, 2))
+    assert x.A is x
+
+    from numpy import array, float64, matrix, ndarray
+
+    y = x.map_blocks(matrix)
+    assert type(y._meta) is matrix
+    assert_array_equal(y._meta, matrix([], dtype=float64).reshape(0, 0))
+    yc = y.compute()
+    assert type(yc) is matrix
+    ycA = yc.A
+    assert type(ycA) is ndarray
+
+    yA = y.A
+    assert type(yA._meta) is ndarray
+    assert_array_equal(yA._meta, array([], dtype=float64).reshape((0, 0)))
+    yAc = yA.compute()
+    assert type(yAc) is ndarray
+
+    assert_eq(yAc, ycA)
+
+
+@pytest.mark.parametrize("spmatrix", ["csr", "csc", "coo"])
+@pytest.mark.filterwarnings("ignore:the matrix subclass:PendingDeprecationWarning")
+def test_A_property_spmatrix(spmatrix):
+    pytest.importorskip("scipy.sparse")
+
+    x = da.ones((5, 5), chunks=(2, 2))
+    assert x.A is x
+
+    from numpy import array, float64, ndarray
+    from scipy.sparse import coo_matrix, csc_matrix, csr_matrix
+
+    mat_map = {
+        "csr": csr_matrix,
+        "csc": csc_matrix,
+        "coo": coo_matrix,
+    }
+    mat = mat_map[spmatrix]
+
+    y = x.map_blocks(mat)
+    assert type(y._meta) is mat
+    empty = mat([], dtype=float64).reshape(0, 0)
+    assert (y._meta != empty).nnz == 0
+
+    yA = y.A
+    yAc = yA.compute()
+    yc = y.compute()
+    ycA = y.compute().A
+
+    assert yA is not y
+    assert type(yA._meta) is ndarray
+    assert type(yAc) is ndarray
+    assert type(yc) is mat
+    assert type(ycA) is ndarray
+
+    assert_eq(yAc, ycA)
+
+    from numpy.testing import assert_array_equal
+
+    assert_array_equal(yA._meta, array([], dtype=float64).reshape((0, 0)))
 
 
 def test_copy_mutate():
