@@ -161,7 +161,7 @@ def blockwise(
     >>> z.chunks
     ((nan, nan, nan),)
 
-    >>> z.compute_chunk_sizes()
+    >>> z = z.compute_chunk_sizes()
     >>> z.chunks
     ((1, 2, 3),)
 
