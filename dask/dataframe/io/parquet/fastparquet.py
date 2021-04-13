@@ -17,6 +17,7 @@ try:
 except ImportError:
     pass
 
+from ....utils import natural_sort_key
 from ...methods import concat
 from ...utils import UNKNOWN_CATEGORIES
 from ..utils import _meta_from_dtypes
@@ -348,6 +349,14 @@ class FastParquetEngine(Engine):
 
         # Get partitioning metadata
         pqpartitions = pf.info.get("partitions", None)
+
+        # Fastparquet does not use a natural sorting
+        # order for partitioned data. Re-sort by path
+        if pqpartitions is not None:
+            pf.row_groups = sorted(
+                pf.row_groups,
+                key=lambda x: natural_sort_key(x.columns[0].file_path),
+            )
 
         # Store types specified in pandas metadata
         pandas_type = {}

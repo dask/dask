@@ -336,7 +336,7 @@ def read_parquet(
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
-        parts, statistics, filters, index, chunksize
+        parts, statistics, filters, index, chunksize, fs
     )
 
     # Account for index and columns arguments.
@@ -1032,7 +1032,7 @@ def apply_filters(parts, statistics, filters):
     return out_parts, out_statistics
 
 
-def process_statistics(parts, statistics, filters, index, chunksize):
+def process_statistics(parts, statistics, filters, index, chunksize, fs):
     """Process row-group column statistics in metadata
     Used in read_parquet.
     """
@@ -1053,7 +1053,7 @@ def process_statistics(parts, statistics, filters, index, chunksize):
 
         # Aggregate parts/statistics if we are splitting by row-group
         if chunksize:
-            parts, statistics = aggregate_row_groups(parts, statistics, chunksize)
+            parts, statistics = aggregate_row_groups(parts, statistics, chunksize, fs)
 
         out = sorted_columns(statistics)
 
@@ -1160,7 +1160,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_row_groups(parts, stats, chunksize):
+def aggregate_row_groups(parts, stats, chunksize, fs):
     if not stats[0].get("file_path_0", None):
         return parts, stats
 
@@ -1174,9 +1174,16 @@ def aggregate_row_groups(parts, stats, chunksize):
         # Criteria to consider aggregating parts (parts are within the same
         # file OR both parts correspond to full files)
         same_path = stat["file_path_0"] == next_stat["file_path_0"]
-        multi_path_allowed = next_part[-1]["piece"][1] == [None] and part["piece"][
-            1
-        ] == [None]
+        multi_path_allowed = len(part["piece"]) == 1 or (
+            next_part[-1]["piece"][1] == [None] and part["piece"][1] == [None]
+        )
+
+        if not same_path and multi_path_allowed:
+            # Make sure files are in the same directory before aggregating
+            # TODO: Make this check optional?
+            root = stat["file_path_0"].split(fs.sep)[:-1]
+            next_root = next_stat["file_path_0"].split(fs.sep)[:-1]
+            multi_path_allowed = root == next_root
 
         if (same_path or multi_path_allowed) and (
             (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
