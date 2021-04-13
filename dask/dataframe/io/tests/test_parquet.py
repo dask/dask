@@ -2640,42 +2640,56 @@ def test_optimize_and_not(tmpdir):
 
 @pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("metadata", [True, False])
-@pytest.mark.parametrize("chunksize", [None, 4096, "1MiB"])
-def test_chunksize_files(tmpdir, chunksize, engine, metadata, index):
+@pytest.mark.parametrize("partition_on", [None, "a"])
+@pytest.mark.parametrize("chunksize", [4096, "1MiB"])
+@write_read_engines()
+def test_chunksize_files(
+    tmpdir, chunksize, partition_on, write_engine, read_engine, metadata, index
+):
+
+    if partition_on and read_engine == "fastparquet" and not metadata:
+        pytest.skip("Fastparquet requires _metadata for partitioned data.")
 
     df_size = 100
-    df = pd.DataFrame(
+    df1 = pd.DataFrame(
         {
             "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
             "b": np.random.random(size=df_size),
             "c": np.random.randint(1, 5, size=df_size),
         }
     )
-    ddf1 = dd.from_pandas(df, npartitions=9)
+    ddf1 = dd.from_pandas(df1, npartitions=9)
 
     ddf1.to_parquet(
         str(tmpdir),
-        engine=engine,
+        engine=write_engine,
+        partition_on=partition_on,
         write_metadata_file=metadata,
         write_index=index,
     )
 
     ddf2 = dd.read_parquet(
         str(tmpdir),
-        engine=engine,
+        engine=read_engine,
         chunksize=chunksize,
     )
 
     # Check that files where aggregated as expected
     if chunksize == 4096:
-        ddf2.npartitions < ddf1.npartitions
+        assert ddf2.npartitions < ddf1.npartitions
     elif chunksize == "1MiB":
-        ddf2.npartitions == 1
-    else:
-        ddf2.npartitions == ddf1.npartitions
+        if partition_on:
+            assert ddf2.npartitions == 3
+        else:
+            assert ddf2.npartitions == 1
 
     # Check that the final data is correct
-    assert_eq(ddf1, ddf2, check_divisions=False, check_index=index)
+    if partition_on:
+        df2 = ddf2.compute().sort_values(["b", "c"])
+        df1 = df1.sort_values(["b", "c"])
+        assert_eq(df1[["b", "c"]], df2[["b", "c"]], check_index=index)
+    else:
+        assert_eq(ddf1, ddf2, check_divisions=False, check_index=index)
 
 
 @pytest.mark.parametrize("metadata", [True, False])

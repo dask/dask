@@ -344,6 +344,7 @@ class FastParquetEngine(Engine):
         dtypes,
         base_path,
         paths,
+        chunksize,
     ):
         """Organize row-groups by file."""
 
@@ -452,7 +453,7 @@ class FastParquetEngine(Engine):
                             cmax = pd.Timestamp(cmax, tz=tz)
                         last = cmax_last.get(name, None)
 
-                        if not filters:
+                        if not (filters or chunksize):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -479,7 +480,10 @@ class FastParquetEngine(Engine):
                             cstats += [cmin, cmax]
                         cmax_last[name] = cmax
                     else:
-                        if not filters and column.meta_data.num_values > 0:
+                        if (
+                            not (filters or chunksize)
+                            and column.meta_data.num_values > 0
+                        ):
                             # We are collecting statistics for divisions
                             # only (no filters) - Lets bail.
                             gather_statistics = False
@@ -579,6 +583,7 @@ class FastParquetEngine(Engine):
         base_path,
         paths,
         fs,
+        chunksize,
     ):
 
         # Organize row-groups by file
@@ -597,6 +602,7 @@ class FastParquetEngine(Engine):
             dtypes,
             base_path,
             paths,
+            chunksize,
         )
 
         # Convert organized row-groups to parts
@@ -669,6 +675,7 @@ class FastParquetEngine(Engine):
             base_path,
             paths,
             fs,
+            chunksize,
         )
 
     @classmethod
@@ -740,11 +747,7 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts, index)
 
     @classmethod
-    def read_partition_multi(cls, *args, **kwargs):
-        return cls.read_partition(*args, **kwargs)
-
-    @classmethod
-    def read_partition(cls, fs, pieces, columns, index, categories=(), **kwargs):
+    def read_partition(cls, fs, piece, columns, index, categories=(), **kwargs):
 
         null_index_name = False
         if isinstance(index, list):
@@ -762,71 +765,60 @@ class FastParquetEngine(Engine):
 
         # Use global `parquet_file` object.  Need to reattach
         # the desired row_group
-        _parquet_file = kwargs.pop("parquet_file", None)
+        parquet_file = kwargs.pop("parquet_file", None)
 
-        # Always convert pieces to be a list
-        if not isinstance(pieces, list):
-            pieces = [pieces]
+        if isinstance(piece, tuple):
+            if isinstance(piece[0], str):
+                # We have a path to read from
+                assert parquet_file is None
+                parquet_file = ParquetFile(
+                    piece[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
+                )
+                rg_indices = piece[1] or list(range(len(parquet_file.row_groups)))
 
-        # Loop over pieces and concatenate results
-        dfs = []
-        for piece in pieces:
-            parquet_file = _parquet_file
-            if isinstance(piece, tuple):
-                if isinstance(piece[0], str):
-                    # We have a path to read from
-                    assert parquet_file is None
-                    parquet_file = ParquetFile(
-                        piece[0],
-                        open_with=fs.open,
-                        sep=fs.sep,
-                        **kwargs.get("file", {}),
-                    )
-                    _piece = None if piece[1] == [None] else piece[1]
-                    rg_indices = _piece or list(range(len(parquet_file.row_groups)))
-
-                    # `piece[1]` will contain row-group indices
-                    row_groups = [parquet_file.row_groups[rg] for rg in rg_indices]
-                elif parquet_file:
-                    # `piece[1]` will contain actual row-group objects,
-                    # but they may be pickled
-                    row_groups = piece[0]
-                    if isinstance(row_groups, bytes):
-                        row_groups = pickle.loads(row_groups)
-                    parquet_file.fmd.row_groups = row_groups
-                    # NOTE: May lose cats after `_set_attrs` call
-                    save_cats = parquet_file.cats
-                    parquet_file._set_attrs()
-                    parquet_file.cats = save_cats
-                else:
-                    raise ValueError("Neither path nor ParquetFile detected!")
-
-                if null_index_name:
-                    if "__index_level_0__" in parquet_file.columns:
-                        # See "Handling a None-labeled index" comment above
-                        index = ["__index_level_0__"]
-                        columns += index
-
-                parquet_file._dtypes = (
-                    lambda *args: parquet_file.dtypes
-                )  # ugly patch, could be fixed
-
-                # Read necessary row-groups and concatenate
-                for row_group in row_groups:
-                    dfs.append(
-                        parquet_file.read_row_group_file(
-                            row_group,
-                            columns,
-                            categories,
-                            index=index,
-                            **kwargs.get("read", {}),
-                        )
-                    )
+                # `piece[1]` will contain row-group indices
+                row_groups = [parquet_file.row_groups[rg] for rg in rg_indices]
+            elif parquet_file:
+                # `piece[1]` will contain actual row-group objects,
+                # but they may be pickled
+                row_groups = piece[0]
+                if isinstance(row_groups, bytes):
+                    row_groups = pickle.loads(row_groups)
+                parquet_file.fmd.row_groups = row_groups
+                # NOTE: May lose cats after `_set_attrs` call
+                save_cats = parquet_file.cats
+                parquet_file._set_attrs()
+                parquet_file.cats = save_cats
             else:
-                # `piece` is NOT a tuple
-                raise ValueError(f"Expected tuple, got {type(piece)}")
+                raise ValueError("Neither path nor ParquetFile detected!")
 
-        return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+            if null_index_name:
+                if "__index_level_0__" in parquet_file.columns:
+                    # See "Handling a None-labeled index" comment above
+                    index = ["__index_level_0__"]
+                    columns += index
+
+            parquet_file._dtypes = (
+                lambda *args: parquet_file.dtypes
+            )  # ugly patch, could be fixed
+
+            # Read necessary row-groups and concatenate
+            dfs = []
+            for row_group in row_groups:
+                dfs.append(
+                    parquet_file.read_row_group_file(
+                        row_group,
+                        columns,
+                        categories,
+                        index=index,
+                        **kwargs.get("read", {}),
+                    )
+                )
+            return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+
+        else:
+            # `piece` is NOT a tuple
+            raise ValueError(f"Expected tuple, got {type(piece)}")
 
     @classmethod
     def initialize_write(

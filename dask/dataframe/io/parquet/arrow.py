@@ -1237,6 +1237,7 @@ class ArrowDatasetEngine(Engine):
             data_path,
             fs,
             read_from_paths,
+            chunksize,
         )
 
     @classmethod
@@ -1311,6 +1312,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         stat_col_indices,
         filters,
+        chunksize,
     ):
         """Organize row-groups by file.
 
@@ -1370,7 +1372,7 @@ class ArrowDatasetEngine(Engine):
                             cmin = statistics[name]["min"]
                             cmax = statistics[name]["max"]
                             last = cmax_last.get(name, None)
-                            if not filters:
+                            if not (filters or chunksize):
                                 # Only think about bailing if we don't need
                                 # stats for filtering
                                 if cmin is None or (last and cmin < last):
@@ -1463,6 +1465,7 @@ class ArrowDatasetEngine(Engine):
         data_path,
         fs,
         read_from_paths,
+        chunksize,
     ):
         """Process row-groups and statistics.
 
@@ -1482,6 +1485,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             stat_col_indices,
             filters,
+            chunksize,
         )
 
         # Check if we need to pass a fragment for each output partition
@@ -1846,6 +1850,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         gather_statistics,
         stat_col_indices,
         filters,
+        chunksize,
     ):
         """Organize row-groups by file.
 
@@ -1858,7 +1863,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
-        for rg in range(metadata.num_row_groups):
+        for rg in sorted(
+            range(metadata.num_row_groups),
+            key=lambda x: metadata.row_group(x).column(0).file_path,
+        ):
             row_group = metadata.row_group(rg)
 
             # NOTE: Here we assume that all column chunks are stored
@@ -1895,7 +1903,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmin = column.statistics.min
                         cmax = column.statistics.max
                         last = cmax_last.get(name, None)
-                        if not filters:
+                        if not (filters or chunksize):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -1924,7 +1932,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmax_last[name] = cmax
                     else:
 
-                        if not filters and column.num_values > 0:
+                        if not (filters or chunksize) and column.num_values > 0:
                             # We are collecting statistics for divisions
                             # only (no filters) - Lets bail.
                             gather_statistics = False
@@ -1962,6 +1970,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         data_path,
         fs,
         read_from_paths,
+        chunksize,
     ):
         """Process row-groups and statistics.
 
@@ -1980,6 +1989,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             gather_statistics,
             stat_col_indices,
             filters,
+            chunksize,
         )
 
         # Convert organized row-groups to parts
