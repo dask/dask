@@ -378,14 +378,14 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
 
     This function is used by `read_parquet`."""
     if isinstance(part, list):
-        if part[0][1] or not hasattr(engine, "read_partition_multi"):
+        if len(part) == 1 or part[0][1] or not hasattr(engine, "read_partition_multi"):
             # Part kwargs expected
             func = engine.read_partition
             dfs = [
                 func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
                 for (rg, kw) in part
             ]
-            df = concat(dfs, axis=0)
+            df = concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
         else:
             # No part specific kwargs, let engine read
             # list of parts at once
