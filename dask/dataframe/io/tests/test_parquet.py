@@ -18,7 +18,7 @@ from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
 from dask.dataframe.utils import assert_eq
-from dask.utils import natural_sort_key, parse_bytes
+from dask.utils import natural_sort_key
 
 try:
     import fastparquet
@@ -2638,13 +2638,12 @@ def test_optimize_and_not(tmpdir):
         assert_eq(a, b)
 
 
-@pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("partition_on", [None, "a"])
 @pytest.mark.parametrize("chunksize", [4096, "1MiB"])
 @write_read_engines()
 def test_chunksize_files(
-    tmpdir, chunksize, partition_on, write_engine, read_engine, metadata, index
+    tmpdir, chunksize, partition_on, write_engine, read_engine, metadata
 ):
 
     if partition_on and read_engine == "fastparquet" and not metadata:
@@ -2665,7 +2664,7 @@ def test_chunksize_files(
         engine=write_engine,
         partition_on=partition_on,
         write_metadata_file=metadata,
-        write_index=index,
+        write_index=False,
     )
 
     ddf2 = dd.read_parquet(
@@ -2687,9 +2686,9 @@ def test_chunksize_files(
     if partition_on:
         df2 = ddf2.compute().sort_values(["b", "c"])
         df1 = df1.sort_values(["b", "c"])
-        assert_eq(df1[["b", "c"]], df2[["b", "c"]], check_index=index)
+        assert_eq(df1[["b", "c"]], df2[["b", "c"]], check_index=False)
     else:
-        assert_eq(ddf1, ddf2, check_divisions=False, check_index=index)
+        assert_eq(ddf1, ddf2, check_divisions=False, check_index=False)
 
 
 @pytest.mark.parametrize("metadata", [True, False])
@@ -2700,7 +2699,6 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
     nparts = 2
     df_size = 100
     row_group_size = 5
-    row_group_byte_size = 451  # Empirically measured
 
     df = pd.DataFrame(
         {
@@ -2743,12 +2741,11 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         assert ddf2.npartitions == num_row_groups
     else:
         # Check that we are really aggregating
-        df_byte_size = row_group_byte_size * num_row_groups
-        expected = df_byte_size // parse_bytes(chunksize)
-        remainder = (df_byte_size % parse_bytes(chunksize)) > 0
-        expected += int(remainder) * nparts
-        # assert ddf2.npartitions == max(nparts, expected)
-        # assert ddf2.npartitions == expected
+        assert ddf2.npartitions < num_row_groups
+        if chunksize == "1MiB":
+            # Largest chunksize will result in
+            # a single output partition
+            assert ddf2.npartitions == 1
 
 
 @write_read_engines()
