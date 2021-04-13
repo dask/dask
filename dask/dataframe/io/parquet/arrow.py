@@ -1857,16 +1857,20 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         This method is used by ArrowLegacyEngine._process_metadata
         """
 
+        sorted_row_group_indices = range(metadata.num_row_groups)
+        if chunksize:
+            sorted_row_group_indices = sorted(
+                range(metadata.num_row_groups),
+                key=lambda x: metadata.row_group(x).column(0).file_path,
+            )
+
         # Get the number of row groups per file
         single_rg_parts = int(split_row_groups) == 1
         file_row_groups = defaultdict(list)
         file_row_group_stats = defaultdict(list)
         file_row_group_column_stats = defaultdict(list)
         cmax_last = {}
-        for rg in sorted(
-            range(metadata.num_row_groups),
-            key=lambda x: metadata.row_group(x).column(0).file_path,
-        ):
+        for rg in sorted_row_group_indices:
             row_group = metadata.row_group(rg)
 
             # NOTE: Here we assume that all column chunks are stored

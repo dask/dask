@@ -353,7 +353,12 @@ class FastParquetEngine(Engine):
 
         # Fastparquet does not use a natural sorting
         # order for partitioned data. Re-sort by path
-        if pqpartitions is not None:
+        if (
+            pqpartitions is not None
+            and chunksize
+            and pf.row_groups
+            and pf.row_groups[0].columns[0].file_path
+        ):
             pf.row_groups = sorted(
                 pf.row_groups,
                 key=lambda x: natural_sort_key(x.columns[0].file_path),
