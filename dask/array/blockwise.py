@@ -144,8 +144,34 @@ def blockwise(
     >>> y.chunks
     ((2, 2), (2,))
 
+    If you can't predict what the output size of the chunks will be
+    (for example, you may be expecting ragged output sizes), then you can use
+    use ``adjust_chunks={...}`` with NaN values.
+
+    >>> def elements_greater_than_zero(a_blocks):
+    ...     array = a_blocks[0]
+    ...     return array[array > 0]
+
+    >>> x = da.from_array(np.array([[0,0,1,0],
+    ...                             [0,2,2,0],
+    ...                             [3,3,3,0]]), chunks=(1,4))
+    >>> z = blockwise(elements_greater_than_zero, 'i', x, 'ij',
+    ...             adjust_chunks={'i': lambda n: np.nan}, dtype=x.dtype)
+
+    >>> z.chunks
+    ((nan, nan, nan),)
+
+    >>> z.compute_chunk_sizes()
+    >>> z.chunks
+    ((1, 2, 3),)
+
+    >>> z.compute()
+    array([1, 2, 2, 3, 3, 3])
+
     Include literals by indexing with None
 
+    >>> x = da.from_array([[1, 2],
+    ...                    [3, 4]], chunks=(1, 2))
     >>> z = blockwise(operator.add, 'ij', x, 'ij', 1234, None, dtype=x.dtype)
     >>> z.compute()
     array([[1235, 1236],
