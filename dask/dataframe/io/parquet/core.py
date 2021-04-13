@@ -233,9 +233,11 @@ def read_parquet(
         By default (None), ``ArrowDatasetEngine`` will set this option to
         ``False`` when there are filters.
     chunksize : int, str
-        The target task partition size.  If set, consecutive row-groups
-        from the same file will be aggregated into the same output
-        partition until the aggregate size reaches this value.
+        The target output partition size. If specified, adjacent row-groups
+        and/or files will be aggregated into the same output partition until
+        the cumulative parquet-storage size reaches this value. Note that
+        inter-file aggregation will only occur if said files are stored in
+        the same directory.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
