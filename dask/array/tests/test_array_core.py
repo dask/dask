@@ -46,7 +46,6 @@ from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import Blockwise
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
-from dask.core import istask
 from dask.delayed import Delayed, delayed
 from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
@@ -2341,19 +2340,25 @@ def test_Array_normalizes_dtype():
     assert isinstance(x.dtype, np.dtype)
 
 
-def test_from_array_with_lock():
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_from_array_with_lock(inline_array):
     x = np.arange(10)
-    d = da.from_array(x, chunks=5, lock=True)
+    d = da.from_array(x, chunks=5, lock=True, inline_array=inline_array)
 
-    # Pull io_subgraph and getter functions from deep in the graph
     tasks = [v for k, v in d.dask.items() if k[0] == d.name]
-    io_subgraphs = [t[0] for t in tasks]
-    getters = [next(iter(i.dsk.values()))[0].args[0] for i in io_subgraphs]
 
-    # Check that a lock is set.
-    assert hasattr(getters[0].keywords.get("lock"), "acquire")
-    # Check that the same lock is shared between tasks.
-    assert len(set(getter.keywords["lock"] for getter in getters)) == 1
+    if inline_array:
+        # Pull io_subgraph and getter functions from deep in the graph
+        io_subgraphs = [t[0] for t in tasks]
+        getters = [next(iter(i.dsk.values()))[0].args[0] for i in io_subgraphs]
+
+        # Check that a lock is set.
+        assert hasattr(getters[0].keywords.get("lock"), "acquire")
+        # Check that the same lock is shared between tasks.
+        assert len(set(getter.keywords["lock"] for getter in getters)) == 1
+    else:
+        assert hasattr(tasks[0][4], "acquire")
+        assert len(set(task[4] for task in tasks)) == 1
 
     assert_eq(d, x)
 
@@ -2384,8 +2389,11 @@ class MyArray:
         (np.array(1), 1),
     ],
 )
-def test_from_array_tasks_always_call_getter(x, chunks):
-    dx = da.from_array(MyArray(x), chunks=chunks, asarray=False)
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_from_array_tasks_always_call_getter(x, chunks, inline_array):
+    dx = da.from_array(
+        MyArray(x), chunks=chunks, asarray=False, inline_array=inline_array
+    )
     assert_eq(x, dx)
 
 
@@ -2454,7 +2462,7 @@ def test_from_array_no_asarray(asarray, cls):
     dx = da.from_array(x, chunks=(5, 5), asarray=asarray)
     assert_chunks_are_of_type(dx)
     assert_chunks_are_of_type(dx[0:5])
-    assert_chunks_are_of_type(dx[0:5][:, 0:1])
+    assert_chunks_are_of_type(dx[0:5][:, 0])
 
 
 def test_from_array_getitem():
@@ -2510,6 +2518,19 @@ def test_from_array_dask_collection_warns():
         da.array(x)
 
 
+def test_from_array_inline():
+    class MyArray(np.ndarray):
+        pass
+
+    a = np.array([1, 2, 3]).view(MyArray)
+    dsk = dict(da.from_array(a, name="my-array").dask)
+    print(dsk)
+    assert dsk["my-array"] is a
+
+    dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
+    assert "my-array" not in dsk
+
+
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
 def test_asarray(asarray):
     assert_eq(asarray([1, 2, 3]), np.asarray([1, 2, 3]))
@@ -2539,20 +2560,19 @@ def test_asarray_dask_dataframe(asarray):
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
-def test_asarray_h5py(asarray):
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_asarray_h5py(asarray, inline_array):
     h5py = pytest.importorskip("h5py")
 
     with tmpfile(".hdf5") as fn:
         with h5py.File(fn, mode="a") as f:
             d = f.create_dataset("/x", shape=(2, 2), dtype=float)
-            x = asarray(d)
+            x = asarray(d, inline_array=inline_array)
 
-            # Check the array is bound
+            # Check for the array in the dsk
             dsk = dict(x.dask)
-            key = next(iter(dsk))
-            func = dsk[key][0].dsk[key[0]][0]
-            assert d in func.args[0].args
-            assert all(istask(v) for v in dsk.values())
+            assert (d in dsk.values()) is not inline_array
+            assert not any(isinstance(v, np.ndarray) for v in dsk.values())
 
 
 def test_asarray_chunks():
@@ -4220,6 +4240,15 @@ def test_to_zarr_delayed_creates_no_metadata():
         result.compute()
         a2 = da.from_zarr(d)
         assert_eq(a, a2)
+
+
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_zarr_inline_array(inline_array):
+    zarr = pytest.importorskip("zarr")
+    a = zarr.array([1, 2, 3])
+    dsk = dict(da.from_zarr(a, inline_array=inline_array).dask)
+    assert len(dsk) == (0 if inline_array else 1) + 1
+    assert (a in dsk.values()) is not inline_array
 
 
 def test_zarr_existing_array():

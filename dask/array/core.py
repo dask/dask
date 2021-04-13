@@ -239,6 +239,7 @@ def graph_from_arraylike(
     lock=False,
     asarray=True,
     dtype=None,
+    inline_array=True,
 ):
     """Dask getting various chunks from an array-like
 
@@ -254,23 +255,42 @@ def graph_from_arraylike(
      ('X', 1, 1): (getter, 'X', (slice(2, 4), slice(3, 6))),
      ('X', 0, 1): (getter, 'X', (slice(0, 2), slice(3, 6)))}
     """
-    # TODO: probably get shape, dtype(?) from arr
     out_name = out_name or arr
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
-    if (
-        has_keyword(getitem, "asarray")
-        and has_keyword(getitem, "lock")
-        and (not asarray or lock)
-    ):
-        getter = partial(getitem, arr, asarray=asarray, lock=lock)
-    else:
-        # Common case, drop extra parameters
-        getter = partial(getitem, arr)
+    # If we are inlining the array-like, we can make it an embarassingly parallel
+    # blockwise operation.
+    if inline_array:
+        if (
+            has_keyword(getitem, "asarray")
+            and has_keyword(getitem, "lock")
+            and (not asarray or lock)
+        ):
+            getter = partial(getitem, arr, asarray=asarray, lock=lock)
+        else:
+            # Common case, drop extra parameters
+            getter = partial(getitem, arr)
 
-    return BlockwiseCreateArray(
-        out_name, partial(_get_from_block_info, getter), shape, chunks
-    )
+        return BlockwiseCreateArray(
+            out_name, partial(_get_from_block_info, getter), shape, chunks
+        )
+    else:
+        keys = product([out_name], *(range(len(bds)) for bds in chunks))
+        slices = slices_from_chunks(chunks)
+
+        if (
+            has_keyword(getitem, "asarray")
+            and has_keyword(getitem, "lock")
+            and (not asarray or lock)
+        ):
+            values = [(getitem, out_name, x, asarray, lock) for x in slices]
+        else:
+            # Common case, drop extra parameters
+            values = [(getitem, out_name, x) for x in slices]
+
+        dsk = dict(zip(keys, values))
+        dsk[out_name] = arr
+        return dsk
 
 
 def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
@@ -2964,6 +2984,7 @@ def from_array(
     fancy=True,
     getitem=None,
     meta=None,
+    inline_array=False,
 ):
     """Create dask array from something that looks like an array.
 
@@ -3029,6 +3050,46 @@ def from_array(
         The metadata for the resulting dask array.  This is the kind of array
         that will result from slicing the input array.
         Defaults to the input array.
+    inline_array : bool, default False
+        How to include the array in the task graph. By default
+        (``inline_array=False``) the array is included in a task by itself,
+        and each chunk refers to that task by its key.
+
+        .. code-block:: python
+
+           >>> x = h5py.File("data.h5")["/x"]  # doctest: +SKIP
+           >>> a = da.from_array(x, chunks=500)  # doctest: +SKIP
+           >>> dict(a.dask)  # doctest: +SKIP
+           {
+              'array-original-<name>': <HDF5 dataset ...>,
+              ('array-<name>', 0): (getitem, "array-original-<name>", ...),
+              ('array-<name>', 1): (getitem, "array-original-<name>", ...)
+           }
+
+        With ``inline_array=True``, Dask will instead inline the array directly
+        in the values of the task graph.
+
+        .. code-block:: python
+
+           >>> a = da.from_array(x, chunks=500, inline_array=True)  # doctest: +SKIP
+           >>> dict(a.dask)  # doctest: +SKIP
+           {
+              ('array-<name>', 0): (getitem, <HDF5 dataset ...>, ...),
+              ('array-<name>', 1): (getitem, <HDF5 dataset ...>, ...)
+           }
+
+        Note that there's no key in the task graph with just the array `x`
+        anymore. Instead it's placed directly in the values.
+
+        The right choice for ``inline_array`` depends on several factors,
+        including the size of ``x``, how expensive it is to create, which
+        scheduler you're using, and the pattern of downstream computations.
+        As a heuristic, ``inline_array=True`` may be the right choice when
+        the array ``x`` is cheap to serialize and deserialize (since it's
+        included in the graph many times) and if you're experiencing ordering
+        issues (see :ref:`order` for more).
+
+        This has no effect when ``x`` is a NumPy array.
 
     Examples
     --------
@@ -3132,6 +3193,7 @@ def from_array(
             lock=lock,
             asarray=asarray,
             dtype=x.dtype,
+            inline_array=inline_array,
         )
         dsk = HighLevelGraph.from_collections(name, dsk)
 
@@ -3152,6 +3214,7 @@ def from_zarr(
     storage_options=None,
     chunks=None,
     name=None,
+    inline_array=False,
     **kwargs,
 ):
     """Load array from the zarr storage format
@@ -3177,6 +3240,9 @@ def from_zarr(
     name : str, optional
          An optional keyname for the array.  Defaults to hashing the input
     kwargs: passed to ``zarr.Array``.
+    inline_array : bool, default False
+        Whether to inline the zarr Array in the values of the task graph.
+        See :meth:`dask.array.from_array` for an explanation.
 
     See Also
     --------
@@ -3196,7 +3262,7 @@ def from_zarr(
     chunks = chunks if chunks is not None else z.chunks
     if name is None:
         name = "from-zarr-" + tokenize(z, component, storage_options, chunks, **kwargs)
-    return from_array(z, chunks, name=name)
+    return from_array(z, chunks, name=name, inline_array=inline_array)
 
 
 def to_zarr(
@@ -4080,7 +4146,7 @@ def asarray(a, **kwargs):
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a):
+def asanyarray(a, **kwargs):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4117,7 +4183,7 @@ def asanyarray(a):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asanyarray(a)
-    return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
+    return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False, **kwargs)
 
 
 def is_scalar_for_elemwise(arg):
