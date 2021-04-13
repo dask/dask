@@ -1,8 +1,5 @@
-import inspect
 import itertools
 import os
-import warnings
-from functools import partial
 from itertools import product
 from typing import (
     Any,
@@ -830,17 +827,11 @@ def make_blockwise_graph(
         from distributed.protocol.serialize import import_allowed_module, to_serialize
         from distributed.worker import dumps_function
 
-        if "iterate_collection" in inspect.getargspec(to_serialize).args:
-            # See: https://github.com/dask/distributed/pull/4641
-            _to_serialize = partial(to_serialize, iterate_collection=True)
-        else:
-            _to_serialize = to_serialize
-            warnings.warn(
-                "The current version of to_serialize/Serialize does not support the "
-                "'iterate_collection' argument.  For better nested-serialization "
-                "handling, update to a newer version of distributed. Otherwise, "
-                "deserialization and run-time errors on the worker are likely!"
-            )
+        def to_serialize2(x):
+            # Nested to_serialize call to ensure each task
+            # element will be serialized independently
+            return to_serialize(to_serialize(x))
+
     else:
         from importlib import import_module as import_allowed_module
 
@@ -945,11 +936,11 @@ def make_blockwise_graph(
             if kwargs:
                 dsk[out_key] = {
                     "function": dumps_function(apply),
-                    "args": _to_serialize(args),
-                    "kwargs": _to_serialize(kwargs2),
+                    "args": to_serialize2(args),
+                    "kwargs": to_serialize2(kwargs2),
                 }
             else:
-                dsk[out_key] = {"function": func, "args": _to_serialize(args)}
+                dsk[out_key] = {"function": func, "args": to_serialize2(args)}
         else:
             if kwargs:
                 val = (apply, func, args, kwargs2)
@@ -957,7 +948,7 @@ def make_blockwise_graph(
                 args.insert(0, func)
                 val = tuple(args)
             # May still need to serialize (if concatenate=True)
-            dsk[out_key] = _to_serialize(val) if deserializing else val
+            dsk[out_key] = to_serialize2(val) if deserializing else val
 
         if return_key_deps:
             key_deps[out_key] = deps
