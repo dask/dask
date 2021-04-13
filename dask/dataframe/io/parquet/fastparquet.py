@@ -280,6 +280,7 @@ class FastParquetEngine(Engine):
         split_row_groups,
         index_cols,
         filters,
+        chunksize,
     ):
         # Cannot gather_statistics if our `parts` is already a list
         # of paths, or if we are building a multi-index (for now).
@@ -289,7 +290,7 @@ class FastParquetEngine(Engine):
             isinstance(parts, list) and len(parts) and isinstance(parts[0], str)
         ) or len(index_cols) > 1:
             gather_statistics = False
-        elif filters is None and len(index_cols) == 0:
+        elif chunksize is None and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
         # Make sure gather_statistics allows filtering
@@ -629,6 +630,7 @@ class FastParquetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
+        chunksize,
     ):
 
         # Check if `parts` is just a list of paths
@@ -650,6 +652,7 @@ class FastParquetEngine(Engine):
             split_row_groups,
             index_cols,
             filters,
+            chunksize,
         )
 
         # Process row-groups and return `(parts, stats)`
@@ -676,6 +679,7 @@ class FastParquetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=True,
+        chunksize=None,
         **kwargs,
     ):
         # Define the parquet-file (pf) object to use for metadata,
@@ -709,6 +713,7 @@ class FastParquetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
+            chunksize,
         )
 
         # Cannot allow `None` in columns if the user has specified index=False

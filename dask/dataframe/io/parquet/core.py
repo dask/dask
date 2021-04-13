@@ -313,6 +313,7 @@ def read_parquet(
         filters=filters,
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
+        chunksize=chunksize,
         **kwargs,
     )
 

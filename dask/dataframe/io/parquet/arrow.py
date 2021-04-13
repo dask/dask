@@ -491,6 +491,7 @@ class ArrowDatasetEngine(Engine):
         filters=None,
         split_row_groups=None,
         read_from_paths=None,
+        chunksize=None,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
@@ -533,6 +534,7 @@ class ArrowDatasetEngine(Engine):
             split_row_groups,
             gather_statistics,
             read_from_paths,
+            chunksize,
         )
 
         # Add `common_kwargs` to the first element of `parts`.
@@ -1175,6 +1177,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups,
         gather_statistics,
         read_from_paths,
+        chunksize,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1218,6 +1221,7 @@ class ArrowDatasetEngine(Engine):
             index_cols,
             filters,
             partition_info,
+            chunksize,
         )
 
         # Convert metadata into `parts` and `stats`
@@ -1245,6 +1249,7 @@ class ArrowDatasetEngine(Engine):
         index_cols,
         filters,
         partition_info,
+        chunksize,
     ):
         """Update read_parquet options given up-to-data metadata.
 
@@ -1267,7 +1272,7 @@ class ArrowDatasetEngine(Engine):
             and isinstance(metadata[0], str)
         ) or len(index_cols) > 1:
             gather_statistics = False
-        elif filters is None and len(index_cols) == 0:
+        elif chunksize is None and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
         # Determine which columns need statistics.
