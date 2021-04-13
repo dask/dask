@@ -1171,13 +1171,20 @@ def aggregate_row_groups(parts, stats, chunksize, fs):
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
 
-        # Criteria to consider aggregating parts (parts are within the same
-        # file OR both parts correspond to full files)
+        # Criteria #1 for aggregating parts: parts are within the same file
         same_path = stat["file_path_0"] == next_stat["file_path_0"]
-        multi_path_allowed = len(part["piece"]) == 1 or (
-            next_part[-1]["piece"][1] == [None] and part["piece"][1] == [None]
-        )
 
+        # Criteria #2 for aggregating parts: The part does not include
+        # row-group information, or both parts include the same kind
+        # of row_group aggregation (all None, or all idices)
+        multi_path_allowed = len(part["piece"]) == 1
+        if not (same_path or multi_path_allowed):
+            rgs = set(list(part["piece"][1]) + list(next_part[-1]["piece"][1]))
+            multi_path_allowed = (rgs == {None}) or (None not in rgs)
+
+        # Criterial #3 for aggregating parts: The parts are stored
+        # in the same director.  This allows us to handle partitioned
+        # datasets in a reliable way.
         if not same_path and multi_path_allowed:
             # Make sure files are in the same directory before aggregating
             # TODO: Make this check optional?
