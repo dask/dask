@@ -2639,6 +2639,40 @@ def test_optimize_and_not(tmpdir):
 
 
 @pytest.mark.parametrize("metadata", [True, False])
+@pytest.mark.parametrize("chunksize", [None, 4096, "1MiB"])
+def test_chunksize_files(tmpdir, chunksize, engine, metadata):
+
+    df_size = 100
+    df = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+            "index": np.arange(0, df_size),
+        }
+    ).set_index("index")
+    ddf1 = dd.from_pandas(df, npartitions=9)
+
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine=engine,
+        write_metadata_file=metadata,
+    )
+
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine=engine,
+        chunksize=chunksize,
+        split_row_groups=True,
+        gather_statistics=True,
+        index="index",
+    )
+
+    ddf2.compute(scheduler="synchronous")
+    assert_eq(ddf1, ddf2, check_divisions=False)
+
+
+@pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
     check_pyarrow()  # Need pyarrow for write phase in this test

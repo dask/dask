@@ -581,10 +581,10 @@ def _row_groups_to_parts(
             for i in range(0, row_group_count, split_row_groups):
                 i_end = i + split_row_groups
                 rg_list = row_groups[i:i_end]
-
                 part = make_part_func(
                     filename,
-                    rg_list if i_end - i < len(row_groups) else [None],
+                    rg_list,
+                    full_file_read=(i_end - i == len(row_groups)),
                     **make_part_kwargs,
                 )
                 if part is None:
@@ -604,7 +604,8 @@ def _row_groups_to_parts(
 
             part = make_part_func(
                 filename,
-                [None],
+                row_groups,
+                full_file_read=True,
                 **make_part_kwargs,
             )
             if part is None:

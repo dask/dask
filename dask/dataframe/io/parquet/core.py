@@ -376,13 +376,18 @@ def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
-
     if isinstance(part, list):
-        dfs = [
-            func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
-            for (rg, kw) in part
-        ]
-        df = concat(dfs, axis=0)
+        if part[0][1]:
+            # Part kwargs expected
+            dfs = [
+                func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
+                for (rg, kw) in part
+            ]
+            df = concat(dfs, axis=0)
+        else:
+            # No part specific kwargs, let engine read
+            # list of parts at once
+            df = func(fs, [p[0] for p in part], columns.copy(), index, **kwargs)
     else:
         # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
         #       be different for each part.
@@ -1159,7 +1164,15 @@ def aggregate_row_groups(parts, stats, chunksize):
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
-        if (stat["file_path_0"] == next_stat["file_path_0"]) and (
+
+        # Criteria to consider aggregating parts (parts are within the same
+        # file OR both parts correspond to full files)
+        same_path = stat["file_path_0"] == next_stat["file_path_0"]
+        multi_path_allowed = next_part[-1]["piece"][1] == [None] and part["piece"][
+            1
+        ] == [None]
+
+        if (same_path or multi_path_allowed) and (
             (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
         ):
             # Update part list

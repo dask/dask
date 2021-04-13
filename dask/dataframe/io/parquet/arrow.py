@@ -544,10 +544,14 @@ class ArrowDatasetEngine(Engine):
         return (meta, stats, parts, index)
 
     @classmethod
+    def multifile_read_supported(cls):
+        return True
+
+    @classmethod
     def read_partition(
         cls,
         fs,
-        piece,
+        pieces,
         columns,
         index,
         categories=(),
@@ -579,34 +583,47 @@ class ArrowDatasetEngine(Engine):
                         columns_and_parts.append(part_name)
                 columns = columns or None
 
-        if isinstance(piece, str):
-            # `piece` is a file-path string
-            path_or_frag = piece
-            row_group = None
-            partition_keys = None
-        else:
-            # `piece` contains (path, row_group, partition_keys)
-            (path_or_frag, row_group, partition_keys) = piece
+        # Always convert pieces to list
+        if not isinstance(pieces, list):
+            pieces = [pieces]
 
-        # Convert row_group to a list and be sure to
-        # check if msgpack converted it to a tuple
-        if isinstance(row_group, tuple):
-            row_group = list(row_group)
-        if not isinstance(row_group, list):
-            row_group = [row_group]
+        tables = []
+        multi_read = len(pieces) > 1
+        for piece in pieces:
 
-        # Read in arrow table and convert to pandas
-        arrow_table = cls._read_table(
-            path_or_frag,
-            fs,
-            row_group,
-            columns,
-            schema,
-            filters,
-            partitions,
-            partition_keys,
-            **kwargs,
-        )
+            if isinstance(piece, str):
+                # `piece` is a file-path string
+                path_or_frag = piece
+                row_group = None
+                partition_keys = None
+            else:
+                # `piece` contains (path, row_group, partition_keys)
+                (path_or_frag, row_group, partition_keys) = piece
+
+            # Convert row_group to a list and be sure to
+            # check if msgpack converted it to a tuple
+            if isinstance(row_group, tuple):
+                row_group = list(row_group)
+            if not isinstance(row_group, list):
+                row_group = [row_group]
+
+            # Read in arrow table and convert to pandas
+            arrow_table = cls._read_table(
+                path_or_frag,
+                fs,
+                row_group,
+                columns,
+                schema,
+                filters,
+                partitions,
+                partition_keys,
+                **kwargs,
+            )
+            if multi_read:
+                tables.append(arrow_table)
+
+        if multi_read:
+            arrow_table = pa.concat_tables(tables)
 
         # For pyarrow.dataset api, if we did not read directly from
         # fragments, we need to add the partitioned columns here.
@@ -1401,6 +1418,7 @@ class ArrowDatasetEngine(Engine):
         cls,
         filename,
         rg_list,
+        full_file_read=None,
         fs=None,
         partition_keys=None,
         partition_obj=None,
@@ -1422,7 +1440,7 @@ class ArrowDatasetEngine(Engine):
         return {
             "piece": (
                 frag_map[(full_path, rg_list[0] or 0)] if frag_map else full_path,
-                rg_list,
+                [None] if full_file_read else rg_list,
                 pkeys,
             ),
         }
