@@ -544,7 +544,6 @@ class FastParquetEngine(Engine):
         cls,
         filename,
         rg_list,
-        full_file_read=None,
         fs=None,
         pf=None,
         base_path=None,
@@ -562,14 +561,8 @@ class FastParquetEngine(Engine):
         else:
             # Get full path (empty strings should be ignored)
             full_path = fs.sep.join([p for p in [base_path, filename] if p != ""])
-            part = {
-                "piece": (
-                    full_path,
-                    [None]
-                    if full_file_read
-                    else [rg[0] for rg in rg_list],  # Don't need global IDs
-                )
-            }
+            row_groups = [rg[0] for rg in rg_list]  # Don't need global IDs
+            part = {"piece": (full_path, row_groups)}
 
         return part
 

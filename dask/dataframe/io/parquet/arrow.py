@@ -1423,7 +1423,6 @@ class ArrowDatasetEngine(Engine):
         cls,
         filename,
         rg_list,
-        full_file_read=None,
         fs=None,
         partition_keys=None,
         partition_obj=None,
@@ -1444,8 +1443,8 @@ class ArrowDatasetEngine(Engine):
             return None  # This partition was filtered
         return {
             "piece": (
-                frag_map[(full_path, rg_list[0] or 0)] if frag_map else full_path,
-                [None] if full_file_read else rg_list,
+                frag_map[(full_path, rg_list[0])] if frag_map else full_path,
+                rg_list,
                 pkeys,
             ),
         }
