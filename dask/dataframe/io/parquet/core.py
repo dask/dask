@@ -94,7 +94,7 @@ class ParquetSubgraph(Layer):
         return (
             read_parquet_part,
             self.fs,
-            self.engine.read_partition,
+            self.engine,
             self.meta,
             [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
@@ -372,13 +372,14 @@ def read_parquet(
     return new_dd_object(subgraph, name, meta, divisions)
 
 
-def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
+def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
     if isinstance(part, list):
-        if part[0][1]:
+        if part[0][1] or not hasattr(engine, "read_partition_multi"):
             # Part kwargs expected
+            func = engine.read_partition
             dfs = [
                 func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
                 for (rg, kw) in part
@@ -387,12 +388,16 @@ def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
         else:
             # No part specific kwargs, let engine read
             # list of parts at once
-            df = func(fs, [p[0] for p in part], columns.copy(), index, **kwargs)
+            df = engine.read_partition_multi(
+                fs, [p[0] for p in part], columns.copy(), index, **kwargs
+            )
     else:
         # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
         #       be different for each part.
         rg, part_kwargs = part
-        df = func(fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs))
+        df = engine.read_partition(
+            fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs)
+        )
 
     if meta.columns.name:
         df.columns.name = meta.columns.name

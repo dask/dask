@@ -544,8 +544,8 @@ class ArrowDatasetEngine(Engine):
         return (meta, stats, parts, index)
 
     @classmethod
-    def multifile_read_supported(cls):
-        return True
+    def read_partition_multi(cls, *args, **kwargs):
+        return cls.read_partition(*args, **kwargs)
 
     @classmethod
     def read_partition(

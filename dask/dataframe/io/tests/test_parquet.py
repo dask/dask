@@ -2638,9 +2638,10 @@ def test_optimize_and_not(tmpdir):
         assert_eq(a, b)
 
 
+@pytest.mark.parametrize("index", [True, False])
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 4096, "1MiB"])
-def test_chunksize_files(tmpdir, chunksize, engine, metadata):
+def test_chunksize_files(tmpdir, chunksize, engine, metadata, index):
 
     df_size = 100
     df = pd.DataFrame(
@@ -2648,28 +2649,33 @@ def test_chunksize_files(tmpdir, chunksize, engine, metadata):
             "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
             "b": np.random.random(size=df_size),
             "c": np.random.randint(1, 5, size=df_size),
-            "index": np.arange(0, df_size),
         }
-    ).set_index("index")
+    )
     ddf1 = dd.from_pandas(df, npartitions=9)
 
     ddf1.to_parquet(
         str(tmpdir),
         engine=engine,
         write_metadata_file=metadata,
+        write_index=index,
     )
 
     ddf2 = dd.read_parquet(
         str(tmpdir),
         engine=engine,
         chunksize=chunksize,
-        split_row_groups=True,
-        gather_statistics=True,
-        index="index",
     )
 
-    ddf2.compute(scheduler="synchronous")
-    assert_eq(ddf1, ddf2, check_divisions=False)
+    # Check that files where aggregated as expected
+    if chunksize == 4096:
+        ddf2.npartitions < ddf1.npartitions
+    elif chunksize == "1MiB":
+        ddf2.npartitions == 1
+    else:
+        ddf2.npartitions == ddf1.npartitions
+
+    # Check that the final data is correct
+    assert_eq(ddf1, ddf2, check_divisions=False, check_index=index)
 
 
 @pytest.mark.parametrize("metadata", [True, False])

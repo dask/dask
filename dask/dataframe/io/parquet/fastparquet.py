@@ -733,6 +733,10 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts, index)
 
     @classmethod
+    def read_partition_multi(cls, *args, **kwargs):
+        return cls.read_partition(*args, **kwargs)
+
+    @classmethod
     def read_partition(cls, fs, pieces, columns, index, categories=(), **kwargs):
 
         null_index_name = False
