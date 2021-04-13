@@ -1176,14 +1176,14 @@ def aggregate_row_groups(parts, stats, chunksize, fs):
 
         # Criteria #2 for aggregating parts: The part does not include
         # row-group information, or both parts include the same kind
-        # of row_group aggregation (all None, or all idices)
+        # of row_group aggregation (all None, or all indices)
         multi_path_allowed = len(part["piece"]) == 1
         if not (same_path or multi_path_allowed):
             rgs = set(list(part["piece"][1]) + list(next_part[-1]["piece"][1]))
             multi_path_allowed = (rgs == {None}) or (None not in rgs)
 
-        # Criterial #3 for aggregating parts: The parts are stored
-        # in the same director.  This allows us to handle partitioned
+        # Criteria #3 for aggregating parts: The parts are stored
+        # in the same directory. This allows us to handle partitioned
         # datasets in a reliable way.
         if not same_path and multi_path_allowed:
             # Make sure files are in the same directory before aggregating
