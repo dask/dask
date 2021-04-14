@@ -9,3 +9,7 @@ array:
 io:
   - dask/dataframe/io/*
   - dask/dataframe/io/**/*
+
+documentation:
+  - dask/docs/*
+  - dask/docs/**/*
