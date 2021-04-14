@@ -2523,7 +2523,6 @@ def test_from_array_inline():
 
     a = np.array([1, 2, 3]).view(MyArray)
     dsk = dict(da.from_array(a, name="my-array").dask)
-    print(dsk)
     assert dsk["my-array"] is a
 
     dsk = dict(da.from_array(a, name="my-array", inline_array=True).dask)
