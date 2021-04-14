@@ -750,14 +750,14 @@ class ArrowDatasetEngine(Engine):
                 # Original dataset does not exist - cannot append
                 append = False
         if append:
-            names = dataset.metadata.schema.names
+            arrow_schema = dataset.schema.to_arrow_schema()
+            names = arrow_schema.names
             has_pandas_metadata = (
-                dataset.schema.to_arrow_schema().metadata is not None
-                and b"pandas" in dataset.schema.to_arrow_schema().metadata
+                arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
             )
             if has_pandas_metadata:
                 pandas_metadata = json.loads(
-                    dataset.schema.to_arrow_schema().metadata[b"pandas"].decode("utf8")
+                    arrow_schema.metadata[b"pandas"].decode("utf8")
                 )
                 categories = [
                     c["name"]
@@ -766,7 +766,7 @@ class ArrowDatasetEngine(Engine):
                 ]
             else:
                 categories = None
-            dtypes = _get_pyarrow_dtypes(dataset.schema.to_arrow_schema(), categories)
+            dtypes = _get_pyarrow_dtypes(arrow_schema, categories)
             if set(names) != set(df.columns) - set(partition_on):
                 raise ValueError(
                     "Appended columns not the same.\n"
