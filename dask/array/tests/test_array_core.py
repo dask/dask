@@ -23,7 +23,6 @@ from dask.array.core import (
     Array,
     blockdims_from_blockshape,
     broadcast_chunks,
-    broadcast_dimensions,
     broadcast_shapes,
     broadcast_to,
     common_blockdim,
@@ -43,7 +42,7 @@ from dask.array.core import (
 )
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
-from dask.blockwise import Blockwise
+from dask.blockwise import Blockwise, broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
