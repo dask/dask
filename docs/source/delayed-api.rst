@@ -42,5 +42,7 @@ Even with this limitation, many workflows can easily be parallelized.
 
 .. autosummary::
    delayed
+   Delayed
 
 .. autofunction:: delayed
+.. autoclass:: Delayed
