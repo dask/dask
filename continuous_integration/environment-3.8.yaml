@@ -61,4 +61,5 @@ dependencies:
   - mmh3
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    # TODO: Point back to dask/distributed before merging
+    - git+https://github.com/rjzamora/distributed.git@iterate-collection-serialize
