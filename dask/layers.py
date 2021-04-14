@@ -1,13 +1,12 @@
-import tlz as toolz
 import operator
 from collections import defaultdict
 
-from .core import keys_in_tasks
-from .utils import apply, insert, stringify, stringify_collection_keys
-from .highlevelgraph import Layer
-from .blockwise import Blockwise, BlockwiseIODeps, blockwise_token
-from .utils import cached_cumsum
+import tlz as toolz
 
+from .blockwise import Blockwise, BlockwiseIODeps, blockwise_token
+from .core import keys_in_tasks
+from .highlevelgraph import Layer
+from .utils import apply, cached_cumsum, insert, stringify, stringify_collection_keys
 
 #
 ##
@@ -797,11 +796,9 @@ class BroadcastJoinLayer(Layer):
             )
         else:
             # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.multi import (
-                _concat_wrapper as concat_func,
-                _merge_chunk_wrapper as merge_chunk_func,
-                _split_partition as split_partition_func,
-            )
+            from dask.dataframe.multi import _concat_wrapper as concat_func
+            from dask.dataframe.multi import _merge_chunk_wrapper as merge_chunk_func
+            from dask.dataframe.multi import _split_partition as split_partition_func
 
         # Get broadcast "plan"
         bcast_name, bcast_size, other_name, other_on = self._broadcast_plan

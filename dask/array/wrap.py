@@ -2,17 +2,16 @@ from functools import partial
 from itertools import product
 
 import numpy as np
-
 from tlz import curry
 
 from ..base import tokenize
-from ..utils import funcname
 from ..layers import BlockwiseCreateArray
+from ..utils import funcname
 from .core import Array, normalize_chunks
 from .utils import (
-    meta_from_array,
     empty_like_safe,
     full_like_safe,
+    meta_from_array,
     ones_like_safe,
     zeros_like_safe,
 )

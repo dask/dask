@@ -2,7 +2,9 @@
 
 import sys
 from os.path import exists
+
 from setuptools import setup
+
 import versioneer
 
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
@@ -61,6 +63,7 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "License :: OSI Approved :: BSD License",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",

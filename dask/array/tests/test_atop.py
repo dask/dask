@@ -1,15 +1,15 @@
 import collections
 from operator import add
 
-import pytest
 import numpy as np
+import pytest
 
 import dask
 import dask.array as da
-from dask.highlevelgraph import HighLevelGraph
-from dask.blockwise import Blockwise, rewrite_blockwise, optimize_blockwise, index_subs
 from dask.array.utils import assert_eq
-from dask.utils_test import inc, dec
+from dask.blockwise import Blockwise, index_subs, optimize_blockwise, rewrite_blockwise
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils_test import dec, inc
 
 a, b, c, d, e, f, g = "abcdefg"
 _0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = ["_%d" % i for i in range(10)]

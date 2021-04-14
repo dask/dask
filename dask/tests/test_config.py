@@ -8,24 +8,23 @@ import pytest
 
 import dask.config
 from dask.config import (
-    update,
-    merge,
-    collect,
-    collect_yaml,
-    collect_env,
-    get,
-    ensure_file,
-    set,
-    config,
-    rename,
-    update_defaults,
-    refresh,
-    expand_environment_variables,
     canonical_name,
-    serialize,
+    collect,
+    collect_env,
+    collect_yaml,
+    config,
     deserialize,
+    ensure_file,
+    expand_environment_variables,
+    get,
+    merge,
+    refresh,
+    rename,
+    serialize,
+    set,
+    update,
+    update_defaults,
 )
-
 from dask.utils import tmpfile
 
 yaml = pytest.importorskip("yaml")

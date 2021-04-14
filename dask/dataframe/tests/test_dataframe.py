@@ -2,32 +2,30 @@ import warnings
 from itertools import product
 from operator import add
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
-from dask.blockwise import fuse_roots
-from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
+from dask.array.numpy_compat import _numpy_118
 from dask.base import compute_as_if_collection
-from dask.utils import put_lines, M
-
+from dask.blockwise import fuse_roots
+from dask.dataframe import _compat, methods
+from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, tm
 from dask.dataframe.core import (
-    repartition_divisions,
-    aca,
-    _concat,
     Scalar,
+    _concat,
+    aca,
     has_parallel_type,
-    total_mem_usage,
     is_broadcastable,
+    repartition_divisions,
+    total_mem_usage,
 )
-from dask.dataframe import methods
-from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
+from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.utils import M, put_lines
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -1693,8 +1691,10 @@ def test_combine_first():
 
 
 def test_dataframe_picklable():
-    from pickle import loads, dumps
-    from cloudpickle import dumps as cp_dumps, loads as cp_loads
+    from pickle import dumps, loads
+
+    from cloudpickle import dumps as cp_dumps
+    from cloudpickle import loads as cp_loads
 
     d = _compat.makeTimeDataFrame()
     df = dd.from_pandas(d, npartitions=3)
@@ -4112,7 +4112,7 @@ def test_map_partition_array(func):
         except Exception:
             continue
         x = pre(ddf).map_partitions(func)
-        assert_eq(x, expected)
+        assert_eq(x, expected, check_type=False)  # TODO: make check_type pass
 
         assert isinstance(x, da.Array)
         assert x.chunks[0] == (np.nan, np.nan)

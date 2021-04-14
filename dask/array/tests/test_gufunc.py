@@ -1,18 +1,17 @@
+import numpy as np
 import pytest
 from numpy.testing import assert_equal
-import dask.array as da
-from dask.array.utils import assert_eq
-import numpy as np
 
+import dask.array as da
 from dask.array.core import Array
 from dask.array.gufunc import (
     _parse_gufunc_signature,
     _validate_normalize_axes,
     apply_gufunc,
-    gufunc,
     as_gufunc,
+    gufunc,
 )
-from dask.array.utils import IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 
 # Copied from `numpy.lib.test_test_function_base.py`:
@@ -587,11 +586,10 @@ def test_apply_gufunc_via_numba_02():
         for i in range(x.shape[0]):
             res[0] += x[i]
 
-    a = da.random.normal(size=(20, 30), chunks=5)
+    a = da.random.normal(size=(20, 30), chunks=30)
 
     x = a.sum(axis=0, keepdims=True)
-    y = mysum(a, axis=0, keepdims=True, allow_rechunk=True)
-
+    y = mysum(a, axis=0, keepdims=True)
     assert_eq(x, y)
 
 

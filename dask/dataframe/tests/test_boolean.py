@@ -3,7 +3,6 @@ import pytest
 
 import dask.dataframe as dd
 
-
 pytestmark = pytest.mark.skipif(
     not dd._compat.PANDAS_GT_100, reason="BooleanArray added in 1.0.0"
 )

@@ -1,20 +1,18 @@
-from itertools import product
-import math
-from numbers import Integral, Number
-from operator import getitem, itemgetter
-import warnings
 import bisect
+import functools
+import math
+import warnings
+from itertools import product
+from numbers import Integral, Number
+from operator import add, getitem, itemgetter
 
 import numpy as np
-from tlz import memoize, merge, pluck, concat
+from tlz import accumulate, concat, memoize, merge, pluck
 
-from ..utils import cached_cumsum, is_arraylike
-from .. import core
-from .. import config
-from .. import utils
+from .. import config, core, utils
+from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..base import tokenize, is_dask_collection
-
+from ..utils import cached_cumsum, is_arraylike
 
 colon = slice(None, None, None)
 
@@ -29,6 +27,10 @@ def _sanitize_index_element(ind):
             return ind2
     elif ind is None:
         return None
+    elif is_dask_collection(ind):
+        if ind.dtype.kind != "i" or ind.size != 1:
+            raise IndexError(f"Bad index. Must be integer-like: {ind}")
+        return ind
     else:
         raise TypeError("Invalid index type", type(ind), ind)
 
@@ -1044,9 +1046,9 @@ def slice_with_int_dask_array_on_axis(x, idx, axis):
 
     This is a helper function of :func:`slice_with_int_dask_array`.
     """
+    from . import chunk
     from .core import Array, blockwise, from_array
     from .utils import asarray_safe
-    from . import chunk
 
     assert 0 <= axis < x.ndim
 
@@ -1280,3 +1282,901 @@ def shuffle_slice(x, index):
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", PerformanceWarning)
         return x[index2].rechunk(chunks2)[index3]
+
+
+class _HashIdWrapper:
+    """Hash and compare a wrapped object by identity instead of value"""
+
+    def __init__(self, wrapped):
+        self.wrapped = wrapped
+
+    def __eq__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is other.wrapped
+
+    def __ne__(self, other):
+        if not isinstance(other, _HashIdWrapper):
+            return NotImplemented
+        return self.wrapped is not other.wrapped
+
+    def __hash__(self):
+        return id(self.wrapped)
+
+
+@functools.lru_cache()
+def _cumsum(seq, initial_zero):
+    if isinstance(seq, _HashIdWrapper):
+        seq = seq.wrapped
+    if initial_zero:
+        return tuple(accumulate(add, seq, 0))
+    else:
+        return tuple(accumulate(add, seq))
+
+
+def cached_cumsum(seq, initial_zero=False):
+    """Compute :meth:`toolz.accumulate` with caching.
+
+    Caching is by the identify of `seq` rather than the value. It is thus
+    important that `seq` is a tuple of immutable objects, and this function
+    is intended for use where `seq` is a value that will persist (generally
+    block sizes).
+
+    Parameters
+    ----------
+    seq : tuple
+        Values to cumulatively sum.
+    initial_zero : bool, optional
+        If true, the return value is prefixed with a zero.
+
+    Returns
+    -------
+    tuple
+    """
+    if isinstance(seq, tuple):
+        # Look up by identity first, to avoid a linear-time __hash__
+        # if we've seen this tuple object before.
+        result = _cumsum(_HashIdWrapper(seq), initial_zero)
+    else:
+        # Construct a temporary tuple, and look up by value.
+        result = _cumsum(tuple(seq), initial_zero)
+    return result
+
+
+def parse_assignment_indices(indices, shape):
+    """Reformat the indices for assignment.
+
+    The aim of this is to convert the indices to a standardised form
+    so that it is easier to ascertain which chunks are touched by the
+    indices.
+
+    This function is intended to be called by `setitem_array`.
+
+    A slice object that is decreasing (i.e. with a negative step), is
+    recast as an increasing slice (i.e. with a postive step. For
+    example ``slice(7,3,-1)`` would be cast as ``slice(4,8,1)``. This
+    is to facilitate finding which blocks are touched by the
+    index. The dimensions for which this has occured are returned by
+    the function.
+
+    Parameters
+    ----------
+    indices : numpy-style indices
+        Indices to array defining the elements to be assigned.
+    shape : sequence of `int`
+        The shape of the array.
+
+    Returns
+    -------
+    parsed_indices : `list`
+        The reformated indices that are equivalent to the input
+        indices.
+    indices_shape : `list`
+        The shape implied by of the parsed indices. For instance,
+        indices of ``(slice(0,2), 5, [4,1,-1])`` will have shape
+        ``[2,3]``.
+    reverse : `list`
+        The positions of the dimensions whose indices in the
+        parsed_indices output are reversed slices.
+
+    Examples
+    --------
+    >>> parse_assignment_indices((slice(1, -1),), (8,))
+    ([slice(1, 7, 1)], [6], [])
+
+    >>> parse_assignment_indices(([1, 2, 6, 5],), (8,))
+    ([array([1, 2, 6, 5])], [4], [])
+
+    >>> parse_assignment_indices((3, slice(-1, 2, -1)), (7, 8))
+    ([3, slice(3, 8, 1)], [5], [1])
+
+    """
+    if not isinstance(indices, tuple):
+        indices = (indices,)
+
+    # Disallow scalar boolean indexing, and also indexing by scalar
+    # numpy or dask array.
+    #
+    # numpy allows these, but Array.__getitem__ does not yet implement
+    # them properly, so disallow it for now in __setitem__
+    for index in indices:
+        if index is True or index is False:
+            raise NotImplementedError(
+                "dask does not yet implement assignment to a scalar "
+                f"boolean index: {index!r}"
+            )
+
+        if (
+            isinstance(index, np.ndarray) or is_dask_collection(index)
+        ) and not index.ndim:
+            raise NotImplementedError(
+                "dask does not yet implement assignment to a scalar "
+                f"numpy or dask array index: {index!r}"
+            )
+
+    # Inititalize output variables
+    indices_shape = []
+    reverse = []
+    parsed_indices = list(normalize_index(indices, shape))
+
+    n_lists = 0
+
+    for i, (index, size) in enumerate(zip(parsed_indices, shape)):
+        is_slice = isinstance(index, slice)
+        if is_slice:
+            # Index is a slice
+            start, stop, step = index.indices(size)
+            if step < 0 and stop == -1:
+                stop = None
+
+            index = slice(start, stop, step)
+
+            if step < 0:
+                # When the slice step is negative, transform the
+                # original slice to a new slice with a positive step
+                # such that the result of the new slice is the reverse
+                # of the result of the original slice.
+                #
+                # For example, if the original slice is slice(6,0,-2)
+                # then the new slice will be slice(2,7,2).
+                #
+                # >>> a = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+                # >>> a[slice(6, 0, -2)]
+                # [6, 4, 2]
+                # >>> a[slice(2, 7, 2)]
+                # [2, 4, 6]
+                # >>> a[slice(6, 0, -2)] == list(reversed(a[slice(2, 7, 2)]))
+                # True
+                start, stop, step = index.indices(size)
+                step *= -1
+                div, mod = divmod(start - stop - 1, step)
+                div_step = div * step
+                start -= div_step
+                stop = start + div_step + 1
+
+                index = slice(start, stop, step)
+                reverse.append(i)
+
+            start, stop, step = index.indices(size)
+            div, mod = divmod(stop - start, step)
+            if div <= 0:
+                indices_shape.append(0)
+            else:
+                if mod != 0:
+                    div += 1
+
+                indices_shape.append(div)
+
+        elif isinstance(index, (int, np.integer)):
+            # Index is an integer
+            index = int(index)
+
+        elif isinstance(index, np.ndarray) or is_dask_collection(index):
+            # Index is 1-d array
+            n_lists += 1
+            if n_lists > 1:
+                raise NotImplementedError(
+                    "dask is currently limited to at most one "
+                    "dimension's assignment index being a "
+                    "1-d array of integers or booleans. "
+                    f"Got: {indices}"
+                )
+
+            if index.ndim != 1:
+                raise IndexError(
+                    f"Incorrect shape ({index.shape}) of integer "
+                    f"indices for dimension with size {size}"
+                )
+
+            index_size = index.size
+            if (
+                index.dtype == bool
+                and not math.isnan(index_size)
+                and index_size != size
+            ):
+                raise IndexError(
+                    "boolean index did not match indexed array along "
+                    f"dimension {i}; dimension is {size} but "
+                    f"corresponding boolean dimension is {index_size}"
+                )
+
+            # Posify an integer dask array (integer numpy arrays were
+            # posified in `normalize_index`)
+            if is_dask_collection(index) and index.dtype != bool:
+                index = np.where(index < 0, index + size, index)
+
+            indices_shape.append(index_size)
+
+        parsed_indices[i] = index
+
+    return parsed_indices, indices_shape, reverse
+
+
+def concatenate_array_chunks(x):
+    """Concatenate the multidimensional chunks of an array.
+
+    Can be used on chunks with unknown sizes.
+
+    Parameters
+    ----------
+    x : dask array
+
+    Returns
+    -------
+    dask array
+        The concatenated dask array with one chunk.
+
+    """
+    from .core import Array, concatenate3
+
+    if x.npartitions == 1:
+        return x
+
+    name = "concatenate3-" + tokenize(x)
+    d = {(name, 0): (concatenate3, x.__dask_keys__())}
+    graph = HighLevelGraph.from_collections(name, d, dependencies=[x])
+    chunks = x.shape
+    if not chunks:
+        chunks = (1,)
+
+    return Array(graph, name, chunks=(chunks,), dtype=x.dtype)
+
+
+def setitem_array(out_name, array, indices, value):
+    """Master function for array assignment.
+
+    This function, that is intended to be called by
+    `Array.__setitem__`, creates a new dask that assigns values to
+    each block that is touched by the indices, leaving other blocks
+    unchanged.
+
+    Each block that overlaps the indices is assigned from the
+    approriate part of the assignment value. The dasks of these value
+    parts are included in the output dask dictionary, as are the dasks
+    of any 1-d dask array indices. This ensures that the dask array
+    assignment value and any dask array indices are not computed until
+    the `Array.__setitem__` operation is computed.
+
+    The part of the assignment value applies to block is created as a
+    "getitem" slice of the full asignment value.
+
+    Parameters
+    ----------
+    out_name : `str`
+        The dask variable output name.
+    array : dask array
+        The dask array that is being assigned to.
+    indices : numpy-style indices
+        Indices to array defining the elements to be assigned.
+    value : dask array
+        The assignment value, i.e. the values which will be assigned
+        to elements of array.
+
+    Returns
+    -------
+    dsk : `dict`
+        A dictionary where the keys are new unique tokens for each
+        block of the form
+
+            (out_name, dim_index[, dim_index[, ...]])
+
+       and the values are either
+
+            (key,)
+
+        or
+
+            (setitem, key, v_key, block_indices)
+
+        where key is an existing top-level dask key of array.
+
+        The first case occurs when the block represented by key does
+        not overlap the indices.
+
+        The second case occurs when the block represented by key does
+        overlap the indices. setitem is the chunk assignment function;
+        v_key is the dask key of the the part of the assignment value
+        that corresponds to the block; and block_indices are the
+        assigment indices that apply to the block.
+
+        The dictionary also includes any additional key/value pairs
+        needed to define v_key, as well as any any additional
+        key/value pairs needed to define dask keys contained in the
+        block_indices list as references to dask array indices.
+
+    """
+
+    @functools.lru_cache()
+    def block_index_from_1d_index(dim, loc0, loc1, is_bool):
+        """The positions of index elements in the range values loc0 and loc1.
+
+        The index is the input assignment index that is defined in the
+        namespace of the caller. It is assumed that negative elements
+        of an integer array have already been posified.
+
+        The non-hashable dsk is the output dask dictionary that is
+        defined in the namespace of the caller.
+
+        Parameters
+        ----------
+        dim : `int`
+           The dimension position of the index that is used as a proxy
+           for the non-hashable index to define the LRU cache key.
+        loc0 : `int`
+            The start index of the block along the dimension.
+        loc1 : `int`
+            The stop index of the block along the dimension.
+        is_bool : `bool`
+            Whether or not the index is of boolean data type.
+
+        Returns
+        -------
+        numpy array or `str`
+            If index is a numpy array then a numpy array is
+            returned.
+
+            If index is a dask array then the dask of the block index
+            is inserted into the output dask dictionary, and its
+            unique top-layer key is returned.
+
+        """
+        if is_bool:
+            # Boolean array (dask or numpy)
+            i = index[loc0:loc1]
+        elif is_dask_collection(index):
+            # Integer dask array
+            #
+            # Check for values in [loc0,loc1).
+            #
+            # Use the 3-argument "where" to insert place-holder
+            # elements that will be searched for and removed in the
+            # `setitem` function at compute time. The place-holder
+            # value must be the size of the block, i.e. loc1-loc0. We
+            # can't use a 1-argument "where" here because that won't
+            # work if index has unknown chunk sizes.
+            i = np.where((loc0 <= index) & (index < loc1), index, loc1)
+            i -= loc0
+        else:
+            # Integer numpy array
+            #
+            # Check for positive values in [loc0,loc1).
+            i = np.where((loc0 <= index) & (index < loc1))[0]
+            i = index[i] - loc0
+
+        if is_dask_collection(i):
+            # Return dask key intead of dask array
+            i = concatenate_array_chunks(i)
+            dsk.update(dict(i.dask))
+            i = next(flatten(i.__dask_keys__()))
+
+        return i
+
+    @functools.lru_cache()
+    def block_index_shape_from_1d_bool_index(dim, loc0, loc1):
+        """Number of True index elements between positions loc0 and loc1.
+
+        The index is the input assignment index that is defined in the
+        namespace of the caller.
+
+        Parameters
+        ----------
+        dim : `int`
+           The dimension position of the index that is used as a proxy
+           for the non-hashable index to define the LRU cache key.
+        loc0 : `int`
+            The start index of the block along the dimension.
+        loc1 : `int`
+            The stop index of the block along the dimension.
+
+        Returns
+        -------
+        numpy array or dask array
+            If index is a numpy array then a numpy array is
+            returned.
+
+            If index is dask array then a dask array is returned.
+
+        """
+        return np.sum(index[loc0:loc1])
+
+    @functools.lru_cache()
+    def n_preceeding_from_1d_bool_index(dim, loc0):
+        """Number of True index elements preceeding position loc0.
+
+        The index is the input assignment index that is defined in the
+        namespace of the caller.
+
+        Parameters
+        ----------
+        dim : `int`
+           The dimension position of the index that is used as a proxy
+           for the non-hashable index to define the LRU cache key.
+        loc0 : `int`
+            The start index of the block along the dimension.
+
+        Returns
+        -------
+        numpy array or dask array
+            If index is a numpy array then a numpy array is
+            returned.
+
+            If index is dask array then a dask array is returned.
+
+        """
+        return np.sum(index[:loc0])
+
+    @functools.lru_cache()
+    def value_indices_from_1d_int_index(dim, vsize, loc0, loc1):
+        """Value indices for index elements between loc0 and loc1.
+
+        The index is the input assignment index that is defined in the
+        namespace of the caller. It is assumed that negative elements
+        have already been posified.
+
+        Parameters
+        ----------
+        dim : `int`
+           The dimension position of the index that is used as a proxy
+           for the non-hashable index to define the LRU cache key.
+        vsize : `int`
+            The full size of the dimension of the assignment value.
+        loc0 : `int`
+            The start index of the block along the dimension.
+        loc1 : `int`
+            The stop index of the block along the dimension.
+
+        Returns
+        -------
+        numpy array or dask array
+            If index is a numpy array then a numpy array is
+            returned.
+
+            If index is dask array then a dask array is returned.
+
+        """
+        # Check for values in [loc0,loc1)
+        if is_dask_collection(index):
+            if np.isnan(index.size):
+                # Integer dask array with unknown size.
+                #
+                # The 1-argument "where" won't work, so use the
+                # 3-argument "where" and convert to a boolean
+                # array. We concatenate the resulting boolean index
+                # and set the chunk size (which must be the full size
+                # of the dimension of the assignment value) which
+                # allows the returned array to be used as a
+                # __getitem__ index to the assignment value.
+                i = np.where((loc0 <= index) & (index < loc1), True, False)
+                i = concatenate_array_chunks(i)
+                i._chunks = ((vsize,),)
+            else:
+                # Integer dask array with known size
+                i = np.where((loc0 <= index) & (index < loc1))[0]
+                i = concatenate_array_chunks(i)
+        else:
+            # Integer numpy array.
+            i = np.where((loc0 <= index) & (index < loc1))[0]
+
+        return i
+
+    from ..core import flatten
+
+    array_shape = array.shape
+    value_shape = value.shape
+    value_ndim = len(value_shape)
+
+    # Reformat input indices
+    indices, indices_shape, reverse = parse_assignment_indices(indices, array_shape)
+
+    # Empty slices can only be assigned size 1 values
+    if 0 in indices_shape and value_shape and max(value_shape) > 1:
+        raise ValueError(
+            f"shape mismatch: value array of shape {value_shape} "
+            "could not be broadcast to indexing result "
+            f"of shape {tuple(indices_shape)}"
+        )
+
+    # Set variables needed when creating the part of the assignment
+    # value that applies to each block.
+    #
+    #  offset: The additive offset to the assignment value dimension
+    #          positions that results in the positions of the
+    #          corresponding dimensions in the array. offset is a
+    #          non-negative integer, and a positive value means that
+    #          the array has more dimensions than the assignment
+    #          value.
+    #
+    #  value_offset: The additive offset to the array dimension
+    #                positions that results in the positions of the
+    #                corresponding dimensions in the assignment
+    #                value. value_offset is a non-negative integer,
+    #                and a positive value means that the assignment
+    #                value has more dimensions than the array.
+    #
+    #          For example:
+    #
+    #          array.shape   value.shape   offset  value_offset
+    #          ------------  ------------  ------  ------------
+    #          (3, 4)        (3, 4)        0       0
+    #          (1, 1, 3, 4)  (3, 4)        2       0
+    #          (3, 4)        (1, 1, 3, 4)  0       2
+    #          ------------  ------------  ------  ------------
+    #
+    #  array_common_shape: The shape of those dimensions of array
+    #                      which correspond to dimensions of the
+    #                      assignment value.
+    #
+    #  value_common_shape: The shape of those dimensions of the
+    #                      assignment value which correspond to
+    #                      dimensions of the array.
+    #
+    #  base_value_indices: The indices used for initialising the
+    #                      selection of the part of the assignment
+    #                      value that applies to each block of
+    #                      array. An element of `None` will end up
+    #                      being replaced by an appropriate slice on a
+    #                      block-by-block basis.
+    #
+    # non_broadcast_dimensions: The integer positions of
+    #                           array_common_shape which do not
+    #                           correspond to broadcast dimensions in
+    #                           the assignment value.
+    #
+    # Note that array_common_shape and value_common_shape may be
+    # different if there are any size 1 dimensions being brodacast.
+    offset = len(indices_shape) - value_ndim
+    if offset >= 0:
+        # The array has the same number or more dimensions than the
+        # assignment value
+        array_common_shape = indices_shape[offset:]
+        value_common_shape = value_shape
+        value_offset = 0
+        reverse = [i - offset for i in reverse if i >= offset]
+    else:
+        # The assigmment value has more dimensions than the array
+        value_offset = -offset
+        array_common_shape = indices_shape
+        value_common_shape = value_shape[value_offset:]
+        offset = 0
+
+        # All of the extra leading dimensions must have size 1
+        if value_shape[:value_offset] != (1,) * value_offset:
+            raise ValueError(
+                "could not broadcast input array from shape"
+                f"{value_shape} into shape {tuple(indices_shape)}"
+            )
+
+    base_value_indices = []
+    non_broadcast_dimensions = []
+    for i, (a, b) in enumerate(zip(array_common_shape, value_common_shape)):
+        if b == 1:
+            base_value_indices.append(slice(None))
+        elif a == b:
+            base_value_indices.append(None)
+            non_broadcast_dimensions.append(i)
+        elif math.isnan(a):
+            base_value_indices.append(None)
+            non_broadcast_dimensions.append(i)
+        else:
+            # Can't check  ...
+            raise ValueError(
+                f"Can't broadcast data with shape {value_common_shape} "
+                f"across shape {tuple(indices_shape)}"
+            )
+    # Translate chunks tuple to a set of array locations in product
+    # order
+    chunks = array.chunks
+    cumdims = [cached_cumsum(bds, initial_zero=True) for bds in chunks]
+    array_locations = [
+        [(s, s + dim) for s, dim in zip(starts, shapes)]
+        for starts, shapes in zip(cumdims, chunks)
+    ]
+    array_locations = product(*array_locations)
+
+    # Get the dask keys of the most recent layer in the same order as
+    # the array locations.
+    in_keys = list(flatten(array.__dask_keys__()))
+
+    # Create a new "setitem" dask entry for each block in the array
+    dsk = {}
+    out_name = (out_name,)
+    for in_key, locations in zip(in_keys, array_locations):
+
+        # Now loop round each block dimension.
+        #
+        # If the block overlaps the indices then set the following
+        # (which will be used to define a new dask entry):
+        #
+        # block_indices: The indices that will be used to assign to
+        #                this block.
+        #
+        # block_indices_shape: The shape implied by block_indices.
+        #
+        # block_preceeding_sizes: How many assigned elements precede
+        #                         this block along each dimension that
+        #                         doesn't have an integer. It is
+        #                         assumed that a slice will have a
+        #                         positive step, as will be the case
+        #                         for reformatted indices. `None` is
+        #                         used for dimensions with 1-d integer
+        #                         arrays.
+        block_indices = []
+        block_indices_shape = []
+        block_preceeding_sizes = []
+
+        local_offset = offset
+
+        # Assume, until demonstrated otherwise, that this block
+        # overlaps the assignment indices.
+        overlaps = True
+
+        # Note which dimension, if any, has 1-d integer array index
+        dim_1d_int_index = None
+
+        for dim, (index, full_size, (loc0, loc1)) in enumerate(
+            zip(
+                indices,
+                array_shape,
+                locations,
+            )
+        ):
+
+            integer_index = isinstance(index, int)
+            if isinstance(index, slice):
+                # Index is a slice
+                stop = loc1 - loc0
+                if index.stop < loc1:
+                    stop -= loc1 - index.stop
+
+                start = index.start - loc0
+                if start < 0:
+                    # Make start positive
+                    start %= index.step
+
+                if start >= stop:
+                    # This block does not overlap the slice index
+                    overlaps = False
+                    break
+
+                step = index.step
+                block_index = slice(start, stop, step)
+                block_index_size, rem = divmod(stop - start, step)
+                if rem:
+                    block_index_size += 1
+
+                pre = index.indices(loc0)
+                n_preceeding, rem = divmod(pre[1] - pre[0], step)
+                if rem:
+                    n_preceeding += 1
+
+            elif integer_index:
+                # Index is an integer
+                local_offset += 1
+                if not loc0 <= index < loc1:
+                    # This block does not overlap the integer index
+                    overlaps = False
+                    break
+
+                block_index = index - loc0
+
+            else:
+                # Index is a 1-d array
+                is_bool = index.dtype == bool
+                block_index = block_index_from_1d_index(dim, loc0, loc1, is_bool)
+
+                if is_bool:
+                    block_index_size = block_index_shape_from_1d_bool_index(
+                        dim, loc0, loc1
+                    )
+                    n_preceeding = n_preceeding_from_1d_bool_index(dim, loc0)
+                else:
+                    block_index_size = None
+                    n_preceeding = None
+                    dim_1d_int_index = dim
+                    loc0_loc1 = loc0, loc1
+
+                if not is_dask_collection(index) and not block_index.size:
+                    # This block does not overlap the 1-d numpy array
+                    # index
+                    overlaps = False
+                    break
+
+                # Note: When the 1-d array index is a dask array then
+                #       we can't tell if this block overlaps it, so we
+                #       assume that it does. If it in fact doesn't
+                #       overlap then the part of the assignment value
+                #       that cooresponds to this block will have zero
+                #       size which, at compute time, will indicate to
+                #       the `setitem` function to pass the block
+                #       through unchanged.
+
+            # Still here? This block overlaps the index for this
+            # dimension.
+            block_indices.append(block_index)
+            if not integer_index:
+                block_indices_shape.append(block_index_size)
+                block_preceeding_sizes.append(n_preceeding)
+
+        # The new dask key
+        out_key = out_name + in_key[1:]
+
+        if not overlaps:
+            # This block does not overlap the indices for all
+            # dimensions, so pass the block through unchanged.
+            dsk[out_key] = in_key
+            continue
+
+        # Still here? Then this block overlaps the indices for all
+        # dimensions and so needs to have some of its elements
+        # assigned.
+
+        # Initialise the indices of the assignment value that define
+        # the parts of it which are to be assigned to this block
+        value_indices = base_value_indices[:]
+        for i in non_broadcast_dimensions:
+            j = i + offset
+            if j == dim_1d_int_index:
+                # Index is a 1-d integer array
+                #
+                # Define index in the current namespace for use in
+                # `value_indices_from_1d_int_index`
+                index = indices[j]
+
+                value_indices[i] = value_indices_from_1d_int_index(
+                    dim_1d_int_index,
+                    value_shape[i + value_offset],
+                    *loc0_loc1,
+                )
+            else:
+                # Index is a slice or 1-d boolean array
+                start = block_preceeding_sizes[j]
+                value_indices[i] = slice(start, start + block_indices_shape[j])
+
+        # If required as a consequence of reformatting any slice
+        # objects of the original indices to have a positive steps,
+        # reverse the indices to assignment value.
+        for i in reverse:
+            size = value_common_shape[i]
+            start, stop, step = value_indices[i].indices(size)
+            size -= 1
+            start = size - start
+            stop = size - stop
+            if stop < 0:
+                stop = None
+
+            value_indices[i] = slice(start, stop, -1)
+
+        if value_ndim > len(indices):
+            # The assignment value has more dimensions than array, so
+            # add a leading Ellipsis to the indices of value.
+            value_indices.insert(0, Ellipsis)
+
+        # Create the part of the full assignment value that is to be
+        # assigned to elements of this block and make sure that it has
+        # just one chunk (so we can represent it with a single key in
+        # the argument list of setitem).
+        v = value[tuple(value_indices)]
+        v = concatenate_array_chunks(v)
+        v_key = next(flatten(v.__dask_keys__()))
+
+        # Insert into the output dask dictionary the dask of the part
+        # of assignment value for this block (not minding when we
+        # overwrite any existing keys as the values will be the same).
+        dsk = merge(dict(v.dask), dsk)
+
+        # Define the assignment function for this block.
+        dsk[out_key] = (setitem, in_key, v_key, block_indices)
+
+    block_index_from_1d_index.cache_clear()
+    block_index_shape_from_1d_bool_index.cache_clear()
+    n_preceeding_from_1d_bool_index.cache_clear()
+    value_indices_from_1d_int_index.cache_clear()
+
+    return dsk
+
+
+def setitem(x, v, indices):
+    """Chunk function of `setitem_array`.
+
+    Assign v to indices of x.
+
+    Parameters
+    ----------
+    x : numpy array
+        The array to be assigned to.
+    v : numpy array
+        The values which will be assigned.
+    indices : list of `slice`, `int`, or numpy array
+        The indices describing the elements of x to be assigned from
+        v. One index per axis.
+
+        Note that an individual index can not be a `list`, use a 1-d
+        numpy array instead.
+
+        If a 1-d numpy array index contains the non-valid value of the
+        size of the corresponding dimension of x, then those index
+        elements will be removed prior to the assignment (see
+        `block_index_from_1d_index` function).
+
+    Returns
+    -------
+    numpy array
+        A new independent array with assigned elements, unless v is
+        empty (i.e. has zero size) in which case then the input array
+        is returned and the indices are ignored.
+
+    Examples
+    --------
+    >>> x = np.arange(8).reshape(2, 4)
+    >>> setitem(x, np.array(-99), [np.array([False, True])])
+    array([[  0,   1,   2,   3],
+           [-99, -99, -99, -99]])
+    >>> x
+    array([[0, 1, 2, 3],
+           [4, 5, 6, 7]])
+    >>> setitem(x, np.array([-88, -99]), [slice(None), np.array([1, 3])])
+    array([[  0, -88,   2, -99],
+           [  4, -88,   6, -99]])
+    >>> setitem(x, -x, [slice(None)])
+    array([[ 0, -1, -2, -3],
+           [-4, -5, -6, -7]])
+    >>> x
+    array([[0, 1, 2, 3],
+           [4, 5, 6, 7]])
+    >>> setitem(x, np.array([-88, -99]), [slice(None), np.array([4, 4, 3, 4, 1, 4])])
+    array([[  0, -99,   2, -88],
+           [  4, -99,   6, -88]])
+    >>> value = np.where(x < 0)[0]
+    >>> value.size
+    0
+    >>> y = setitem(x, value, [Ellipsis])
+    >>> y is x
+    True
+    """
+    if not v.size:
+        return x
+
+    # Normalize integer array indices
+    for i, (index, block_size) in enumerate(zip(indices, x.shape)):
+        if isinstance(index, np.ndarray) and index.dtype != bool:
+            # Strip out any non-valid place-holder values
+            index = index[np.where(index < block_size)[0]]
+            indices[i] = index
+
+    # If x is not masked but v is, then turn the x into a masked
+    # array.
+    if not np.ma.isMA(x) and np.ma.isMA(v):
+        x = x.view(np.ma.MaskedArray)
+
+    # Copy the array to guarantee no other objects are corrupted
+    x = x.copy()
+
+    # Do the assignment
+    try:
+        x[tuple(indices)] = v
+    except ValueError as e:
+        raise ValueError(
+            "shape mismatch: value array could " "not be broadcast to indexing result"
+        ) from e
+
+    return x

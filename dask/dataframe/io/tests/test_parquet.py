@@ -1,5 +1,5 @@
-import math
 import glob
+import math
 import os
 import sys
 import warnings
@@ -11,19 +11,14 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.multiprocessing
 import dask.dataframe as dd
-from dask.dataframe._compat import (
-    PANDAS_GT_110,
-    PANDAS_GT_121,
-    PANDAS_GT_130,
-)
-from dask.dataframe.utils import assert_eq
+import dask.multiprocessing
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
+from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_read_parquet_getitem
-from dask.dataframe.io.parquet.core import ParquetSubgraph
+from dask.dataframe.utils import assert_eq
 from dask.utils import natural_sort_key, parse_bytes
-
 
 try:
     import fastparquet
@@ -3378,3 +3373,44 @@ def test_roundtrip_rename_columns(tmpdir, engine):
     df1.columns = ["d", "e", "f"]
 
     assert_eq(df1, ddf2.compute())
+
+
+def test_custom_metadata(tmpdir, engine):
+    # Write a parquet dataset with custom metadata
+
+    # Define custom metadata
+    custom_metadata = {b"my_key": b"my_data"}
+
+    # Write parquet dataset
+    path = str(tmpdir)
+    df = pd.DataFrame({"a": range(10), "b": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(
+        path,
+        engine=engine,
+        custom_metadata=custom_metadata,
+    )
+
+    # Check that data is correct
+    assert_eq(df, dd.read_parquet(path, engine=engine))
+
+    # Require pyarrow.parquet to check key/value metadata
+    if pq:
+        # Read footer metadata and _metadata.
+        # Check that it contains keys/values from `custom_metadata`
+        files = glob.glob(os.path.join(path, "*.parquet"))
+        files += [os.path.join(path, "_metadata")]
+        for fn in files:
+            _md = pq.ParquetFile(fn).metadata.metadata
+            for k, v in custom_metadata.items():
+                assert _md[k] == custom_metadata[k]
+
+    # Make sure we raise an error if the custom metadata
+    # includes a b"pandas" key
+    custom_metadata = {b"pandas": b"my_new_pandas_md"}
+    with pytest.raises(ValueError) as e:
+        dd.from_pandas(df, npartitions=2).to_parquet(
+            path,
+            engine=engine,
+            custom_metadata=custom_metadata,
+        )
+    assert "User-defined key/value" in str(e.value)

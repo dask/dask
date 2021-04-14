@@ -6,68 +6,60 @@ import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from functools import wraps, partial, reduce
+from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
 
 import tlz as toolz
+from fsspec.core import open_files
 from tlz import (
-    merge,
-    take,
-    valmap,
-    partition_all,
-    remove,
+    accumulate,
     compose,
+    count,
     curry,
     first,
-    second,
-    accumulate,
-    peek,
     frequencies,
-    merge_with,
-    join,
-    reduceby,
-    count,
-    pluck,
     groupby,
+    join,
+    merge,
+    merge_with,
+    partition_all,
+    peek,
+    pluck,
+    reduceby,
+    remove,
+    second,
+    take,
     topk,
     unique,
-    accumulate,
+    valmap,
 )
-from fsspec.core import open_files
 
 from .. import config
-from .avro import to_avro
-from ..base import tokenize, dont_optimize, replace_name_in_key, DaskMethodsMixin
+from ..base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
 from ..context import globalmethod
-from ..core import (
-    quote,
-    istask,
-    get_dependencies,
-    reverse_dict,
-    flatten,
-)
-from ..sizeof import sizeof
+from ..core import flatten, get_dependencies, istask, quote, reverse_dict
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
-from ..optimization import fuse, cull, inline
+from ..optimization import cull, fuse, inline
+from ..sizeof import sizeof
 from ..utils import (
     apply,
-    system_encoding,
-    takes_multiple_arguments,
-    funcname,
     digit,
-    insert,
-    ensure_dict,
     ensure_bytes,
+    ensure_dict,
     ensure_unicode,
+    funcname,
+    insert,
+    iter_chunks,
     key_split,
     parse_bytes,
-    iter_chunks,
+    system_encoding,
+    takes_multiple_arguments,
 )
 from . import chunk
-
+from .avro import to_avro
 
 no_default = "__no__default__"
 no_result = type(
@@ -1557,6 +1549,7 @@ class Bag(DaskMethodsMixin):
         0  Charlie      300
         """
         import pandas as pd
+
         import dask.dataframe as dd
 
         if meta is None:

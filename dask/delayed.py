@@ -1,21 +1,25 @@
-from dataclasses import is_dataclass, fields
 import operator
 import types
 import uuid
 import warnings
 from collections.abc import Iterator
+from dataclasses import fields, is_dataclass
 
-from tlz import curry, concat, unique, merge
+from tlz import concat, curry, merge, unique
 
 from . import config, threaded
-from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
-from .base import replace_name_in_key, tokenize as _tokenize
-
-from .core import quote
+from .base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    is_dask_collection,
+    replace_name_in_key,
+)
+from .base import tokenize as _tokenize
 from .context import globalmethod
-from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
+from .core import quote
 from .highlevelgraph import HighLevelGraph
+from .optimization import cull
+from .utils import OperatorMethodMixin, apply, ensure_dict, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
 
