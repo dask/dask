@@ -12,7 +12,7 @@ from ..utils import apply, derived_from
 from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
-from .utils import meta_from_array, ones_like_safe, svd_flip
+from .utils import meta_from_array, ones_like_safe, svd_flip, solve_triangular_safe
 
 
 def _cumsum_blocks(it):
@@ -964,9 +964,7 @@ def svd(a, coerce_signs=True):
 
 
 def _solve_triangular_lower(a, b):
-    import scipy.linalg
-
-    return scipy.linalg.solve_triangular(a, b, lower=True)
+    return solve_triangular_safe(a, b)
 
 
 def lu(a):
@@ -1126,8 +1124,6 @@ def solve_triangular(a, b, lower=False):
         Solution to the system `a x = b`. Shape of return matches `b`.
     """
 
-    import scipy.linalg
-
     if a.ndim != 2:
         raise ValueError("a must be 2 dimensional")
     if b.ndim <= 2:
@@ -1188,14 +1184,18 @@ def solve_triangular(a, b, lower=False):
                         prevs.append(prev)
                     target = (operator.sub, target, (sum, prevs))
                 dsk[_key(i, j)] = (
-                    scipy.linalg.solve_triangular,
+                    solve_triangular_safe,
                     (a.name, i, i),
                     target,
                 )
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[a, b])
+
+    a_meta = meta_from_array(a)
+    b_meta = meta_from_array(b)
     res = _solve_triangular_lower(
-        np.array([[1, 0], [1, 2]], dtype=a.dtype), np.array([0, 1], dtype=b.dtype)
+        np.array([[1, 0], [1, 2]], dtype=a.dtype, like=a_meta),
+        np.array([0, 1], dtype=b.dtype, like=b_meta),
     )
     meta = meta_from_array(a, b.ndim, dtype=res.dtype)
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)

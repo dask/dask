@@ -565,6 +565,22 @@ def svd_flip(u, v, u_based_decision=False):
     return u, v
 
 
+################
+# scipy.linalg #
+################
+
+
+def solve_triangular_safe(a, b, lower=False):
+    import scipy.linalg
+
+    if is_cupy_type(a):
+        import cupyx.scipy.linalg
+
+        return cupyx.scipy.linalg.solve_triangular(a, b, lower=lower)
+
+    return scipy.linalg.solve_triangular(a, b, lower=lower)
+
+
 def _is_nep18_active():
     class A:
         def __array_function__(self, *args, **kwargs):

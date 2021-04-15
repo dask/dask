@@ -1368,3 +1368,52 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
 
     assert_eq(x[:, idx], expect)
     assert_eq(x.T[idx, :], expect.T)
+
+
+@pytest.mark.parametrize("iscomplex", [False, True])
+@pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
+def test_cupy_lstsq(nrow, ncol, chunk, iscomplex):
+    cupy.random.seed(1)
+    A = cupy.random.randint(1, 20, (nrow, ncol))
+    b = cupy.random.randint(1, 20, nrow)
+    if iscomplex:
+        A = A + 1.0j * cupy.random.randint(1, 20, A.shape)
+        b = b + 1.0j * cupy.random.randint(1, 20, b.shape)
+
+    dA = da.from_array(A, (chunk, ncol))
+    db = da.from_array(b, chunk)
+
+    x, r, rank, s = cupy.linalg.lstsq(A, b, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
+
+    # reduce rank causes multicollinearity, only compare rank
+    A[:, 1] = A[:, 2]
+    dA = da.from_array(A, (chunk, ncol))
+    db = da.from_array(b, chunk)
+    x, r, rank, s = cupy.linalg.lstsq(
+        A, b, rcond=cupy.finfo(cupy.double).eps * max(nrow, ncol)
+    )
+    assert rank == ncol - 1
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db)
+    assert drank.compute() == rank
+
+    # 2D case
+    A = cupy.random.randint(1, 20, (nrow, ncol))
+    b2D = cupy.random.randint(1, 20, (nrow, ncol // 2))
+    if iscomplex:
+        A = A + 1.0j * cupy.random.randint(1, 20, A.shape)
+        b2D = b2D + 1.0j * cupy.random.randint(1, 20, b2D.shape)
+    dA = da.from_array(A, (chunk, ncol))
+    db2D = da.from_array(b2D, (chunk, ncol // 2))
+    x, r, rank, s = cupy.linalg.lstsq(A, b2D, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db2D)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
