@@ -254,7 +254,7 @@ class FastParquetEngine(Engine):
 
         # fastparquet doesn't handle multiindex
         if len(index_names) > 1:
-            raise ValueError("Cannot read DataFrame with MultiIndex.")
+            raise ValueError("fastparquet cannot read DataFrame with MultiIndex.")
 
         for cat in categories:
             if cat in meta:
