@@ -382,9 +382,10 @@ async def test_combo_of_layer_types(c, s, a, b):
 @gen_cluster(client=True)
 async def test_annotation_pack_unpack(c, s, a, b):
     hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
 
     annotations = {"workers": ("alice",)}
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
+
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
