@@ -165,8 +165,7 @@ def read_parquet(
         non-index fields will be read (as determined by the pandas parquet
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
-    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]],
-    default None
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
         List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
         Using this argument will NOT result in row-wise filtering of the final
         partitions unless ``engine="pyarrow-dataset"`` is also specified.  For
