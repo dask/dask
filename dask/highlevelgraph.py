@@ -57,13 +57,40 @@ class Layer(collections.abc.Mapping):
     """
 
     annotations: Optional[Mapping[str, Any]]
+    collection_annotations: Optional[Mapping[str, Any]]
 
-    def __init__(self, annotations: Mapping[str, Any] = None):
-        self.info = {}
+    def __init__(
+        self,
+        annotations: Mapping[str, Any] = None,
+        collection_annotations: Mapping[str, Any] = {},
+    ):
+        """Initialize Layer object.
+
+        Parameters
+        ----------
+        annotations : Mapping[str, Any], optional
+            By default, None.
+            Annotations are metadata or soft constraints associated with tasks
+            that dask schedulers may choose to respect:
+            They signal intent without enforcing hard constraints.
+            As such, they are primarily designed for use with the distributed
+            scheduler. See the dask.annotate function for more information.
+        collection_annotations : Mapping[str, Any], optional
+            By default an empty dict.
+            Experimental, intended to assist with visualizing the performance
+            characteristics of Dask computations.
+            These annotations are *not* passed to the distributed scheduler.
+        """
         if annotations:
             self.annotations = annotations
         else:
             self.annotations = copy.copy(config.get("annotations", None))
+        if collection_annotations:
+            self.collection_annotations = collection_annotations
+        else:
+            self.collection_annotations = copy.copy(
+                config.get("collection_annotations", {})
+            )
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
