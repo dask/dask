@@ -3616,7 +3616,10 @@ class DataFrame(_Frame):
                 "type": type(self),
                 "divisions": divisions,
                 "dataframe_type": type(meta),
-                "series_dtypes": {col: meta[col].dtype for col in meta.columns},
+                "series_dtypes": {
+                    col: meta[col].dtype if hasattr(meta[col], "dtype") else None
+                    for col in meta.columns
+                },
             }
         )
 
