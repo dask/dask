@@ -37,6 +37,7 @@ from .ufunc import multiply, sqrt
 from .utils import (
     array_safe,
     asarray_safe,
+    matmul_safe,
     meta_from_array,
     safe_wraps,
     validate_axis,
@@ -321,11 +322,7 @@ def vdot(a, b):
 
 
 def _matmul(a, b):
-    chunk = np.matmul(a, b)
-    # Since we have performed the contraction via matmul
-    # but blockwise expects all dimensions back, we need
-    # to add one dummy dimension back
-    return chunk[..., np.newaxis]
+    return matmul_safe(a, b)
 
 
 @derived_from(np)

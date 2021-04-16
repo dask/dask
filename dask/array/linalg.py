@@ -13,6 +13,7 @@ from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
 from .utils import (
+    _zeros_safe,
     array_safe,
     meta_from_array,
     ones_like_safe,
@@ -970,7 +971,7 @@ def svd(a, coerce_signs=True):
 
 
 def _solve_triangular_lower(a, b):
-    return solve_triangular_safe(a, b)
+    return solve_triangular_safe(a, b, lower=True)
 
 
 def lu(a):
@@ -989,7 +990,6 @@ def lu(a):
     l:  Array, lower triangular matrix with unit diagonal.
     u:  Array, upper triangular matrix
     """
-
     import scipy.linalg
 
     if a.ndim != 2:
@@ -1257,9 +1257,7 @@ def inv(a):
 
 
 def _cholesky_lower(a):
-    import scipy.linalg
-
-    return scipy.linalg.cholesky(a, lower=True)
+    return np.linalg.cholesky(a)
 
 
 def cholesky(a, lower=False):
@@ -1293,7 +1291,6 @@ def _cholesky(a):
     Private function to perform Cholesky decomposition, which returns both
     lower and upper triangulars.
     """
-    import scipy.linalg
 
     if a.ndim != 2:
         raise ValueError("Dimension must be 2 to perform cholesky decomposition")
@@ -1327,7 +1324,7 @@ def _cholesky(a):
     for i in range(vdim):
         for j in range(hdim):
             if i < j:
-                dsk[name, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
+                dsk[name, i, j] = (_zeros_safe, (a.chunks[0][i], a.chunks[1][j]), a)
                 dsk[name_upper, j, i] = (name, i, j)
             elif i == j:
                 target = (a.name, i, j)
@@ -1357,7 +1354,9 @@ def _cholesky(a):
 
     graph_upper = HighLevelGraph.from_collections(name_upper, dsk, dependencies=[a])
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
-    cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
+    a_meta = meta_from_array(a)
+    cho = np.linalg.cholesky(array_safe([[1, 2], [2, 5]], dtype=a.dtype, like=a_meta))
+    # cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
     meta = meta_from_array(a, dtype=cho.dtype)
 
     lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)

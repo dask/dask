@@ -427,10 +427,34 @@ def zeros_like_safe(a, shape, **kwargs):
     using the old behavior, returning ``np.zeros(shape, **kwargs)``.
     """
     try:
+        foo = np.zeros_like(a, shape=shape, **kwargs)
+        print("foo: ", type(foo))
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
         kwargs.setdefault("dtype", _dtype_of(a))
         return np.zeros(shape, **kwargs)
+
+
+def _zeros_safe(shape, like):
+    """
+    Private zeros function intended to be used during graph construction
+    """
+    return zeros_safe(shape, like=like)
+
+
+def zeros_safe(*args, like, **kwargs):
+    """
+    Use the `like=` from `np.zeros` to create a new zeros dispatching
+    to the downstream library. If that fails, falls back to the
+    default NumPy behavior, resulting in a `numpy.ndarray`.
+    """
+    if like is None:
+        return np.zeros(*args, **kwargs)
+    else:
+        try:
+            return np.zeros(*args, like=meta_from_array(like), **kwargs)
+        except TypeError:
+            return np.zeros(*args, **kwargs)
 
 
 def arange_safe(*args, like, **kwargs):
@@ -565,9 +589,19 @@ def svd_flip(u, v, u_based_decision=False):
     return u, v
 
 
-################
-# scipy.linalg #
-################
+def matmul_safe(a, b):
+    xp = np
+
+    if is_cupy_type(a):
+        import cupy
+
+        xp = cupy
+
+    chunk = xp.matmul(a, b)
+    # Since we have performed the contraction via matmul
+    # but blockwise expects all dimensions back, we need
+    # to add one dummy dimension back
+    return chunk[..., xp.newaxis]
 
 
 def solve_triangular_safe(a, b, lower=False):

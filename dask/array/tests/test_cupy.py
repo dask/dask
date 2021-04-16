@@ -1417,3 +1417,27 @@ def test_cupy_lstsq(nrow, ncol, chunk, iscomplex):
     assert_eq(dr, r)
     assert drank.compute() == rank
     assert_eq(ds, s)
+
+
+def _get_symmat(size):
+    cupy.random.seed(1)
+    A = cupy.random.randint(1, 21, (size, size))
+    lA = cupy.tril(A)
+    return lA.dot(lA.T)
+
+
+@pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 3), (30, 6)])
+def test_cupy_cholesky(shape, chunk):
+    import scipy.linalg
+
+    A = _get_symmat(shape)
+    dA = da.from_array(A, (chunk, chunk))
+
+    # Need to take the transpose because default in `cupy.linalg.cholesky` is
+    # to return lower triangle
+    assert_eq(da.linalg.cholesky(dA), cupy.linalg.cholesky(A).T, check_graph=False)
+    assert_eq(
+        da.linalg.cholesky(dA, lower=True).map_blocks(cupy.asnumpy),
+        scipy.linalg.cholesky(cupy.asnumpy(A), lower=True),
+        check_graph=False,
+    )
