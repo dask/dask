@@ -9,7 +9,7 @@ set -xe
 mamba install -y -c arrow-nightlies "pyarrow>3.0"
 
 if [[ ${UPSTREAM_DEV} ]]; then
-    # mamba update -y -c arrow-nightlies pyarrow
+    # mamba install -y -c arrow-nightlies "pyarrow>3.0"
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force numpy pandas

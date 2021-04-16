@@ -6516,7 +6516,7 @@ def idxmaxmin_row(x, fn=None, skipna=True):
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
-    if len(x) == 0:
+    if len(x) <= 1:
         return x
     return (
         x.groupby(level=0)
