@@ -13,11 +13,11 @@ from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
 from .utils import (
+    array_safe,
     meta_from_array,
     ones_like_safe,
     solve_triangular_safe,
     svd_flip,
-    array_safe,
 )
 
 
