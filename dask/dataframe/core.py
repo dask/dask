@@ -3611,13 +3611,14 @@ class DataFrame(_Frame):
 
     def __init__(self, dsk, name, meta, divisions):
         super().__init__(dsk, name, meta, divisions)
-        if hasattr(self, "dask") and name in self.dask.layers:
-            self.dask.layers[name].collection_annotations["type"] = type(self)
-            self.dask.layers[name].collection_annotations["divisions"] = divisions
-            self.dask.layers[name].collection_annotations["dataframe_type"] = type(meta)
-            self.dask.layers[name].collection_annotations["series_dtypes"] = {
-                col: meta[col].dtype for col in meta.columns
+        self.dask.layers[name].collection_annotations.update(
+            {
+                "type": type(self),
+                "divisions": divisions,
+                "dataframe_type": type(meta),
+                "series_dtypes": {col: meta[col].dtype for col in meta.columns},
             }
+        )
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
