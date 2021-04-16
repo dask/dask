@@ -154,23 +154,24 @@ def read_parquet(
 
     Parameters
     ----------
-    path : string or list
+    path : str or list
         Source directory for data, or path(s) to individual parquet files.
         Prefix with a protocol like ``s3://`` to read from alternative
         filesystems. To read from multiple files you can pass a globstring or a
         list of paths, with the caveat that they must all have the same
         protocol.
-    columns : string, list or None (default)
+    columns : str or list, default None
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
-    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
-        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
-        argument will NOT result in row-wise filtering of the final partitions
-        unless ``engine="pyarrow-dataset"`` is also specified.  For other engines,
-        filtering is only performed at the partition level, i.e., to prevent the
-        loading of some row-groups and/or files.
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]],
+    default None
+        List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
+        Using this argument will NOT result in row-wise filtering of the final
+        partitions unless ``engine="pyarrow-dataset"`` is also specified.  For
+        other engines, filtering is only performed at the partition level, i.e.,
+        to prevent the loading of some row-groups and/or files.
 
         For the "pyarrow" engines, predicates can be expressed in disjunctive
         normal form (DNF). This means that the innermost tuple describes a single
@@ -184,18 +185,18 @@ def read_parquet(
 
         Note that the "fastparquet" engine does not currently support DNF for
         the filtering of partitioned columns (List[Tuple] is required).
-    index : string, list, False or None (default)
+    index : str, list or False, default None
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
         to read all fields as columns.
-    categories : list, dict or None
+    categories : list or dict, default None
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
         If a list, assumes up to 2**16-1 labels; if a dict, specify the number
         of labels expected; if None, will load categories automatically for
         data written by dask/fastparquet, not otherwise.
-    storage_options : dict
+    storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
@@ -210,12 +211,12 @@ def read_parquet(
         pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
         ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
         option will be deprecated once the ParquetDataset API is deprecated.
-    gather_statistics : bool or None (default).
+    gather_statistics : bool, default None
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
-    split_row_groups : bool or int
+    split_row_groups : bool or int, default None
         Default is True if a _metadata file is available or if
         the dataset is composed of a single file (otherwise defult is False).
         If True, then each output dataframe partition will correspond to a single
@@ -223,7 +224,7 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
-    read_from_paths : bool or None (default)
+    read_from_paths : bool, default None
         Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
         Determines whether the engine should avoid inserting large pyarrow
         (``ParquetFileFragment``) objects in the task graph.  If this option
@@ -232,8 +233,8 @@ def read_parquet(
         size of the task graph, but will add minor overhead to ``read_partition``.
         By default (None), ``ArrowDatasetEngine`` will set this option to
         ``False`` when there are filters.
-    chunksize : int, str
-        The target task partition size.  If set, consecutive row-groups
+    chunksize : int or str, default None
+        The target task partition size. If set, consecutive row-groups
         from the same file will be aggregated into the same output
         partition until the aggregate size reaches this value.
     **kwargs: dict (of dicts)
