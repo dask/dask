@@ -12,7 +12,13 @@ from ..utils import apply, derived_from
 from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
-from .utils import meta_from_array, ones_like_safe, solve_triangular_safe, svd_flip
+from .utils import (
+    meta_from_array,
+    ones_like_safe,
+    solve_triangular_safe,
+    svd_flip,
+    array_safe,
+)
 
 
 def _cumsum_blocks(it):
@@ -1194,8 +1200,8 @@ def solve_triangular(a, b, lower=False):
     a_meta = meta_from_array(a)
     b_meta = meta_from_array(b)
     res = _solve_triangular_lower(
-        np.array([[1, 0], [1, 2]], dtype=a.dtype, like=a_meta),
-        np.array([0, 1], dtype=b.dtype, like=b_meta),
+        array_safe([[1, 0], [1, 2]], dtype=a.dtype, like=a_meta),
+        array_safe([0, 1], dtype=b.dtype, like=b_meta),
     )
     meta = meta_from_array(a, b.ndim, dtype=res.dtype)
     return Array(graph, name, shape=b.shape, chunks=b.chunks, meta=meta)
