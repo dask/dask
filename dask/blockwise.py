@@ -955,6 +955,7 @@ def lol_product(head, values):
     values : sequence
         Mix of singletons and lists. Each list is substituted with every
         possible value and introduces another level of list in the output.
+
     Examples
     --------
 
