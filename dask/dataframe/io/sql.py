@@ -226,6 +226,10 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
     engine.dispose()
     if len(df) == 0:
         return meta
+    elif len(meta.dtypes.to_dict()) == 0:
+        # only index column in loaded
+        # required only for pandas < 1.0.0
+        return df
     else:
         return df.astype(meta.dtypes.to_dict(), copy=False)
 
