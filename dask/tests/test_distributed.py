@@ -425,3 +425,30 @@ async def test_annotation_pack_unpack(c, s, a, b):
     unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
+
+
+@gen_cluster(client=True)
+async def test_blockwise_concatenate(c, s, a, b):
+    """Test a blockwise operation with concatenated axes"""
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def f(x, y):
+        da.assert_eq(y, [[0, 1, 2]])
+        return x
+
+    x = da.from_array(np.array([0, 1, 2]))
+    y = da.from_array(np.array([[0, 1, 2]]))
+    z = da.blockwise(
+        f,
+        ("i"),
+        x,
+        ("i"),
+        y,
+        ("ij"),
+        dtype=x.dtype,
+        concatenate=True,
+    )
+
+    await c.compute(z, optimize_graph=False)
+    da.assert_eq(z, x)
