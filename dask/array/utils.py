@@ -427,34 +427,17 @@ def zeros_like_safe(a, shape, **kwargs):
     using the old behavior, returning ``np.zeros(shape, **kwargs)``.
     """
     try:
-        foo = np.zeros_like(a, shape=shape, **kwargs)
-        print("foo: ", type(foo))
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
         kwargs.setdefault("dtype", _dtype_of(a))
         return np.zeros(shape, **kwargs)
 
 
-def _zeros_safe(shape, like):
+def _zeros_safe(a, shape, like=None):
     """
     Private zeros function intended to be used during graph construction
     """
-    return zeros_safe(shape, like=like)
-
-
-def zeros_safe(*args, like, **kwargs):
-    """
-    Use the `like=` from `np.zeros` to create a new zeros dispatching
-    to the downstream library. If that fails, falls back to the
-    default NumPy behavior, resulting in a `numpy.ndarray`.
-    """
-    if like is None:
-        return np.zeros(*args, **kwargs)
-    else:
-        try:
-            return np.zeros(*args, like=meta_from_array(like), **kwargs)
-        except TypeError:
-            return np.zeros(*args, **kwargs)
+    return zeros_like_safe(a, shape, like=like)
 
 
 def arange_safe(*args, like, **kwargs):

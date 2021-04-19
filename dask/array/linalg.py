@@ -1324,7 +1324,12 @@ def _cholesky(a):
     for i in range(vdim):
         for j in range(hdim):
             if i < j:
-                dsk[name, i, j] = (_zeros_safe, (a.chunks[0][i], a.chunks[1][j]), a)
+                dsk[name, i, j] = (
+                    _zeros_safe,
+                    a,
+                    (a.chunks[0][i], a.chunks[1][j]),
+                    meta_from_array(a),
+                )
                 dsk[name_upper, j, i] = (name, i, j)
             elif i == j:
                 target = (a.name, i, j)
@@ -1356,7 +1361,6 @@ def _cholesky(a):
     graph_lower = HighLevelGraph.from_collections(name, dsk, dependencies=[a])
     a_meta = meta_from_array(a)
     cho = np.linalg.cholesky(array_safe([[1, 2], [2, 5]], dtype=a.dtype, like=a_meta))
-    # cho = scipy.linalg.cholesky(np.array([[1, 2], [2, 5]], dtype=a.dtype))
     meta = meta_from_array(a, dtype=cho.dtype)
 
     lower = Array(graph_lower, name, shape=a.shape, chunks=a.chunks, meta=meta)

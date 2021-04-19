@@ -1435,9 +1435,15 @@ def test_cupy_cholesky(shape, chunk):
 
     # Need to take the transpose because default in `cupy.linalg.cholesky` is
     # to return lower triangle
-    assert_eq(da.linalg.cholesky(dA), cupy.linalg.cholesky(A).T, check_graph=False)
+    assert_eq(
+        da.linalg.cholesky(dA),
+        cupy.linalg.cholesky(A).T,
+        check_graph=False,
+        check_chunks=False,
+    )
     assert_eq(
         da.linalg.cholesky(dA, lower=True).map_blocks(cupy.asnumpy),
         scipy.linalg.cholesky(cupy.asnumpy(A), lower=True),
         check_graph=False,
+        check_chunks=False,
     )
