@@ -12,7 +12,7 @@ dependencies:
   # optional dependencies pulled in by pip install dask[distributed]
   # TODO: Use distributed-2021.04.1 when it becomes available
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/dask/distributed.git
   # test dependencies
   - pytest
   - pytest-rerunfailures
