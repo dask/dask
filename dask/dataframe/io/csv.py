@@ -1,37 +1,38 @@
 from collections.abc import Mapping
 from io import BytesIO
-from warnings import warn, catch_warnings, simplefilter
-from ...layers import DataFrameIOLayer
+from warnings import catch_warnings, simplefilter, warn
+
 from ...highlevelgraph import HighLevelGraph
+from ...layers import DataFrameIOLayer
 
 try:
     import psutil
 except ImportError:
     psutil = None
 
-from fsspec.core import open as open_file, open_files
+import fsspec.implementations.local
 import numpy as np
 import pandas as pd
+from fsspec.compression import compr
+from fsspec.core import get_fs_token_paths
+from fsspec.core import open as open_file
+from fsspec.core import open_files
+from fsspec.utils import infer_compression
 from pandas.api.types import (
-    is_integer_dtype,
-    is_float_dtype,
-    is_object_dtype,
-    is_datetime64_any_dtype,
     CategoricalDtype,
+    is_datetime64_any_dtype,
+    is_float_dtype,
+    is_integer_dtype,
+    is_object_dtype,
 )
 
 from ...base import tokenize
 from ...bytes import read_bytes
-from ..core import new_dd_object
 from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
+from ..core import new_dd_object
 from ..utils import clear_known_categories
-
-import fsspec.implementations.local
-from fsspec.compression import compr
-from fsspec.core import get_fs_token_paths
-from fsspec.utils import infer_compression
 
 
 class CSVFunctionWrapper:

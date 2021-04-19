@@ -1,7 +1,8 @@
-import pytest
 import numpy as np
+import pytest
+
 import dask.array as da
-from dask.array.reshape import reshape_rechunk, expand_tuple, contract_tuple
+from dask.array.reshape import contract_tuple, expand_tuple, reshape_rechunk
 from dask.array.utils import assert_eq
 
 
@@ -106,6 +107,8 @@ def test_reshape_unknown_sizes():
         ((2, 2, 3, 4), ((1, 1), (2,), (1, 2), (4,)), (4, 3, 4), ((2, 2), (1, 2), (4,))),
         # (2, 3, 4) -> (24,).
         ((2, 3, 4), ((1, 1), (1, 1, 1), (2, 2)), (24,), ((2,) * 12,)),
+        # (2, 3, 4) -> (2, 12)
+        ((2, 3, 4), ((1, 1), (1, 1, 1), (4,)), (2, 12), ((1, 1), (4,) * 3)),
     ],
 )
 def test_reshape_all_chunked_no_merge(inshape, inchunks, outshape, outchunks):

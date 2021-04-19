@@ -1,5 +1,5 @@
-from dask.rewrite import RewriteRule, RuleSet, head, args, VAR, Traverser
-from dask.utils_test import inc, add
+from dask.rewrite import VAR, RewriteRule, RuleSet, Traverser, args, head
+from dask.utils_test import add, inc
 
 
 def double(x):

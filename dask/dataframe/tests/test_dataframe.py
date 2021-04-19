@@ -2,32 +2,31 @@ import warnings
 from itertools import product
 from operator import add
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 from pandas.io.formats import format as pandas_format
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_118
 import dask.dataframe as dd
-from dask.blockwise import fuse_roots
-from dask.dataframe import _compat
-from dask.dataframe._compat import tm, PANDAS_GT_100, PANDAS_GT_110
+from dask.array.numpy_compat import _numpy_118
 from dask.base import compute_as_if_collection
-from dask.utils import put_lines, M
-
+from dask.blockwise import fuse_roots
+from dask.dataframe import _compat, methods
+from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, tm
 from dask.dataframe.core import (
-    repartition_divisions,
-    aca,
-    _concat,
     Scalar,
+    _concat,
+    _map_freq_to_period_start,
+    aca,
     has_parallel_type,
-    total_mem_usage,
     is_broadcastable,
+    repartition_divisions,
+    total_mem_usage,
 )
-from dask.dataframe import methods
-from dask.dataframe.utils import assert_eq, make_meta, assert_max_deps
+from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.utils import M, put_lines
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -225,6 +224,9 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
+@pytest.mark.xfail(
+    dd._compat.PANDAS_GT_130, reason="https://github.com/dask/dask/issues/7444"
+)
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -1634,13 +1636,22 @@ def test_combine():
 
     first = lambda a, b: a
 
+    # You can add series with strings and nans but you can't add scalars 'a' + np.NaN
+    str_add = lambda a, b: a + b if a is not np.nan else a
+
     # DataFrame
-    for dda, ddb, a, b in [
-        (ddf1, ddf2, df1, df2),
-        (ddf1.A, ddf2.A, df1.A, df2.A),
-        (ddf1.B, ddf2.B, df1.B, df2.B),
+    for dda, ddb, a, b, runs in [
+        (ddf1, ddf2, df1, df2, [(add, None), (first, None)]),
+        (ddf1.A, ddf2.A, df1.A, df2.A, [(add, None), (add, 100), (first, None)]),
+        (
+            ddf1.B,
+            ddf2.B,
+            df1.B,
+            df2.B,
+            [(str_add, None), (str_add, "d"), (first, None)],
+        ),
     ]:
-        for func, fill_value in [(add, None), (add, 100), (first, None)]:
+        for func, fill_value in runs:
             sol = a.combine(b, func, fill_value=fill_value)
             assert_eq(dda.combine(ddb, func, fill_value=fill_value), sol)
             assert_eq(dda.combine(b, func, fill_value=fill_value), sol)
@@ -1681,8 +1692,10 @@ def test_combine_first():
 
 
 def test_dataframe_picklable():
-    from pickle import loads, dumps
-    from cloudpickle import dumps as cp_dumps, loads as cp_loads
+    from pickle import dumps, loads
+
+    from cloudpickle import dumps as cp_dumps
+    from cloudpickle import loads as cp_loads
 
     d = _compat.makeTimeDataFrame()
     df = dd.from_pandas(d, npartitions=3)
@@ -2010,7 +2023,7 @@ def test_repartition_freq_divisions():
         assert div == div.round("15s")
     assert ddf2.divisions[0] == df.index.min()
     assert ddf2.divisions[-1] == df.index.max()
-    assert_eq(ddf2, ddf2)
+    assert_eq(ddf2, df)
 
 
 def test_repartition_freq_errors():
@@ -2024,14 +2037,70 @@ def test_repartition_freq_errors():
 
 
 def test_repartition_freq_month():
-    ts = pd.date_range("2015-01-01 00:00", " 2015-05-01 23:50", freq="10min")
+    ts = pd.date_range("2015-01-01 00:00", "2015-05-01 23:50", freq="10min")
     df = pd.DataFrame(
         np.random.randint(0, 100, size=(len(ts), 4)), columns=list("ABCD"), index=ts
     )
-    ddf = dd.from_pandas(df, npartitions=1).repartition(freq="1M")
+    ddf = dd.from_pandas(df, npartitions=1).repartition(freq="MS")
 
     assert_eq(df, ddf)
-    assert 2 < ddf.npartitions <= 6
+
+    assert ddf.divisions == (
+        pd.Timestamp("2015-1-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-2-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-3-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-4-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-5-1 00:00:00", freq="MS"),
+        pd.Timestamp("2015-5-1 23:50:00", freq="10T"),
+    )
+
+    assert ddf.npartitions == 5
+
+
+def test_repartition_freq_day():
+    index = [
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-2"),
+        pd.Timestamp("2020-1-2"),
+    ]
+    pdf = pd.DataFrame(index=index, data={"foo": "foo"})
+    ddf = dd.from_pandas(pdf, npartitions=1).repartition(freq="D")
+    assert_eq(ddf, pdf)
+    assert ddf.npartitions == 2
+    assert ddf.divisions == (
+        pd.Timestamp("2020-1-1", freq="D"),
+        pd.Timestamp("2020-1-2", freq="D"),
+        pd.Timestamp("2020-1-2"),
+    )
+
+
+@pytest.mark.parametrize(
+    "freq, expected_freq",
+    [
+        ("M", "MS"),
+        ("MS", "MS"),
+        ("2M", "2MS"),
+        ("Q", "QS"),
+        ("Q-FEB", "QS-FEB"),
+        ("2Q", "2QS"),
+        ("2Q-FEB", "2QS-FEB"),
+        ("2QS-FEB", "2QS-FEB"),
+        ("BQ", "BQS"),
+        ("2BQ", "2BQS"),
+        ("SM", "SMS"),
+        ("A", "AS"),
+        ("A-JUN", "AS-JUN"),
+        ("BA", "BAS"),
+        ("2BA", "2BAS"),
+        ("BY", "BAS"),
+        ("Y", "AS"),
+        (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
+    ],
+)
+def test_map_freq_to_period_start(freq, expected_freq):
+    new_freq = _map_freq_to_period_start(freq)
+    assert new_freq == expected_freq
 
 
 def test_repartition_input_errors():
@@ -4072,7 +4141,7 @@ def test_map_partition_array(func):
         except Exception:
             continue
         x = pre(ddf).map_partitions(func)
-        assert_eq(x, expected)
+        assert_eq(x, expected, check_type=False)  # TODO: make check_type pass
 
         assert isinstance(x, da.Array)
         assert x.chunks[0] == (np.nan, np.nan)

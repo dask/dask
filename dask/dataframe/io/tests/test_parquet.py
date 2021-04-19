@@ -1,5 +1,5 @@
-import math
 import glob
+import math
 import os
 import sys
 import warnings
@@ -11,15 +11,15 @@ import pandas as pd
 import pytest
 
 import dask
-import dask.multiprocessing
 import dask.dataframe as dd
+import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
-from dask.dataframe.utils import assert_eq
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
-from dask.utils import natural_sort_key, parse_bytes
+from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
+from dask.utils import natural_sort_key, parse_bytes
 
 try:
     import fastparquet
@@ -836,6 +836,35 @@ def test_append_different_columns(tmpdir, engine):
     assert "Appended dtypes" in str(excinfo.value)
 
 
+def test_append_dict_column(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/7492
+
+    if engine == "fastparquet":
+        pytest.xfail("Fastparquet engine is missing dict-column support")
+    elif pa.__version__ < LooseVersion("1.0.1"):
+        pytest.skip("Newer PyArrow version required for dict-column support.")
+
+    tmp = str(tmpdir)
+    dts = pd.date_range("2020-01-01", "2021-01-01")
+    df = pd.DataFrame(
+        {"value": [{"x": x} for x in range(len(dts))]},
+        index=dts,
+    )
+    ddf1 = dd.from_pandas(df, npartitions=1)
+
+    # Write ddf1 to tmp, and then append it again
+    ddf1.to_parquet(tmp, append=True, engine=engine)
+    ddf1.to_parquet(tmp, append=True, engine=engine, ignore_divisions=True)
+
+    # Read back all data (ddf1 + ddf1)
+    ddf2 = dd.read_parquet(tmp, engine=engine)
+
+    # Check computed result
+    expect = pd.concat([df, df])
+    result = ddf2.compute()
+    assert_eq(expect, result)
+
+
 @write_read_engines_xfail
 def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
@@ -917,6 +946,13 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     ],
 )
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
+    if (
+        PANDAS_GT_130
+        and engine == "fastparquet"
+        and read_kwargs.get("categories", None)
+    ):
+        pytest.xfail("https://github.com/dask/fastparquet/issues/577")
+
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = "index"
@@ -2241,6 +2277,22 @@ def test_read_dir_nometa(tmpdir, write_engine, read_engine, statistics, remove_c
 
     ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=statistics)
     assert_eq(ddf, ddf2, check_divisions=False)
+    assert ddf.divisions == tuple(range(0, 420, 30))
+    if statistics is False or statistics is None and read_engine.startswith("pyarrow"):
+        assert ddf2.divisions == (None,) * 14
+    else:
+        assert ddf2.divisions == tuple(range(0, 420, 30))
+
+
+@write_read_engines()
+def test_statistics_nometa(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, engine=write_engine, write_metadata_file=False)
+
+    ddf2 = dd.read_parquet(tmp_path, engine=read_engine, gather_statistics=True)
+    assert_eq(ddf, ddf2)
+    assert ddf.divisions == tuple(range(0, 420, 30))
+    assert ddf2.divisions == tuple(range(0, 420, 30))
 
 
 @pytest.mark.parametrize("schema", ["infer", None])
@@ -3382,3 +3434,44 @@ def test_roundtrip_rename_columns(tmpdir, engine):
     df1.columns = ["d", "e", "f"]
 
     assert_eq(df1, ddf2.compute())
+
+
+def test_custom_metadata(tmpdir, engine):
+    # Write a parquet dataset with custom metadata
+
+    # Define custom metadata
+    custom_metadata = {b"my_key": b"my_data"}
+
+    # Write parquet dataset
+    path = str(tmpdir)
+    df = pd.DataFrame({"a": range(10), "b": range(10)})
+    dd.from_pandas(df, npartitions=2).to_parquet(
+        path,
+        engine=engine,
+        custom_metadata=custom_metadata,
+    )
+
+    # Check that data is correct
+    assert_eq(df, dd.read_parquet(path, engine=engine))
+
+    # Require pyarrow.parquet to check key/value metadata
+    if pq:
+        # Read footer metadata and _metadata.
+        # Check that it contains keys/values from `custom_metadata`
+        files = glob.glob(os.path.join(path, "*.parquet"))
+        files += [os.path.join(path, "_metadata")]
+        for fn in files:
+            _md = pq.ParquetFile(fn).metadata.metadata
+            for k, v in custom_metadata.items():
+                assert _md[k] == custom_metadata[k]
+
+    # Make sure we raise an error if the custom metadata
+    # includes a b"pandas" key
+    custom_metadata = {b"pandas": b"my_new_pandas_md"}
+    with pytest.raises(ValueError) as e:
+        dd.from_pandas(df, npartitions=2).to_parquet(
+            path,
+            engine=engine,
+            custom_metadata=custom_metadata,
+        )
+    assert "User-defined key/value" in str(e.value)

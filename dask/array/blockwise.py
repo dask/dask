@@ -4,9 +4,9 @@ import warnings
 import tlz as toolz
 
 from .. import base, utils
+from ..blockwise import blockwise as core_blockwise
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..blockwise import blockwise as core_blockwise
 
 
 def blockwise(
@@ -168,7 +168,7 @@ def blockwise(
     if new:
         raise ValueError("Unknown dimension", new)
 
-    from .core import unify_chunks, normalize_arg
+    from .core import normalize_arg, unify_chunks
 
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)

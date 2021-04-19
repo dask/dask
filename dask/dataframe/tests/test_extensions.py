@@ -1,4 +1,5 @@
 from decimal import Decimal
+
 import pytest
 
 import dask.dataframe as dd
@@ -7,6 +8,7 @@ from dask.dataframe.utils import assert_eq
 pd = pytest.importorskip("pandas")
 
 from pandas.tests.extension.decimal.array import DecimalArray, DecimalDtype
+
 from dask.dataframe.extensions import make_array_nonempty, make_scalar
 
 

@@ -98,6 +98,7 @@ Top level user functions:
    greater
    greater_equal
    histogram
+   histogramdd
    hstack
    hypot
    imag
@@ -185,6 +186,7 @@ Top level user functions:
    rint
    roll
    rollaxis
+   rot90
    round
    sign
    signbit
@@ -401,13 +403,6 @@ Other functions
 
 .. currentmodule:: dask.array
 
-.. autofunction:: from_array
-.. autofunction:: from_delayed
-.. autofunction:: store
-.. autofunction:: coarsen
-.. autofunction:: stack
-.. autofunction:: concatenate
-
 .. autofunction:: add
 .. autofunction:: all
 .. autofunction:: allclose
@@ -499,6 +494,7 @@ Other functions
 .. autofunction:: greater
 .. autofunction:: greater_equal
 .. autofunction:: histogram
+.. autofunction:: histogramdd
 .. autofunction:: hstack
 .. autofunction:: hypot
 .. autofunction:: imag
@@ -584,6 +580,7 @@ Other functions
 .. autofunction:: rint
 .. autofunction:: roll
 .. autofunction:: rollaxis
+.. autofunction:: rot90
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
