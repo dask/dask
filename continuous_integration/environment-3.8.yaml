@@ -2,6 +2,7 @@
 name: test-environment
 channels:
   - conda-forge
+  - arrow-nightlies
 dependencies:
   # required dependencies
   - python=3.8
@@ -24,7 +25,7 @@ dependencies:
   # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
   - sqlalchemy<1.4.0
-  - pyarrow=1.0
+  - pyarrow>3.0
   - coverage
   - jsonschema
   # other -- IO
