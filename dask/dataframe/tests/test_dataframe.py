@@ -18,6 +18,7 @@ from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
+    _map_freq_to_period_start,
     aca,
     has_parallel_type,
     is_broadcastable,
@@ -2072,6 +2073,34 @@ def test_repartition_freq_day():
         pd.Timestamp("2020-1-2", freq="D"),
         pd.Timestamp("2020-1-2"),
     )
+
+
+@pytest.mark.parametrize(
+    "freq, expected_freq",
+    [
+        ("M", "MS"),
+        ("MS", "MS"),
+        ("2M", "2MS"),
+        ("Q", "QS"),
+        ("Q-FEB", "QS-FEB"),
+        ("2Q", "2QS"),
+        ("2Q-FEB", "2QS-FEB"),
+        ("2QS-FEB", "2QS-FEB"),
+        ("BQ", "BQS"),
+        ("2BQ", "2BQS"),
+        ("SM", "SMS"),
+        ("A", "AS"),
+        ("A-JUN", "AS-JUN"),
+        ("BA", "BAS"),
+        ("2BA", "2BAS"),
+        ("BY", "BAS"),
+        ("Y", "AS"),
+        (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
+    ],
+)
+def test_map_freq_to_period_start(freq, expected_freq):
+    new_freq = _map_freq_to_period_start(freq)
+    assert new_freq == expected_freq
 
 
 def test_repartition_input_errors():
