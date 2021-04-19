@@ -301,11 +301,11 @@ class Blockwise(Layer):
         for dep, ind in indices:
             if isinstance(dep, BlockwiseDep):
                 name = "blockwise-io-" + output
-                self.indices.append((name, ind))
+                self.indices.append((name, tuple(ind) if ind is not None else ind))
                 self.io_deps[name] = dep
                 self.numblocks[name] = dep.numblocks
             else:
-                self.indices.append((dep, ind))
+                self.indices.append((dep, tuple(ind) if ind is not None else ind))
         self.indices = tuple(self.indices)
 
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
