@@ -2077,8 +2077,10 @@ def test_merge_outer_empty():
 
     for x in range(0, k_clusters + 1):
         assert_eq(
-            dd.merge(empty_df, df[df.cluster == x], how="outer").compute(),
-            df[df.cluster == x].compute(),
+            dd.merge(empty_df, df[df.cluster == x], how="outer")
+            .compute()
+            .sort_values("user"),
+            df[df.cluster == x].compute().sort_values("user"),
             check_index=False,
         )
 
