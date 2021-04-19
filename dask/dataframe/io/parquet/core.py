@@ -66,12 +66,6 @@ class ParquetFunctionWrapper:
 
     def __call__(self, part):
 
-        # May need to deserialize in distributed
-        if isinstance(part, tuple) and part[0] == "serialized":
-            from distributed.protocol import deserialize
-
-            part = deserialize(*part[1:])
-
         if not isinstance(part, list):
             part = [part]
 

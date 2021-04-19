@@ -64,12 +64,6 @@ class CSVFunctionWrapper:
 
     def __call__(self, part):
 
-        # May need to deserialize in distributed
-        if isinstance(part, tuple) and part[0] == "serialized":
-            from distributed.protocol import deserialize
-
-            part = deserialize(*part[1:])
-
         # Part will be a 3-element tuple
         block, path, is_first = part
 

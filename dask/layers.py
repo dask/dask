@@ -884,11 +884,11 @@ class MaterializedIODeps(BlockwiseIODeps):
 
     @classmethod
     def __dask_distributed_pack__(cls, cls_path: str, parts: dict):
-        from distributed.protocol import serialize
+        from distributed.protocol import to_serialize
 
         packed_parts = {}
         for k, v in parts.items():
-            packed_parts[k] = ("serialized",) + serialize(v)
+            packed_parts[k] = to_serialize(v)
         return (cls_path, packed_parts)
 
 
