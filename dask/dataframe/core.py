@@ -6264,6 +6264,9 @@ def repartition_freq(df, freq=None):
     """ Repartition a timeseries dataframe by a new frequency """
     if not isinstance(df.divisions[0], pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
+
+    freq = _map_freq_to_period_start(freq)
+
     try:
         start = df.divisions[0].ceil(freq)
     except ValueError:
@@ -6279,6 +6282,45 @@ def repartition_freq(df, freq=None):
             divisions = [df.divisions[0]] + divisions
 
     return df.repartition(divisions=divisions)
+
+
+def _map_freq_to_period_start(freq):
+    """Ensure that the frequency pertains to the **start** of a period.
+
+    If e.g. `freq='M'`, then the divisions are:
+        - 2021-31-1 00:00:00 (start of February partition)
+        - 2021-2-28 00:00:00 (start of March partition)
+        - ...
+
+    but this **should** be:
+        - 2021-2-1 00:00:00 (start of February partition)
+        - 2021-3-1 00:00:00 (start of March partition)
+        - ...
+
+    Therefore, we map `freq='M'` to `freq='MS'` (same for quarter and year).
+    """
+
+    if not isinstance(freq, str):
+        return freq
+
+    offset = pd.tseries.frequencies.to_offset(freq)
+    offset_type_name = type(offset).__name__
+
+    if not offset_type_name.endswith("End"):
+        return freq
+
+    new_offset = offset_type_name[: -len("End")] + "Begin"
+    try:
+        new_offset_type = getattr(pd.tseries.offsets, new_offset)
+        if "-" in freq:
+            _, anchor = freq.split("-")
+            anchor = "-" + anchor
+        else:
+            anchor = ""
+        n = str(offset.n) if offset.n != 1 else ""
+        return f"{n}{new_offset_type._prefix}{anchor}"
+    except AttributeError:
+        return freq
 
 
 def repartition_size(df, size):
