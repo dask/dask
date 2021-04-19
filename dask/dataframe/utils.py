@@ -285,7 +285,7 @@ def _empty_series(name, dtype, index=None):
 
 
 make_meta = Dispatch("make_meta")
-
+make_meta_obj = Dispatch("make_meta_obj")
 
 @make_meta.register((pd.Series, pd.DataFrame))
 def make_meta_pandas(x, index=None):
@@ -297,7 +297,7 @@ def make_meta_index(x, index=None):
     return x[0:0]
 
 
-@make_meta.register(object)
+@make_meta_obj.register((pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex, np.int64))
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
@@ -365,6 +365,19 @@ def make_meta_object(x, index=None):
 
     raise TypeError("Don't know how to create metadata from {0}".format(x))
 
+def make_meta_util(x, index=None, parent_meta=None):
+    import dask.dataframe as dd
+    if isinstance(x, (dd.core.Series, dd.core.DataFrame)):
+        return x._meta
+
+    if parent_meta is None:
+        return make_meta(x, index=index)
+    else:
+        if hasattr(x, "_meta"):
+            return x._meta
+        # import pdb;pdb.set_trace()
+        func = make_meta_obj.dispatch(type(parent_meta))
+        return func(x, index=index)
 
 _numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
 

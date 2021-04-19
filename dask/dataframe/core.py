@@ -72,6 +72,7 @@ from .utils import (
     is_index_like,
     is_series_like,
     make_meta,
+    make_meta_util,
     meta_nonempty,
     raise_on_meta_error,
     valid_divisions,
@@ -5466,15 +5467,15 @@ def apply_concat_apply(
         meta = _emulate(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
-    meta = make_meta(
-        meta, index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None)
+    meta = make_meta_util(
+        meta, index=(getattr(make_meta_util(dfs[0]), "index", None) if dfs else None), parent_meta=dfs[0]._meta
     )
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
 
     divisions = [None] * (split_out + 1)
 
-    return new_dd_object(graph, b, meta, divisions)
+    return new_dd_object(graph, b, meta, divisions, parent_meta=dfs[0]._meta)
 
 
 aca = apply_concat_apply
@@ -5557,14 +5558,16 @@ def map_partitions(
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
-    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    meta_index = getattr(make_meta_util(dfs[0]), "index", None) if dfs else None
 
     if meta is no_default:
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
-        meta = make_meta(meta, index=meta_index)
+        # print(dfs)
+        # import pdb;pdb.set_trace()
+        meta = make_meta_util(meta, index=meta_index, parent_meta=dfs[0]._meta)
 
     if has_keyword(func, "partition_info"):
         kwargs["partition_info"] = "__dummy__"
@@ -6671,7 +6674,7 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions):
+def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
