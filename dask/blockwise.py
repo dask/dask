@@ -30,14 +30,15 @@ from .utils import (
 )
 
 
-class BlockwiseArgs:
+class BlockwiseDep:
     """Base class for (indexable) Blockwise-IO arguments"""
 
     shape: Tuple[int, ...]
+    numblocks: Tuple[int, ...]
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         raise NotImplementedError(
-            "Must define `__getitem__` for `BlockwiseArgs` subclass."
+            "Must define `__getitem__` for `BlockwiseDep` subclass."
         )
 
     def get(self, idx: Tuple[int, ...]) -> Any:
@@ -51,23 +52,22 @@ class BlockwiseArgs:
 
     def __dask_distributed_pack__(self):
         raise NotImplementedError(
-            "Must define `__dask_distributed_pack__` for `BlockwiseArgs` subclass."
+            "Must define `__dask_distributed_pack__` for `BlockwiseDep` subclass."
         )
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.shape}>"
 
 
-class BlockwiseArgsDict(BlockwiseArgs):
+class BlockwiseDepDict(BlockwiseDep):
     """Base class for dictionary-based Blockwise-IO arguments"""
 
-    def __init__(self, mapping: dict, shape=None):
+    def __init__(self, mapping: dict, shape: tuple, numblocks: tuple):
         self.mapping = mapping
-        if shape:
-            self.shape = shape
-        else:
-            # By default, assume 1D shape
-            self.shape = (len(mapping),)
+
+        # By default, assume 1D shape
+        self.shape = shape
+        self.numblocks = numblocks or (len(mapping),)
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         return self.mapping[idx]
@@ -79,8 +79,10 @@ class BlockwiseArgsDict(BlockwiseArgs):
         for k, v in self.mapping.items():
             packed_parts[k] = to_serialize(v)
         return (
-            "dask.blockwise.BlockwiseArgsDict",
+            "dask.blockwise.BlockwiseDepDict",
             packed_parts,
+            self.shape,
+            self.numblocks,
         )
 
 
@@ -253,7 +255,7 @@ class Blockwise(Layer):
         mapping between place-holder collection indices, e.g ``(1,)``,
         and any chunk/partition-specific arguments needed by the underlying
         IO function. We assume that these mappings are all represented as
-        ``BlockwiseArgs``-based object.
+        ``BlockwiseDep``-based object.
 
     See Also
     --------
@@ -288,10 +290,24 @@ class Blockwise(Layer):
         self.output_indices = tuple(output_indices)
         self.output_blocks = output_blocks
         self.dsk = dsk
-        self.indices = tuple(
-            (name, tuple(ind) if ind is not None else ind) for name, ind in indices
-        )
+
+        # Remove `BlockwiseDep` arguments from input indices
+        # and add them to `self.io_deps`.
+        # TODO: Remove `io_deps` and handle indexable objects
+        # in `self.indices` throughout `Blockwise`.
+        self.indices = []
         self.numblocks = numblocks
+        self.io_deps = io_deps or {}
+        for dep, ind in indices:
+            if isinstance(dep, BlockwiseDep):
+                name = "blockwise-io-" + output
+                self.indices.append((name, ind))
+                self.io_deps[name] = dep
+                self.numblocks[name] = dep.numblocks
+            else:
+                self.indices.append((dep, ind))
+        self.indices = tuple(self.indices)
+
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
         # enforce a canonical value if there are no axes for reduction.
         output_indices_set = set(self.output_indices)
@@ -304,7 +320,6 @@ class Blockwise(Layer):
             concatenate = None
         self.concatenate = concatenate
         self.new_axes = new_axes or {}
-        self.io_deps = io_deps or {}
 
     @property
     def dims(self):
@@ -418,7 +433,7 @@ class Blockwise(Layer):
         global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
 
         # Handle `io_deps` serialization. Assume each element
-        # is a `BlockwiseArgs`-based object.
+        # is a `BlockwiseDep`-based object.
         packed_io_deps = {}
         for name, input_map in self.io_deps.items():
             packed_io_deps[name] = input_map.__dask_distributed_pack__()

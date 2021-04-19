@@ -5,7 +5,7 @@ from collections import defaultdict
 import tlz as toolz
 
 from .base import tokenize
-from .blockwise import Blockwise, BlockwiseArgs, BlockwiseArgsDict, blockwise_token
+from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import keys_in_tasks
 from .highlevelgraph import Layer
 from .utils import apply, insert, stringify, stringify_collection_keys
@@ -40,11 +40,13 @@ class CallableLazyImport:
 #
 
 
-class CreateArrayDeps(BlockwiseArgs):
+class CreateArrayDeps(BlockwiseDep):
     """Index-chunk mapping for BlockwiseCreateArray"""
 
-    def __init__(self, chunks: tuple):
+    def __init__(self, chunks: tuple, shape: tuple):
         self.chunks = chunks
+        self.numblocks = tuple(len(chunk) for chunk in chunks)
+        self.shape = shape
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
@@ -53,6 +55,7 @@ class CreateArrayDeps(BlockwiseArgs):
         return (
             "dask.layers.CreateArrayDeps",
             self.chunks,
+            self.shape,
         )
 
 
@@ -82,20 +85,16 @@ class BlockwiseCreateArray(Blockwise):
         shape,
         chunks,
     ):
-        io_name = "blockwise-create-" + name
-
         # Define "blockwise" graph
         dsk = {name: (func, blockwise_token(0))}
 
         out_ind = tuple(range(len(shape)))
-        self.nchunks = tuple(len(chunk) for chunk in chunks)
         super().__init__(
             name,
             out_ind,
             dsk,
-            [(io_name, out_ind)],
-            {io_name: self.nchunks},
-            io_deps={io_name: CreateArrayDeps(chunks)},
+            [(CreateArrayDeps(chunks, shape), out_ind)],
+            {},
         )
 
 
@@ -905,16 +904,19 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.annotations = annotations
 
         # Define mapping between key index and "part"
-        io_arg_map = BlockwiseArgsDict({(i,): self.inputs[i] for i in self.part_ids})
+        io_arg_map = BlockwiseDepDict(
+            {(i,): self.inputs[i] for i in self.part_ids}, None, None
+        )
 
-        # Create Blockwise layer
-        dataframe_blockwise_io_layer(
-            io_func,
-            io_arg_map,
+        # Use Blockwise initializer
+        dsk = {self.name: (io_func, blockwise_token(0))}
+        super().__init__(
             self.name,
-            len(self.part_ids),
-            constructor=super().__init__,
-            annotations=self.annotations,
+            "i",
+            dsk,
+            [(io_arg_map, "i")],
+            {},
+            annotations=annotations,
         )
 
     def project_columns(self, columns):
@@ -941,33 +943,3 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
             self.name, len(self.part_ids), list(self.columns)
         )
-
-
-def dataframe_blockwise_io_layer(
-    io_func, part_inputs, output_name, npartitions, constructor=None, annotations=None
-):
-    """Helper utility to initialize a DataFrameIOLayer
-
-    Parameters
-    ----------
-    io_func: callable
-        The function needed to generate data for each output partition.
-    part_inputs: dict
-        Mapping between collection keys and inputs to ``io_func``.  Each
-        element in ``part_inputs`` should be a tuple.
-    output_name: str
-        Name of the output ``Blockwise`` layer.
-    """
-
-    name = "blockwise-io-" + output_name
-    dsk = {output_name: (io_func, blockwise_token(0))}
-    constructor = constructor or Blockwise
-    return constructor(
-        output_name,
-        "i",
-        dsk,
-        [(name, "i")],
-        {name: (npartitions,)},
-        io_deps={name: part_inputs},
-        annotations=annotations,
-    )

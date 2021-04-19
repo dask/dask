@@ -318,11 +318,6 @@ def read_parquet(
                 common_kwargs,
             ),
             label=label,
-            # If `large_graph_objects=True`, the engine
-            # is allowed pass complex (non-msgpack-serializable)
-            # objects in the graph.  For these cases, we should
-            # call `serialize` on `parts` (to be safe)
-            serialize=large_graph_objects,
         )
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
