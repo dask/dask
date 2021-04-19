@@ -5,7 +5,7 @@ from collections import defaultdict
 import tlz as toolz
 
 from .base import tokenize
-from .blockwise import Blockwise, BlockwiseIODeps, blockwise_token
+from .blockwise import Blockwise, BlockwiseArgs, BlockwiseArgsDict, blockwise_token
 from .core import keys_in_tasks
 from .highlevelgraph import Layer
 from .utils import apply, insert, stringify, stringify_collection_keys
@@ -40,7 +40,7 @@ class CallableLazyImport:
 #
 
 
-class CreateArrayDeps(BlockwiseIODeps):
+class CreateArrayDeps(BlockwiseArgs):
     """Index-chunk mapping for BlockwiseCreateArray"""
 
     def __init__(self, chunks: tuple):
@@ -48,6 +48,12 @@ class CreateArrayDeps(BlockwiseIODeps):
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+
+    def __dask_distributed_pack__(self):
+        return (
+            "dask.layers.CreateArrayDeps",
+            self.chunks,
+        )
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -89,12 +95,7 @@ class BlockwiseCreateArray(Blockwise):
             dsk,
             [(io_name, out_ind)],
             {io_name: self.nchunks},
-            io_deps={
-                io_name: (
-                    "dask.layers.CreateArrayDeps",
-                    chunks,
-                )
-            },
+            io_deps={io_name: CreateArrayDeps(chunks)},
         )
 
 
@@ -867,31 +868,6 @@ class BroadcastJoinLayer(DataFrameLayer):
         return dsk
 
 
-class MaterializedIODeps(BlockwiseIODeps):
-    """Partially-materialized IO-Dep Wrapper
-
-    This class will always call `serialize` on each element of the
-    IO dependencies during distributed execution. Therefore, the
-    IO function will need to use `deserialize` if it is passed
-    a tuple with "serialized" as the first element.
-    """
-
-    def __init__(self, parts):
-        self.parts = parts
-
-    def __getitem__(self, idx: tuple):
-        return self.parts[idx]
-
-    @classmethod
-    def __dask_distributed_pack__(cls, cls_path: str, parts: dict):
-        from distributed.protocol import to_serialize
-
-        packed_parts = {}
-        for k, v in parts.items():
-            packed_parts[k] = to_serialize(v)
-        return (cls_path, packed_parts)
-
-
 class DataFrameIOLayer(Blockwise, DataFrameLayer):
     """DataFrame-based Blockwise Layer with IO
 
@@ -918,7 +894,6 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         part_ids=None,
         label=None,
-        serialize=False,
         annotations=None,
     ):
         self.name = name
@@ -928,19 +903,9 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
         self.label = label
         self.annotations = annotations
-        self.serialize = serialize
 
         # Define mapping between key index and "part"
-        io_arg_map = {(i,): self.inputs[i] for i in self.part_ids}
-
-        # Wrap io_arg_map to in MaterializedIODeps if it is
-        # expected to contain objects than cannot be serialized
-        # with msgpack
-        if serialize:
-            io_arg_map = (
-                "dask.layers.MaterializedIODeps",
-                io_arg_map,
-            )
+        io_arg_map = BlockwiseArgsDict({(i,): self.inputs[i] for i in self.part_ids})
 
         # Create Blockwise layer
         dataframe_blockwise_io_layer(
@@ -962,7 +927,6 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 self.io_func,
                 part_ids=self.part_ids,
                 annotations=self.annotations,
-                serialize=self.serialize,
             )
             if hasattr(layer.io_func, "columns"):
                 # Apply column projection

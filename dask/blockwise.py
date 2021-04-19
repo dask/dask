@@ -30,21 +30,58 @@ from .utils import (
 )
 
 
-class BlockwiseIODeps:
-    """Index-argument mapping for Blockwise IO dependencies"""
+class BlockwiseArgs:
+    """Base class for (indexable) Blockwise-IO arguments"""
 
-    def __getitem__(self, idx: tuple):
+    shape: Tuple[int, ...]
+
+    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         raise NotImplementedError(
-            "Must define `__getitem__` for `BlockwiseIODeps` subclass."
+            "Must define `__getitem__` for `BlockwiseArgs` subclass."
         )
 
-    @classmethod
-    def __dask_distributed_pack__(cls, cls_path: str, *args):
-        return (cls_path, *args)
+    def get(self, idx: Tuple[int, ...]) -> Any:
+        return self.__getitem__(idx)
 
-    @classmethod
-    def __dask_distributed_unpack__(cls, cls_path: str, *args):
-        return (cls_path, *args)
+    def get(self, idx: Tuple[int, ...], default) -> Any:
+        try:
+            return self.__getitem__(idx)
+        except KeyError:
+            return default
+
+    def __dask_distributed_pack__(self):
+        raise NotImplementedError(
+            "Must define `__dask_distributed_pack__` for `BlockwiseArgs` subclass."
+        )
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.shape}>"
+
+
+class BlockwiseArgsDict(BlockwiseArgs):
+    """Base class for dictionary-based Blockwise-IO arguments"""
+
+    def __init__(self, mapping: dict, shape=None):
+        self.mapping = mapping
+        if shape:
+            self.shape = shape
+        else:
+            # By default, assume 1D shape
+            self.shape = (len(mapping),)
+
+    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
+        return self.mapping[idx]
+
+    def __dask_distributed_pack__(self):
+        from distributed.protocol import to_serialize
+
+        packed_parts = {}
+        for k, v in self.mapping.items():
+            packed_parts[k] = to_serialize(v)
+        return (
+            "dask.blockwise.BlockwiseArgsDict",
+            packed_parts,
+        )
 
 
 def subs(task, substitution):
@@ -215,11 +252,8 @@ class Blockwise(Layer):
         dependencies.  The inner-most elements of io_deps correspond to the
         mapping between place-holder collection indices, e.g ``(1,)``,
         and any chunk/partition-specific arguments needed by the underlying
-        IO function. If ``io_deps[key]`` corresponds to a tuple, the first
-        two elements of that tuple must contain the dask module path and the
-        name for the desired ``BlockwiseIODeps``-based mapping, respectively.
-        The remaining tuple elements should be initialization arguments.
-        See ``make_blockwise_graph`` for usage.
+        IO function. We assume that these mappings are all represented as
+        ``BlockwiseArgs``-based object.
 
     See Also
     --------
@@ -343,7 +377,6 @@ class Blockwise(Layer):
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
         from distributed.protocol import to_serialize
-        from distributed.protocol.serialize import import_allowed_module
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
         from distributed.worker import dumps_function
@@ -384,23 +417,11 @@ class Blockwise(Layer):
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
 
-        # Handle `io_deps` serialization.
-        # If `io_deps[<collection_key>]` is just a dict, we rely
-        # entirely on msgpack.  It is up to the `Blockwise` layer to
-        # ensure that all arguments are msgpack serializable. To enable
-        # more control over serialization, a `BlockwiseIODeps` mapping
-        # subclass can be defined with the necessary
-        # `__dask_distributed_{pack,unpack}__` methods.
+        # Handle `io_deps` serialization. Assume each element
+        # is a `BlockwiseArgs`-based object.
         packed_io_deps = {}
         for name, input_map in self.io_deps.items():
-            if isinstance(input_map, tuple):
-                # Use the `__dask_distributed_pack__` definition for the
-                # specified `BlockwiseIODeps` subclass
-                module_name, attr_name = input_map[0].rsplit(".", 1)
-                io_dep_map = getattr(import_allowed_module(module_name), attr_name)
-                packed_io_deps[name] = io_dep_map.__dask_distributed_pack__(*input_map)
-            else:
-                packed_io_deps[name] = input_map
+            packed_io_deps[name] = input_map.__dask_distributed_pack__()
 
         return {
             "output": self.output,
@@ -838,8 +859,6 @@ def make_blockwise_graph(
             _args = io_deps[arg]
             module_name, attr_name = _args[0].rsplit(".", 1)
             io_dep_map = getattr(import_allowed_module(module_name), attr_name)
-            if deserializing:
-                _args = io_dep_map.__dask_distributed_unpack__(*_args)
             io_arg_mappings[arg] = io_dep_map(*_args[1:])
 
     if concatenate is True:
