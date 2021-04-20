@@ -15,7 +15,7 @@ from typing import (
 
 import tlz as toolz
 
-from .base import clone_key, get_name_from_key
+from .base import clone_key, get_name_from_key, tokenize
 from .compatibility import prod
 from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
@@ -312,13 +312,12 @@ class Blockwise(Layer):
         self.numblocks = numblocks
         self.io_deps = io_deps or {}
         for dep, ind in indices:
+            name = dep
             if isinstance(dep, BlockwiseDep):
-                name = "blockwise-io-" + output
-                self.indices.append((name, tuple(ind) if ind is not None else ind))
+                name = tokenize(dep)
                 self.io_deps[name] = dep
                 self.numblocks[name] = dep.numblocks
-            else:
-                self.indices.append((dep, tuple(ind) if ind is not None else ind))
+            self.indices.append((name, tuple(ind) if ind is not None else ind))
         self.indices = tuple(self.indices)
 
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
