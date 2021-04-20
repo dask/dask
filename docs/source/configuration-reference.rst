@@ -83,7 +83,7 @@ Admin
 
 
 UCX
-~~~
+---
 
 .. dask-config-block::
    :location: ucx
@@ -92,7 +92,7 @@ UCX
 
 
 RMM
-~~~
+---
 
 .. dask-config-block::
     :location: rmm
