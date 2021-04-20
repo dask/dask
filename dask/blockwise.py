@@ -49,7 +49,7 @@ class BlockwiseDep:
         except KeyError:
             return default
 
-    def __dask_distributed_pack__(self):
+    def __dask_distributed_pack__(self, output_blocks):
         raise NotImplementedError(
             "Must define `__dask_distributed_pack__` for `BlockwiseDep` subclass."
         )
@@ -76,11 +76,12 @@ class BlockwiseDepDict(BlockwiseDep):
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         return self.mapping[idx]
 
-    def __dask_distributed_pack__(self):
+    def __dask_distributed_pack__(self, output_blocks):
         from distributed.protocol import to_serialize
 
         packed_mapping = {}
-        for k, v in self.mapping.items():
+        for k in output_blocks or self.mapping.keys():
+            v = self.mapping[k]
             packed_mapping[k] = to_serialize(v)
         return {
             "mapping": packed_mapping,
@@ -451,7 +452,7 @@ class Blockwise(Layer):
             packed_io_deps[name] = {
                 "__module__": input_map.__module__,
                 "__name__": type(input_map).__name__,
-                "state": input_map.__dask_distributed_pack__(),
+                "state": input_map.__dask_distributed_pack__(self.output_blocks),
             }
 
         return {

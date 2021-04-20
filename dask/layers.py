@@ -50,7 +50,7 @@ class CreateArrayDeps(BlockwiseDep):
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
-    def __dask_distributed_pack__(self):
+    def __dask_distributed_pack__(self, output_blocks):
         return {"chunks": self.chunks}
 
     @classmethod
