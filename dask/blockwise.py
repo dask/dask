@@ -887,21 +887,8 @@ def make_blockwise_graph(
         key_deps = {}
 
     if deserializing:
-        from distributed.protocol.serialize import import_allowed_module, to_serialize
+        from distributed.protocol.serialize import to_serialize
         from distributed.worker import dumps_function
-    else:
-        from importlib import import_module as import_allowed_module
-
-    # Check if there are tuple arguments in `io_deps`.
-    # If so, we must use this tuple to construct the actual
-    # IO-argument mapping.
-    io_arg_mappings = {}
-    for arg, val in io_deps.items():
-        if isinstance(val, tuple):
-            _args = io_deps[arg]
-            module_name, attr_name = _args[0].rsplit(".", 1)
-            io_dep_map = getattr(import_allowed_module(module_name), attr_name)
-            io_arg_mappings[arg] = io_dep_map(*_args[1:])
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -965,13 +952,7 @@ def make_blockwise_graph(
                     # We don't want to stringify keys for args
                     # we are replacing here
                     idx = tups[1:]
-                    if arg in io_arg_mappings:
-                        args.append(io_arg_mappings[arg][idx])
-                    else:
-                        # The required inputs for the IO function
-                        # are specified explicitly in `io_deps`
-                        # (Or the index is the only required arg)
-                        args.append(io_deps[arg].get(idx, idx))
+                    args.append(io_deps[arg].get(idx, idx))
                 elif deserializing:
                     args.append(stringify_collection_keys(tups))
                 else:
