@@ -43,20 +43,21 @@ class CallableLazyImport:
 class CreateArrayDeps(BlockwiseDep):
     """Index-chunk mapping for BlockwiseCreateArray"""
 
-    def __init__(self, chunks: tuple, shape: tuple):
+    def __init__(self, chunks: tuple):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
-        self.shape = shape
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
     def __dask_distributed_pack__(self):
-        return (
-            "dask.layers.CreateArrayDeps",
-            self.chunks,
-            self.shape,
-        )
+        return {"chunks": self.chunks}
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        instance = cls.__new__(cls)
+        instance.chunks = state["chunks"]
+        return instance
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -93,7 +94,7 @@ class BlockwiseCreateArray(Blockwise):
             name,
             out_ind,
             dsk,
-            [(CreateArrayDeps(chunks, shape), out_ind)],
+            [(CreateArrayDeps(chunks), out_ind)],
             {},
         )
 
@@ -905,7 +906,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
-            {(i,): self.inputs[i] for i in self.part_ids}, None, None
+            {(i,): self.inputs[i] for i in self.part_ids},
+            None,
         )
 
         # Use Blockwise initializer

@@ -33,7 +33,6 @@ from .utils import (
 class BlockwiseDep:
     """Base class for (indexable) Blockwise-IO arguments"""
 
-    shape: Tuple[int, ...]
     numblocks: Tuple[int, ...]
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
@@ -55,6 +54,12 @@ class BlockwiseDep:
             "Must define `__dask_distributed_pack__` for `BlockwiseDep` subclass."
         )
 
+    @classmethod
+    def __dask_distributed_pack__(cls, state):
+        raise NotImplementedError(
+            "Must define `__dask_distributed_unpack__` for `BlockwiseDep` subclass."
+        )
+
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.shape}>"
 
@@ -62,11 +67,10 @@ class BlockwiseDep:
 class BlockwiseDepDict(BlockwiseDep):
     """Base class for dictionary-based Blockwise-IO arguments"""
 
-    def __init__(self, mapping: dict, shape: tuple, numblocks: tuple):
+    def __init__(self, mapping: dict, numblocks: tuple):
         self.mapping = mapping
 
         # By default, assume 1D shape
-        self.shape = shape
         self.numblocks = numblocks or (len(mapping),)
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
@@ -75,15 +79,20 @@ class BlockwiseDepDict(BlockwiseDep):
     def __dask_distributed_pack__(self):
         from distributed.protocol import to_serialize
 
-        packed_parts = {}
+        packed_mapping = {}
         for k, v in self.mapping.items():
-            packed_parts[k] = to_serialize(v)
-        return (
-            "dask.blockwise.BlockwiseDepDict",
-            packed_parts,
-            self.shape,
-            self.numblocks,
-        )
+            packed_mapping[k] = to_serialize(v)
+        return {
+            "mapping": packed_mapping,
+            "numblocks": self.numblocks,
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        instance = cls.__new__(cls)
+        instance.mapping = state["mapping"]
+        instance.numblocks = state["numblocks"]
+        return instance
 
 
 def subs(task, substitution):
@@ -228,7 +237,9 @@ class Blockwise(Layer):
     indices: Tuple[str, Tuple[str, ...]]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
-        Or includes literals, which have ``None`` for an index value
+        Or includes literals, which have ``None`` for an index value.
+        In place of input-key names, the first tuple element may also be a
+        ``BlockwiseDep`` object.
     numblocks: Mapping[key, Sequence[int]]
         Number of blocks along each dimension for each input
     concatenate: bool
@@ -256,6 +267,8 @@ class Blockwise(Layer):
         and any chunk/partition-specific arguments needed by the underlying
         IO function. We assume that these mappings are all represented as
         ``BlockwiseDep``-based object.
+        **WARNING**: This argument should only be used internally (for culling,
+        fusion and cloning of existing Blockwise layers).
 
     See Also
     --------
@@ -436,7 +449,11 @@ class Blockwise(Layer):
         # is a `BlockwiseDep`-based object.
         packed_io_deps = {}
         for name, input_map in self.io_deps.items():
-            packed_io_deps[name] = input_map.__dask_distributed_pack__()
+            packed_io_deps[name] = {
+                "__module__": input_map.__module__,
+                "__name__": type(input_map).__name__,
+                "state": input_map.__dask_distributed_pack__(),
+            }
 
         return {
             "output": self.output,
@@ -456,6 +473,8 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.protocol.serialize import import_allowed_module
+
         # Make sure we convert list items back from tuples in `indices`.
         # The msgpack serialization will have converted lists into
         # tuples, and tuples may be stringified during graph
@@ -464,6 +483,15 @@ class Blockwise(Layer):
             list(ind) if is_list else ind
             for ind, is_list in zip(state["indices"], state["is_list"])
         ]
+
+        # Unpack io_deps state
+        io_deps = state["io_deps"].copy()
+        for replace_name, packed_dep in state["io_deps"].items():
+            mod = import_allowed_module(packed_dep["__module__"])
+            dep_cls = getattr(mod, packed_dep["__name__"])
+            io_deps[replace_name] = dep_cls.__dask_distributed_unpack__(
+                packed_dep["state"]
+            )
 
         layer_dsk, layer_deps = make_blockwise_graph(
             state["func"],
@@ -478,7 +506,7 @@ class Blockwise(Layer):
             return_key_deps=True,
             deserializing=True,
             func_future_args=state["func_future_args"],
-            io_deps=state["io_deps"],
+            io_deps=io_deps,
         )
         g_deps = state["global_dependencies"]
 
