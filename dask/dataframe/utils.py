@@ -7,9 +7,9 @@ import traceback
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 
-import scipy.sparse as sp
 import numpy as np
 import pandas as pd
+import scipy.sparse as sp
 from pandas.api.types import (
     is_categorical_dtype,
     is_datetime64tz_dtype,
