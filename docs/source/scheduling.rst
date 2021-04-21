@@ -185,9 +185,9 @@ or within a single compute call:
 
    x.compute(scheduler='threads')
 
-Additionally some of the scheduler support other keyword arguments.
-For example, the pool-based single-machine scheduler allows you to provide custom pools
-or specify the desired number of workers:
+Each scheduler may support extra keywords specific to that scheduler. For example,
+the pool-based single-machine scheduler allows you to provide custom pools or
+specify the desired number of workers:
 
 .. code-block:: python
 
@@ -197,3 +197,13 @@ or specify the desired number of workers:
 
    with dask.config.set(num_workers=4):
        x.compute()
+
+The scheduler accepts any ``concurrent.futures.Executer`` instance as well as any other 
+subclass from a third party library, such as ``loky``. For example:
+
+.. code-block:: python
+
+   from loky import get_reusable_executor
+   with dask.config.set(pool=get_reusable_executor(max_workers=4)):
+       x.compute()
+
