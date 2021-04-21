@@ -55,9 +55,7 @@ class CreateArrayDeps(BlockwiseDep):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state):
-        instance = cls.__new__(cls)
-        instance.chunks = state["chunks"]
-        return instance
+        return cls(**state)
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -91,11 +89,11 @@ class BlockwiseCreateArray(Blockwise):
 
         out_ind = tuple(range(len(shape)))
         super().__init__(
-            name,
-            out_ind,
-            dsk,
-            [(CreateArrayDeps(chunks), out_ind)],
-            {},
+            output=name,
+            output_indices=out_ind,
+            dsk=dsk,
+            indices=[(CreateArrayDeps(chunks), out_ind)],
+            numblocks={},
         )
 
 
@@ -907,17 +905,16 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
             {(i,): self.inputs[i] for i in self.part_ids},
-            None,
         )
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
         super().__init__(
-            self.name,
-            "i",
-            dsk,
-            [(io_arg_map, "i")],
-            {},
+            output=self.name,
+            output_indices="i",
+            dsk=dsk,
+            indices=[(io_arg_map, "i")],
+            numblocks={},
             annotations=annotations,
         )
 

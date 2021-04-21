@@ -40,9 +40,6 @@ class BlockwiseDep:
             "Must define `__getitem__` for `BlockwiseDep` subclass."
         )
 
-    def get(self, idx: Tuple[int, ...]) -> Any:
-        return self.__getitem__(idx)
-
     def get(self, idx: Tuple[int, ...], default) -> Any:
         try:
             return self.__getitem__(idx)
@@ -67,7 +64,7 @@ class BlockwiseDep:
 class BlockwiseDepDict(BlockwiseDep):
     """Base class for dictionary-based Blockwise-IO arguments"""
 
-    def __init__(self, mapping: dict, numblocks: tuple):
+    def __init__(self, mapping: dict, numblocks: Optional[Tuple[int, ...]] = None):
         self.mapping = mapping
 
         # By default, assume 1D shape
@@ -90,10 +87,7 @@ class BlockwiseDepDict(BlockwiseDep):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state):
-        instance = cls.__new__(cls)
-        instance.mapping = state["mapping"]
-        instance.numblocks = state["numblocks"]
-        return instance
+        return cls(**state)
 
 
 def subs(task, substitution):
@@ -256,20 +250,12 @@ class Blockwise(Layer):
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
-    io_deps: dict[dict or tuple] (optional)
+    io_deps: Dict[Str, BlockwiseDep] (optional)
         Dictionary containing the mapping between "place-holder" collection
-        keys and the arguments needed to generate those collections internally.
-        The outer-most dict keys are the names of place-holder collections
-        being generated within this Blockwise layer (e.g. "read-parquet").
-        Since these collections do not actually exist outside this layer, any
-        key with a name in this set will be excluded from the external
-        dependencies.  The inner-most elements of io_deps correspond to the
-        mapping between place-holder collection indices, e.g ``(1,)``,
-        and any chunk/partition-specific arguments needed by the underlying
-        IO function. We assume that these mappings are all represented as
-        ``BlockwiseDep``-based object.
+        keys and a ``BlockwiseDep``-based objects.
         **WARNING**: This argument should only be used internally (for culling,
-        fusion and cloning of existing Blockwise layers).
+        fusion and cloning of existing Blockwise layers). Explicit use of this
+        argument will be deprecated in the future.
 
     See Also
     --------
@@ -291,13 +277,13 @@ class Blockwise(Layer):
         output: str,
         output_indices: Iterable[str],
         dsk: Mapping[str, tuple],
-        indices: Iterable[Tuple[str, Optional[Iterable[str]]]],
+        indices: Iterable[Tuple[Union[str, BlockwiseDep], Optional[Iterable[str]]]],
         numblocks: Mapping[str, Sequence[int]],
         concatenate: bool = None,
         new_axes: Mapping[str, int] = None,
         output_blocks: Set[Tuple[int, ...]] = None,
         annotations: Mapping[str, Any] = None,
-        io_deps: Optional[Mapping[str, Union[dict, tuple]]] = None,
+        io_deps: Optional[Mapping[str, BlockwiseDep]] = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
