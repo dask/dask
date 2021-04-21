@@ -25,7 +25,7 @@ from dask.dataframe.core import (
     repartition_divisions,
     total_mem_usage,
 )
-from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta_util
 from dask.utils import M, put_lines
 
 dsk = {
@@ -33,7 +33,7 @@ dsk = {
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
     ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
 }
-meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
+meta = make_meta_util({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame())
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 CHECK_FREQ = {}
@@ -1507,7 +1507,7 @@ def test_unknown_divisions():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta({"a": "i8", "b": "i8"})
+    meta = make_meta_util({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
     d = dd.DataFrame(dsk, "x", meta, [None, None, None, None])
     full = d.compute(scheduler="sync")
 
@@ -2264,7 +2264,7 @@ def test_sample_raises():
 
 
 def test_empty_max():
-    meta = make_meta({"x": "i8"})
+    meta = make_meta_util({"x": "i8"}, parent_meta=pd.DataFrame())
     a = dd.DataFrame(
         {("x", 0): pd.DataFrame({"x": [1]}), ("x", 1): pd.DataFrame({"x": []})},
         "x",

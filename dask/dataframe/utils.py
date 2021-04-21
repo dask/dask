@@ -7,6 +7,7 @@ import traceback
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 
+import scipy.sparse as sp
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -297,7 +298,7 @@ def make_meta_index(x, index=None):
     return x[0:0]
 
 
-@make_meta_obj.register((pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex, np.int64))
+@make_meta_obj.register((pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex, sp.csr.csr_matrix))
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
@@ -369,15 +370,18 @@ def make_meta_util(x, index=None, parent_meta=None):
     import dask.dataframe as dd
     if isinstance(x, (dd.core.Series, dd.core.DataFrame)):
         return x._meta
+    if hasattr(x, "_meta"):
+        return x._meta
 
-    if parent_meta is None:
+    try:
         return make_meta(x, index=index)
-    else:
-        if hasattr(x, "_meta"):
-            return x._meta
-        # import pdb;pdb.set_trace()
-        func = make_meta_obj.dispatch(type(parent_meta))
-        return func(x, index=index)
+    except TypeError:
+        if parent_meta is not None:
+            func = make_meta_obj.dispatch(type(parent_meta))
+            return func(x, index=index)
+        else:
+            func = make_meta_obj.dispatch(type(x))
+            return func(x, index=index)
 
 _numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
 
