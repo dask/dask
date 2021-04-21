@@ -971,7 +971,7 @@ def make_blockwise_graph(
             # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
                 dsk[out_key] = {
-                    "function": dumps_function(apply),
+                    "function": dumps_function(func),
                     "args": to_serialize(args),
                     "kwargs": to_serialize(kwargs2),
                 }
