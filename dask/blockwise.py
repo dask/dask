@@ -34,6 +34,7 @@ class BlockwiseDep:
     """Base class for (indexable) Blockwise-IO arguments"""
 
     numblocks: Tuple[int, ...]
+    produces_tasks: bool
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         raise NotImplementedError(
@@ -64,8 +65,14 @@ class BlockwiseDep:
 class BlockwiseDepDict(BlockwiseDep):
     """Base class for dictionary-based Blockwise-IO arguments"""
 
-    def __init__(self, mapping: dict, numblocks: Optional[Tuple[int, ...]] = None):
+    def __init__(
+        self,
+        mapping: dict,
+        numblocks: Optional[Tuple[int, ...]] = None,
+        produces_tasks: Optional[bool] = False,
+    ):
         self.mapping = mapping
+        self.produces_tasks = produces_tasks
 
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
@@ -82,6 +89,7 @@ class BlockwiseDepDict(BlockwiseDep):
                 for k in output_blocks or self.mapping.keys()
             },
             "numblocks": self.numblocks,
+            "produces_tasks": self.produces_tasks,
         }
 
     @classmethod
@@ -390,7 +398,7 @@ class Blockwise(Layer):
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
         from distributed.protocol import to_serialize
-        from distributed.utils import CancelledError, _maybe_complex
+        from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
         from distributed.worker import dumps_function
 
@@ -413,20 +421,14 @@ class Blockwise(Layer):
         # Handle `io_deps` serialization. Assume each element
         # is a `BlockwiseDep`-based object.
         packed_io_deps = {}
-        _complex = False
+        inline_tasks = False
         for name, blockwise_dep in self.io_deps.items():
             packed_io_deps[name] = {
                 "__module__": blockwise_dep.__module__,
                 "__name__": type(blockwise_dep).__name__,
                 "state": blockwise_dep.__dask_distributed_pack__(self.output_blocks),
             }
-            # Mark this object as "complex" if the first element
-            # contains an inline task. This logic only captures
-            # BlockwiseDepDict-based dependencies.
-            # TODO: Remove this logic once single-pass serialization
-            # removes the need to treat nested tasks differently.
-            if hasattr(blockwise_dep, "mapping"):
-                _complex = _maybe_complex(next(iter(blockwise_dep.mapping.values())))
+            inline_tasks = inline_tasks or blockwise_dep.produces_tasks
 
         # Dump the function if concatenate is False, because
         # we will not need to construct a nested task.  For now,
@@ -434,7 +436,7 @@ class Blockwise(Layer):
         # dependencies.
         func = (
             to_serialize(dsk[0])
-            if (self.concatenate or _complex)
+            if (self.concatenate or inline_tasks)
             else dumps_function(dsk[0])
         )
         func_future_args = dsk[1:]
@@ -963,7 +965,7 @@ def make_blockwise_graph(
             deps.update(func_future_args)
             args += list(func_future_args)
 
-        if deserializing and not concatenate and isinstance(func, bytes):
+        if deserializing and isinstance(func, bytes):
             # Construct a function/args/kwargs dict if we
             # do not have a nested task (i.e. concatenate=False).
             # TODO: Avoid using the iterate_collection-version

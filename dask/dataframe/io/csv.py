@@ -363,6 +363,7 @@ def text_blocks_to_pandas(
             kwargs,
         ),
         label=label,
+        produces_tasks=True,
     )
     graph = HighLevelGraph({name: layer}, {name: set()})
     return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))

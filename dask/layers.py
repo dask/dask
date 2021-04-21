@@ -892,6 +892,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         part_ids=None,
         label=None,
+        produces_tasks=False,
         annotations=None,
     ):
         self.name = name
@@ -900,11 +901,13 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.io_func = io_func
         self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
         self.label = label
+        self.produces_tasks = produces_tasks
         self.annotations = annotations
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
             {(i,): self.inputs[i] for i in self.part_ids},
+            produces_tasks=self.produces_tasks,
         )
 
         # Use Blockwise initializer
@@ -927,6 +930,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 self.inputs,
                 self.io_func,
                 part_ids=self.part_ids,
+                produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
             if hasattr(layer.io_func, "columns"):
