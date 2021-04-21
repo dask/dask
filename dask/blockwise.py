@@ -421,16 +421,17 @@ class Blockwise(Layer):
                 "state": blockwise_dep.__dask_distributed_pack__(self.output_blocks),
             }
             # Mark this object as "complex" if the first element
-            # contains an inline task.
+            # contains an inline task. This logic only captures
+            # BlockwiseDepDict-based dependencies.
             # TODO: Remove this logic once single-pass serialization
             # removes the need to treat nested tasks differently.
             if hasattr(blockwise_dep, "mapping"):
-                _complex = _maybe_complex(next(iter(self.mapping.values())))
+                _complex = _maybe_complex(next(iter(blockwise_dep.mapping.values())))
 
         # Dump the function if concatenate is False, because
         # we will not need to construct a nested task.  For now,
         # we also need to check if the `io_deps` contain "complex"
-        # arguments.
+        # dependencies.
         func = (
             to_serialize(dsk[0])
             if (self.concatenate or _complex)
@@ -887,7 +888,6 @@ def make_blockwise_graph(
 
     if deserializing:
         from distributed.protocol.serialize import to_serialize
-        from distributed.utils import _maybe_complex
         from distributed.worker import dumps_function
 
     if concatenate is True:
@@ -963,7 +963,7 @@ def make_blockwise_graph(
             deps.update(func_future_args)
             args += list(func_future_args)
 
-        if deserializing and not (concatenate or any(map(_maybe_complex, args))):
+        if deserializing and not concatenate and isinstance(func, bytes):
             # Construct a function/args/kwargs dict if we
             # do not have a nested task (i.e. concatenate=False).
             # TODO: Avoid using the iterate_collection-version
