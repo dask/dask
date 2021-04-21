@@ -85,9 +85,9 @@ class CSVFunctionWrapper:
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
-        # Generate the block if necessary
-        if isinstance(block, tuple) and block and callable(block[0]):
-            block = block[0](*block[1:])
+        # # Generate the block if necessary
+        # if isinstance(block, tuple) and block and callable(block[0]):
+        #     block = block[0](*block[1:])
 
         # Call `pandas_read_text`
         out = pandas_read_text(
