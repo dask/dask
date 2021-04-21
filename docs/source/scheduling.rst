@@ -193,7 +193,7 @@ or specify the desired number of workers:
 
    from concurrent.futures import ThreadPoolExecutor
    with dask.config.set(pool=ThreadPoolExecutor(4)):
-       ...
+       x.compute()
 
    with dask.config.set(num_workers=4):
-       ...
+       x.compute()
