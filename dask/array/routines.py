@@ -1753,10 +1753,11 @@ def _ravel_multi_index_kernel(multi_index, func_kwargs):
 
 @wraps(np.ravel_multi_index)
 def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
+    multi_index = asarray(multi_index)
     return multi_index.map_blocks(
         _ravel_multi_index_kernel,
         dtype=np.intp,
-        chunks=(multi_index.shape[-1],),
+        chunks=multi_index.shape[1:],
         drop_axis=0,
         func_kwargs=dict(dims=dims, mode=mode, order=order),
     )

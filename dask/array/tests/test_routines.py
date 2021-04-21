@@ -1745,6 +1745,25 @@ def test_ravel_multi_index(arr, chunks, kwargs):
     )
 
 
+@pytest.mark.parametrize(
+    "arr, chunks, kwargs",
+    [
+        ([[3, 6, 6], [4, 5, 1]], (2, 3), dict(dims=(7, 7))),
+    ],
+)
+def test_ravel_multi_index_tuple(arr, chunks, kwargs):
+    arr = np.asarray(arr)
+    darr = da.from_array(arr, chunks=chunks)
+    assert_eq(
+        np.ravel_multi_index(arr, **kwargs),
+        da.ravel_multi_index(darr, **kwargs).compute(),
+    )
+    assert_eq(
+        np.ravel_multi_index((arr, arr), **kwargs),
+        da.ravel_multi_index((darr, darr), **kwargs).compute(),
+    )
+
+
 def test_coarsen():
     x = np.random.randint(10, size=(24, 24))
     d = da.from_array(x, chunks=(4, 8))
