@@ -314,10 +314,16 @@ below.
 How to build the Dask documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To build the documentation locally, clone this repository and install
-the necessary requirements using ``pip`` or ``conda``::
+To build the documentation locally, make a fork of the main 
+`Dask repository <https://github.com/dask/dask>`_, clone the fork,
+and install the necessary requirements using ``pip`` or ``conda``::
 
-  git clone https://github.com/dask/dask.git
+  #if your accessing via HTTPS
+  git clone https://github.com/<your-github-username>/dask.git
+
+  #if you are accessing via SSH
+  git clone git@github.com:<your-github-username>/dask.git
+
   cd dask/docs
 
 ``pip``::
