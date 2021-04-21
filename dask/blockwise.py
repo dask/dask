@@ -471,7 +471,7 @@ class Blockwise(Layer):
         ]
 
         # Unpack io_deps state
-        io_deps = state["io_deps"].copy()
+        io_deps = {}
         for replace_name, packed_dep in state["io_deps"].items():
             mod = import_allowed_module(packed_dep["__module__"])
             dep_cls = getattr(mod, packed_dep["__name__"])
