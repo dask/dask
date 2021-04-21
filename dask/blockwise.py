@@ -76,12 +76,11 @@ class BlockwiseDepDict(BlockwiseDep):
     def __dask_distributed_pack__(self, output_blocks):
         from distributed.protocol import to_serialize
 
-        packed_mapping = {}
-        for k in output_blocks or self.mapping.keys():
-            v = self.mapping[k]
-            packed_mapping[k] = to_serialize(v)
         return {
-            "mapping": packed_mapping,
+            "mapping": {
+                k: to_serialize(self.mapping[k])
+                for k in output_blocks or self.mapping.keys()
+            },
             "numblocks": self.numblocks,
         }
 
