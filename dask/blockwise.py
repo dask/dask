@@ -17,7 +17,7 @@ import tlz as toolz
 
 from .base import clone_key, get_name_from_key, tokenize
 from .compatibility import prod
-from .core import flatten, istask, keys_in_tasks, reverse_dict
+from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
@@ -251,7 +251,7 @@ class Blockwise(Layer):
         Layer annotations
     io_deps: Dict[Str, BlockwiseDep] (optional)
         Dictionary containing the mapping between "place-holder" collection
-        keys and a ``BlockwiseDep``-based objects.
+        keys and ``BlockwiseDep``-based objects.
         **WARNING**: This argument should only be used internally (for culling,
         fusion and cloning of existing Blockwise layers). Explicit use of this
         argument will be deprecated in the future.
@@ -1477,13 +1477,3 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
             dependencies[name] = set()
 
     return HighLevelGraph(layers, dependencies)
-
-
-def _has_inline_task(x):
-    return (
-        istask(x)
-        or type(x) is list
-        and any(map(_has_inline_task, x))
-        or type(x) is dict
-        and any(map(_has_inline_task, x.values()))
-    )
