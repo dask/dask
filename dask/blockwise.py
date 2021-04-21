@@ -434,11 +434,11 @@ class Blockwise(Layer):
         # Handle `io_deps` serialization. Assume each element
         # is a `BlockwiseDep`-based object.
         packed_io_deps = {}
-        for name, input_map in self.io_deps.items():
+        for name, blockwise_dep in self.io_deps.items():
             packed_io_deps[name] = {
-                "__module__": input_map.__module__,
-                "__name__": type(input_map).__name__,
-                "state": input_map.__dask_distributed_pack__(self.output_blocks),
+                "__module__": blockwise_dep.__module__,
+                "__name__": type(blockwise_dep).__name__,
+                "state": blockwise_dep.__dask_distributed_pack__(self.output_blocks),
             }
 
         return {
