@@ -5,6 +5,7 @@ from typing import (
     Any,
     Hashable,
     Iterable,
+    List,
     Mapping,
     Optional,
     Sequence,
@@ -47,7 +48,9 @@ class BlockwiseDep:
         except KeyError:
             return default
 
-    def __dask_distributed_pack__(self, output_blocks):
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
         raise NotImplementedError(
             "Must define `__dask_distributed_pack__` for `BlockwiseDep` subclass."
         )
@@ -80,13 +83,15 @@ class BlockwiseDepDict(BlockwiseDep):
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         return self.mapping[idx]
 
-    def __dask_distributed_pack__(self, output_blocks):
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
         from distributed.protocol import to_serialize
 
         return {
             "mapping": {
                 k: to_serialize(self.mapping[k])
-                for k in output_blocks or self.mapping.keys()
+                for k in required_indices or self.mapping.keys()
             },
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
@@ -426,7 +431,8 @@ class Blockwise(Layer):
             packed_io_deps[name] = {
                 "__module__": blockwise_dep.__module__,
                 "__name__": type(blockwise_dep).__name__,
-                "state": blockwise_dep.__dask_distributed_pack__(self.output_blocks),
+                # TODO: Pass a `required_indices` list to __pack__
+                "state": blockwise_dep.__dask_distributed_pack__(),
             }
             inline_tasks = inline_tasks or blockwise_dep.produces_tasks
 

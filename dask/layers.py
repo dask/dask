@@ -1,6 +1,7 @@
 import copy
 import operator
 from collections import defaultdict
+from typing import List, Optional, Tuple
 
 import tlz as toolz
 
@@ -50,7 +51,9 @@ class CreateArrayDeps(BlockwiseDep):
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
 
-    def __dask_distributed_pack__(self, output_blocks):
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
         return {"chunks": self.chunks}
 
     @classmethod
