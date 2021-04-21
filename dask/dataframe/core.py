@@ -71,7 +71,6 @@ from .utils import (
     is_dataframe_like,
     is_index_like,
     is_series_like,
-    make_meta,
     make_meta_util,
     meta_nonempty,
     raise_on_meta_error,
@@ -119,7 +118,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        self._parent_meta = pd.Series(dtype='float64')
+        self._parent_meta = pd.Series(dtype="float64")
 
         meta = make_meta_util(meta, parent_meta=self._parent_meta)
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
@@ -1886,7 +1885,7 @@ Dask Name: {name}, {task} tasks"""
                 token=name,
                 meta=meta,
                 enforce_metadata=False,
-                parent_meta=self._meta
+                parent_meta=self._meta,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
@@ -2063,7 +2062,12 @@ Dask Name: {name}, {task} tasks"""
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + "std"
             result = map_partitions(
-                np.sqrt, v, meta=meta, token=name, enforce_metadata=False, parent_meta=self._meta
+                np.sqrt,
+                v,
+                meta=meta,
+                token=name,
+                enforce_metadata=False,
+                parent_meta=self._meta,
             )
             return handle_out(out, result)
 
@@ -2302,7 +2306,12 @@ Dask Name: {name}, {task} tasks"""
             n = num.count(split_every=split_every)
             name = self._token_prefix + "sem"
             result = map_partitions(
-                np.sqrt, v / n, meta=meta, token=name, enforce_metadata=False, parent_meta=self._meta
+                np.sqrt,
+                v / n,
+                meta=meta,
+                token=name,
+                enforce_metadata=False,
+                parent_meta=self._meta,
             )
 
             if isinstance(self, DataFrame):
@@ -3361,7 +3370,11 @@ Dask Name: {name}, {task} tasks""".format(
         if meta is no_default:
             meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
-            meta = make_meta_util(meta, index=getattr(make_meta_util(self), "index", None), parent_meta=self._meta)
+            meta = make_meta_util(
+                meta,
+                index=getattr(make_meta_util(self), "index", None),
+                parent_meta=self._meta,
+            )
 
         return type(self)(graph, name, meta, self.divisions)
 
@@ -5474,7 +5487,9 @@ def apply_concat_apply(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
     meta = make_meta_util(
-        meta, index=(getattr(make_meta_util(dfs[0]), "index", None) if dfs else None), parent_meta=dfs[0]._meta
+        meta,
+        index=(getattr(make_meta_util(dfs[0]), "index", None) if dfs else None),
+        parent_meta=dfs[0]._meta,
     )
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
@@ -5947,7 +5962,9 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
         return Scalar(graph, name, "f8")
-    meta = make_meta_util([(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta)
+    meta = make_meta_util(
+        [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
+    )
     return DataFrame(graph, name, meta, (df.columns[0], df.columns[-1]))
 
 

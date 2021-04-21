@@ -1520,7 +1520,11 @@ def test_concat2():
             {"b": [40, 50, 60], "c": [30, 20, 10], "d": [90, 80, 70]}, index=[3, 4, 5]
         ),
     }
-    meta = make_meta_util({"b": "i8", "c": "i8", "d": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame())
+    meta = make_meta_util(
+        {"b": "i8", "c": "i8", "d": "i8"},
+        index=pd.Index([], "i8"),
+        parent_meta=pd.DataFrame(),
+    )
     d = dd.DataFrame(dsk, "y", meta, [0, 3, 5])
 
     cases = [[a, b], [a, c], [a, d]]

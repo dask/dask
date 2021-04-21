@@ -14,7 +14,12 @@ from ...delayed import delayed
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..shuffle import set_partition
-from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta_util
+from ..utils import (
+    check_meta,
+    insert_meta_param_description,
+    is_series_like,
+    make_meta_util,
+)
 
 lock = Lock()
 
@@ -587,7 +592,7 @@ def from_delayed(
     for df in dfs:
         if not isinstance(df, Delayed):
             raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
-    
+
     parent_meta = delayed(make_meta_util)(dfs[0]).compute()
 
     if meta is None:

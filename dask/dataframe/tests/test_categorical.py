@@ -121,7 +121,8 @@ def test_unknown_categoricals():
         {("unknown", i): df for (i, df) in enumerate(frames)},
         "unknown",
         make_meta_util(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}, parent_meta=frames[0]
+            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"},
+            parent_meta=frames[0],
         ),
         [None] * 4,
     )
