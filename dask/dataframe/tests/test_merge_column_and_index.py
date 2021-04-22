@@ -227,7 +227,4 @@ def test_merge_column_with_nulls(repartition):
     )
     dask_result = df1_d.merge(df2_d, how="left", left_on="a", right_index=True)
 
-    assert_eq(
-        dask_result.compute().sort_index(),
-        pandas_result.sort_index(),
-    )
+    assert_eq(dask_result, pandas_result)
