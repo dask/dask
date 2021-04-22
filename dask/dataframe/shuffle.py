@@ -350,9 +350,7 @@ def shuffle(
         # If this is an index, we should still convert to a
         # DataFrame. Otherwise, the hashed values of a column
         # selection will not match (important when merging).
-        _divisions = index.divisions
         index = index.to_frame()
-        index.divisions = _divisions
 
     partitions = index.map_partitions(
         partitioning_index,

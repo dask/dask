@@ -3710,7 +3710,11 @@ class Index(Series):
             raise NotImplementedError()
 
         return self.map_partitions(
-            M.to_frame, index, name, meta=self._meta.to_frame(index, name)
+            M.to_frame,
+            index,
+            name,
+            meta=self._meta.to_frame(index, name),
+            transform_divisions=False,
         )
 
     @insert_meta_param_description(pad=12)
