@@ -198,7 +198,7 @@ specify the desired number of workers:
    with dask.config.set(num_workers=4):
        x.compute()
 
-The scheduler accepts any ``concurrent.futures.Executer`` instance as well as any other 
+The scheduler accepts any ``concurrent.futures.Executor`` instance as well as any other 
 subclass from a third party library, such as loky_. For example:
 
 .. _loky: https://github.com/joblib/loky
