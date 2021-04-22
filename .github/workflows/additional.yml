@@ -21,6 +21,7 @@ jobs:
           miniforge-version: latest
           use-mamba: true
           channel-priority: true
+          python-version: "3.7"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
           auto-activate-base: false
