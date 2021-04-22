@@ -689,19 +689,19 @@ def _get_coord_mapping(
 
     Parameters
     ----------
-    dims: dict
+    dims : dict
         Mapping between each index specified in `argpairs` and
         the number of output blocks for that index. Corresponds
         to the Blockwise `dims` attribute.
-    output: str
+    output : str
         Corresponds to the Blockwise `output` attribute.
-    out_indices: tuple
+    out_indices : tuple
         Corresponds to the Blockwise `output_indices` attribute.
-    numblocks: dict
+    numblocks : dict
         Corresponds to the Blockwise `numblocks` attribute.
-    argpairs: tuple
+    argpairs : tuple
         Corresponds to the Blockwise `indices` attribute.
-    concatenate: bool
+    concatenate : bool
         Corresponds to the Blockwise `concatenate` attribute.
     """
 
@@ -802,7 +802,6 @@ def make_blockwise_graph(
 
     Examples
     --------
-
     Simple embarrassing map operation
 
     >>> inc = lambda x: x + 1
@@ -877,7 +876,6 @@ def make_blockwise_graph(
     >>> make_blockwise_graph(add, 'z', 'i', 'x', 'i', 100, None,  numblocks={'x': (2,)})  # doctest: +SKIP
     {('z', 0): (add, ('x', 0), 100),
      ('z', 1): (add, ('x', 1), 100)}
-
 
     See Also
     --------
@@ -1010,15 +1008,14 @@ def lol_product(head, values):
 
     Parameters
     ----------
-
     head : tuple
         Prefix prepended to all results.
     values : sequence
         Mix of singletons and lists. Each list is substituted with every
         possible value and introduces another level of list in the output.
+
     Examples
     --------
-
     >>> lol_product(('x',), (1, 2, 3))
     ('x', 1, 2, 3)
     >>> lol_product(('x',), (1, [2, 3], 4, [5, 6]))  # doctest: +NORMALIZE_WHITESPACE
@@ -1038,7 +1035,6 @@ def lol_tuples(head, ind, values, dummies):
 
     Parameters
     ----------
-
     head : tuple
         The known tuple so far
     ind : Iterable
@@ -1050,7 +1046,6 @@ def lol_tuples(head, ind, values, dummies):
 
     Examples
     --------
-
     >>> lol_tuples(('x',), 'ij', {'i': 1, 'j': 0}, {})
     ('x', 1, 0)
 
@@ -1084,8 +1079,8 @@ def optimize_blockwise(graph, keys=()):
 
     Parameters
     ----------
-    full_graph: HighLevelGraph
-    keys: Iterable
+    graph : HighLevelGraph
+    keys : Iterable
         The keys of all outputs of all collections.
         Used to make sure that we don't fuse a layer needed by an output
 
@@ -1338,7 +1333,6 @@ def rewrite_blockwise(inputs):
 
 def zero_broadcast_dimensions(lol, nblocks):
     """
-
     >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
     >>> nblocks = (4, 1, 2)  # note singleton dimension in second place
     >>> lol = [[('x', 1, 0, 0), ('x', 1, 0, 1)],
@@ -1363,13 +1357,13 @@ def broadcast_dimensions(argpairs, numblocks, sentinels=(1, (1,)), consolidate=N
 
     Parameters
     ----------
-    argpairs: iterable
+    argpairs : iterable
         name, ijk index pairs
-    numblocks: dict
+    numblocks : dict
         maps {name: number of blocks}
-    sentinels: iterable (optional)
+    sentinels : iterable (optional)
         values for singleton dimensions
-    consolidate: func (optional)
+    consolidate : func (optional)
         use this to reduce each set of common blocks into a smaller set
 
     Examples
@@ -1450,9 +1444,9 @@ def fuse_roots(graph: HighLevelGraph, keys: list):
 
     Parameters
     ----------
-    graph: HighLevelGraph
+    graph : HighLevelGraph
         The full graph of the computation
-    keys: list
+    keys : list
         The output keys of the computation, to be passed on to fuse
 
     See Also
