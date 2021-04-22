@@ -199,7 +199,9 @@ specify the desired number of workers:
        x.compute()
 
 The scheduler accepts any ``concurrent.futures.Executer`` instance as well as any other 
-subclass from a third party library, such as ``loky``. For example:
+subclass from a third party library, such as loky_. For example:
+
+.. _loky: https://github.com/joblib/loky
 
 .. code-block:: python
 
