@@ -380,17 +380,6 @@ async def test_combo_of_layer_types(c, s, a, b):
 
 
 @gen_cluster(client=True)
-async def test_annotation_pack_unpack(c, s, a, b):
-    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
-
-    annotations = {"workers": ("alice",)}
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
-    annotations = unpacked_hlg["annotations"]
-    assert annotations == {"workers": {"n": ("alice",)}}
-
-
-@gen_cluster(client=True)
 async def test_map_partitions_partition_info(c, s, a, b):
     dd = pytest.importorskip("dask.dataframe")
     pd = pytest.importorskip("pandas")
@@ -401,3 +390,14 @@ async def test_map_partitions_partition_info(c, s, a, b):
     )
     assert res[0] == {"number": 0, "division": 0}
     assert res[1] == {"number": 1, "division": 5}
+
+
+@gen_cluster(client=True)
+async def test_annotation_pack_unpack(c, s, a, b):
+    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
+
+    annotations = {"workers": ("alice",)}
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
+    annotations = unpacked_hlg["annotations"]
+    assert annotations == {"workers": {"n": ("alice",)}}
