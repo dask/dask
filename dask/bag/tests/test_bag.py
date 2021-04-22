@@ -1122,7 +1122,7 @@ def test_to_delayed_optimize_graph(tmpdir):
     assert dict(d2.dask) == dict(x.dask)
     assert d.compute() == d2.compute()
 
-    [d] = b2.to_textfiles(tmpdir, compute=False)
+    [d] = b2.to_textfiles(str(tmpdir), compute=False)
     text = str(dict(d.dask))
     assert text.count("reify") <= 0
 
