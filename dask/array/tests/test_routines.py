@@ -1740,8 +1740,8 @@ def test_ravel_multi_index(arr, chunks, kwargs):
     arr = np.asarray(arr)
     darr = da.from_array(arr, chunks=chunks)
     assert_eq(
-        da.ravel_multi_index(darr, **kwargs).compute(),
         np.ravel_multi_index(arr, **kwargs),
+        da.ravel_multi_index(darr, **kwargs),
     )
 
 
@@ -1756,11 +1756,11 @@ def test_ravel_multi_index_tuple(arr, chunks, kwargs):
     darr = da.from_array(arr, chunks=chunks)
     assert_eq(
         np.ravel_multi_index(arr, **kwargs),
-        da.ravel_multi_index(darr, **kwargs).compute(),
+        da.ravel_multi_index(darr, **kwargs),
     )
     assert_eq(
         np.ravel_multi_index((arr, arr), **kwargs),
-        da.ravel_multi_index((darr, darr), **kwargs).compute(),
+        da.ravel_multi_index((darr, darr), **kwargs),
     )
 
 
