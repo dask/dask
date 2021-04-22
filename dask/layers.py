@@ -47,6 +47,7 @@ class CreateArrayDeps(BlockwiseDep):
     def __init__(self, chunks: tuple):
         self.chunks = chunks
         self.numblocks = tuple(len(chunk) for chunk in chunks)
+        self.produces_tasks = False
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
