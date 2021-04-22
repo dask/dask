@@ -88,11 +88,11 @@ class BlockwiseDepDict(BlockwiseDep):
     ):
         from distributed.protocol import to_serialize
 
+        if required_indices is None:
+            required_indices = self.mapping.keys()
+
         return {
-            "mapping": {
-                k: to_serialize(self.mapping[k])
-                for k in required_indices or self.mapping.keys()
-            },
+            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
         }
@@ -896,7 +896,6 @@ def make_blockwise_graph(
 
     if deserializing:
         from distributed.protocol.serialize import to_serialize
-        from distributed.worker import dumps_function
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -979,7 +978,7 @@ def make_blockwise_graph(
             # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
                 dsk[out_key] = {
-                    "function": dumps_function(func),
+                    "function": func,
                     "args": to_serialize(args),
                     "kwargs": to_serialize(kwargs2),
                 }
