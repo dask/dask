@@ -78,23 +78,13 @@ Download code
 Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
 clone the fork::
 
-   #if your accessing via HTTPS
    git clone https://github.com/<your-github-username>/dask.git
-   
-   #if you are accessing via SSH
-   git clone git@github.com:<your-github-username>/dask.git
-
    cd dask
 
 You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
 can successfully install Dask)::
 
-   #if your accessing via HTTPS
-   git remote add upstream https://github.com/dask/dask.git
-
-   #if you are accessing via SSH
-   git remote add upstream git@github.com:dask/dask.git   
-
+   git remote add upstream https://github.com/dask/dask.git 
    git pull upstream main --tags
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
@@ -318,12 +308,8 @@ To build the documentation locally, make a fork of the main
 `Dask repository <https://github.com/dask/dask>`_, clone the fork,
 and install the necessary requirements using ``pip`` or ``conda``::
 
-  #if your accessing via HTTPS
+
   git clone https://github.com/<your-github-username>/dask.git
-
-  #if you are accessing via SSH
-  git clone git@github.com:<your-github-username>/dask.git
-
   cd dask/docs
 
 ``pip``::
