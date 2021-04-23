@@ -1768,8 +1768,8 @@ def test_ravel_multi_index(asarray, arr, chunks, kwargs):
         arr = input = asarray(arr)
 
     assert_eq(
-        da.ravel_multi_index(input, **kwargs),
         np.ravel_multi_index(arr, **kwargs),
+        da.ravel_multi_index(input, **kwargs),
     )
 
 
