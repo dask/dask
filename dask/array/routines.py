@@ -1757,12 +1757,35 @@ def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
             f"Dask types are not supported in the `dims` argument: {dims!r}"
         )
 
-    multi_index_arrs = broadcast_arrays(*multi_index)
-    if len(multi_index_arrs) != len(dims):
+    if is_arraylike(multi_index):
+        multi_index = asarray(multi_index)
+        multi_index_arrs = [multi_index]
+        out_ndim = multi_index.ndim - 1
+    else:
+        multi_index_arrs = [asarray(x) for x in multi_index]
+        out_ndim = max(x.ndim for x in multi_index_arrs)
+
+    return blockwise(
+        lambda *indexes, **kwargs: np.ravel_multi_index(indexes, **kwargs),
+        range(out_ndim),
+        *flatten([inds, range(inds.ndim)] for inds in multi_index_arrs),
+        dtype=np.intp,
+        # concatenate=True,
+        dims=dims,
+        mode=mode,
+        order=order,
+    )
+
+    if is_arraylike(multi_index):
+        index_stack = asarray(multi_index)
+    else:
+        multi_index_arrs = broadcast_arrays(*multi_index)
+        index_stack = stack(multi_index_arrs)
+
+    if len(index_stack) != len(dims):
         raise ValueError(
             f"parameter multi_index must be a sequence of length {len(dims)}"
         )
-    index_stack = stack(multi_index_arrs)
     if not np.issubdtype(index_stack.dtype, np.signedinteger):
         raise TypeError("only int indices permitted")
     return index_stack.map_blocks(
