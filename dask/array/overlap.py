@@ -9,7 +9,7 @@ from tlz.curried import map
 
 from ..base import tokenize
 from ..core import flatten
-from ..highlevelgraph import HighLevelGraph
+from ..highlevelgraph import HighLevelGraph, Layer
 from ..utils import concrete, derived_from
 from . import chunk, numpy_compat
 from .core import (
@@ -21,6 +21,80 @@ from .core import (
     unify_chunks,
 )
 from .creation import empty_like, full_like
+
+
+class ArrayOverlapLayer(Layer):
+    """Simple HighLevelGraph array overlap layer.
+
+    Lazily computed High-level graph layer for a array overlap operations.
+
+    Parameters
+    ----------
+    name : str
+        Name of new output overlap array.
+    """
+
+    def __init__(
+        self,
+        name,
+    ):
+        self.name = name
+
+    def __repr__(self):
+        return "ArrayOverlapLayer<name='{}'".format(self.name)
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def _cull_dependencies(self, keys, parts_out=None):
+        """Determine the necessary dependencies to produce `keys`."""
+        # deps = defaultdict(set)
+        # TODO
+        pass
+
+    def _cull(self):
+        # TODO - do we need an equivalent to parts_out
+        # return SimpleShuffleLayer(self.name)
+        pass
+
+    def cull(self, keys, all_keys):
+        """Cull a ArrayOverlapLayer HighLevelGraph layer.
+
+        The underlying graph will only include the necessary
+        tasks to produce the keys (indicies) included in `parts_out`.
+        Therefore, "culling" the layer only requires us to reset this
+        parameter.
+        """
+        parts_out = self._keys_to_parts(keys)
+        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
+        if parts_out != self.parts_out:
+            culled_layer = self._cull(parts_out)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
+
+    def _construct_graph(self):
+        """Construct graph for a simple shuffle operation."""
+        # TODO - here's the important bit
+        # see ShuffleLayer/SimpleShuffleLayer _construct_graph,
+        # and also the make_blockwise_graph() function used with Blockwise
+        # return dsk
 
 
 def fractional_slice(task, axes):
@@ -526,6 +600,7 @@ def overlap(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
+    breakpoint()
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
@@ -534,7 +609,7 @@ def overlap(x, depth, boundary):
     new_chunks = tuple(
         ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
     )
-    x1 = x.rechunk(new_chunks)
+    x1 = x.rechunk(new_chunks)  # this is a no-op if x.chunks == new_chunks
 
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
