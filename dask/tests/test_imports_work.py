@@ -1,12 +1,12 @@
 import pytest
 
-try:
-    import psutil
-except ImportError:
-    pytest.skip()
+from dask.dataframe.io.csv import _infer_block_size
 
 
 def test_import_dask_dataframe(monkeypatch):
+    pytest.importorskip("psutil")
+    import psutil
+
     class MockOutput:
         total = None
 
@@ -14,4 +14,4 @@ def test_import_dask_dataframe(monkeypatch):
         return MockOutput
 
     monkeypatch.setattr(psutil, "virtual_memory", mock_virtual_memory)
-    import dask.dataframe  # noqa F401
+    assert _infer_block_size()
