@@ -1,4 +1,9 @@
-import psutil
+import pytest
+
+try:
+    import psutil
+except ImportError:
+    pytest.skip()
 
 
 def test_import_dask_dataframe(monkeypatch):
