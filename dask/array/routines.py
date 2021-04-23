@@ -1757,7 +1757,7 @@ def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
     return multi_index.map_blocks(
         _ravel_multi_index_kernel,
         dtype=np.intp,
-        chunks=multi_index.shape[1:],
+        chunks=multi_index.chunks[1:],
         drop_axis=0,
         func_kwargs=dict(dims=dims, mode=mode, order=order),
     )
