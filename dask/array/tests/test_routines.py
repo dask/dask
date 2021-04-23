@@ -1746,14 +1746,27 @@ def test_unravel_index():
         # Shape tests:
         ([[3, 6, 6]], (1, 1), dict(dims=(7), order="C")),
         ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
+        # Multi-dimensional index arrays
+        (
+            np.arange(6).reshape(3, 2, 1).tolist(),
+            (1, 2, 1),
+            dict(dims=(7, 6, 9), order="C"),
+        ),
+        # Broadcasting index arrays
+        ([1, [2, 3]], None, dict(dims=(8, 9))),
+        ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, dict(dims=(8, 9, 10))),
     ],
 )
 def test_ravel_multi_index(asarray, arr, chunks, kwargs):
+    if any(np.isscalar(x) for x in arr) and asarray in (np.asarray, da.from_array):
+        pytest.skip()
+
     if asarray is da.from_array:
         arr = np.asarray(arr)
         input = da.from_array(arr, chunks=chunks)
     else:
         arr = input = asarray(arr)
+
     assert_eq(
         da.ravel_multi_index(input, **kwargs),
         np.ravel_multi_index(arr, **kwargs),
@@ -1765,6 +1778,14 @@ def test_ravel_multi_index(asarray, arr, chunks, kwargs):
 def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
     with pytest.raises(NotImplementedError, match="Dask types are not supported"):
         da.ravel_multi_index((2, 1), list(dims) if wrap_in_list else dims)
+
+
+def test_ravel_multi_index_non_int_dtype():
+    with pytest.raises(TypeError, match="only int indices permitted"):
+        da.ravel_multi_index(
+            (1.0, 2),
+            (5, 10),
+        )
 
 
 def test_coarsen():

@@ -21,6 +21,7 @@ from .core import (
     asanyarray,
     asarray,
     blockwise,
+    broadcast_arrays,
     broadcast_shapes,
     broadcast_to,
     concatenate,
@@ -1747,10 +1748,6 @@ def unravel_index(indices, shape, order="C"):
     return unraveled_indices
 
 
-def _ravel_multi_index_kernel(multi_index, func_kwargs):
-    return np.ravel_multi_index(multi_index, **func_kwargs)
-
-
 @wraps(np.ravel_multi_index)
 def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
     if np.isscalar(dims):
@@ -1759,18 +1756,23 @@ def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
         raise NotImplementedError(
             f"Dask types are not supported in the `dims` argument: {dims!r}"
         )
-    multi_index_arr = asarray(multi_index)
-    if len(multi_index_arr) != len(dims):
+
+    multi_index_arrs = broadcast_arrays(*multi_index)
+    if len(multi_index_arrs) != len(dims):
         raise ValueError(
             f"parameter multi_index must be a sequence of length {len(dims)}"
         )
-
-    return multi_index_arr.map_blocks(
-        _ravel_multi_index_kernel,
+    index_stack = stack(multi_index_arrs)
+    if not np.issubdtype(index_stack.dtype, np.signedinteger):
+        raise TypeError("only int indices permitted")
+    return index_stack.map_blocks(
+        np.ravel_multi_index,
         dtype=np.intp,
-        chunks=(multi_index_arr.chunks[-1],),
+        chunks=index_stack.chunks[1:],
         drop_axis=0,
-        func_kwargs=dict(dims=dims, mode=mode, order=order),
+        dims=dims,
+        mode=mode,
+        order=order,
     )
 
 
