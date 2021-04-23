@@ -342,6 +342,7 @@ class Blockwise(Layer):
     def __dask_distributed_pack__(
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
+        from distributed.protocol import to_serialize
         from distributed.protocol.serialize import import_allowed_module
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
@@ -363,7 +364,9 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        func = dumps_function(dsk[0])
+        # Dump the function if concatenate is False, because
+        # we will not need to construct a nested task
+        func = to_serialize(dsk[0]) if self.concatenate else dumps_function(dsk[0])
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -819,8 +822,8 @@ def make_blockwise_graph(
         key_deps = {}
 
     if deserializing:
-        from distributed.protocol.serialize import import_allowed_module
-        from distributed.worker import dumps_function, warn_dumps
+        from distributed.protocol.serialize import import_allowed_module, to_serialize
+        from distributed.worker import dumps_function
     else:
         from importlib import import_module as import_allowed_module
 
@@ -915,21 +918,30 @@ def make_blockwise_graph(
         if deserializing:
             deps.update(func_future_args)
             args += list(func_future_args)
+
+        if deserializing and not concatenate:
+            # Construct a function/args/kwargs dict if we
+            # do not have a nested task (i.e. concatenate=False).
+            # TODO: Avoid using the iterate_collection-version
+            # of to_serialize if we know that are no embeded
+            # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
-                val = {
+                dsk[out_key] = {
                     "function": dumps_function(apply),
-                    "args": warn_dumps(args),
-                    "kwargs": warn_dumps(kwargs2),
+                    "args": to_serialize(args),
+                    "kwargs": to_serialize(kwargs2),
                 }
             else:
-                val = {"function": func, "args": warn_dumps(args)}
+                dsk[out_key] = {"function": func, "args": to_serialize(args)}
         else:
             if kwargs:
                 val = (apply, func, args, kwargs2)
             else:
                 args.insert(0, func)
                 val = tuple(args)
-        dsk[out_key] = val
+            # May still need to serialize (if concatenate=True)
+            dsk[out_key] = to_serialize(val) if deserializing else val
+
         if return_key_deps:
             key_deps[out_key] = deps
 
