@@ -3,6 +3,8 @@ from numbers import Number
 
 import pytest
 
+from dask.delayed import delayed
+
 np = pytest.importorskip("numpy")
 
 import dask.array as da
@@ -1724,6 +1726,16 @@ def test_unravel_index():
 
 
 @pytest.mark.parametrize(
+    "asarray",
+    [
+        lambda x: x,
+        lambda x: [np.asarray(a) for a in x],
+        lambda x: [da.asarray(a) for a in x],
+        np.asarray,
+        da.from_array,
+    ],
+)
+@pytest.mark.parametrize(
     "arr, chunks, kwargs",
     [
         # Numpy doctests:
@@ -1736,13 +1748,23 @@ def test_unravel_index():
         ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
     ],
 )
-def test_ravel_multi_index(arr, chunks, kwargs):
-    arr = np.asarray(arr)
-    darr = da.from_array(arr, chunks=chunks)
+def test_ravel_multi_index(asarray, arr, chunks, kwargs):
+    if asarray is da.from_array:
+        arr = np.asarray(arr)
+        input = da.from_array(arr, chunks=chunks)
+    else:
+        arr = input = asarray(arr)
     assert_eq(
-        da.ravel_multi_index(darr, **kwargs).compute(),
+        da.ravel_multi_index(input, **kwargs),
         np.ravel_multi_index(arr, **kwargs),
     )
+
+
+@pytest.mark.parametrize("dims", [da.from_array([5, 10]), delayed([5, 10], nout=2)])
+@pytest.mark.parametrize("wrap_in_list", [False, True])
+def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
+    with pytest.raises(NotImplementedError, match="Dask types are not supported"):
+        da.ravel_multi_index((2, 1), list(dims) if wrap_in_list else dims)
 
 
 def test_coarsen():

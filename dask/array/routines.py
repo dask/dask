@@ -1753,10 +1753,22 @@ def _ravel_multi_index_kernel(multi_index, func_kwargs):
 
 @wraps(np.ravel_multi_index)
 def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
-    return multi_index.map_blocks(
+    if np.isscalar(dims):
+        dims = (dims,)
+    if is_dask_collection(dims) or any(is_dask_collection(d) for d in dims):
+        raise NotImplementedError(
+            f"Dask types are not supported in the `dims` argument: {dims!r}"
+        )
+    multi_index_arr = asarray(multi_index)
+    if len(multi_index_arr) != len(dims):
+        raise ValueError(
+            f"parameter multi_index must be a sequence of length {len(dims)}"
+        )
+
+    return multi_index_arr.map_blocks(
         _ravel_multi_index_kernel,
         dtype=np.intp,
-        chunks=(multi_index.shape[-1],),
+        chunks=(multi_index_arr.chunks[-1],),
         drop_axis=0,
         func_kwargs=dict(dims=dims, mode=mode, order=order),
     )
