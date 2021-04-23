@@ -786,6 +786,10 @@ def test_auto_blocksize():
 
 
 def test__infer_block_size(monkeypatch):
+    """
+    psutil returns a total memory of `None` on some systems
+    see https://github.com/dask/dask/pull/7601
+    """
     psutil = pytest.importorskip("psutil")
 
     class MockOutput:
