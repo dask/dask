@@ -354,6 +354,11 @@ def plot_resources(results, palette="Viridis", **kwargs):
         kwargs["width"] = kwargs.pop("plot_width")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
+
+    # Drop `label_size` to match `plot_cache` and `plot_tasks` kwargs
+    if "label_size" in kwargs:
+        kwargs.pop("label_size")
+
     defaults.update(**kwargs)
 
     if results:
