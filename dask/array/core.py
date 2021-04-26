@@ -286,7 +286,6 @@ def dotmany(A, B, leftfunc=None, rightfunc=None, **kwargs):
         A = map(leftfunc, A)
     if rightfunc:
         B = map(rightfunc, B)
-    breakpoint()
     return sum(map(partial(np.dot, **kwargs), A, B))
 
 
