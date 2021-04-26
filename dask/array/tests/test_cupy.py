@@ -221,7 +221,7 @@ def test_basic(func):
         assert type(ddc._meta) is type(ddc.compute())
     else:
         assert_eq(ddc, ddc)  # Check that _meta and computed arrays match types
-        assert_eq(ddc, ddn)
+        assert_eq(ddc, ddn, check_type=False)
 
 
 @pytest.mark.parametrize("dtype", ["f4", "f8"])
@@ -388,7 +388,7 @@ def test_overlap_internal():
         ]
     )
 
-    assert_eq(g, expected)
+    assert_eq(g, expected, check_type=False)
     assert same_keys(da.overlap.overlap_internal(d, {0: 2, 1: 1}), g)
 
 
@@ -424,11 +424,11 @@ def test_reflect():
 
     e = da.overlap.reflect(d, axis=0, depth=2)
     expected = np.array([1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 8])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
     e = da.overlap.reflect(d, axis=0, depth=1)
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
 
 @pytest.mark.skipif(
@@ -440,11 +440,11 @@ def test_nearest():
 
     e = da.overlap.nearest(d, axis=0, depth=2)
     expected = np.array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
     e = da.overlap.nearest(d, axis=0, depth=1)
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
 
 @pytest.mark.skipif(
@@ -460,8 +460,8 @@ def test_constant():
     assert e.shape[0] == d.shape[0] + 4
     assert e.shape[1] == d.shape[1]
 
-    assert_eq(e[1, :], np.ones(8, dtype=x.dtype) * 10)
-    assert_eq(e[-1, :], np.ones(8, dtype=x.dtype) * 10)
+    assert_eq(e[1, :], np.ones(8, dtype=x.dtype) * 10, check_type=False)
+    assert_eq(e[-1, :], np.ones(8, dtype=x.dtype) * 10, check_type=False)
 
 
 @pytest.mark.skipif(
@@ -491,7 +491,7 @@ def test_boundaries():
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ]
     )
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
 
 def test_random_all():
@@ -637,8 +637,12 @@ def test_tsqr(m, n, chunks, error_type):
         assert_eq((m_u, n_u), u.shape)  # shape check
         assert_eq((n_s,), s.shape)  # shape check
         assert_eq((d_vh, d_vh), vh.shape)  # shape check
-        assert_eq(np.eye(n_u, n_u), da.dot(u.T, u))  # u must be orthonormal
-        assert_eq(np.eye(d_vh, d_vh), da.dot(vh, vh.T))  # vh must be orthonormal
+        assert_eq(
+            np.eye(n_u, n_u), da.dot(u.T, u), check_type=False
+        )  # u must be orthonormal
+        assert_eq(
+            np.eye(d_vh, d_vh), da.dot(vh, vh.T), check_type=False
+        )  # vh must be orthonormal
         assert_eq(mat, da.dot(da.dot(u, da.diag(s)), vh[:n_q]))  # accuracy check
     else:
         with pytest.raises(error_type):
@@ -773,7 +777,9 @@ def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
         assert_eq((m_q, n_q), q.shape)  # shape check
         assert_eq((m_r, n_r), r.shape)  # shape check
         assert_eq(mat, np.dot(q, r))  # accuracy check
-        assert_eq(np.eye(n_q, n_q), np.dot(q.T, q))  # q must be orthonormal
+        assert_eq(
+            np.eye(n_q, n_q), np.dot(q.T, q), check_type=False
+        )  # q must be orthonormal
         assert_eq(r, np.triu(r))  # r must be upper triangular
 
         # test SVD
@@ -786,9 +792,15 @@ def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
         assert_eq((m_u, n_u), u.shape)  # shape check
         assert_eq((n_s,), s.shape)  # shape check
         assert_eq((d_vh, d_vh), vh.shape)  # shape check
-        assert_eq(np.eye(n_u, n_u), np.dot(u.T, u))  # u must be orthonormal
-        assert_eq(np.eye(d_vh, d_vh), np.dot(vh, vh.T))  # vh must be orthonormal
-        assert_eq(mat, np.dot(np.dot(u, np.diag(s)), vh[:n_q]))  # accuracy check
+        assert_eq(
+            np.eye(n_u, n_u), np.dot(u.T, u), check_type=False
+        )  # u must be orthonormal
+        assert_eq(
+            np.eye(d_vh, d_vh), np.dot(vh, vh.T), check_type=False
+        )  # vh must be orthonormal
+        assert_eq(
+            mat, np.dot(np.dot(u, np.diag(s)), vh[:n_q]), check_type=False
+        )  # accuracy check
     else:
         with pytest.raises(error_type):
             q, r = da.linalg.tsqr(data)
@@ -969,7 +981,7 @@ def test_compress():
     # cupy.compress is not implemented but dask implementation does not
     # rely on np.compress -- move originial data back to host and
     # compare da.compress with np.compress
-    assert_eq(np.compress(c.tolist(), carr.tolist(), axis=0), res)
+    assert_eq(np.compress(c.tolist(), carr.tolist(), axis=0), res, check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1017,9 +1029,11 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
 
     if mode == "empty":
         # empty pads lead to undefined values which may be different
-        assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
+        assert_eq(
+            np_r[pad_width:-pad_width], da_r[pad_width:-pad_width], check_type=False
+        )
     else:
-        assert_eq(np_r, da_r)
+        assert_eq(np_r, da_r, check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1034,6 +1048,7 @@ def test_digitize(bins_type):
             assert_eq(
                 da.digitize(d, bins, right=right),
                 np.digitize(x, bins_cupy, right=right),
+                check_type=False,
             )
 
     x = cupy.random.random(size=(100, 100))
@@ -1061,9 +1076,11 @@ def test_vindex():
     res_cp = da.core._vindex(d_cp, [0, 1, 6, 0], [0, 1, 0, 7])
 
     assert type(res_cp._meta) == cupy.core.core.ndarray
-    assert_eq(res_cp, res_cp)  # Check that _meta and computed arrays match types
+    assert_eq(
+        res_cp, res_cp, check_type=False
+    )  # Check that _meta and computed arrays match types
 
-    assert_eq(res_np, res_cp)
+    assert_eq(res_np, res_cp, check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1074,13 +1091,14 @@ def test_percentile():
     assert_eq(
         da.percentile(d, qs, interpolation="midpoint"),
         np.array([1, 1, 1], dtype=d.dtype),
+        check_type=False,
     )
 
     x = cupy.array([0, 0, 5, 5, 5, 5, 20, 20])
     d = da.from_array(x, chunks=(3,))
 
     result = da.percentile(d, qs, interpolation="midpoint")
-    assert_eq(result, np.array([0, 5, 20], dtype=result.dtype))
+    assert_eq(result, np.array([0, 5, 20], dtype=result.dtype), check_type=False)
 
     # Currently fails, tokenize(cupy.array(...)) is not deterministic.
     # See https://github.com/dask/dask/issues/6718
@@ -1102,7 +1120,7 @@ def test_percentiles_with_empty_arrays():
 
     assert type(res._meta) == cupy.core.core.ndarray
     assert_eq(res, res)  # Check that _meta and computed arrays match types
-    assert_eq(res, np.array([1, 1, 1], dtype=x.dtype))
+    assert_eq(res, np.array([1, 1, 1], dtype=x.dtype), check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1154,17 +1172,17 @@ def test_view():
     result = d.view()
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, x.view())
+    assert_eq(result, x.view(), check_type=False)
 
     result = d.view("i4")
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, x.view("i4"))
+    assert_eq(result, x.view("i4"), check_type=False)
 
     result = d.view("i2")
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, x.view("i2"))
+    assert_eq(result, x.view("i2"), check_type=False)
     assert all(isinstance(s, int) for s in d.shape)
 
     x = np.arange(8, dtype="i1")
@@ -1172,7 +1190,7 @@ def test_view():
     result = d.view("i4")
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(x.view("i4"), d.view("i4"))
+    assert_eq(x.view("i4"), d.view("i4"), check_type=False)
 
     with pytest.raises(ValueError):
         x = np.arange(8, dtype="i1")
@@ -1191,12 +1209,12 @@ def test_view_fortran():
     result = d.view("i4", order="F")
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, x.T.view("i4").T)
+    assert_eq(result, x.T.view("i4").T, check_type=False)
 
     result = d.view("i2", order="F")
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, x.T.view("i2").T)
+    assert_eq(result, x.T.view("i2").T, check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1204,7 +1222,7 @@ def test_getter():
     result = da.core.getter(cupy.arange(5), (None, slice(None, None)))
 
     assert type(result) == cupy.core.core.ndarray
-    assert_eq(result, np.arange(5)[None, :])
+    assert_eq(result, np.arange(5)[None, :], check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1272,13 +1290,14 @@ def test_percentile():
     assert_eq(
         da.percentile(d, qs, interpolation="midpoint"),
         np.array([1, 1, 1], dtype=d.dtype),
+        check_type=False,
     )
 
     x = cupy.array([0, 0, 5, 5, 5, 5, 20, 20])
     d = da.from_array(x, chunks=(3,))
 
     result = da.percentile(d, qs, interpolation="midpoint")
-    assert_eq(result, np.array([0, 5, 20], dtype=result.dtype))
+    assert_eq(result, np.array([0, 5, 20], dtype=result.dtype), check_type=False)
 
     assert not same_keys(
         da.percentile(d, qs, interpolation="midpoint"),
@@ -1305,7 +1324,7 @@ def test_percentiles_with_empty_arrays():
 
     assert type(res._meta) == cupy.core.core.ndarray
     assert_eq(res, res)  # Check that _meta and computed arrays match types
-    assert_eq(res, np.array([1, 1, 1], dtype=x.dtype))
+    assert_eq(res, np.array([1, 1, 1], dtype=x.dtype), check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1315,7 +1334,7 @@ def test_percentiles_with_empty_q():
 
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, np.array([], dtype=x.dtype))
+    assert_eq(result, np.array([], dtype=x.dtype), check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
@@ -1328,7 +1347,7 @@ def test_percentiles_with_scaler_percentile(q):
 
     assert type(result._meta) == cupy.core.core.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
-    assert_eq(result, np.array([1], dtype=d.dtype))
+    assert_eq(result, np.array([1], dtype=d.dtype), check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
