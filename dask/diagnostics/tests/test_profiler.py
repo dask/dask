@@ -307,7 +307,6 @@ def test_cache_profiler_plot():
 
 
 @pytest.mark.skipif("not bokeh")
-@ignore_abc_warning
 def test_cache_profiler_plot_with_invalid_bokeh_kwarg_raises_error():
     with CacheProfiler(metric_name="non-standard") as cprof:
         get(dsk, "e")
