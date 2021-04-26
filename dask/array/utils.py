@@ -433,13 +433,6 @@ def zeros_like_safe(a, shape, **kwargs):
         return np.zeros(shape, **kwargs)
 
 
-def _zeros_safe(a, shape, like=None):
-    """
-    Private zeros function intended to be used during graph construction
-    """
-    return zeros_like_safe(a, shape, like=like)
-
-
 def arange_safe(*args, like, **kwargs):
     """
     Use the `like=` from `np.arange` to create a new array dispatching
@@ -605,12 +598,6 @@ def scipy_linalg_safe(func_name, *args, **kwargs):
 
 def solve_triangular_safe(a, b, lower=False):
     return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
-
-
-def lu_safe(a, permute_l=False, overwrite_a=False, check_finite=True):
-    return scipy_linalg_safe(
-        "lu", a, permute_l=permute_l, overwrite_a=overwrite_a, check_finite=check_finite
-    )
 
 
 def _is_nep18_active():

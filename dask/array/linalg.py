@@ -13,9 +13,7 @@ from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
 from .utils import (
-    _zeros_safe,
     array_safe,
-    lu_safe,
     meta_from_array,
     ones_like_safe,
     solve_triangular_safe,
@@ -992,6 +990,7 @@ def lu(a):
     l:  Array, lower triangular matrix with unit diagonal.
     u:  Array, upper triangular matrix
     """
+    import scipy.linalg
 
     if a.ndim != 2:
         raise ValueError("Dimension must be 2 to perform lu decomposition")
@@ -1008,7 +1007,6 @@ def lu(a):
 
     vdim = len(a.chunks[0])
     hdim = len(a.chunks[1])
-    a_meta = meta_from_array(a)
 
     token = tokenize(a)
     name_lu = "lu-lu-" + token
@@ -1035,7 +1033,7 @@ def lu(a):
                 prevs.append(prev)
             target = (operator.sub, target, (sum, prevs))
         # diagonal block
-        dsk[name_lu, i, i] = (lu_safe, target)
+        dsk[name_lu, i, i] = (scipy.linalg.lu, target)
 
         # sweep to horizontal
         for j in range(i + 1, hdim):
@@ -1082,36 +1080,20 @@ def lu(a):
                 # transposed permutation matrix is equal to its inverse
                 dsk[name_p_inv, i, j] = (np.transpose, (name_p, i, j))
             elif i > j:
-                dsk[name_p, i, j] = (
-                    zeros_like_safe,
-                    a_meta,
-                    (a.chunks[0][i], a.chunks[1][j]),
-                )
+                dsk[name_p, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
                 # calculations are performed using permuted l,
                 # thus the result should be reverted by inverted (=transposed) p
                 # to have the same row order as diagonal blocks
                 dsk[name_l, i, j] = (np.dot, (name_p_inv, i, i), (name_lu, i, j))
-                dsk[name_u, i, j] = (
-                    zeros_like_safe,
-                    a_meta,
-                    (a.chunks[0][i], a.chunks[1][j]),
-                )
+                dsk[name_u, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
                 dsk[name_l_permuted, i, j] = (name_lu, i, j)
             else:
-                dsk[name_p, i, j] = (
-                    zeros_like_safe,
-                    a_meta,
-                    (a.chunks[0][i], a.chunks[1][j]),
-                )
-                dsk[name_l, i, j] = (
-                    zeros_like_safe,
-                    a_meta,
-                    (a.chunks[0][i], a.chunks[1][j]),
-                )
+                dsk[name_p, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
+                dsk[name_l, i, j] = (np.zeros, (a.chunks[0][i], a.chunks[1][j]))
                 dsk[name_u, i, j] = (name_lu, i, j)
                 # l_permuted is not referred in upper triangulars
 
-    pp, ll, uu = lu_safe(ones_like_safe(a_meta, shape=(1, 1)))
+    pp, ll, uu = scipy.linalg.lu(np.ones(shape=(1, 1), dtype=a.dtype))
     pp_meta = meta_from_array(a, dtype=pp.dtype)
     ll_meta = meta_from_array(a, dtype=ll.dtype)
     uu_meta = meta_from_array(a, dtype=uu.dtype)
@@ -1343,10 +1325,9 @@ def _cholesky(a):
         for j in range(hdim):
             if i < j:
                 dsk[name, i, j] = (
-                    _zeros_safe,
-                    a,
-                    (a.chunks[0][i], a.chunks[1][j]),
+                    zeros_like_safe,
                     meta_from_array(a),
+                    (a.chunks[0][i], a.chunks[1][j]),
                 )
                 dsk[name_upper, j, i] = (name, i, j)
             elif i == j:
