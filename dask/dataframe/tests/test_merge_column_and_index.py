@@ -209,3 +209,22 @@ def test_merge_known_to_double_bcast_left(
     assert_eq(result, expected)
     assert_eq(result.divisions, ddf_right.divisions)
     assert len(result.__dask_graph__()) < 90
+
+
+@pytest.mark.parametrize("repartition", [None, 4])
+def test_merge_column_with_nulls(repartition):
+    # See: https://github.com/dask/dask/issues/7558
+
+    df1 = pd.DataFrame({"a": ["0", "0", None, None, None, None, "5", "7", "15", "33"]})
+    df2 = pd.DataFrame({"c": ["1", "2", "3", "4"], "b": ["0", "5", "7", "15"]})
+    df1_d = dd.from_pandas(df1, npartitions=4)
+    df2_d = dd.from_pandas(df2, npartitions=3).set_index("b")
+    if repartition:
+        df2_d = df2_d.repartition(repartition)
+
+    pandas_result = df1.merge(
+        df2.set_index("b"), how="left", left_on="a", right_index=True
+    )
+    dask_result = df1_d.merge(df2_d, how="left", left_on="a", right_index=True)
+
+    assert_eq(dask_result, pandas_result)

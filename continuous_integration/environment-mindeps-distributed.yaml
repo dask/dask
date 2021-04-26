@@ -10,10 +10,7 @@ dependencies:
   - fsspec=0.6.0
   - toolz=0.8.2
   # optional dependencies pulled in by pip install dask[distributed]
-  # TODO: Use distributed-2021.04.1 when it becomes available
-  - pip
-  - pip:
-    - git+https://github.com/dask/distributed.git
+  - distributed=2021.04.1
   # test dependencies
   - pytest
   - pytest-rerunfailures
