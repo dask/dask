@@ -214,13 +214,6 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
     return p
 
 
-def _get_figure_keywords():
-    bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    o = bp.Figure.properties()
-    o.add("tools")
-    return o
-
-
 def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
     """Visualize the results of profiling in a bokeh plot.
 
@@ -258,7 +251,7 @@ def plot_tasks(results, dsk, palette="Viridis", label_size=60, **kwargs):
         kwargs["width"] = kwargs.pop("plot_width")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
+    defaults.update(**kwargs)
 
     if results:
         keys, tasks, starts, ends, ids = zip(*results)
@@ -361,7 +354,13 @@ def plot_resources(results, palette="Viridis", **kwargs):
         kwargs["width"] = kwargs.pop("plot_width")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
+
+    # Drop `label_size` to match `plot_cache` and `plot_tasks` kwargs
+    if "label_size" in kwargs:
+        kwargs.pop("label_size")
+
+    defaults.update(**kwargs)
+
     if results:
         t, mem, cpu = zip(*results)
         left, right = min(t), max(t)
@@ -457,7 +456,7 @@ def plot_cache(
         kwargs["width"] = kwargs.pop("plot_width")
     if "plot_height" in kwargs:
         kwargs["height"] = kwargs.pop("plot_height")
-    defaults.update((k, v) for (k, v) in kwargs.items() if k in _get_figure_keywords())
+    defaults.update(**kwargs)
 
     if results:
         starts, ends = list(zip(*results))[3:]
