@@ -1447,3 +1447,26 @@ def test_cupy_cholesky(shape, chunk):
         check_graph=False,
         check_chunks=False,
     )
+
+
+def _check_lu_result(p, l, u, A):
+    assert cupy.allclose(p.dot(l).dot(u), A)
+
+    # check triangulars
+    assert_eq(l, da.tril(l), check_graph=False)
+    assert_eq(u, da.triu(u), check_graph=False)
+
+
+@pytest.mark.parametrize("size", [50, 100, 200])
+def test_lu_3(size):
+    cupy.random.seed(10)
+    A = cupy.random.randint(0, 10, (size, size))
+
+    # Only float32, float64, complex64 and complex128 are supported.
+    A = A.astype(np.float32)
+
+    dA = da.from_array(A, chunks=(25, 25))
+    dp, dl, du = da.linalg.lu(dA)
+    dp.compute()
+    breakpoint()
+    _check_lu_result(dp, dl, du, A)

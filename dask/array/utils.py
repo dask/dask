@@ -587,15 +587,30 @@ def matmul_safe(a, b):
     return chunk[..., xp.newaxis]
 
 
-def solve_triangular_safe(a, b, lower=False):
-    import scipy.linalg
-
+def scipy_linalg_safe(func_name, *args, **kwargs):
+    # need to evaluate at least the first input array
+    # for gpu/cpu checking
+    a = args[0]
     if is_cupy_type(a):
         import cupyx.scipy.linalg
 
-        return cupyx.scipy.linalg.solve_triangular(a, b, lower=lower)
+        func = getattr(cupyx.scipy.linalg, func_name)
+    else:
+        import scipy.linalg
 
-    return scipy.linalg.solve_triangular(a, b, lower=lower)
+        func = getattr(scipy.linalg, func_name)
+
+    return func(*args, **kwargs)
+
+
+def solve_triangular_safe(a, b, lower=False):
+    return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
+
+
+def lu_safe(a, permute_l=False, overwrite_a=False, check_finite=True):
+    return scipy_linalg_safe(
+        "lu", a, permute_l=permute_l, overwrite_a=overwrite_a, check_finite=check_finite
+    )
 
 
 def _is_nep18_active():
