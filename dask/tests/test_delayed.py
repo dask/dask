@@ -395,6 +395,17 @@ def test_nout():
     assert x.compute() == tuple()
 
 
+@pytest.mark.parametrize(
+    "x",
+    [[1, 2], (1, 2), (add, 1, 2), [], ()],
+)
+def test_nout_with_tasks(x):
+    length = len(x)
+    d = delayed(x, nout=length)
+    assert len(d) == len(list(d)) == length
+    assert d.compute() == x
+
+
 def test_kwargs():
     def mysum(a, b, c=(), **kwargs):
         return a + b + sum(c) + sum(kwargs.values())
