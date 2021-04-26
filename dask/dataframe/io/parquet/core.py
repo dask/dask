@@ -90,7 +90,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     split_row_groups=None,
-    large_graph_objects=False,
+    read_from_paths=None,
     chunksize=None,
     **kwargs,
 ):
@@ -171,12 +171,14 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
-    large_graph_objects : bool
+    read_from_paths : bool or None (default)
         Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
-        If False, the default, the engine is not allowed to insert large/complex
-        objects in the task graph (e.g. ``ParquetFileFragment`` objects). For
-        smaller datasets (i.e. smaller graphs), setting this option to True
-        may improve performance.
+        Determines whether the engine should avoid inserting large pyarrow
+        (``ParquetFileFragment``) objects in the task graph. If this option
+        is True (default), ``read_partition`` will need to regenerate the
+        appropriate fragment object from the path and row-group IDs.  This will
+        reduce the size of the task graph, but will add minor overhead to
+        ``read_partition``.
     chunksize : int, str
         The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
@@ -211,7 +213,7 @@ def read_parquet(
             engine=engine,
             gather_statistics=gather_statistics,
             split_row_groups=split_row_groups,
-            large_graph_objects=large_graph_objects,
+            read_from_paths=read_from_paths,
             chunksize=chunksize,
         )
         return df[columns]
@@ -230,7 +232,7 @@ def read_parquet(
         engine,
         gather_statistics,
         split_row_groups,
-        large_graph_objects,
+        read_from_paths,
         chunksize,
     )
 
@@ -258,7 +260,7 @@ def read_parquet(
         gather_statistics=True if chunksize else gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
-        large_graph_objects=large_graph_objects,
+        read_from_paths=read_from_paths,
         **kwargs,
     )
 

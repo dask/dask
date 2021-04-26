@@ -3123,10 +3123,10 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
         assert_eq(ddf, read_df)
 
 
-@pytest.mark.parametrize("large_graph_objects", [True, False])
+@pytest.mark.parametrize("read_from_paths", [True, False])
 @pytest.mark.parametrize("test_filter_partitioned", [True, False])
-def test_pyarrow_dataset_large_graph_objects(
-    tmpdir, large_graph_objects, test_filter_partitioned
+def test_pyarrow_dataset_read_from_paths(
+    tmpdir, read_from_paths, test_filter_partitioned
 ):
     check_pyarrow()
 
@@ -3148,7 +3148,7 @@ def test_pyarrow_dataset_large_graph_objects(
         fn,
         engine="pyarrow",
         filters=[("b", "==", "a")] if test_filter_partitioned else None,
-        large_graph_objects=large_graph_objects,
+        read_from_paths=read_from_paths,
     )
 
     if test_filter_partitioned:

@@ -490,7 +490,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=None,
-        large_graph_objects=None,
+        read_from_paths=None,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
@@ -532,7 +532,7 @@ class ArrowDatasetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
-            large_graph_objects,
+            read_from_paths,
         )
 
         # Add `common_kwargs` to the first element of `parts`.
@@ -1167,7 +1167,7 @@ class ArrowDatasetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
-        large_graph_objects,
+        read_from_paths,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1225,7 +1225,7 @@ class ArrowDatasetEngine(Engine):
             partition_info,
             data_path,
             fs,
-            large_graph_objects,
+            read_from_paths,
         )
 
     @classmethod
@@ -1450,7 +1450,7 @@ class ArrowDatasetEngine(Engine):
         partition_info,
         data_path,
         fs,
-        large_graph_objects,
+        read_from_paths,
     ):
         """Process row-groups and statistics.
 
@@ -1474,11 +1474,11 @@ class ArrowDatasetEngine(Engine):
 
         # Check if we need to pass a fragment for each output partition.
         # By default, we will avoid passing fragments in the graph unless
-        # the user has specified `large_graph_objects=True`
+        # the user has specified `read_from_paths=False`
         partitions = partition_info.get("partitions", None)
         pass_frags = (
             filters
-            and large_graph_objects
+            and (read_from_paths is False)
             and _need_fragments(filters, partition_info.get("partition_keys", None))
         )
 
@@ -1951,7 +1951,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         partition_info,
         data_path,
         fs,
-        large_graph_objects,
+        read_from_paths,
     ):
         """Process row-groups and statistics.
 
