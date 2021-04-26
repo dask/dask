@@ -224,9 +224,6 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
-@pytest.mark.xfail(
-    dd._compat.PANDAS_GT_130, reason="https://github.com/dask/dask/issues/7444"
-)
 @pytest.mark.parametrize(
     "npartitions",
     [
