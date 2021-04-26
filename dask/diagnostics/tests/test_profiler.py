@@ -25,10 +25,6 @@ prof = Profiler()
 dsk = {"a": 1, "b": 2, "c": (add, "a", "b"), "d": (mul, "a", "b"), "e": (mul, "c", "d")}
 
 dsk2 = {"a": 1, "b": 2, "c": (lambda a, b: sleep(0.1) or (a + b), "a", "b")}
-# Bokeh, via jinja https://github.com/pallets/jinja/issues/998
-ignore_abc_warning = pytest.mark.filterwarnings(
-    "ignore:Using or importing:DeprecationWarning"
-)
 
 
 def test_profiler():
@@ -171,7 +167,6 @@ def test_register(profiler):
 
 
 @pytest.mark.skipif("not bokeh")
-@ignore_abc_warning
 def test_unquote():
     from dask.diagnostics.profile_visualize import unquote
 
@@ -189,7 +184,6 @@ def test_unquote():
 
 
 @pytest.mark.skipif("not bokeh")
-@ignore_abc_warning
 def test_pprint_task():
     from dask.diagnostics.profile_visualize import pprint_task
 
@@ -227,7 +221,6 @@ def check_title(p, title):
 
 
 @pytest.mark.skipif("not bokeh")
-@ignore_abc_warning
 def test_profiler_plot():
     with prof:
         get(dsk, "e")
@@ -254,7 +247,6 @@ def test_profiler_plot():
 
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
-@ignore_abc_warning
 def test_resource_profiler_plot():
     with ResourceProfiler(dt=0.01) as rprof:
         get(dsk2, "c")
@@ -289,7 +281,6 @@ def test_resource_profiler_plot():
 
 
 @pytest.mark.skipif("not bokeh")
-@ignore_abc_warning
 def test_cache_profiler_plot():
     with CacheProfiler(metric_name="non-standard") as cprof:
         get(dsk, "e")
@@ -317,7 +308,6 @@ def test_cache_profiler_plot():
 
 @pytest.mark.skipif("not bokeh")
 @pytest.mark.skipif("not psutil")
-@ignore_abc_warning
 def test_plot_multiple():
     from dask.diagnostics.profile_visualize import visualize
 
@@ -346,7 +336,6 @@ def test_plot_multiple():
 
 
 @pytest.mark.skipif("not bokeh")
-@ignore_abc_warning
 def test_saves_file():
     with tmpfile("html") as fn:
         with prof:
@@ -360,7 +349,6 @@ def test_saves_file():
 
 
 @pytest.mark.skipif("not bokeh")
-@ignore_abc_warning
 def test_get_colors():
     from bokeh.palettes import Blues5, Viridis
 
