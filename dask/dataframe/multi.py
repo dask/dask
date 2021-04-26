@@ -364,7 +364,10 @@ def hash_join(
     )
 
     # dummy result
-    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
+    # Avoid using dummy data for a collection it is empty
+    _lhs_meta = lhs._meta_nonempty if len(lhs.columns) else lhs._meta
+    _rhs_meta = rhs._meta_nonempty if len(rhs.columns) else rhs._meta
+    meta = _lhs_meta.merge(_rhs_meta, **kwargs)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
