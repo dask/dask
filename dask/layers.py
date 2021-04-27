@@ -1,4 +1,3 @@
-import copy
 import operator
 from collections import defaultdict
 from typing import List, Optional, Tuple
@@ -946,10 +945,10 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
-            if hasattr(layer.io_func, "columns"):
-                # Apply column projection
-                layer.io_func = copy.deepcopy(layer.io_func)
-                layer.io_func.columns = columns
+            try:
+                layer.io_func = layer.io_func.project_columns(columns)
+            except AttributeError:
+                pass
             return layer, None
         else:
             # Default behavior

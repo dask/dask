@@ -1,3 +1,4 @@
+import copy
 from distutils.version import LooseVersion
 
 from fsspec.core import get_fs_token_paths
@@ -22,6 +23,16 @@ class ORCFunctionWrapper:
         self.fs = fs
         self.columns = columns
         self.schema = schema
+
+    def project_columns(self, columns):
+        """Return a new ORCFunctionWrapper object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
 
     def __call__(self, stripe_info):
         path, stripe = stripe_info

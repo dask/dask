@@ -1,3 +1,4 @@
+import copy
 import math
 import warnings
 from distutils.version import LooseVersion
@@ -62,6 +63,16 @@ class ParquetFunctionWrapper:
         #                   passed identically for all
         #                   partitions.
         self.common_kwargs = toolz.merge(common_kwargs, kwargs or {})
+
+    def project_columns(self, columns):
+        """Return a new ParquetFunctionWrapper object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
 
     def __call__(self, part):
 

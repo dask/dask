@@ -1,3 +1,4 @@
+import copy
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
@@ -61,6 +62,16 @@ class CSVFunctionWrapper:
         self.enforce = enforce
         self.kwargs = kwargs
         self.columns = None  # Used to pass `usecols`
+
+    def project_columns(self, columns):
+        """Return a new CSVFunctionWrapper object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
 
     def __call__(self, part):
 
