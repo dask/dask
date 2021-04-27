@@ -3,12 +3,10 @@ import copy
 import numpy as np
 import pandas as pd
 
-from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
 from ...utils import random_state_data
 from ..core import DataFrame, tokenize
-from .io import from_delayed
 
 __all__ = ["make_timeseries"]
 
@@ -193,6 +191,31 @@ def make_timeseries(
     return DataFrame(graph, name, head, divisions)
 
 
+class GenerateDay:
+    """
+    Wrapper Class for ``generate_day``
+    Generates daily-stock data for a day.
+    """
+
+    def __init__(self, freq):
+        self.freq = freq
+
+    def __call__(self, part):
+        s, seed = part
+        if isinstance(seed, int):
+            seed = random_state_data(1, seed)
+        return generate_day(
+            s.name,
+            s.loc["Open"],
+            s.loc["High"],
+            s.loc["Low"],
+            s.loc["Close"],
+            s.loc["Volume"],
+            freq=self.freq,
+            random_state=seed,
+        )
+
+
 def generate_day(
     date,
     open,
@@ -302,28 +325,34 @@ def daily_stock(
     from pandas_datareader import data
 
     df = data.DataReader(symbol, data_source, start, stop)
-    seeds = random_state_data(len(df), random_state=random_state)
-    parts = []
+    npartitions = len(df)
+    if random_state is None:
+        # Get random integer seed for each partition. We can
+        # call `random_state_data` in `GenerateDay`
+        seeds = np.random.randint(2e9, size=npartitions)
+    else:
+        seeds = random_state_data(npartitions, random_state=random_state)
+
+    label = "daily-stock-"
+    name = label + tokenize(symbol, start, stop, freq, data_source, seeds)
+
     divisions = []
-    for i, seed in zip(range(len(df)), seeds):
+    inputs = []
+    for i, seed in zip(range(npartitions), seeds):
         s = df.iloc[i]
         if s.isnull().any():
             continue
-        part = delayed(generate_day)(
-            s.name,
-            s.loc["Open"],
-            s.loc["High"],
-            s.loc["Low"],
-            s.loc["Close"],
-            s.loc["Volume"],
-            freq=freq,
-            random_state=seed,
-        )
-        parts.append(part)
+        inputs.append((s, seed))
         divisions.append(s.name + pd.Timedelta(hours=9))
 
-    divisions.append(s.name + pd.Timedelta(hours=12 + 4))
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=inputs,
+        io_func=GenerateDay(freq),
+        label=label,
+    )
 
+    graph = HighLevelGraph({name: layer}, {name: set()})
     meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
-
-    return from_delayed(parts, meta=meta, divisions=divisions)
+    return DataFrame(graph, name, meta, divisions)
