@@ -56,7 +56,7 @@ class BlockwiseDep:
         )
 
     @classmethod
-    def __dask_distributed_pack__(cls, state):
+    def __dask_distributed_unpack__(cls, state):
         raise NotImplementedError(
             "Must define `__dask_distributed_unpack__` for `BlockwiseDep` subclass."
         )
@@ -72,7 +72,7 @@ class BlockwiseDepDict(BlockwiseDep):
         self,
         mapping: dict,
         numblocks: Optional[Tuple[int, ...]] = None,
-        produces_tasks: Optional[bool] = False,
+        produces_tasks: bool = False,
     ):
         self.mapping = mapping
         self.produces_tasks = produces_tasks
@@ -438,8 +438,7 @@ class Blockwise(Layer):
 
         # Dump the function if concatenate is False, because
         # we will not need to construct a nested task.  For now,
-        # we also need to check if the `io_deps` contain "complex"
-        # dependencies.
+        # we also need to check if the `io_deps` produce nested tasks.
         func = (
             to_serialize(dsk[0])
             if (self.concatenate or inline_tasks)
