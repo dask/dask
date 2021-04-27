@@ -565,21 +565,6 @@ def svd_flip(u, v, u_based_decision=False):
     return u, v
 
 
-def matmul_safe(a, b):
-    xp = np
-
-    if is_cupy_type(a):
-        import cupy
-
-        xp = cupy
-
-    chunk = xp.matmul(a, b)
-    # Since we have performed the contraction via matmul
-    # but blockwise expects all dimensions back, we need
-    # to add one dummy dimension back
-    return chunk[..., xp.newaxis]
-
-
 def scipy_linalg_safe(func_name, *args, **kwargs):
     # need to evaluate at least the first input array
     # for gpu/cpu checking

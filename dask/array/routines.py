@@ -14,7 +14,7 @@ from ..compatibility import apply
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, funcname, is_arraylike
+from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
 from .core import (
     Array,
@@ -37,7 +37,6 @@ from .ufunc import multiply, sqrt
 from .utils import (
     array_safe,
     asarray_safe,
-    matmul_safe,
     meta_from_array,
     safe_wraps,
     validate_axis,
@@ -322,7 +321,18 @@ def vdot(a, b):
 
 
 def _matmul(a, b):
-    return matmul_safe(a, b)
+    xp = np
+
+    if is_cupy_type(a):
+        import cupy
+
+        xp = cupy
+
+    chunk = xp.matmul(a, b)
+    # Since we have performed the contraction via matmul
+    # but blockwise expects all dimensions back, we need
+    # to add one dummy dimension back
+    return chunk[..., xp.newaxis]
 
 
 @derived_from(np)
