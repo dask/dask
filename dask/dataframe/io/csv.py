@@ -60,7 +60,7 @@ class CSVFunctionWrapper:
         self.dtypes = dtypes
         self.enforce = enforce
         self.kwargs = kwargs
-        self.columns = None
+        self.columns = None  # Used to pass `usecols`
 
     def __call__(self, part):
 
@@ -81,12 +81,15 @@ class CSVFunctionWrapper:
         # for the first block of each file
         write_header = False
         rest_kwargs = self.kwargs.copy()
+        if self.columns is not None:
+            if rest_kwargs.get("usecols", None) is None:
+                rest_kwargs["usecols"] = self.columns
         if not is_first:
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
         # Call `pandas_read_text`
-        out = pandas_read_text(
+        return pandas_read_text(
             self.reader,
             block,
             self.header,
@@ -97,9 +100,6 @@ class CSVFunctionWrapper:
             self.enforce,
             path_info,
         )
-        if self.columns is None:
-            return out
-        return out[self.columns]
 
 
 def pandas_read_text(
