@@ -1,7 +1,11 @@
+import copy
+
 import numpy as np
 import pandas as pd
 
 from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
+from ...layers import DataFrameIOLayer
 from ...utils import random_state_data
 from ..core import DataFrame, tokenize
 from .io import from_delayed
@@ -62,6 +66,41 @@ make = {
     object: make_string,
     "category": make_categorical,
 }
+
+
+class MakeTimeseriesPart:
+    """
+    Wrapper Class for ``make_timeseries_part``
+    Makes a timeseries partition.
+    """
+
+    def __init__(self, dtypes, freq, kwargs):
+        self.dtypes = dtypes
+        self.freq = freq
+        self.kwargs = kwargs
+        self.columns = None
+
+    def project_columns(self, columns):
+        """Return a new MakeTimeseriesPart object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
+
+    def __call__(self, part):
+        divisions, state_data = part
+        if isinstance(state_data, int):
+            state_data = random_state_data(1, state_data)
+        if self.columns:
+            dtypes = {k: v for k, v in self.dtypes.items() if k in self.columns}
+        else:
+            dtypes = self.dtypes
+        return make_timeseries_part(
+            divisions[0], divisions[1], dtypes, self.freq, state_data, self.kwargs
+        )
 
 
 def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
@@ -126,24 +165,51 @@ def make_timeseries(
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
     divisions = list(pd.date_range(start=start, end=end, freq=partition_freq))
-    state_data = random_state_data(len(divisions) - 1, seed)
-    name = "make-timeseries-" + tokenize(
-        start, end, dtypes, freq, partition_freq, state_data
+    npartitions = len(divisions) - 1
+    if seed is None:
+        # Get random integer seed for each partition. We can
+        # call `random_state_data` in `MakeTimeseriesPart`
+        state_data = np.random.randint(2e9, size=npartitions)
+    else:
+        state_data = random_state_data(npartitions, seed)
+    label = "make-timeseries-"
+    name = label + tokenize(start, end, dtypes, freq, partition_freq, state_data)
+
+    # Build parts
+    parts = []
+    for i in range(len(divisions) - 1):
+        parts.append((divisions[i : i + 2], state_data[i]))
+
+    # Construct Layer and Collection
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=parts,
+        io_func=MakeTimeseriesPart(dtypes, freq, kwargs),
+        label=label,
     )
-    dsk = {
-        (name, i): (
-            make_timeseries_part,
-            divisions[i],
-            divisions[i + 1],
-            dtypes,
-            freq,
-            state_data[i],
-            kwargs,
-        )
-        for i in range(len(divisions) - 1)
-    }
+    graph = HighLevelGraph({name: layer}, {name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(dsk, name, head, divisions)
+    return DataFrame(graph, name, head, divisions)
+
+    # state_data = random_state_data(len(divisions) - 1, seed)
+    # name = "make-timeseries-" + tokenize(
+    #     start, end, dtypes, freq, partition_freq, state_data
+    # )
+    # dsk = {
+    #     (name, i): (
+    #         make_timeseries_part,
+    #         divisions[i],
+    #         divisions[i + 1],
+    #         dtypes,
+    #         freq,
+    #         state_data[i],
+    #         kwargs,
+    #     )
+    #     for i in range(len(divisions) - 1)
+    # }
+    # head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
+    # return DataFrame(dsk, name, head, divisions)
 
 
 def generate_day(
