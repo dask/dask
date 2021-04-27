@@ -83,7 +83,6 @@ def read_orc(path, columns=None, storage_options=None):
     fs, fs_token, paths = get_fs_token_paths(
         path, mode="rb", storage_options=storage_options
     )
-    npartitions = 0
     schema = None
     parts = []
     for path in paths:
@@ -95,7 +94,6 @@ def read_orc(path, columns=None, storage_options=None):
                 raise ValueError("Incompatible schemas while parsing ORC files")
         for stripe in range(o.nstripes):
             parts.append((path, stripe))
-            npartitions += 1
     schema = _get_pyarrow_dtypes(schema, categories=None)
     if columns is not None:
         ex = set(columns) - set(schema)
@@ -118,4 +116,4 @@ def read_orc(path, columns=None, storage_options=None):
     columns = list(schema) if columns is None else columns
     meta = _meta_from_dtypes(columns, schema, [], [])
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-    return DataFrame(graph, output_name, meta, [None] * (npartitions + 1))
+    return DataFrame(graph, output_name, meta, [None] * (len(parts) + 1))

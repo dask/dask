@@ -56,13 +56,12 @@ class ParquetFunctionWrapper:
         self.index = index
 
         # `kwargs` = user-defined kwargs to be passed
-        #            indetically for all partitions.
-        self.kwargs = kwargs
-
+        #            identically for all partitions.
+        #
         # `common_kwargs` = kwargs set by engine to be
         #                   passed identically for all
         #                   partitions.
-        self.common_kwargs = common_kwargs
+        self.common_kwargs = toolz.merge(common_kwargs, kwargs or {})
 
     def __call__(self, part):
 
@@ -76,7 +75,7 @@ class ParquetFunctionWrapper:
             [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
             self.index,
-            toolz.merge(self.common_kwargs, self.kwargs or {}),
+            self.common_kwargs,
         )
 
 
