@@ -241,7 +241,7 @@ class Blockwise(Layer):
     dsk: dict
         A small graph to apply per-output-block.  May include keys from the
         input indices.
-    indices: Tuple[str, Tuple[str, ...]]
+    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
         Or includes literals, which have ``None`` for an index value.
@@ -262,7 +262,7 @@ class Blockwise(Layer):
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
-    io_deps: Dict[Str, BlockwiseDep] (optional)
+    io_deps: Dict[str, BlockwiseDep] (optional)
         Dictionary containing the mapping between "place-holder" collection
         keys and ``BlockwiseDep``-based objects.
         **WARNING**: This argument should only be used internally (for culling,
@@ -436,9 +436,23 @@ class Blockwise(Layer):
             }
             inline_tasks = inline_tasks or blockwise_dep.produces_tasks
 
-        # Dump the function if concatenate is False, because
-        # we will not need to construct a nested task.  For now,
-        # we also need to check if the `io_deps` produce nested tasks.
+        # Dump (pickle + cache) the function here if we know `make_blockwise_graph`
+        # will NOT be producing "nested" tasks (via `__dask_distributed_unpack__`).
+        #
+        # If `make_blockwise_graph` DOES need to produce nested tasks later on, it
+        # will need to call `to_serialize` on the entire task.  That will be a
+        # problem if the function was already pickled here. Therefore, we want to
+        # call `to_serialize` on the function if we know there will be nested tasks.
+        #
+        # We know there will be nested tasks if either:
+        #   (1) `concatenate=True`   # Check `self.concatenate`
+        #   (2) `inline_tasks=True`  # Check `BlockwiseDep.produces_tasks`
+        #
+        # We do not call `to_serialize` in ALL cases, because that code path does
+        # not cache the function on the scheduler or worker (or warn if there are
+        # large objects being passed into the graph).  However, in the future,
+        # single-pass serialization improvements should allow us to remove this
+        # special logic altogether.
         func = (
             to_serialize(dsk[0])
             if (self.concatenate or inline_tasks)

@@ -875,17 +875,29 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
 
     Parameters
     ----------
-    name : string
+    name : str
         Name to use for the constructed layer.
-    columns : string, list or None
+    columns : str, list or None
         Field name(s) to read in as columns in the output.
     inputs : list[tuple]
-        List of input-argument tuples. Each element will be
-        passed to ``io_func`` to construct a single output
-        partition.
+        List of arguments to be passed to ``io_func`` so
+        that the materialized task to produce partition ``i``
+        will be: ``(<io_func>, inputs[i])``.  Note that each
+        element of ``inputs`` is typically a tuple of arguments.
     io_func : callable
         A callable function that takes in a single tuple
         of arguments, and outputs a DataFrame partition.
+    label : str (optional)
+        String to use as a prefix in the place-holder collection
+        name. If nothing is specified (default), "subset-" will
+        be used.
+    produces_tasks : bool (optional)
+        Whether one or more elements of `inputs` is expected to
+        contain a nested task. This argument in only used for
+        serialization purposes, and will be deprecated in the
+        future. Default is False.
+    annotations: dict (optional)
+        Layer annotations to pass through to Blockwise.
     """
 
     def __init__(
@@ -894,7 +906,6 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         columns,
         inputs,
         io_func,
-        part_ids=None,
         label=None,
         produces_tasks=False,
         annotations=None,
@@ -903,14 +914,13 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.columns = columns
         self.inputs = inputs
         self.io_func = io_func
-        self.part_ids = list(range(len(inputs))) if part_ids is None else part_ids
         self.label = label
         self.produces_tasks = produces_tasks
         self.annotations = annotations
 
         # Define mapping between key index and "part"
         io_arg_map = BlockwiseDepDict(
-            {(i,): self.inputs[i] for i in self.part_ids},
+            {(i,): inp for i, inp in enumerate(self.inputs)},
             produces_tasks=self.produces_tasks,
         )
 
@@ -933,7 +943,6 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 list(columns),
                 self.inputs,
                 self.io_func,
-                part_ids=self.part_ids,
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
@@ -948,5 +957,5 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
 
     def __repr__(self):
         return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
+            self.name, len(self.inputs), list(self.columns)
         )
