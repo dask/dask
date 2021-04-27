@@ -380,6 +380,46 @@ async def test_combo_of_layer_types(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_blockwise_concatenate(c, s, a, b):
+    """Test a blockwise operation with concatenated axes"""
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def f(x, y):
+        da.assert_eq(y, [[0, 1, 2]])
+        return x
+
+    x = da.from_array(np.array([0, 1, 2]))
+    y = da.from_array(np.array([[0, 1, 2]]))
+    z = da.blockwise(
+        f,
+        ("i"),
+        x,
+        ("i"),
+        y,
+        ("ij"),
+        dtype=x.dtype,
+        concatenate=True,
+    )
+
+    await c.compute(z, optimize_graph=False)
+    da.assert_eq(z, x)
+
+
+@gen_cluster(client=True)
+async def test_map_partitions_partition_info(c, s, a, b):
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
+    res = await c.compute(
+        ddf.map_partitions(lambda x, partition_info=None: partition_info)
+    )
+    assert res[0] == {"number": 0, "division": 0}
+    assert res[1] == {"number": 1, "division": 5}
+
+
+@gen_cluster(client=True)
 async def test_annotation_pack_unpack(c, s, a, b):
     hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
     packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])

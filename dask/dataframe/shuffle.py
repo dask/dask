@@ -346,6 +346,11 @@ def shuffle(
 
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
+    elif hasattr(index, "to_frame"):
+        # If this is an index, we should still convert to a
+        # DataFrame. Otherwise, the hashed values of a column
+        # selection will not match (important when merging).
+        index = index.to_frame()
 
     partitions = index.map_partitions(
         partitioning_index,
@@ -732,7 +737,16 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions):
-    partitions = divisions.searchsorted(s, side="right") - 1
+    try:
+        partitions = divisions.searchsorted(s, side="right") - 1
+    except TypeError:
+        # When `searchsorted` fails with `TypeError`, it may be
+        # caused by nulls in `s`. Try again with the null-values
+        # explicitly mapped to the first partition.
+        partitions = np.empty(len(s), dtype="int32")
+        partitions[s.isna()] = 0
+        not_null = s.notna()
+        partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
     partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
     return partitions
 

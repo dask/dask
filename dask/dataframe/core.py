@@ -32,6 +32,7 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
+from ..optimization import SubgraphCallable
 from ..utils import (
     Dispatch,
     IndexCallable,
@@ -3710,7 +3711,11 @@ class Index(Series):
             raise NotImplementedError()
 
         return self.map_partitions(
-            M.to_frame, index, name, meta=self._meta.to_frame(index, name)
+            M.to_frame,
+            index,
+            name,
+            meta=self._meta.to_frame(index, name),
+            transform_divisions=False,
         )
 
     @insert_meta_param_description(pad=12)
@@ -5642,17 +5647,22 @@ def map_partitions(
         dsk = dict(dsk)
 
         for k, v in dsk.items():
-            vv = v
-            v = v[0]
+            subgraph = v[0]
             number = k[-1]
             assert isinstance(number, int)
             info = {"number": number, "division": divisions[number]}
-            v = copy.copy(v)  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__dummy__": info})
-            v.dsk[key] = task
-            dsk[k] = (v,) + vv[1:]
+            # Replace the __dummy__ keyword argument with `info`
+            subgraph_dsk = copy.copy(subgraph.dsk)
+            [(key, task)] = subgraph_dsk.items()
+            subgraph_dsk[key] = subs(task, {"__dummy__": info})
+            dsk[k] = (
+                SubgraphCallable(
+                    dsk=subgraph_dsk,
+                    outkey=subgraph.outkey,
+                    inkeys=subgraph.inkeys,
+                    name=f"{subgraph.name}-info-{tokenize(info)}",
+                ),
+            ) + v[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
@@ -6264,6 +6274,9 @@ def repartition_freq(df, freq=None):
     """ Repartition a timeseries dataframe by a new frequency """
     if not isinstance(df.divisions[0], pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
+
+    freq = _map_freq_to_period_start(freq)
+
     try:
         start = df.divisions[0].ceil(freq)
     except ValueError:
@@ -6279,6 +6292,45 @@ def repartition_freq(df, freq=None):
             divisions = [df.divisions[0]] + divisions
 
     return df.repartition(divisions=divisions)
+
+
+def _map_freq_to_period_start(freq):
+    """Ensure that the frequency pertains to the **start** of a period.
+
+    If e.g. `freq='M'`, then the divisions are:
+        - 2021-31-1 00:00:00 (start of February partition)
+        - 2021-2-28 00:00:00 (start of March partition)
+        - ...
+
+    but this **should** be:
+        - 2021-2-1 00:00:00 (start of February partition)
+        - 2021-3-1 00:00:00 (start of March partition)
+        - ...
+
+    Therefore, we map `freq='M'` to `freq='MS'` (same for quarter and year).
+    """
+
+    if not isinstance(freq, str):
+        return freq
+
+    offset = pd.tseries.frequencies.to_offset(freq)
+    offset_type_name = type(offset).__name__
+
+    if not offset_type_name.endswith("End"):
+        return freq
+
+    new_offset = offset_type_name[: -len("End")] + "Begin"
+    try:
+        new_offset_type = getattr(pd.tseries.offsets, new_offset)
+        if "-" in freq:
+            _, anchor = freq.split("-")
+            anchor = "-" + anchor
+        else:
+            anchor = ""
+        n = str(offset.n) if offset.n != 1 else ""
+        return f"{n}{new_offset_type._prefix}{anchor}"
+    except AttributeError:
+        return freq
 
 
 def repartition_size(df, size):

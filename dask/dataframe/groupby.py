@@ -1963,6 +1963,6 @@ def _value_counts(x, **kwargs):
 
 
 def _value_counts_aggregate(series_gb):
-    to_concat = {k: v.sum(level=1) for k, v in series_gb}
+    to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
     names = list(series_gb.obj.index.names)
     return pd.Series(pd.concat(to_concat, names=names))
