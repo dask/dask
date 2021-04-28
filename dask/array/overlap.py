@@ -2,6 +2,7 @@ import warnings
 from itertools import product
 from numbers import Integral
 from operator import getitem
+from typing import Mapping
 
 import numpy as np
 from tlz import concat, get, merge, partial, pipe
@@ -9,7 +10,7 @@ from tlz.curried import map
 
 from ..base import tokenize
 from ..core import flatten
-from ..highlevelgraph import HighLevelGraph, Layer
+from ..highlevelgraph import Layer
 from ..utils import concrete, derived_from
 from . import chunk, numpy_compat
 from .core import (
@@ -32,13 +33,25 @@ class ArrayOverlapLayer(Layer):
     ----------
     name : str
         Name of new output overlap array.
+    array : Dask array
+    axes: Mapping
+        Axes dictionary indicating overlap in each dimension,
+        e.g. ``{'0': 1, '1': 1}``
     """
+
+    name: str
+    # array: # Dask array
+    axes: Mapping[str, int]
 
     def __init__(
         self,
         name,
+        array,
+        axes,
     ):
         self.name = name
+        self.array = array
+        self.axes = axes
 
     def __repr__(self):
         return "ArrayOverlapLayer<name='{}'".format(self.name)
@@ -62,39 +75,38 @@ class ArrayOverlapLayer(Layer):
     def __len__(self):
         return len(self._dict)
 
-    def _cull_dependencies(self, keys, parts_out=None):
-        """Determine the necessary dependencies to produce `keys`."""
-        # deps = defaultdict(set)
-        # TODO
-        pass
-
-    def _cull(self):
-        # TODO - do we need an equivalent to parts_out
-        # return SimpleShuffleLayer(self.name)
-        pass
-
-    def cull(self, keys, all_keys):
-        """Cull a ArrayOverlapLayer HighLevelGraph layer.
-
-        The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
-        Therefore, "culling" the layer only requires us to reset this
-        parameter.
-        """
-        parts_out = self._keys_to_parts(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != self.parts_out:
-            culled_layer = self._cull(parts_out)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
 
     def _construct_graph(self):
-        """Construct graph for a simple shuffle operation."""
-        # TODO - here's the important bit
-        # see ShuffleLayer/SimpleShuffleLayer _construct_graph,
-        # and also the make_blockwise_graph() function used with Blockwise
-        # return dsk
+        """Construct graph for a simple overlap operation."""
+        x = self.array
+        axes = self.axes
+        dims = list(map(len, x.chunks))
+        expand_key2 = partial(expand_key, dims=dims, axes=axes)
+
+        # Make keys for each of the surrounding sub-arrays
+        interior_keys = pipe(
+            x.__dask_keys__(), flatten, map(expand_key2), map(flatten), concat, list
+        )
+
+        name = "overlap-" + tokenize(x, axes)
+        getitem_name = "getitem-" + tokenize(x, axes)
+        interior_slices = {}
+        overlap_blocks = {}
+        for k in interior_keys:
+            frac_slice = fractional_slice((x.name,) + k, axes)
+            if (x.name,) + k != frac_slice:
+                interior_slices[(getitem_name,) + k] = frac_slice
+            else:
+                interior_slices[(getitem_name,) + k] = (x.name,) + k
+                overlap_blocks[(name,) + k] = (
+                    concatenate3,
+                    (concrete, expand_key2((None,) + k, name=getitem_name)),
+                )
+
+        dsk = merge(interior_slices, overlap_blocks)
+        return dsk
 
 
 def fractional_slice(task, axes):
@@ -192,45 +204,10 @@ def expand_key(k, dims, name=None, axes=None):
     return result
 
 
-def overlap_internal(x, axes):
-    """Share boundaries between neighboring blocks
-
-    Parameters
-    ----------
-
-    x: da.Array
-        A dask array
-    axes: dict
-        The size of the shared boundary per axis
-
-    The axes input informs how many cells to overlap between neighboring blocks
-    {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
-    """
-    dims = list(map(len, x.chunks))
-    expand_key2 = partial(expand_key, dims=dims, axes=axes)
-
-    # Make keys for each of the surrounding sub-arrays
-    interior_keys = pipe(
-        x.__dask_keys__(), flatten, map(expand_key2), map(flatten), concat, list
-    )
-
-    name = "overlap-" + tokenize(x, axes)
-    getitem_name = "getitem-" + tokenize(x, axes)
-    interior_slices = {}
-    overlap_blocks = {}
-    for k in interior_keys:
-        frac_slice = fractional_slice((x.name,) + k, axes)
-        if (x.name,) + k != frac_slice:
-            interior_slices[(getitem_name,) + k] = frac_slice
-        else:
-            interior_slices[(getitem_name,) + k] = (x.name,) + k
-            overlap_blocks[(name,) + k] = (
-                concatenate3,
-                (concrete, expand_key2((None,) + k, name=getitem_name)),
-            )
-
+def _overlap_internal_chunks(original_chunks, axes):
+    """Get new chunks for array with overlap."""
     chunks = []
-    for i, bds in enumerate(x.chunks):
+    for i, bds in enumerate(original_chunks):
         depth = axes.get(i, 0)
         if isinstance(depth, tuple):
             left_depth = depth[0]
@@ -248,9 +225,26 @@ def overlap_internal(x, axes):
             for bd in bds[1:-1]:
                 mid.append(bd + left_depth + right_depth)
             chunks.append(left + mid + right)
+    return chunks
 
-    dsk = merge(interior_slices, overlap_blocks)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
+
+def overlap_internal(x, axes):
+    """Share boundaries between neighboring blocks
+
+    Parameters
+    ----------
+
+    x: da.Array
+        A dask array
+    axes: dict
+        The size of the shared boundary per axis
+
+    The axes input informs how many cells to overlap between neighboring blocks
+    {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
+    """
+    name = "overlap-" + tokenize(x, axes)
+    graph = ArrayOverlapLayer(name=name, array=x, axes=axes, dependencies=[x])
+    chunks = _overlap_internal_chunks(x.chunks, axes)
 
     return Array(graph, name, chunks, meta=x)
 
@@ -600,7 +594,6 @@ def overlap(x, depth, boundary):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
-    breakpoint()
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
