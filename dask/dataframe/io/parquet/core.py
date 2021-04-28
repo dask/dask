@@ -210,6 +210,7 @@ def read_parquet(
     See Also
     --------
     to_parquet
+    pyarrow.parquet.ParquetDataset
     """
 
     if isinstance(columns, str):
