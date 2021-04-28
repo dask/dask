@@ -637,7 +637,7 @@ class BroadcastJoinLayer(Layer):
     def __len__(self):
         return len(self._dict)
 
-    def __dask_distributed_pack__(self, client):
+    def __dask_distributed_pack__(self, *args, **kwargs):
         import pickle
 
         # Pickle complex merge_kwargs elements. Also
@@ -744,9 +744,9 @@ class BroadcastJoinLayer(Layer):
             self.lhs_npartitions,
             self.rhs_name,
             self.rhs_npartitions,
-            self.merge_kwargs,
             annotations=self.annotations,
             parts_out=parts_out,
+            **self.merge_kwargs,
         )
 
     def cull(self, keys, all_keys):

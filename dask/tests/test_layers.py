@@ -41,7 +41,7 @@ def _dataframe_shuffle():
 
     # Perform a computation using an HLG-based shuffle
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
-    return dd.from_pandas(df, npartitions=2)
+    return dd.from_pandas(df, npartitions=2).shuffle("a", shuffle="tasks")
 
 
 def _dataframe_broadcast_join():
@@ -52,7 +52,7 @@ def _dataframe_broadcast_join():
     df = pd.DataFrame({"a": range(10), "b": range(10, 20)})
     ddf1 = dd.from_pandas(df, npartitions=4)
     ddf2 = dd.from_pandas(df, npartitions=1)
-    return ddf1.merge(ddf2, how="left", broadcast=True)
+    return ddf1.merge(ddf2, how="left", broadcast=True, shuffle="tasks")
 
 
 def _array_creation():
