@@ -62,7 +62,7 @@ class Layer(collections.abc.Mapping):
     def __init__(
         self,
         annotations: Mapping[str, Any] = None,
-        collection_annotations: Mapping[str, Any] = {},
+        collection_annotations: Mapping[str, Any] = None,
     ):
         """Initialize Layer object.
 
@@ -75,8 +75,7 @@ class Layer(collections.abc.Mapping):
             They signal intent without enforcing hard constraints.
             As such, they are primarily designed for use with the distributed
             scheduler. See the dask.annotate function for more information.
-        collection_annotations : Mapping[str, Any], optional
-            By default an empty dict.
+        collection_annotations : Mapping[str, Any], optional. By default, None.
             Experimental, intended to assist with visualizing the performance
             characteristics of Dask computations.
             These annotations are *not* passed to the distributed scheduler.
@@ -89,7 +88,7 @@ class Layer(collections.abc.Mapping):
             self.collection_annotations = collection_annotations
         else:
             self.collection_annotations = copy.copy(
-                config.get("collection_annotations", {})
+                config.get("collection_annotations", None)
             )
 
     @abc.abstractmethod
