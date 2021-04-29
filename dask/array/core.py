@@ -1147,6 +1147,32 @@ class Array(DaskMethodsMixin):
             if result is not None:
                 self = result
 
+        try:
+            layer = self.dask.layers[name]
+        except (AttributeError, KeyError):
+            # self is no longer an Array after applying the plugins, OR
+            # a plugin replaced the HighLevelGraph with a plain dict, OR
+            # name is not the top layer's name (this can happen after the layer is
+            # manipulated, to avoid a collision)
+            pass
+        else:
+            if layer.collection_annotations is None:
+                layer.collection_annotations = {
+                    "type": type(self),
+                    "chunk_type": type(self._meta),
+                    "chunks": self.chunks,
+                    "dtype": dtype,
+                }
+            else:
+                layer.collection_annotations.update(
+                    {
+                        "type": type(self),
+                        "chunk_type": type(self._meta),
+                        "chunks": self.chunks,
+                        "dtype": dtype,
+                    }
+                )
+
         return self
 
     def __reduce__(self):
