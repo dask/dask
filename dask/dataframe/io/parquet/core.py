@@ -375,12 +375,16 @@ def read_parquet(
     return new_dd_object(subgraph, name, meta, divisions)
 
 
+def check_multi_support(engine):
+    return hasattr(engine, "multi_support") and engine.multi_support
+
+
 def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
     if isinstance(part, list):
-        if len(part) == 1 or part[0][1] or not hasattr(engine, "read_partition_multi"):
+        if len(part) == 1 or part[0][1] or not check_multi_support(engine):
             # Part kwargs expected
             func = engine.read_partition
             dfs = [
@@ -391,7 +395,7 @@ def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
         else:
             # No part specific kwargs, let engine read
             # list of parts at once
-            df = engine.read_partition_multi(
+            df = engine.read_partition(
                 fs, [p[0] for p in part], columns.copy(), index, **kwargs
             )
     else:

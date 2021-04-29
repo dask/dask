@@ -545,9 +545,10 @@ class ArrowDatasetEngine(Engine):
 
         return (meta, stats, parts, index)
 
+    @property
     @classmethod
-    def read_partition_multi(cls, *args, **kwargs):
-        return cls.read_partition(*args, **kwargs)
+    def multi_support(cls):
+        return cls == ArrowDatasetEngine
 
     @classmethod
     def read_partition(
@@ -2078,6 +2079,11 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             return None
         else:
             return meta
+
+    @property
+    @classmethod
+    def multi_support(cls):
+        return cls == ArrowLegacyEngine
 
 
 # Compatibility access to legacy ArrowEngine
