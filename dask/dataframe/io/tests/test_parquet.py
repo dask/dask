@@ -13,11 +13,12 @@ import pytest
 import dask
 import dask.dataframe as dd
 import dask.multiprocessing
+from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
-from dask.dataframe.io.parquet.core import ParquetSubgraph
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
-from dask.dataframe.optimize import optimize_read_parquet_getitem
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
+from dask.layers import DataFrameIOLayer
 from dask.utils import natural_sort_key, parse_bytes
 
 try:
@@ -833,6 +834,35 @@ def test_append_different_columns(tmpdir, engine):
     with pytest.raises(ValueError) as excinfo:
         ddf3.to_parquet(tmp, engine=engine, append=True)
     assert "Appended dtypes" in str(excinfo.value)
+
+
+def test_append_dict_column(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/7492
+
+    if engine == "fastparquet":
+        pytest.xfail("Fastparquet engine is missing dict-column support")
+    elif pa.__version__ < LooseVersion("1.0.1"):
+        pytest.skip("Newer PyArrow version required for dict-column support.")
+
+    tmp = str(tmpdir)
+    dts = pd.date_range("2020-01-01", "2021-01-01")
+    df = pd.DataFrame(
+        {"value": [{"x": x} for x in range(len(dts))]},
+        index=dts,
+    )
+    ddf1 = dd.from_pandas(df, npartitions=1)
+
+    # Write ddf1 to tmp, and then append it again
+    ddf1.to_parquet(tmp, append=True, engine=engine)
+    ddf1.to_parquet(tmp, append=True, engine=engine, ignore_divisions=True)
+
+    # Read back all data (ddf1 + ddf1)
+    ddf2 = dd.read_parquet(tmp, engine=engine)
+
+    # Check computed result
+    expect = pd.concat([df, df])
+    result = ddf2.compute()
+    assert_eq(expect, result)
 
 
 @write_read_engines_xfail
@@ -2420,11 +2450,11 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     # Write ddf back to disk to check that the round trip
     # preserves the getitem optimization
     out = ddf.to_frame().to_parquet(tmp_path_wt, engine=engine, compute=False)
-    dsk = optimize_read_parquet_getitem(out.dask, keys=[out.key])
+    dsk = optimize_dataframe_getitem(out.dask, keys=[out.key])
 
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
@@ -2437,10 +2467,10 @@ def test_getitem_optimization_empty(tmpdir, engine):
     ddf.to_parquet(fn, engine=engine)
 
     df2 = dd.read_parquet(fn, columns=[], engine=engine)
-    dsk = optimize_read_parquet_getitem(df2.dask, keys=[df2._name])
+    dsk = optimize_dataframe_getitem(df2.dask, keys=[df2._name])
 
     subgraph = next(iter((dsk.layers.values())))
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == []
 
 
@@ -2462,20 +2492,6 @@ def test_getitem_optimization_multi(tmpdir, engine):
     assert_eq(a3, b3)
 
 
-def test_subgraph_getitem():
-    meta = pd.DataFrame(columns=["a"])
-    subgraph = ParquetSubgraph("name", "pyarrow", "fs", meta, [], [], [0, 1, 2], {})
-
-    with pytest.raises(KeyError):
-        subgraph["foo"]
-
-    with pytest.raises(KeyError):
-        subgraph[("name", -1)]
-
-    with pytest.raises(KeyError):
-        subgraph[("name", 3)]
-
-
 def test_blockwise_parquet_annotations(tmpdir):
     check_engine()
 
@@ -2490,8 +2506,53 @@ def test_blockwise_parquet_annotations(tmpdir):
     layers = ddf.__dask_graph__().layers
     assert len(layers) == 1
     layer = next(iter((layers.values())))
-    assert isinstance(layer, ParquetSubgraph)
+    assert isinstance(layer, DataFrameIOLayer)
     assert layer.annotations == {"foo": "bar"}
+
+
+def test_optimize_blockwise_parquet(tmpdir):
+    check_engine()
+
+    size = 40
+    npartitions = 2
+    tmp = str(tmpdir)
+    df = pd.DataFrame({"a": np.arange(size, dtype=np.int32)})
+    expect = dd.from_pandas(df, npartitions=npartitions)
+    expect.to_parquet(tmp)
+    ddf = dd.read_parquet(tmp)
+
+    # `ddf` should now have ONE Blockwise layer
+    layers = ddf.__dask_graph__().layers
+    assert len(layers) == 1
+    assert isinstance(list(layers.values())[0], Blockwise)
+
+    # Check single-layer result
+    assert_eq(ddf, expect)
+
+    # Increment by 1
+    ddf += 1
+    expect += 1
+
+    # Increment by 10
+    ddf += 10
+    expect += 10
+
+    # `ddf` should now have THREE Blockwise layers
+    layers = ddf.__dask_graph__().layers
+    assert len(layers) == 3
+    assert all(isinstance(layer, Blockwise) for layer in layers.values())
+
+    # Check that `optimize_blockwise` fuses all three
+    # `Blockwise` layers together into a singe `Blockwise` layer
+    keys = [(ddf._name, i) for i in range(npartitions)]
+    graph = optimize_blockwise(ddf.__dask_graph__(), keys)
+    layers = graph.layers
+    name = list(layers.keys())[0]
+    assert len(layers) == 1
+    assert isinstance(layers[name], Blockwise)
+
+    # Check final result
+    assert_eq(ddf, expect)
 
 
 def test_split_row_groups(tmpdir, engine):
@@ -2743,10 +2804,10 @@ def test_read_parquet_getitem_skip_when_getting_read_parquet(tmpdir, engine):
 
     # Make sure we are still allowing the getitem optimization
     ddf = ddf["A"]
-    dsk = optimize_read_parquet_getitem(ddf.dask, keys=[(ddf._name, 0)])
+    dsk = optimize_dataframe_getitem(ddf.dask, keys=[(ddf._name, 0)])
     read = [key for key in dsk.layers if key.startswith("read-parquet")][0]
     subgraph = dsk.layers[read]
-    assert isinstance(subgraph, ParquetSubgraph)
+    assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == ["A"]
 
 
@@ -2875,6 +2936,42 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
     # this should not fail, but instead produce timestamps that are in the valid range
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
+
+
+@pytest.mark.parametrize(
+    "write_cols",
+    [["part", "col"], ["part", "kind", "col"]],
+)
+def test_partitioned_column_overlap(tmpdir, engine, write_cols):
+
+    tmpdir.mkdir("part=a")
+    tmpdir.mkdir("part=b")
+    path0 = str(tmpdir.mkdir("part=a/kind=x"))
+    path1 = str(tmpdir.mkdir("part=b/kind=x"))
+    path0 = os.path.join(path0, "data.parquet")
+    path1 = os.path.join(path1, "data.parquet")
+
+    _df1 = pd.DataFrame({"part": "a", "kind": "x", "col": range(5)})
+    _df2 = pd.DataFrame({"part": "b", "kind": "x", "col": range(5)})
+    df1 = _df1[write_cols]
+    df2 = _df2[write_cols]
+    df1.to_parquet(path0, index=False)
+    df2.to_parquet(path1, index=False)
+
+    if engine == "fastparquet":
+        path = [path0, path1]
+    else:
+        path = str(tmpdir)
+
+    if write_cols == ["part", "kind", "col"]:
+        result = dd.read_parquet(path, engine=engine)
+        expect = pd.concat([_df1, _df2], ignore_index=True)
+        assert_eq(result, expect, check_index=False)
+    else:
+        # For now, partial overlap between partition columns and
+        # real columns is not allowed
+        with pytest.raises(ValueError):
+            dd.read_parquet(path, engine=engine)
 
 
 @fp_pandas_xfail
