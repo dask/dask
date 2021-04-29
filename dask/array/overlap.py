@@ -48,10 +48,16 @@ class ArrayOverlapLayer(Layer):
         name,
         array,
         axes,
+        chunks,
+        token,
+        dask_keys,
     ):
         self.name = name
         self.array = array
         self.axes = axes
+        self.chunks = chunks
+        self.token = token
+        self.dask_keys = dask_keys
 
     def __repr__(self):
         return "ArrayOverlapLayer<name='{}'".format(self.name)
@@ -82,25 +88,30 @@ class ArrayOverlapLayer(Layer):
         """Construct graph for a simple overlap operation."""
         x = self.array
         axes = self.axes
-        dims = list(map(len, x.chunks))
+        chunks = self.chunks
+        name = self.name
+        dask_keys = self.dask_keys
+
+        getitem_name = "getitem-" + self.token
+        overlap_name = "overlap-" + self.token
+
+        dims = list(map(len, chunks))
         expand_key2 = partial(expand_key, dims=dims, axes=axes)
 
         # Make keys for each of the surrounding sub-arrays
         interior_keys = pipe(
-            x.__dask_keys__(), flatten, map(expand_key2), map(flatten), concat, list
+            dask_keys, flatten, map(expand_key2), map(flatten), concat, list
         )
-
-        name = "overlap-" + tokenize(x, axes)
-        getitem_name = "getitem-" + tokenize(x, axes)
+        # breakpoint()
         interior_slices = {}
         overlap_blocks = {}
         for k in interior_keys:
-            frac_slice = fractional_slice((x.name,) + k, axes)
-            if (x.name,) + k != frac_slice:
+            frac_slice = fractional_slice((name,) + k, axes)
+            if (name,) + k != frac_slice:
                 interior_slices[(getitem_name,) + k] = frac_slice
             else:
-                interior_slices[(getitem_name,) + k] = (x.name,) + k
-                overlap_blocks[(name,) + k] = (
+                interior_slices[(getitem_name,) + k] = (name,) + k
+                overlap_blocks[(overlap_name,) + k] = (
                     concatenate3,
                     (concrete, expand_key2((None,) + k, name=getitem_name)),
                 )
@@ -242,8 +253,10 @@ def overlap_internal(x, axes):
     The axes input informs how many cells to overlap between neighboring blocks
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
-    name = "overlap-" + tokenize(x, axes)
-    graph = ArrayOverlapLayer(name=name, array=x, axes=axes)
+    token = tokenize(x, axes)
+    name = "overlap-" + token
+
+    graph = ArrayOverlapLayer(name=x.name, array=x, axes=axes, chunks=x.chunks, token=token, dask_keys=x.__dask_keys__())
     graph = HighLevelGraph.from_collections(name, graph, dependencies=[x])
     chunks = _overlap_internal_chunks(x.chunks, axes)
 
