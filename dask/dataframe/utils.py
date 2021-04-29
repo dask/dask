@@ -349,21 +349,29 @@ def make_meta_object(x, index=None):
             columns=[c for c, d in x],
             index=index,
         )
-    elif not hasattr(x, "dtype") and x is not None:
+    scalar = None
+
+    if not hasattr(x, "dtype") and x is not None:
         # could be a string, a dtype object, or a python type. Skip `None`,
         # because it is implictly converted to `dtype('f8')`, which we don't
         # want here.
         try:
             dtype = np.dtype(x)
-            return _scalar_from_dtype(dtype)
+            scalar = _scalar_from_dtype(dtype)
         except Exception:
             # Continue on to next check
             pass
 
-    if is_scalar(x):
-        return _nonempty_scalar(x)
+    if scalar is None and is_scalar(x):
+        scalar = _nonempty_scalar(x)
 
-    raise TypeError("Don't know how to create metadata from {0}".format(x))
+    if scalar is None:
+        raise TypeError("Don't know how to create metadata from {0}".format(x))
+
+    if index is None:
+        return scalar
+    else:
+        return pd.Series([scalar])[0:0].reindex(index)
 
 
 _numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)

@@ -5562,8 +5562,12 @@ def map_partitions(
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
-    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
-
+    # func might return a different index.
+    meta_index = (
+        getattr(_emulate(func, *args, udf=True, **kwargs), "index", None)
+        if dfs
+        else None
+    )
     if meta is no_default:
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
@@ -5663,7 +5667,6 @@ def map_partitions(
                     name=f"{subgraph.name}-info-{tokenize(info)}",
                 ),
             ) + v[1:]
-
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
 
