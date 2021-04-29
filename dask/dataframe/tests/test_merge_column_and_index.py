@@ -210,6 +210,9 @@ def test_merge_known_to_double_bcast_left(
     assert_eq(result.divisions, ddf_right.divisions)
     assert len(result.__dask_graph__()) < 90
 
+    # Check that culling works
+    result.head(1)
+
 
 @pytest.mark.parametrize("repartition", [None, 4])
 def test_merge_column_with_nulls(repartition):
