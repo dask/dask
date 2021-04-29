@@ -376,7 +376,9 @@ def read_parquet(
 
 
 def check_multi_support(engine):
-    return hasattr(engine, "multi_support") and engine.multi_support
+    # Helper function to check that the engine
+    # supports a multi-partition read
+    return hasattr(engine, "multi_support") and engine.multi_support()
 
 
 def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):

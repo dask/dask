@@ -545,7 +545,6 @@ class ArrowDatasetEngine(Engine):
 
         return (meta, stats, parts, index)
 
-    @property
     @classmethod
     def multi_support(cls):
         return cls == ArrowDatasetEngine
@@ -2080,7 +2079,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         else:
             return meta
 
-    @property
     @classmethod
     def multi_support(cls):
         return cls == ArrowLegacyEngine
