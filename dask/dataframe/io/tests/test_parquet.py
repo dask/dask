@@ -835,6 +835,35 @@ def test_append_different_columns(tmpdir, engine):
     assert "Appended dtypes" in str(excinfo.value)
 
 
+def test_append_dict_column(tmpdir, engine):
+    # See: https://github.com/dask/dask/issues/7492
+
+    if engine == "fastparquet":
+        pytest.xfail("Fastparquet engine is missing dict-column support")
+    elif pa.__version__ < LooseVersion("1.0.1"):
+        pytest.skip("Newer PyArrow version required for dict-column support.")
+
+    tmp = str(tmpdir)
+    dts = pd.date_range("2020-01-01", "2021-01-01")
+    df = pd.DataFrame(
+        {"value": [{"x": x} for x in range(len(dts))]},
+        index=dts,
+    )
+    ddf1 = dd.from_pandas(df, npartitions=1)
+
+    # Write ddf1 to tmp, and then append it again
+    ddf1.to_parquet(tmp, append=True, engine=engine)
+    ddf1.to_parquet(tmp, append=True, engine=engine, ignore_divisions=True)
+
+    # Read back all data (ddf1 + ddf1)
+    ddf2 = dd.read_parquet(tmp, engine=engine)
+
+    # Check computed result
+    expect = pd.concat([df, df])
+    result = ddf2.compute()
+    assert_eq(expect, result)
+
+
 @write_read_engines_xfail
 def test_ordering(tmpdir, write_engine, read_engine):
     tmp = str(tmpdir)
@@ -2927,6 +2956,42 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
     # this should not fail, but instead produce timestamps that are in the valid range
     dd.read_parquet(str(tmpdir), engine=ArrowEngineWithTimestampClamp).compute()
+
+
+@pytest.mark.parametrize(
+    "write_cols",
+    [["part", "col"], ["part", "kind", "col"]],
+)
+def test_partitioned_column_overlap(tmpdir, engine, write_cols):
+
+    tmpdir.mkdir("part=a")
+    tmpdir.mkdir("part=b")
+    path0 = str(tmpdir.mkdir("part=a/kind=x"))
+    path1 = str(tmpdir.mkdir("part=b/kind=x"))
+    path0 = os.path.join(path0, "data.parquet")
+    path1 = os.path.join(path1, "data.parquet")
+
+    _df1 = pd.DataFrame({"part": "a", "kind": "x", "col": range(5)})
+    _df2 = pd.DataFrame({"part": "b", "kind": "x", "col": range(5)})
+    df1 = _df1[write_cols]
+    df2 = _df2[write_cols]
+    df1.to_parquet(path0, index=False)
+    df2.to_parquet(path1, index=False)
+
+    if engine == "fastparquet":
+        path = [path0, path1]
+    else:
+        path = str(tmpdir)
+
+    if write_cols == ["part", "kind", "col"]:
+        result = dd.read_parquet(path, engine=engine)
+        expect = pd.concat([_df1, _df2], ignore_index=True)
+        assert_eq(result, expect, check_index=False)
+    else:
+        # For now, partial overlap between partition columns and
+        # real columns is not allowed
+        with pytest.raises(ValueError):
+            dd.read_parquet(path, engine=engine)
 
 
 @fp_pandas_xfail

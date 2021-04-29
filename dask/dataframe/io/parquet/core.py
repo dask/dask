@@ -154,23 +154,23 @@ def read_parquet(
 
     Parameters
     ----------
-    path : string or list
+    path : str or list
         Source directory for data, or path(s) to individual parquet files.
         Prefix with a protocol like ``s3://`` to read from alternative
         filesystems. To read from multiple files you can pass a globstring or a
         list of paths, with the caveat that they must all have the same
         protocol.
-    columns : string, list or None (default)
+    columns : str or list, default None
         Field name(s) to read in as columns in the output. By default all
         non-index fields will be read (as determined by the pandas parquet
         metadata, if present). Provide a single field name instead of a list to
         read in the data as a Series.
-    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]]
-        List of filters to apply, like ``[[('x', '=', 0), ...], ...]``. Using this
-        argument will NOT result in row-wise filtering of the final partitions
-        unless ``engine="pyarrow-dataset"`` is also specified.  For other engines,
-        filtering is only performed at the partition level, i.e., to prevent the
-        loading of some row-groups and/or files.
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
+        List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
+        Using this argument will NOT result in row-wise filtering of the final
+        partitions unless ``engine="pyarrow-dataset"`` is also specified.  For
+        other engines, filtering is only performed at the partition level, i.e.,
+        to prevent the loading of some row-groups and/or files.
 
         For the "pyarrow" engines, predicates can be expressed in disjunctive
         normal form (DNF). This means that the innermost tuple describes a single
@@ -184,18 +184,18 @@ def read_parquet(
 
         Note that the "fastparquet" engine does not currently support DNF for
         the filtering of partitioned columns (List[Tuple] is required).
-    index : string, list, False or None (default)
+    index : str, list or False, default None
         Field name(s) to use as the output frame index. By default will be
         inferred from the pandas parquet file metadata (if present). Use False
         to read all fields as columns.
-    categories : list, dict or None
+    categories : list or dict, default None
         For any fields listed here, if the parquet encoding is Dictionary,
         the column will be created with dtype category. Use only if it is
         guaranteed that the column is encoded as dictionary in all row-groups.
         If a list, assumes up to 2**16-1 labels; if a dict, specify the number
         of labels expected; if None, will load categories automatically for
         data written by dask/fastparquet, not otherwise.
-    storage_options : dict
+    storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     engine : str, default 'auto'
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
@@ -210,12 +210,12 @@ def read_parquet(
         pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
         ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
         option will be deprecated once the ParquetDataset API is deprecated.
-    gather_statistics : bool or None (default).
+    gather_statistics : bool, default None
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
-    split_row_groups : bool or int
+    split_row_groups : bool or int, default None
         Default is True if a _metadata file is available or if
         the dataset is composed of a single file (otherwise defult is False).
         If True, then each output dataframe partition will correspond to a single
@@ -223,7 +223,7 @@ def read_parquet(
         complete file.  If a positive integer value is given, each dataframe
         partition will correspond to that number of parquet row-groups (or fewer).
         Only the "pyarrow" engine supports this argument.
-    read_from_paths : bool or None (default)
+    read_from_paths : bool, default None
         Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
         Determines whether the engine should avoid inserting large pyarrow
         (``ParquetFileFragment``) objects in the task graph.  If this option
@@ -232,7 +232,7 @@ def read_parquet(
         size of the task graph, but will add minor overhead to ``read_partition``.
         By default (None), ``ArrowDatasetEngine`` will set this option to
         ``False`` when there are filters.
-    chunksize : int, str
+    chunksize : int, str, default None
         The target output partition size. If specified, adjacent row-groups
         and/or files will be aggregated into the same output partition until
         the cumulative parquet-storage size reaches this value. Note that
@@ -255,6 +255,7 @@ def read_parquet(
     See Also
     --------
     to_parquet
+    pyarrow.parquet.ParquetDataset
     """
 
     if isinstance(columns, str):
@@ -451,45 +452,45 @@ def to_parquet(
     engine : {'auto', 'fastparquet', 'pyarrow'}, default 'auto'
         Parquet library to use. If only one library is installed, it will use
         that one; if both, it will use 'fastparquet'.
-    compression : string or dict, optional
+    compression : string or dict, default 'default'
         Either a string like ``"snappy"`` or a dictionary mapping column names
         to compressors like ``{"name": "gzip", "values": "snappy"}``. The
         default is ``"default"``, which uses the default compression for
         whichever engine is selected.
-    write_index : boolean, optional
+    write_index : boolean, default True
         Whether or not to write the index. Defaults to True.
-    append : bool, optional
+    append : bool, default False
         If False (default), construct data-set from scratch. If True, add new
         row-group(s) to an existing data-set. In the latter case, the data-set
         must exist, and the schema must match the input data.
-    overwrite : bool, optional
+    overwrite : bool, default False
         Whether or not to remove the contents of `path` before writing the dataset.
         The default is False.  If True, the specified path must correspond to
         a directory (but not the current working directory).  This option cannot
         be set to True if `append=True`.
         NOTE: `overwrite=True` will remove the original data even if the current
         write operation fails.  Use at your own risk.
-    ignore_divisions : bool, optional
+    ignore_divisions : bool, default False
         If False (default) raises error when previous divisions overlap with
         the new appended divisions. Ignored if append=False.
-    partition_on : list, optional
+    partition_on : list, default None
         Construct directory-based partitioning by splitting on these fields'
         values. Each dask partition will result in one or more datafiles,
         there will be no global groupby.
-    storage_options : dict, optional
+    storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
-    custom_metadata : dict, optional
+    custom_metadata : dict, default None
         Custom key/value metadata to include in all footer metadata (and
         in the global "_metadata" file, if applicable).  Note that the custom
         metadata may not contain the reserved b"pandas" key.
-    write_metadata_file : bool, optional
+    write_metadata_file : bool, default True
         Whether to write the special "_metadata" file.
-    compute : bool, optional
+    compute : bool, default True
         If True (default) then the result is computed immediately. If False
         then a ``dask.delayed`` object is returned for future computation.
-    compute_kwargs : dict, optional
+    compute_kwargs : dict, default True
         Options to be passed in to the compute method
-    schema : Schema object, dict, or {"infer", None}, optional
+    schema : Schema object, dict, or {"infer", None}, default None
         Global schema to use for the output dataset. Alternatively, a `dict`
         of pyarrow types can be specified (e.g. `schema={"id": pa.string()}`).
         For this case, fields excluded from the dictionary will be inferred
