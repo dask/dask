@@ -1472,11 +1472,13 @@ class ArrowDatasetEngine(Engine):
             filters,
         )
 
-        # Check if we need to pass a fragment for each output partition
-        read_from_paths = read_from_paths or False
+        # Check if we need to pass a fragment for each output partition.
+        # By default, we will avoid passing fragments in the graph unless
+        # the user has specified `read_from_paths=False`
+        partitions = partition_info.get("partitions", None)
         pass_frags = (
             filters
-            and (not read_from_paths)
+            and (read_from_paths is False)
             and _need_fragments(filters, partition_info.get("partition_keys", None))
         )
 
@@ -1492,7 +1494,7 @@ class ArrowDatasetEngine(Engine):
             make_part_kwargs={
                 "fs": fs,
                 "partition_keys": partition_info.get("partition_keys", None),
-                "partition_obj": partition_info.get("partitions", None),
+                "partition_obj": partitions,
                 "data_path": data_path,
                 "frag_map": frag_map if pass_frags else None,
             },
@@ -1501,7 +1503,7 @@ class ArrowDatasetEngine(Engine):
         # Add common kwargs
         common_kwargs = {
             "partitioning": partition_info["partitioning"],
-            "partitions": partition_info["partitions"],
+            "partitions": partitions,
             "categories": categories,
             "filters": filters,
             "schema": schema,

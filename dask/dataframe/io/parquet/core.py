@@ -1,3 +1,4 @@
+import copy
 import math
 import warnings
 from distutils.version import LooseVersion
@@ -9,7 +10,8 @@ from fsspec.utils import stringify_path
 
 from ....base import tokenize
 from ....delayed import Delayed
-from ....highlevelgraph import HighLevelGraph, Layer
+from ....highlevelgraph import HighLevelGraph
+from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
 from ...core import DataFrame, new_dd_object
 from ...methods import concat
@@ -31,105 +33,61 @@ NONE_LABEL = "__null_dask_index__"
 # User API
 
 
-class ParquetSubgraph(Layer):
+class ParquetFunctionWrapper:
     """
-    Subgraph for reading Parquet files.
-
-    Enables optimizations (see optimize_read_parquet_getitem).
+    Parquet Function-Wrapper Class
+    Reads parquet data from disk to produce a partition
+    (given a `part` argument).
     """
 
     def __init__(
         self,
-        name,
         engine,
         fs,
         meta,
         columns,
         index,
-        parts,
         kwargs,
-        part_ids=None,
-        common_kwargs=None,
-        annotations=None,
+        common_kwargs,
     ):
-        super().__init__(annotations=annotations)
-        self.name = name
-        self.engine = engine
+        self.read_partition = engine.read_partition
         self.fs = fs
         self.meta = meta
         self.columns = columns
         self.index = index
-        self.parts = parts
-        self.kwargs = kwargs
-        self.part_ids = list(range(len(parts))) if part_ids is None else part_ids
 
-        # `kwargs` = user-defined kwargs to be passed for all parts
-        self.kwargs = kwargs
+        # `kwargs` = user-defined kwargs to be passed
+        #            identically for all partitions.
+        #
+        # `common_kwargs` = kwargs set by engine to be
+        #                   passed identically for all
+        #                   partitions.
+        self.common_kwargs = toolz.merge(common_kwargs, kwargs or {})
 
-        # `common_kwargs` = engine-gathered kwargs to be passed for all parts
-        self.common_kwargs = common_kwargs if common_kwargs else {}
+    def project_columns(self, columns):
+        """Return a new ParquetFunctionWrapper object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
 
-    def __repr__(self):
-        return "ParquetSubgraph<name='{}', n_parts={}, columns={}>".format(
-            self.name, len(self.part_ids), list(self.columns)
-        )
+    def __call__(self, part):
 
-    def __getitem__(self, key):
-        try:
-            name, i = key
-        except ValueError:
-            # too many / few values to unpack
-            raise KeyError(key) from None
-
-        if name != self.name:
-            raise KeyError(key)
-
-        if i not in self.part_ids:
-            raise KeyError(key)
-
-        part = self.parts[i]
         if not isinstance(part, list):
             part = [part]
 
-        return (
-            read_parquet_part,
+        return read_parquet_part(
             self.fs,
-            self.engine.read_partition,
+            self.read_partition,
             self.meta,
             [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
             self.index,
-            toolz.merge(self.common_kwargs, self.kwargs or {}),
+            self.common_kwargs,
         )
-
-    def __len__(self):
-        return len(self.part_ids)
-
-    def __iter__(self):
-        for i in self.part_ids:
-            yield (self.name, i)
-
-    def is_materialized(self):
-        return False  # Never materialized
-
-    def get_dependencies(self, all_hlg_keys):
-        return {k: set() for k in self}
-
-    def cull(self, keys, all_hlg_keys):
-        ret = ParquetSubgraph(
-            name=self.name,
-            engine=self.engine,
-            fs=self.fs,
-            meta=self.meta,
-            columns=self.columns,
-            index=self.index,
-            parts=self.parts,
-            kwargs=self.kwargs,
-            part_ids={i for i in self.part_ids if (self.name, i) in keys},
-            common_kwargs=self.common_kwargs,
-            annotations=self.annotations,
-        )
-        return ret, ret.get_dependencies(all_hlg_keys)
 
 
 def read_parquet(
@@ -226,14 +184,13 @@ def read_parquet(
     read_from_paths : bool, default None
         Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
         Determines whether the engine should avoid inserting large pyarrow
-        (``ParquetFileFragment``) objects in the task graph.  If this option
-        is True, ``read_partition`` will need to regenerate the appropriate
-        fragment object from the path and row-group IDs.  This will reduce the
-        size of the task graph, but will add minor overhead to ``read_partition``.
-        By default (None), ``ArrowDatasetEngine`` will set this option to
-        ``False`` when there are filters.
-    chunksize : int or str, default None
-        The target task partition size. If set, consecutive row-groups
+        (``ParquetFileFragment``) objects in the task graph. If this option
+        is True (default), ``read_partition`` will need to regenerate the
+        appropriate fragment object from the path and row-group IDs.  This will
+        reduce the size of the task graph, but will add minor overhead to
+        ``read_partition``.
+    chunksize : int, str
+        The target task partition size.  If set, consecutive row-groups
         from the same file will be aggregated into the same output
         partition until the aggregate size reaches this value.
     **kwargs: dict (of dicts)
@@ -275,7 +232,8 @@ def read_parquet(
     if columns is not None:
         columns = list(columns)
 
-    name = "read-parquet-" + tokenize(
+    label = "read-parquet-"
+    output_name = label + tokenize(
         path,
         columns,
         filters,
@@ -347,18 +305,6 @@ def read_parquet(
     if meta.index.name == NONE_LABEL:
         meta.index.name = None
 
-    subgraph = ParquetSubgraph(
-        name,
-        engine,
-        fs,
-        meta,
-        columns,
-        index,
-        parts,
-        kwargs,
-        common_kwargs=common_kwargs,
-    )
-
     # Set the index that was previously treated as a column
     if index_in_columns:
         meta = meta.set_index(index)
@@ -367,10 +313,28 @@ def read_parquet(
 
     if len(divisions) < 2:
         # empty dataframe - just use meta
-        subgraph = {(name, 0): meta}
+        graph = {(output_name, 0): meta}
         divisions = (None, None)
+    else:
+        # Create Blockwise layer
+        layer = DataFrameIOLayer(
+            output_name,
+            columns,
+            parts,
+            ParquetFunctionWrapper(
+                engine,
+                fs,
+                meta,
+                columns,
+                index,
+                kwargs,
+                common_kwargs,
+            ),
+            label=label,
+        )
+        graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(subgraph, name, meta, divisions)
+    return new_dd_object(graph, output_name, meta, divisions)
 
 
 def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
