@@ -1168,7 +1168,7 @@ class Array(DaskMethodsMixin):
             layer.collection_annotations.update(
                 {
                     "type": type(self),
-                    "chunk_type": type(meta),
+                    "chunk_type": type(self._meta),
                     "chunks": chunks,
                     "dtype": dtype,
                 }
