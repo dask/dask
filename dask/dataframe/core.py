@@ -3765,6 +3765,35 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors = set()
 
+    def __init__(self, dsk, name, meta, divisions):
+        super().__init__(dsk, name, meta, divisions)
+        if self.dask.layers[name].collection_annotations is None:
+            self.dask.layers[name].collection_annotations = {
+                "type": type(self),
+                "divisions": self.divisions,
+                "dataframe_type": type(self._meta),
+                "series_dtypes": {
+                    col: self._meta[col].dtype
+                    if hasattr(self._meta[col], "dtype")
+                    else None
+                    for col in self._meta.columns
+                },
+            }
+        else:
+            self.dask.layers[name].collection_annotations.update(
+                {
+                    "type": type(self),
+                    "divisions": self.divisions,
+                    "dataframe_type": type(self._meta),
+                    "series_dtypes": {
+                        col: self._meta[col].dtype
+                        if hasattr(self._meta[col], "dtype")
+                        else None
+                        for col in self._meta.columns
+                    },
+                }
+            )
+
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
             if isinstance(context[1][0], np.ndarray) and context[1][0].shape == ():
