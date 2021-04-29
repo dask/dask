@@ -10,7 +10,7 @@ from tlz.curried import map
 
 from ..base import tokenize
 from ..core import flatten
-from ..highlevelgraph import Layer
+from ..highlevelgraph import HighLevelGraph, Layer
 from ..utils import concrete, derived_from
 from . import chunk, numpy_compat
 from .core import (
@@ -243,7 +243,8 @@ def overlap_internal(x, axes):
     {0: 2, 2: 5} means share two cells in 0 axis, 5 cells in 2 axis
     """
     name = "overlap-" + tokenize(x, axes)
-    graph = ArrayOverlapLayer(name=name, array=x, axes=axes, dependencies=[x])
+    graph = ArrayOverlapLayer(name=name, array=x, axes=axes)
+    graph = HighLevelGraph.from_collections(name, graph, dependencies=[x])
     chunks = _overlap_internal_chunks(x.chunks, axes)
 
     return Array(graph, name, chunks, meta=x)
