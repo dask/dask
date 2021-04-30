@@ -24,7 +24,7 @@ from .core import (
 from .creation import empty_like, full_like
 
 
-class ArrayOverlapLayer(HighLevelGraph):
+class ArrayOverlapLayer(Layer):
     """Simple HighLevelGraph array overlap layer.
 
     Lazily computed High-level graph layer for a array overlap operations.
@@ -46,14 +46,12 @@ class ArrayOverlapLayer(HighLevelGraph):
     def __init__(
         self,
         name,
-        array,
         axes,
         chunks,
         numblocks,
         token,
     ):
         self.name = name
-        self.array = array
         self.axes = axes
         self.chunks = chunks
         self.numblocks = numblocks
@@ -106,7 +104,6 @@ class ArrayOverlapLayer(HighLevelGraph):
 
     def _construct_graph(self):
         """Construct graph for a simple overlap operation."""
-        x = self.array
         axes = self.axes
         chunks = self.chunks
         name = self.name
@@ -276,7 +273,13 @@ def overlap_internal(x, axes):
     token = tokenize(x, axes)
     name = "overlap-" + token
 
-    graph = ArrayOverlapLayer(name=x.name, array=x, axes=axes, chunks=x.chunks, numblocks=x.numblocks, token=token)
+    graph = ArrayOverlapLayer(
+        name=x.name,
+        axes=axes,
+        chunks=x.chunks,
+        numblocks=x.numblocks,
+        token=token,
+    )
     graph = HighLevelGraph.from_collections(name, graph, dependencies=[x])
     chunks = _overlap_internal_chunks(x.chunks, axes)
 
@@ -463,7 +466,7 @@ def nearest(x, axis, depth):
 
 
 def constant(x, axis, depth, value):
-    """ Add constant slice to either side of array """
+    """Add constant slice to either side of array"""
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 
