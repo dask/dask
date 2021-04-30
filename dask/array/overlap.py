@@ -24,7 +24,7 @@ from .core import (
 from .creation import empty_like, full_like
 
 
-class ArrayOverlapLayer(Layer):
+class ArrayOverlapLayer(HighLevelGraph):
     """Simple HighLevelGraph array overlap layer.
 
     Lazily computed High-level graph layer for a array overlap operations.
@@ -49,15 +49,16 @@ class ArrayOverlapLayer(Layer):
         array,
         axes,
         chunks,
+        numblocks,
         token,
-        dask_keys,
     ):
         self.name = name
         self.array = array
         self.axes = axes
         self.chunks = chunks
+        self.numblocks = numblocks
         self.token = token
-        self.dask_keys = dask_keys
+        self._cached_keys = None
 
     def __repr__(self):
         return "ArrayOverlapLayer<name='{}'".format(self.name)
@@ -84,13 +85,32 @@ class ArrayOverlapLayer(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
+    def __dask_keys__(self):
+        if self._cached_keys is not None:
+            return self._cached_keys
+
+        name, chunks, numblocks = self.name, self.chunks, self.numblocks
+
+        def keys(*args):
+            if not chunks:
+                return [(name,)]
+            ind = len(args)
+            if ind + 1 == len(numblocks):
+                result = [(name,) + args + (i,) for i in range(numblocks[ind])]
+            else:
+                result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
+            return result
+
+        self._cached_keys = result = keys()
+        return result
+
     def _construct_graph(self):
         """Construct graph for a simple overlap operation."""
         x = self.array
         axes = self.axes
         chunks = self.chunks
         name = self.name
-        dask_keys = self.dask_keys
+        dask_keys = self.__dask_keys__()
 
         getitem_name = "getitem-" + self.token
         overlap_name = "overlap-" + self.token
@@ -256,7 +276,7 @@ def overlap_internal(x, axes):
     token = tokenize(x, axes)
     name = "overlap-" + token
 
-    graph = ArrayOverlapLayer(name=x.name, array=x, axes=axes, chunks=x.chunks, token=token, dask_keys=x.__dask_keys__())
+    graph = ArrayOverlapLayer(name=x.name, array=x, axes=axes, chunks=x.chunks, numblocks=x.numblocks, token=token)
     graph = HighLevelGraph.from_collections(name, graph, dependencies=[x])
     chunks = _overlap_internal_chunks(x.chunks, axes)
 
