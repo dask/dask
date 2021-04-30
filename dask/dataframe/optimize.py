@@ -23,6 +23,9 @@ def optimize(dsk, keys, **kwargs):
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
+    # Do not perform low-level fusion unless the user has
+    # specified True explicitly. The configuration will be
+    # None by default.
     if not config.get("optimization.fuse.active"):
         return dsk
 

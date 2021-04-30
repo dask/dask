@@ -57,7 +57,7 @@ properties:
         properties:
 
           active:
-            type: boolean
+            type: [boolean, 'null']
             description: Turn task fusion on/off
 
           ave-width:
