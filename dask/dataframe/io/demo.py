@@ -1,10 +1,12 @@
+import copy
+
 import numpy as np
 import pandas as pd
 
-from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
+from ...layers import DataFrameIOLayer
 from ...utils import random_state_data
 from ..core import DataFrame, tokenize
-from .io import from_delayed
 
 __all__ = ["make_timeseries"]
 
@@ -62,6 +64,41 @@ make = {
     object: make_string,
     "category": make_categorical,
 }
+
+
+class MakeTimeseriesPart:
+    """
+    Wrapper Class for ``make_timeseries_part``
+    Makes a timeseries partition.
+    """
+
+    def __init__(self, dtypes, freq, kwargs):
+        self.dtypes = dtypes
+        self.freq = freq
+        self.kwargs = kwargs
+        self.columns = None
+
+    def project_columns(self, columns):
+        """Return a new MakeTimeseriesPart object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
+
+    def __call__(self, part):
+        divisions, state_data = part
+        if isinstance(state_data, int):
+            state_data = random_state_data(1, state_data)
+        if self.columns:
+            dtypes = {k: v for k, v in self.dtypes.items() if k in self.columns}
+        else:
+            dtypes = self.dtypes
+        return make_timeseries_part(
+            divisions[0], divisions[1], dtypes, self.freq, state_data, self.kwargs
+        )
 
 
 def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
@@ -126,24 +163,57 @@ def make_timeseries(
     2000-01-01 08:00:00  1031     Kevin  0.466002
     """
     divisions = list(pd.date_range(start=start, end=end, freq=partition_freq))
-    state_data = random_state_data(len(divisions) - 1, seed)
-    name = "make-timeseries-" + tokenize(
-        start, end, dtypes, freq, partition_freq, state_data
+    npartitions = len(divisions) - 1
+    if seed is None:
+        # Get random integer seed for each partition. We can
+        # call `random_state_data` in `MakeTimeseriesPart`
+        state_data = np.random.randint(2e9, size=npartitions)
+    else:
+        state_data = random_state_data(npartitions, seed)
+    label = "make-timeseries-"
+    name = label + tokenize(start, end, dtypes, freq, partition_freq, state_data)
+
+    # Build parts
+    parts = []
+    for i in range(len(divisions) - 1):
+        parts.append((divisions[i : i + 2], state_data[i]))
+
+    # Construct Layer and Collection
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=parts,
+        io_func=MakeTimeseriesPart(dtypes, freq, kwargs),
+        label=label,
     )
-    dsk = {
-        (name, i): (
-            make_timeseries_part,
-            divisions[i],
-            divisions[i + 1],
-            dtypes,
-            freq,
-            state_data[i],
-            kwargs,
-        )
-        for i in range(len(divisions) - 1)
-    }
+    graph = HighLevelGraph({name: layer}, {name: set()})
     head = make_timeseries_part("2000", "2000", dtypes, "1H", state_data[0], kwargs)
-    return DataFrame(dsk, name, head, divisions)
+    return DataFrame(graph, name, head, divisions)
+
+
+class GenerateDay:
+    """
+    Wrapper Class for ``generate_day``
+    Generates daily-stock data for a day.
+    """
+
+    def __init__(self, freq):
+        self.freq = freq
+
+    def __call__(self, part):
+        s, seed = part
+        if isinstance(seed, int):
+            seed = random_state_data(1, seed)
+        return generate_day(
+            s.name,
+            s.loc["Open"],
+            s.loc["High"],
+            s.loc["Low"],
+            s.loc["Close"],
+            s.loc["Volume"],
+            freq=self.freq,
+            random_state=seed,
+        )
 
 
 def generate_day(
@@ -255,28 +325,34 @@ def daily_stock(
     from pandas_datareader import data
 
     df = data.DataReader(symbol, data_source, start, stop)
-    seeds = random_state_data(len(df), random_state=random_state)
-    parts = []
+    npartitions = len(df)
+    if random_state is None:
+        # Get random integer seed for each partition. We can
+        # call `random_state_data` in `GenerateDay`
+        seeds = np.random.randint(2e9, size=npartitions)
+    else:
+        seeds = random_state_data(npartitions, random_state=random_state)
+
+    label = "daily-stock-"
+    name = label + tokenize(symbol, start, stop, freq, data_source, seeds)
+
     divisions = []
-    for i, seed in zip(range(len(df)), seeds):
+    inputs = []
+    for i, seed in zip(range(npartitions), seeds):
         s = df.iloc[i]
         if s.isnull().any():
             continue
-        part = delayed(generate_day)(
-            s.name,
-            s.loc["Open"],
-            s.loc["High"],
-            s.loc["Low"],
-            s.loc["Close"],
-            s.loc["Volume"],
-            freq=freq,
-            random_state=seed,
-        )
-        parts.append(part)
+        inputs.append((s, seed))
         divisions.append(s.name + pd.Timedelta(hours=9))
 
-    divisions.append(s.name + pd.Timedelta(hours=12 + 4))
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=inputs,
+        io_func=GenerateDay(freq),
+        label=label,
+    )
 
+    graph = HighLevelGraph({name: layer}, {name: set()})
     meta = generate_day("2000-01-01", 1, 2, 0, 1, 100)
-
-    return from_delayed(parts, meta=meta, divisions=divisions)
+    return DataFrame(graph, name, meta, divisions)
