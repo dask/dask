@@ -62,4 +62,4 @@ dependencies:
   - mmh3
   - pip
   - pip:
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/madsbk/distributed.git@merge_global_annotations_on_client
