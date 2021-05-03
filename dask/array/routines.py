@@ -1763,7 +1763,7 @@ def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
         multi_index_arrs = broadcast_arrays(*multi_index)
         index_stack = stack(multi_index_arrs)
 
-    if len(index_stack) != len(dims):
+    if not np.isnan(index_stack.shape).any() and len(index_stack) != len(dims):
         raise ValueError(
             f"parameter multi_index must be a sequence of length {len(dims)}"
         )
