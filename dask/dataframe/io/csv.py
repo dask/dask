@@ -399,15 +399,22 @@ def auto_blocksize(total_memory, cpu_count):
     return min(blocksize, int(64e6))
 
 
+def _infer_block_size():
+    default = 2 ** 25
+    if psutil is not None:
+        with catch_warnings():
+            simplefilter("ignore", RuntimeWarning)
+            mem = psutil.virtual_memory().total
+            cpu = psutil.cpu_count()
+
+        if mem and cpu:
+            return auto_blocksize(mem, cpu)
+
+    return default
+
+
 # guess blocksize if psutil is installed or use acceptable default one if not
-if psutil is not None:
-    with catch_warnings():
-        simplefilter("ignore", RuntimeWarning)
-        TOTAL_MEM = psutil.virtual_memory().total
-        CPU_COUNT = psutil.cpu_count()
-        AUTO_BLOCKSIZE = auto_blocksize(TOTAL_MEM, CPU_COUNT)
-else:
-    AUTO_BLOCKSIZE = 2 ** 25
+AUTO_BLOCKSIZE = _infer_block_size()
 
 
 def read_pandas(

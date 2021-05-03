@@ -20,6 +20,7 @@ from dask.bytes.utils import compress
 from dask.core import flatten
 from dask.dataframe._compat import tm
 from dask.dataframe.io.csv import (
+    _infer_block_size,
     auto_blocksize,
     block_mask,
     pandas_read_text,
@@ -782,6 +783,23 @@ def test_auto_blocksize():
     assert isinstance(auto_blocksize(3000, 15), int)
     assert auto_blocksize(3000, 3) == 100
     assert auto_blocksize(5000, 2) == 250
+
+
+def test__infer_block_size(monkeypatch):
+    """
+    psutil returns a total memory of `None` on some systems
+    see https://github.com/dask/dask/pull/7601
+    """
+    psutil = pytest.importorskip("psutil")
+
+    class MockOutput:
+        total = None
+
+    def mock_virtual_memory():
+        return MockOutput
+
+    monkeypatch.setattr(psutil, "virtual_memory", mock_virtual_memory)
+    assert _infer_block_size()
 
 
 def test_auto_blocksize_max64mb():
