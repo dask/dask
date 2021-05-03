@@ -144,7 +144,11 @@ class StringAccessor(Accessor):
         if others is None:
 
             def str_cat_none(x):
-                return pd.Series(x).str.cat(sep=sep, na_rep=na_rep)
+
+                if isinstance(x, (Series, Index)):
+                    x = x.compute()
+
+                return x.str.cat(sep=sep, na_rep=na_rep)
 
             return self._series.reduction(chunk=str_cat_none, aggregate=str_cat_none)
 
