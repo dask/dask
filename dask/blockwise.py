@@ -62,6 +62,10 @@ class BlockwiseDep:
             "Must define `__getitem__` for `BlockwiseDep` subclass."
         )
 
+    def __len__(self):
+        """BlockwiseDep object length"""
+        return product(*self.numblocks)
+
     def get(self, idx: Tuple[int, ...], default) -> Any:
         """BlockwiseDep ``__getitem__`` Wrapper"""
         try:
@@ -185,6 +189,50 @@ class BlockwiseDepDict(BlockwiseDep):
     @classmethod
     def __dask_distributed_unpack__(cls, state):
         return cls(**state)
+
+
+class BlockwiseDepFrameDict(BlockwiseDepDict):
+    """Frame-based Blockwise-IO argument
+
+    This is a special case of ``BlockwiseDepDict`` in
+    which each element of ``mapping`` is a frame-like
+    object (e.g. ``pandas.DataFrame``/``Series``). The
+    primary purpose of this class is to provide formal
+    ``from_frame`` and ``project_columns`` methods.
+
+    See Also
+    --------
+    dask.blockwise.Blockwise
+    dask.blockwise.BlockwiseDepDict
+    """
+
+    @classmethod
+    def from_frame(cls, data, locations):
+        return cls(
+            mapping={
+                (i,): data.iloc[start:stop]
+                for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
+            }
+        )
+
+    def project_columns(self, columns):
+
+        # Make sure column selection is a list
+        if isinstance(columns, (tuple, set)):
+            columns = list(columns)
+        elif not isinstance(columns, list):
+            columns = [columns]
+
+        # Return early if `columns` is not a subset,
+        # or representitive `mapping` element does not
+        # have a `columns` attribute (e.g. it's a `Series`)
+        try:
+            if sorted(next(iter(self.mapping.values())).columns) == sorted(columns):
+                return self
+        except AttributeError:
+            return self
+
+        return BlockwiseDepFrameDict({k: v[columns] for k, v in self.mapping.items()})
 
 
 def subs(task, substitution):

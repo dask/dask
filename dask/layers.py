@@ -878,11 +878,14 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         Name to use for the constructed layer.
     columns : str, list or None
         Field name(s) to read in as columns in the output.
-    inputs : list[tuple]
+    inputs : list[tuple] or BlockwiseDep
         List of arguments to be passed to ``io_func`` so
         that the materialized task to produce partition ``i``
-        will be: ``(<io_func>, inputs[i])``.  Note that each
-        element of ``inputs`` is typically a tuple of arguments.
+        will be: ``(<io_func>, inputs[i])``.  If ``inputs`` is
+        already a ``BlockwiseDep`` object, it should generate
+        the real input arguments dynamically (given the index
+        of each partition). If ``inputs`` is a list, each element
+        is typically a collection of arguments.
     io_func : callable
         A callable function that takes in a single tuple
         of arguments, and outputs a DataFrame partition.
@@ -917,11 +920,16 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.produces_tasks = produces_tasks
         self.annotations = annotations
 
-        # Define mapping between key index and "part"
-        io_arg_map = BlockwiseDepDict(
-            {(i,): inp for i, inp in enumerate(self.inputs)},
-            produces_tasks=self.produces_tasks,
-        )
+        if isinstance(self.inputs, BlockwiseDep):
+            # `inputs` is already a `BlockwiseDep` object
+            io_arg_map = self.inputs
+        else:
+            # Need to construct a `BlockwiseDep` object.
+            # Define mapping between key index and "part"
+            io_arg_map = BlockwiseDepDict(
+                {(i,): inp for i, inp in enumerate(self.inputs)},
+                produces_tasks=self.produces_tasks,
+            )
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
@@ -937,14 +945,23 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
     def project_columns(self, columns):
         # Method inherited from `DataFrameLayer.project_columns`
         if columns and (self.columns is None or columns < set(self.columns)):
+
+            # Try projecting columns in `inputs` (if `BlockwiseDep`)
+            try:
+                inputs = self.inputs.project_columns(columns)
+            except AttributeError:
+                inputs = self.inputs
+
             layer = DataFrameIOLayer(
                 (self.label or "subset-") + tokenize(self.name, columns),
                 list(columns),
-                self.inputs,
+                inputs,
                 self.io_func,
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
+
+            # Try projecting columns in `layer.io_func`
             try:
                 layer.io_func = layer.io_func.project_columns(columns)
             except AttributeError:

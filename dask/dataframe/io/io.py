@@ -9,8 +9,11 @@ from tlz import merge
 
 from ... import array as da
 from ...base import tokenize
+from ...blockwise import BlockwiseDepFrameDict
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
+from ...layers import DataFrameIOLayer
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..shuffle import set_partition
@@ -225,11 +228,15 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
-    dsk = {
-        (name, i): data.iloc[start:stop]
-        for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-    }
-    return new_dd_object(dsk, name, data, divisions)
+    # Create Blockwise layer
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=BlockwiseDepFrameDict.from_frame(data, locations),
+        io_func=lambda x: x,
+    )
+    graph = HighLevelGraph({name: layer}, {name: set()})
+    return new_dd_object(graph, name, data, divisions)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
