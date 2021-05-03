@@ -9,8 +9,10 @@ import dask.array as da
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 from dask.delayed import Delayed, delayed
+from dask.layers import DataFrameIOLayer
 from dask.utils import tmpfile
 
 ####################
@@ -239,6 +241,14 @@ def test_from_pandas_dataframe():
     assert len(ddf.divisions) == len(ddf.dask) + 1
     assert isinstance(ddf.divisions[0], type(df.index[0]))
     tm.assert_frame_equal(df, ddf.compute())
+
+    # Test getitem optimization
+    out = dd.from_pandas(df, npartitions=1)[["b"]]
+    dsk = optimize_dataframe_getitem(out.dask, keys=out.__dask_keys__())
+    read = [key for key in dsk.layers if key.startswith("from-pandas")][0]
+    subgraph = dsk.layers[read]
+    assert isinstance(subgraph, DataFrameIOLayer)
+    assert subgraph.columns == ["b"]
 
 
 def test_from_pandas_small():

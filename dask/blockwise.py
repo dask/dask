@@ -196,24 +196,15 @@ class BlockwiseDepFrameDict(BlockwiseDepDict):
 
     This is a special case of ``BlockwiseDepDict`` in
     which each element of ``mapping`` is a frame-like
-    object (e.g. ``pandas.DataFrame``/``Series``). The
-    primary purpose of this class is to provide formal
-    ``from_frame`` and ``project_columns`` methods.
+    object (e.g. ``pandas.DataFrame``/``Series``).
+    The primary purpose of this class is to provide a
+    formal ``project_columns`` method.
 
     See Also
     --------
     dask.blockwise.Blockwise
     dask.blockwise.BlockwiseDepDict
     """
-
-    @classmethod
-    def from_frame(cls, data, locations):
-        return cls(
-            mapping={
-                (i,): data.iloc[start:stop]
-                for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-            }
-        )
 
     def project_columns(self, columns):
 

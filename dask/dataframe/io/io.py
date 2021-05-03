@@ -9,7 +9,6 @@ from tlz import merge
 
 from ... import array as da
 from ...base import tokenize
-from ...blockwise import BlockwiseDepFrameDict
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
 from ...highlevelgraph import HighLevelGraph
@@ -213,7 +212,8 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     if chunksize is None:
         chunksize = int(ceil(nrows / npartitions))
 
-    name = name or ("from_pandas-" + tokenize(data, chunksize))
+    label = "from-pandas-"
+    name = name or (label + tokenize(data, chunksize))
 
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
@@ -232,8 +232,12 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     layer = DataFrameIOLayer(
         name=name,
         columns=None,
-        inputs=BlockwiseDepFrameDict.from_frame(data, locations),
+        inputs=[
+            data.iloc[start:stop] for start, stop in zip(locations[:-1], locations[1:])
+        ],
         io_func=lambda x: x,
+        label=label,
+        from_framelike=True,
     )
     graph = HighLevelGraph({name: layer}, {name: set()})
     return new_dd_object(graph, name, data, divisions)

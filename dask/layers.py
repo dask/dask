@@ -5,7 +5,13 @@ from typing import List, Optional, Tuple
 import tlz as toolz
 
 from .base import tokenize
-from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
+from .blockwise import (
+    Blockwise,
+    BlockwiseDep,
+    BlockwiseDepDict,
+    BlockwiseDepFrameDict,
+    blockwise_token,
+)
 from .core import keys_in_tasks
 from .highlevelgraph import Layer
 from .utils import apply, insert, stringify, stringify_collection_keys
@@ -878,14 +884,11 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         Name to use for the constructed layer.
     columns : str, list or None
         Field name(s) to read in as columns in the output.
-    inputs : list[tuple] or BlockwiseDep
+    inputs : list[tuple]
         List of arguments to be passed to ``io_func`` so
         that the materialized task to produce partition ``i``
-        will be: ``(<io_func>, inputs[i])``.  If ``inputs`` is
-        already a ``BlockwiseDep`` object, it should generate
-        the real input arguments dynamically (given the index
-        of each partition). If ``inputs`` is a list, each element
-        is typically a collection of arguments.
+        will be: ``(<io_func>, inputs[i])``.  Note that each
+        element of ``inputs`` is typically a tuple of arguments.
     io_func : callable
         A callable function that takes in a single tuple
         of arguments, and outputs a DataFrame partition.
@@ -894,10 +897,14 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         name. If nothing is specified (default), "subset-" will
         be used.
     produces_tasks : bool (optional)
-        Whether one or more elements of `inputs` is expected to
+        Whether one or more elements of ``inputs`` is expected to
         contain a nested task. This argument in only used for
         serialization purposes, and will be deprecated in the
         future. Default is False.
+    from_framelike : bool (optional)
+        Whether the elements of ``inputs`` are all "frame-like",
+        enabling an extra ``BlockwiseDep``-level column-projection
+        optimization. Defaults to False.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -910,6 +917,7 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         label=None,
         produces_tasks=False,
+        from_framelike=False,
         annotations=None,
     ):
         self.name = name
@@ -918,18 +926,23 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.io_func = io_func
         self.label = label
         self.produces_tasks = produces_tasks
+        self.from_framelike = from_framelike
         self.annotations = annotations
 
-        if isinstance(self.inputs, BlockwiseDep):
-            # `inputs` is already a `BlockwiseDep` object
-            io_arg_map = self.inputs
-        else:
-            # Need to construct a `BlockwiseDep` object.
-            # Define mapping between key index and "part"
-            io_arg_map = BlockwiseDepDict(
-                {(i,): inp for i, inp in enumerate(self.inputs)},
-                produces_tasks=self.produces_tasks,
-            )
+        # Need to construct a `BlockwiseDep` object.
+        # Define mapping between key index and "part"
+        dep_cls = BlockwiseDepFrameDict if self.from_framelike else BlockwiseDepDict
+        io_arg_map = dep_cls(
+            {(i,): inp for i, inp in enumerate(self.inputs)},
+            produces_tasks=produces_tasks,
+        )
+
+        # Try projecting columns in `io_arg_map`
+        if columns and from_framelike:
+            try:
+                io_arg_map = io_arg_map.project_columns(columns)
+            except AttributeError:
+                pass
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
@@ -946,18 +959,13 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         # Method inherited from `DataFrameLayer.project_columns`
         if columns and (self.columns is None or columns < set(self.columns)):
 
-            # Try projecting columns in `inputs` (if `BlockwiseDep`)
-            try:
-                inputs = self.inputs.project_columns(columns)
-            except AttributeError:
-                inputs = self.inputs
-
             layer = DataFrameIOLayer(
                 (self.label or "subset-") + tokenize(self.name, columns),
                 list(columns),
-                inputs,
+                self.inputs,
                 self.io_func,
                 produces_tasks=self.produces_tasks,
+                from_framelike=self.from_framelike,
                 annotations=self.annotations,
             )
 
