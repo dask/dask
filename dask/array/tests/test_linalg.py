@@ -807,11 +807,17 @@ def test_cholesky(shape, chunk):
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
-    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A), check_graph=False)
+    assert_eq(
+        da.linalg.cholesky(dA).compute(),
+        scipy.linalg.cholesky(A),
+        check_graph=False,
+        check_chunks=False,
+    )
     assert_eq(
         da.linalg.cholesky(dA, lower=True),
         scipy.linalg.cholesky(A, lower=True),
         check_graph=False,
+        check_chunks=False,
     )
 
 
