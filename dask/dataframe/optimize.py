@@ -19,13 +19,11 @@ def optimize(dsk, keys, **kwargs):
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
         if fuse_active is None:
-            # Input graph is materialized.
-            # Set fuse.active default to True.
             fuse_active = True
-
-    dsk = optimize_dataframe_getitem(dsk, keys=keys)
-    dsk = optimize_blockwise(dsk, keys=keys)
-    dsk = fuse_roots(dsk, keys=keys)
+    else:
+        dsk = optimize_dataframe_getitem(dsk, keys=keys)
+        dsk = optimize_blockwise(dsk, keys=keys)
+        dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
     # Do not perform low-level fusion unless the user has
