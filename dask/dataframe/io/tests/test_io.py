@@ -86,25 +86,28 @@ def test_meta_from_recarray():
         _meta_from_array(x, columns=["a", "b", "c"])
 
 
-def test_from_array():
+@pytest.mark.parametrize("eager_slice", [True, False])
+def test_from_array(eager_slice):
     x = np.arange(10 * 3).reshape(10, 3)
-    d = dd.from_array(x, chunksize=4)
+    d = dd.from_array(x, chunksize=4, eager_slice=eager_slice)
     assert isinstance(d, dd.DataFrame)
     tm.assert_index_equal(d.columns, pd.Index([0, 1, 2]))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
-    d = dd.from_array(x, chunksize=4, columns=list("abc"))
+    d = dd.from_array(x, chunksize=4, columns=list("abc"), eager_slice=eager_slice)
     assert isinstance(d, dd.DataFrame)
     tm.assert_index_equal(d.columns, pd.Index(["a", "b", "c"]))
     assert d.divisions == (0, 4, 8, 9)
     assert (d.compute().values == x).all()
 
     with pytest.raises(ValueError):
-        dd.from_array(np.ones(shape=(10, 10, 10)))
+        dd.from_array(np.ones(shape=(10, 10, 10)), eager_slice=eager_slice)
 
     # Test getitem optimization
-    d = dd.from_array(x, chunksize=4, columns=list("abc"))[["a"]]
+    d = dd.from_array(x, chunksize=4, columns=list("abc"), eager_slice=eager_slice)[
+        ["a"]
+    ]
     dsk = optimize_dataframe_getitem(d.dask, keys=d.__dask_keys__())
     read = [key for key in dsk.layers if key.startswith("from-array")][0]
     subgraph = dsk.layers[read]

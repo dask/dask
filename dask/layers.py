@@ -8,9 +8,8 @@ from .base import tokenize
 from .blockwise import (
     Blockwise,
     BlockwiseDep,
-    BlockwiseDepColArrays,
+    BlockwiseDepColumnar,
     BlockwiseDepDict,
-    BlockwiseDepFrames,
     blockwise_token,
 )
 from .core import keys_in_tasks
@@ -902,14 +901,15 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         contain a nested task. This argument in only used for
         serialization purposes, and will be deprecated in the
         future. Default is False.
-    from_framelike : bool (optional)
-        Whether the elements of ``inputs`` are all "frame-like",
-        enabling an extra ``BlockwiseDep``-level column-projection
-        optimization. Defaults to False.
-    from_arraylike : bool (optional)
-        Whether the elements of ``inputs`` include the array-based
-        arguments needed for DataFrame construction. Cannot be used
-        with ``from_framelike=True``. Defaults to False.
+    from_columnar : bool (optional)
+        Whether the elements of ``inputs`` are dicts containing
+        "data" keys with columnar-object values. Defaults to False.
+    common_kwargs : dict (optional)
+        Dictionary of key-word arguments that are the same for every
+        partition of the output DataFrame collection. This dictionary
+        is passed through to the ``BlockwiseDep`` backend. Note that
+        using ``common_kwargs`` requires that every element of
+        ``inputs`` be a dictionary.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -922,9 +922,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         label=None,
         produces_tasks=False,
-        from_framelike=False,
-        from_arraylike=False,
-        common_inputs=None,
+        from_columnar=False,
+        common_kwargs=None,
         annotations=None,
     ):
         self.name = name
@@ -933,36 +932,23 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.io_func = io_func
         self.label = label
         self.produces_tasks = produces_tasks
-        self.from_framelike = from_framelike
-        self.from_arraylike = from_arraylike
-        self.common_inputs = common_inputs
+        self.from_columnar = from_columnar
+        self.common_kwargs = common_kwargs
         self.annotations = annotations
 
         # Need to construct a `BlockwiseDep` object.
         # Define mapping between key index and "part"
-        if from_framelike and from_arraylike:
-            raise ValueError(
-                "DataFrameIOLayer cannot be initialized with "
-                "both from_framelike and from_arraylike."
-            )
-        elif from_framelike:
-            dep_cls = BlockwiseDepFrames
-        elif from_arraylike:
-            dep_cls = BlockwiseDepColArrays
-        else:
-            dep_cls = BlockwiseDepDict
+        dep_cls = BlockwiseDepColumnar if from_columnar else BlockwiseDepDict
         io_arg_map = dep_cls(
             {(i,): inp for i, inp in enumerate(self.inputs)},
             produces_tasks=produces_tasks,
-            common_kwargs=common_inputs,
+            common_kwargs=common_kwargs,
         )
 
-        # Try projecting columns in `io_arg_map`
-        if columns and (from_framelike or from_arraylike):
-            try:
-                io_arg_map = io_arg_map.project_columns(columns)
-            except AttributeError:
-                pass
+        # Project columns in `io_arg_map` if we have
+        # columnar arguments (`from_columnar==True`)
+        if columns and from_columnar:
+            io_arg_map = io_arg_map.project_columns(columns)
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
@@ -985,9 +971,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 self.inputs,
                 self.io_func,
                 produces_tasks=self.produces_tasks,
-                from_framelike=self.from_framelike,
-                from_arraylike=self.from_arraylike,
-                common_inputs=self.common_inputs,
+                from_columnar=self.from_columnar,
+                common_kwargs=self.common_kwargs,
                 annotations=self.annotations,
             )
 

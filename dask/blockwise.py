@@ -27,6 +27,7 @@ from .utils import (
     apply,
     ensure_dict,
     homogeneous_deepmap,
+    is_arraylike,
     stringify,
     stringify_collection_keys,
 )
@@ -111,6 +112,24 @@ class BlockwiseDepDict(BlockwiseDep):
     function arguments that are difficult to calculate at
     graph-materialization time.
 
+    Parameters
+    ----------
+    mapping : Dict[str, Any]
+        Mapping between output collection indices and the
+        input arguments to the underlying ``Blockwise`` fuction.
+        The values of ``mapping`` must be dictionaries if the
+        ``common_kwargs`` option is used.
+    numblocks : Optional[Tuple[int, ...]]
+        Number of of output-collection blocks along each dimension.
+    common_kwargs : Optional[Dict[str, Any]]
+        Dictionary of key-word arguments that should be (lazily)
+        merged with every value of ``mapping``. Use of this
+        option requires that all values of ``mapping`` are
+        dictionaries.
+    produces_tasks : bool
+        Whether the generated task dependencies will include
+        nested tasks.  Default is False.
+
     Examples
     --------
 
@@ -160,7 +179,7 @@ class BlockwiseDepDict(BlockwiseDep):
 
     def __init__(
         self,
-        mapping: dict,
+        mapping: Dict[str, Any],
         numblocks: Optional[Tuple[int, ...]] = None,
         common_kwargs: Optional[Dict[str, Any]] = None,
         produces_tasks: bool = False,
@@ -203,53 +222,17 @@ class BlockwiseDepDict(BlockwiseDep):
         return cls(**state)
 
 
-class BlockwiseDepColArrays(BlockwiseDepDict):
-    def project_columns(self, columns):
-
-        # Make sure column selection is a list
-        if isinstance(columns, (tuple, set)):
-            columns = list(columns)
-        elif not isinstance(columns, list):
-            columns = [columns]
-
-        # Define helper utility to apply column projection
-        # on each sub-array.  The logic depends on whether
-        # slicing was performed eagerly or not.
-        def _set_columns(arr, inds):
-            if isinstance(arr, tuple):
-                return (
-                    arr[0],
-                    arr[1][:, col_indices],
-                    arr[2],
-                )
-            return arr[:, col_indices]
-
-        # Perform the actual column projection by returning
-        # a new `BlockwiseDepColArrays` object with the new
-        # mapping.
-        _cols = list(self.common_kwargs["columns"])
-        if len(columns) != len(_cols):
-            common_kwargs = {"index": None, "columns": columns}
-            col_indices = [_cols.index(c) for c in columns]
-            return BlockwiseDepColArrays(
-                {
-                    k: {"data": _set_columns(v["data"], col_indices)}
-                    for k, v in self.mapping.items()
-                },
-                common_kwargs=common_kwargs,
-            )
-        else:
-            return self
-
-
-class BlockwiseDepFrames(BlockwiseDepDict):
-    """Frame-based Blockwise-IO argument
+class BlockwiseDepColumnar(BlockwiseDepDict):
+    """Blockwise-IO argument with Columnar Data
 
     This is a special case of ``BlockwiseDepDict`` in
-    which each element of ``mapping`` is a frame-like
-    object (e.g. ``pandas.DataFrame``/``Series``).
-    The primary purpose of this class is to provide a
-    formal ``project_columns`` method.
+    which each element of ``mapping`` is a dictionary
+    containing a columnar "data" element.  This element
+    may be a frame-like object (e.g. ``pandas.DataFrame``
+    and ``Series``), or it can be an array-like element
+    (e.g. ``numpy.ndarray``). The primary purpose of this
+    class is to provide a formal ``project_columns``
+    method for special cases of ``BlockwiseDepDict``.
 
     See Also
     --------
@@ -265,14 +248,72 @@ class BlockwiseDepFrames(BlockwiseDepDict):
         elif not isinstance(columns, list):
             columns = [columns]
 
+        # Perform the actual column projection.
+        # We sample the first element of mapping to
+        # determine if the underlying data is array-like
+        # or frame-like.
+        sample = next(iter(self.mapping.values()))["data"]
+        if is_arraylike(sample):
+            return self._project_columns_arr(columns)
+        else:
+            return self._project_columns_frame(columns)
+
+    def _project_columns_arr(self, columns):
+        # Array-like column projection.
+        # Return a new `BlockwiseDepColumnar` object with
+        # the new mapping.
+
+        def _set_columns_arr(arr, col_indices):
+            # Helper utility to apply column projection
+            # on each sub-array.  The logic depends on whether
+            # slicing was performed eagerly or not.
+            if isinstance(arr, tuple):
+                # Deal with lazy slicing.
+                # The second element should be array-like.
+                return (
+                    arr[0],
+                    arr[1][:, col_indices],
+                    arr[2],
+                )
+            return arr[:, col_indices]
+
+        cols = list(self.common_kwargs["columns"])
+        if len(columns) != len(cols):
+            common_kwargs = {"index": None, "columns": columns}
+            col_indices = [cols.index(c) for c in columns]
+            return BlockwiseDepColumnar(
+                mapping={
+                    k: {"data": _set_columns_arr(v["data"], col_indices)}
+                    for k, v in self.mapping.items()
+                },
+                numblocks=self.numblocks,
+                common_kwargs=common_kwargs,
+                produces_tasks=self.produces_tasks,
+            )
+        else:
+            return self
+
+    def _project_columns_frame(self, columns):
+        # Frame-like column projection.
+        # Return a new `BlockwiseDepColumnar` object with
+        # the new mapping.
+
         # Return early if `columns` is not a subset,
         # or representitive `mapping` element does not
         # have a `columns` attribute (e.g. it's a `Series`)
         try:
             if sorted(next(iter(self.mapping.values())).columns) == sorted(columns):
                 return self
-            return BlockwiseDepFrames({k: v[columns] for k, v in self.mapping.items()})
+            return BlockwiseDepColumnar(
+                mapping={k: v[columns] for k, v in self.mapping.items()},
+                numblocks=self.numblocks,
+                common_kwargs=self.common_kwargs,
+                produces_tasks=self.produces_tasks,
+            )
         except (AttributeError, KeyError):
+            # Failed to project due to missing `columns`
+            # attribute, or problematic column selection
+            # (KeyError). Skipping projection optimization.
             return self
 
 
