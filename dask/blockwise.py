@@ -3,6 +3,7 @@ import os
 from itertools import product
 from typing import (
     Any,
+    Dict,
     Hashable,
     Iterable,
     List,
@@ -161,16 +162,26 @@ class BlockwiseDepDict(BlockwiseDep):
         self,
         mapping: dict,
         numblocks: Optional[Tuple[int, ...]] = None,
+        common_kwargs: Optional[Dict[str, Any]] = None,
         produces_tasks: bool = False,
     ):
         self.mapping = mapping
+        self.common_kwargs = common_kwargs or {}
         self.produces_tasks = produces_tasks
 
         # By default, assume 1D shape
         self.numblocks = numblocks or (len(mapping),)
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
-        return self.mapping[idx]
+        _part = self.mapping[idx]
+        if self.common_kwargs:
+            if not isinstance(_part, dict):
+                raise ValueError(
+                    "Using `BlockwiseDepDict.common_kwargs` requires "
+                    "all `mapping` elements to be of type `dict`."
+                )
+            return toolz.merge(_part, self.common_kwargs)
+        return _part
 
     def __dask_distributed_pack__(
         self, required_indices: Optional[List[Tuple[int, ...]]] = None
@@ -183,6 +194,7 @@ class BlockwiseDepDict(BlockwiseDep):
         return {
             "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
             "numblocks": self.numblocks,
+            "common_kwargs": self.common_kwargs,
             "produces_tasks": self.produces_tasks,
         }
 
@@ -191,7 +203,46 @@ class BlockwiseDepDict(BlockwiseDep):
         return cls(**state)
 
 
-class BlockwiseDepFrameDict(BlockwiseDepDict):
+class BlockwiseDepColArrays(BlockwiseDepDict):
+    def project_columns(self, columns):
+
+        # Make sure column selection is a list
+        if isinstance(columns, (tuple, set)):
+            columns = list(columns)
+        elif not isinstance(columns, list):
+            columns = [columns]
+
+        # Define helper utility to apply column projection
+        # on each sub-array.  The logic depends on whether
+        # slicing was performed eagerly or not.
+        def _set_columns(arr, inds):
+            if isinstance(arr, tuple):
+                return (
+                    arr[0],
+                    arr[1][:, col_indices],
+                    arr[2],
+                )
+            return arr[:, col_indices]
+
+        # Perform the actual column projection by returning
+        # a new `BlockwiseDepColArrays` object with the new
+        # mapping.
+        _cols = list(self.common_kwargs["columns"])
+        if len(columns) != len(_cols):
+            common_kwargs = {"index": None, "columns": columns}
+            col_indices = [_cols.index(c) for c in columns]
+            return BlockwiseDepColArrays(
+                {
+                    k: {"data": _set_columns(v["data"], col_indices)}
+                    for k, v in self.mapping.items()
+                },
+                common_kwargs=common_kwargs,
+            )
+        else:
+            return self
+
+
+class BlockwiseDepFrames(BlockwiseDepDict):
     """Frame-based Blockwise-IO argument
 
     This is a special case of ``BlockwiseDepDict`` in
@@ -208,6 +259,10 @@ class BlockwiseDepFrameDict(BlockwiseDepDict):
 
     def project_columns(self, columns):
 
+        import pdb
+
+        pdb.set_trace()
+
         # Make sure column selection is a list
         if isinstance(columns, (tuple, set)):
             columns = list(columns)
@@ -223,7 +278,7 @@ class BlockwiseDepFrameDict(BlockwiseDepDict):
         except AttributeError:
             return self
 
-        return BlockwiseDepFrameDict({k: v[columns] for k, v in self.mapping.items()})
+        return BlockwiseDepFrames({k: v[columns] for k, v in self.mapping.items()})
 
 
 def subs(task, substitution):

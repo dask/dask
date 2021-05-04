@@ -103,6 +103,14 @@ def test_from_array():
     with pytest.raises(ValueError):
         dd.from_array(np.ones(shape=(10, 10, 10)))
 
+    # Test getitem optimization
+    d = dd.from_array(x, chunksize=4, columns=list("abc"))[["a"]]
+    dsk = optimize_dataframe_getitem(d.dask, keys=d.__dask_keys__())
+    read = [key for key in dsk.layers if key.startswith("from-array")][0]
+    subgraph = dsk.layers[read]
+    assert isinstance(subgraph, DataFrameIOLayer)
+    assert subgraph.columns == ["a"]
+
 
 def test_from_array_with_record_dtype():
     x = np.array([(i, i * 10) for i in range(10)], dtype=[("a", "i4"), ("b", "i4")])

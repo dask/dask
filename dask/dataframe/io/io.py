@@ -1,3 +1,4 @@
+import copy
 import os
 from math import ceil
 from operator import getitem
@@ -78,7 +79,29 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
-def from_array(x, chunksize=50000, columns=None, meta=None):
+class FromArrayFunctionWrapper:
+    def __init__(self, meta):
+        self.meta = meta
+        try:
+            self.columns = meta.columns
+        except AttributeError:
+            self.columns = None
+
+    def project_columns(self, columns):
+        if self.columns is None or sorted(columns) == sorted(self.columns):
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        func.meta = self.meta[columns]
+        return func
+
+    def __call__(self, kwargs):
+        if isinstance(kwargs["data"], tuple):
+            kwargs["data"] = kwargs["data"][0](*kwargs["data"][1:])
+        return type(self.meta)(**kwargs)
+
+
+def from_array(x, chunksize=50000, columns=None, meta=None, eager_slice=False):
     """Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
@@ -119,16 +142,33 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
     token = tokenize(x, chunksize, columns)
-    name = "from_array-" + token
+    label = "from-array-"
+    name = label + token
 
-    dsk = {}
-    for i in range(0, int(ceil(len(x) / chunksize))):
-        data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
-        if is_series_like(meta):
-            dsk[name, i] = (type(meta), data, None, meta.dtype, meta.name)
-        else:
-            dsk[name, i] = (type(meta), data, None, meta.columns)
-    return new_dd_object(dsk, name, meta, divisions)
+    if is_series_like(meta):
+        common_inputs = {"index": None, "dtype": meta.dtype, "name": meta.name}
+    else:
+        common_inputs = {"index": None, "columns": meta.columns}
+
+    # Create Blockwise layer
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=[
+            {
+                "data": getitem(x, slice(i * chunksize, (i + 1) * chunksize))
+                if eager_slice
+                else (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
+            }
+            for i in range(0, int(ceil(len(x) / chunksize)))
+        ],
+        io_func=FromArrayFunctionWrapper(meta),
+        label=label,
+        from_arraylike=True,
+        common_inputs=common_inputs,
+    )
+    graph = HighLevelGraph({name: layer}, {name: set()})
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):

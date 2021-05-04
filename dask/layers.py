@@ -8,8 +8,9 @@ from .base import tokenize
 from .blockwise import (
     Blockwise,
     BlockwiseDep,
+    BlockwiseDepColArrays,
     BlockwiseDepDict,
-    BlockwiseDepFrameDict,
+    BlockwiseDepFrames,
     blockwise_token,
 )
 from .core import keys_in_tasks
@@ -905,6 +906,10 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         Whether the elements of ``inputs`` are all "frame-like",
         enabling an extra ``BlockwiseDep``-level column-projection
         optimization. Defaults to False.
+    from_arraylike : bool (optional)
+        Whether the elements of ``inputs`` include the array-based
+        arguments needed for DataFrame construction. Cannot be used
+        with ``from_framelike=True``. Defaults to False.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -918,6 +923,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         label=None,
         produces_tasks=False,
         from_framelike=False,
+        from_arraylike=False,
+        common_inputs=None,
         annotations=None,
     ):
         self.name = name
@@ -927,22 +934,35 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.label = label
         self.produces_tasks = produces_tasks
         self.from_framelike = from_framelike
+        self.from_arraylike = from_arraylike
+        self.common_inputs = common_inputs
         self.annotations = annotations
 
         # Need to construct a `BlockwiseDep` object.
         # Define mapping between key index and "part"
-        dep_cls = BlockwiseDepFrameDict if self.from_framelike else BlockwiseDepDict
+        if from_framelike and from_arraylike:
+            raise ValueError(
+                "DataFrameIOLayer cannot be initialized with "
+                "both from_framelike and from_arraylike."
+            )
+        elif from_framelike:
+            dep_cls = BlockwiseDepFrames
+        elif from_arraylike:
+            dep_cls = BlockwiseDepColArrays
+        else:
+            dep_cls = BlockwiseDepDict
         io_arg_map = dep_cls(
             {(i,): inp for i, inp in enumerate(self.inputs)},
             produces_tasks=produces_tasks,
+            common_kwargs=common_inputs,
         )
 
-        # Try projecting columns in `io_arg_map`
-        if columns and from_framelike:
-            try:
-                io_arg_map = io_arg_map.project_columns(columns)
-            except AttributeError:
-                pass
+        # # Try projecting columns in `io_arg_map`
+        # if columns and (from_framelike or from_arraylike):
+        #     try:
+        #         io_arg_map = io_arg_map.project_columns(columns)
+        #     except AttributeError:
+        #         pass
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
@@ -966,6 +986,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 self.io_func,
                 produces_tasks=self.produces_tasks,
                 from_framelike=self.from_framelike,
+                from_arraylike=self.from_arraylike,
+                common_inputs=self.common_inputs,
                 annotations=self.annotations,
             )
 
