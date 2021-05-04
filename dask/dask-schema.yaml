@@ -58,7 +58,12 @@ properties:
 
           active:
             type: [boolean, 'null']
-            description: Turn task fusion on/off
+            description: |
+              Turn task fusion on/off. This setting only applies to a
+              fully-materialized task graph (not to a high-Level graph). By default
+              (None), the active task fusion option will be treated as ``False`` for
+              Dask-Dataframe collections, and as ``True`` for all other graphs
+              (including Dask-Array collections).
 
           ave-width:
             type: number
