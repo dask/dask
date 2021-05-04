@@ -64,10 +64,6 @@ class BlockwiseDep:
             "Must define `__getitem__` for `BlockwiseDep` subclass."
         )
 
-    def __len__(self):
-        """BlockwiseDep object length"""
-        return product(*self.numblocks)
-
     def get(self, idx: Tuple[int, ...], default) -> Any:
         """BlockwiseDep ``__getitem__`` Wrapper"""
         try:
