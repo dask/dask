@@ -957,12 +957,12 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
             common_kwargs=common_inputs,
         )
 
-        # # Try projecting columns in `io_arg_map`
-        # if columns and (from_framelike or from_arraylike):
-        #     try:
-        #         io_arg_map = io_arg_map.project_columns(columns)
-        #     except AttributeError:
-        #         pass
+        # Try projecting columns in `io_arg_map`
+        if columns and (from_framelike or from_arraylike):
+            try:
+                io_arg_map = io_arg_map.project_columns(columns)
+            except AttributeError:
+                pass
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}

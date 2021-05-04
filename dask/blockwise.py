@@ -259,10 +259,6 @@ class BlockwiseDepFrames(BlockwiseDepDict):
 
     def project_columns(self, columns):
 
-        import pdb
-
-        pdb.set_trace()
-
         # Make sure column selection is a list
         if isinstance(columns, (tuple, set)):
             columns = list(columns)
@@ -275,10 +271,9 @@ class BlockwiseDepFrames(BlockwiseDepDict):
         try:
             if sorted(next(iter(self.mapping.values())).columns) == sorted(columns):
                 return self
-        except AttributeError:
+            return BlockwiseDepFrames({k: v[columns] for k, v in self.mapping.items()})
+        except (AttributeError, KeyError):
             return self
-
-        return BlockwiseDepFrames({k: v[columns] for k, v in self.mapping.items()})
 
 
 def subs(task, substitution):
