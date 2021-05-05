@@ -18,13 +18,16 @@ def optimize(dsk, keys, **kwargs):
     fuse_active = config.get("optimization.fuse.active")
     if not isinstance(dsk, HighLevelGraph):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
-        if fuse_active is None:
-            fuse_active = True
+        dsk = dsk.cull(set(keys))
+        if not fuse_active:
+            # TODO: Figure out why the key_dependencies cause
+            # a problem when active fusion is disabled.
+            dsk.key_dependencies = {}
     else:
         dsk = optimize_dataframe_getitem(dsk, keys=keys)
         dsk = optimize_blockwise(dsk, keys=keys)
         dsk = fuse_roots(dsk, keys=keys)
-    dsk = dsk.cull(set(keys))
+        dsk = dsk.cull(set(keys))
 
     # Do not perform low-level fusion unless the user has
     # specified True explicitly, or if the input to this
