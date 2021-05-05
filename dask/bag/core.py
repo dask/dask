@@ -1059,7 +1059,7 @@ class Bag(DaskMethodsMixin):
         return self.reduction(min, min, split_every=split_every)
 
     def any(self, split_every=None):
-        """ Are any of the elements truthy? 
+        """Are any of the elements truthy? 
         
         Examples
         --------
@@ -1071,7 +1071,7 @@ class Bag(DaskMethodsMixin):
         return self.reduction(any, any, split_every=split_every)
 
     def all(self, split_every=None):
-        """ Are all elements truthy? 
+        """Are all elements truthy? 
         
         Examples
         --------
@@ -1083,7 +1083,7 @@ class Bag(DaskMethodsMixin):
         return self.reduction(all, all, split_every=split_every)
 
     def count(self, split_every=None):
-        """ Count the number of elements. 
+        """Count the number of elements. 
         
         Examples
         --------
