@@ -3,15 +3,15 @@ from functools import wraps
 import numpy as np
 
 from ..base import normalize_token
+from ..utils import derived_from
 from .core import (
-    concatenate_lookup,
-    tensordot_lookup,
-    map_blocks,
     asanyarray,
     blockwise,
+    concatenate_lookup,
+    map_blocks,
+    tensordot_lookup,
 )
 from .routines import _average
-from ..utils import derived_from
 
 
 @normalize_token.register(np.ma.masked_array)

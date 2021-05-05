@@ -1,26 +1,28 @@
+import inspect
+import os
+import pickle
+import threading
+import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
-from dataclasses import is_dataclass, fields
+from dataclasses import fields, is_dataclass
+from distutils.version import LooseVersion
 from functools import partial
 from hashlib import md5
 from numbers import Number
 from operator import getitem
 from typing import Iterator, Mapping, Set
-import inspect
-import pickle
-import os
-import threading
-import uuid
 
-from tlz import merge, groupby, curry, identity
+from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
-from .context import thread_state
-from .core import flatten, quote, get as simple_get, literal
-from .hashing import hash_buffer_hex
-from .utils import Dispatch, ensure_dict, apply, key_split
 from . import config, local, threaded
-
+from .context import thread_state
+from .core import flatten
+from .core import get as simple_get
+from .core import literal, quote
+from .hashing import hash_buffer_hex
+from .utils import Dispatch, apply, ensure_dict, key_split
 
 __all__ = (
     "DaskMethodsMixin",
@@ -285,7 +287,7 @@ class DaskMethodsMixin:
 
     def __await__(self):
         try:
-            from distributed import wait, futures_of
+            from distributed import futures_of, wait
         except ImportError as e:
             raise ImportError(
                 "Using async/await with dask requires the `distributed` package"
@@ -646,8 +648,9 @@ def visualize(*args, **kwargs):
     color = kwargs.get("color")
 
     if color == "order":
-        from .order import order
         import matplotlib.pyplot as plt
+
+        from .order import order
 
         o = order(dsk)
         try:
@@ -895,6 +898,8 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
+    PANDAS_GT_130 = LooseVersion(pd.__version__) >= LooseVersion("1.3.0")
+
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
         values = ind.array
@@ -932,13 +937,21 @@ def register_pandas():
         return [
             s.name,
             s.dtype,
-            normalize_token(s._data.blocks[0].values),
+            normalize_token(s._values),
             normalize_token(s.index),
         ]
 
     @normalize_token.register(pd.DataFrame)
     def normalize_dataframe(df):
-        data = [block.values for block in df._data.blocks]
+        mgr = df._data
+
+        if PANDAS_GT_130:
+            # for compat with ArrayManager, pandas 1.3.0 introduced a `.arrays`
+            # attribute that returns the column arrays/block arrays for both
+            # BlockManager and ArrayManager
+            data = list(mgr.arrays)
+        else:
+            data = [block.values for block in mgr.blocks]
         data.extend([df.columns, df.index])
         return list(map(normalize_token, data))
 

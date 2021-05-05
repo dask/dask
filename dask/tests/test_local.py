@@ -1,9 +1,7 @@
 import dask
-
-from dask.local import start_state_from_dask, get_sync, finish_task, sortkey
+from dask.local import finish_task, get_sync, sortkey, start_state_from_dask
 from dask.order import order
-from dask.utils_test import GetFunctionTestMixin, inc, add
-
+from dask.utils_test import GetFunctionTestMixin, add, inc
 
 fib_dask = {"f0": 0, "f1": 1, "f2": 1, "f3": 2, "f4": 3, "f5": 5, "f6": 8}
 

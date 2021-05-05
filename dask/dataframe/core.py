@@ -2,21 +2,21 @@ import copy
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
-from functools import wraps, partial
-from numbers import Number, Integral
+from functools import partial, wraps
+from numbers import Integral, Number
 from operator import getitem
 from pprint import pformat
 
 import numpy as np
 import pandas as pd
-from pandas.util import cache_readonly
 from pandas.api.types import (
     is_bool_dtype,
-    is_timedelta64_dtype,
-    is_numeric_dtype,
     is_datetime64_any_dtype,
+    is_numeric_dtype,
+    is_timedelta64_dtype,
 )
-from tlz import merge, first, unique, partition_all, remove
+from pandas.util import cache_readonly
+from tlz import first, merge, partition_all, remove, unique
 
 try:
     from chest import Chest as Cache
@@ -24,56 +24,58 @@ except ImportError:
     Cache = dict
 
 from .. import array as da
-from .. import core
-
-from ..utils import parse_bytes, partial_by_order, Dispatch, IndexCallable, apply
-from .. import threaded
-from ..context import globalmethod
-from ..utils import (
-    has_keyword,
-    random_state_data,
-    pseudorandom,
-    derived_from,
-    funcname,
-    memory_repr,
-    put_lines,
-    M,
-    key_split,
-    OperatorMethodMixin,
-    is_arraylike,
-    typename,
-    iter_chunks,
-)
+from .. import core, threaded
 from ..array.core import Array, normalize_arg
 from ..array.utils import zeros_like_safe
-from ..blockwise import blockwise, Blockwise, subs
-from ..base import DaskMethodsMixin, tokenize, dont_optimize, is_dask_collection
-from ..delayed import delayed, Delayed, unpack_collections
+from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from ..blockwise import Blockwise, blockwise, subs
+from ..context import globalmethod
+from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-
+from ..optimization import SubgraphCallable
+from ..utils import (
+    Dispatch,
+    IndexCallable,
+    M,
+    OperatorMethodMixin,
+    apply,
+    derived_from,
+    funcname,
+    has_keyword,
+    is_arraylike,
+    iter_chunks,
+    key_split,
+    memory_repr,
+    parse_bytes,
+    partial_by_order,
+    pseudorandom,
+    put_lines,
+    random_state_data,
+    typename,
+)
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .optimize import optimize
 from .utils import (
-    meta_nonempty,
-    make_meta,
-    insert_meta_param_description,
-    raise_on_meta_error,
-    clear_known_categories,
-    group_split_dispatch,
-    is_categorical_dtype,
-    has_known_categories,
     PANDAS_GT_100,
     PANDAS_GT_110,
-    index_summary,
-    is_dataframe_like,
-    is_series_like,
-    is_index_like,
-    valid_divisions,
-    hash_object_dispatch,
     check_matching_columns,
+    clear_known_categories,
     drop_by_shallow_copy,
+    group_split_dispatch,
+    has_known_categories,
+    hash_object_dispatch,
+    index_summary,
+    insert_meta_param_description,
+    is_categorical_dtype,
+    is_dataframe_like,
+    is_index_like,
+    is_series_like,
+    make_meta,
+    meta_nonempty,
+    raise_on_meta_error,
+    valid_divisions,
 )
 
 no_default = "__no_default__"
@@ -1738,6 +1740,8 @@ Dask Name: {name}, {task} tasks"""
         else:
             return result
 
+    product = prod  # aliased dd.product
+
     @derived_from(pd.DataFrame)
     def max(self, axis=None, skipna=True, split_every=False, out=None):
         return self._reduction_agg(
@@ -3102,7 +3106,8 @@ Dask Name: {name}, {task} tasks""".format(
         --------
         pandas.Series.rename
         """
-        from pandas.api.types import is_scalar, is_dict_like, is_list_like
+        from pandas.api.types import is_dict_like, is_list_like, is_scalar
+
         import dask.dataframe as dd
 
         if is_scalar(index) or (
@@ -3706,7 +3711,11 @@ class Index(Series):
             raise NotImplementedError()
 
         return self.map_partitions(
-            M.to_frame, index, name, meta=self._meta.to_frame(index, name)
+            M.to_frame,
+            index,
+            name,
+            meta=self._meta.to_frame(index, name),
+            transform_divisions=False,
         )
 
     @insert_meta_param_description(pad=12)
@@ -3755,6 +3764,35 @@ class DataFrame(_Frame):
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = "dataframe-"
     _accessors = set()
+
+    def __init__(self, dsk, name, meta, divisions):
+        super().__init__(dsk, name, meta, divisions)
+        if self.dask.layers[name].collection_annotations is None:
+            self.dask.layers[name].collection_annotations = {
+                "type": type(self),
+                "divisions": self.divisions,
+                "dataframe_type": type(self._meta),
+                "series_dtypes": {
+                    col: self._meta[col].dtype
+                    if hasattr(self._meta[col], "dtype")
+                    else None
+                    for col in self._meta.columns
+                },
+            }
+        else:
+            self.dask.layers[name].collection_annotations.update(
+                {
+                    "type": type(self),
+                    "divisions": self.divisions,
+                    "dataframe_type": type(self._meta),
+                    "series_dtypes": {
+                        col: self._meta[col].dtype
+                        if hasattr(self._meta[col], "dtype")
+                        else None
+                        for col in self._meta.columns
+                    },
+                }
+            )
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -3962,7 +4000,7 @@ class DataFrame(_Frame):
         cs = self._meta.select_dtypes(include=include, exclude=exclude).columns
         return self[list(cs)]
 
-    def sort_values(self, other, npartitions=None, ascending=True, **kwargs):
+    def sort_values(self, by, npartitions=None, ascending=True, **kwargs):
         """Sort the dataset by a single column.
 
         Sorting a parallel dataset requires expensive shuffles and is generally
@@ -3970,7 +4008,7 @@ class DataFrame(_Frame):
 
         Parameters
         ----------
-        other: string
+        by: string
         npartitions: int, None, or 'auto'
             The ideal number of output partitions. If None, use the same as
             the input. If 'auto' then decide by memory use.
@@ -3982,14 +4020,11 @@ class DataFrame(_Frame):
         --------
         >>> df2 = df.sort_values('x')  # doctest: +SKIP
         """
-        if not ascending:
-            raise NotImplementedError("The ascending= keyword is not supported")
-
         from .shuffle import sort_values
 
         return sort_values(
             self,
-            other,
+            by,
             ascending=ascending,
             npartitions=npartitions,
             **kwargs,
@@ -5641,17 +5676,22 @@ def map_partitions(
         dsk = dict(dsk)
 
         for k, v in dsk.items():
-            vv = v
-            v = v[0]
+            subgraph = v[0]
             number = k[-1]
             assert isinstance(number, int)
             info = {"number": number, "division": divisions[number]}
-            v = copy.copy(v)  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__dummy__": info})
-            v.dsk[key] = task
-            dsk[k] = (v,) + vv[1:]
+            # Replace the __dummy__ keyword argument with `info`
+            subgraph_dsk = copy.copy(subgraph.dsk)
+            [(key, task)] = subgraph_dsk.items()
+            subgraph_dsk[key] = subs(task, {"__dummy__": info})
+            dsk[k] = (
+                SubgraphCallable(
+                    dsk=subgraph_dsk,
+                    outkey=subgraph.outkey,
+                    inkeys=subgraph.inkeys,
+                    name=f"{subgraph.name}-info-{tokenize(info)}",
+                ),
+            ) + v[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
@@ -5829,7 +5869,7 @@ def quantile(df, q, method="default"):
             "crick", "crick is a required dependency for using the t-digest method."
         )
 
-        from dask.array.percentile import _tdigest_chunk, _percentiles_from_tdigest
+        from dask.array.percentile import _percentiles_from_tdigest, _tdigest_chunk
 
         name = "quantiles_tdigest-1-" + token
         val_dsk = {
@@ -6263,6 +6303,9 @@ def repartition_freq(df, freq=None):
     """ Repartition a timeseries dataframe by a new frequency """
     if not isinstance(df.divisions[0], pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
+
+    freq = _map_freq_to_period_start(freq)
+
     try:
         start = df.divisions[0].ceil(freq)
     except ValueError:
@@ -6273,12 +6316,50 @@ def repartition_freq(df, freq=None):
     if not len(divisions):
         divisions = [df.divisions[0], df.divisions[-1]]
     else:
-        if divisions[-1] != df.divisions[-1]:
-            divisions.append(df.divisions[-1])
+        divisions.append(df.divisions[-1])
         if divisions[0] != df.divisions[0]:
             divisions = [df.divisions[0]] + divisions
 
     return df.repartition(divisions=divisions)
+
+
+def _map_freq_to_period_start(freq):
+    """Ensure that the frequency pertains to the **start** of a period.
+
+    If e.g. `freq='M'`, then the divisions are:
+        - 2021-31-1 00:00:00 (start of February partition)
+        - 2021-2-28 00:00:00 (start of March partition)
+        - ...
+
+    but this **should** be:
+        - 2021-2-1 00:00:00 (start of February partition)
+        - 2021-3-1 00:00:00 (start of March partition)
+        - ...
+
+    Therefore, we map `freq='M'` to `freq='MS'` (same for quarter and year).
+    """
+
+    if not isinstance(freq, str):
+        return freq
+
+    offset = pd.tseries.frequencies.to_offset(freq)
+    offset_type_name = type(offset).__name__
+
+    if not offset_type_name.endswith("End"):
+        return freq
+
+    new_offset = offset_type_name[: -len("End")] + "Begin"
+    try:
+        new_offset_type = getattr(pd.tseries.offsets, new_offset)
+        if "-" in freq:
+            _, anchor = freq.split("-")
+            anchor = "-" + anchor
+        else:
+            anchor = ""
+        n = str(offset.n) if offset.n != 1 else ""
+        return f"{n}{new_offset_type._prefix}{anchor}"
+    except AttributeError:
+        return freq
 
 
 def repartition_size(df, size):
@@ -6516,7 +6597,7 @@ def idxmaxmin_row(x, fn=None, skipna=True):
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
-    if len(x) == 0:
+    if len(x) <= 1:
         return x
     return (
         x.groupby(level=0)

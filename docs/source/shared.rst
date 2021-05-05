@@ -1,13 +1,14 @@
+:orphan:
+
 Shared Memory
 =============
 
-The asynchronous scheduler requires an ``apply_async`` function and a
-``Queue``.  These determine the kind of worker and parallelism that we exploit.
-``apply_async`` functions can be found in the following places:
-
-*  ``multithreading.Pool().apply_async`` - uses multiple processes
-*  ``multithreading.pool.ThreadPool().apply_async`` - uses multiple threads
-*  ``dask.local.apply_sync`` - uses only the main thread (useful for debugging)
+The asynchronous scheduler accepts any ``concurrent.futures.Executor``
+instance. This includes instances of the ``ThreadPoolExecutor`` and
+``ProcessPoolExecutor`` defined in the Python standard library as well as any
+other subclass from a 3rd party library. Dask also defines its own
+``SynchronousExecutor`` for that simply runs functions on the main thread
+(useful for debugging).
 
 Full dask ``get`` functions exist in each of ``dask.threaded.get``,
 ``dask.multiprocessing.get`` and ``dask.get`` respectively.
@@ -37,14 +38,10 @@ chains are started.  This can also be queried in constant time.
 Performance
 -----------
 
-*EDIT: The experiments run in this section are now outdated.  Anecdotal testing
-shows that performance has improved significantly.  There is now about 200 us
-overhead per task and about 1 ms startup time.*
-
 **tl;dr** The threaded scheduler overhead behaves roughly as follows:
 
-*  1ms overhead per task
-*  100ms startup time (if you wish to make a new ThreadPool each time)
+*  200us overhead per task
+*  10us startup time (if you wish to make a new ThreadPoolExecutor each time)
 *  Constant scaling with number of tasks
 *  Linear scaling with number of dependencies per task
 
@@ -62,31 +59,31 @@ The quickest/simplest test we can do it to use IPython's ``timeit`` magic:
    In [2]: x = da.ones(1000, chunks=(2,)).sum()
 
    In [3]: len(x.dask)
-   Out[3]: 1001
+   Out[3]: 1168
 
    In [4]: %timeit x.compute()
-   1 loops, best of 3: 550 ms per loop
+   92.1 ms ± 2.61 ms per loop (mean ± std. dev. of 7 runs, 10 loops each)
 
-So this takes about 500 microseconds per task.  About 100ms of this is from overhead:
-
-.. code-block:: python
-
-   In [6]: x = da.ones(1000, chunks=(1000,)).sum()
-   In [7]: %timeit x.compute()
-   10 loops, best of 3: 103 ms per loop
-
-Most of this overhead is from spinning up a ThreadPool each time.  This may be
-mediated by using a global or contextual pool:
+So this takes ~90 microseconds per task.  About 100ms of this is from overhead:
 
 .. code-block:: python
 
-   >>> from multiprocessing.pool import ThreadPool
-   >>> pool = ThreadPool()
-   >>> dask.config.set(pool=pool)  # set global threadpool
+   In [5]: x = da.ones(1000, chunks=(1000,)).sum()
+   In [6]: %timeit x.compute()
+   1.18 ms ± 8.64 µs per loop (mean ± std. dev. of 7 runs, 1000 loops each)
+
+There is some overhead from spinning up a ThreadPoolExecutor each time.
+This may be mediated by using a global or contextual pool:
+
+.. code-block:: python
+
+   >>> from concurrent.futures import ThreadPoolExecutor
+   >>> pool = ThreadPoolExecutor()
+   >>> dask.config.set(pool=pool)  # set global ThreadPoolExecutor
 
    or
 
-   >>> with dask.config.set(pool=pool)  # use threadpool throughout with block
+   >>> with dask.config.set(pool=pool)  # use ThreadPoolExecutor throughout with block
    ...     ...
 
 We now measure scaling the number of tasks and scaling the density of the

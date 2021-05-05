@@ -1,16 +1,16 @@
+import os
+import pathlib
+from time import sleep
+
 import numpy as np
 import pandas as pd
 import pytest
 
-import os
-from time import sleep
-import pathlib
-
 import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
-from dask.utils import tmpfile, tmpdir, dependency_depth
 from dask.dataframe.utils import assert_eq
+from dask.utils import dependency_depth, tmpdir, tmpfile
 
 
 def test_to_hdf():

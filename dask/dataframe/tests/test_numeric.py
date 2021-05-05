@@ -1,10 +1,10 @@
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
-from dask.array import from_array, Array
+from dask.array import Array, from_array
+from dask.dataframe import Series, from_pandas, to_numeric
 from dask.delayed import Delayed
-from dask.dataframe import from_pandas, Series, to_numeric
 
 
 @pytest.mark.parametrize("arg", ["5", 5, "5 "])
@@ -15,7 +15,7 @@ def test_to_numeric_on_scalars(arg):
 
 
 def test_to_numeric_on_dask_array():
-    arg = from_array(["1.0", "2", -3, 5.1])
+    arg = from_array(["1.0", "2", "-3", "5.1"])
     expected = np.array([1.0, 2.0, -3.0, 5.1])
     output = to_numeric(arg)
     assert isinstance(output, Array)

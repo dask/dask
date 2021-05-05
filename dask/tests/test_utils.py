@@ -7,35 +7,36 @@ import pytest
 from tlz import curry
 
 from dask import get
-from dask.utils import (
-    getargspec,
-    takes_multiple_arguments,
-    Dispatch,
-    random_state_data,
-    memory_repr,
-    methodcaller,
-    M,
-    skip_doctest,
-    SerializableLock,
-    funcname,
-    ndeepmap,
-    ensure_dict,
-    extra_titles,
-    asciitable,
-    itemgetter,
-    partial_by_order,
-    has_keyword,
-    derived_from,
-    parse_timedelta,
-    parse_bytes,
-    is_arraylike,
-    iter_chunks,
-    stringify,
-    stringify_collection_keys,
-)
-from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
 from dask.optimization import SubgraphCallable
+from dask.utils import (
+    Dispatch,
+    M,
+    SerializableLock,
+    asciitable,
+    derived_from,
+    ensure_dict,
+    extra_titles,
+    format_bytes,
+    funcname,
+    getargspec,
+    has_keyword,
+    is_arraylike,
+    itemgetter,
+    iter_chunks,
+    memory_repr,
+    methodcaller,
+    ndeepmap,
+    parse_bytes,
+    parse_timedelta,
+    partial_by_order,
+    random_state_data,
+    skip_doctest,
+    stringify,
+    stringify_collection_keys,
+    takes_multiple_arguments,
+)
+from dask.utils_test import inc
 
 
 def test_getargspec():
@@ -637,3 +638,24 @@ def test_stringify_collection_keys():
     assert res[0] == str(obj[0])
     assert res[1] == str(obj[1])
     assert res[2] == obj[2]
+
+
+@pytest.mark.parametrize(
+    "n,expect",
+    [
+        (0, "0 B"),
+        (920, "920 B"),
+        (930, "0.91 kiB"),
+        (921.23 * 2 ** 10, "921.23 kiB"),
+        (931.23 * 2 ** 10, "0.91 MiB"),
+        (921.23 * 2 ** 20, "921.23 MiB"),
+        (931.23 * 2 ** 20, "0.91 GiB"),
+        (921.23 * 2 ** 30, "921.23 GiB"),
+        (931.23 * 2 ** 30, "0.91 TiB"),
+        (921.23 * 2 ** 40, "921.23 TiB"),
+        (931.23 * 2 ** 40, "0.91 PiB"),
+        (2 ** 60, "1024.00 PiB"),
+    ],
+)
+def test_format_bytes(n, expect):
+    assert format_bytes(int(n)) == expect

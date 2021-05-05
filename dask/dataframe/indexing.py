@@ -1,16 +1,16 @@
-from datetime import datetime
-from collections import defaultdict
-
 import bisect
+from collections import defaultdict
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
 
-from .core import new_dd_object, Series
 from ..array.core import Array
-from .utils import is_index_like, meta_nonempty
-from . import methods
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
+from . import methods
+from .core import Series, new_dd_object
+from .utils import is_index_like, meta_nonempty
 
 
 class _IndexerBase:

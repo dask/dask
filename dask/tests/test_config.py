@@ -8,24 +8,23 @@ import pytest
 
 import dask.config
 from dask.config import (
-    update,
-    merge,
-    collect,
-    collect_yaml,
-    collect_env,
-    get,
-    ensure_file,
-    set,
-    config,
-    rename,
-    update_defaults,
-    refresh,
-    expand_environment_variables,
     canonical_name,
-    serialize,
+    collect,
+    collect_env,
+    collect_yaml,
+    config,
     deserialize,
+    ensure_file,
+    expand_environment_variables,
+    get,
+    merge,
+    refresh,
+    rename,
+    serialize,
+    set,
+    update,
+    update_defaults,
 )
-
 from dask.utils import tmpfile
 
 yaml = pytest.importorskip("yaml")
@@ -180,13 +179,10 @@ def test_collect():
             assert config == expected
 
 
-def test_collect_env_none():
-    os.environ["DASK_FOO"] = "bar"
-    try:
-        config = collect([])
-        assert config == {"foo": "bar"}
-    finally:
-        del os.environ["DASK_FOO"]
+def test_collect_env_none(monkeypatch):
+    monkeypatch.setenv("DASK_FOO", "bar")
+    config = collect([])
+    assert config == {"foo": "bar"}
 
 
 def test_get():
@@ -367,12 +363,9 @@ def test_refresh():
         ({"a": "A", "b": [1, "2", "$FOO"]}, {"a": "A", "b": [1, "2", "foo"]}),
     ],
 )
-def test_expand_environment_variables(inp, out):
-    try:
-        os.environ["FOO"] = "foo"
-        assert expand_environment_variables(inp) == out
-    finally:
-        del os.environ["FOO"]
+def test_expand_environment_variables(monkeypatch, inp, out):
+    monkeypatch.setenv("FOO", "foo")
+    assert expand_environment_variables(inp) == out
 
 
 def test_env_var_canonical_name(monkeypatch):

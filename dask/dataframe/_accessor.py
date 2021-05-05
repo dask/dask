@@ -1,6 +1,5 @@
 import warnings
 
-
 # Ported from pandas
 # https://github.com/pandas-dev/pandas/blob/master/pandas/core/accessor.py
 

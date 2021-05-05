@@ -1,4 +1,4 @@
-from .core import tensordot_lookup, concatenate_lookup, einsum_lookup
+from .core import concatenate_lookup, einsum_lookup, tensordot_lookup
 
 
 @tensordot_lookup.register_lazy("cupy")
@@ -24,8 +24,7 @@ def register_cupyx():
     from cupyx.scipy.sparse import spmatrix
 
     try:
-        from cupyx.scipy.sparse import hstack
-        from cupyx.scipy.sparse import vstack
+        from cupyx.scipy.sparse import hstack, vstack
     except ImportError as e:
         raise ImportError(
             "Stacking of sparse arrays requires at least CuPy version 8.0.0"

@@ -1,7 +1,7 @@
 import pytest
 
-from dask.context import globalmethod
 import dask
+from dask.context import globalmethod
 
 
 def test_with_get():

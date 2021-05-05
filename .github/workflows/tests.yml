@@ -25,7 +25,10 @@ jobs:
       - name: Setup Conda Environment
         uses: conda-incubator/setup-miniconda@v2
         with:
-          miniconda-version: "latest"
+          miniforge-variant: Mambaforge
+          miniforge-version: latest
+          use-mamba: true
+          channel-priority: true
           python-version: ${{ matrix.python-version }}
           environment-file: continuous_integration/environment-${{ matrix.python-version }}.yaml
           activate-environment: test-environment
@@ -35,6 +38,8 @@ jobs:
         shell: bash -l {0}
         if: ${{ matrix.os == 'macos-latest' && matrix.python-version == '3.8' }}
         run: |
+          # FIXME https://github.com/mamba-org/mamba/issues/412
+          # mamba uninstall --force numpy
           conda uninstall --force numpy
           python -m pip install --no-deps numpy==1.20
 
@@ -43,7 +48,7 @@ jobs:
         # test_base.py::test_tokenize_object_with_recursion_error_returns_uuid
         shell: bash -l {0}
         if: ${{ matrix.os == 'windows-latest' && matrix.python-version == '3.9' }}
-        run: conda uninstall ipython
+        run: mamba uninstall ipython
 
       - name: Install
         shell: bash -l {0}

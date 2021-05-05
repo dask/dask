@@ -1,10 +1,9 @@
-import re
 import os
+import re
 from functools import partial
 
-from .core import istask, get_dependencies, ishashable
-from .utils import funcname, import_required, key_split, apply
-
+from .core import get_dependencies, ishashable, istask
+from .utils import apply, funcname, import_required, key_split
 
 graphviz = import_required(
     "graphviz",

@@ -1,12 +1,14 @@
-import tlz as toolz
 import operator
 from collections import defaultdict
+from typing import List, Optional, Tuple
 
+import tlz as toolz
+
+from .base import tokenize
+from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import keys_in_tasks
-from .utils import apply, insert, stringify, stringify_collection_keys
 from .highlevelgraph import Layer
-from .blockwise import Blockwise, BlockwiseIODeps, blockwise_token
-
+from .utils import apply, insert, stringify, stringify_collection_keys
 
 #
 ##
@@ -38,14 +40,25 @@ class CallableLazyImport:
 #
 
 
-class CreateArrayDeps(BlockwiseIODeps):
+class CreateArrayDeps(BlockwiseDep):
     """Index-chunk mapping for BlockwiseCreateArray"""
 
     def __init__(self, chunks: tuple):
         self.chunks = chunks
+        self.numblocks = tuple(len(chunk) for chunk in chunks)
+        self.produces_tasks = False
 
     def __getitem__(self, idx: tuple):
         return tuple(chunk[i] for i, chunk in zip(idx, self.chunks))
+
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
+        return {"chunks": self.chunks}
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)
 
 
 class BlockwiseCreateArray(Blockwise):
@@ -74,25 +87,16 @@ class BlockwiseCreateArray(Blockwise):
         shape,
         chunks,
     ):
-        io_name = "blockwise-create-" + name
-
         # Define "blockwise" graph
         dsk = {name: (func, blockwise_token(0))}
 
         out_ind = tuple(range(len(shape)))
-        self.nchunks = tuple(len(chunk) for chunk in chunks)
         super().__init__(
-            name,
-            out_ind,
-            dsk,
-            [(io_name, out_ind)],
-            {io_name: self.nchunks},
-            io_deps={
-                io_name: (
-                    "dask.layers.CreateArrayDeps",
-                    chunks,
-                )
-            },
+            output=name,
+            output_indices=out_ind,
+            dsk=dsk,
+            indices=[(CreateArrayDeps(chunks), out_ind)],
+            numblocks={},
         )
 
 
@@ -103,7 +107,26 @@ class BlockwiseCreateArray(Blockwise):
 #
 
 
-class SimpleShuffleLayer(Layer):
+class DataFrameLayer(Layer):
+    """DataFrame-based HighLevelGraph Layer"""
+
+    def project_columns(self, output_columns):
+        """Produce a column projection for this layer.
+        Given a list of required output columns, this method
+        returns a tuple with the projected layer, and any column
+        dependencies for this layer.  A value of ``None`` for
+        ``output_columns`` means that the current layer (and
+        any dependent layers) cannot be projected. This method
+        should be overridden by specialized DataFrame layers
+        to enable column projection.
+        """
+
+        # Default behavior.
+        # Return: `projected_layer`, `dep_columns`
+        return self, None
+
+
+class SimpleShuffleLayer(DataFrameLayer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -551,7 +574,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return dsk
 
 
-class BroadcastJoinLayer(Layer):
+class BroadcastJoinLayer(DataFrameLayer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -637,7 +660,7 @@ class BroadcastJoinLayer(Layer):
     def __len__(self):
         return len(self._dict)
 
-    def __dask_distributed_pack__(self, client):
+    def __dask_distributed_pack__(self, *args, **kwargs):
         import pickle
 
         # Pickle complex merge_kwargs elements. Also
@@ -744,9 +767,9 @@ class BroadcastJoinLayer(Layer):
             self.lhs_npartitions,
             self.rhs_name,
             self.rhs_npartitions,
-            self.merge_kwargs,
             annotations=self.annotations,
             parts_out=parts_out,
+            **self.merge_kwargs,
         )
 
     def cull(self, keys, all_keys):
@@ -783,11 +806,9 @@ class BroadcastJoinLayer(Layer):
             )
         else:
             # Not running on distributed scheduler - Use explicit functions
-            from dask.dataframe.multi import (
-                _concat_wrapper as concat_func,
-                _merge_chunk_wrapper as merge_chunk_func,
-                _split_partition as split_partition_func,
-            )
+            from dask.dataframe.multi import _concat_wrapper as concat_func
+            from dask.dataframe.multi import _merge_chunk_wrapper as merge_chunk_func
+            from dask.dataframe.multi import _split_partition as split_partition_func
 
         # Get broadcast "plan"
         bcast_name, bcast_size, other_name, other_on = self._broadcast_plan
@@ -846,3 +867,94 @@ class BroadcastJoinLayer(Layer):
             dsk[(self.name, i)] = (concat_func, _concat_list)
 
         return dsk
+
+
+class DataFrameIOLayer(Blockwise, DataFrameLayer):
+    """DataFrame-based Blockwise Layer with IO
+
+    Parameters
+    ----------
+    name : str
+        Name to use for the constructed layer.
+    columns : str, list or None
+        Field name(s) to read in as columns in the output.
+    inputs : list[tuple]
+        List of arguments to be passed to ``io_func`` so
+        that the materialized task to produce partition ``i``
+        will be: ``(<io_func>, inputs[i])``.  Note that each
+        element of ``inputs`` is typically a tuple of arguments.
+    io_func : callable
+        A callable function that takes in a single tuple
+        of arguments, and outputs a DataFrame partition.
+    label : str (optional)
+        String to use as a prefix in the place-holder collection
+        name. If nothing is specified (default), "subset-" will
+        be used.
+    produces_tasks : bool (optional)
+        Whether one or more elements of `inputs` is expected to
+        contain a nested task. This argument in only used for
+        serialization purposes, and will be deprecated in the
+        future. Default is False.
+    annotations: dict (optional)
+        Layer annotations to pass through to Blockwise.
+    """
+
+    def __init__(
+        self,
+        name,
+        columns,
+        inputs,
+        io_func,
+        label=None,
+        produces_tasks=False,
+        annotations=None,
+    ):
+        self.name = name
+        self.columns = columns
+        self.inputs = inputs
+        self.io_func = io_func
+        self.label = label
+        self.produces_tasks = produces_tasks
+        self.annotations = annotations
+
+        # Define mapping between key index and "part"
+        io_arg_map = BlockwiseDepDict(
+            {(i,): inp for i, inp in enumerate(self.inputs)},
+            produces_tasks=self.produces_tasks,
+        )
+
+        # Use Blockwise initializer
+        dsk = {self.name: (io_func, blockwise_token(0))}
+        super().__init__(
+            output=self.name,
+            output_indices="i",
+            dsk=dsk,
+            indices=[(io_arg_map, "i")],
+            numblocks={},
+            annotations=annotations,
+        )
+
+    def project_columns(self, columns):
+        # Method inherited from `DataFrameLayer.project_columns`
+        if columns and (self.columns is None or columns < set(self.columns)):
+            layer = DataFrameIOLayer(
+                (self.label or "subset-") + tokenize(self.name, columns),
+                list(columns),
+                self.inputs,
+                self.io_func,
+                produces_tasks=self.produces_tasks,
+                annotations=self.annotations,
+            )
+            try:
+                layer.io_func = layer.io_func.project_columns(columns)
+            except AttributeError:
+                pass
+            return layer, None
+        else:
+            # Default behavior
+            return self, None
+
+    def __repr__(self):
+        return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
+            self.name, len(self.inputs), self.columns
+        )

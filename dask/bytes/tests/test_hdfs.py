@@ -2,13 +2,12 @@ import os
 import posixpath
 
 import pytest
+from fsspec.core import get_fs_token_paths, open_files
 from tlz import concat
-from fsspec.core import open_files, get_fs_token_paths
 
 import dask
 import dask.bag as db
 from dask.bytes.core import read_bytes
-
 
 try:
     import distributed
@@ -147,10 +146,11 @@ def test_read_csv(hdfs):
 
 def test_read_text(hdfs):
     import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
 
-    pool = mp.get_context("spawn").Pool(2)
+    ctx = mp.get_context("spawn")
 
-    with pool:
+    with ProcessPoolExecutor(2, ctx) as pool:
         with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
             f.write("Alice 100\nBob 200\nCharlie 300".encode())
 
@@ -190,8 +190,8 @@ def test_read_text_unicode(hdfs):
 @require_pyarrow
 def test_parquet_pyarrow(hdfs):
     dd = pytest.importorskip("dask.dataframe")
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     fn = "%s/test.parquet" % basedir
     hdfs_fn = "hdfs://%s" % fn

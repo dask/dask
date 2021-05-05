@@ -1,6 +1,6 @@
+from dask.callbacks import Callback
 from dask.local import get_sync
 from dask.threaded import get as get_threaded
-from dask.callbacks import Callback
 from dask.utils_test import add
 
 

@@ -1,12 +1,11 @@
 from collections import namedtuple
 from itertools import starmap
-from timeit import default_timer
+from multiprocessing import Pipe, Process, current_process
 from time import sleep
-from multiprocessing import Process, Pipe, current_process
+from timeit import default_timer
 
 from ..callbacks import Callback
 from ..utils import import_required
-
 
 # Stores execution data for each task
 TaskData = namedtuple(

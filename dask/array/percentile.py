@@ -5,9 +5,9 @@ from numbers import Number
 import numpy as np
 from tlz import merge
 
-from .core import Array
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
+from .core import Array
 
 
 @wraps(np.percentile)
