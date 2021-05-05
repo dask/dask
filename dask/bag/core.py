@@ -1059,15 +1059,39 @@ class Bag(DaskMethodsMixin):
         return self.reduction(min, min, split_every=split_every)
 
     def any(self, split_every=None):
-        """ Are any of the elements truthy? """
+        """ Are any of the elements truthy? 
+        
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> bool_bag = db.from_sequence([True, True, False])
+        >>> bool_bag.any().compute()
+        True         
+        """
         return self.reduction(any, any, split_every=split_every)
 
     def all(self, split_every=None):
-        """ Are all elements truthy? """
+        """ Are all elements truthy? 
+        
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> bool_bag = db.from_sequence([True, True, False])
+        >>> bool_bag.all().compute()
+        False        
+        """
         return self.reduction(all, all, split_every=split_every)
 
     def count(self, split_every=None):
-        """ Count the number of elements. """
+        """ Count the number of elements. 
+        
+        Examples
+        --------
+        >>> import dask.bag as db
+        >>> numbers = db.from_sequence([1, 2, 3])
+        >>> numbers.count().compute()
+        3
+        """
         return self.reduction(count, sum, split_every=split_every)
 
     def mean(self):
