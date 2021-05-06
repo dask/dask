@@ -978,7 +978,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return n, bins
 
 
-def _block_histogramdd_rectangular(sample, bins, range, weights):
+def _block_histogramdd_rect(sample, bins, range, weights):
     """Call numpy.histogramdd for a blocked/chunked calculation.
 
     Slurps the result into an additional outer axis; this new axis
@@ -1004,14 +1004,13 @@ def _block_histogramdd_multiarg(*args):
     The last three arguments _must be_ (bins, range, weights).
 
     The difference between this function and
-    _block_histogramdd_rectangular is that here we expect the sample
+    _block_histogramdd_rect is that here we expect the sample
     to be composed of multiple arguments (multiple 1D arrays, each one
-    representing a coordinate), while _block_histogramdd_rectangular
+    representing a coordinate), while _block_histogramdd_rect
     expects a single rectangular (2D array where columns are
     coordinates) sample.
 
     """
-
     bins, range, weights = args[-3:]
     sample = args[:-3]
     return np.histogramdd(sample, bins=bins, range=range, weights=weights)[0:1]
@@ -1196,7 +1195,9 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
             if sample[i].chunksize != sample[0].chunksize:
                 raise ValueError("All coordinate arrays must be chunked identically.")
     else:
-        raise ValueError("Incompatible sample.")
+        raise ValueError(
+            "Incompatible sample. Must be a 2D array or a sequence of 1D arrays."
+        )
 
     # Require only Array or Delayed objects for bins, range, and weights.
     for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
@@ -1212,6 +1213,11 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
             raise ValueError(
                 "Input array and weights must have the same shape "
                 "and chunk structure along the first dimension."
+            )
+        elif not rectangular_sample and weights.numblocks != n_chunks:
+            raise ValueError(
+                "Input arrays and weights must have the same shape "
+                "and chunk structure."
             )
 
     # if bins is a list, tuple, then make sure the length is the same
@@ -1277,18 +1283,14 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     if rectangular_sample:
         sample_keys = flatten(sample.__dask_keys__())
         dsk = {
-            (name, i, *column_zeros): (_block_histogramdd_rectangular, k, bins, range, w)
+            (name, i, *column_zeros): (_block_histogramdd_rect, k, bins, range, w)
             for i, (k, w) in enumerate(zip(sample_keys, w_keys))
         }
     else:
         sample_keys = [
             list(flatten(sample[i].__dask_keys__())) for i in _range(len(sample))
         ]
-        # outer loop: loop over chunks/partitions (resulting list will
-        #   have length equal to n_chunks
-        # inner loop: loop over total number of dimensions (total
-        #   number of coordinates) to fuse each coodinate chunk
-        fused_keys = [
+        fused_on_chunk_keys = [
             tuple(sample_keys[j][i] for j in _range(D)) for i in _range(n_chunks)
         ]
         dsk = {
@@ -1296,7 +1298,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
                 _block_histogramdd_multiarg,
                 *(*k, bins, range, w),
             )
-            for i, (k, w) in enumerate(zip(fused_keys, w_keys))
+            for i, (k, w) in enumerate(zip(fused_on_chunk_keys, w_keys))
         }
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
