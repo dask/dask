@@ -945,11 +945,11 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         }
         dtype = np.histogram([])[0].dtype
     else:
-        a_keys = flatten(a.__dask_keys__())
+        sample_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
             (name, i, 0): (_block_hist, k, bins_ref, range_ref, w)
-            for i, (k, w) in enumerate(zip(a_keys, w_keys))
+            for i, (k, w) in enumerate(zip(sample_keys, w_keys))
         }
         dtype = weights.dtype
 
@@ -978,12 +978,12 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return n, bins
 
 
-def _block_histogramdd(sample, bins, range=None, weights=None):
+def _block_histogramdd(sample, bins, range, weights):
     """Call numpy.histogramdd for a blocked/chunked calculation.
 
-    Slurps the result into an additional outer axis via [np.newaxis].
-    This new axis will be used to stack chunked calls of the numpy
-    function and add them together later.
+    Slurps the result into an additional outer axis; this new axis
+    will be used to stack chunked calls of the numpy function and add
+    them together later.
 
     Returns
     -------
@@ -992,6 +992,26 @@ def _block_histogramdd(sample, bins, range=None, weights=None):
 
     """
     return np.histogramdd(sample, bins, range=range, weights=weights)[0:1]
+
+
+def _block_histogramdd_multiarg(*args):
+    """Call numpy.histogramdd for a multi argument blocked/chunked calculation.
+
+    Slurps the result into an additional outer axis; this new axis
+    will be used to stack chunked calls of the numpy function and add
+    them together later.
+
+    The difference between this function and _block_histogramdd is
+    that here we expect the sample to be composed of multiple
+    arguments (multiple 1D arrays, each one representing a
+    coordinate), while _block_histogramdd expects a single rectangular
+    (2D array where columns are coordinates) sample.
+
+    """
+
+    bins, range, weights = args[-3:]
+    sample = args[:-3]
+    return np.histogramdd(sample, bins=bins, range=range, weights=weights)[0:1]
 
 
 def histogramdd(sample, bins, range=None, normed=None, weights=None, density=None):
@@ -1157,16 +1177,23 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
     # N == total number of samples
     # D == total number of dimensions
-    try:
-        # Recommended input ND-array
+    if hasattr(sample, "shape"):
         N, D = sample.shape
-    except (AttributeError, ValueError):
-        # If we have a sequence of 1D arrays
-        sample = atleast_2d(sample).T
-        N, D = sample.shape
-        # rechunk if necessary
-        if sample.chunksize[1] != D:
-            sample = sample.rechunk((sample.chunksize[0], D))
+        n_chunks = len(list(flatten(sample.__dask_keys__())))
+        rectangular_sample = True
+        # Require data to be chunked along the first axis only.
+        if sample.shape[1:] != sample.chunksize[1:]:
+            raise ValueError("Input array can only be chunked along the 0th axis.")
+    elif isinstance(sample, (tuple, list)):
+        rectangular_sample = False
+        D = len(sample)
+        N = sample[0].shape[0]
+        n_chunks = len(list(flatten(sample[0].__dask_keys__())))
+        for i in _range(1, D):
+            if sample[i].chunksize != sample[0].chunksize:
+                raise ValueError("All coordinate arrays must be chunked identically.")
+    else:
+        raise ValueError("Incompatible sample.")
 
     # Require only Array or Delayed objects for bins, range, and weights.
     for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
@@ -1176,16 +1203,13 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
                 "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
             )
 
-    # Require data to be chunked along the first axis only.
-    if sample.shape[1:] != sample.chunksize[1:]:
-        raise ValueError("Input array can only be chunked along the 0th axis")
-
     # Require that the chunking of the sample and weights are compatible.
-    if weights is not None and weights.chunks[0] != sample.chunks[0]:
-        raise ValueError(
-            "Input array and weights must have the same shape "
-            "and chunk structure along the first dimension."
-        )
+    if weights is not None:
+        if rectangular_sample and weights.chunks[0] != sample.chunks[0]:
+            raise ValueError(
+                "Input array and weights must have the same shape "
+                "and chunk structure along the first dimension."
+            )
 
     # if bins is a list, tuple, then make sure the length is the same
     # as the number dimensions.
@@ -1214,41 +1238,66 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     else:
         edges = [np.asarray(b) for b in bins]
 
+    if rectangular_sample:
+        deps = (sample,)
+    else:
+        deps = tuple(sample)
+
+    if weights is not None:
+        w_keys = flatten(weights.__dask_keys__())
+        deps += (weights,)
+        dtype = weights.dtype
+    else:
+        w_keys = (None,) * n_chunks
+        dtype = np.histogramdd([])[0].dtype
+
+    # This tuple of zeros represents the chunk index along the columns
+    # (we only allow chunking along the rows).
+    column_zeros = tuple(0 for _ in _range(D))
+
     # With dsk below, we will construct a (D + 1) dimensional array
     # stacked for each chunk. For example, if the histogram is going
     # to be 3 dimensions, this creates a stack of cubes (1 cube for
     # each sample chunk) that will be collapsed into a final cube (the
     # result).
 
-    # This tuple of zeros represents the chunk index along the columns
-    # (we only allow chunking along the rows).
-    column_zeros = tuple(0 for _ in _range(D))
+    # We first execute the rectangular case: sample is a single 2D
+    # array where each column in the sample represents a coordinate of
+    # the sample).
 
-    if weights is None:
-        dsk = {
-            (name, i, *column_zeros): (_block_histogramdd, k, bins, range)
-            for i, k in enumerate(flatten(sample.__dask_keys__()))
-        }
-        dtype = np.histogramdd([])[0].dtype
-    else:
-        a_keys = flatten(sample.__dask_keys__())
-        w_keys = flatten(weights.__dask_keys__())
+    # Then we take care of the sequence-of-coordinates case, sample is
+    # a tuple or list of arrays, with each element of that sequence
+    # representing a coordinate of the complete sample.
+
+    if rectangular_sample:
+        sample_keys = flatten(sample.__dask_keys__())
         dsk = {
             (name, i, *column_zeros): (_block_histogramdd, k, bins, range, w)
-            for i, (k, w) in enumerate(zip(a_keys, w_keys))
+            for i, (k, w) in enumerate(zip(sample_keys, w_keys))
         }
-        dtype = weights.dtype
+    else:
+        sample_keys = [
+            list(flatten(sample[i].__dask_keys__())) for i in _range(len(sample))
+        ]
+        # outer loop: loop over chunks/partitions (resulting list will
+        #   have length equal to n_chunks
+        # inner loop: loop over total number of dimensions (total
+        #   number of coordinates) to fuse each coodinate chunk
+        fused_keys = [
+            tuple(sample_keys[j][i] for j in _range(D)) for i in _range(n_chunks)
+        ]
+        dsk = {
+            (name, i, *column_zeros): (
+                _block_histogramdd_multiarg,
+                *(*k, bins, range, w),
+            )
+            for i, (k, w) in enumerate(zip(fused_keys, w_keys))
+        }
 
-    deps = (sample,)
-    if weights is not None:
-        deps += (weights,)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
-
-    nchunks = len(list(flatten(sample.__dask_keys__())))
     all_nbins = tuple((b.size - 1,) for b in edges)
-    stacked_chunks = ((1,) * nchunks, *all_nbins)
+    stacked_chunks = ((1,) * n_chunks, *all_nbins)
     mapped = Array(graph, name, stacked_chunks, dtype=dtype)
-
     # Finally, sum over chunks providing to get the final D
     # dimensional result array.
     n = mapped.sum(axis=0)
