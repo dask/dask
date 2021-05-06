@@ -51,6 +51,7 @@ class ArrayOverlapLayer(Layer):
         numblocks,
         token,
     ):
+        super().__init__()
         self.name = name
         self.axes = axes
         self.chunks = chunks
