@@ -63,9 +63,7 @@ properties:
               fully-materialized task graph (not a high-Level graph). By default
               (None), the active task-fusion option will be treated as ``False``
               for Dask-Dataframe collections, and as ``True`` for all other graphs
-              (including Dask-Array collections). The only exception to the Dask-
-              Dataframe default is when the input graph is already materialized.
-              The default will be treated as ``True`` in this case.
+              (including Dask-Array collections).
 
           ave-width:
             type: number
