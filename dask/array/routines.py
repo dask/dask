@@ -1025,10 +1025,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     compatible with this function. If weights are used, they must be
     chunked along the 0th axis identically to the input sample.
 
-    A proper example setup for a three dimensional histogram, where
-    the sample shape is ``(8, 3)`` and weights are shape ``(8,)``,
-    sample chunks would be ``((4, 4), (3,))`` and the weights chunks
-    would be ``((4, 4),)`` a table of the structure:
+    An example setup for a three dimensional histogram, where the
+    sample shape is ``(8, 3)`` and weights are shape ``(8,)``, sample
+    chunks would be ``((4, 4), (3,))`` and the weights chunks would be
+    ``((4, 4),)`` a table of the structure:
 
     +-------+-----------------------+-----------+
     |       |      sample (8 x 3)   |  weights  |
@@ -1064,6 +1064,10 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     from ``dask.dataframe``, i.e. :class:`dask.dataframe.Series` or
     :class:`dask.dataframe.DataFrame`.
 
+    The function is also compatible with `x`, `y`, and `z` being
+    individual 1D arrays with equal chunking. In that case, the data
+    should be passed as a tuple: ``histogramdd((x, y, z), ...)``
+
     Parameters
     ----------
     sample : dask.array.Array (N, D) or sequence of dask.array.Array
@@ -1075,9 +1079,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         * When a (N, D) dask Array, each row is an entry in the sample
           (coordinate in D dimensional space).
         * When a sequence of dask Arrays, each element in the sequence
-          is the array of values for a single coordinate. This type of
-          input will be automatically rechunked along the column axis
-          if necessary. This may induce a runtime increase.
+          is the array of values for a single coordinate.
     bins : sequence of arrays describing bin edges, int, or sequence of ints
         The bin specification.
 
@@ -1148,8 +1150,16 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     >>> np.isclose(h.sum().compute(), w.sum().compute())
     True
 
-    """
+    Using a sequence of 1D arrays as the input:
 
+    >>> x = da.random.uniform(0, 1, size=(1000,), chunks=(200,))
+    >>> y = da.random.uniform(0, 1, size=(1000,), chunks=(200,))
+    >>> z = da.random.uniform(0, 1, size=(1000,), chunks=(200,))
+    >>> bins = (6,) * 3
+    >>> range = ((0, 1),) * 3
+    >>> h, edges = da.histogramdd((x, y, z), bins=bins, range=range)
+
+    """
     # logic used in numpy.histogramdd to handle normed/density.
     if normed is None:
         if density is None:
