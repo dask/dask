@@ -463,6 +463,30 @@ async def test_map_partitions_partition_info(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_futures_in_subgraphs(c, s, a, b):
+    """Copied from distributed (tests/test_client.py)"""
+
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            dict(
+                uid=range(50),
+                enter_time=pd.date_range(
+                    start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
+                ),
+            )
+        ),
+        npartitions=1,
+    )
+
+    ddf = ddf[ddf.uid.isin(range(29))].persist()
+    ddf["day"] = ddf.enter_time.dt.day_name()
+    ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
+
+
+@gen_cluster(client=True)
 async def test_annotation_pack_unpack(c, s, a, b):
     hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
     packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
