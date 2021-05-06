@@ -978,7 +978,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return n, bins
 
 
-def _block_histogramdd(sample, bins, range, weights):
+def _block_histogramdd_rectangular(sample, bins, range, weights):
     """Call numpy.histogramdd for a blocked/chunked calculation.
 
     Slurps the result into an additional outer axis; this new axis
@@ -1001,11 +1001,14 @@ def _block_histogramdd_multiarg(*args):
     will be used to stack chunked calls of the numpy function and add
     them together later.
 
-    The difference between this function and _block_histogramdd is
-    that here we expect the sample to be composed of multiple
-    arguments (multiple 1D arrays, each one representing a
-    coordinate), while _block_histogramdd expects a single rectangular
-    (2D array where columns are coordinates) sample.
+    The last three arguments _must be_ (bins, range, weights).
+
+    The difference between this function and
+    _block_histogramdd_rectangular is that here we expect the sample
+    to be composed of multiple arguments (multiple 1D arrays, each one
+    representing a coordinate), while _block_histogramdd_rectangular
+    expects a single rectangular (2D array where columns are
+    coordinates) sample.
 
     """
 
@@ -1179,7 +1182,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # D == total number of dimensions
     if hasattr(sample, "shape"):
         N, D = sample.shape
-        n_chunks = len(list(flatten(sample.__dask_keys__())))
+        n_chunks = sample.numblocks[0]
         rectangular_sample = True
         # Require data to be chunked along the first axis only.
         if sample.shape[1:] != sample.chunksize[1:]:
@@ -1188,7 +1191,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         rectangular_sample = False
         D = len(sample)
         N = sample[0].shape[0]
-        n_chunks = len(list(flatten(sample[0].__dask_keys__())))
+        n_chunks = sample[0].numblocks[0]
         for i in _range(1, D):
             if sample[i].chunksize != sample[0].chunksize:
                 raise ValueError("All coordinate arrays must be chunked identically.")
@@ -1229,10 +1232,12 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         if not all(len(r) == 2 for r in range):
             raise ValueError("range argument should be a sequence of pairs")
 
-    # we will return the edges to mimic the NumPy API (we also use the
-    # edges later as a way to calculate the total number of bins).
+    # If bins is a single int, clone it D times.
     if isinstance(bins, int):
         bins = (bins,) * D
+
+    # we will return the edges to mimic the NumPy API (we also use the
+    # edges later as a way to calculate the total number of bins).
     if all(isinstance(b, int) for b in bins) and all(len(r) == 2 for r in range):
         edges = [np.linspace(r[0], r[1], b + 1) for b, r in zip(bins, range)]
     else:
@@ -1259,20 +1264,20 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # stacked for each chunk. For example, if the histogram is going
     # to be 3 dimensions, this creates a stack of cubes (1 cube for
     # each sample chunk) that will be collapsed into a final cube (the
-    # result).
-
-    # We first execute the rectangular case: sample is a single 2D
-    # array where each column in the sample represents a coordinate of
-    # the sample).
-
-    # Then we take care of the sequence-of-coordinates case, sample is
-    # a tuple or list of arrays, with each element of that sequence
-    # representing a coordinate of the complete sample.
+    # result). Depending on the input data, we can do this in two ways
+    #
+    # 1. The rectangular case: when the sample is a single 2D array
+    #    where each column in the sample represents a coordinate of
+    #    the sample).
+    #
+    # 2. The sequence-of-arrays case, when the sample is a tuple or
+    #    list of arrays, with each array in that sequence representing
+    #    the entirety of one coordinate of the complete sample.
 
     if rectangular_sample:
         sample_keys = flatten(sample.__dask_keys__())
         dsk = {
-            (name, i, *column_zeros): (_block_histogramdd, k, bins, range, w)
+            (name, i, *column_zeros): (_block_histogramdd_rectangular, k, bins, range, w)
             for i, (k, w) in enumerate(zip(sample_keys, w_keys))
         }
     else:
