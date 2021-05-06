@@ -3,6 +3,7 @@ import pytest
 distributed = pytest.importorskip("distributed")
 
 import asyncio
+import os
 from functools import partial
 from operator import add
 
@@ -308,6 +309,42 @@ def test_blockwise_array_creation(c, io, fuse):
     with dask.config.set({"optimization.fuse.active": fuse}):
         darr.compute()
         da.assert_eq(darr, narr)
+
+
+@pytest.mark.parametrize(
+    "io",
+    [
+        "parquet-pyarrow",
+        "parquet-fastparquet",
+        "csv",
+    ],
+)
+@pytest.mark.parametrize("fuse", [True, False])
+def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
+    ddf0 = dd.from_pandas(df, npartitions=3)
+
+    if io.startswith("parquet"):
+        if io == "parquet-pyarrow":
+            pytest.importorskip("pyarrow.parquet")
+            engine = "pyarrow"
+        else:
+            pytest.importorskip("fastparquet")
+            engine = "fastparquet"
+        ddf0.to_parquet(str(tmpdir), engine=engine)
+        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    elif io == "csv":
+        ddf0.to_csv(str(tmpdir), index=False)
+        ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
+
+    df = df[["x"]] + 10
+    ddf = ddf[["x"]] + 10
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        ddf.compute()
+        dd.assert_eq(ddf, df, check_index=False)
 
 
 @gen_cluster(client=True)

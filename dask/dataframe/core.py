@@ -3711,7 +3711,11 @@ class Index(Series):
             raise NotImplementedError()
 
         return self.map_partitions(
-            M.to_frame, index, name, meta=self._meta.to_frame(index, name)
+            M.to_frame,
+            index,
+            name,
+            meta=self._meta.to_frame(index, name),
+            transform_divisions=False,
         )
 
     @insert_meta_param_description(pad=12)
@@ -3760,6 +3764,35 @@ class DataFrame(_Frame):
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = "dataframe-"
     _accessors = set()
+
+    def __init__(self, dsk, name, meta, divisions):
+        super().__init__(dsk, name, meta, divisions)
+        if self.dask.layers[name].collection_annotations is None:
+            self.dask.layers[name].collection_annotations = {
+                "type": type(self),
+                "divisions": self.divisions,
+                "dataframe_type": type(self._meta),
+                "series_dtypes": {
+                    col: self._meta[col].dtype
+                    if hasattr(self._meta[col], "dtype")
+                    else None
+                    for col in self._meta.columns
+                },
+            }
+        else:
+            self.dask.layers[name].collection_annotations.update(
+                {
+                    "type": type(self),
+                    "divisions": self.divisions,
+                    "dataframe_type": type(self._meta),
+                    "series_dtypes": {
+                        col: self._meta[col].dtype
+                        if hasattr(self._meta[col], "dtype")
+                        else None
+                        for col in self._meta.columns
+                    },
+                }
+            )
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
