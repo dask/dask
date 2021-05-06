@@ -945,11 +945,11 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         }
         dtype = np.histogram([])[0].dtype
     else:
-        sample_keys = flatten(a.__dask_keys__())
+        a_keys = flatten(a.__dask_keys__())
         w_keys = flatten(weights.__dask_keys__())
         dsk = {
             (name, i, 0): (_block_hist, k, bins_ref, range_ref, w)
-            for i, (k, w) in enumerate(zip(sample_keys, w_keys))
+            for i, (k, w) in enumerate(zip(a_keys, w_keys))
         }
         dtype = weights.dtype
 
