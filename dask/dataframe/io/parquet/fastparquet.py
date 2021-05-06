@@ -180,6 +180,19 @@ def _determine_pf_parts(fs, paths, gather_statistics, **kwargs):
             paths[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
         )
 
+    # Ensure that there is no overlap between partition columns
+    # and explicit columns in `pf`
+    if pf.cats:
+        _partitions = [p for p in pf.cats if p not in pf.columns]
+        if not _partitions:
+            pf.cats = {}
+        elif len(_partitions) != len(pf.cats):
+            raise ValueError(
+                "No partition-columns should be written in the \n"
+                "file unless they are ALL written in the file.\n"
+                "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
+            )
+
     return parts, pf, gather_statistics, base
 
 
