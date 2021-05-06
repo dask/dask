@@ -159,7 +159,7 @@ class ArrayOverlapLayer(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
-    def __dask_keys__(self):
+    def _dask_keys(self):
         if self._cached_keys is not None:
             return self._cached_keys
 
@@ -183,7 +183,7 @@ class ArrayOverlapLayer(Layer):
         axes = self.axes
         chunks = self.chunks
         name = self.name
-        dask_keys = self.__dask_keys__()
+        dask_keys = self._dask_keys()
 
         getitem_name = "getitem-" + self.token
         overlap_name = "overlap-" + self.token
