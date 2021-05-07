@@ -7,11 +7,11 @@ import os
 import warnings
 
 import numpy as np
-from tlz import frequencies, concat
+from tlz import concat, frequencies
 
-from .core import Array
 from ..highlevelgraph import HighLevelGraph
 from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
+from .core import Array
 
 try:
     AxisError = np.AxisError
@@ -272,6 +272,7 @@ def assert_eq(
     check_graph=True,
     check_meta=True,
     check_chunks=True,
+    check_type=True,
     **kwargs,
 ):
     a_original = a
@@ -297,6 +298,12 @@ def assert_eq(
         assert (
             a.shape == b.shape
         ), f"a and b have different shapes (a: {a.shape}, b: {b.shape})"
+        if check_type:
+            _a = a if a.shape else a.item()
+            _b = b if b.shape else b.item()
+            assert type(_a) == type(
+                _b
+            ), f"a and b have different types (a: {type(_a)}, b: {type(_b)})"
         if check_meta:
             if hasattr(a, "_meta") and hasattr(b, "_meta"):
                 assert_eq(a._meta, b._meta)
@@ -375,9 +382,9 @@ def _dtype_of(a):
 
 def empty_like_safe(a, shape, **kwargs):
     """
-    Return np.empty_like(a, shape=shape, **kwargs) if the shape argument
+    Return ``np.empty_like(a, shape=shape, **kwargs)`` if the shape argument
     is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning np.empty(shape, **kwargs).
+    using the old behavior, returning ``np.empty(shape, **kwargs)``.
     """
     try:
         return np.empty_like(a, shape=shape, **kwargs)
@@ -388,10 +395,10 @@ def empty_like_safe(a, shape, **kwargs):
 
 def full_like_safe(a, fill_value, shape, **kwargs):
     """
-    Return np.full_like(a, fill_value, shape=shape, **kwargs) if the
+    Return ``np.full_like(a, fill_value, shape=shape, **kwargs)`` if the
     shape argument is supported (requires NumPy >= 1.17), otherwise
     falls back to using the old behavior, returning
-    np.full(shape, fill_value, **kwargs).
+    ``np.full(shape, fill_value, **kwargs)``.
     """
     try:
         return np.full_like(a, fill_value, shape=shape, **kwargs)
@@ -402,9 +409,9 @@ def full_like_safe(a, fill_value, shape, **kwargs):
 
 def ones_like_safe(a, shape, **kwargs):
     """
-    Return np.ones_like(a, shape=shape, **kwargs) if the shape argument
+    Return ``np.ones_like(a, shape=shape, **kwargs)`` if the shape argument
     is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning np.ones(shape, **kwargs).
+    using the old behavior, returning ``np.ones(shape, **kwargs)``.
     """
     try:
         return np.ones_like(a, shape=shape, **kwargs)
@@ -415,15 +422,30 @@ def ones_like_safe(a, shape, **kwargs):
 
 def zeros_like_safe(a, shape, **kwargs):
     """
-    Return np.zeros_like(a, shape=shape, **kwargs) if the shape argument
+    Return ``np.zeros_like(a, shape=shape, **kwargs)`` if the shape argument
     is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning np.zeros(shape, **kwargs).
+    using the old behavior, returning ``np.zeros(shape, **kwargs)``.
     """
     try:
         return np.zeros_like(a, shape=shape, **kwargs)
     except TypeError:
         kwargs.setdefault("dtype", _dtype_of(a))
         return np.zeros(shape, **kwargs)
+
+
+def arange_safe(*args, like, **kwargs):
+    """
+    Use the `like=` from `np.arange` to create a new array dispatching
+    to the downstream library. If that fails, falls back to the
+    default NumPy behavior, resulting in a `numpy.ndarray`.
+    """
+    if like is None:
+        return np.arange(*args, **kwargs)
+    else:
+        try:
+            return np.arange(*args, like=meta_from_array(like), **kwargs)
+        except TypeError:
+            return np.arange(*args, **kwargs)
 
 
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
@@ -541,6 +563,26 @@ def svd_flip(u, v, u_based_decision=False):
     # Force all singular vectors into same half-space
     u, v = u * signs, v * signs.T
     return u, v
+
+
+def scipy_linalg_safe(func_name, *args, **kwargs):
+    # need to evaluate at least the first input array
+    # for gpu/cpu checking
+    a = args[0]
+    if is_cupy_type(a):
+        import cupyx.scipy.linalg
+
+        func = getattr(cupyx.scipy.linalg, func_name)
+    else:
+        import scipy.linalg
+
+        func = getattr(scipy.linalg, func_name)
+
+    return func(*args, **kwargs)
+
+
+def solve_triangular_safe(a, b, lower=False):
+    return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
 
 
 def _is_nep18_active():

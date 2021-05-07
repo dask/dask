@@ -1,12 +1,11 @@
 import numpy as np
 import pandas as pd
+import pytest
+from pandas.util import hash_pandas_object
+
 import dask.dataframe as dd
 from dask.dataframe import _compat
 from dask.dataframe._compat import tm
-from pandas.util import hash_pandas_object
-
-import pytest
-
 from dask.dataframe.utils import assert_eq
 
 

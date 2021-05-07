@@ -1,8 +1,8 @@
 import io
 from functools import partial
 
-from tlz import concat
 from fsspec.core import open_files
+from tlz import concat
 
 from ..bytes import read_bytes
 from ..delayed import delayed

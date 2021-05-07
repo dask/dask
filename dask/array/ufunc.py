@@ -1,20 +1,20 @@
-from operator import getitem
 from functools import partial
+from operator import getitem
 
 import numpy as np
 
-from .core import Array, elemwise, blockwise, apply_infer_dtype, asarray
-from .utils import empty_like_safe, IS_NEP18_ACTIVE
-from ..base import is_dask_collection, normalize_function
 from .. import core
+from ..base import is_dask_collection, normalize_function
 from ..highlevelgraph import HighLevelGraph
 from ..utils import (
-    funcname,
     derived_from,
+    funcname,
     is_dataframe_like,
-    is_series_like,
     is_index_like,
+    is_series_like,
 )
+from .core import Array, apply_infer_dtype, asarray, blockwise, elemwise
+from .utils import IS_NEP18_ACTIVE, empty_like_safe
 
 
 def __array_wrap__(numpy_ufunc, x, *args, **kwargs):

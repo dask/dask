@@ -42,8 +42,8 @@ interface is used inside Dask.
 
     The Dask graph.
 
-    Returns
-    -------
+    **Returns**
+
     dsk : Mapping, None
         The Dask graph.  If ``None``, this instance will not be interpreted as a
         Dask collection, and none of the remaining interface methods will be
@@ -61,8 +61,8 @@ interface is used inside Dask.
     than those described in the :doc:`task graph specification documentation <spec>`.
     These additional constraints are described below.
 
-    Returns
-    -------
+    **Returns**
+
     keys : list
         A possibly nested list of keys that represent the outputs of the graph.
         After computation, the results will be returned in the same layout,
@@ -85,8 +85,8 @@ interface is used inside Dask.
     This method should only be implemented if the collection uses
     :class:`~dask.highlevelgraph.HighLevelGraph` to implement its dask graph.
 
-    Returns
-    -------
+    **Returns**
+
     names : tuple
         Tuple of names of the HighLevelGraph layers which contain all keys returned by
         :meth:`__dask_keys__`.
@@ -105,8 +105,8 @@ interface is used inside Dask.
 
     If not implemented, defaults to returning the graph unchanged.
 
-    Parameters
-    ----------
+    **Parameters**
+
     dsk : MutableMapping
         The merged graphs from all collections sharing the same
         ``__dask_optimize__`` method.
@@ -117,8 +117,8 @@ interface is used inside Dask.
         Extra keyword arguments forwarded from the call to ``compute`` or
         ``persist``. Can be used or ignored as needed.
 
-    Returns
-    -------
+    **Returns**
+
     optimized_dsk : MutableMapping
         The optimized Dask graph.
 
@@ -142,8 +142,8 @@ interface is used inside Dask.
 
     Used to implement ``dask.compute``.
 
-    Returns
-    -------
+    **Returns**
+
     finalize : callable
         A function with the signature ``finalize(results, *extra_args)``.
         Called with the computed results in the same structure as the
@@ -165,8 +165,8 @@ interface is used inside Dask.
 
     Used to implement :func:`dask.persist`.
 
-    Returns
-    -------
+    **Returns**
+
     rebuild : callable
         A function with the signature
         ``rebuild(dsk, *extra_args, rename : Mapping[str, str] = None)``.

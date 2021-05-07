@@ -1,10 +1,10 @@
-import pandas as pd
 from textwrap import dedent
 
-import dask.dataframe as dd
-import dask.array as da
 import numpy as np
+import pandas as pd
 
+import dask.array as da
+import dask.dataframe as dd
 
 style = """<style scoped>
     .dataframe tbody tr th:only-of-type {

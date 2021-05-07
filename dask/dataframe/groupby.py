@@ -6,31 +6,30 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..utils import M, derived_from, funcname, itemgetter
 from .core import (
     DataFrame,
     Series,
+    _extract_meta,
     aca,
     map_partitions,
     new_dd_object,
     no_default,
     split_out_on_index,
-    _extract_meta,
 )
-from .methods import drop_columns, concat
+from .methods import concat, drop_columns
 from .shuffle import shuffle
 from .utils import (
-    make_meta,
-    insert_meta_param_description,
-    raise_on_meta_error,
-    is_series_like,
-    is_dataframe_like,
     PANDAS_GT_100,
     PANDAS_GT_110,
+    insert_meta_param_description,
+    is_dataframe_like,
+    is_series_like,
+    make_meta,
+    raise_on_meta_error,
 )
-from ..base import tokenize
-from ..utils import derived_from, M, funcname, itemgetter
-from ..highlevelgraph import HighLevelGraph
-
 
 # #############################################
 #
@@ -1964,6 +1963,6 @@ def _value_counts(x, **kwargs):
 
 
 def _value_counts_aggregate(series_gb):
-    to_concat = {k: v.sum(level=1) for k, v in series_gb}
+    to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
     names = list(series_gb.obj.index.names)
     return pd.Series(pd.concat(to_concat, names=names))

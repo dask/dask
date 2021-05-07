@@ -1,11 +1,10 @@
 import pandas as pd
 from pandas.api.types import is_scalar as pd_is_scalar
 
-from ..utils import derived_from
-from ..delayed import delayed
 from ..array import Array
+from ..delayed import delayed
+from ..utils import derived_from
 from .core import Series
-
 
 __all__ = ("to_numeric",)
 

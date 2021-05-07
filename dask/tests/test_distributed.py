@@ -1,31 +1,27 @@
-from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 import pytest
 
 distributed = pytest.importorskip("distributed")
 
 import asyncio
+import os
 from functools import partial
 from operator import add
 
 from tornado import gen
 
-import dask
-from dask import persist, delayed, compute
-import dask.bag as db
-from dask.delayed import Delayed
-from dask.utils import tmpdir, get_named_args
 from distributed import futures_of
 from distributed.client import wait
-from distributed.utils_test import (  # noqa F401
-    gen_cluster,
-    inc,
-    cluster,
-    cluster_fixture,
-    loop,
-    client as c,
-    varying,
-)
+from distributed.utils_test import client as c  # noqa F401
+from distributed.utils_test import cluster_fixture  # noqa F401
+from distributed.utils_test import loop  # noqa F401
+from distributed.utils_test import cluster, gen_cluster, inc, varying
 
+import dask
+import dask.bag as db
+from dask import compute, delayed, persist
+from dask.delayed import Delayed
+from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
+from dask.utils import get_named_args, tmpdir
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
@@ -73,11 +69,6 @@ def test_persist_nested(c):
 def test_futures_to_delayed_dataframe(c):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-
-    from dask.array.numpy_compat import _numpy_120
-
-    if _numpy_120:
-        pytest.skip("https://github.com/dask/dask/issues/7170")
 
     df = pd.DataFrame({"x": [1, 2, 3]})
 
@@ -320,6 +311,42 @@ def test_blockwise_array_creation(c, io, fuse):
         da.assert_eq(darr, narr)
 
 
+@pytest.mark.parametrize(
+    "io",
+    [
+        "parquet-pyarrow",
+        "parquet-fastparquet",
+        "csv",
+    ],
+)
+@pytest.mark.parametrize("fuse", [True, False])
+def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"x": [1, 2, 3] * 5, "y": range(15)})
+    ddf0 = dd.from_pandas(df, npartitions=3)
+
+    if io.startswith("parquet"):
+        if io == "parquet-pyarrow":
+            pytest.importorskip("pyarrow.parquet")
+            engine = "pyarrow"
+        else:
+            pytest.importorskip("fastparquet")
+            engine = "fastparquet"
+        ddf0.to_parquet(str(tmpdir), engine=engine)
+        ddf = dd.read_parquet(str(tmpdir), engine=engine)
+    elif io == "csv":
+        ddf0.to_csv(str(tmpdir), index=False)
+        ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
+
+    df = df[["x"]] + 10
+    ddf = ddf[["x"]] + 10
+    with dask.config.set({"optimization.fuse.active": fuse}):
+        ddf.compute()
+        dd.assert_eq(ddf, df, check_index=False)
+
+
 @gen_cluster(client=True)
 async def test_blockwise_numpy_args(c, s, a, b):
     """Test pack/unpack of blockwise that includes a NumPy literal argument"""
@@ -387,6 +414,46 @@ async def test_combo_of_layer_types(c, s, a, b):
     res = x.sum() + df.sum()
     res = await c.compute(res, optimize_graph=False)
     assert res == 21
+
+
+@gen_cluster(client=True)
+async def test_blockwise_concatenate(c, s, a, b):
+    """Test a blockwise operation with concatenated axes"""
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    def f(x, y):
+        da.assert_eq(y, [[0, 1, 2]])
+        return x
+
+    x = da.from_array(np.array([0, 1, 2]))
+    y = da.from_array(np.array([[0, 1, 2]]))
+    z = da.blockwise(
+        f,
+        ("i"),
+        x,
+        ("i"),
+        y,
+        ("ij"),
+        dtype=x.dtype,
+        concatenate=True,
+    )
+
+    await c.compute(z, optimize_graph=False)
+    da.assert_eq(z, x)
+
+
+@gen_cluster(client=True)
+async def test_map_partitions_partition_info(c, s, a, b):
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    ddf = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=2)
+    res = await c.compute(
+        ddf.map_partitions(lambda x, partition_info=None: partition_info)
+    )
+    assert res[0] == {"number": 0, "division": 0}
+    assert res[1] == {"number": 1, "division": 5}
 
 
 @gen_cluster(client=True)

@@ -78,14 +78,14 @@ Download code
 Make a fork of the main `Dask repository <https://github.com/dask/dask>`_ and
 clone the fork::
 
-   git clone https://github.com/<your-github-username>/dask
+   git clone https://github.com/<your-github-username>/dask.git
    cd dask
 
 You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
 can successfully install Dask)::
 
-   git remote add upstream https://github.com/dask/dask
-   git pull upstream --tags
+   git remote add upstream https://github.com/dask/dask.git 
+   git pull upstream main --tags
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
 
@@ -256,24 +256,26 @@ Docstring testing requires ``graphviz`` to be installed. This can be done via::
 Code Formatting
 ~~~~~~~~~~~~~~~
 
-Dask uses `Black <https://black.readthedocs.io/en/stable/>`_ and
-`Flake8 <http://flake8.pycqa.org/en/latest/>`_ to ensure a consistent code
-format throughout the project. ``black`` and ``flake8`` can be installed with
-``pip``::
+Dask uses `Black <https://black.readthedocs.io/en/stable/>`_,
+`Flake8 <http://flake8.pycqa.org/en/latest/>`_, and
+`isort <https://pycqa.github.io/isort/>`_ to ensure a consistent code
+format throughout the project. ``black``, ``flake8``, and ``isort`` can
+be installed with ``pip``::
 
-   python -m pip install black flake8
+   python -m pip install black flake8 isort
 
 and then run from the root of the Dask repository::
 
    black dask
    flake8 dask
+   isort dask
 
 to auto-format your code. Additionally, many editors have plugins that will
-apply ``black`` as you edit files.
+apply ``black`` and ``isort`` as you edit files.
 
 Optionally, you may wish to setup `pre-commit hooks <https://pre-commit.com/>`_
-to automatically run ``black`` and ``flake8`` when you make a git commit. This
-can be done by installing ``pre-commit``::
+to automatically run ``black``, ``flake8``, and ``isort`` when you make a git
+commit. This can be done by installing ``pre-commit``::
 
    python -m pip install pre-commit
 
@@ -281,9 +283,9 @@ and then running::
 
    pre-commit install
 
-from the root of the Dask repository. Now ``black`` and ``flake8`` will be run
-each time you commit changes. You can skip these checks with
-``git commit --no-verify``.
+from the root of the Dask repository. Now ``black``, ``flake8``, and ``isort``
+will be run each time you commit changes. You can skip these checks with
+``git commit --no-verify`` or with the short version ``git commit -n``.
 
 
 Contributing to Documentation
@@ -302,10 +304,12 @@ below.
 How to build the Dask documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To build the documentation locally, clone this repository and install
-the necessary requirements using ``pip`` or ``conda``::
+To build the documentation locally, make a fork of the main 
+`Dask repository <https://github.com/dask/dask>`_, clone the fork,
+and install the necessary requirements using ``pip`` or ``conda``::
 
-  git clone https://github.com/dask/dask.git
+
+  git clone https://github.com/<your-github-username>/dask.git
   cd dask/docs
 
 ``pip``::

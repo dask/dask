@@ -2,16 +2,18 @@
 
 import sys
 from os.path import exists
+
 from setuptools import setup
+
 import versioneer
 
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-    "array": ["numpy >= 1.15.1"],
+    "array": ["numpy >= 1.16"],
     "bag": [],  # keeping for backwards compatibility
-    "dataframe": ["numpy >= 1.15.1", "pandas >= 0.25.0"],
-    "distributed": ["distributed >= 2021.03.0"],
+    "dataframe": ["numpy >= 1.16", "pandas >= 0.25.0"],
+    "distributed": ["distributed >= 2021.04.1"],
     "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
     "delayed": [],  # keeping for backwards compatibility
 }
@@ -61,6 +63,7 @@ setup(
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
         "Programming Language :: Python :: 3.9",
+        "License :: OSI Approved :: BSD License",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",

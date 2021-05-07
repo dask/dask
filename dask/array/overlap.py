@@ -1,25 +1,26 @@
-import numpy as np
 import warnings
-from operator import getitem
 from itertools import product
 from numbers import Integral
-from tlz import merge, pipe, concat, partial, get
+from operator import getitem
+
+import numpy as np
+from tlz import concat, get, merge, partial, pipe
 from tlz.curried import map
 
+from ..base import tokenize
+from ..core import flatten
+from ..highlevelgraph import HighLevelGraph
+from ..utils import concrete, derived_from
 from . import chunk, numpy_compat
 from .core import (
     Array,
-    map_blocks,
     concatenate,
     concatenate3,
+    map_blocks,
     reshapelist,
     unify_chunks,
 )
 from .creation import empty_like, full_like
-from ..highlevelgraph import HighLevelGraph
-from ..base import tokenize
-from ..core import flatten
-from ..utils import concrete, derived_from
 
 
 def fractional_slice(task, axes):
@@ -780,6 +781,10 @@ def map_overlap(
         # Reverse unification order to allow block broadcasting
         inds = [list(reversed(range(x.ndim))) for x in args]
         _, args = unify_chunks(*list(concat(zip(args, inds))), warn=False)
+
+    # Escape to map_blocks if depth is zero (a more efficient computation)
+    if all([all(depth_val == 0 for depth_val in d.values()) for d in depth]):
+        return map_blocks(func, *args, **kwargs)
 
     for i, x in enumerate(args):
         for j in range(x.ndim):

@@ -3,20 +3,21 @@ import pytest
 pytest.importorskip("numpy")
 
 import numpy as np
+
 import dask
 import dask.array as da
-from dask.highlevelgraph import HighLevelGraph
-from dask.optimization import fuse
-from dask.utils import SerializableLock
 from dask.array.core import getter, getter_nofancy
 from dask.array.optimization import (
+    fuse_slice,
     getitem,
     optimize,
     optimize_blockwise,
     optimize_slices,
-    fuse_slice,
 )
 from dask.array.utils import assert_eq
+from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import fuse
+from dask.utils import SerializableLock
 
 
 def test_fuse_getitem():
