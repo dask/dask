@@ -1,3 +1,4 @@
+import os
 from functools import partial
 
 import pytest
@@ -85,9 +86,9 @@ def test_read_text(fmt, bs, encoding, include_path):
         assert "".join(line for block in L for line in block) == expected
 
 
-def test_read_text_unicode_no_collection(tmp_path):
+def test_read_text_unicode_no_collection(tmpdir):
     data = b"abcd\xc3\xa9"
-    fn = tmp_path / "data.txt"
+    fn = os.path.join(tmpdir, "data.txt")
     with open(fn, "wb") as f:
         f.write(b"\n".join([data, data]))
 
