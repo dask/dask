@@ -1,3 +1,6 @@
+import math
+import random as rnd
+
 import pytest
 
 import dask.bag as db
@@ -124,3 +127,53 @@ def test_partitions_are_coerced_to_lists():
 
     C = db.zip(B, a).compute()
     assert len(C) == 4
+
+
+def test_reservoir_sample_map_partitions_correctness():
+    N, k = 20, 10
+    seq = list(range(N))
+    distribution = [0 for _ in range(N)]
+    expected_distribution = [0 for _ in range(N)]
+    reps = 2000
+    for _ in range(reps):
+        picks, _ = random._reservoir_sample_map_partitions(seq, k)
+        for pick in picks:
+            distribution[pick] += 1
+        for pick in rnd.sample(seq, k=k):
+            expected_distribution[pick] += 1
+
+    # convert to probabilities
+    distribution = [c / (reps * k) for c in distribution]
+    expected_distribution = [c / (reps * k) for c in expected_distribution]
+
+    # use bhattacharyya distance to asses the similarity of distributions
+    assert math.isclose(
+        0.0, bhattacharyya(distribution, expected_distribution), abs_tol=1e-2
+    )
+
+
+def test_reservoir_sample_with_replacement_map_partitions_correctness():
+    N, k = 20, 10
+    seq = list(range(N))
+    distribution = [0 for _ in range(N)]
+    expected_distribution = [0 for _ in range(N)]
+    reps = 2000
+    for _ in range(reps):
+        picks, _ = random._reservoir_sample_with_replacement_map_partitions(seq, k)
+        for pick in picks:
+            distribution[pick] += 1
+        for pick in rnd.choices(seq, k=k):
+            expected_distribution[pick] += 1
+
+    # convert to probabilities
+    distribution = [c / (reps * k) for c in distribution]
+    expected_distribution = [c / (reps * k) for c in expected_distribution]
+
+    # use bhattacharyya distance to asses the similarity of distributions
+    assert math.isclose(
+        0.0, bhattacharyya(distribution, expected_distribution), abs_tol=1e-2
+    )
+
+
+def bhattacharyya(h1, h2):
+    return 1 - sum(math.sqrt(hi * hj) for hi, hj in zip(h1, h2))
