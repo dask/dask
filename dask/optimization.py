@@ -3,6 +3,7 @@ import numbers
 from enum import Enum
 
 from . import config, core, utils
+from .base import tokenize
 from .core import (
     flatten,
     get_dependencies,
@@ -937,10 +938,12 @@ class SubgraphCallable:
 
     __slots__ = ("dsk", "outkey", "inkeys", "name")
 
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
+    def __init__(self, dsk, outkey, inkeys, name=None):
         self.dsk = dsk
         self.outkey = outkey
         self.inkeys = inkeys
+        if name is None:
+            name = tokenize(dsk, outkey, inkeys)
         self.name = name
 
     def __repr__(self):
