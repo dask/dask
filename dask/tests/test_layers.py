@@ -67,6 +67,12 @@ def _array_creation(tmpdir):
     return da.ones((100,)) + da.zeros((100,))
 
 
+def _array_map_overlap(tmpdir):
+    da = pytest.importorskip("dask.array")
+    array = da.ones((100,)) + da.zeros((100,))
+    return array.map_overlap(lambda x: x, depth=1)
+
+
 def test_fractional_slice():
     assert fractional_slice(("x", 4.9), {0: 2}) == (getitem, ("x", 5), (slice(0, 2),))
 
