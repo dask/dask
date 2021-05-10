@@ -6,7 +6,6 @@ from typing import List, Optional, Tuple
 import tlz as toolz
 from tlz.curried import map
 
-from .array.core import concatenate3, reshapelist
 from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import flatten, keys_in_tasks
@@ -180,6 +179,7 @@ class ArrayOverlapLayer(Layer):
 
     def _construct_graph(self):
         """Construct graph for a simple overlap operation."""
+        concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
         axes = self.axes
         chunks = self.chunks
         name = self.name
@@ -266,6 +266,19 @@ def expand_key(k, dims, name=None, axes=None):
     shape2 = [d if any((axes.get(i, 0),)) else 1 for i, d in enumerate(shape)]
     result = reshapelist(shape2, seq)
     return result
+
+
+def reshapelist(shape, seq):
+    """Reshape iterator to nested shape
+
+    >>> reshapelist((2, 3), range(6))
+    [[0, 1, 2], [3, 4, 5]]
+    """
+    if len(shape) == 1:
+        return list(seq)
+    else:
+        n = int(len(seq) / shape[0])
+        return [reshapelist(shape[1:], part) for part in toolz.partition(n, seq)]
 
 
 def fractional_slice(task, axes):
