@@ -1156,6 +1156,7 @@ def test_SubgraphCallable():
 
     f2 = pickle.loads(pickle.dumps(f))
     assert f2 == f
+    assert hash(f2) == hash(f)
     assert f2(1, 2) == f(1, 2)
 
 
