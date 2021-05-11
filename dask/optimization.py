@@ -943,7 +943,7 @@ class SubgraphCallable:
         self.outkey = outkey
         self.inkeys = inkeys
         if name is None:
-            name = "subgraph_callable-" + str(uuid.uuid1())
+            name = f"subgraph_callable-{uuid.uuid4()}")
         self.name = name
 
     def __repr__(self):
