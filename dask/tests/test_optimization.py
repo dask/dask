@@ -1197,6 +1197,7 @@ def test_SubgraphCallable_eq():
     # Reordering the inputs must not prevent equality
     f5 = SubgraphCallable(dsk1, "c", ["e", "d"], name=f1.name)
     assert f1 == f5
+    assert hash(f1) == hash(f5)
 
     # Explicitly named graphs with different names must be unequal
     unnamed1 = SubgraphCallable(dsk1, "c", ["d", "e"], name="first")
