@@ -1152,12 +1152,27 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
 
     Using a sequence of 1D arrays as the input:
 
-    >>> x = da.random.uniform(0, 1, size=(1000,), chunks=(200,))
-    >>> y = da.random.uniform(0, 1, size=(1000,), chunks=(200,))
-    >>> z = da.random.uniform(0, 1, size=(1000,), chunks=(200,))
-    >>> bins = (6,) * 3
-    >>> range = ((0, 1),) * 3
-    >>> h, edges = da.histogramdd((x, y, z), bins=bins, range=range)
+    >>> x = da.array([2, 4, 2, 4, 2, 4])
+    >>> y = da.array([2, 2, 4, 4, 2, 4])
+    >>> z = da.array([4, 2, 4, 2, 4, 2])
+    >>> bins = ([0, 3, 6],) * 3
+    >>> h, edges = da.histogramdd((x, y, z), bins)
+    >>> h
+    dask.array<sum-aggregate, shape=(2, 2, 2), dtype=float64, chunksize=(2, 2, 2), chunktype=numpy.ndarray>
+    >>> edges[0]
+    dask.array<array, shape=(3,), dtype=int64, chunksize=(3,), chunktype=numpy.ndarray>
+    >>> h.compute()
+    array([[[0., 2.],
+            [0., 1.]],
+
+           [[1., 0.],
+            [2., 0.]]])
+    >>> edges[0].compute()
+    array([0, 3, 6])
+    >>> edges[1].compute()
+    array([0, 3, 6])
+    >>> edges[2].compute()
+    array([0, 3, 6])
 
     """
     # logic used in numpy.histogramdd to handle normed/density.
