@@ -1,9 +1,9 @@
 import math
 import numbers
+import uuid
 from enum import Enum
 
 from . import config, core, utils
-from .base import tokenize
 from .core import (
     flatten,
     get_dependencies,
@@ -943,7 +943,7 @@ class SubgraphCallable:
         self.outkey = outkey
         self.inkeys = inkeys
         if name is None:
-            name = tokenize(dsk, outkey, inkeys)
+            name = "subgraph_callable-" + str(uuid.uuid1())
         self.name = name
 
     def __repr__(self):
