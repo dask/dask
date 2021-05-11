@@ -1177,6 +1177,32 @@ def test_SubgraphCallable_with_numpy():
     assert f1 != f4
 
 
+def test_SubgraphCallable_eq():
+    dsk1 = {"a": 1, "b": 2, "c": (add, "d", "e")}
+    dsk2 = {"a": (inc, 0), "b": (inc, "a"), "c": (add, "d", "e")}
+    f1 = SubgraphCallable(dsk1, "c", ["d", "e"])
+    f2 = SubgraphCallable(dsk2, "c", ["d", "e"])
+    # Different graphs must compare unequal (when no name given)
+    assert f1 != f2
+
+    # Different inputs must compare unequal
+    f3 = SubgraphCallable(dsk2, "c", ["d", "f"], name=f1.name)
+    assert f3 != f1
+
+    # Different outputs must compare unequal
+    f4 = SubgraphCallable(dsk2, "a", ["d", "e"], name=f1.name)
+    assert f4 != f1
+
+    # Reordering the inputs must not prevent equality
+    f5 = SubgraphCallable(dsk1, "c", ["e", "d"], name=f1.name)
+    assert f1 == f5
+
+    # Explicitly named graphs with different names must be unequal
+    unnamed1 = SubgraphCallable(dsk1, "c", ["d", "e"], name="first")
+    unnamed2 = SubgraphCallable(dsk1, "c", ["d", "e"], name="second")
+    assert unnamed1 != unnamed2
+
+
 def test_fuse_subgraphs(compare_subgraph_callables):
     dsk = {
         "x-1": 1,
