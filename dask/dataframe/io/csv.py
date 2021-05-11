@@ -55,7 +55,7 @@ class CSVFunctionWrapper:
         kwargs,
     ):
         self.full_columns = full_columns
-        self.columns = columns  # Used to pass `usecols`
+        self.columns = columns
         self.colname = colname
         self.head = head
         self.header = header
@@ -110,6 +110,8 @@ class CSVFunctionWrapper:
             path_info,
         )
         if self.columns is not None:
+            # TODO: Use `usecols` in case the backend
+            # has column-selection optimizations
             return df[self.columns]
         return df
 
