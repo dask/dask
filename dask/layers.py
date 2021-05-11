@@ -5,7 +5,13 @@ from typing import List, Optional, Tuple
 import tlz as toolz
 
 from .base import tokenize
-from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
+from .blockwise import (
+    Blockwise,
+    BlockwiseDep,
+    BlockwiseDepColumnar,
+    BlockwiseDepDict,
+    blockwise_token,
+)
 from .core import keys_in_tasks
 from .highlevelgraph import Layer
 from .utils import apply, insert, stringify, stringify_collection_keys
@@ -891,10 +897,19 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         name. If nothing is specified (default), "subset-" will
         be used.
     produces_tasks : bool (optional)
-        Whether one or more elements of `inputs` is expected to
+        Whether one or more elements of ``inputs`` is expected to
         contain a nested task. This argument in only used for
         serialization purposes, and will be deprecated in the
         future. Default is False.
+    from_columnar : bool (optional)
+        Whether the elements of ``inputs`` are dicts containing
+        "data" keys with columnar-object values. Defaults to False.
+    common_kwargs : dict (optional)
+        Dictionary of key-word arguments that are the same for every
+        partition of the output DataFrame collection. This dictionary
+        is passed through to the ``BlockwiseDep`` backend. Note that
+        using ``common_kwargs`` requires that every element of
+        ``inputs`` be a dictionary.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -907,6 +922,8 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         io_func,
         label=None,
         produces_tasks=False,
+        from_columnar=False,
+        common_kwargs=None,
         annotations=None,
     ):
         self.name = name
@@ -915,13 +932,23 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         self.io_func = io_func
         self.label = label
         self.produces_tasks = produces_tasks
+        self.from_columnar = from_columnar
+        self.common_kwargs = common_kwargs
         self.annotations = annotations
 
+        # Need to construct a `BlockwiseDep` object.
         # Define mapping between key index and "part"
-        io_arg_map = BlockwiseDepDict(
+        dep_cls = BlockwiseDepColumnar if from_columnar else BlockwiseDepDict
+        io_arg_map = dep_cls(
             {(i,): inp for i, inp in enumerate(self.inputs)},
-            produces_tasks=self.produces_tasks,
+            produces_tasks=produces_tasks,
+            common_kwargs=common_kwargs,
         )
+
+        # Project columns in `io_arg_map` if we have
+        # columnar arguments (`from_columnar==True`)
+        if columns and from_columnar:
+            io_arg_map = io_arg_map.project_columns(columns)
 
         # Use Blockwise initializer
         dsk = {self.name: (io_func, blockwise_token(0))}
@@ -937,14 +964,19 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
     def project_columns(self, columns):
         # Method inherited from `DataFrameLayer.project_columns`
         if columns and (self.columns is None or columns < set(self.columns)):
+
             layer = DataFrameIOLayer(
                 (self.label or "subset-") + tokenize(self.name, columns),
                 list(columns),
                 self.inputs,
                 self.io_func,
                 produces_tasks=self.produces_tasks,
+                from_columnar=self.from_columnar,
+                common_kwargs=self.common_kwargs,
                 annotations=self.annotations,
             )
+
+            # Try projecting columns in `layer.io_func`
             try:
                 layer.io_func = layer.io_func.project_columns(columns)
             except AttributeError:

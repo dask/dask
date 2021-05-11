@@ -1,3 +1,4 @@
+import copy
 import os
 from math import ceil
 from operator import getitem
@@ -11,6 +12,8 @@ from ... import array as da
 from ...base import tokenize
 from ...dataframe.core import new_dd_object
 from ...delayed import delayed
+from ...highlevelgraph import HighLevelGraph
+from ...layers import DataFrameIOLayer
 from ...utils import M, ensure_dict
 from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
 from ..shuffle import set_partition
@@ -76,7 +79,40 @@ def _meta_from_array(x, columns=None, index=None, meta=None):
     return meta._constructor(data, columns=columns, index=index)
 
 
-def from_array(x, chunksize=50000, columns=None, meta=None):
+class FromArrayFunctionWrapper:
+    """
+    Function-Wrapper Class for ``from_array``
+    """
+
+    def __init__(self, meta):
+        self.meta = meta
+        try:
+            self.columns = meta.columns
+        except AttributeError:
+            self.columns = None
+
+    def project_columns(self, columns):
+        """Return a new FromArrayFunctionWrapper object with
+        a sub-column projection.
+        """
+        if self.columns is None or sorted(columns) == sorted(self.columns):
+            return self
+        func = copy.deepcopy(self)
+        func.columns = columns
+        func.meta = self.meta[columns]
+        return func
+
+    def __call__(self, kwargs):
+        if isinstance(kwargs["data"], tuple):
+            # Since the data is stored within a dictionary in
+            # the graph, it is not treated as a nested task.
+            # We need to execute the task explicitly (here) if
+            # it was not computed eagerly.
+            kwargs["data"] = kwargs["data"][0](*kwargs["data"][1:])
+        return type(self.meta)(**kwargs)
+
+
+def from_array(x, chunksize=50000, columns=None, meta=None, eager_slice=False):
     """Read any sliceable array into a Dask Dataframe
 
     Uses getitem syntax to pull slices out of the array.  The array need not be
@@ -103,6 +139,9 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
         An optional `meta` parameter can be passed for dask
         to specify the concrete dataframe type to use for partitions of
         the Dask dataframe. By default, pandas DataFrame is used.
+    eager_slice : bool, optional
+        Whether to perform slicing eagerly (on the client) or
+        lazily (on the worker). Default is False.
 
     Returns
     -------
@@ -117,16 +156,33 @@ def from_array(x, chunksize=50000, columns=None, meta=None):
     divisions = tuple(range(0, len(x), chunksize))
     divisions = divisions + (len(x) - 1,)
     token = tokenize(x, chunksize, columns)
-    name = "from_array-" + token
+    label = "from-array-"
+    name = label + token
 
-    dsk = {}
-    for i in range(0, int(ceil(len(x) / chunksize))):
-        data = (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
-        if is_series_like(meta):
-            dsk[name, i] = (type(meta), data, None, meta.dtype, meta.name)
-        else:
-            dsk[name, i] = (type(meta), data, None, meta.columns)
-    return new_dd_object(dsk, name, meta, divisions)
+    if is_series_like(meta):
+        common_kwargs = {"index": None, "dtype": meta.dtype, "name": meta.name}
+    else:
+        common_kwargs = {"index": None, "columns": meta.columns}
+
+    # Create Blockwise layer
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=[
+            {
+                "data": getitem(x, slice(i * chunksize, (i + 1) * chunksize))
+                if eager_slice
+                else (getitem, x, slice(i * chunksize, (i + 1) * chunksize))
+            }
+            for i in range(0, int(ceil(len(x) / chunksize)))
+        ],
+        io_func=FromArrayFunctionWrapper(meta),
+        label=label,
+        from_columnar=True,
+        common_kwargs=common_kwargs,
+    )
+    graph = HighLevelGraph({name: layer}, {name: set()})
+    return new_dd_object(graph, name, meta, divisions)
 
 
 def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
@@ -210,7 +266,8 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     if chunksize is None:
         chunksize = int(ceil(nrows / npartitions))
 
-    name = name or ("from_pandas-" + tokenize(data, chunksize))
+    label = "from-pandas-"
+    name = name or (label + tokenize(data, chunksize))
 
     if not nrows:
         return new_dd_object({(name, 0): data}, name, data, [None, None])
@@ -225,11 +282,20 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
-    dsk = {
-        (name, i): data.iloc[start:stop]
-        for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))
-    }
-    return new_dd_object(dsk, name, data, divisions)
+    # Create Blockwise layer
+    layer = DataFrameIOLayer(
+        name=name,
+        columns=None,
+        inputs=[
+            {"data": data.iloc[start:stop]}
+            for start, stop in zip(locations[:-1], locations[1:])
+        ],
+        io_func=lambda x: x["data"],
+        label=label,
+        from_columnar=True,
+    )
+    graph = HighLevelGraph({name: layer}, {name: set()})
+    return new_dd_object(graph, name, data, divisions)
 
 
 def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwargs):
