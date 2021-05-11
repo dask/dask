@@ -404,6 +404,7 @@ class Layer(collections.abc.Mapping):
         }
         for k, v in unpacked_futures_deps.items():
             dependencies[k] = set(dependencies.get(k, ())) | v
+        dependencies.update(known_key_dependencies)
 
         # The scheduler expect all keys to be strings
         dependencies = {

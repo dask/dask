@@ -11,7 +11,7 @@ array:
 
 optimization:
   fuse:
-    active: true
+    active: null  # Treat as false for dask.dataframe, true for everything else
     ave-width: 1
     max-width: null  # 1.5 + ave_width * log(ave_width + 1)
     max-height: .inf
