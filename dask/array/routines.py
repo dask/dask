@@ -1164,7 +1164,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     >>> h.compute()
     array([[[0., 2.],
             [0., 1.]],
-
+    <BLANKLINE>
            [[1., 0.],
             [2., 0.]]])
     >>> edges[0].compute()
