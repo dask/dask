@@ -943,7 +943,7 @@ class SubgraphCallable:
         self.outkey = outkey
         self.inkeys = inkeys
         if name is None:
-            name = f"subgraph_callable-{uuid.uuid4()}")
+            name = f"subgraph_callable-{uuid.uuid4()}"
         self.name = name
 
     def __repr__(self):
@@ -969,4 +969,4 @@ class SubgraphCallable:
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
 
     def __hash__(self):
-        return hash(tuple((self.outkey, tuple(self.inkeys), self.name)))
+        return hash(tuple((self.outkey, frozenset(self.inkeys), self.name)))
