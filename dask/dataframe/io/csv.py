@@ -44,6 +44,7 @@ class CSVFunctionWrapper:
 
     def __init__(
         self,
+        full_columns,
         columns,
         colname,
         head,
@@ -53,7 +54,8 @@ class CSVFunctionWrapper:
         enforce,
         kwargs,
     ):
-        self.full_columns = columns
+        self.full_columns = full_columns
+        self.columns = columns  # Used to pass `usecols`
         self.colname = colname
         self.head = head
         self.header = header
@@ -61,7 +63,6 @@ class CSVFunctionWrapper:
         self.dtypes = dtypes
         self.enforce = enforce
         self.kwargs = kwargs
-        self.columns = None  # Used to pass `usecols`
 
     def project_columns(self, columns):
         """Return a new CSVFunctionWrapper object with
@@ -92,15 +93,12 @@ class CSVFunctionWrapper:
         # for the first block of each file
         write_header = False
         rest_kwargs = self.kwargs.copy()
-        if self.columns is not None:
-            if rest_kwargs.get("usecols", None) is None:
-                rest_kwargs["usecols"] = self.columns
         if not is_first:
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
         # Call `pandas_read_text`
-        return pandas_read_text(
+        df = pandas_read_text(
             self.reader,
             block,
             self.header,
@@ -111,6 +109,9 @@ class CSVFunctionWrapper:
             self.enforce,
             path_info,
         )
+        if self.columns is not None:
+            return df[self.columns]
+        return df
 
 
 def pandas_read_text(
@@ -363,6 +364,7 @@ def text_blocks_to_pandas(
         parts,
         CSVFunctionWrapper(
             columns,
+            None,
             colname,
             head,
             header,
