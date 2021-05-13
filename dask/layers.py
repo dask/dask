@@ -937,18 +937,21 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
     def project_columns(self, columns):
         # Method inherited from `DataFrameLayer.project_columns`
         if columns and (self.columns is None or columns < set(self.columns)):
+
+            # Apply column projection in IO function
+            try:
+                io_func = self.io_func.project_columns(list(columns))
+            except AttributeError:
+                io_func = self.io_func
+
             layer = DataFrameIOLayer(
                 (self.label or "subset-") + tokenize(self.name, columns),
                 list(columns),
                 self.inputs,
-                self.io_func,
+                io_func,
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
-            try:
-                layer.io_func = layer.io_func.project_columns(columns)
-            except AttributeError:
-                pass
             return layer, None
         else:
             # Default behavior
