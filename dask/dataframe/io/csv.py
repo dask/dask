@@ -71,6 +71,8 @@ class CSVFunctionWrapper:
         if columns == self.columns:
             return self
         func = copy.deepcopy(self)
+        func.head = self.head[columns]
+        func.dtypes = {c: self.dtypes[c] for c in columns}
         func.columns = columns
         return func
 
@@ -97,6 +99,19 @@ class CSVFunctionWrapper:
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
+        # Deal with column projection
+        columns = self.full_columns
+        project_after_read = False
+        if self.columns is not None:
+            if rest_kwargs.get("parse_dates", None):
+                # If `parse_dates` is defined, avoid changing
+                # `usecols` here. Instead, we can just select
+                # columns after the read
+                project_after_read = True
+            else:
+                columns = self.columns
+                rest_kwargs["usecols"] = columns
+
         # Call `pandas_read_text`
         df = pandas_read_text(
             self.reader,
@@ -104,14 +119,12 @@ class CSVFunctionWrapper:
             self.header,
             rest_kwargs,
             self.dtypes,
-            self.full_columns,
+            columns,
             write_header,
             self.enforce,
             path_info,
         )
-        if self.columns is not None:
-            # TODO: Use `usecols` in case the backend
-            # has column-selection optimizations
+        if project_after_read:
             return df[self.columns]
         return df
 
