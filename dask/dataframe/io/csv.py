@@ -103,10 +103,10 @@ class CSVFunctionWrapper:
         columns = self.full_columns
         project_after_read = False
         if self.columns is not None:
-            if rest_kwargs.get("parse_dates", None):
-                # If `parse_dates` is defined, avoid changing
-                # `usecols` here. Instead, we can just select
-                # columns after the read
+            if self.kwargs:
+                # To be safe, if any kwargs are defined, avoid
+                # changing `usecols` here. Instead, we can just
+                # select columns after the read
                 project_after_read = True
             else:
                 columns = self.columns
