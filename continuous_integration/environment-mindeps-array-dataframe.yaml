@@ -10,7 +10,6 @@ dependencies:
   - fsspec=0.6.0
   - toolz=0.8.2
   # optional dependencies pulled in by pip install dask[array, dataframe]
-  - distributed=2021.04.1
   - numpy=1.16
   - pandas=0.25.0
   # test dependencies

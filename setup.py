@@ -10,7 +10,7 @@ import versioneer
 # NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-    "array": ["numpy >= 1.16", "distributed >= 2021.04.1"],
+    "array": ["numpy >= 1.16"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.16", "pandas >= 0.25.0"],
     "distributed": ["distributed >= 2021.04.1"],
