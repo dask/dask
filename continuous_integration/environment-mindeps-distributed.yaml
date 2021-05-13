@@ -12,7 +12,8 @@ dependencies:
   # optional dependencies pulled in by pip install dask[distributed]
   - pip
   - pip:
-    - git+https://github.com/madsbk/distributed.git@merge_global_annotations_on_client
+    # TODO: Replace this with distributed=2021.05.0 once it is out
+    - git+https://github.com/dask/distributed
   # test dependencies
   - pytest
   - pytest-rerunfailures
