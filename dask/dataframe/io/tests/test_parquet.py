@@ -2456,6 +2456,7 @@ def test_getitem_optimization(tmpdir, engine, preserve_index, index):
     subgraph = dsk.layers[read]
     assert isinstance(subgraph, DataFrameIOLayer)
     assert subgraph.columns == ["B"]
+    assert next(iter((subgraph.dsk.values())))[0].columns == ["B"]
 
     assert_eq(ddf.compute(optimize_graph=False), ddf.compute())
 
