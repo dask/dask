@@ -4123,6 +4123,11 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     ----------
     a : array-like
         Input data, in any form that can be converted to a dask array.
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
 
     Returns
     -------
@@ -4148,7 +4153,7 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes, **kwargs)
+        return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
     return from_array(a, getitem=getter_inline, **kwargs)
