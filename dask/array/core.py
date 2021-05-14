@@ -3872,7 +3872,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     from . import wrap
 
-    seq = [asarray(a) for a in seq]
+    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to concatenate")
