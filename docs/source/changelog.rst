@@ -1,6 +1,37 @@
 Changelog
 =========
 
+2021.05.0
+---------
+
+Released on May 14, 2021
+
+- Remove deprecated ``kind`` kwarg to comply with pandas 1.3.0 (:pr:`7653`) `Julia Signell`_
+- Fix bug in DataFrame column projection (:pr:`7645`) `Richard (Rick) Zamora`_
+- Merge global annotations when packing (:pr:`7565`) `Mads R. B. Kristensen`_
+- Avoid ``inplace=`` in pandas ``set_categories`` (:pr:`7633`) `James Bourbeau`_
+- Change the active-fusion default to ``False`` for Dask-Dataframe (:pr:`7620`) `Richard (Rick) Zamora`_
+- Array: remove extraneous code from ``RandomState`` (:pr:`7487`) `Gabe Joseph`_
+- Implement ``str.concat`` when ``others=None`` (:pr:`7623`) `Daniel Mesejo-León`_
+- Fix ``dask.dataframe`` in sandboxed environments (:pr:`7601`) `Noah D. Brenowitz`_
+- Support for ``cupyx.scipy.linalg`` (:pr:`7563`) `Benjamin Zaitlen`_
+- Move ``timeseries`` and daily-stock to ``Blockwise`` (:pr:`7615`) `Richard (Rick) Zamora`_
+- Fix bugs in broadcast join (:pr:`7617`) `Richard (Rick) Zamora`_
+- Use ``Blockwise`` for DataFrame IO (parquet, csv, and orc) (:pr:`7415`) `Richard (Rick) Zamora`_
+- Adding chunk & type information to Dask ``HighLevelGraph`` s (:pr:`7309`) `Genevieve Buckley`_
+- Add ``pyarrow`` sphinx ``intersphinx_mapping`` (:pr:`7612`) `Ray Bell`_
+- Remove skip on test freq (:pr:`7608`) `Julia Signell`_
+- Defaults in ``read_parquet`` parameters (:pr:`7567`) `Ray Bell`_
+- Remove ``ignore_abc_warning`` (:pr:`7606`) `Julia Signell`_
+- Harden DataFrame merge between column-selection and index (:pr:`7575`) `Richard (Rick) Zamora`_
+- Get rid of ``ignore_abc`` decorator (:pr:`7604`) `Julia Signell`_
+- Remove kwarg validation for bokeh (:pr:`7597`) `Julia Signell`_
+- Add ``loky`` example (:pr:`7590`) `Naty Clementi`_
+- Delayed: ``nout`` when arguments become tasks (:pr:`7593`) `Gabe Joseph`_
+- Update distributed version in mindep CI build (:pr:`7602`) `James Bourbeau`_
+- Support all or no overlap between partition columns and real columns (:pr:`7541`) `Richard (Rick) Zamora`_
+
+
 2021.04.1
 ---------
 
@@ -535,7 +566,7 @@ Array
 - Handle sequences containing dask Arrays (:pr:`6595`) `Gabe Joseph`_
 - Avoid large chunks from ``getitem`` with lists (:pr:`6514`) `Tom Augspurger`_
 - Eagerly slice numpy arrays in ``from_array`` (:pr:`6605`) `Deepak Cherian`_
-- Restore ability to pickle dask arrays (:pr:`6594`) `Noah D Brenowitz`_
+- Restore ability to pickle dask arrays (:pr:`6594`) `Noah D. Brenowitz`_
 - Add SVD support for short-and-fat arrays (:pr:`6591`) `Eric Czech`_
 - Add simple chunk type registry and defer as appropriate to upcast types (:pr:`6393`) `Jon Thielen`_
 - Align coarsen chunks by default (:pr:`6580`) `Deepak Cherian`_
@@ -4120,7 +4151,7 @@ Other
 .. _`David Sheldon`: https://github.com/davidsmf
 .. _`McToel`: https://github.com/McToel
 .. _`Kilian Lieret`: https://github.com/klieret
-.. _`Noah D Brenowitz`: https://github.com/nbren12
+.. _`Noah D. Brenowitz`: https://github.com/nbren12
 .. _`Jon Thielen`: https://github.com/jthielen
 .. _`Poruri Sai Rahul`: https://github.com/rahulporuri
 .. _`Kyle Nicholson`: https://github.com/kylejn27
