@@ -422,7 +422,7 @@ def read_hdf(
         common_kwargs = {"mode": mode}
 
     # Build parts
-    parts, divisions = build_parts(
+    parts, divisions = _build_parts(
         paths, key, start, stop, chunksize, sorted_index, mode
     )
 
@@ -440,7 +440,7 @@ def read_hdf(
     return new_dd_object(graph, name, meta, divisions)
 
 
-def build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
+def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
     """
     Build the list of partition inputs and divisions for read_hdf
     """
@@ -448,7 +448,7 @@ def build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
     global_divisions = []
     for path in paths:
 
-        keys, stops, divisions = get_keys_stops_divisions(
+        keys, stops, divisions = _get_keys_stops_divisions(
             path, key, stop, sorted_index, chunksize, mode
         )
 
@@ -459,12 +459,12 @@ def build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
             elif division:
                 global_divisions = division
 
-            parts.extend(one_path_one_key(path, k, start, stop, chunksize))
+            parts.extend(_one_path_one_key(path, k, start, stop, chunksize))
 
     return parts, global_divisions or [None] * (len(parts) + 1)
 
 
-def one_path_one_key(path, key, start, stop, chunksize):
+def _one_path_one_key(path, key, start, stop, chunksize):
     """
     Get the DataFrame corresponding to one path and one key (which
     should not contain any wildcards).
@@ -501,7 +501,7 @@ def _expand_key(key, hdf):
     return keys
 
 
-def get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
+def _get_keys_stops_divisions(path, key, stop, sorted_index, chunksize, mode):
     """
     Get the "keys" or group identifiers which match the given key, which
     can contain wildcards (see _expand_path). This uses the hdf file
