@@ -142,7 +142,15 @@ class StringAccessor(Accessor):
         from .core import Index, Series
 
         if others is None:
-            raise NotImplementedError("x.str.cat() with `others == None`")
+
+            def str_cat_none(x):
+
+                if isinstance(x, (Series, Index)):
+                    x = x.compute()
+
+                return x.str.cat(sep=sep, na_rep=na_rep)
+
+            return self._series.reduction(chunk=str_cat_none, aggregate=str_cat_none)
 
         valid_types = (Series, Index, pd.Series, pd.Index)
         if isinstance(others, valid_types):

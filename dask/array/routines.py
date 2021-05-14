@@ -14,7 +14,7 @@ from ..compatibility import apply
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, funcname, is_arraylike
+from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
 from .core import (
     Array,
@@ -162,9 +162,9 @@ def transpose(a, axes=None):
     if axes:
         if len(axes) != a.ndim:
             raise ValueError("axes don't match array")
+        axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     else:
         axes = tuple(range(a.ndim))[::-1]
-    axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     return blockwise(
         np.transpose, axes, a, tuple(range(a.ndim)), dtype=a.dtype, axes=axes
     )
@@ -321,11 +321,18 @@ def vdot(a, b):
 
 
 def _matmul(a, b):
-    chunk = np.matmul(a, b)
+    xp = np
+
+    if is_cupy_type(a):
+        import cupy
+
+        xp = cupy
+
+    chunk = xp.matmul(a, b)
     # Since we have performed the contraction via matmul
     # but blockwise expects all dimensions back, we need
     # to add one dummy dimension back
-    return chunk[..., np.newaxis]
+    return chunk[..., xp.newaxis]
 
 
 @derived_from(np)

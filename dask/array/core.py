@@ -1147,6 +1147,32 @@ class Array(DaskMethodsMixin):
             if result is not None:
                 self = result
 
+        try:
+            layer = self.dask.layers[name]
+        except (AttributeError, KeyError):
+            # self is no longer an Array after applying the plugins, OR
+            # a plugin replaced the HighLevelGraph with a plain dict, OR
+            # name is not the top layer's name (this can happen after the layer is
+            # manipulated, to avoid a collision)
+            pass
+        else:
+            if layer.collection_annotations is None:
+                layer.collection_annotations = {
+                    "type": type(self),
+                    "chunk_type": type(self._meta),
+                    "chunks": self.chunks,
+                    "dtype": dtype,
+                }
+            else:
+                layer.collection_annotations.update(
+                    {
+                        "type": type(self),
+                        "chunk_type": type(self._meta),
+                        "chunks": self.chunks,
+                        "dtype": dtype,
+                    }
+                )
+
         return self
 
     def __reduce__(self):
@@ -4758,8 +4784,8 @@ def concatenate3(arrays):
 
     if IS_NEP18_ACTIVE and not all(
         NDARRAY_ARRAY_FUNCTION
-        is getattr(arr, "__array_function__", NDARRAY_ARRAY_FUNCTION)
-        for arr in arrays
+        is getattr(type(arr), "__array_function__", NDARRAY_ARRAY_FUNCTION)
+        for arr in core.flatten(arrays, container=(list, tuple))
     ):
         try:
             x = unpack_singleton(arrays)
@@ -4785,7 +4811,9 @@ def concatenate3(arrays):
 
     result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
-    for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
+    for (idx, arr) in zip(
+        slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
+    ):
         if hasattr(arr, "ndim"):
             while arr.ndim < ndim:
                 arr = arr[None, ...]

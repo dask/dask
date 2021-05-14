@@ -1,6 +1,10 @@
+import copy
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
+
+from ...highlevelgraph import HighLevelGraph
+from ...layers import DataFrameIOLayer
 
 try:
     import psutil
@@ -32,85 +36,97 @@ from ..core import new_dd_object
 from ..utils import clear_known_categories
 
 
-class CSVSubgraph(Mapping):
+class CSVFunctionWrapper:
     """
-    Subgraph for reading CSV files.
+    CSV Function-Wrapper Class
+    Reads CSV data from disk to produce a partition (given a key).
     """
 
     def __init__(
         self,
-        name,
-        reader,
-        blocks,
-        is_first,
+        full_columns,
+        columns,
+        colname,
         head,
         header,
-        kwargs,
+        reader,
         dtypes,
-        columns,
         enforce,
-        path,
+        kwargs,
     ):
-        self.name = name
-        self.reader = reader
-        self.blocks = blocks
-        self.is_first = is_first
-        self.head = head  # example pandas DF for metadata
-        self.header = header  # prepend to all blocks
-        self.kwargs = kwargs
-        self.dtypes = dtypes
+        self.full_columns = full_columns
         self.columns = columns
+        self.colname = colname
+        self.head = head
+        self.header = header
+        self.reader = reader
+        self.dtypes = dtypes
         self.enforce = enforce
-        self.colname, self.paths = path or (None, None)
+        self.kwargs = kwargs
 
-    def __getitem__(self, key):
-        try:
-            name, i = key
-        except ValueError:
-            # too many / few values to unpack
-            raise KeyError(key) from None
+    def project_columns(self, columns):
+        """Return a new CSVFunctionWrapper object with
+        a sub-column projection.
+        """
+        if columns == self.columns:
+            return self
+        func = copy.deepcopy(self)
+        func.head = self.head[columns]
+        func.dtypes = {c: self.dtypes[c] for c in columns}
+        func.columns = columns
+        return func
 
-        if name != self.name:
-            raise KeyError(key)
+    def __call__(self, part):
 
-        if i < 0 or i >= len(self.blocks):
-            raise KeyError(key)
+        # Part will be a 3-element tuple
+        block, path, is_first = part
 
-        block = self.blocks[i]
-        if self.paths is not None:
+        # Construct `path_info`
+        if path is not None:
             path_info = (
                 self.colname,
-                self.paths[i],
+                path,
                 sorted(list(self.head[self.colname].cat.categories)),
             )
         else:
             path_info = None
 
+        # Deal with arguments that are special
+        # for the first block of each file
         write_header = False
         rest_kwargs = self.kwargs.copy()
-        if not self.is_first[i]:
+        if not is_first:
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
-        return (
-            pandas_read_text,
+        # Deal with column projection
+        columns = self.full_columns
+        project_after_read = False
+        if self.columns is not None:
+            if self.kwargs:
+                # To be safe, if any kwargs are defined, avoid
+                # changing `usecols` here. Instead, we can just
+                # select columns after the read
+                project_after_read = True
+            else:
+                columns = self.columns
+                rest_kwargs["usecols"] = columns
+
+        # Call `pandas_read_text`
+        df = pandas_read_text(
             self.reader,
             block,
             self.header,
             rest_kwargs,
             self.dtypes,
-            self.columns,
+            columns,
             write_header,
             self.enforce,
             path_info,
         )
-
-    def __len__(self):
-        return len(self.blocks)
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield (self.name, i)
+        if project_after_read:
+            return df[self.columns]
+        return df
 
 
 def pandas_read_text(
@@ -325,8 +341,6 @@ def text_blocks_to_pandas(
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
 
-    name = "read-csv-" + tokenize(reader, columns, enforce, head, blocksize)
-
     if path:
         colname, path_converter = path
         paths = [b[1].path for b in blocks]
@@ -344,21 +358,41 @@ def text_blocks_to_pandas(
     if len(unknown_categoricals):
         head = clear_known_categories(head, cols=unknown_categoricals)
 
-    subgraph = CSVSubgraph(
-        name,
-        reader,
-        blocks,
-        is_first,
-        head,
-        header,
-        kwargs,
-        dtypes,
-        columns,
-        enforce,
-        path,
-    )
+    # Define parts
+    parts = []
+    colname, paths = path or (None, None)
+    for i in range(len(blocks)):
+        parts.append(
+            [
+                blocks[i],
+                paths[i] if paths else None,
+                is_first[i],
+            ]
+        )
 
-    return new_dd_object(subgraph, name, head, (None,) * (len(blocks) + 1))
+    # Create Blockwise layer
+    label = "read-csv-"
+    name = label + tokenize(reader, columns, enforce, head, blocksize)
+    layer = DataFrameIOLayer(
+        name,
+        columns,
+        parts,
+        CSVFunctionWrapper(
+            columns,
+            None,
+            colname,
+            head,
+            header,
+            reader,
+            dtypes,
+            enforce,
+            kwargs,
+        ),
+        label=label,
+        produces_tasks=True,
+    )
+    graph = HighLevelGraph({name: layer}, {name: set()})
+    return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
 
 
 def block_mask(block_lists):
@@ -382,15 +416,22 @@ def auto_blocksize(total_memory, cpu_count):
     return min(blocksize, int(64e6))
 
 
+def _infer_block_size():
+    default = 2 ** 25
+    if psutil is not None:
+        with catch_warnings():
+            simplefilter("ignore", RuntimeWarning)
+            mem = psutil.virtual_memory().total
+            cpu = psutil.cpu_count()
+
+        if mem and cpu:
+            return auto_blocksize(mem, cpu)
+
+    return default
+
+
 # guess blocksize if psutil is installed or use acceptable default one if not
-if psutil is not None:
-    with catch_warnings():
-        simplefilter("ignore", RuntimeWarning)
-        TOTAL_MEM = psutil.virtual_memory().total
-        CPU_COUNT = psutil.cpu_count()
-        AUTO_BLOCKSIZE = auto_blocksize(TOTAL_MEM, CPU_COUNT)
-else:
-    AUTO_BLOCKSIZE = 2 ** 25
+AUTO_BLOCKSIZE = _infer_block_size()
 
 
 def read_pandas(

@@ -1103,7 +1103,7 @@ def test_to_delayed():
     assert t.compute() == 21
 
 
-def test_to_delayed_optimize_graph():
+def test_to_delayed_optimize_graph(tmpdir):
     b = db.from_sequence([1, 2, 3, 4, 5, 6], npartitions=1)
     b2 = b.map(inc).map(inc).map(inc)
 
@@ -1122,7 +1122,7 @@ def test_to_delayed_optimize_graph():
     assert dict(d2.dask) == dict(x.dask)
     assert d.compute() == d2.compute()
 
-    [d] = b2.to_textfiles("foo.txt", compute=False)
+    [d] = b2.to_textfiles(str(tmpdir), compute=False)
     text = str(dict(d.dask))
     assert text.count("reify") <= 0
 
