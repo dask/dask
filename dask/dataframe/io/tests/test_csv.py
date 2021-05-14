@@ -510,8 +510,11 @@ def test_read_csv_skiprows_range():
 def test_usecols():
     with filetext(timeseries) as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=["High", "Low"])
+        df_select = df[["High"]]
         expected = pd.read_csv(fn, usecols=["High", "Low"])
+        expected_select = expected[["High"]]
         assert (df.compute().values == expected.values).all()
+        assert (df_select.compute().values == expected_select.values).all()
 
 
 def test_string_blocksize():

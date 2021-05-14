@@ -86,18 +86,15 @@ class MakeTimeseriesPart:
             return self
         func = copy.deepcopy(self)
         func.columns = columns
+        func.dtypes = {c: self.dtypes[c] for c in columns}
         return func
 
     def __call__(self, part):
         divisions, state_data = part
         if isinstance(state_data, int):
             state_data = random_state_data(1, state_data)
-        if self.columns:
-            dtypes = {k: v for k, v in self.dtypes.items() if k in self.columns}
-        else:
-            dtypes = self.dtypes
         return make_timeseries_part(
-            divisions[0], divisions[1], dtypes, self.freq, state_data, self.kwargs
+            divisions[0], divisions[1], self.dtypes, self.freq, state_data, self.kwargs
         )
 
 

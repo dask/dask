@@ -286,7 +286,7 @@ async def test_annotations_blockwise_unpack(c, s, a, b):
         "full",
     ],
 )
-@pytest.mark.parametrize("fuse", [True, False])
+@pytest.mark.parametrize("fuse", [True, False, None])
 def test_blockwise_array_creation(c, io, fuse):
     np = pytest.importorskip("numpy")
     da = pytest.importorskip("dask.array")
@@ -308,6 +308,9 @@ def test_blockwise_array_creation(c, io, fuse):
     narr += 2
     with dask.config.set({"optimization.fuse.active": fuse}):
         darr.compute()
+        dsk = dask.array.optimize(darr.dask, darr.__dask_keys__())
+        # dsk should be a dict unless fuse is explicitly False
+        assert isinstance(dsk, dict) == (fuse is not False)
         da.assert_eq(darr, narr)
 
 
@@ -319,7 +322,7 @@ def test_blockwise_array_creation(c, io, fuse):
         "csv",
     ],
 )
-@pytest.mark.parametrize("fuse", [True, False])
+@pytest.mark.parametrize("fuse", [True, False, None])
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
@@ -344,6 +347,9 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
     ddf = ddf[["x"]] + 10
     with dask.config.set({"optimization.fuse.active": fuse}):
         ddf.compute()
+        dsk = dask.dataframe.optimize(ddf.dask, ddf.__dask_keys__())
+        # dsk should not be a dict unless fuse is explicitly True
+        assert isinstance(dsk, dict) == bool(fuse)
         dd.assert_eq(ddf, df, check_index=False)
 
 
@@ -479,11 +485,36 @@ async def test_map_partitions_partition_info(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_futures_in_subgraphs(c, s, a, b):
+    """Copied from distributed (tests/test_client.py)"""
+
+    dd = pytest.importorskip("dask.dataframe")
+    pd = pytest.importorskip("pandas")
+
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            dict(
+                uid=range(50),
+                enter_time=pd.date_range(
+                    start="2020-01-01", end="2020-09-01", periods=50, tz="UTC"
+                ),
+            )
+        ),
+        npartitions=1,
+    )
+
+    ddf = ddf[ddf.uid.isin(range(29))].persist()
+    ddf["day"] = ddf.enter_time.dt.day_name()
+    ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
+
+
+@gen_cluster(client=True)
 async def test_annotation_pack_unpack(c, s, a, b):
     hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"])
 
     annotations = {"workers": ("alice",)}
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg, annotations)
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
+
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
