@@ -1,4 +1,3 @@
-import copy
 import os
 import uuid
 from fnmatch import fnmatch
@@ -282,6 +281,7 @@ class HDFFunctionWrapper:
         self.columns = columns
         self.lock = lock
         self.common_kwargs = common_kwargs
+        self.dim = dim
         if columns and dim > 1:
             self.common_kwargs = merge(common_kwargs, {"columns": columns})
 
@@ -291,10 +291,7 @@ class HDFFunctionWrapper:
         """
         if columns == self.columns:
             return self
-        func = copy.deepcopy(self)
-        func.columns = columns
-        func.common_kwargs["columns"] = columns
-        return func
+        return HDFFunctionWrapper(columns, self.dim, self.lock, self.common_kwargs)
 
     def __call__(self, part):
         """ Read from hdf5 file with a lock """

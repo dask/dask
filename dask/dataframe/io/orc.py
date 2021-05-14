@@ -1,4 +1,3 @@
-import copy
 from distutils.version import LooseVersion
 
 from fsspec.core import get_fs_token_paths
@@ -30,9 +29,7 @@ class ORCFunctionWrapper:
         """
         if columns == self.columns:
             return self
-        func = copy.deepcopy(self)
-        func.columns = columns
-        return func
+        return ORCFunctionWrapper(self.fs, columns, self.schema)
 
     def __call__(self, stripe_info):
         path, stripe = stripe_info
