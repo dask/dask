@@ -177,9 +177,8 @@ class ArrayOverlapLayer(Layer):
         self._cached_keys = result = keys()
         return result
 
-    def _construct_graph(self):
+    def _construct_graph(self, deserializing=False):
         """Construct graph for a simple overlap operation."""
-        concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
         axes = self.axes
         chunks = self.chunks
         name = self.name
@@ -188,6 +187,14 @@ class ArrayOverlapLayer(Layer):
         getitem_name = "getitem-" + self.token
         overlap_name = "overlap-" + self.token
 
+        if deserializing:
+            # Use CallableLazyImport objects to avoid importing dataframe
+            # module on the scheduler
+            concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
+        else:
+            # Not running on distributed scheduler - Use explicit functions
+            from dask.array.core import concatenate3
+
         dims = list(map(len, chunks))
         expand_key2 = toolz.partial(expand_key, dims=dims, axes=axes)
 
@@ -195,7 +202,6 @@ class ArrayOverlapLayer(Layer):
         interior_keys = toolz.pipe(
             dask_keys, flatten, map(expand_key2), map(flatten), toolz.concat, list
         )
-        # breakpoint()
         interior_slices = {}
         overlap_blocks = {}
         for k in interior_keys:
@@ -211,6 +217,10 @@ class ArrayOverlapLayer(Layer):
 
         dsk = toolz.merge(interior_slices, overlap_blocks)
         return dsk
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)._construct_graph(deserializing=True)
 
 
 def expand_key(k, dims, name=None, axes=None):
