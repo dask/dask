@@ -429,8 +429,6 @@ def read_hdf(
     # Construct Layer and Collection
     label = "read-hdf-"
     name = label + tokenize(paths, key, start, stop, sorted_index, chunksize, mode)
-    if len(divisions) != len(parts) + 1:
-        divisions = [None] * (len(parts) + 1)
     layer = DataFrameIOLayer(
         name,
         columns,
@@ -463,7 +461,7 @@ def build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
 
             parts.extend(one_path_one_key(path, k, start, stop, chunksize))
 
-    return parts, global_divisions
+    return parts, global_divisions or [None] * (len(parts) + 1)
 
 
 def one_path_one_key(path, key, start, stop, chunksize):
