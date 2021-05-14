@@ -565,6 +565,26 @@ def svd_flip(u, v, u_based_decision=False):
     return u, v
 
 
+def scipy_linalg_safe(func_name, *args, **kwargs):
+    # need to evaluate at least the first input array
+    # for gpu/cpu checking
+    a = args[0]
+    if is_cupy_type(a):
+        import cupyx.scipy.linalg
+
+        func = getattr(cupyx.scipy.linalg, func_name)
+    else:
+        import scipy.linalg
+
+        func = getattr(scipy.linalg, func_name)
+
+    return func(*args, **kwargs)
+
+
+def solve_triangular_safe(a, b, lower=False):
+    return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
+
+
 def _is_nep18_active():
     class A:
         def __array_function__(self, *args, **kwargs):
