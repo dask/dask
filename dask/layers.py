@@ -1,5 +1,7 @@
 import operator
 from collections import defaultdict
+from itertools import product
+from numbers import Integral
 from typing import List, Optional, Tuple
 
 import tlz as toolz
@@ -8,6 +10,7 @@ from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import keys_in_tasks
 from .highlevelgraph import Layer
+from .layers_utils import _slice_1d
 from .utils import apply, insert, stringify, stringify_collection_keys
 
 #
@@ -98,6 +101,91 @@ class BlockwiseCreateArray(Blockwise):
             indices=[(CreateArrayDeps(chunks), out_ind)],
             numblocks={},
         )
+
+
+class SlicingLayer(Layer):
+    """Array slicing HighLevelGraph Layer"""
+
+    def __init__(
+        self,
+        out_name,
+        in_name,
+        blockdims,
+        index,
+        shape,
+    ):
+        super().__init__()
+        self.out_name = out_name
+        self.in_name = in_name
+        self.blockdims = blockdims
+        self.index = index
+        self.shape = shape
+
+    def __repr__(self):
+        return "SlicingLayer<name='{}'".format(self.name)
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    def _construct_graph(self, deserializing=False):
+        """Construct graph for a simple overlap operation."""
+        out_name = self.out_name
+        in_name = self.in_name
+        blockdims = self.blockdims
+        index = self.index
+        shape = self.shape
+
+        # Get a list (for each dimension) of dicts{blocknum: slice()}
+        block_slices = list(map(_slice_1d, shape, blockdims, index))
+        sorted_block_slices = [sorted(i.items()) for i in block_slices]
+
+        # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
+        in_names = list(
+            product([in_name], *[toolz.pluck(0, s) for s in sorted_block_slices])
+        )
+
+        # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
+        out_names = list(
+            product(
+                [out_name],
+                *[
+                    range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+                    for d, i in zip(block_slices, index)
+                    if not isinstance(i, Integral)
+                ],
+            )
+        )
+
+        all_slices = list(product(*[toolz.pluck(1, s) for s in sorted_block_slices]))
+
+        dsk = {
+            out_name: (operator.getitem, in_name, slices)
+            for out_name, in_name, slices in zip(out_names, in_names, all_slices)
+        }
+        return dsk
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)._construct_graph(deserializing=True)
 
 
 #
