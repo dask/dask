@@ -109,7 +109,11 @@ def unpack_collections(expr):
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
-            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
+            [
+                [f.name, getattr(expr, f.name)]
+                for f in fields(expr)
+                if hasattr(expr, f.name)
+            ]
         )
 
         return (apply, typ, (), (dict, args)), collections
