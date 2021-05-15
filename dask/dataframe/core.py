@@ -3177,7 +3177,7 @@ Dask Name: {name}, {task} tasks""".format(
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
         raise NotImplementedError(
-            "Series getitem in only supported for other series objects "
+            "Series getitem is only supported for other series objects "
             "with matching partition structure"
         )
 
