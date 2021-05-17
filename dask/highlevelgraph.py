@@ -964,8 +964,7 @@ class HighLevelGraph(Mapping):
 
         The approach is to delegate the packaging to each layer in the high level graph
         by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
-        on each layer. If the layer doesn't implement packaging, we materialize the
-        layer and pack it.
+        on each layer.
 
         Parameters
         ----------
