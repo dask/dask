@@ -32,6 +32,7 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
+from ..layers import GetItemLayer
 from ..optimization import SubgraphCallable
 from ..utils import (
     Dispatch,
@@ -3862,7 +3863,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = GetItemLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -3896,7 +3897,7 @@ class DataFrame(_Frame):
                 from .multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = GetItemLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         if isinstance(key, DataFrame):

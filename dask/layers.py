@@ -4,7 +4,7 @@ from typing import List, Optional, Tuple
 
 import tlz as toolz
 
-from .base import tokenize
+from .base import is_dask_collection, tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import keys_in_tasks
 from .highlevelgraph import Layer
@@ -961,3 +961,56 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         return "DataFrameIOLayer<name='{}', n_parts={}, columns={}>".format(
             self.name, len(self.inputs), self.columns
         )
+
+
+class GetItemLayer(Blockwise):
+    """DataFrame-based GetItem Layer"""
+
+    def __init__(
+        self,
+        name,
+        frame,
+        key,
+        annotations=None,
+    ):
+        self.name = name
+        self.frame = frame
+        self.key = key
+        self.annotations = annotations
+
+        # Initialize `inputs`, `inputs_indices` & `numblocks`
+        # for target `frame` collection
+        inputs = [frame._name]
+        inputs_indices = ["i"]
+        numblocks = {frame._name: (frame.npartitions,)}
+
+        # Update `inputs`, `inputs_indices` & `numblocks`
+        # for getitem `key`
+        if is_dask_collection(key):
+            inputs.append(key._name)
+            inputs_indices.append("i")
+            if hasattr(key, "npartitions"):
+                numblocks[key._name] = (key.npartitions,)
+            elif hasattr(key, "numblocks"):
+                numblocks[key._name] = key.numblocks
+            else:
+                numblocks[key._name] = (1,)
+        else:
+            inputs.append(key)
+            inputs_indices.append(None)
+
+        # Initalize Blockwise backend
+        indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
+        keys = map(blockwise_token, range(len(inputs)))
+        super().__init__(
+            output=self.name,
+            output_indices="i",
+            dsk={self.name: (operator.getitem,) + tuple(keys)},
+            indices=indices,
+            numblocks=numblocks,
+            concatenate=True,
+            annotations=annotations,
+        )
+
+    def __repr__(self):
+        return "GetItemLayer<name='{}', key={}>".format(self.name, self.key)
