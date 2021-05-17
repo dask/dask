@@ -434,7 +434,7 @@ class Layer(collections.abc.Mapping):
 
         This method is called by the scheduler in Distributed in order to unpack
         the state of a layer and merge it into its global task graph. The method
-        should update `dsk` and `dependencies`, which are the already materialized
+        can use `dsk` and `dependencies`, which are the already materialized
         state of the preceding layers in the high level graph. The layers of the
         high level graph are unpacked in topological order.
 
