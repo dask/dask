@@ -1,6 +1,7 @@
+from functools import partial
+
 import numpy as np
 import pandas as pd
-from functools import partial
 
 from ..utils import derived_from
 
@@ -138,10 +139,18 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):
-        from .core import Series, Index
+        from .core import Index, Series
 
         if others is None:
-            raise NotImplementedError("x.str.cat() with `others == None`")
+
+            def str_cat_none(x):
+
+                if isinstance(x, (Series, Index)):
+                    x = x.compute()
+
+                return x.str.cat(sep=sep, na_rep=na_rep)
+
+            return self._series.reduction(chunk=str_cat_none, aggregate=str_cat_none)
 
         valid_types = (Series, Index, pd.Series, pd.Index)
         if isinstance(others, valid_types):

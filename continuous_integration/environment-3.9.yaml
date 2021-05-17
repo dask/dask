@@ -14,15 +14,16 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
-  # Not available for Python 3.9 on conda-forge yet
-  # - fastparquet
+  - fastparquet
   - h5py
   - pytables
   - zarr
   - tiledb-py
   - xarray
   - fsspec
-  - sqlalchemy
+  # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
+  # along with other issues https://github.com/pandas-dev/pandas/issues/40467
+  - sqlalchemy<1.4.0
   - pyarrow
   - coverage
   - jsonschema
@@ -44,8 +45,7 @@ dependencies:
   - graphviz
   - ipython
   - lz4
-  # Not available for Python 3.9 on conda-forge yet
-  # - numba
+  - numba
   - partd
   - psutil
   - requests
@@ -54,8 +54,7 @@ dependencies:
   - scipy
   - toolz
   - python-snappy
-  # Depends on numba
-  # - sparse
+  - sparse
   - cachey
   - python-graphviz
   - pandas-datareader

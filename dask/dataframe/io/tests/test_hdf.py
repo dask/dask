@@ -1,16 +1,16 @@
+import os
+import pathlib
+from time import sleep
+
 import numpy as np
 import pandas as pd
 import pytest
 
-import os
-from time import sleep
-import pathlib
-
 import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
-from dask.utils import tmpfile, tmpdir, dependency_depth
 from dask.dataframe.utils import assert_eq
+from dask.utils import dependency_depth, tmpdir, tmpfile
 
 
 def test_to_hdf():
@@ -120,8 +120,8 @@ def test_to_hdf_multiple_nodes():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             b.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df16, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df16, out)
 
 
 def test_to_hdf_multiple_files():
@@ -203,8 +203,8 @@ def test_to_hdf_multiple_files():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             a.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df, out)
 
 
 def test_to_hdf_modes_multiple_nodes():

@@ -3,19 +3,23 @@ import types
 import uuid
 import warnings
 from collections.abc import Iterator
+from dataclasses import fields, is_dataclass
 
-from tlz import curry, concat, unique, merge
+from tlz import concat, curry, merge, unique
 
 from . import config, threaded
-from .base import is_dask_collection, dont_optimize, DaskMethodsMixin
-from .base import replace_name_in_key, tokenize as _tokenize
-from .compatibility import is_dataclass, dataclass_fields
-
-from .core import quote
+from .base import (
+    DaskMethodsMixin,
+    dont_optimize,
+    is_dask_collection,
+    replace_name_in_key,
+)
+from .base import tokenize as _tokenize
 from .context import globalmethod
-from .optimization import cull
-from .utils import funcname, methodcaller, OperatorMethodMixin, ensure_dict, apply
+from .core import quote
 from .highlevelgraph import HighLevelGraph
+from .optimization import cull
+from .utils import OperatorMethodMixin, apply, ensure_dict, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
 
@@ -105,7 +109,7 @@ def unpack_collections(expr):
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
-            [[f.name, getattr(expr, f.name)] for f in dataclass_fields(expr)]
+            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
         )
 
         return (apply, typ, (), (dict, args)), collections
@@ -183,7 +187,7 @@ def to_task_dask(expr):
 
     if is_dataclass(expr):
         args, dsk = to_task_dask(
-            [[f.name, getattr(expr, f.name)] for f in dataclass_fields(expr)]
+            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
         )
 
         return (apply, typ, (), (dict, args)), dsk
@@ -431,11 +435,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         task = quote(obj)
         collections = set()
 
+    if not (nout is None or (type(nout) is int and nout >= 0)):
+        raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
     if task is obj:
-        if not (nout is None or (type(nout) is int and nout >= 0)):
-            raise ValueError(
-                "nout must be None or a non-negative integer, got %s" % nout
-            )
         if not name:
             try:
                 prefix = obj.__name__
@@ -449,7 +451,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             name = "%s-%s" % (type(obj).__name__, tokenize(task, pure=pure))
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
-        return Delayed(name, graph)
+        return Delayed(name, graph, nout)
 
 
 def right(method):

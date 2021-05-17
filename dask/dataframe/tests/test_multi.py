@@ -1,29 +1,28 @@
 import warnings
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
+import pytest
 
+import dask.dataframe as dd
 from dask.base import compute_as_if_collection
 from dask.dataframe._compat import tm
 from dask.dataframe.core import _Frame
 from dask.dataframe.methods import concat
 from dask.dataframe.multi import (
-    align_partitions,
-    merge_indexed_dataframes,
-    hash_join,
-    concat_indexed_dataframes,
     _maybe_align_partitions,
+    align_partitions,
+    concat_indexed_dataframes,
+    hash_join,
+    merge_indexed_dataframes,
 )
 from dask.dataframe.utils import (
-    assert_eq,
     assert_divisions,
-    make_meta,
-    has_known_categories,
+    assert_eq,
     clear_known_categories,
+    has_known_categories,
+    make_meta,
 )
-
-import pytest
 
 
 def test_align_partitions():
@@ -2078,9 +2077,10 @@ def test_merge_outer_empty():
 
     for x in range(0, k_clusters + 1):
         assert_eq(
-            dd.merge(empty_df, df[df.cluster == x], how="outer").compute(),
-            df[df.cluster == x].compute(),
+            dd.merge(empty_df, df[df.cluster == x], how="outer"),
+            df[df.cluster == x],
             check_index=False,
+            check_divisions=False,
         )
 
 
@@ -2141,6 +2141,30 @@ def test_groupby_concat_cudf(engine):
         res_dd = dd.concat([grouped_dd1, grouped_dd2], axis=1)
 
     assert_eq(res_dd.compute().sort_index(), res.sort_index())
+
+
+@pytest.mark.parametrize("ordered", [True, False])
+def test_concat_ignore_order(ordered):
+    pdf1 = pd.DataFrame(
+        {
+            "x": pd.Categorical(
+                ["a", "b", "c", "a"], categories=["a", "b", "c"], ordered=ordered
+            )
+        }
+    )
+    ddf1 = dd.from_pandas(pdf1, 2)
+    pdf2 = pd.DataFrame(
+        {
+            "x": pd.Categorical(
+                ["c", "b", "a"], categories=["c", "b", "a"], ordered=ordered
+            )
+        }
+    )
+    ddf2 = dd.from_pandas(pdf2, 2)
+    expected = pd.concat([pdf1, pdf2])
+    expected["x"] = expected["x"].astype("category")
+    result = dd.concat([ddf1, ddf2], ignore_order=True)
+    assert_eq(result, expected)
 
 
 def test_categorical_join():

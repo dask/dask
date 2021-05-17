@@ -1,17 +1,15 @@
 import collections
-import warnings
 from operator import add
 
-import pytest
 import numpy as np
+import pytest
 
 import dask
 import dask.array as da
-from dask.highlevelgraph import HighLevelGraph
-from dask.blockwise import Blockwise, rewrite_blockwise, optimize_blockwise, index_subs
 from dask.array.utils import assert_eq
-from dask.array.numpy_compat import _numpy_116
-from dask.utils_test import inc, dec
+from dask.blockwise import Blockwise, index_subs, optimize_blockwise, rewrite_blockwise
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils_test import dec, inc
 
 a, b, c, d, e, f, g = "abcdefg"
 _0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = ["_%d" % i for i in range(10)]
@@ -519,23 +517,16 @@ def test_blockwise_chunks():
 
 
 def test_blockwise_numpy_arg():
-    with warnings.catch_warnings():
-        if not _numpy_116:
-            # Not sure why, but this DeprecationWarning is no longer
-            # showing up for NumPy >=1.16. So we only filter here
-            # for 1.15 and earlier
-            warnings.simplefilter("ignore", DeprecationWarning)
+    x = da.arange(10, chunks=(5,))
+    y = np.arange(1000)
 
-        x = da.arange(10, chunks=(5,))
-        y = np.arange(1000)
-
-        x = x.map_blocks(lambda x, y: x, 1.0)
-        x = x.map_blocks(lambda x, y: x, "abc")
-        x = x.map_blocks(lambda x, y: x, y)
-        x = x.map_blocks(lambda x, y: x, "abc")
-        x = x.map_blocks(lambda x, y: x, 1.0)
-        x = x.map_blocks(lambda x, y, z: x, "abc", np.array(["a", "b"], dtype=object))
-        assert_eq(x, np.arange(10))
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y: x, "abc")
+    x = x.map_blocks(lambda x, y: x, y)
+    x = x.map_blocks(lambda x, y: x, "abc")
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y, z: x, "abc", np.array(["a", "b"], dtype=object))
+    assert_eq(x, np.arange(10))
 
 
 def test_bag_array_conversion():

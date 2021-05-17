@@ -5,6 +5,7 @@ from operator import add
 import pytest
 
 import dask
+import dask.bag as db
 from dask import delayed
 from dask.base import clone_key
 from dask.blockwise import Blockwise
@@ -14,7 +15,6 @@ from dask.tests.test_base import Tuple
 from dask.utils_test import import_or_none
 
 da = import_or_none("dask.array")
-db = import_or_none("dask.bag")
 dd = import_or_none("dask.dataframe")
 pd = import_or_none("pandas")
 
@@ -126,7 +126,7 @@ def test_checkpoint(layers):
     assert cnt.n == 5
 
 
-@pytest.mark.skipif("not da or not db or not dd")
+@pytest.mark.skipif("not da or not dd")
 def test_checkpoint_collections():
     colls, cnt = collections_with_node_counters()
     cp = checkpoint(*colls)
@@ -150,7 +150,7 @@ def test_wait_on_many(layers):
     assert cnt.n == 5
 
 
-@pytest.mark.skipif("not da or not db or not dd")
+@pytest.mark.skipif("not da or not dd")
 def test_wait_on_collections():
     colls, cnt = collections_with_node_counters()
 
@@ -274,7 +274,7 @@ def test_bind(layers):
     assert cnt.n == 9
 
 
-@pytest.mark.skipif("not da or not db or not dd")
+@pytest.mark.skipif("not da or not dd")
 @pytest.mark.parametrize("func", [bind, clone])
 def test_bind_clone_collections(func):
     @delayed

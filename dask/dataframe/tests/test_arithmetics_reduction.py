@@ -1,17 +1,13 @@
-from datetime import datetime
 import warnings
+from datetime import datetime
 
-import pytest
 import numpy as np
 import pandas as pd
+import pytest
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_120, PANDAS_VERSION
-from dask.dataframe.utils import (
-    assert_eq,
-    assert_dask_graph,
-    make_meta,
-)
+from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
 
 try:
     import scipy
@@ -722,6 +718,7 @@ def test_reductions(split_every):
 
         assert_eq(dds.sum(split_every=split_every), pds.sum())
         assert_eq(dds.prod(split_every=split_every), pds.prod())
+        assert_eq(dds.product(split_every=split_every), pds.product())
         assert_eq(dds.min(split_every=split_every), pds.min())
         assert_eq(dds.max(split_every=split_every), pds.max())
         assert_eq(dds.count(split_every=split_every), pds.count())
@@ -731,6 +728,13 @@ def test_reductions(split_every):
             n = pds.shape[0]
             bias_factor = (n * (n - 1)) ** 0.5 / (n - 2)
             assert_eq(dds.skew(), pds.skew() / bias_factor)
+
+        if scipy:
+            # pandas uses a bias factor for kurtosis, need to correct for that
+            n = pds.shape[0]
+            factor = ((n - 1) * (n + 1)) / ((n - 2) * (n - 3))
+            offset = (6 * (n - 1)) / ((n - 2) * (n - 3))
+            assert_eq(factor * dds.kurtosis() + offset, pds.kurtosis())
 
         with pytest.warns(None):
             # runtime warnings; https://github.com/dask/dask/issues/2381
@@ -755,6 +759,10 @@ def test_reductions(split_every):
         assert_eq(dds.sum(skipna=False, split_every=split_every), pds.sum(skipna=False))
         assert_eq(
             dds.prod(skipna=False, split_every=split_every), pds.prod(skipna=False)
+        )
+        assert_eq(
+            dds.product(skipna=False, split_every=split_every),
+            pds.product(skipna=False),
         )
         assert_eq(dds.min(skipna=False, split_every=split_every), pds.min(skipna=False))
         assert_eq(dds.max(skipna=False, split_every=split_every), pds.max(skipna=False))
@@ -825,7 +833,9 @@ def test_reductions_timedelta(split_every):
         (pd.Series([1, 2.5, 6]), None, None),
     ],
 )
-@pytest.mark.parametrize("redfunc", ["sum", "prod", "min", "max", "mean", "var", "std"])
+@pytest.mark.parametrize(
+    "redfunc", ["sum", "prod", "product", "min", "max", "mean", "var", "std"]
+)
 def test_reductions_out(frame, axis, out, redfunc):
     dsk_in = dd.from_pandas(frame, 3)
     dsk_out = dd.from_pandas(pd.Series([0]), 1).sum()
@@ -917,6 +927,10 @@ def test_deterministic_reduction_names(split_every):
             == x.prod(split_every=split_every)._name
         )
         assert (
+            x.product(split_every=split_every)._name
+            == x.product(split_every=split_every)._name
+        )
+        assert (
             x.min(split_every=split_every)._name == x.min(split_every=split_every)._name
         )
         assert (
@@ -960,6 +974,7 @@ def test_reduction_series_invalid_axis():
         for s in [ddf1.a, pdf1.a]:  # both must behave the same
             pytest.raises(ValueError, lambda: s.sum(axis=axis))
             pytest.raises(ValueError, lambda: s.prod(axis=axis))
+            pytest.raises(ValueError, lambda: s.product(axis=axis))
             pytest.raises(ValueError, lambda: s.min(axis=axis))
             pytest.raises(ValueError, lambda: s.max(axis=axis))
             # only count doesn't have axis keyword
@@ -981,6 +996,7 @@ def test_reductions_non_numeric_dtypes():
     dds = dd.from_pandas(pds, 2)
     assert_eq(dds.sum(), pds.sum())
     check_raises(dds, pds, "prod")
+    check_raises(dds, pds, "product")
     assert_eq(dds.min(), pds.min())
     assert_eq(dds.max(), pds.max())
     assert_eq(dds.count(), pds.count())
@@ -988,6 +1004,7 @@ def test_reductions_non_numeric_dtypes():
     check_raises(dds, pds, "var")
     check_raises(dds, pds, "sem")
     check_raises(dds, pds, "skew")
+    check_raises(dds, pds, "kurtosis")
     assert_eq(dds.nunique(), pds.nunique())
 
     for pds in [
@@ -999,6 +1016,7 @@ def test_reductions_non_numeric_dtypes():
 
         check_raises(dds, pds, "sum")
         check_raises(dds, pds, "prod")
+        check_raises(dds, pds, "product")
         assert_eq(dds.min(), pds.min())
         assert_eq(dds.max(), pds.max())
         assert_eq(dds.count(), pds.count())
@@ -1011,6 +1029,7 @@ def test_reductions_non_numeric_dtypes():
         check_raises(dds, pds, "var")
         check_raises(dds, pds, "sem")
         check_raises(dds, pds, "skew")
+        check_raises(dds, pds, "kurtosis")
         assert_eq(dds.nunique(), pds.nunique())
 
     pds = pd.Series(pd.timedelta_range("1 days", freq="D", periods=5))
@@ -1021,6 +1040,7 @@ def test_reductions_non_numeric_dtypes():
     assert_eq(dds.count(), pds.count())
     # both pandas and dask skew calculations do not support timedelta
     check_raises(dds, pds, "skew")
+    check_raises(dds, pds, "kurtosis")
 
     # ToDo: pandas supports timedelta std, dask returns float64
     # assert_eq(dds.std(), pds.std())
@@ -1045,6 +1065,7 @@ def test_reductions_frame(split_every):
 
     assert_eq(ddf1.sum(split_every=split_every), pdf1.sum())
     assert_eq(ddf1.prod(split_every=split_every), pdf1.prod())
+    assert_eq(ddf1.product(split_every=split_every), pdf1.product())
     assert_eq(ddf1.min(split_every=split_every), pdf1.min())
     assert_eq(ddf1.max(split_every=split_every), pdf1.max())
     assert_eq(ddf1.count(split_every=split_every), pdf1.count())
@@ -1059,6 +1080,9 @@ def test_reductions_frame(split_every):
     for axis in [0, 1, "index", "columns"]:
         assert_eq(ddf1.sum(axis=axis, split_every=split_every), pdf1.sum(axis=axis))
         assert_eq(ddf1.prod(axis=axis, split_every=split_every), pdf1.prod(axis=axis))
+        assert_eq(
+            ddf1.product(axis=axis, split_every=split_every), pdf1.product(axis=axis)
+        )
         assert_eq(ddf1.min(axis=axis, split_every=split_every), pdf1.min(axis=axis))
         assert_eq(ddf1.max(axis=axis, split_every=split_every), pdf1.max(axis=axis))
         assert_eq(ddf1.count(axis=axis, split_every=split_every), pdf1.count(axis=axis))
@@ -1148,6 +1172,7 @@ def test_reductions_frame_dtypes():
         )
 
     assert_eq(df.prod(), ddf.prod())
+    assert_eq(df.product(), ddf.product())
     assert_eq(df.min(), ddf.min())
     assert_eq(df.max(), ddf.max())
     assert_eq(df.count(), ddf.count())
@@ -1209,6 +1234,7 @@ def test_reductions_frame_nan(split_every):
     ddf = dd.from_pandas(df, 3)
     assert_eq(df.sum(), ddf.sum(split_every=split_every))
     assert_eq(df.prod(), ddf.prod(split_every=split_every))
+    assert_eq(df.product(), ddf.product(split_every=split_every))
     assert_eq(df.min(), ddf.min(split_every=split_every))
     assert_eq(df.max(), ddf.max(split_every=split_every))
     assert_eq(df.count(), ddf.count(split_every=split_every))
@@ -1228,6 +1254,9 @@ def test_reductions_frame_nan(split_every):
         assert_eq(df.sum(skipna=False), ddf.sum(skipna=False, split_every=split_every))
         assert_eq(
             df.prod(skipna=False), ddf.prod(skipna=False, split_every=split_every)
+        )
+        assert_eq(
+            df.product(skipna=False), ddf.product(skipna=False, split_every=split_every)
         )
         assert_eq(df.min(skipna=False), ddf.min(skipna=False, split_every=split_every))
         assert_eq(df.max(skipna=False), ddf.max(skipna=False, split_every=split_every))
@@ -1257,6 +1286,10 @@ def test_reductions_frame_nan(split_every):
         assert_eq(
             df.prod(axis=1, skipna=False),
             ddf.prod(axis=1, skipna=False, split_every=split_every),
+        )
+        assert_eq(
+            df.product(axis=1, skipna=False),
+            ddf.product(axis=1, skipna=False, split_every=split_every),
         )
         assert_eq(
             df.min(axis=1, skipna=False),
@@ -1364,7 +1397,7 @@ def test_empty_df_reductions(func):
     assert_eq(dsk_func(ddf), pd_func(pdf))
 
 
-@pytest.mark.parametrize("method", ["sum", "prod"])
+@pytest.mark.parametrize("method", ["sum", "prod", "product"])
 @pytest.mark.parametrize("min_count", [0, 9])
 def test_series_agg_with_min_count(method, min_count):
     df = pd.DataFrame([[1]], columns=["a"])

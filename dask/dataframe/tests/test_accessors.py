@@ -1,7 +1,7 @@
 import contextlib
 
+import numpy as np
 import pytest
-
 
 pd = pytest.importorskip("pandas")
 import dask.dataframe as dd
@@ -213,13 +213,20 @@ def test_str_accessor_cat(df_ddf):
         ddf.str_col.str.cat([ddf.str_col.str.upper(), df.str_col.str.lower()], sep=":"),
         df.str_col.str.cat([df.str_col.str.upper(), df.str_col.str.lower()], sep=":"),
     )
+    assert_eq(ddf.str_col.str.cat(sep=":"), df.str_col.str.cat(sep=":"))
 
     for o in ["foo", ["foo"]]:
         with pytest.raises(TypeError):
             ddf.str_col.str.cat(o)
 
-    with pytest.raises(NotImplementedError):
-        ddf.str_col.str.cat(sep=":")
+
+def test_str_accessor_cat_none():
+    s = pd.Series(["a", "a", "b", "b", "c", np.nan], name="foo")
+    ds = dd.from_pandas(s, npartitions=2)
+
+    assert_eq(ds.str.cat(), s.str.cat())
+    assert_eq(ds.str.cat(na_rep="-"), s.str.cat(na_rep="-"))
+    assert_eq(ds.str.cat(sep="_", na_rep="-"), s.str.cat(sep="_", na_rep="-"))
 
 
 def test_str_accessor_noexpand():

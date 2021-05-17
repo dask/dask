@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.utils import meta_from_array, assert_eq
+from dask.array.utils import assert_eq, meta_from_array
 
 asarrays = [np.asarray]
 

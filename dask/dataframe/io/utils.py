@@ -1,6 +1,7 @@
-import pandas as pd
 import json
 from uuid import uuid4
+
+import pandas as pd
 
 
 def _get_pyarrow_dtypes(schema, categories):

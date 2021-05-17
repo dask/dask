@@ -4,12 +4,12 @@ from operator import mul
 
 import numpy as np
 
-from .core import Array
-from .utils import meta_from_array
 from ..base import tokenize
 from ..core import flatten
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M
+from .core import Array
+from .utils import meta_from_array
 
 
 def reshape_rechunk(inshape, outshape, inchunks):
@@ -49,8 +49,8 @@ def reshape_rechunk(inshape, outshape, inchunks):
             if all(len(inchunks[i]) == inshape[i] for i in range(ii)):
                 for i in range(ii + 1):
                     result_inchunks[i] = inchunks[i]
-                result_outchunks[oi] = inchunks[i] * np.prod(
-                    list(map(len, inchunks[:i]))
+                result_outchunks[oi] = inchunks[ii] * np.prod(
+                    list(map(len, inchunks[ileft:ii]))
                 )
             else:
                 for i in range(ileft + 1, ii + 1):  # need single-shape dimensions

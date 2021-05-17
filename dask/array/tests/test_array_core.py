@@ -1,57 +1,57 @@
 import copy
+from unittest import mock
 
 import pytest
 
 np = pytest.importorskip("numpy")
 
+import operator
 import os
 import time
-from io import StringIO
-import operator
-from operator import add, sub, getitem
-from threading import Lock
 import warnings
+from io import StringIO
+from operator import add, getitem, sub
+from threading import Lock
 
-from tlz import merge, countby, concat
+from numpy import nancumprod, nancumsum
+from tlz import concat, countby, merge
 from tlz.curried import identity
 
 import dask
 import dask.array as da
 import dask.dataframe
-from dask.base import tokenize, compute_as_if_collection
-from dask.delayed import Delayed, delayed
-from dask.utils import ignoring, tmpfile, tmpdir, key_split, apply
-from dask.utils_test import inc, dec
-
 from dask.array.core import (
-    getem,
-    getter,
-    dotmany,
-    concatenate3,
     Array,
-    stack,
-    concatenate,
-    from_array,
+    blockdims_from_blockshape,
+    broadcast_chunks,
     broadcast_shapes,
     broadcast_to,
-    blockdims_from_blockshape,
-    store,
-    optimize,
-    from_func,
-    normalize_chunks,
-    broadcast_chunks,
-    from_delayed,
     common_blockdim,
+    concatenate,
+    concatenate3,
     concatenate_axes,
+    dotmany,
+    from_array,
+    from_delayed,
+    from_func,
+    getem,
+    getter,
+    normalize_chunks,
+    optimize,
+    stack,
+    store,
 )
-from dask.blockwise import (
-    make_blockwise_graph as top,
-    broadcast_dimensions,
-    optimize_blockwise,
-)
+from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
+from dask.base import compute_as_if_collection, tokenize
+from dask.blockwise import broadcast_dimensions
+from dask.blockwise import make_blockwise_graph as top
+from dask.blockwise import optimize_blockwise
+from dask.delayed import Delayed, delayed
+from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
+from dask.utils_test import dec, inc
 
-from numpy import nancumsum, nancumprod
+from .test_dispatch import EncapsulateNDArray
 
 
 def test_getem():
@@ -301,20 +301,17 @@ def test_Array_numpy_gufunc_call__array_ufunc__01():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
     ny = np.linalg._umath_linalg.inv(nx)
-    y = np.linalg._umath_linalg.inv(x, output_dtypes=float)
-    vy = y.compute()
-    assert_eq(ny, vy)
+    y = np.linalg._umath_linalg.inv(x)
+    assert_eq(ny, y)
 
 
 def test_Array_numpy_gufunc_call__array_ufunc__02():
     x = da.random.normal(size=(3, 10, 10), chunks=(2, 10, 10))
     nx = x.compute()
     nw, nv = np.linalg._umath_linalg.eig(nx)
-    w, v = np.linalg._umath_linalg.eig(x, output_dtypes=(float, float))
-    vw = w.compute()
-    vv = v.compute()
-    assert_eq(nw, vw)
-    assert_eq(nv, vv)
+    w, v = np.linalg._umath_linalg.eig(x)
+    assert_eq(nw, w)
+    assert_eq(nv, v)
 
 
 def test_stack():
@@ -1526,8 +1523,10 @@ def test_map_blocks_optimize_blockwise(func):
     c = b + base[3]
     dsk = c.__dask_graph__()
     optimized = optimize_blockwise(dsk)
-    # The two additions and the map_blocks should be fused together
-    assert len(optimized.layers) == len(dsk.layers) - 2
+
+    # Everything should be fused into a single layer.
+    # If the lambda includes block_info, there will be two layers.
+    assert len(optimized.layers) == len(dsk.layers) - 6
 
 
 def test_repr():
@@ -2591,7 +2590,7 @@ def test_from_func():
 
     assert d.shape == x.shape
     assert d.dtype == x.dtype
-    assert_eq(d.compute(), 2 * x)
+    assert_eq(d, 2 * x)
     assert same_keys(d, from_func(f, (10,), x.dtype, kwargs={"n": 2}))
 
 
@@ -2642,6 +2641,25 @@ def test_concatenate3_2():
             ]
         ),
     )
+
+
+@pytest.mark.skipif(not _numpy_117, reason="NEP-18 is not enabled by default")
+@pytest.mark.parametrize("one_d", [True, False])
+@mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
+def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
+    x = EncapsulateNDArray(np.arange(10))
+    concat = [x, x] if one_d else [[x[None]], [x[None]]]
+    result = concatenate3(concat)
+    assert type(result) is type(x)
+    mock_concatenate2.assert_called()
+    mock_concatenate2.reset_mock()
+
+    # When all the inputs are supported by plain `np.concatenate`, we should take the concatenate3
+    # fastpath of allocating the full array up front and writing blocks into it.
+    concat = [x.arr, x.arr] if one_d else [[x.arr[None]], [x.arr[None]]]
+    plain_np_result = concatenate3(concat)
+    mock_concatenate2.assert_not_called()
+    assert type(plain_np_result) is np.ndarray
 
 
 def test_map_blocks3():
@@ -2789,7 +2807,7 @@ def test_point_slicing():
 
 
 def test_point_slicing_with_full_slice():
-    from dask.array.core import _vindex_transpose, _get_axis
+    from dask.array.core import _get_axis, _vindex_transpose
 
     x = np.arange(4 * 5 * 6 * 7).reshape((4, 5, 6, 7))
     d = da.from_array(x, chunks=(2, 3, 3, 4))
@@ -2944,11 +2962,11 @@ def test_memmap():
 
                 x.store(target)
 
-                assert_eq(target, x)
+                assert_eq(target, x, check_type=False)
 
                 np.save(fn_2, target)
 
-                assert_eq(np.load(fn_2, mmap_mode="r"), x)
+                assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
             finally:
                 target._mmap.close()
 
@@ -3323,7 +3341,7 @@ def test_from_array_names():
     ],
 )
 def test_array_picklable(array):
-    from pickle import loads, dumps
+    from pickle import dumps, loads
 
     a2 = loads(dumps(array))
     assert_eq(array, a2)
@@ -3615,11 +3633,299 @@ def test_setitem_2d():
     assert_eq(x, dx)
 
 
+def test_setitem_extended_API_0d():
+    # 0-d array
+    x = np.array(9)
+    dx = da.from_array(9)
+
+    x[()] = -1
+    dx[()] = -1
+    assert_eq(x, dx.compute())
+
+    x[...] = -11
+    dx[...] = -11
+    assert_eq(x, dx.compute())
+
+
+def test_setitem_extended_API_1d():
+    # 1-d array
+    x = np.arange(10)
+    dx = da.from_array(x.copy(), chunks=(4, 6))
+
+    x[2:8:2] = -1
+    dx[2:8:2] = -1
+    assert_eq(x, dx.compute())
+
+    x[...] = -11
+    dx[...] = -11
+    assert_eq(x, dx.compute())
+
+
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        [Ellipsis, -1],
+        [(slice(None, None, 2), slice(None, None, -1)), -1],
+        [slice(1, None, 2), -1],
+        [[4, 3, 1], -1],
+        [(Ellipsis, 4), -1],
+        [5, -1],
+        [(slice(None), 2), range(6)],
+        [3, range(10)],
+        [(slice(None), [3, 5, 6]), [-30, -31, -32]],
+        [([-1, 0, 1], 2), [-30, -31, -32]],
+        [(slice(None, 2), slice(None, 3)), [-50, -51, -52]],
+        [(slice(None), [6, 1, 3]), [-60, -61, -62]],
+        [(slice(1, 3), slice(1, 4)), [[-70, -71, -72]]],
+        [(slice(None), [9, 8, 8]), [-80, -81, 91]],
+        [([True, False, False, False, True, False], 2), -1],
+        [(3, [True, True, False, True, True, False, True, False, True, True]), -1],
+        [(np.array([False, False, True, True, False, False]), slice(5, 7)), -1],
+        [
+            (
+                4,
+                da.from_array(
+                    [False, False, True, True, False, False, True, False, False, True]
+                ),
+            ),
+            -1,
+        ],
+    ],
+)
+def test_setitem_extended_API_2d(index, value):
+    # 2-d array
+    x = np.ma.arange(60).reshape((6, 10))
+    dx = da.from_array(x, chunks=(2, 3))
+    dx[index] = value
+    x[index] = value
+    assert_eq(x, dx.compute())
+
+
+def test_setitem_extended_API_2d_rhs_func_of_lhs():
+    # Cases:
+    # * RHS and/or indices are a function of the LHS
+    # * Indices have unknown chunk sizes
+    # * RHS has extra leading size 1 dimensions compared to LHS
+    x = np.arange(60).reshape((6, 10))
+    chunks = (2, 3)
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[2:4, dx[0] > 3] = -5
+    x[2:4, x[0] > 3] = -5
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[2, dx[0] < -2] = -7
+    x[2, x[0] < -2] = -7
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[dx % 2 == 0] = -8
+    x[x % 2 == 0] = -8
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[dx % 2 == 0] = -8
+    x[x % 2 == 0] = -8
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[3:5, 5:1:-2] = -dx[:2, 4:1:-2]
+    x[3:5, 5:1:-2] = -x[:2, 4:1:-2]
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[0, 1:3] = -dx[0, 4:2:-1]
+    x[0, 1:3] = -x[0, 4:2:-1]
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[...] = dx
+    x[...] = x
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[...] = dx[...]
+    x[...] = x[...]
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[0] = dx[-1]
+    x[0] = x[-1]
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[0, :] = dx[-2, :]
+    x[0, :] = x[-2, :]
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[:, 1] = dx[:, -3]
+    x[:, 1] = x[:, -3]
+    assert_eq(x, dx.compute())
+
+    index = da.from_array([0, 2], chunks=(2,))
+    dx = da.from_array(x, chunks=chunks)
+    dx[index, 8] = [99, 88]
+    x[[0, 2], 8] = [99, 88]
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=chunks)
+    dx[:, index] = dx[:, :2]
+    x[:, [0, 2]] = x[:, :2]
+    assert_eq(x, dx.compute())
+
+    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
+    dx = da.from_array(x, chunks=chunks)
+    dx[index, 7] = [-23, -33]
+    x[index.compute(), 7] = [-23, -33]
+    assert_eq(x, dx.compute())
+
+    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
+    dx = da.from_array(x, chunks=chunks)
+    dx[(index,)] = -34
+    x[(index.compute(),)] = -34
+    assert_eq(x, dx.compute())
+
+    index = index - 4
+    dx = da.from_array(x, chunks=chunks)
+    dx[index, 7] = [-43, -53]
+    x[index.compute(), 7] = [-43, -53]
+    assert_eq(x, dx.compute())
+
+    index = da.from_array([0, -1], chunks=(1,))
+    x[[0, -1]] = 9999
+    dx[(index,)] = 9999
+    assert_eq(x, dx.compute())
+
+    dx = da.from_array(x, chunks=(-1, -1))
+    dx[...] = da.from_array(x, chunks=chunks)
+    assert_eq(x, dx.compute())
+
+    # RHS has extra leading size 1 dimensions compared to LHS
+    dx = da.from_array(x.copy(), chunks=(2, 3))
+    v = x.reshape((1, 1) + x.shape)
+    x[...] = v
+    dx[...] = v
+    assert_eq(x, dx.compute())
+
+    index = da.where(da.arange(3, chunks=(1,)) < 2)[0]
+    v = -np.arange(12).reshape(1, 1, 6, 2)
+    x[:, [0, 1]] = v
+    dx[:, index] = v
+    assert_eq(x, dx.compute())
+
+
+@pytest.mark.parametrize(
+    "index, value",
+    [
+        [(1, slice(1, 7, 2)), np.ma.masked],
+        [(slice(1, 5, 2), [7, 5]), np.ma.masked_all((2, 2))],
+    ],
+)
+def test_setitem_extended_API_2d_mask(index, value):
+    x = np.ma.arange(60).reshape((6, 10))
+    dx = da.from_array(x.data, chunks=(2, 3))
+    dx[index] = value
+    x[index] = value
+    dx = dx.persist()
+    assert_eq(x, dx.compute())
+    assert_eq(x.mask, da.ma.getmaskarray(dx).compute())
+
+
+def test_setitem_on_read_only_blocks():
+    # Outputs of broadcast_trick-style functions contain read-only
+    # arrays
+    dx = da.empty((4, 6), dtype=float, chunks=(2, 2))
+    dx[0] = 99
+
+    assert_eq(dx[0, 0], 99.0)
+
+    dx[0:2] = 88
+
+    assert_eq(dx[0, 0], 88.0)
+
+
 def test_setitem_errs():
     x = da.ones((4, 4), chunks=(2, 2))
 
     with pytest.raises(ValueError):
         x[x > 1] = x
+
+    # Shape mismatch
+    with pytest.raises(ValueError):
+        x[[True, True, False, False], 0] = [2, 3, 4]
+
+    with pytest.raises(ValueError):
+        x[[True, True, True, False], 0] = [2, 3]
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    with pytest.raises(ValueError):
+        x[0, da.from_array([True, False, False, True])] = [2, 3, 4]
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    with pytest.raises(ValueError):
+        x[0, da.from_array([True, True, False, False])] = [2, 3, 4]
+
+    x = da.ones((4, 4), chunks=(2, 2))
+    with pytest.raises(ValueError):
+        x[da.from_array([True, True, True, False]), 0] = [2, 3]
+
+    x = da.ones((4, 4), chunks=(2, 2))
+
+    # Too many indices
+    with pytest.raises(IndexError):
+        x[:, :, :] = 2
+
+    # 2-d boolean indexing a single dimension
+    with pytest.raises(IndexError):
+        x[[[True, True, False, False]], 0] = 5
+
+    # Too many/not enough booleans
+    with pytest.raises(IndexError):
+        x[[True, True, False]] = 5
+
+    with pytest.raises(IndexError):
+        x[[False, True, True, True, False]] = 5
+
+    # 2-d indexing a single dimension
+    with pytest.raises(IndexError):
+        x[[[1, 2, 3]], 0] = 5
+
+    # Multiple 1-d boolean/integer arrays
+    with pytest.raises(NotImplementedError):
+        x[[1, 2], [2, 3]] = 6
+
+    with pytest.raises(NotImplementedError):
+        x[[True, True, False, False], [2, 3]] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[[True, True, False, False], [False, True, False, False]] = 7
+
+    # scalar boolean indexing
+    with pytest.raises(NotImplementedError):
+        x[True] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[np.array(True)] = 5
+
+    with pytest.raises(NotImplementedError):
+        x[0, da.from_array(True)] = 5
+
+    # Scalar arrays
+    y = da.from_array(np.array(1))
+    with pytest.raises(IndexError):
+        y[:] = 2
+
+    # RHS has non-brodacastable extra leading dimensions
+    x = np.arange(12).reshape((3, 4))
+    dx = da.from_array(x, chunks=(2, 2))
+    with pytest.raises(ValueError):
+        dx[...] = np.arange(24).reshape((2, 1, 3, 4))
+
+    # RHS has extra leading size 1 dimensions compared to LHS
+    x = np.arange(12).reshape((3, 4))
+    dx = da.from_array(x, chunks=(2, 3))
 
 
 def test_zero_slice_dtypes():

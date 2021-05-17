@@ -1,6 +1,5 @@
 import requests
 import yaml
-
 from docutils import nodes
 from docutils.parsers.rst import Directive, directives
 
@@ -71,6 +70,9 @@ def dask_config_to_html(key, value, schema, prefix=""):
             description = description.strip()
         except KeyError:
             description = "No Comment"
+
+        if "dask." in prefix:
+            prefix = prefix.replace("dask.", "")
 
         key = prefix + key
         value = str(value)

@@ -1,17 +1,16 @@
 from itertools import zip_longest
+from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
-from .core import getter, getter_nofancy, getter_inline
 from .. import config
-from ..blockwise import optimize_blockwise, fuse_roots
+from ..blockwise import fuse_roots, optimize_blockwise
 from ..core import flatten, reverse_dict
+from ..highlevelgraph import HighLevelGraph
 from ..optimization import fuse, inline_functions
 from ..utils import ensure_dict
-from ..highlevelgraph import HighLevelGraph
-
-from numbers import Integral
+from .core import getter, getter_inline, getter_nofancy
 
 # All get* functions the optimizations know about
 GETTERS = (getter, getter_nofancy, getter_inline, getitem)
@@ -47,7 +46,9 @@ def optimize(
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
 
-    if not config.get("optimization.fuse.active"):
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
         return dsk
 
     dependencies = dsk.get_all_dependencies()

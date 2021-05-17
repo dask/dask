@@ -1,15 +1,14 @@
 """ A set of NumPy functions to apply per chunk """
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
+from numbers import Integral
 
-from tlz import concat
 import numpy as np
-from . import numpy_compat as npcompat
+from tlz import concat
 
 from ..core import flatten
 from ..utils import ignoring
-
-from numbers import Integral
+from . import numpy_compat as npcompat
 
 try:
     from numpy import take_along_axis
@@ -259,8 +258,10 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     ]
 
 
-def arange(start, stop, step, length, dtype):
-    res = np.arange(start, stop, step, dtype)
+def arange(start, stop, step, length, dtype, like=None):
+    from .utils import arange_safe
+
+    res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
 
 

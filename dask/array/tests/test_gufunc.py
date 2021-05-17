@@ -1,18 +1,17 @@
+import numpy as np
 import pytest
 from numpy.testing import assert_equal
-import dask.array as da
-from dask.array.utils import assert_eq
-import numpy as np
 
+import dask.array as da
 from dask.array.core import Array
 from dask.array.gufunc import (
     _parse_gufunc_signature,
     _validate_normalize_axes,
     apply_gufunc,
-    gufunc,
     as_gufunc,
+    gufunc,
 )
-from dask.array.utils import IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 
 # Copied from `numpy.lib.test_test_function_base.py`:
@@ -587,11 +586,10 @@ def test_apply_gufunc_via_numba_02():
         for i in range(x.shape[0]):
             res[0] += x[i]
 
-    a = da.random.normal(size=(20, 30), chunks=5)
+    a = da.random.normal(size=(20, 30), chunks=30)
 
     x = a.sum(axis=0, keepdims=True)
-    y = mysum(a, axis=0, keepdims=True, allow_rechunk=True)
-
+    y = mysum(a, axis=0, keepdims=True)
     assert_eq(x, y)
 
 
@@ -626,3 +624,22 @@ def test_apply_gufunc_with_meta():
     expected = stats(a.compute())
     assert_eq(expected[0], result[0])
     assert_eq(expected[1], result[1])
+
+
+def test_as_gufunc_with_meta():
+    stack = da.ones((1, 50, 60), chunks=(1, -1, -1))
+    expected = (stack, stack.max())
+
+    meta = (np.array((), dtype=np.float64), np.array((), dtype=np.float64))
+
+    @da.as_gufunc(signature="(i,j) ->(i,j), ()", meta=meta)
+    def array_and_max(arr):
+        return arr, np.atleast_1d(arr.max())
+
+    result = array_and_max(stack)
+    assert_eq(expected[0], result[0])
+
+    # Because `np.max` returns a scalar instead of an `np.ndarray`, we cast
+    # the expected output to a `np.ndarray`, as `meta` defines the output
+    # should be.
+    assert_eq(np.array([expected[1].compute()]), result[1].compute())

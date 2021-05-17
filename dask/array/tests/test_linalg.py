@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg
 
 import dask.array as da
-from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
+from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
 from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
@@ -807,11 +807,17 @@ def test_cholesky(shape, chunk):
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
-    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A), check_graph=False)
+    assert_eq(
+        da.linalg.cholesky(dA).compute(),
+        scipy.linalg.cholesky(A),
+        check_graph=False,
+        check_chunks=False,
+    )
     assert_eq(
         da.linalg.cholesky(dA, lower=True),
         scipy.linalg.cholesky(A, lower=True),
         check_graph=False,
+        check_chunks=False,
     )
 
 

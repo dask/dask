@@ -3,19 +3,14 @@ import warnings
 
 import numpy as np
 import pandas as pd
-
 import pytest
 
 import dask
-from dask.utils import M
 import dask.dataframe as dd
-from dask.dataframe._compat import tm, PANDAS_GT_100
 from dask.dataframe import _compat
-from dask.dataframe.utils import (
-    assert_eq,
-    assert_dask_graph,
-    assert_max_deps,
-)
+from dask.dataframe._compat import PANDAS_GT_100, tm
+from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
+from dask.utils import M
 
 # TODO(pandas) Categorical.set_levels(inplace=True) is deprecated
 pytestmark = pytest.mark.filterwarnings("ignore:inplace is deprecated:FutureWarning")

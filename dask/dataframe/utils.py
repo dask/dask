@@ -1,44 +1,39 @@
 import math
 import numbers
 import re
-import textwrap
-from collections.abc import Iterator, Mapping
-
 import sys
+import textwrap
 import traceback
+from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
     is_categorical_dtype,
-    is_scalar,
-    is_sparse,
-    is_period_dtype,
     is_datetime64tz_dtype,
     is_interval_dtype,
+    is_period_dtype,
+    is_scalar,
+    is_sparse,
 )
 
-# include these here for compat
-from ._compat import (  # noqa: F401
-    PANDAS_GT_100,
-    PANDAS_GT_110,
-    PANDAS_GT_120,
-    tm,
-)
-
-from .extensions import make_array_nonempty, make_scalar
 from ..base import is_dask_collection
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import asciitable, is_arraylike, Dispatch, typename
+from ..utils import Dispatch, asciitable, is_arraylike
 from ..utils import is_dataframe_like as dask_is_dataframe_like
-from ..utils import is_series_like as dask_is_series_like
 from ..utils import is_index_like as dask_is_index_like
+from ..utils import is_series_like as dask_is_series_like
+from ..utils import typename
 
 # register pandas extension types
 from . import _dtypes  # noqa: F401
 from . import methods
+
+# include these here for compat
+from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
+from .extensions import make_array_nonempty, make_scalar
 
 
 def is_integer_na_dtype(t):
@@ -235,10 +230,10 @@ def strip_unknown_categories(x, just_drop_unknown=False):
                         if just_drop_unknown:
                             x[c].cat.remove_categories(UNKNOWN_CATEGORIES, inplace=True)
                         else:
-                            x[c].cat.set_categories([], inplace=True)
+                            x[c] = x[c].cat.set_categories([])
         elif isinstance(x, pd.Series):
             if is_categorical_dtype(x.dtype) and not has_known_categories(x):
-                x.cat.set_categories([], inplace=True)
+                x = x.cat.set_categories([])
         if isinstance(x.index, pd.CategoricalIndex) and not has_known_categories(
             x.index
         ):
@@ -270,10 +265,10 @@ def clear_known_categories(x, cols=None, index=True):
             elif not mask.loc[cols].all():
                 raise ValueError("Not all columns are categoricals")
             for c in cols:
-                x[c].cat.set_categories([UNKNOWN_CATEGORIES], inplace=True)
+                x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
         elif isinstance(x, pd.Series):
             if is_categorical_dtype(x.dtype):
-                x.cat.set_categories([UNKNOWN_CATEGORIES], inplace=True)
+                x = x.cat.set_categories([UNKNOWN_CATEGORIES])
         if index and isinstance(x.index, pd.CategoricalIndex):
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
     elif isinstance(x, pd.CategoricalIndex):

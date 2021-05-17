@@ -1,6 +1,6 @@
-from io import BytesIO
-import os
 import gzip
+import os
+from io import BytesIO
 from time import sleep
 from unittest import mock
 
@@ -9,24 +9,25 @@ import pytest
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 
+from fsspec.compression import compr
 from tlz import partition_all, valmap
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
-from dask.core import flatten
-from dask.dataframe.io.csv import (
-    text_blocks_to_pandas,
-    pandas_read_text,
-    auto_blocksize,
-    block_mask,
-)
-from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.bytes.core import read_bytes
 from dask.bytes.utils import compress
-from dask.utils import filetexts, filetext, tmpfile, tmpdir
-from fsspec.compression import compr
+from dask.core import flatten
+from dask.dataframe._compat import tm
+from dask.dataframe.io.csv import (
+    _infer_block_size,
+    auto_blocksize,
+    block_mask,
+    pandas_read_text,
+    text_blocks_to_pandas,
+)
+from dask.dataframe.utils import assert_eq, has_known_categories
+from dask.utils import filetext, filetexts, tmpdir, tmpfile
 
 # List of available compression format for test_read_csv_compression
 compression_fmts = [fmt for fmt in compr] + [None]
@@ -509,8 +510,11 @@ def test_read_csv_skiprows_range():
 def test_usecols():
     with filetext(timeseries) as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=["High", "Low"])
+        df_select = df[["High"]]
         expected = pd.read_csv(fn, usecols=["High", "Low"])
+        expected_select = expected[["High"]]
         assert (df.compute().values == expected.values).all()
+        assert (df_select.compute().values == expected_select.values).all()
 
 
 def test_string_blocksize():
@@ -782,6 +786,23 @@ def test_auto_blocksize():
     assert isinstance(auto_blocksize(3000, 15), int)
     assert auto_blocksize(3000, 3) == 100
     assert auto_blocksize(5000, 2) == 250
+
+
+def test__infer_block_size(monkeypatch):
+    """
+    psutil returns a total memory of `None` on some systems
+    see https://github.com/dask/dask/pull/7601
+    """
+    psutil = pytest.importorskip("psutil")
+
+    class MockOutput:
+        total = None
+
+    def mock_virtual_memory():
+        return MockOutput
+
+    monkeypatch.setattr(psutil, "virtual_memory", mock_virtual_memory)
+    assert _infer_block_size()
 
 
 def test_auto_blocksize_max64mb():
