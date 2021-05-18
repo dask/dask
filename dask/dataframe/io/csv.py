@@ -1,3 +1,4 @@
+import copy
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
@@ -69,17 +70,11 @@ class CSVFunctionWrapper:
         """
         if columns == self.columns:
             return self
-        return CSVFunctionWrapper(
-            self.full_columns,
-            columns,
-            self.colname,
-            self.head[columns],
-            self.header,
-            self.reader,
-            {c: self.dtypes[c] for c in columns},
-            self.enforce,
-            self.kwargs,
-        )
+        func = copy.deepcopy(self)
+        func.head = self.head[columns]
+        func.dtypes = {c: self.dtypes[c] for c in columns}
+        func.columns = columns
+        return func
 
     def __call__(self, part):
 
