@@ -53,7 +53,7 @@ def optimize_dataframe_getitem(dsk, keys):
     # may become beneficial once `DataFrameLayer,` is made a base
     # type for all relevant DataFrame operations.
 
-    from ..layers import DataFrameIOLayer, GetItemLayer
+    from ..layers import DataFrameGetitemLayer, DataFrameIOLayer
 
     dataframe_io_layers = [
         k for k, v in dsk.layers.items() if isinstance(v, DataFrameIOLayer)
@@ -76,8 +76,8 @@ def optimize_dataframe_getitem(dsk, keys):
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
 
-            # Check that block is a GetItemLayer
-            if not isinstance(block, GetItemLayer):
+            # Check that block is a DataFrameGetitemLayer
+            if not isinstance(block, DataFrameGetitemLayer):
                 return dsk
 
             block_columns = block.indices[1][0]

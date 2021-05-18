@@ -963,7 +963,78 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
 
-class GetItemLayer(Blockwise, DataFrameLayer):
+class DataFrameBinOp(Blockwise, DataFrameLayer):
+    """DataFrame-based Binary Operator Layer
+
+    Parameters
+    ----------
+    name : str
+        Name to use for the constructed layer.
+    op : Callable
+        Binary operator.
+    frame : _Frame
+        Primary target of binary operation.
+    frame : str, list, _Frame, Scalar, or Array
+        Secondary target of binary operation.
+    annotations: dict (optional)
+        Layer annotations to pass through to Blockwise.
+    """
+
+    def __init__(
+        self,
+        op,
+        name,
+        frame,
+        other,
+        annotations=None,
+    ):
+        self.op = op
+        self.name = name
+        self.frame = frame
+        self.other = other
+        self.annotations = annotations
+
+        # Initialize `inputs`, `inputs_indices` & `numblocks`
+        # for target `frame` collection
+        inputs = [frame._name]
+        inputs_indices = ["i"]
+        numblocks = {frame._name: (frame.npartitions,)}
+
+        # Update `inputs`, `inputs_indices` & `numblocks`
+        # for getitem `other`
+        if is_dask_collection(other):
+            inputs.append(other._name)
+            inputs_indices.append("i")
+            if hasattr(other, "npartitions"):
+                numblocks[other._name] = (other.npartitions,)
+            elif hasattr(other, "numblocks"):
+                numblocks[other._name] = other.numblocks
+            else:
+                numblocks[other._name] = (1,)
+        else:
+            inputs.append(other)
+            inputs_indices.append(None)
+
+        # Initalize Blockwise backend
+        indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
+        keys = map(blockwise_token, range(len(inputs)))
+        super().__init__(
+            output=self.name,
+            output_indices="i",
+            dsk={self.name: (self.op,) + tuple(keys)},
+            indices=indices,
+            numblocks=numblocks,
+            concatenate=True,
+            annotations=annotations,
+        )
+
+    def __repr__(self):
+        return "DataFrameBinOp<name='{}', op={}, frame={}, other={}>".format(
+            self.name, self.op, self.frame, self.other
+        )
+
+
+class DataFrameGetitemLayer(DataFrameBinOp):
     """DataFrame-based getitem Layer
 
     Parameters
@@ -988,96 +1059,26 @@ class GetItemLayer(Blockwise, DataFrameLayer):
         self.name = name
         self.frame = frame
         self.key = key
-        self.annotations = annotations
-
-        # Initialize `inputs`, `inputs_indices` & `numblocks`
-        # for target `frame` collection
-        inputs = [frame._name]
-        inputs_indices = ["i"]
-        numblocks = {frame._name: (frame.npartitions,)}
-
-        # Update `inputs`, `inputs_indices` & `numblocks`
-        # for getitem `key`
-        if is_dask_collection(key):
-            inputs.append(key._name)
-            inputs_indices.append("i")
-            if hasattr(key, "npartitions"):
-                numblocks[key._name] = (key.npartitions,)
-            elif hasattr(key, "numblocks"):
-                numblocks[key._name] = key.numblocks
-            else:
-                numblocks[key._name] = (1,)
-        else:
-            inputs.append(key)
-            inputs_indices.append(None)
-
-        # Initalize Blockwise backend
-        indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-        keys = map(blockwise_token, range(len(inputs)))
         super().__init__(
-            output=self.name,
-            output_indices="i",
-            dsk={self.name: (operator.getitem,) + tuple(keys)},
-            indices=indices,
-            numblocks=numblocks,
-            concatenate=True,
+            op=operator.getitem,
+            name=self.name,
+            frame=self.frame,
+            other=self.key,
             annotations=annotations,
         )
 
     def __repr__(self):
-        return "GetItemLayer<name='{}', key={}>".format(self.name, self.key)
-
-
-class BinopLayer(Blockwise, DataFrameLayer):
-    def __init__(
-        self,
-        op,
-        name,
-        a,
-        b,
-        annotations=None,
-    ):
-        self.name = name
-        self.op = op
-        self.a = a
-        self.b = b
-        self.annotations = annotations
-
-        # Initialize `inputs`, `inputs_indices` & `numblocks`
-        # for `a` (always a collection)
-        inputs = [a._name]
-        inputs_indices = ["i"]
-        numblocks = {a._name: (a.npartitions,)}
-
-        # Update `inputs`, `inputs_indices` & `numblocks`
-        # for `b`
-        if is_dask_collection(b):
-            inputs.append(b._name)
-            inputs_indices.append("i")
-            if hasattr(b, "npartitions"):
-                numblocks[b._name] = (b.npartitions,)
-            elif hasattr(b, "numblocks"):
-                numblocks[b._name] = b.numblocks
-            else:
-                numblocks[b._name] = (1,)
-        else:
-            inputs.append(b)
-            inputs_indices.append(None)
-
-        # Initalize Blockwise backend
-        indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-        keys = map(blockwise_token, range(len(inputs)))
-        super().__init__(
-            output=self.name,
-            output_indices="i",
-            dsk={self.name: (self.op,) + tuple(keys)},
-            indices=indices,
-            numblocks=numblocks,
-            concatenate=True,
-            annotations=annotations,
+        return "DataFrameGetitemLayer<name='{}', frame={}, key={}>".format(
+            self.name, self.frame, self.key
         )
 
+
+class DataFrameBinCompareLayer(DataFrameBinOp):
+    def __init__(self, op, *args, **kwargs):
+        assert hasattr(op, "__name__") and op.__name__ in ["gt", "lt", "eq", "ge", "le"]
+        super().__init__(op, *args, **kwargs)
+
     def __repr__(self):
-        return "BinopLayer<name='{}', op={}, a={}, b={}>".format(
-            self.name, self.op, self.a, self.b
+        return "DataFrameBinCompareLayer<name='{}', op={}, frame={}, other={}>".format(
+            self.name, self.op.__name__, self.frame, self.other
         )

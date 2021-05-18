@@ -32,7 +32,7 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..layers import BinopLayer, GetItemLayer
+from ..layers import DataFrameBinCompareLayer, DataFrameGetitemLayer
 from ..optimization import SubgraphCallable
 from ..utils import (
     Dispatch,
@@ -3863,7 +3863,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = GetItemLayer(name, self, key)
+            dsk = DataFrameGetitemLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -3897,7 +3897,7 @@ class DataFrame(_Frame):
                 from .multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = GetItemLayer(name, self, key)
+            dsk = DataFrameGetitemLayer(name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         if isinstance(key, DataFrame):
@@ -5183,17 +5183,12 @@ def elemwise(op, *args, **kwargs):
         if not isinstance(arg, (_Frame, Scalar, Array))
     ]
 
-    if (
-        kwargs
-        or not hasattr(op, "__name__")
-        or op.__name__ not in ["gt", "lt", "eq", "ge", "le"]
-        or len(args) > 2
-    ):
+    if hasattr(op, "__name__") and op.__name__ in ["gt", "lt", "eq", "ge", "le"]:
+        # Use simple DataFrameBinCompareLayer
+        dsk = DataFrameBinCompareLayer(op, _name, *args)
+    else:
         # adjust the key length of Scalar
         dsk = partitionwise_graph(op, _name, *args, **kwargs)
-    else:
-        # Use simple BinopLayer
-        dsk = BinopLayer(op, _name, *args)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
 
