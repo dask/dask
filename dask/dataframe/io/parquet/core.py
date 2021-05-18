@@ -1,3 +1,4 @@
+import copy
 import math
 import warnings
 from distutils.version import LooseVersion
@@ -49,7 +50,7 @@ class ParquetFunctionWrapper:
         kwargs,
         common_kwargs,
     ):
-        self.engine = engine
+        self.read_partition = engine.read_partition
         self.fs = fs
         self.meta = meta
         self.columns = columns
@@ -69,15 +70,9 @@ class ParquetFunctionWrapper:
         """
         if columns == self.columns:
             return self
-        return ParquetFunctionWrapper(
-            self.engine,
-            self.fs,
-            self.meta,
-            columns,
-            self.index,
-            None,  # Already merged into common_kwargs
-            self.common_kwargs,
-        )
+        func = copy.deepcopy(self)
+        func.columns = columns
+        return func
 
     def __call__(self, part):
 
@@ -86,7 +81,7 @@ class ParquetFunctionWrapper:
 
         return read_parquet_part(
             self.fs,
-            self.engine.read_partition,
+            self.read_partition,
             self.meta,
             [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
