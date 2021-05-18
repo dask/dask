@@ -115,10 +115,10 @@ class Layer(collections.abc.Mapping):
     def cull(
         self, keys: set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, set]]:
-        """Return a new Layer with only the tasks required to calculate `keys` and
-        a map of external key dependencies.
+        """Remove unnecessary tasks from the layer
 
-        In other words, remove unnecessary tasks from the layer.
+        In other words, return a new Layer with only the tasks required to
+        calculate `keys` and a map of external key dependencies.
 
         Examples
         --------
@@ -174,29 +174,32 @@ class Layer(collections.abc.Mapping):
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
-    def __dask_distributed_annotations_pack__(self) -> Optional[Mapping[str, Any]]:
+    def __dask_distributed_annotations_pack__(
+        self, annotations: Mapping[str, Any] = None
+    ) -> Optional[Mapping[str, Any]]:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
         other values are simply transmitted as is
+
+        Parameters
+        ----------
+        annotations : Mapping[str, Any], optional
+            A top-level annotations.
 
         Returns
         -------
         packed_annotations : dict
             Packed annotations.
         """
-        if self.annotations is None:
-            return None
-
+        annotations = toolz.merge(self.annotations or {}, annotations or {})
         packed = {}
-
-        for a, v in self.annotations.items():
+        for a, v in annotations.items():
             if callable(v):
                 packed[a] = {stringify(k): v(k) for k in self}
                 packed[a]["__expanded_annotations__"] = True
             else:
                 packed[a] = v
-
         return packed
 
     @staticmethod
@@ -404,6 +407,7 @@ class Layer(collections.abc.Mapping):
         }
         for k, v in unpacked_futures_deps.items():
             dependencies[k] = set(dependencies.get(k, ())) | v
+        dependencies.update(known_key_dependencies)
 
         # The scheduler expect all keys to be strings
         dependencies = {
@@ -430,7 +434,7 @@ class Layer(collections.abc.Mapping):
 
         This method is called by the scheduler in Distributed in order to unpack
         the state of a layer and merge it into its global task graph. The method
-        should update `dsk` and `dependencies`, which are the already materialized
+        can use `dsk` and `dependencies`, which are the already materialized
         state of the preceding layers in the high level graph. The layers of the
         high level graph are unpacked in topological order.
 
@@ -951,21 +955,25 @@ class HighLevelGraph(Mapping):
                 )
 
     def __dask_distributed_pack__(
-        self, client, client_keys: Iterable[Hashable]
+        self,
+        client,
+        client_keys: Iterable[Hashable],
+        annotations: Mapping[str, Any] = None,
     ) -> dict:
         """Pack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the packaging to each layer in the high level graph
         by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
-        on each layer. If the layer doesn't implement packaging, we materialize the
-        layer and pack it.
+        on each layer.
 
         Parameters
         ----------
         client : distributed.Client
             The client calling this function.
-        client_keys : Iterable
+        client_keys : Iterable[Hashable]
             List of keys requested by the client.
+        annotations : Mapping[str, Any], optional
+            A top-level annotations.
 
         Returns
         -------
@@ -985,13 +993,15 @@ class HighLevelGraph(Mapping):
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.__dask_distributed_annotations_pack__(),
+                    "annotations": layer.__dask_distributed_annotations_pack__(
+                        annotations
+                    ),
                 }
             )
         return {"layers": layers}
 
     @staticmethod
-    def __dask_distributed_unpack__(hlg: dict, annotations: Mapping[str, Any]) -> Dict:
+    def __dask_distributed_unpack__(hlg: dict) -> dict:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -1002,10 +1012,6 @@ class HighLevelGraph(Mapping):
         ----------
         hlg: dict
             Packed high level graph layers
-        annotations : dict
-            A top-level annotations object which may be partially populated,
-            and which may be further filled by annotations from the layers
-            of the packed_hlg.
 
         Returns
         -------
@@ -1042,11 +1048,7 @@ class HighLevelGraph(Mapping):
                 deps[k] = deps.get(k, set()) | v
 
             # Unpack the annotations
-            if annotations and layer["annotations"]:
-                layer_annotations = {**layer["annotations"], **annotations}
-            else:
-                layer_annotations = annotations or layer["annotations"] or None
-            unpack_anno(anno, layer_annotations, unpacked_layer["dsk"].keys())
+            unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
 
         return {"dsk": dsk, "deps": deps, "annotations": anno}
 
