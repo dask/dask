@@ -580,10 +580,10 @@ class HighLevelGraph(Mapping):
         self.dependencies = dependencies
         self.key_dependencies = key_dependencies or {}
         # Makes sure that all layers are `Layer`
-        self.layers = {
-            k: v if isinstance(v, Layer) else MaterializedLayer(v)
-            for k, v in layers.items()
-        }
+        for k, v in layers.items():
+            if not isinstance(v, Layer):
+                layers[k] = MaterializedLayer(v)
+        self.layers = layers
 
     @classmethod
     def _from_collection(cls, name, layer, collection):
