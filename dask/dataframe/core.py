@@ -32,7 +32,7 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..layers import GetItemLayer
+from ..layers import BinopLayer, GetItemLayer
 from ..optimization import SubgraphCallable
 from ..utils import (
     Dispatch,
@@ -5183,8 +5183,17 @@ def elemwise(op, *args, **kwargs):
         if not isinstance(arg, (_Frame, Scalar, Array))
     ]
 
-    # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
+    if (
+        kwargs
+        or not hasattr(op, "__name__")
+        or op.__name__ not in ["gt", "lt", "eq", "ge", "le"]
+        or len(args) > 2
+    ):
+        # adjust the key length of Scalar
+        dsk = partitionwise_graph(op, _name, *args, **kwargs)
+    else:
+        # Use simple BinopLayer
+        dsk = BinopLayer(op, _name, *args)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
 

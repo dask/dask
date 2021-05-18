@@ -963,8 +963,20 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
 
-class GetItemLayer(Blockwise):
-    """DataFrame-based GetItem Layer"""
+class GetItemLayer(Blockwise, DataFrameLayer):
+    """DataFrame-based getitem Layer
+
+    Parameters
+    ----------
+    name : str
+        Name to use for the constructed layer.
+    frame : _Frame
+        Dask collection that the ``key`` will be selected from.
+    key : str, list, _Frame, Array, or Scalar
+        The object being selected from ``frame``.
+    annotations: dict (optional)
+        Layer annotations to pass through to Blockwise.
+    """
 
     def __init__(
         self,
@@ -1014,3 +1026,58 @@ class GetItemLayer(Blockwise):
 
     def __repr__(self):
         return "GetItemLayer<name='{}', key={}>".format(self.name, self.key)
+
+
+class BinopLayer(Blockwise, DataFrameLayer):
+    def __init__(
+        self,
+        op,
+        name,
+        a,
+        b,
+        annotations=None,
+    ):
+        self.name = name
+        self.op = op
+        self.a = a
+        self.b = b
+        self.annotations = annotations
+
+        # Initialize `inputs`, `inputs_indices` & `numblocks`
+        # for `a` (always a collection)
+        inputs = [a._name]
+        inputs_indices = ["i"]
+        numblocks = {a._name: (a.npartitions,)}
+
+        # Update `inputs`, `inputs_indices` & `numblocks`
+        # for `b`
+        if is_dask_collection(b):
+            inputs.append(b._name)
+            inputs_indices.append("i")
+            if hasattr(b, "npartitions"):
+                numblocks[b._name] = (b.npartitions,)
+            elif hasattr(b, "numblocks"):
+                numblocks[b._name] = b.numblocks
+            else:
+                numblocks[b._name] = (1,)
+        else:
+            inputs.append(b)
+            inputs_indices.append(None)
+
+        # Initalize Blockwise backend
+        indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
+        keys = map(blockwise_token, range(len(inputs)))
+        super().__init__(
+            output=self.name,
+            output_indices="i",
+            dsk={self.name: (self.op,) + tuple(keys)},
+            indices=indices,
+            numblocks=numblocks,
+            concatenate=True,
+            annotations=annotations,
+        )
+
+    def __repr__(self):
+        return "BinopLayer<name='{}', op={}, a={}, b={}>".format(
+            self.name, self.op, self.a, self.b
+        )
