@@ -972,10 +972,10 @@ class DataFrameBinOp(Blockwise, DataFrameLayer):
         Name to use for the constructed layer.
     op : Callable
         Binary operator.
-    frame : _Frame
-        Primary target of binary operation.
-    frame : str, list, _Frame, Scalar, or Array
-        Secondary target of binary operation.
+    first : obj
+        First binary-operation argument.
+    second : obj
+        Second binary-operation argument.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
     """
@@ -984,36 +984,33 @@ class DataFrameBinOp(Blockwise, DataFrameLayer):
         self,
         op,
         name,
-        frame,
-        other,
+        first,
+        second,
         annotations=None,
     ):
         self.op = op
         self.name = name
-        self.frame = frame
-        self.other = other
+        self.first = first
+        self.second = second
         self.annotations = annotations
 
-        # Initialize `inputs`, `inputs_indices` & `numblocks`
-        # for target `frame` collection
-        inputs = [frame._name]
-        inputs_indices = ["i"]
-        numblocks = {frame._name: (frame.npartitions,)}
-
-        # Update `inputs`, `inputs_indices` & `numblocks`
-        # for getitem `other`
-        if is_dask_collection(other):
-            inputs.append(other._name)
-            inputs_indices.append("i")
-            if hasattr(other, "npartitions"):
-                numblocks[other._name] = (other.npartitions,)
-            elif hasattr(other, "numblocks"):
-                numblocks[other._name] = other.numblocks
+        # Construct `inputs`, `inputs_indices` & `numblocks`
+        inputs = []
+        inputs_indices = []
+        numblocks = {}
+        for arg in [first, second]:
+            if is_dask_collection(arg):
+                inputs.append(arg._name)
+                inputs_indices.append("i")
+                if hasattr(arg, "npartitions"):
+                    numblocks[arg._name] = (arg.npartitions,)
+                elif hasattr(arg, "numblocks"):
+                    numblocks[arg._name] = arg.numblocks
+                else:
+                    numblocks[arg._name] = (1,)
             else:
-                numblocks[other._name] = (1,)
-        else:
-            inputs.append(other)
-            inputs_indices.append(None)
+                inputs.append(arg)
+                inputs_indices.append(None)
 
         # Initalize Blockwise backend
         indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
@@ -1029,8 +1026,8 @@ class DataFrameBinOp(Blockwise, DataFrameLayer):
         )
 
     def __repr__(self):
-        return "DataFrameBinOp<name='{}', op={}, frame={}, other={}>".format(
-            self.name, self.op, self.frame, self.other
+        return "DataFrameBinOp<name='{}', op={}, first={}, second={}>".format(
+            self.name, self.op, self.first, self.second
         )
 
 
@@ -1056,20 +1053,17 @@ class DataFrameGetitemLayer(DataFrameBinOp):
         key,
         annotations=None,
     ):
-        self.name = name
-        self.frame = frame
-        self.key = key
         super().__init__(
             op=operator.getitem,
-            name=self.name,
-            frame=self.frame,
-            other=self.key,
+            name=name,
+            first=frame,
+            second=key,
             annotations=annotations,
         )
 
     def __repr__(self):
         return "DataFrameGetitemLayer<name='{}', frame={}, key={}>".format(
-            self.name, self.frame, self.key
+            self.name, self.first, self.second
         )
 
 
@@ -1079,6 +1073,6 @@ class DataFrameBinCompareLayer(DataFrameBinOp):
         super().__init__(op, *args, **kwargs)
 
     def __repr__(self):
-        return "DataFrameBinCompareLayer<name='{}', op={}, frame={}, other={}>".format(
-            self.name, self.op.__name__, self.frame, self.other
+        return "DataFrameBinCompareLayer<name='{}', op={}, first={}, second={}>".format(
+            self.name, self.op.__name__, self.first, self.second
         )
