@@ -231,10 +231,10 @@ def strip_unknown_categories(x, just_drop_unknown=False):
                         if just_drop_unknown:
                             x[c].cat.remove_categories(UNKNOWN_CATEGORIES, inplace=True)
                         else:
-                            x[c].cat.set_categories([], inplace=True)
+                            x[c] = x[c].cat.set_categories([])
         elif isinstance(x, pd.Series):
             if is_categorical_dtype(x.dtype) and not has_known_categories(x):
-                x.cat.set_categories([], inplace=True)
+                x = x.cat.set_categories([])
         if isinstance(x.index, pd.CategoricalIndex) and not has_known_categories(
             x.index
         ):
@@ -266,10 +266,10 @@ def clear_known_categories(x, cols=None, index=True):
             elif not mask.loc[cols].all():
                 raise ValueError("Not all columns are categoricals")
             for c in cols:
-                x[c].cat.set_categories([UNKNOWN_CATEGORIES], inplace=True)
+                x[c] = x[c].cat.set_categories([UNKNOWN_CATEGORIES])
         elif isinstance(x, pd.Series):
             if is_categorical_dtype(x.dtype):
-                x.cat.set_categories([UNKNOWN_CATEGORIES], inplace=True)
+                x = x.cat.set_categories([UNKNOWN_CATEGORIES])
         if index and isinstance(x.index, pd.CategoricalIndex):
             x.index = x.index.set_categories([UNKNOWN_CATEGORIES])
     elif isinstance(x, pd.CategoricalIndex):

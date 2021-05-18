@@ -226,9 +226,6 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
-@pytest.mark.xfail(
-    dd._compat.PANDAS_GT_130, reason="https://github.com/dask/dask/issues/7444"
-)
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -474,7 +471,7 @@ def test_describe_empty():
         df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, RuntimeWarning)):
         ddf_len0.describe(percentiles_method="dask").compute()
 
     with pytest.raises(ValueError):
