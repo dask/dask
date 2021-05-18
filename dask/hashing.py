@@ -14,10 +14,9 @@ hashers = []  # In decreasing performance order
 try:
     import xxhash  # `python -m pip install xxhash`
 except ImportError:
-    xxhash_flag = False
-    pass
+    _xxhash_available = False
 else:
-    xxhash_flag = True
+    _xxhash_available = True
     if xxhash.VERSION >= "2.0.0":
 
         def _hash_xxhash3(buf):
@@ -48,7 +47,7 @@ else:
 
         hashers.append(_hash_cityhash)
 
-if xxhash_flag:
+if _xxhash_available:
 
     def _hash_xxhash(buf):
         """
