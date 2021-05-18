@@ -1447,7 +1447,7 @@ def _get_symmat(size):
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 3), (30, 6)])
 def test_cupy_cholesky(shape, chunk):
-    import scipy.linalg
+    scipy_linalg = pytest.importorskip("scipy.linalg")
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
@@ -1462,7 +1462,7 @@ def test_cupy_cholesky(shape, chunk):
     )
     assert_eq(
         da.linalg.cholesky(dA, lower=True).map_blocks(cupy.asnumpy),
-        scipy.linalg.cholesky(cupy.asnumpy(A), lower=True),
+        scipy_linalg.cholesky(cupy.asnumpy(A), lower=True),
         check_graph=False,
         check_chunks=False,
     )
