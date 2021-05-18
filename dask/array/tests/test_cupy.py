@@ -214,7 +214,7 @@ def test_basic(func):
     ddc = func(dc)
     ddn = func(dn)
 
-    assert type(ddc._meta) is cupy.core.core.ndarray
+    assert type(ddc._meta) is cupy.ndarray
 
     if next(iter(ddc.dask.keys()))[0].startswith("empty"):
         # We can't verify for data correctness when testing empty_like
@@ -237,7 +237,7 @@ def test_sizeof(dtype):
 def test_diag():
     v = cupy.arange(11)
     dv = da.from_array(v, chunks=(4,), asarray=False)
-    assert type(dv._meta) == cupy.core.core.ndarray
+    assert type(dv._meta) == cupy.ndarray
     assert_eq(dv, dv)  # Check that _meta and computed arrays match types
     assert_eq(da.diag(dv), cupy.diag(v))
 
@@ -245,13 +245,13 @@ def test_diag():
     dv = dv + dv + 3
     darr = da.diag(dv)
     cupyarr = cupy.diag(v)
-    assert type(darr._meta) == cupy.core.core.ndarray
+    assert type(darr._meta) == cupy.ndarray
     assert_eq(darr, darr)  # Check that _meta and computed arrays match types
     assert_eq(darr, cupyarr)
 
     x = cupy.arange(64).reshape((8, 8))
     dx = da.from_array(x, chunks=(4, 4), asarray=False)
-    assert type(dx._meta) == cupy.core.core.ndarray
+    assert type(dx._meta) == cupy.ndarray
     assert_eq(dx, dx)  # Check that _meta and computed arrays match types
     assert_eq(da.diag(dx), cupy.diag(x))
 
@@ -280,7 +280,7 @@ def test_diagonal():
     # Empty diagonal.
     assert_eq(da.diagonal(v, offset=10), np.diagonal(v, offset=10))
     assert_eq(da.diagonal(v, offset=-10), np.diagonal(v, offset=-10))
-    assert isinstance(da.diagonal(v).compute(), cupy.core.core.ndarray)
+    assert isinstance(da.diagonal(v).compute(), cupy.ndarray)
 
     with pytest.raises(ValueError):
         da.diagonal(v, axis1=-2)
@@ -497,7 +497,7 @@ def test_boundaries():
 def test_random_all():
     def rnd_test(func, *args, **kwargs):
         a = func(*args, **kwargs)
-        assert type(a._meta) == cupy.core.core.ndarray
+        assert type(a._meta) == cupy.ndarray
         assert_eq(a, a)  # Check that _meta and computed arrays match types
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
@@ -549,7 +549,7 @@ def test_random_shapes(shape):
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
 
     x = rs.poisson(size=shape, chunks=3)
-    assert type(x._meta) == cupy.core.core.ndarray
+    assert type(x._meta) == cupy.ndarray
     assert_eq(x, x)  # Check that _meta and computed arrays match types
     assert x._meta.shape == (0,) * len(shape)
     assert x.shape == shape
@@ -1075,7 +1075,7 @@ def test_vindex():
     res_np = da.core._vindex(d_np, [0, 1, 6, 0], [0, 1, 0, 7])
     res_cp = da.core._vindex(d_cp, [0, 1, 6, 0], [0, 1, 0, 7])
 
-    assert type(res_cp._meta) == cupy.core.core.ndarray
+    assert type(res_cp._meta) == cupy.ndarray
     assert_eq(
         res_cp, res_cp, check_type=False
     )  # Check that _meta and computed arrays match types
@@ -1118,7 +1118,7 @@ def test_percentiles_with_empty_arrays():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     res = da.percentile(x, [10, 50, 90], interpolation="midpoint")
 
-    assert type(res._meta) == cupy.core.core.ndarray
+    assert type(res._meta) == cupy.ndarray
     assert_eq(res, res)  # Check that _meta and computed arrays match types
     assert_eq(res, np.array([1, 1, 1], dtype=x.dtype), check_type=False)
 
@@ -1128,7 +1128,7 @@ def test_percentiles_with_empty_q():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     result = da.percentile(x, [], interpolation="midpoint")
 
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, np.array([], dtype=x.dtype))
 
@@ -1141,7 +1141,7 @@ def test_percentiles_with_scaler_percentile(q):
     d = da.from_array(cupy.ones((16,)), chunks=(4,))
     result = da.percentile(d, q, interpolation="midpoint")
 
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, np.array([1], dtype=d.dtype))
 
@@ -1153,12 +1153,12 @@ def test_percentiles_with_unknown_chunk_sizes():
     x._chunks = ((np.nan,) * 10,)
 
     result = da.percentile(x, 50, interpolation="midpoint").compute()
-    assert type(result) == cupy.core.core.ndarray
+    assert type(result) == cupy.ndarray
     assert 0.1 < result < 0.9
 
     a, b = da.percentile(x, [40, 60], interpolation="midpoint").compute()
-    assert type(a) == cupy.core.core.ndarray
-    assert type(b) == cupy.core.core.ndarray
+    assert type(a) == cupy.ndarray
+    assert type(b) == cupy.ndarray
     assert 0.1 < a < 0.9
     assert 0.1 < b < 0.9
     assert a < b
@@ -1170,17 +1170,17 @@ def test_view():
     d = da.from_array(cupy.array(x), chunks=(2, 3))
 
     result = d.view()
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, x.view(), check_type=False)
 
     result = d.view("i4")
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, x.view("i4"), check_type=False)
 
     result = d.view("i2")
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, x.view("i2"), check_type=False)
     assert all(isinstance(s, int) for s in d.shape)
@@ -1188,7 +1188,7 @@ def test_view():
     x = np.arange(8, dtype="i1")
     d = da.from_array(cupy.array(x), chunks=(4,))
     result = d.view("i4")
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(x.view("i4"), d.view("i4"), check_type=False)
 
@@ -1207,12 +1207,12 @@ def test_view_fortran():
     d = da.from_array(cupy.asfortranarray(cupy.array(x)), chunks=(2, 3))
 
     result = d.view("i4", order="F")
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, x.T.view("i4").T, check_type=False)
 
     result = d.view("i2", order="F")
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, x.T.view("i2").T, check_type=False)
 
@@ -1221,7 +1221,7 @@ def test_view_fortran():
 def test_getter():
     result = da.core.getter(cupy.arange(5), (None, slice(None, None)))
 
-    assert type(result) == cupy.core.core.ndarray
+    assert type(result) == cupy.ndarray
     assert_eq(result, np.arange(5)[None, :], check_type=False)
 
 
@@ -1322,7 +1322,7 @@ def test_percentiles_with_empty_arrays():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     res = da.percentile(x, [10, 50, 90], interpolation="midpoint")
 
-    assert type(res._meta) == cupy.core.core.ndarray
+    assert type(res._meta) == cupy.ndarray
     assert_eq(res, res)  # Check that _meta and computed arrays match types
     assert_eq(res, np.array([1, 1, 1], dtype=x.dtype), check_type=False)
 
@@ -1332,7 +1332,7 @@ def test_percentiles_with_empty_q():
     x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
     result = da.percentile(x, [], interpolation="midpoint")
 
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, np.array([], dtype=x.dtype), check_type=False)
 
@@ -1345,7 +1345,7 @@ def test_percentiles_with_scaler_percentile(q):
     d = da.from_array(cupy.ones((16,)), chunks=(4,))
     result = da.percentile(d, q, interpolation="midpoint")
 
-    assert type(result._meta) == cupy.core.core.ndarray
+    assert type(result._meta) == cupy.ndarray
     assert_eq(result, result)  # Check that _meta and computed arrays match types
     assert_eq(result, np.array([1], dtype=d.dtype), check_type=False)
 
@@ -1357,12 +1357,12 @@ def test_percentiles_with_unknown_chunk_sizes():
     x._chunks = ((np.nan,) * 10,)
 
     result = da.percentile(x, 50, interpolation="midpoint").compute()
-    assert type(result) == cupy.core.core.ndarray
+    assert type(result) == cupy.ndarray
     assert 0.1 < result < 0.9
 
     a, b = da.percentile(x, [40, 60], interpolation="midpoint").compute()
-    assert type(a) == cupy.core.core.ndarray
-    assert type(b) == cupy.core.core.ndarray
+    assert type(a) == cupy.ndarray
+    assert type(b) == cupy.ndarray
     assert 0.1 < a < 0.9
     assert 0.1 < b < 0.9
     assert a < b
