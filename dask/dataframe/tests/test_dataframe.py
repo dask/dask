@@ -1367,7 +1367,7 @@ def test_quantile_for_possibly_unsorted_q():
 
 
 def test_quantile_tiny_partitions():
-    """ See https://github.com/dask/dask/issues/6551 """
+    """See https://github.com/dask/dask/issues/6551"""
     df = pd.DataFrame({"a": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=3)
     r = ddf["a"].quantile(0.5).compute()

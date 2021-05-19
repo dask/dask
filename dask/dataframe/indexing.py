@@ -75,7 +75,7 @@ class _iLocIndexer(_IndexerBase):
 
 
 class _LocIndexer(_IndexerBase):
-    """ Helper class for the .loc accessor """
+    """Helper class for the .loc accessor"""
 
     @property
     def _meta_indexer(self):
@@ -99,7 +99,7 @@ class _LocIndexer(_IndexerBase):
         return self._loc(iindexer, cindexer)
 
     def _loc(self, iindexer, cindexer):
-        """ Helper function for the .loc accessor """
+        """Helper function for the .loc accessor"""
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):

@@ -84,7 +84,7 @@ unknown_chunk_message = (
 
 
 class PerformanceWarning(Warning):
-    """ A warning given when bad chunking may cause poor performance """
+    """A warning given when bad chunking may cause poor performance"""
 
 
 def getter(a, b, asarray=True, lock=None):
@@ -1460,17 +1460,17 @@ class Array(DaskMethodsMixin):
 
     @cached_property
     def size(self):
-        """ Number of elements in array """
+        """Number of elements in array"""
         return reduce(mul, self.shape, 1)
 
     @property
     def nbytes(self):
-        """ Number of bytes in array """
+        """Number of bytes in array"""
         return self.size * self.dtype.itemsize
 
     @property
     def itemsize(self):
-        """ Length of one array element in bytes """
+        """Length of one array element in bytes"""
         return self.dtype.itemsize
 
     @property
@@ -2489,7 +2489,7 @@ class Array(DaskMethodsMixin):
     def rechunk(
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
-        """ See da.rechunk for docstring """
+        """See da.rechunk for docstring"""
         from . import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
@@ -4590,7 +4590,7 @@ def deepfirst(seq):
 
 
 def shapelist(a):
-    """ Get the shape of nested list """
+    """Get the shape of nested list"""
     if type(a) is list:
         return tuple([len(a)] + list(shapelist(a[0])))
     else:
@@ -4823,7 +4823,7 @@ def concatenate3(arrays):
 
 
 def concatenate_axes(arrays, axes):
-    """ Recursively call np.concatenate along axes """
+    """Recursively call np.concatenate along axes"""
     if len(axes) != ndimlist(arrays):
         raise ValueError("Length of axes should equal depth of nested arrays")
 
@@ -5085,13 +5085,13 @@ def _get_axis(indexes):
 
 
 def _vindex_slice(block, points):
-    """ Pull out point-wise slices from block """
+    """Pull out point-wise slices from block"""
     points = [p if isinstance(p, slice) else list(p) for p in points]
     return block[tuple(points)]
 
 
 def _vindex_transpose(block, axis):
-    """ Rotate block so that points are on the first dimension """
+    """Rotate block so that points are on the first dimension"""
     axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
     return block.transpose(axes)
 
