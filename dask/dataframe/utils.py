@@ -329,9 +329,8 @@ def make_meta_object(x, index=None):
     >>> make_meta('i8')                         # doctest: +SKIP
     1
     """
-    if hasattr(x, "_meta"):
-        return x._meta
-    elif is_arraylike(x) and x.shape:
+
+    if is_arraylike(x) and x.shape:
         return x[:0]
 
     if index is not None:
@@ -371,10 +370,6 @@ def make_meta_object(x, index=None):
 
 
 def make_meta_util(x, index=None, parent_meta=None):
-    import dask.dataframe as dd
-
-    if isinstance(x, (dd.core.Series, dd.core.DataFrame)):
-        return x._meta
     if hasattr(x, "_meta"):
         return x._meta
 
