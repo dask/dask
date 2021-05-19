@@ -5,7 +5,7 @@ set -o errexit
 test_import () {
     echo "Create environment: python=$PYTHON_VERSION $1"
     # Create an empty environment
-    mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml fsspec toolz partd cloudpickle $1
+    mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml fsspec toolz partd cloudpickle scipy $1
     conda activate test-imports
     pip install -e .
     echo "python -c '$2'"
