@@ -3319,8 +3319,8 @@ def to_zarr(
 
     See Also
     --------
-    :func:`dask.array.store`
-    :meth:`dask.array.Array.compute_chunk_sizes`
+    dask.array.store
+    dask.array.Array.compute_chunk_sizes
 
     """
     import zarr
