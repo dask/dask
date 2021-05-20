@@ -380,7 +380,7 @@ def to_parquet(
     compute=True,
     compute_kwargs=None,
     schema=None,
-    datafile_name_template=None,
+    datafile_name_template="part.*.parquet",
     **kwargs,
 ):
     """Store Dask.dataframe to Parquet files
@@ -446,7 +446,7 @@ def to_parquet(
         output partition. If the partitions produce inconsistent schemas,
         pyarrow will throw an error when writing the shared _metadata file.
         Note that this argument is ignored by the "fastparquet" engine.
-    datafile_name_template : string, default None
+    datafile_name_template : string, default "part.*.parquet"
         Lets you customize the filename.  `to_parquet` outputs files like
         `part.0.parquet` and `part.1.parquet` by default.  If you
         set this option to `*-fun.parquet`, it will output files like
@@ -583,21 +583,17 @@ def to_parquet(
         **kwargs_pass,
     )
 
-    if datafile_name_template:
-        # if append:
-        #     raise ValueError(
-        #         "Cannot use both `datafile_name_template` and `append=True`"
-        #     )
-        if datafile_name_template.count("*") != 1:
-            raise ValueError(
-                "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
-            )
-        file_template = datafile_name_template.replace("*", "%i")
-    else:
-        file_template = "part.%i.parquet"
+    # check datafile_name_template is valid
+    if datafile_name_template.count("*") != 1:
+        raise ValueError(
+            "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
+        )
 
     # Use i_offset and df.npartitions to define file-name list
-    filenames = [file_template % (i + i_offset) for i in range(df.npartitions)]
+    filenames = [
+        datafile_name_template.replace("*", "%i") % (i + i_offset)
+        for i in range(df.npartitions)
+    ]
 
     # Construct IO graph
     dsk = {}

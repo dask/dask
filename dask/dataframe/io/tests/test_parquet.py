@@ -3530,7 +3530,7 @@ def test_custom_filename(tmpdir, engine):
     assert_eq(df, dd.read_parquet(fn, engine=engine))
 
 
-def test_custom_filename_throws_error_when_append_is_true(tmpdir, engine):
+def test_custom_filename_works_with_pyarrow_when_append_is_true(tmpdir, engine):
     fn = str(tmpdir)
     pdf = pd.DataFrame(
         {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
@@ -3543,7 +3543,11 @@ def test_custom_filename_throws_error_when_append_is_true(tmpdir, engine):
     )
     df = dd.from_pandas(pdf, npartitions=1)
     if engine == "fastparquet":
-        pytest.skip("fastparquet errors out with 'IndexError: list index out of range', not sure why")
+        pytest.xfail(
+            "fastparquet errors our with IndexError when datafile_name_template is customized "
+            "and append is set to True.  We didn't do a detailed investigation for expediency. "
+            "See this comment for the conversation: https://github.com/dask/dask/pull/7682#issuecomment-845243623"
+        )
     df.to_parquet(
         fn,
         datafile_name_template="hi-*.parquet",
@@ -3551,6 +3555,12 @@ def test_custom_filename_throws_error_when_append_is_true(tmpdir, engine):
         append=True,
         ignore_divisions=True,
     )
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-1.parquet" in files
+    assert "hi-2.parquet" in files
     expected_pdf = pd.DataFrame(
         {"num1": [1, 2, 3, 4, 33], "num2": [7, 8, 9, 10, 44]},
     )
