@@ -30,14 +30,22 @@ def _calculate_divisions(
     """
     sizes = df.map_partitions(sizeof) if repartition else []
     divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
-    mins = partition_col.map_partitions(M.min)
-    maxes = partition_col.map_partitions(M.max)
-    divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+    # Take min/max of each partition, but need to avoid map_partitions coercing them into an array w/ a
+    # single dtype (e.g. converting ints to floats when there is an empty/nan partition)
+    mins = list(
+        partition_col.partitions[i].map_partitions(M.min)
+        for i in range(partition_col.npartitions)
+    )
+    maxs = list(
+        partition_col.partitions[i].map_partitions(M.max)
+        for i in range(partition_col.npartitions)
+    )
+    divisions, sizes, mins, maxs = base.compute(divisions, sizes, mins, maxs)
     divisions = methods.tolist(divisions)
     if type(sizes) is not list:
         sizes = methods.tolist(sizes)
-    mins = methods.tolist(mins)
-    maxes = methods.tolist(maxes)
+    mins = [m.iloc[0] for m in mins]
+    maxs = [m.iloc[0] for m in maxs]
 
     empty_dataframe_detected = pd.isnull(divisions).all()
     if repartition or empty_dataframe_detected:
@@ -56,13 +64,13 @@ def _calculate_divisions(
             divisions = [divisions[i] for i in indexes]
 
     mins = remove_nans(mins)
-    maxes = remove_nans(maxes)
+    maxs = remove_nans(maxs)
     if pd.api.types.is_categorical_dtype(partition_col.dtype):
         dtype = partition_col.dtype
         mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
-        maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
+        maxs = pd.Categorical(maxs, dtype=dtype).codes.tolist()
 
-    return divisions, mins, maxes
+    return divisions, mins, maxs
 
 
 def sort_values(
@@ -147,7 +155,7 @@ def set_index(
 
     if npartitions == "auto":
         repartition = True
-        npartitions = max(100, df.npartitions)
+        npartitions = max(100, df.npartitions)  # TODO: why 100?
     else:
         if npartitions is None:
             npartitions = df.npartitions
@@ -159,17 +167,17 @@ def set_index(
         index2 = index
 
     if divisions is None:
-        divisions, mins, maxes = _calculate_divisions(
+        divisions, mins, maxs = _calculate_divisions(
             df, index2, repartition, npartitions, upsample, partition_size
         )
 
         if (
             mins == sorted(mins)
-            and maxes == sorted(maxes)
-            and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+            and maxs == sorted(maxs)
+            and all(mx < mn for mx, mn in zip(maxs[:-1], mins[1:]))
             and npartitions == df.npartitions
         ):
-            divisions = mins + [maxes[-1]]
+            divisions = mins + [maxs[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
             return result.map_partitions(M.sort_index)
 
@@ -906,25 +914,96 @@ def fix_overlap(ddf, overlap):
     return new_dd_object(graph, name, ddf._meta, ddf.divisions)
 
 
-def compute_and_set_divisions(df, **kwargs):
-    mins = df.index.map_partitions(M.min, meta=df.index)
-    maxes = df.index.map_partitions(M.max, meta=df.index)
-    mins, maxes = compute(mins, maxes, **kwargs)
+def fix_duplicate_divisions(df):
+    """Remove duplicate `divisions` (which are not allowed generally, and correspond to empty partitions anyway) by
+    concatenating runs of partitions with the same `min` division"""
+    divisions = df.divisions
+    if df.known_divisions and len(np.unique(divisions)) != len(divisions):
+        dsk = {}
+        name = "dedupe-divisions-%s" % tokenize(df)
+        deduped_partition_idx = 0
+        partition_idx = 0
+        deduped_divisions = []
+        found_dupes = False
+        while partition_idx < df.npartitions:
+            start_partition_idx = partition_idx
+            division = divisions[start_partition_idx]
+            partition_idx += 1
+            # Identify all partitions whose `min` division equals `cur_partition_idx`'s
+            while (
+                partition_idx < df.npartitions and divisions[partition_idx] == division
+            ):
+                partition_idx += 1
+
+            # If any were found, concat them all together at index `cur_partition_idx`
+            if partition_idx > start_partition_idx + 1:
+                found_dupes = True
+                dsk[(name, deduped_partition_idx)] = (
+                    methods.concat,
+                    [
+                        (df._name, idx)
+                        for idx in range(start_partition_idx, partition_idx)
+                    ],
+                )
+            else:
+                dsk[(name, deduped_partition_idx)] = (df._name, start_partition_idx)
+
+            deduped_divisions.append(division)
+            deduped_partition_idx += 1
+
+        if found_dupes:
+            deduped_divisions.append(divisions[-1])
+            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+            return new_dd_object(graph, name, df._meta, deduped_divisions)
+
+    return df
+
+
+def compute_and_set_sorted_divisions(df, **kwargs):
+    """Given a _Frame with index already monotonically increasing but divisions unknown, compute and set the
+    divisions"""
+    index = df.index
+
+    # Take min/max of each partition, but avoid full-_Frame `map_partitions` because it coerces mins/maxs into an array
+    # w/ a single dtype (e.g. converting ints to floats when there is an empty/nan partition).
+    mins = tuple(
+        index.partitions[i].map_partitions(M.min, meta=index)
+        for i in range(index.npartitions)
+    )
+    maxs = tuple(
+        index.partitions[i].map_partitions(M.max, meta=index)
+        for i in range(index.npartitions)
+    )
+    mins, maxs = compute(mins, maxs, **kwargs)
+    mins = [m.iloc[0] for m in mins]
+    maxs = [m.iloc[0] for m in maxs]
     mins = remove_nans(mins)
-    maxes = remove_nans(maxes)
+    maxs = remove_nans(maxs)
 
     if (
         sorted(mins) != list(mins)
-        or sorted(maxes) != list(maxes)
-        or any(a > b for a, b in zip(mins, maxes))
+        or sorted(maxs) != list(maxs)
+        or any(a > b for a, b in zip(mins, maxs))
     ):
         raise ValueError(
-            "Partitions must be sorted ascending with the index", mins, maxes
+            "Partitions must be sorted ascending with the index", mins, maxs
         )
 
-    df.divisions = tuple(mins) + (list(maxes)[-1],)
+    df.divisions = tuple(mins) + (list(maxs)[-1],)
 
-    overlap = [i for i in range(1, len(mins)) if mins[i] >= maxes[i - 1]]
+    mins, maxs = tuple(
+        zip(
+            *[
+                (m, M)
+                for i, (m, M) in enumerate(zip(mins, maxs))
+                if df.divisions[i] != df.divisions[i + 1] or i + 1 == df.npartitions
+            ]
+        )
+    )
+
+    # drop+concatenate partitions with the same starting division value
+    df = fix_duplicate_divisions(df)
+    overlap = [i for i in range(1, len(mins)) if mins[i] == maxs[i - 1]]
     return fix_overlap(df, overlap) if overlap else df
 
 
@@ -937,7 +1016,7 @@ def set_sorted_index(df, index, drop=True, divisions=None, **kwargs):
     result = map_partitions(M.set_index, df, index, drop=drop, meta=meta)
 
     if not divisions:
-        return compute_and_set_divisions(result, **kwargs)
+        return compute_and_set_sorted_divisions(result, **kwargs)
     elif len(divisions) != len(df.divisions):
         msg = (
             "When doing `df.set_index(col, sorted=True, divisions=...)`, "

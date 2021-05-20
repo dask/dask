@@ -886,7 +886,7 @@ def test_set_index_categorical():
 
 
 def test_compute_divisions():
-    from dask.dataframe.shuffle import compute_and_set_divisions
+    from dask.dataframe.shuffle import compute_and_set_sorted_divisions
 
     df = pd.DataFrame(
         {"x": [1, 2, 3, 4], "y": [10, 20, 20, 40], "z": [4, 3, 2, 1]},
@@ -895,7 +895,7 @@ def test_compute_divisions():
     a = dd.from_pandas(df, 2, sort=False)
     assert not a.known_divisions
 
-    b = compute_and_set_divisions(copy(a))
+    b = compute_and_set_sorted_divisions(copy(a))
 
     assert_eq(a, b, check_divisions=False)
     assert b.known_divisions
@@ -1095,9 +1095,13 @@ def test_dataframe_shuffle_on_tasks_api(on, ignore_index, max_branch):
 def test_set_index_overlap():
     A = pd.DataFrame({"key": [1, 2, 3, 4, 4, 5, 6, 7], "value": list("abcd" * 2)})
     a = dd.from_pandas(A, npartitions=2)
-    a = a.set_index("key", sorted=True)
-    b = a.repartition(divisions=a.divisions)
-    assert_eq(a, b)
+    S = A.set_index("key")
+    s = a.set_index("key", sorted=True)
+    assert s.divisions == (1, 4, 7)
+    assert_eq(s, S)
+    b = s.repartition(divisions=s.divisions)
+    assert_eq(s, b)
+    assert b.divisions == (1, 4, 7)
 
 
 def test_set_index_overlap_2():
@@ -1111,7 +1115,7 @@ def test_set_index_overlap_2():
     ddf2 = ddf1.reset_index().repartition(8).set_index("index", sorted=True)
 
     assert_eq(ddf1, ddf2)
-    assert ddf2.npartitions == 8
+    assert ddf2.npartitions == 3
 
 
 def test_shuffle_hlg_layer():
@@ -1180,10 +1184,21 @@ def test_shuffle_hlg_layer_serialize(npartitions):
 
 
 def test_set_index_nan_partition():
-    d[d.a > 3].set_index("a")  # Set index with 1 null partition
-    d[d.a > 1].set_index("a", sorted=True)  # Set sorted index with 0 null partitions
-    a = d[d.a > 3].set_index("a", sorted=True)  # Set sorted index with 1 null partition
-    assert_eq(a, a)
+    a_gt3 = d[d.a > 3].set_index("a")  # Set index with 1 null partition
+    assert a_gt3.divisions == (4, 5, 8, 9)
+    np.testing.assert_equal(a_gt3.compute().index.values, list(range(4, 10)))
+
+    a_gt1 = d[d.a > 1].set_index(
+        "a", sorted=True
+    )  # Set sorted index with 0 null partitions
+    assert a_gt1.divisions == (2, 4, 7, 9)
+    np.testing.assert_equal(a_gt1.compute().index.values, list(range(2, 10)))
+
+    a_gt3_sorted = d[d.a > 3].set_index(
+        "a", sorted=True
+    )  # Set sorted index with 1 null partition
+    assert a_gt3_sorted.divisions == (4, 7, 9)
+    assert_eq(a_gt3_sorted, a_gt3)
 
 
 @pytest.mark.parametrize(
