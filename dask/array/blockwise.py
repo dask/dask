@@ -49,6 +49,13 @@ def blockwise(
         Dictionary mapping index to function to be applied to chunk sizes
     new_axes : dict, keyword only
         New indexes and their dimension lengths
+    align_arrays : bool, keyword only
+        If ``True`` (the default), the input arrays will be rechunked if
+        necessary to be aligned along shared dimensions. If ``False``, the
+        input chunks will not be altered. If the inputs do not have
+        consistent chunking along a particular dimension, ``adjust_chunks``
+        should be specified to determine the output chunks for that
+        dimension.
 
     Examples
     --------
