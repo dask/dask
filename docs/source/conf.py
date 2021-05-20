@@ -314,6 +314,10 @@ intersphinx_mapping = {
         "https://asyncssh.readthedocs.io/en/latest/objects.inv",
     ),
     "pyarrow": ("https://arrow.apache.org/docs/", None),
+    "zarr": (
+        "https://zarr.readthedocs.io/en/latest/",
+        "https://zarr.readthedocs.io/en/latest/objects.inv",
+    ),
 }
 
 # Redirects
