@@ -583,11 +583,14 @@ def to_parquet(
         **kwargs_pass,
     )
 
-    # Fall back to default template if user specified template is missing
     if datafile_name_template:
+        if append:
+            raise ValueError(
+                "Cannot use both `datafile_name_template` and `append=True`"
+            )
         if datafile_name_template.count("*") != 1:
             raise ValueError(
-                "datafile_name_template must contain exactly one * (exactly one asterisk)"
+                "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
             )
         file_template = datafile_name_template.replace("*", "%i")
     else:

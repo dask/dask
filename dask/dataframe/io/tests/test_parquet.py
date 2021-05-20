@@ -3530,6 +3530,31 @@ def test_custom_filename(tmpdir, engine):
     assert_eq(df, dd.read_parquet(fn, engine=engine))
 
 
+def test_custom_filename_throws_error_when_append_is_true(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, datafile_name_template="hi-*.parquet", engine=engine)
+
+    pdf = pd.DataFrame(
+        {"num1": [33], "num2": [44]},
+    )
+    df = dd.from_pandas(pdf, npartitions=1)
+    with pytest.raises(ValueError) as excinfo:
+        df.to_parquet(
+            fn,
+            datafile_name_template="hi-*.parquet",
+            engine=engine,
+            append=True,
+            ignore_divisions=True,
+        )
+    assert "Cannot use both `datafile_name_template` and `append=True`" in str(
+        excinfo.value
+    )
+
+
 def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
     fn = str(tmpdir)
     pdf = pd.DataFrame(
@@ -3539,13 +3564,13 @@ def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
     with pytest.raises(ValueError) as excinfo:
         df.to_parquet(fn, datafile_name_template="whatever.parquet", engine=engine)
     assert (
-        "datafile_name_template must contain exactly one * (exactly one asterisk)"
+        "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
         in str(excinfo.value)
     )
     with pytest.raises(ValueError) as excinfo:
         df.to_parquet(fn, datafile_name_template="*-whatever-*.parquet", engine=engine)
     assert (
-        "datafile_name_template must contain exactly one * (exactly one asterisk)"
+        "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
         in str(excinfo.value)
     )
 
