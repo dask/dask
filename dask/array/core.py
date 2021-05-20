@@ -58,10 +58,10 @@ from ..utils import (
     typename,
 )
 from . import chunk
+from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
-from .backends import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
-from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
+from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
 from .numpy_compat import _Recurser
 from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 

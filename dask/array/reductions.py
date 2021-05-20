@@ -22,12 +22,12 @@ from ..utils import (
     is_series_like,
 )
 from . import chunk
-
-# Keep empty_lookup here for backwards compatibility
-from .backends import divide_lookup, empty_lookup  # noqa: F401
 from .blockwise import blockwise
 from .core import Array, _concatenate2, handle_out, implements
 from .creation import arange, diagonal
+
+# Keep empty_lookup here for backwards compatibility
+from .dispatch import divide_lookup, empty_lookup  # noqa: F401
 from .utils import compute_meta, full_like_safe, is_arraylike, validate_axis
 from .wrap import ones, zeros
 

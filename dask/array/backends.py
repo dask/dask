@@ -1,23 +1,20 @@
 import numpy as np
 
-from ..utils import Dispatch
+from .dispatch import (
+    concatenate_lookup,
+    divide_lookup,
+    einsum_lookup,
+    empty_lookup,
+    tensordot_lookup,
+)
 from .numpy_compat import divide as np_divide
 from .numpy_compat import ma_divide
 
-concatenate_lookup = Dispatch("concatenate")
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
-
-tensordot_lookup = Dispatch("tensordot")
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
-
-einsum_lookup = Dispatch("einsum")
 einsum_lookup.register((object, np.ndarray), np.einsum)
-
-empty_lookup = Dispatch("empty")
 empty_lookup.register((object, np.ndarray), np.empty)
 empty_lookup.register(np.ma.masked_array, np.ma.empty)
-
-divide_lookup = Dispatch("divide")
 divide_lookup.register((object, np.ndarray), np_divide)
 divide_lookup.register(np.ma.masked_array, ma_divide)
 
