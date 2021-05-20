@@ -206,7 +206,7 @@ def test_non_existent_func():
     ],
 )
 def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
-    """ Test proper dispatch on binary NumPy functions"""
+    """Test proper dispatch on binary NumPy functions"""
     assert (
         type(func(arr_upcast, arr_downcast))
         == type(func(arr_downcast, arr_upcast))

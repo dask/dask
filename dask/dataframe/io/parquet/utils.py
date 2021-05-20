@@ -7,7 +7,7 @@ from ....utils import natural_sort_key
 
 
 class Engine:
-    """ The API necessary to provide a new Parquet reader/writer """
+    """The API necessary to provide a new Parquet reader/writer"""
 
     @classmethod
     def read_metadata(

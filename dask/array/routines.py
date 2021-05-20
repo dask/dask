@@ -1618,7 +1618,7 @@ def _asarray_isnull(values):
 
 
 def isnull(values):
-    """ pandas.isnull for dask arrays """
+    """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
     import pandas as pd  # noqa
 
@@ -1626,7 +1626,7 @@ def isnull(values):
 
 
 def notnull(values):
-    """ pandas.notnull for dask arrays """
+    """pandas.notnull for dask arrays"""
     return ~isnull(values)
 
 
