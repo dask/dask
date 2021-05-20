@@ -84,7 +84,7 @@ unknown_chunk_message = (
 
 
 class PerformanceWarning(Warning):
-    """ A warning given when bad chunking may cause poor performance """
+    """A warning given when bad chunking may cause poor performance"""
 
 
 def getter(a, b, asarray=True, lock=None):
@@ -1460,17 +1460,17 @@ class Array(DaskMethodsMixin):
 
     @cached_property
     def size(self):
-        """ Number of elements in array """
+        """Number of elements in array"""
         return reduce(mul, self.shape, 1)
 
     @property
     def nbytes(self):
-        """ Number of bytes in array """
+        """Number of bytes in array"""
         return self.size * self.dtype.itemsize
 
     @property
     def itemsize(self):
-        """ Length of one array element in bytes """
+        """Length of one array element in bytes"""
         return self.dtype.itemsize
 
     @property
@@ -3306,11 +3306,11 @@ def to_zarr(
         where overwrite=True will replace the existing data.  Note that this
         check is done at computation time, not during graph creation.
     compute: bool
-        See ``store()``.
+        See :func:`~dask.array.store` for more details.
     return_stored: bool
-        See ``store()``.
+        See :func:`~dask.array.store` for more details.
     **kwargs:
-        passed to the ``zarr.create()`` function, e.g., compression options
+        Passed to the :func:`zarr.creation.create` function, e.g., compression options.
 
     Raises
     ------
@@ -3319,8 +3319,8 @@ def to_zarr(
 
     See Also
     --------
-    dask.array.store
-    dask.array.Array.compute_chunk_sizes
+    :func:`dask.array.store`
+    :meth:`dask.array.Array.compute_chunk_sizes`
 
     """
     import zarr
@@ -4595,7 +4595,7 @@ def deepfirst(seq):
 
 
 def shapelist(a):
-    """ Get the shape of nested list """
+    """Get the shape of nested list"""
     if type(a) is list:
         return tuple([len(a)] + list(shapelist(a[0])))
     else:
@@ -4828,7 +4828,7 @@ def concatenate3(arrays):
 
 
 def concatenate_axes(arrays, axes):
-    """ Recursively call np.concatenate along axes """
+    """Recursively call np.concatenate along axes"""
     if len(axes) != ndimlist(arrays):
         raise ValueError("Length of axes should equal depth of nested arrays")
 
@@ -5090,13 +5090,13 @@ def _get_axis(indexes):
 
 
 def _vindex_slice(block, points):
-    """ Pull out point-wise slices from block """
+    """Pull out point-wise slices from block"""
     points = [p if isinstance(p, slice) else list(p) for p in points]
     return block[tuple(points)]
 
 
 def _vindex_transpose(block, axis):
-    """ Rotate block so that points are on the first dimension """
+    """Rotate block so that points are on the first dimension"""
     axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
     return block.transpose(axes)
 
