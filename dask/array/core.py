@@ -63,7 +63,7 @@ from . import chunk
 from .backends import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 from .numpy_compat import _Recurser
-from .slicing import cached_cumsum, replace_ellipsis, slice_array
+from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -1141,6 +1141,32 @@ class Array(DaskMethodsMixin):
             if result is not None:
                 self = result
 
+        try:
+            layer = self.dask.layers[name]
+        except (AttributeError, KeyError):
+            # self is no longer an Array after applying the plugins, OR
+            # a plugin replaced the HighLevelGraph with a plain dict, OR
+            # name is not the top layer's name (this can happen after the layer is
+            # manipulated, to avoid a collision)
+            pass
+        else:
+            if layer.collection_annotations is None:
+                layer.collection_annotations = {
+                    "type": type(self),
+                    "chunk_type": type(self._meta),
+                    "chunks": self.chunks,
+                    "dtype": dtype,
+                }
+            else:
+                layer.collection_annotations.update(
+                    {
+                        "type": type(self),
+                        "chunk_type": type(self._meta),
+                        "chunks": self.chunks,
+                        "dtype": dtype,
+                    }
+                )
+
         return self
 
     def __reduce__(self):
@@ -1627,10 +1653,17 @@ class Array(DaskMethodsMixin):
     def __complex__(self):
         return self._scalarfunc(complex)
 
-    def __setitem__(self, key, value):
-        from .routines import where
+    def __index__(self):
+        return self._scalarfunc(operator.index)
 
+    def __setitem__(self, key, value):
+        if value is np.ma.masked:
+            value = np.ma.masked_all(())
+
+        ## Use the "where" method for cases when key is an Array
         if isinstance(key, Array):
+            from .routines import where
+
             if isinstance(value, Array) and value.ndim > 1:
                 raise ValueError("boolean index array should have 1 dimension")
             try:
@@ -1646,11 +1679,22 @@ class Array(DaskMethodsMixin):
             self.dask = y.dask
             self._name = y.name
             self._chunks = y.chunks
-            return self
-        else:
-            raise NotImplementedError(
-                "Item assignment with %s not supported" % type(key)
-            )
+            return
+
+        # Still here? Then apply the assignment to other type of
+        # indices via the `setitem_array` function.
+        value = asanyarray(value)
+
+        out = "setitem-" + tokenize(self, key, value)
+        dsk = setitem_array(out, self, key, value)
+
+        graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
+        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype)
+
+        self._meta = y._meta
+        self.dask = y.dask
+        self._name = y.name
+        self._chunks = y.chunks
 
     def __getitem__(self, index):
         # Field access, e.g. x['a'] or x[['a', 'b']]
@@ -4734,8 +4778,8 @@ def concatenate3(arrays):
 
     if IS_NEP18_ACTIVE and not all(
         NDARRAY_ARRAY_FUNCTION
-        is getattr(arr, "__array_function__", NDARRAY_ARRAY_FUNCTION)
-        for arr in arrays
+        is getattr(type(arr), "__array_function__", NDARRAY_ARRAY_FUNCTION)
+        for arr in core.flatten(arrays, container=(list, tuple))
     ):
         try:
             x = unpack_singleton(arrays)
@@ -4761,7 +4805,9 @@ def concatenate3(arrays):
 
     result = np.empty(shape=shape, dtype=dtype(deepfirst(arrays)))
 
-    for (idx, arr) in zip(slices_from_chunks(chunks), core.flatten(arrays)):
+    for (idx, arr) in zip(
+        slices_from_chunks(chunks), core.flatten(arrays, container=(list, tuple))
+    ):
         if hasattr(arr, "ndim"):
             while arr.ndim < ndim:
                 arr = arr[None, ...]

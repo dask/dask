@@ -151,7 +151,7 @@ def test_unregistered_func(func):
     y = da.from_array(x, chunks=(50, 50))
 
     # Check if it's an equivalent array
-    assert_eq(x, y, check_meta=False)
+    assert_eq(x, y, check_meta=False, check_type=False)
 
     # Perform two NumPy functions, one on the
     # Encapsulated array
@@ -162,7 +162,7 @@ def test_unregistered_func(func):
     yy = func(y)
 
     # Check that they are equivalent arrays.
-    assert_eq(xx, yy, check_meta=False)
+    assert_eq(xx, yy, check_meta=False, check_type=False)
 
 
 def test_non_existent_func():

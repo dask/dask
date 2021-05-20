@@ -515,7 +515,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Process metadata to define `meta` and `index_cols`
-        meta, index_cols, categories, index = cls._generate_dd_meta(
+        meta, index_cols, categories, index, partition_info = cls._generate_dd_meta(
             schema, index, categories, partition_info
         )
 
@@ -750,14 +750,14 @@ class ArrowDatasetEngine(Engine):
                 # Original dataset does not exist - cannot append
                 append = False
         if append:
-            names = dataset.metadata.schema.names
+            arrow_schema = dataset.schema.to_arrow_schema()
+            names = arrow_schema.names
             has_pandas_metadata = (
-                dataset.schema.to_arrow_schema().metadata is not None
-                and b"pandas" in dataset.schema.to_arrow_schema().metadata
+                arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
             )
             if has_pandas_metadata:
                 pandas_metadata = json.loads(
-                    dataset.schema.to_arrow_schema().metadata[b"pandas"].decode("utf8")
+                    arrow_schema.metadata[b"pandas"].decode("utf8")
                 )
                 categories = [
                     c["name"]
@@ -766,7 +766,7 @@ class ArrowDatasetEngine(Engine):
                 ]
             else:
                 categories = None
-            dtypes = _get_pyarrow_dtypes(dataset.schema.to_arrow_schema(), categories)
+            dtypes = _get_pyarrow_dtypes(arrow_schema, categories)
             if set(names) != set(df.columns) - set(partition_on):
                 raise ValueError(
                     "Appended columns not the same.\n"
@@ -834,6 +834,7 @@ class ArrowDatasetEngine(Engine):
         index_cols=None,
         schema=None,
         head=False,
+        custom_metadata=None,
         **kwargs,
     ):
         _meta = None
@@ -845,6 +846,10 @@ class ArrowDatasetEngine(Engine):
             index_cols = []
 
         t = cls._pandas_to_arrow_table(df, preserve_index=preserve_index, schema=schema)
+        if custom_metadata:
+            _md = t.schema.metadata
+            _md.update(custom_metadata)
+            t = t.replace_schema_metadata(metadata=_md)
 
         if partition_on:
             md_list = _write_partitioned(
@@ -1087,11 +1092,21 @@ class ArrowDatasetEngine(Engine):
         if index is None and index_names:
             index = index_names
 
-        if set(column_names).intersection(partitions):
-            raise ValueError(
-                "partition(s) should not exist in columns.\n"
-                "categories: {} | partitions: {}".format(column_names, partitions)
-            )
+        # Ensure that there is no overlap between partition columns
+        # and explicit column storage
+        if partitions:
+            _partitions = [p for p in partitions if p not in column_names]
+            if not _partitions:
+                partitions = []
+                partition_info["partitions"] = None
+                partition_info["partition_keys"] = {}
+                partition_info["partition_names"] = partitions
+            elif len(_partitions) != len(partitions):
+                raise ValueError(
+                    "No partition-columns should be written in the \n"
+                    "file unless they are ALL written in the file.\n"
+                    "columns: {} | partitions: {}".format(column_names, partitions)
+                )
 
         column_names, index_names = _normalize_index_columns(
             columns, column_names + partitions, index, index_names
@@ -1137,7 +1152,7 @@ class ArrowDatasetEngine(Engine):
                         index=meta.index,
                     )
 
-        return meta, index_cols, categories, index
+        return meta, index_cols, categories, index, partition_info
 
     @classmethod
     def _construct_parts(
@@ -1457,11 +1472,13 @@ class ArrowDatasetEngine(Engine):
             filters,
         )
 
-        # Check if we need to pass a fragment for each output partition
-        read_from_paths = read_from_paths or False
+        # Check if we need to pass a fragment for each output partition.
+        # By default, we will avoid passing fragments in the graph unless
+        # the user has specified `read_from_paths=False`
+        partitions = partition_info.get("partitions", None)
         pass_frags = (
             filters
-            and (not read_from_paths)
+            and (read_from_paths is False)
             and _need_fragments(filters, partition_info.get("partition_keys", None))
         )
 
@@ -1477,7 +1494,7 @@ class ArrowDatasetEngine(Engine):
             make_part_kwargs={
                 "fs": fs,
                 "partition_keys": partition_info.get("partition_keys", None),
-                "partition_obj": partition_info.get("partitions", None),
+                "partition_obj": partitions,
                 "data_path": data_path,
                 "frag_map": frag_map if pass_frags else None,
             },
@@ -1486,7 +1503,7 @@ class ArrowDatasetEngine(Engine):
         # Add common kwargs
         common_kwargs = {
             "partitioning": partition_info["partitioning"],
-            "partitions": partition_info["partitions"],
+            "partitions": partitions,
             "categories": categories,
             "filters": filters,
             "schema": schema,

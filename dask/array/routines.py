@@ -14,7 +14,7 @@ from ..compatibility import apply
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, funcname, is_arraylike
+from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
 from .core import (
     Array,
@@ -43,6 +43,9 @@ from .utils import (
     zeros_like_safe,
 )
 from .wrap import ones
+
+# save built-in for histogram functions which use range as a kwarg.
+_range = range
 
 
 @derived_from(np)
@@ -159,9 +162,9 @@ def transpose(a, axes=None):
     if axes:
         if len(axes) != a.ndim:
             raise ValueError("axes don't match array")
+        axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     else:
         axes = tuple(range(a.ndim))[::-1]
-    axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     return blockwise(
         np.transpose, axes, a, tuple(range(a.ndim)), dtype=a.dtype, axes=axes
     )
@@ -318,11 +321,18 @@ def vdot(a, b):
 
 
 def _matmul(a, b):
-    chunk = np.matmul(a, b)
+    xp = np
+
+    if is_cupy_type(a):
+        import cupy
+
+        xp = cupy
+
+    chunk = xp.matmul(a, b)
     # Since we have performed the contraction via matmul
     # but blockwise expects all dimensions back, we need
     # to add one dummy dimension back
-    return chunk[..., np.newaxis]
+    return chunk[..., xp.newaxis]
 
 
 @derived_from(np)
@@ -422,26 +432,8 @@ def _inner_apply_along_axis(arr, func1d, func1d_axis, func1d_args, func1d_kwargs
 @derived_from(np)
 def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs):
     """
-    Apply a function to 1-D slices along the given axis. This is
-    a blocked variant of :func:`numpy.apply_along_axis` implemented via
+    This is a blocked variant of :func:`numpy.apply_along_axis` implemented via
     :func:`dask.array.map_blocks`
-
-    Parameters
-    ----------
-    func1d : callable
-        Function to apply to 1-D slices of the array along the given axis
-    axis : int
-        Axis along which func1d will be applied
-    arr : dask array
-        Dask array to which ``func1d`` will be applied
-    args : any
-        Additional arguments to ``func1d``.
-    dtype : str or dtype, optional
-        The dtype of the output of ``func1d``.
-    shape : tuple, optional
-        The shape of the output of ``func1d``.
-    kwargs : any
-        Additional keyword arguments for ``func1d``.
 
     Notes
     -----
@@ -746,8 +738,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     Parameters
     ----------
-    a : array_like
-        Input data. The histogram is computed over the flattened array.
+    a : dask.array.Array
+        Input data; the histogram is computed over the flattened
+        array. If the ``weights`` argument is used, the chunks of
+        ``a`` are accessed to check chunking compatibility between
+        ``a`` and ``weights``. If ``weights`` is ``None``, a
+        :py:class:`dask.dataframe.Series` object can be passed as
+        input data.
     bins : int or sequence of scalars, optional
         Either an iterable specifying the ``bins`` or the number of ``bins``
         and a ``range`` argument is required as computing ``min`` and ``max``
@@ -768,7 +765,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     normed : bool, optional
         This is equivalent to the ``density`` argument, but produces incorrect
         results for unequal bin widths. It should not be used.
-    weights : array_like, optional
+    weights : dask.array.Array, optional
         A dask.array.Array of weights, of the same block structure as ``a``.  Each value in
         ``a`` only contributes its associated weight towards the bin count
         (instead of 1). If ``density`` is True, the weights are
@@ -785,6 +782,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         If ``density`` is True, ``bins`` cannot be a single-number delayed
         value. It must be a concrete number, or a (possibly-delayed)
         array/sequence of the bin edges.
+
     Returns
     -------
     hist : dask Array
@@ -792,7 +790,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         description of the possible semantics.
     bin_edges : dask Array of dtype float
         Return the bin edges ``(length(hist)+1)``.
-
 
     Examples
     --------
@@ -925,6 +922,295 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             return n, bins
     else:
         return n, bins
+
+
+def _block_histogramdd(sample, bins, range=None, weights=None):
+    """Call numpy.histogramdd for a blocked/chunked calculation.
+
+    Slurps the result into an additional outer axis via [np.newaxis].
+    This new axis will be used to stack chunked calls of the numpy
+    function and add them together later.
+
+    Returns
+    -------
+    :py:object:`np.ndarray`
+        NumPy array with an additional outer dimension.
+
+    """
+    return np.histogramdd(sample, bins, range=range, weights=weights)[0:1]
+
+
+def histogramdd(sample, bins, range=None, normed=None, weights=None, density=None):
+    """Blocked variant of :func:`numpy.histogramdd`.
+
+    Chunking of the input data (``sample``) is only allowed along the
+    0th (row) axis (the axis corresponding to the total number of
+    samples). Data chunked along the 1st axis (column) axis is not
+    compatible with this function. If weights are used, they must be
+    chunked along the 0th axis identically to the input sample.
+
+    A proper example setup for a three dimensional histogram, where
+    the sample shape is ``(8, 3)`` and weights are shape ``(8,)``,
+    sample chunks would be ``((4, 4), (3,))`` and the weights chunks
+    would be ``((4, 4),)`` a table of the structure:
+
+    +-------+-----------------------+-----------+
+    |       |      sample (8 x 3)   |  weights  |
+    +=======+=====+=====+=====+=====+=====+=====+
+    | chunk | row | `x` | `y` | `z` | row | `w` |
+    +-------+-----+-----+-----+-----+-----+-----+
+    |       |   0 |   5 |   6 |   6 |   0 | 0.5 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   1 |   8 |   9 |   2 |   1 | 0.8 |
+    |   0   +-----+-----+-----+-----+-----+-----+
+    |       |   2 |   3 |   3 |   1 |   2 | 0.3 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   3 |   2 |   5 |   6 |   3 | 0.7 |
+    +-------+-----+-----+-----+-----+-----+-----+
+    |       |   4 |   3 |   1 |   1 |   4 | 0.3 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   5 |   3 |   2 |   9 |   5 | 1.3 |
+    |   1   +-----+-----+-----+-----+-----+-----+
+    |       |   6 |   8 |   1 |   5 |   6 | 0.8 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   7 |   3 |   5 |   3 |   7 | 0.7 |
+    +-------+-----+-----+-----+-----+-----+-----+
+
+    If the sample 0th dimension and weight 0th (row) dimension are
+    chunked differently, a ``ValueError`` will be raised. If
+    coordinate groupings ((x, y, z) trios) are separated by a chunk
+    boundry, then a ``ValueError`` will be raised. We suggest that you
+    rechunk your data if it is of that form.
+
+    The chunks property of the data (and optional weights) are used to
+    check for compatibility with the blocked algorithm (as described
+    above); therefore, you must call `to_dask_array` on a collection
+    from ``dask.dataframe``, i.e. :class:`dask.dataframe.Series` or
+    :class:`dask.dataframe.DataFrame`.
+
+    Parameters
+    ----------
+    sample : dask.array.Array (N, D) or sequence of dask.array.Array
+        Multidimensional data to be histogrammed.
+
+        Note the unusual interpretation of a sample when it is a
+        sequence of dask Arrays:
+
+        * When a (N, D) dask Array, each row is an entry in the sample
+          (coordinate in D dimensional space).
+        * When a sequence of dask Arrays, each element in the sequence
+          is the array of values for a single coordinate. This type of
+          input will be automatically rechunked along the column axis
+          if necessary. This may induce a runtime increase.
+    bins : sequence of arrays describing bin edges, int, or sequence of ints
+        The bin specification.
+
+        The possible binning configurations are:
+
+        * A sequence of arrays describing the monotonically increasing
+          bin edges along each dimension.
+        * A single int describing the total number of bins that will
+          be used in each dimension (this requires the ``range``
+          argument to be defined).
+        * A sequence of ints describing the total number of bins to be
+          used in each dimension (this requires the ``range`` argument
+          to be defined).
+
+        When bins are described by arrays, the rightmost edge is
+        included. Bins described by arrays also allows for non-uniform
+        bin widths.
+    range : sequence of pairs, optional
+        A sequence of length D, each a (min, max) tuple giving the
+        outer bin edges to be used if the edges are not given
+        explicitly in ``bins``. If defined, this argument is required
+        to have an entry for each dimension. Unlike
+        :func:`numpy.histogramdd`, if `bins` does not define bin
+        edges, this argument is required (this function will not
+        automatically use the min and max of of the value in a given
+        dimension because the input data may be lazy in dask).
+    normed : bool, optional
+        An alias for the density argument that behaves identically. To
+        avoid confusion with the broken argument to `histogram`,
+        `density` should be preferred.
+    weights : dask.array.Array, optional
+        An array of values weighing each sample in the input data. The
+        chunks of the weights must be identical to the chunking along
+        the 0th (row) axis of the data sample.
+    density : bool, optional
+        If ``False`` (default), the returned array represents the
+        number of samples in each bin. If ``True``, the returned array
+        represents the probability density function at each bin.
+
+    See Also
+    --------
+    histogram
+
+    Examples
+    --------
+    Computing the histogram in 5 blocks using different bin edges
+    along each dimension:
+
+    >>> import dask.array as da
+    >>> x = da.random.uniform(0, 1, size=(1000, 3), chunks=(200, 3))
+    >>> edges = [
+    ...     np.linspace(0, 1, 5), # 4 bins in 1st dim
+    ...     np.linspace(0, 1, 6), # 5 in the 2nd
+    ...     np.linspace(0, 1, 4), # 3 in the 3rd
+    ... ]
+    >>> h, edges = da.histogramdd(x, bins=edges)
+    >>> result = h.compute()
+    >>> result.shape
+    (4, 5, 3)
+
+    Defining the bins by total number and their ranges, along with
+    using weights:
+
+    >>> bins = (4, 5, 3)
+    >>> ranges = ((0, 1),) * 3  # expands to ((0, 1), (0, 1), (0, 1))
+    >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
+    >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    >>> np.isclose(h.sum().compute(), w.sum().compute())
+    True
+
+    """
+
+    # logic used in numpy.histogramdd to handle normed/density.
+    if normed is None:
+        if density is None:
+            density = False
+    elif density is None:
+        # an explicit normed argument was passed, alias it to the new name
+        density = normed
+    else:
+        raise TypeError("Cannot specify both 'normed' and 'density'")
+
+    # check if any dask collections (dc) were passed to bins= or
+    # range= these are unsupported.
+    dc_bins = is_dask_collection(bins)
+    if isinstance(bins, (list, tuple)):
+        dc_bins = dc_bins or any([is_dask_collection(b) for b in bins])
+    dc_range = (
+        any([is_dask_collection(r) for r in range]) if range is not None else False
+    )
+    if dc_bins or dc_range:
+        raise NotImplementedError(
+            "Passing dask collections to bins=... or range=... is not supported."
+        )
+
+    # generate token and name for task
+    token = tokenize(sample, bins, range, weights, density)
+    name = f"histogramdd-sum-{token}"
+
+    # N == total number of samples
+    # D == total number of dimensions
+    try:
+        # Recommended input ND-array
+        N, D = sample.shape
+    except (AttributeError, ValueError):
+        # If we have a sequence of 1D arrays
+        sample = atleast_2d(sample).T
+        N, D = sample.shape
+        # rechunk if necessary
+        if sample.chunksize[1] != D:
+            sample = sample.rechunk((sample.chunksize[0], D))
+
+    # Require only Array or Delayed objects for bins, range, and weights.
+    for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
+        if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
+            raise TypeError(
+                "Dask types besides Array and Delayed are not supported "
+                "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
+            )
+
+    # Require data to be chunked along the first axis only.
+    if sample.shape[1:] != sample.chunksize[1:]:
+        raise ValueError("Input array can only be chunked along the 0th axis")
+
+    # Require that the chunking of the sample and weights are compatible.
+    if weights is not None and weights.chunks[0] != sample.chunks[0]:
+        raise ValueError(
+            "Input array and weights must have the same shape "
+            "and chunk structure along the first dimension."
+        )
+
+    # if bins is a list, tuple, then make sure the length is the same
+    # as the number dimensions.
+    if isinstance(bins, (list, tuple)):
+        if len(bins) != D:
+            raise ValueError(
+                "The dimension of bins must be equal to the dimension of the sample."
+            )
+
+    # if range is defined, check that it's the right length and also a
+    # sequence of pairs.
+    if range is not None:
+        if len(range) != D:
+            raise ValueError(
+                "range argument requires one entry, a min max pair, per dimension."
+            )
+        if not all(len(r) == 2 for r in range):
+            raise ValueError("range argument should be a sequence of pairs")
+
+    # we will return the edges to mimic the NumPy API (we also use the
+    # edges later as a way to calculate the total number of bins).
+    if isinstance(bins, int):
+        bins = (bins,) * D
+    if all(isinstance(b, int) for b in bins) and all(len(r) == 2 for r in range):
+        edges = [np.linspace(r[0], r[1], b + 1) for b, r in zip(bins, range)]
+    else:
+        edges = [np.asarray(b) for b in bins]
+
+    # With dsk below, we will construct a (D + 1) dimensional array
+    # stacked for each chunk. For example, if the histogram is going
+    # to be 3 dimensions, this creates a stack of cubes (1 cube for
+    # each sample chunk) that will be collapsed into a final cube (the
+    # result).
+
+    # This tuple of zeros represents the chunk index along the columns
+    # (we only allow chunking along the rows).
+    column_zeros = tuple(0 for _ in _range(D))
+
+    if weights is None:
+        dsk = {
+            (name, i, *column_zeros): (_block_histogramdd, k, bins, range)
+            for i, k in enumerate(flatten(sample.__dask_keys__()))
+        }
+        dtype = np.histogramdd([])[0].dtype
+    else:
+        a_keys = flatten(sample.__dask_keys__())
+        w_keys = flatten(weights.__dask_keys__())
+        dsk = {
+            (name, i, *column_zeros): (_block_histogramdd, k, bins, range, w)
+            for i, (k, w) in enumerate(zip(a_keys, w_keys))
+        }
+        dtype = weights.dtype
+
+    deps = (sample,)
+    if weights is not None:
+        deps += (weights,)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
+
+    nchunks = len(list(flatten(sample.__dask_keys__())))
+    all_nbins = tuple((b.size - 1,) for b in edges)
+    stacked_chunks = ((1,) * nchunks, *all_nbins)
+    mapped = Array(graph, name, stacked_chunks, dtype=dtype)
+
+    # Finally, sum over chunks providing to get the final D
+    # dimensional result array.
+    n = mapped.sum(axis=0)
+
+    if density:
+        # compute array of values to divide by the bin width along
+        # each dimension.
+        width_divider = np.ones(n.shape)
+        for i in _range(D):
+            shape = np.ones(D, int)
+            shape[i] = width_divider.shape[i]
+            width_divider *= np.diff(edges[i]).reshape(shape)
+        width_divider = asarray(width_divider, chunks=n.chunks)
+        return n / width_divider / n.sum(), edges
+
+    return n, [asarray(entry) for entry in edges]
 
 
 @derived_from(np)
