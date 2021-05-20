@@ -2,7 +2,7 @@
 import numpy as np
 
 from .. import config, core
-from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
+from ..blockwise import fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
 from ..optimization import cull, fuse
 from ..utils import ensure_dict
@@ -80,7 +80,7 @@ def optimize_dataframe_getitem(dsk, keys):
             if not isinstance(block, DataFrameGetitemLayer):
                 return dsk
 
-            block_columns = block.indices[1][0]
+            block_columns = block.key
             if isinstance(block_columns, str) or np.issubdtype(
                 type(block_columns), np.integer
             ):
@@ -97,16 +97,15 @@ def optimize_dataframe_getitem(dsk, keys):
             for block_key, block in update_blocks.items():
                 # (('read-parquet-old', (.,)), ( ... )) ->
                 # (('read-parquet-new', (.,)), ( ... ))
-                new_indices = ((new.name, block.indices[0][1]), block.indices[1])
-                numblocks = {new.name: block.numblocks[old.name]}
-                new_block = Blockwise(
-                    block.output,
-                    block.output_indices,
-                    block.dsk,
-                    new_indices,
-                    numblocks,
-                    block.concatenate,
-                    block.new_axes,
+                new_block = DataFrameGetitemLayer(
+                    name=block.name,
+                    first=new.name,
+                    second=block.second,
+                    first_indices=block.first_indices,
+                    first_numblocks=block.first_numblocks,
+                    second_indices=block.second_indices,
+                    second_numblocks=block.second_numblocks,
+                    annotations=block.annotations,
                 )
                 layers[block_key] = new_block
                 dependencies[block_key] = {new.name}
@@ -116,5 +115,4 @@ def optimize_dataframe_getitem(dsk, keys):
         if new.name != old.name:
             del layers[old.name]
 
-    new_hlg = HighLevelGraph(layers, dependencies)
-    return new_hlg
+    return HighLevelGraph(layers, dependencies)

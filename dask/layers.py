@@ -986,40 +986,59 @@ class DataFrameBinOp(Blockwise, DataFrameLayer):
         name,
         first,
         second,
+        first_indices=None,
+        first_numblocks=None,
+        second_indices=None,
+        second_numblocks=None,
         annotations=None,
     ):
+        def _collection_info(arg):
+            out = arg._name
+            if hasattr(arg, "npartitions"):
+                out_numblocks = (arg.npartitions,)
+            elif hasattr(arg, "numblocks"):
+                out_numblocks = (arg.numblocks,)
+            else:
+                out_numblocks = (1,)
+            return out, "i", out_numblocks
+
+        numblocks = {}
+        if is_dask_collection(first):
+            self.first, self.first_indices, self.first_numblocks = _collection_info(
+                first
+            )
+        else:
+            self.first = first
+            self.first_indices = first_indices
+            self.first_numblocks = first_numblocks
+        if self.first_indices:
+            numblocks[self.first] = self.first_numblocks
+
+        if is_dask_collection(second):
+            self.second, self.second_indices, self.second_numblocks = _collection_info(
+                second
+            )
+            numblocks[self.second] = self.second_numblocks
+        else:
+            self.second = second
+            self.second_indices = second_indices
+            self.second_numblocks = second_numblocks
+        if self.second_indices:
+            numblocks[self.second] = self.second_numblocks
+
         self.op = op
         self.name = name
-        self.first = first
-        self.second = second
         self.annotations = annotations
 
-        # Construct `inputs`, `inputs_indices` & `numblocks`
-        inputs = []
-        inputs_indices = []
-        numblocks = {}
-        for arg in [first, second]:
-            if is_dask_collection(arg):
-                inputs.append(arg._name)
-                inputs_indices.append("i")
-                if hasattr(arg, "npartitions"):
-                    numblocks[arg._name] = (arg.npartitions,)
-                elif hasattr(arg, "numblocks"):
-                    numblocks[arg._name] = arg.numblocks
-                else:
-                    numblocks[arg._name] = (1,)
-            else:
-                inputs.append(arg)
-                inputs_indices.append(None)
-
         # Initalize Blockwise backend
-        indices = [(k, v) for k, v in zip(inputs, inputs_indices)]
-        keys = map(blockwise_token, range(len(inputs)))
         super().__init__(
             output=self.name,
             output_indices="i",
-            dsk={self.name: (self.op,) + tuple(keys)},
-            indices=indices,
+            dsk={self.name: (self.op,) + tuple(map(blockwise_token, range(2)))},
+            indices=[
+                (self.first, self.first_indices),
+                (self.second, self.second_indices),
+            ],
             numblocks=numblocks,
             concatenate=True,
             annotations=annotations,
@@ -1046,20 +1065,16 @@ class DataFrameGetitemLayer(DataFrameBinOp):
         Layer annotations to pass through to Blockwise.
     """
 
-    def __init__(
-        self,
-        name,
-        frame,
-        key,
-        annotations=None,
-    ):
+    def __init__(self, *args, **kwargs):
         super().__init__(
-            op=operator.getitem,
-            name=name,
-            first=frame,
-            second=key,
-            annotations=annotations,
+            operator.getitem,
+            *args,
+            **kwargs,
         )
+
+    @property
+    def key(self):
+        return self.second
 
     def __repr__(self):
         return "DataFrameGetitemLayer<name='{}', frame={}, key={}>".format(
