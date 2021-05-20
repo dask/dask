@@ -586,7 +586,9 @@ def to_parquet(
     # Fall back to default template if user specified template is missing
     if datafile_name_template:
         if datafile_name_template.count("*") != 1:
-            raise ValueError("datafile_name_template must contain exactly one * (exactly one asterisk)")
+            raise ValueError(
+                "datafile_name_template must contain exactly one * (exactly one asterisk)"
+            )
         file_template = datafile_name_template.replace("*", "%i")
     else:
         file_template = "part.%i.parquet"

@@ -3538,23 +3538,32 @@ def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
     df = dd.from_pandas(pdf, npartitions=2)
     with pytest.raises(ValueError) as excinfo:
         df.to_parquet(fn, datafile_name_template="whatever.parquet", engine=engine)
-    assert "datafile_name_template must contain exactly one * (exactly one asterisk)" in str(excinfo.value)
+    assert (
+        "datafile_name_template must contain exactly one * (exactly one asterisk)"
+        in str(excinfo.value)
+    )
     with pytest.raises(ValueError) as excinfo:
         df.to_parquet(fn, datafile_name_template="*-whatever-*.parquet", engine=engine)
-    assert "datafile_name_template must contain exactly one * (exactly one asterisk)" in str(excinfo.value)
+    assert (
+        "datafile_name_template must contain exactly one * (exactly one asterisk)"
+        in str(excinfo.value)
+    )
 
 
 def test_custom_filename_with_partition(tmpdir, engine):
     fn = str(tmpdir)
     pdf = pd.DataFrame(
         {
-            "first_name": ["frank",  "li", "marcela", "luis"],
+            "first_name": ["frank", "li", "marcela", "luis"],
             "country": ["canada", "china", "venezuela", "venezuela"],
         },
     )
     df = dd.from_pandas(pdf, npartitions=4)
     df.to_parquet(
-        fn, partition_on=["country"], datafile_name_template="*-cool.parquet", write_index=False
+        fn,
+        partition_on=["country"],
+        datafile_name_template="*-cool.parquet",
+        write_index=False,
     )
 
     for root, dirs, files in os.walk(fn):
@@ -3576,4 +3585,6 @@ def test_custom_filename_with_partition(tmpdir, engine):
     pd.testing.assert_frame_equal(
         df.compute().reset_index(drop=True),
         actual.compute().reset_index(drop=True),
-        check_dtype=False, check_categorical=False)
+        check_dtype=False,
+        check_categorical=False,
+    )
