@@ -584,10 +584,10 @@ def to_parquet(
     )
 
     if datafile_name_template:
-        if append:
-            raise ValueError(
-                "Cannot use both `datafile_name_template` and `append=True`"
-            )
+        # if append:
+        #     raise ValueError(
+        #         "Cannot use both `datafile_name_template` and `append=True`"
+        #     )
         if datafile_name_template.count("*") != 1:
             raise ValueError(
                 "`datafile_name_template` must contain exactly one * (exactly one asterisk)"
