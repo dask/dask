@@ -3305,8 +3305,12 @@ def to_zarr(
         If given array already exists, overwrite=False will cause an error,
         where overwrite=True will replace the existing data.  Note that this
         check is done at computation time, not during graph creation.
-    compute, return_stored: see ``store()``
-    kwargs: passed to the ``zarr.create()`` function, e.g., compression options
+    compute: bool
+        See ``store()``.
+    return_stored: bool
+        See ``store()``.
+    **kwargs:
+        passed to the ``zarr.create()`` function, e.g., compression options
 
     Raises
     ------
@@ -3315,6 +3319,7 @@ def to_zarr(
 
     See Also
     --------
+    dask.array.store
     dask.array.Array.compute_chunk_sizes
 
     """
