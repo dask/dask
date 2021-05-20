@@ -711,5 +711,5 @@ except AttributeError:
 
 
 def single_key(seq):
-    """ Pick out the only element of this list, a list of keys """
+    """Pick out the only element of this list, a list of keys"""
     return seq[0]

@@ -609,7 +609,7 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
 
 
 def unsupported_arguments(doc, args):
-    """ Mark unsupported arguments with a disclaimer """
+    """Mark unsupported arguments with a disclaimer"""
     lines = doc.split("\n")
     for arg in args:
         subset = [
@@ -624,7 +624,7 @@ def unsupported_arguments(doc, args):
 
 
 def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
-    """ Helper function for derived_from to ease testing """
+    """Helper function for derived_from to ease testing"""
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
@@ -1059,7 +1059,7 @@ class OperatorMethodMixin:
 
     @classmethod
     def _bind_operator(cls, op):
-        """ bind operator to this class """
+        """bind operator to this class"""
         name = op.__name__
 
         if name.endswith("_"):
@@ -1083,12 +1083,12 @@ class OperatorMethodMixin:
 
     @classmethod
     def _get_unary_operator(cls, op):
-        """ Must return a method used by unary operator """
+        """Must return a method used by unary operator"""
         raise NotImplementedError
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
-        """ Must return a method used by binary operator """
+        """Must return a method used by binary operator"""
         raise NotImplementedError
 
 
@@ -1151,7 +1151,7 @@ def is_arraylike(x):
 
 
 def is_dataframe_like(df):
-    """ Looks like a Pandas DataFrame """
+    """Looks like a Pandas DataFrame"""
     typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
@@ -1161,7 +1161,7 @@ def is_dataframe_like(df):
 
 
 def is_series_like(s):
-    """ Looks like a Pandas Series """
+    """Looks like a Pandas Series"""
     typ = s.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
@@ -1171,7 +1171,7 @@ def is_series_like(s):
 
 
 def is_index_like(s):
-    """ Looks like a Pandas Index """
+    """Looks like a Pandas Index"""
     typ = s.__class__
     return (
         all(hasattr(s, name) for name in ("name", "dtype"))

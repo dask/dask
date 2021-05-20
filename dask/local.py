@@ -456,7 +456,7 @@ def get_async(
                 raise ValueError("Found no accessible jobs in dask")
 
             def fire_tasks(chunksize):
-                """ Fire off a task to the thread pool """
+                """Fire off a task to the thread pool"""
                 # Determine chunksize and/or number of tasks to submit
                 nready = len(state["ready"])
                 if chunksize == -1:

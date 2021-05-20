@@ -417,14 +417,14 @@ def test_nearest_neighbor(abcde):
 
 
 def test_string_ordering():
-    """ Prefer ordering tasks by name first """
+    """Prefer ordering tasks by name first"""
     dsk = {("a", 1): (f,), ("a", 2): (f,), ("a", 3): (f,)}
     o = order(dsk)
     assert o == {("a", 1): 0, ("a", 2): 1, ("a", 3): 2}
 
 
 def test_string_ordering_dependents():
-    """ Prefer ordering tasks by name first even when in dependencies """
+    """Prefer ordering tasks by name first even when in dependencies"""
     dsk = {("a", 1): (f, "b"), ("a", 2): (f, "b"), ("a", 3): (f, "b"), "b": (f,)}
     o = order(dsk)
     assert o == {"b": 0, ("a", 1): 1, ("a", 2): 2, ("a", 3): 3}
@@ -586,7 +586,7 @@ def test_use_structure_not_keys(abcde):
 
 
 def test_dont_run_all_dependents_too_early(abcde):
-    """ From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372 """
+    """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
     a, b, c, d, e = abcde
     depth = 10
     dsk = {(a, 0): 0, (b, 0): 1, (c, 0): 2, (d, 0): (f, (a, 0), (b, 0), (c, 0))}

@@ -62,7 +62,7 @@ def test_rechunk_internals_1():
 
 
 def test_intersect_1():
-    """ Convert 1 D chunks"""
+    """Convert 1 D chunks"""
     old = ((10, 10, 10, 10, 10),)
     new = ((25, 5, 20),)
     answer = [
@@ -75,7 +75,7 @@ def test_intersect_1():
 
 
 def test_intersect_2():
-    """ Convert 1 D chunks"""
+    """Convert 1 D chunks"""
     old = ((20, 20, 20, 20, 20),)
     new = ((58, 4, 20, 18),)
     answer = [
@@ -141,7 +141,7 @@ def test_rechunk_expand2():
 
 
 def test_rechunk_method():
-    """ Test rechunking can be done as a method of dask array."""
+    """Test rechunking can be done as a method of dask array."""
     old = ((5, 2, 3),) * 4
     new = ((3, 3, 3, 1),) * 4
     a = np.random.uniform(0, 1, 10000).reshape((10,) * 4)
@@ -152,7 +152,7 @@ def test_rechunk_method():
 
 
 def test_rechunk_blockshape():
-    """ Test that blockshape can be used."""
+    """Test that blockshape can be used."""
     new_shape, new_chunks = (10, 10), (4, 3)
     new_blockdims = normalize_chunks(new_chunks, new_shape)
     old_chunks = ((4, 4, 2), (3, 3, 3, 1))

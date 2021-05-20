@@ -361,7 +361,7 @@ def nearest(x, axis, depth):
 
 
 def constant(x, axis, depth, value):
-    """ Add constant slice to either side of array """
+    """Add constant slice to either side of array"""
     chunks = list(x.chunks)
     chunks[axis] = (depth,)
 

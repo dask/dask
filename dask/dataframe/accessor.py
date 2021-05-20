@@ -177,7 +177,7 @@ def str_extractall(series, pat, flags):
 
 
 def str_get(series, index):
-    """ Implements series.str[index] """
+    """Implements series.str[index]"""
     return series.str[index]
 
 

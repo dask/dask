@@ -74,7 +74,7 @@ def sort_values(
     partition_size=128e6,
     **kwargs,
 ):
-    """ See DataFrame.sort_values for docstring """
+    """See DataFrame.sort_values for docstring"""
     if not ascending:
         raise NotImplementedError("The ascending= keyword is not supported")
     if not isinstance(by, str):
@@ -127,7 +127,7 @@ def set_index(
     partition_size=128e6,
     **kwargs,
 ):
-    """ See _Frame.set_index for docstring """
+    """See _Frame.set_index for docstring"""
     if isinstance(index, Series) and index._name == df.index._name:
         return df
     if isinstance(index, (DataFrame, tuple, list)):
@@ -374,7 +374,7 @@ def shuffle(
 
 
 def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
-    """ Shuffle dataframe so that column separates along divisions """
+    """Shuffle dataframe so that column separates along divisions"""
     divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
@@ -730,7 +730,7 @@ def cleanup_partd_files(p, keys):
 
 
 def collect(p, part, meta, barrier_token):
-    """ Collect partitions from partd, yield dataframes """
+    """Collect partitions from partd, yield dataframes"""
     with ensure_cleanup_on_exception(p):
         res = p.get(part)
         return res if len(res) > 0 else meta
@@ -876,7 +876,7 @@ def get_overlap(df, index):
 
 
 def fix_overlap(ddf, overlap):
-    """ Ensures that the upper bound on each partition of ddf (except the last) is exclusive """
+    """Ensures that the upper bound on each partition of ddf (except the last) is exclusive"""
     name = "fix-overlap-" + tokenize(ddf, overlap)
     n = len(ddf.divisions) - 1
     dsk = {(name, i): (ddf._name, i) for i in range(n)}

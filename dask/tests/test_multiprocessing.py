@@ -25,7 +25,7 @@ def my_small_function_global(a, b):
 
 
 def test_pickle_globals():
-    """ Unrelated globals should not be included in serialized bytes """
+    """Unrelated globals should not be included in serialized bytes"""
     b = _dumps(my_small_function_global)
     assert b"my_small_function_global" in b
     assert b"unrelated_function_global" not in b
@@ -265,7 +265,7 @@ def test_custom_context_ignored_elsewhere():
 
 @pytest.mark.skipif(sys.platform != "win32", reason="POSIX supports different contexts")
 def test_get_context_always_default():
-    """ On Python 2/Windows, get_context() always returns same context."""
+    """On Python 2/Windows, get_context() always returns same context."""
     assert get_context() is multiprocessing
     with pytest.warns(UserWarning):
         with dask.config.set({"multiprocessing.context": "forkserver"}):
