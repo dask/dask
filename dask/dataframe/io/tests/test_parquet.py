@@ -3512,3 +3512,68 @@ def test_custom_metadata(tmpdir, engine):
             custom_metadata=custom_metadata,
         )
     assert "User-defined key/value" in str(e.value)
+
+
+def test_custom_filename(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    df.to_parquet(fn, datafile_name_template="hi-*.parquet", engine=engine)
+
+    files = os.listdir(fn)
+    assert "_common_metadata" in files
+    assert "_metadata" in files
+    assert "hi-0.parquet" in files
+    assert "hi-1.parquet" in files
+    assert_eq(df, dd.read_parquet(fn, engine=engine))
+
+
+def test_throws_error_if_custom_filename_is_invalid(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {"num1": [1, 2, 3, 4], "num2": [7, 8, 9, 10]},
+    )
+    df = dd.from_pandas(pdf, npartitions=2)
+    with pytest.raises(ValueError) as excinfo:
+        df.to_parquet(fn, datafile_name_template="whatever.parquet", engine=engine)
+    assert "datafile_name_template must contain exactly one * (exactly one asterisk)" in str(excinfo.value)
+    with pytest.raises(ValueError) as excinfo:
+        df.to_parquet(fn, datafile_name_template="*-whatever-*.parquet", engine=engine)
+    assert "datafile_name_template must contain exactly one * (exactly one asterisk)" in str(excinfo.value)
+
+
+def test_custom_filename_with_partition(tmpdir, engine):
+    fn = str(tmpdir)
+    pdf = pd.DataFrame(
+        {
+            "first_name": ["frank",  "li", "marcela", "luis"],
+            "country": ["canada", "china", "venezuela", "venezuela"],
+        },
+    )
+    df = dd.from_pandas(pdf, npartitions=4)
+    df.to_parquet(
+        fn, partition_on=["country"], datafile_name_template="*-cool.parquet", write_index=False
+    )
+
+    for root, dirs, files in os.walk(fn):
+        for dir in dirs:
+            assert dir in (
+                "country=canada",
+                "country=china",
+                "country=venezuela",
+            )
+        for file in files:
+            assert file in (
+                "0-cool.parquet",
+                "1-cool.parquet",
+                "2-cool.parquet",
+                "_common_metadata",
+                "_metadata",
+            )
+    actual = dd.read_parquet(fn, engine=engine, index=False)
+    pd.testing.assert_frame_equal(
+        df.compute().reset_index(drop=True),
+        actual.compute().reset_index(drop=True),
+        check_dtype=False, check_categorical=False)
