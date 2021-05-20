@@ -4,6 +4,7 @@ import warnings
 import tlz as toolz
 
 from .. import base, utils
+from ..blockwise import BlockwiseDep
 from ..blockwise import blockwise as core_blockwise
 from ..delayed import unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -167,9 +168,15 @@ def blockwise(
             "Repeated elements not allowed in output index",
             [k for k, v in toolz.frequencies(out_ind).items() if v > 1],
         )
+    arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
     new = (
         set(out_ind)
-        - {a for arg in args[1::2] if arg is not None for a in arg}
+        - {
+            a
+            for (arg, ind) in arginds
+            if not isinstance(arg, BlockwiseDep)
+            for a in ind
+        }
         - set(new_axes or ())
     )
     if new:
@@ -180,16 +187,16 @@ def blockwise(
     if align_arrays:
         chunkss, arrays = unify_chunks(*args)
     else:
-        arginds = [(a, i) for (a, i) in toolz.partition(2, args) if i is not None]
         chunkss = {}
         # For each dimension, use the input chunking that has the most blocks;
         # this will ensure that broadcasting works as expected, and in
         # particular the number of blocks should be correct if the inputs are
         # consistent.
         for arg, ind in arginds:
-            for c, i in zip(arg.chunks, ind):
-                if i not in chunkss or len(c) > len(chunkss[i]):
-                    chunkss[i] = c
+            if not isinstance(arg, BlockwiseDep):
+                for c, i in zip(arg.chunks, ind):
+                    if i not in chunkss or len(c) > len(chunkss[i]):
+                        chunkss[i] = c
         arrays = args[::2]
 
     for k, v in new_axes.items():
@@ -221,9 +228,10 @@ def blockwise(
                     "Index string %s does not match array dimension %d"
                     % (ind, arg.ndim)
                 )
-            numblocks[arg.name] = arg.numblocks
-            arrays.append(arg)
-            arg = arg.name
+            if not isinstance(arg, BlockwiseDep):
+                numblocks[arg.name] = arg.numblocks
+                arrays.append(arg)
+                arg = arg.name
         argindsstr.extend((arg, ind))
 
     # Normalize keyword arguments

@@ -42,7 +42,7 @@ class BlockwiseDep:
     ``Blockwise`` layer.
 
     All ``BlockwiseDep`` instances must define a ``numblocks``
-    attribute to speficy the number of blocks/partitions the
+    attribute to specify the number of blocks/partitions the
     object can support along each dimension. The object should
     also define a ``produces_tasks`` attribute to specify if
     any nested tasks will be passed to the Blockwise function.
@@ -95,6 +95,10 @@ class BlockwiseDep:
 
     def __repr__(self) -> str:
         return f"<{type(self).__name__} {self.numblocks}>"
+
+    @property
+    def ndim(self) -> int:
+        return len(self.numblocks)
 
 
 class BlockwiseDepDict(BlockwiseDep):

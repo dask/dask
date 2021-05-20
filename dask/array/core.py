@@ -435,7 +435,7 @@ def _pass_extra_kwargs(func, keys, *args, **kwargs):
     """Helper for :func:`dask.array.map_blocks` to pass `block_info` or `block_id`.
 
     For each element of `keys`, a corresponding element of args is changed
-    to a keyword argument with that key, before all arguments re passed on
+    to a keyword argument with that key, before all arguments are passed on
     to `func`.
     """
     kwargs.update(zip(keys, args))
