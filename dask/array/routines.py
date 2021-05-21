@@ -176,12 +176,15 @@ def flip(m, axis=None):
 
     Parameters
     ----------
+    m : array_like
+        Input array.
     axis : None or int or tuple of ints, optional
         Axis or axes to reverse element order of. None will reverse all axes.
 
     Returns
     -------
-    reversed array : ndarray
+    dask.array.Array
+        The flipped array.
     """
 
     m = asanyarray(m)
