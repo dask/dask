@@ -1093,7 +1093,7 @@ class Array(DaskMethodsMixin):
     A parallel nd-array comprised of many numpy arrays arranged in a grid.
 
     This constructor is for advanced uses only.  For normal use see the
-    :func:`da.from_array <dask.array.from_array>` function.
+    :func:`dask.array.from_array` function.
 
     Parameters
     ----------
@@ -5163,7 +5163,7 @@ def to_npy_stack(dirname, x, axis=0):
         |-- info
 
     The ``info`` file stores the dtype, chunks, and axis information of the array.
-    You can load these stacks with the :func:`da.from_npy_stack <dask.array.from_npy_stack>` function.
+    You can load these stacks with the :func:`dask.array.from_npy_stack` function.
 
     >>> y = da.from_npy_stack('data/')  # doctest: +SKIP
 
@@ -5196,7 +5196,7 @@ def to_npy_stack(dirname, x, axis=0):
 def from_npy_stack(dirname, mmap_mode="r"):
     """Load dask array from stack of npy files
 
-    See :func:`da.to_npy_stack <dask.array.to_npy_stack>` for docstring.
+    See :func:`dask.array.to_npy_stack` for docstring.
 
     Parameters
     ----------
