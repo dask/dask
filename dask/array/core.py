@@ -473,10 +473,10 @@ class _BlockInfoInput:
 
 
 class _BlockInfoOutput:
-    def __init__(self, shape: Tuple[int, ...], starts: Tuple[int, ...], dtype) -> None:
+    def __init__(self, shape: Tuple[int, ...], starts: Tuple[int, ...], meta) -> None:
         self.shape = shape
         self.starts = starts
-        self.dtype = dtype
+        self.meta = meta
         self.num_chunks = tuple(len(s) - 1 for s in self.starts)
 
     def __getitem__(self, idx: Tuple[int, ...]) -> dict:
@@ -486,7 +486,7 @@ class _BlockInfoOutput:
             "array-location": [(s[i], s[i + 1]) for s, i in zip(self.starts, idx)],
             "chunk-location": idx,
             "chunk-shape": tuple(s[i + 1] - s[i] for s, i in zip(self.starts, idx)),
-            "dtype": self.dtype,
+            "dtype": self.meta.dtype,
         }
 
     def __dask_distributed_pack__(self):
@@ -495,16 +495,18 @@ class _BlockInfoOutput:
         return {
             "shape": self.shape,
             "starts": self.starts,
-            "dtype": to_serialize(self.dtype),
+            "meta": to_serialize(self.meta),
         }
 
     @classmethod
     def __dask_distributed_unpack__(cls, state):
+        from distributed.protocol import deserialize
+
         # msgpack turns tuples into lists, so we have to convert back
         return cls(
             tuple(state["shape"]),
             tuple(tuple(s) for s in state["starts"]),
-            state["dtype"],
+            deserialize(state["meta"].header, state["meta"].frames),
         )
 
 
@@ -881,7 +883,7 @@ def map_blocks(
         block_info_output = _BlockInfoOutput(
             out.shape,
             [cached_cumsum(c, initial_zero=True) for c in out.chunks],
-            out.dtype,
+            out._meta,
         )
         block_info = _BlockInfo(block_info_output, block_info_inputs)
         extra_argpairs.append((block_info, out_ind))
