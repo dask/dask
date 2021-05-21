@@ -170,25 +170,33 @@ def transpose(a, axes=None):
     )
 
 
-def flip(m, axis):
+def flip(m, axis=None):
     """
     Reverse element order along axis.
 
     Parameters
     ----------
-    axis : int
-        Axis to reverse element order of.
+    m : array_like
+        Input array.
+    axis : None or int or tuple of ints, optional
+        Axis or axes to reverse element order of. None will reverse all axes.
 
     Returns
     -------
-    reversed array : ndarray
+    dask.array.Array
+        The flipped array.
     """
 
     m = asanyarray(m)
 
     sl = m.ndim * [slice(None)]
+    if axis is None:
+        axis = range(m.ndim)
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
     try:
-        sl[axis] = slice(None, None, -1)
+        for ax in axis:
+            sl[ax] = slice(None, None, -1)
     except IndexError as e:
         raise ValueError(
             "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
