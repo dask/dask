@@ -15,7 +15,7 @@ from itertools import product, zip_longest
 from numbers import Integral, Number
 from operator import add, getitem, mul
 from threading import Lock
-from typing import Dict
+from typing import Dict, List
 from typing import Mapping as TypingMapping
 from typing import Optional, Tuple
 
@@ -439,7 +439,7 @@ class _BlockInfoInput:
         self,
         idx_remap: Tuple[int, ...],
         shape: Tuple[int, ...],
-        starts: Tuple[int, ...],
+        starts: Tuple[Tuple[int, ...], ...],
     ) -> None:
         self.idx_remap = idx_remap
         self.shape = shape
@@ -454,6 +454,22 @@ class _BlockInfoInput:
             "array-location": [(s[i], s[i + 1]) for s, i in zip(self.starts, location)],
             "chunk-location": location,
         }
+
+    def __dask_distributed_pack__(self):
+        return {
+            "idx_remap": self.idx_remap,
+            "shape": self.shape,
+            "starts": self.starts,
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        # msgpack turns tuples into lists, so we have to convert back
+        return cls(
+            tuple(state["idx_remap"]),
+            tuple(state["shape"]),
+            tuple((tuple(s) for s in state["starts"])),
+        )
 
 
 class _BlockInfoOutput:
@@ -473,6 +489,24 @@ class _BlockInfoOutput:
             "dtype": self.dtype,
         }
 
+    def __dask_distributed_pack__(self):
+        from distributed.protocol import to_serialize
+
+        return {
+            "shape": self.shape,
+            "starts": self.starts,
+            "dtype": to_serialize(self.dtype),
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        # msgpack turns tuples into lists, so we have to convert back
+        return cls(
+            tuple(state["shape"]),
+            tuple(tuple(s) for s in state["starts"]),
+            state["dtype"],
+        )
+
 
 class _BlockInfo(BlockwiseDep):
     """Generate ``block_info`` parameters for :func:`map_blocks` on the fly."""
@@ -489,6 +523,27 @@ class _BlockInfo(BlockwiseDep):
         info = {key: array_info[idx] for key, array_info in self.inputs.items()}
         info[None] = self.output[idx]
         return info
+
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
+        return {
+            "output": self.output.__dask_distributed_pack__(),
+            "inputs": {
+                name: value.__dask_distributed_pack__()
+                for name, value in self.inputs.items()
+            },
+        }
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(
+            _BlockInfoOutput.__dask_distributed_unpack__(state["output"]),
+            {
+                name: _BlockInfoInput.__dask_distributed_unpack__(value)
+                for name, value in state["inputs"].items()
+            },
+        )
 
 
 def _pass_extra_kwargs(func, keys, *args, **kwargs):
