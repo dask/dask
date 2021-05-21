@@ -301,6 +301,7 @@ extlinks = {
 #  --Options for sphinx extensions -----------------------------------------------
 
 intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
     "pandas": (
         "https://pandas.pydata.org/pandas-docs/stable/",
         "https://pandas.pydata.org/pandas-docs/stable/objects.inv",
@@ -318,6 +319,7 @@ intersphinx_mapping = {
         "https://zarr.readthedocs.io/en/latest/",
         "https://zarr.readthedocs.io/en/latest/objects.inv",
     ),
+    "skimage": ("https://scikit-image.org/docs/dev/", None),
 }
 
 # Redirects
