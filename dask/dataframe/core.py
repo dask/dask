@@ -4052,7 +4052,7 @@ class DataFrame(_Frame):
         This function operates exactly like ``pandas.set_index`` except with
         different performance costs (dask dataframe ``set_index`` is much more expensive).
         Under normal operation this function does an initial pass over the index column
-        to compute approximate qunatiles to serve as future divisions. It then passes
+        to compute approximate quantiles to serve as future divisions. It then passes
         over the data a second time, splitting up each input partition into several
         pieces and sharing those pieces to all of the output partitions now in
         sorted order.
