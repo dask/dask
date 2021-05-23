@@ -720,6 +720,53 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
+@derived_from(np)
+def searchsorted(a, v, side="left", sorter=None):
+    if a.ndim != 1:
+        raise ValueError("Input array a must be one dimensional")
+
+    if sorter is not None:
+        raise NotImplementedError(
+            "da.searchsorted with a sorter argument is not supported"
+        )
+
+    # call np.searchsorted for each pair of blocks in a and v
+    def _searchsorted_block(x, y):
+        res = np.searchsorted(x, y, side=side)
+        # 0 is only correct for the first block of a, but blockwise doesn't have a way
+        # of telling which block is being operated on (unlike map_blocks),
+        # so set all 0 values to a special value and set back at the end
+        res[res == 0] = -1
+        return res[np.newaxis, :]
+
+    dtype = np.searchsorted(np.array([0]), np.array([0])).dtype
+    out = blockwise(
+        _searchsorted_block,
+        list(range(v.ndim + 1)),
+        a,
+        [0],
+        v,
+        list(range(1, v.ndim + 1)),
+        dtype=dtype,
+        adjust_chunks={0: 1},  # one row for each block in a
+    )
+
+    # add offsets to take account of the position of each block within the array a
+    a_chunk_sizes = np.array(a.chunks[0])
+    a_chunk_offsets = np.cumsum(np.insert(a_chunk_sizes, 0, 0))[:-1]
+    a_chunk_offsets = np.expand_dims(a_chunk_offsets, axis=tuple(range(1, v.ndim + 1)))
+    a_offsets = asarray(a_chunk_offsets, chunks=1)
+    out = np.where(out < 0, out, out + a_offsets)
+
+    # combine the results from each block (of a)
+    out = out.max(axis=0)
+
+    # fix up any -1 values
+    out[out == -1] = 0
+
+    return out
+
+
 # TODO: dask linspace doesn't support delayed values
 def _linspace_from_delayed(start, stop, num=50):
     linspace_name = "linspace-" + tokenize(start, stop, num)
