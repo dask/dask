@@ -38,9 +38,11 @@ from .extensions import make_array_nonempty, make_scalar
 meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
+
     meta_object_types += (sp.csr.csr_matrix,)
 except ImportError:
     pass
+
 
 def is_integer_na_dtype(t):
     dtype = getattr(t, "dtype", t)
