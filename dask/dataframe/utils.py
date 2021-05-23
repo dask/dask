@@ -9,7 +9,6 @@ from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
-import scipy.sparse as sp
 from pandas.api.types import (
     is_categorical_dtype,
     is_datetime64tz_dtype,
@@ -36,6 +35,12 @@ from . import methods
 from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
 from .extensions import make_array_nonempty, make_scalar
 
+meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+try:
+    import scipy.sparse as sp
+    meta_object_types += (sp.csr.csr_matrix,)
+except ImportError:
+    pass
 
 def is_integer_na_dtype(t):
     dtype = getattr(t, "dtype", t)
@@ -299,9 +304,7 @@ def make_meta_index(x, index=None):
     return x[0:0]
 
 
-@make_meta_obj.register(
-    (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex, sp.csr.csr_matrix)
-)
+@make_meta_obj.register(meta_object_types)
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
