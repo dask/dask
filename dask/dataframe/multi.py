@@ -66,7 +66,7 @@ from tlz import first, merge_sorted, unique
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..layers import BroadcastJoinLayer
-from ..utils import M, apply
+from ..utils import M, apply, Dispatch
 from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
@@ -232,9 +232,16 @@ required = {
 }
 allowed_left = ("inner", "left", "leftsemi", "leftanti")
 allowed_right = ("inner", "right")
+merge_chunk_dispatch = Dispatch("merge_chunk")
+
 
 
 def merge_chunk(lhs, *args, **kwargs):
+    func = merge_chunk_dispatch.dispatch(type(lhs))
+    return func(lhs, *args, **kwargs)
+
+@merge_chunk_dispatch.register((pd.DataFrame, pd.Series, pd.Index, pd.Categorical))
+def merge_chunk_pandas(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
     categorical_columns = kwargs.pop("categorical_columns", None)
 
