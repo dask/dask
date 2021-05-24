@@ -3935,7 +3935,8 @@ class DataFrame(_Frame):
         except AttributeError:
             columns = ()
 
-        if key in columns:
+        # exclude protected attributes from setitem
+        if key in columns and key not in ["divisions", "dask", "_name", "_meta"]:
             self[key] = value
         else:
             object.__setattr__(self, key, value)
