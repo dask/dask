@@ -1,6 +1,6 @@
 try:
     from ..base import compute
-    from . import backends, rolling
+    from . import backends, dispatch, rolling
     from .core import (
         DataFrame,
         Index,

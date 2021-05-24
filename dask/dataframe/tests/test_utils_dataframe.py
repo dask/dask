@@ -468,7 +468,7 @@ def test_apply_and_enforce_message():
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
     with pytest.warns(None) as w:
-        dd.utils._nonempty_series(ser)
+        meta_nonempty(ser)
 
     assert len(w) == 0
 
@@ -476,5 +476,5 @@ def test_nonempty_series_sparse():
 @pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
 def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
-    non_empty = dd.utils._nonempty_series(ser)
+    non_empty = meta_nonempty(ser)
     assert non_empty.dtype == "Float64"
