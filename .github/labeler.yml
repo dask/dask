@@ -15,8 +15,5 @@ documentation:
   - dask/docs/**/*
 
 dispatch:
-  - dask/array/backends.py
-  - dask/array/dispatch.py
-  - dask/dataframe/backends.py
-  - dask/dataframe/dispatch.py
-  - dask/dataframe/extensions.py
+  - dask/*/backends.py
+  - dask/*/dispatch.py
