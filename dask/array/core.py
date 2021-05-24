@@ -3882,7 +3882,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     from . import wrap
 
-    seq = [asarray(a) for a in seq]
+    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to concatenate")
@@ -4126,13 +4126,18 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, **kwargs):
+def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
     ----------
     a : array-like
         Input data, in any form that can be converted to a dask array.
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
 
     Returns
     -------
@@ -4158,7 +4163,7 @@ def asarray(a, **kwargs):
     elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a)
+        return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
     return from_array(a, getitem=getter_inline, **kwargs)
@@ -4693,7 +4698,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     """
     from . import wrap
 
-    seq = [asarray(a) for a in seq]
+    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to stack")
