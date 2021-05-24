@@ -754,9 +754,11 @@ def searchsorted(a, v, side="left", sorter=None):
     # add offsets to take account of the position of each block within the array a
     a_chunk_sizes = np.array(a.chunks[0])
     a_chunk_offsets = np.cumsum(np.insert(a_chunk_sizes, 0, 0))[:-1]
-    a_chunk_offsets = np.expand_dims(a_chunk_offsets, axis=tuple(range(1, v.ndim + 1)))
+    for axis in range(1, v.ndim + 1):
+        # expand_dims in numpy < 1.18 does not support axis tuple, so we need to loop
+        a_chunk_offsets = np.expand_dims(a_chunk_offsets, axis=axis)
     a_offsets = asarray(a_chunk_offsets, chunks=1)
-    out = np.where(out < 0, out, out + a_offsets)
+    out = where(out < 0, out, out + a_offsets)
 
     # combine the results from each block (of a)
     out = out.max(axis=0)

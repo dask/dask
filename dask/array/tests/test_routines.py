@@ -637,6 +637,9 @@ def test_digitize():
 )
 @pytest.mark.parametrize("side", ["left", "right"])
 def test_searchsorted(a, a_chunks, v, v_chunks, side):
+    a = np.array(a)
+    v = np.array(v)
+
     ad = da.asarray(a, chunks=a_chunks)
     vd = da.asarray(v, chunks=v_chunks)
 
