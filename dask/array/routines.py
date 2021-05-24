@@ -720,6 +720,15 @@ def digitize(a, bins, right=False):
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
 
 
+def _searchsorted_block(x, y, side):
+    res = np.searchsorted(x, y, side=side)
+    # 0 is only correct for the first block of a, but blockwise doesn't have a way
+    # of telling which block is being operated on (unlike map_blocks),
+    # so set all 0 values to a special value and set back at the end of searchsorted
+    res[res == 0] = -1
+    return res[np.newaxis, :]
+
+
 @derived_from(np)
 def searchsorted(a, v, side="left", sorter=None):
     if a.ndim != 1:
@@ -731,14 +740,6 @@ def searchsorted(a, v, side="left", sorter=None):
         )
 
     # call np.searchsorted for each pair of blocks in a and v
-    def _searchsorted_block(x, y):
-        res = np.searchsorted(x, y, side=side)
-        # 0 is only correct for the first block of a, but blockwise doesn't have a way
-        # of telling which block is being operated on (unlike map_blocks),
-        # so set all 0 values to a special value and set back at the end
-        res[res == 0] = -1
-        return res[np.newaxis, :]
-
     dtype = np.searchsorted(np.array([0]), np.array([0])).dtype
     out = blockwise(
         _searchsorted_block,
@@ -747,6 +748,8 @@ def searchsorted(a, v, side="left", sorter=None):
         [0],
         v,
         list(range(1, v.ndim + 1)),
+        side,
+        None,
         dtype=dtype,
         adjust_chunks={0: 1},  # one row for each block in a
     )

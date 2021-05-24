@@ -647,7 +647,7 @@ def test_searchsorted(a, a_chunks, v, v_chunks, side):
 
     assert out.shape == vd.shape
     assert out.chunks == vd.chunks
-    np.testing.assert_equal(out, np.searchsorted(a, v, side))
+    assert_eq(out, np.searchsorted(a, v, side))
 
 
 def test_searchsorted_sorter_not_implemented():
