@@ -32,7 +32,7 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..layers import DataFrameBinCompareLayer, DataFrameGetitemLayer
+from ..layers import DataFrameGetitemLayer
 from ..optimization import SubgraphCallable
 from ..utils import (
     Dispatch,
@@ -5183,12 +5183,8 @@ def elemwise(op, *args, **kwargs):
         if not isinstance(arg, (_Frame, Scalar, Array))
     ]
 
-    if hasattr(op, "__name__") and op.__name__ in ["gt", "lt", "eq", "ge", "le"]:
-        # Use simple DataFrameBinCompareLayer
-        dsk = DataFrameBinCompareLayer(op, _name, *args)
-    else:
-        # adjust the key length of Scalar
-        dsk = partitionwise_graph(op, _name, *args, **kwargs)
+    # adjust the key length of Scalar
+    dsk = partitionwise_graph(op, _name, *args, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
 

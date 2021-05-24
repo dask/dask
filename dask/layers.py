@@ -1,6 +1,6 @@
 import operator
 from collections import defaultdict
-from typing import List, Optional, Tuple
+from typing import Any, Callable, List, Mapping, Optional, Sequence, Tuple
 
 import tlz as toolz
 
@@ -966,32 +966,61 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
 class DataFrameBinOp(Blockwise, DataFrameLayer):
     """DataFrame-based Binary Operator Layer
 
+    This is a special case of ``Blockwise``, comprising a binary
+    operator with two input arguments. One (or both) of the input
+    arguments must corespond to a ``_Frame`` collection object.
+
     Parameters
     ----------
     name : str
         Name to use for the constructed layer.
     op : Callable
         Binary operator.
-    first : obj
-        First binary-operation argument.
-    second : obj
-        Second binary-operation argument.
+    first : Union[_Frame, Array, Scalar, str]
+        First binary-operation argument. If the provided value is the
+        name of a collection, blockwise ``indices`` and ``numblocks``
+        must also be provided (using ``first_indices`` and
+        ``first_numblocks``, respectively). If a collection is specified,
+        it will be used to define ``first_name``, ``first_indices``, and
+        ``first_numblocks`` attributes automatically.
+    second : Union[_Frame, Array, Scalar, str]
+        Second binary-operation argument. If the provided value is the
+        name of a collection, blockwise ``indices`` and ``numblocks``
+        must also be provided (using ``second_indices`` and
+        ``second_numblocks``, respectively). If a collection is specified,
+        it will be used to define ``second_name``, ``second_indices``, and
+        ``second_numblocks`` attributes automatically.
+    first_indices: Optional[Tuple[str, ...]]
+        Blockwise indices for first binary-operation argument.
+    first_numblocks: Optional[Sequence[int]]
+        Blockwise numblocks for first binary-operation argument.
+    second_indices: Optional[Tuple[str, ...]]
+        Blockwise indices for second binary-operation argument.
+    second_numblocks: Optional[Sequence[int]]
+        Blockwise numblocks for second binary-operation argument.
     annotations: dict (optional)
         Layer annotations to pass through to Blockwise.
+
+    See Also
+    --------
+    dask.blockwise.Blockwise
+    dask.layers.DataFrameGetitemLayer
     """
 
     def __init__(
         self,
-        op,
-        name,
-        first,
-        second,
-        first_indices=None,
-        first_numblocks=None,
-        second_indices=None,
-        second_numblocks=None,
-        annotations=None,
+        op: Callable,
+        name: str,
+        first: Any,
+        second: Any,
+        first_indices: Optional[Tuple[str, ...]] = None,
+        first_numblocks: Optional[Sequence[int]] = None,
+        second_indices: Optional[Tuple[str, ...]] = None,
+        second_numblocks: Optional[Sequence[int]] = None,
+        annotations: Mapping[str, Any] = None,
     ):
+
+        # Helper function to simplify `numblocks` logic
         def _collection_info(arg):
             out = arg._name
             if hasattr(arg, "npartitions"):
@@ -1002,42 +1031,47 @@ class DataFrameBinOp(Blockwise, DataFrameLayer):
                 out_numblocks = (1,)
             return out, "i", out_numblocks
 
+        # Inialize attributes for first binary-operation argument
         numblocks = {}
         if is_dask_collection(first):
-            self.first, self.first_indices, self.first_numblocks = _collection_info(
-                first
-            )
+            (
+                self.first_name,
+                self.first_indices,
+                self.first_numblocks,
+            ) = _collection_info(first)
         else:
-            self.first = first
+            self.first_name = first
             self.first_indices = first_indices
             self.first_numblocks = first_numblocks
         if self.first_indices:
-            numblocks[self.first] = self.first_numblocks
+            numblocks[self.first_name] = self.first_numblocks
 
+        # Inialize attributes for second binary-operation argument
         if is_dask_collection(second):
-            self.second, self.second_indices, self.second_numblocks = _collection_info(
-                second
-            )
-            numblocks[self.second] = self.second_numblocks
+            (
+                self.second_name,
+                self.second_indices,
+                self.second_numblocks,
+            ) = _collection_info(second)
+            numblocks[self.second_name] = self.second_numblocks
         else:
-            self.second = second
+            self.second_name = second
             self.second_indices = second_indices
             self.second_numblocks = second_numblocks
         if self.second_indices:
-            numblocks[self.second] = self.second_numblocks
+            numblocks[self.second_name] = self.second_numblocks
 
+        # Initalize Blockwise backend
         self.op = op
         self.name = name
         self.annotations = annotations
-
-        # Initalize Blockwise backend
         super().__init__(
             output=self.name,
             output_indices="i",
             dsk={self.name: (self.op,) + tuple(map(blockwise_token, range(2)))},
             indices=[
-                (self.first, self.first_indices),
-                (self.second, self.second_indices),
+                (self.first_name, self.first_indices),
+                (self.second_name, self.second_indices),
             ],
             numblocks=numblocks,
             concatenate=True,
@@ -1046,7 +1080,7 @@ class DataFrameBinOp(Blockwise, DataFrameLayer):
 
     def __repr__(self):
         return "DataFrameBinOp<name='{}', op={}, first={}, second={}>".format(
-            self.name, self.op, self.first, self.second
+            self.name, self.op, self.first_name, self.second_name
         )
 
 
@@ -1057,12 +1091,12 @@ class DataFrameGetitemLayer(DataFrameBinOp):
     ----------
     name : str
         Name to use for the constructed layer.
-    frame : _Frame
-        Dask collection that the ``key`` will be selected from.
-    key : str, list, _Frame, Array, or Scalar
+    frame : str or _Frame
+        Dask collection that the ``getitem_key`` will be selected from.
+    getitem_key : str, list, _Frame, Array, or Scalar
         The object being selected from ``frame``.
-    annotations: dict (optional)
-        Layer annotations to pass through to Blockwise.
+    **kwargs:
+        Key-word arguments passed through to ``DataFrameBinOp``.
     """
 
     def __init__(self, *args, **kwargs):
@@ -1073,21 +1107,24 @@ class DataFrameGetitemLayer(DataFrameBinOp):
         )
 
     @property
-    def key(self):
-        return self.second
+    def selected_columns(self):
+        """Return column selection (if applicable)"""
+        return self.second_name if self.second_indices is None else set()
 
-    def __repr__(self):
-        return "DataFrameGetitemLayer<name='{}', frame={}, key={}>".format(
-            self.name, self.first, self.second
+    def modify_input_dependency(self, dependency):
+        """Return a Layer with a modified input dependency"""
+        return DataFrameGetitemLayer(
+            name=self.name,
+            first=dependency,
+            second=self.second_name,
+            first_indices=self.first_indices,
+            first_numblocks=self.first_numblocks,
+            second_indices=self.second_indices,
+            second_numblocks=self.second_numblocks,
+            annotations=self.annotations,
         )
 
-
-class DataFrameBinCompareLayer(DataFrameBinOp):
-    def __init__(self, op, *args, **kwargs):
-        assert hasattr(op, "__name__") and op.__name__ in ["gt", "lt", "eq", "ge", "le"]
-        super().__init__(op, *args, **kwargs)
-
     def __repr__(self):
-        return "DataFrameBinCompareLayer<name='{}', op={}, first={}, second={}>".format(
-            self.name, self.op.__name__, self.first, self.second
+        return "DataFrameGetitemLayer<name='{}', frame={}, getitem_key={}>".format(
+            self.name, self.first_name, self.second_name
         )

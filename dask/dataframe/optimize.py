@@ -80,13 +80,13 @@ def optimize_dataframe_getitem(dsk, keys):
             if not isinstance(block, DataFrameGetitemLayer):
                 return dsk
 
-            block_columns = block.key
+            block_columns = block.selected_columns
             if isinstance(block_columns, str) or np.issubdtype(
                 type(block_columns), np.integer
             ):
                 block_columns = [block_columns]
-            columns |= set(block_columns)
             update_blocks[dep] = block
+            columns |= set(block_columns)
 
         # Project columns and update blocks
         old = layers[k]
@@ -97,16 +97,7 @@ def optimize_dataframe_getitem(dsk, keys):
             for block_key, block in update_blocks.items():
                 # (('read-parquet-old', (.,)), ( ... )) ->
                 # (('read-parquet-new', (.,)), ( ... ))
-                new_block = DataFrameGetitemLayer(
-                    name=block.name,
-                    first=new.name,
-                    second=block.second,
-                    first_indices=block.first_indices,
-                    first_numblocks=block.first_numblocks,
-                    second_indices=block.second_indices,
-                    second_numblocks=block.second_numblocks,
-                    annotations=block.annotations,
-                )
+                new_block = block.modify_input_dependency(new.name)
                 layers[block_key] = new_block
                 dependencies[block_key] = {new.name}
             dependencies[new.name] = dependencies.pop(k)
