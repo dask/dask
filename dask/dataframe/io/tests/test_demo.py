@@ -174,4 +174,6 @@ def test_make_timeseries_getitem_compute():
 
     df = dd.demo.make_timeseries()
     df2 = df[df.y > 0]
-    df2.compute()
+    df3 = df2.compute()
+    assert df3["y"].min() > 0
+    assert list(df.columns) == list(df3.columns)

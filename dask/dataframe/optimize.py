@@ -63,7 +63,7 @@ def optimize_dataframe_getitem(dsk, keys):
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
-
+    column_projection = True
     for k in dataframe_blockwise:
         columns = set()
         update_blocks = {}
@@ -92,43 +92,49 @@ def optimize_dataframe_getitem(dsk, keys):
                 # ... where this value is __getitem__...
                 return dsk
 
+            if block.indices[1][1] is not None:
+                # Not a column selection unless `indices` are `None`.
+                # Must disable column projection for this particular
+                # IO layer.
+                column_projection = False
+                break
+
             block_columns = block.indices[1][0]
             if isinstance(block_columns, str) or np.issubdtype(
                 type(block_columns), np.integer
             ):
                 block_columns = [block_columns]
             update_blocks[dep] = block
-            if block.indices[1][1] is None:
-                # Not a column selection unless `indices` are `None`
-                columns |= set(block_columns)
+            columns |= set(block_columns)
 
         # Project columns and update blocks
-        old = layers[k]
-        new = old.project_columns(columns)[0]
-        if new.name != old.name:
-            columns = list(columns)
-            assert len(update_blocks)
-            for block_key, block in update_blocks.items():
-                # (('read-parquet-old', (.,)), ( ... )) ->
-                # (('read-parquet-new', (.,)), ( ... ))
-                new_indices = ((new.name, block.indices[0][1]), block.indices[1])
-                numblocks = {new.name: block.numblocks[old.name]}
-                new_block = Blockwise(
-                    block.output,
-                    block.output_indices,
-                    block.dsk,
-                    new_indices,
-                    numblocks,
-                    block.concatenate,
-                    block.new_axes,
-                )
-                layers[block_key] = new_block
-                dependencies[block_key] = {new.name}
-            dependencies[new.name] = dependencies.pop(k)
+        if column_projection:
+            old = layers[k]
+            new = old.project_columns(columns)[0]
+            if new.name != old.name:
+                columns = list(columns)
+                assert len(update_blocks)
+                for block_key, block in update_blocks.items():
+                    # (('read-parquet-old', (.,)), ( ... )) ->
+                    # (('read-parquet-new', (.,)), ( ... ))
+                    new_indices = ((new.name, block.indices[0][1]), block.indices[1])
+                    numblocks = {new.name: block.numblocks[old.name]}
+                    new_block = Blockwise(
+                        block.output,
+                        block.output_indices,
+                        block.dsk,
+                        new_indices,
+                        numblocks,
+                        block.concatenate,
+                        block.new_axes,
+                    )
+                    layers[block_key] = new_block
+                    dependencies[block_key] = {new.name}
+                dependencies[new.name] = dependencies.pop(k)
 
-        layers[new.name] = new
-        if new.name != old.name:
-            del layers[old.name]
+            layers[new.name] = new
+            if new.name != old.name:
+                del layers[old.name]
 
     new_hlg = HighLevelGraph(layers, dependencies)
     return new_hlg
