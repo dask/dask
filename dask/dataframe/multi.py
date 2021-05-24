@@ -287,7 +287,7 @@ def merge_chunk(lhs, *args, **kwargs):
 
 
 def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwargs):
-    """ Join two partitioned dataframes along their index """
+    """Join two partitioned dataframes along their index"""
     how = kwargs.get("how", "left")
     kwargs["left_index"] = left_index
     kwargs["right_index"] = right_index
@@ -771,7 +771,7 @@ def pair_partitions(L, R):
 
 
 def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
-    """ merge_asof but potentially adding rows to the beginning/end of right """
+    """merge_asof but potentially adding rows to the beginning/end of right"""
     frames = []
     if prev is not None:
         frames.append(prev)
@@ -979,7 +979,7 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
 
 
 def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
-    """ Concatenate indexed dataframes together along the index """
+    """Concatenate indexed dataframes together along the index"""
     warn = axis != 0
     kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(

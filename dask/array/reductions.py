@@ -550,7 +550,7 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def numel(x, **kwargs):
-    """ A reduction to count the number of elements """
+    """A reduction to count the number of elements"""
 
     if hasattr(x, "mask"):
         return chunk.sum(np.ones_like(x), **kwargs)
@@ -582,7 +582,7 @@ def numel(x, **kwargs):
 
 
 def nannumel(x, **kwargs):
-    """ A reduction to count the number of elements """
+    """A reduction to count the number of elements"""
     return chunk.sum(~(np.isnan(x)), **kwargs)
 
 
@@ -931,7 +931,7 @@ def nanstd(
 
 
 def _arg_combine(data, axis, argfunc, keepdims=False):
-    """ Merge intermediate results from ``arg_*`` functions"""
+    """Merge intermediate results from ``arg_*`` functions"""
     axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
     vals = data["vals"]
     arg = data["arg"]

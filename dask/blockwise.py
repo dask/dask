@@ -204,7 +204,7 @@ def subs(task, substitution):
 
 
 def index_subs(ind, substitution):
-    """ A simple subs function that works both on tuples and strings """
+    """A simple subs function that works both on tuples and strings"""
     if ind is None:
         return ind
     else:

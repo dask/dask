@@ -25,7 +25,7 @@ lock = Lock()
 
 
 def _meta_from_array(x, columns=None, index=None, meta=None):
-    """ Create empty DataFrame or Series which has correct dtype """
+    """Create empty DataFrame or Series which has correct dtype"""
 
     if x.ndim > 2:
         raise ValueError(
