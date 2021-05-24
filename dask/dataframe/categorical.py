@@ -2,18 +2,18 @@ from collections import defaultdict
 from numbers import Integral
 
 import pandas as pd
+from pandas.api.types import is_scalar
 from tlz import partition_all
 
 from ..base import compute_as_if_collection, tokenize
-from ..utils import Dispatch
 from . import methods
 from .accessor import Accessor
-from .utils import (
-    clear_known_categories,
-    has_known_categories,
+from .dispatch import (  # noqa: F401
+    categorical_dtype,
+    categorical_dtype_dispatch,
     is_categorical_dtype,
-    is_scalar,
 )
+from .utils import clear_known_categories, has_known_categories
 
 
 def _categorize_block(df, categories, index):
@@ -274,16 +274,3 @@ class CategoricalAccessor(Accessor):
             meta=meta,
             token="cat-set_categories",
         )
-
-
-categorical_dtype_dispatch = Dispatch("CategoricalDtype")
-
-
-def categorical_dtype(meta, categories=None, ordered=False):
-    func = categorical_dtype_dispatch.dispatch(type(meta))
-    return func(categories=categories, ordered=ordered)
-
-
-@categorical_dtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def categorical_dtype_pandas(categories=None, ordered=False):
-    return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)
