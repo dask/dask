@@ -63,7 +63,6 @@ def optimize_dataframe_getitem(dsk, keys):
 
     layers = dsk.layers.copy()
     dependencies = dsk.dependencies.copy()
-    column_projection = True
     for k in dataframe_blockwise:
         columns = set()
         update_blocks = {}
@@ -76,6 +75,7 @@ def optimize_dataframe_getitem(dsk, keys):
             # See https://github.com/dask/dask/issues/5893
             return dsk
 
+        column_projection = True
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
 
@@ -92,20 +92,18 @@ def optimize_dataframe_getitem(dsk, keys):
                 # ... where this value is __getitem__...
                 return dsk
 
-            if block.indices[1][1] is not None:
-                # Not a column selection unless `indices` are `None`.
-                # Must disable column projection for this particular
-                # IO layer.
-                column_projection = False
-                break
-
             block_columns = block.indices[1][0]
-            if isinstance(block_columns, str) or np.issubdtype(
-                type(block_columns), np.integer
-            ):
+            if isinstance(block_columns, str):
+                if block_columns in layers.keys():
+                    # Not a column selection if the getitem
+                    # key is a collection key
+                    column_projection = False
+                    break
                 block_columns = [block_columns]
-            update_blocks[dep] = block
+            elif np.issubdtype(type(block_columns), np.integer):
+                block_columns = [block_columns]
             columns |= set(block_columns)
+            update_blocks[dep] = block
 
         # Project columns and update blocks
         if column_projection:
