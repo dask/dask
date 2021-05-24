@@ -68,6 +68,14 @@ def optimize_dataframe_getitem(dsk, keys):
         columns = set()
         update_blocks = {}
 
+        if any(layers[k].name == x[0] for x in keys if isinstance(x, tuple)):
+            # ... but bail on the optimization if the dataframe_blockwise layer is in
+            # the requested keys, because we cannot change the name anymore.
+            # These keys are structured like [('getitem-<token>', 0), ...]
+            # so we check for the first item of the tuple.
+            # See https://github.com/dask/dask/issues/5893
+            return dsk
+
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
 
@@ -84,14 +92,6 @@ def optimize_dataframe_getitem(dsk, keys):
                 # ... where this value is __getitem__...
                 return dsk
 
-            if any(layers[k].name == x[0] for x in keys if isinstance(x, tuple)):
-                # ... but bail on the optimization if the dataframe_blockwise layer is in
-                # the requested keys, because we cannot change the name anymore.
-                # These keys are structured like [('getitem-<token>', 0), ...]
-                # so we check for the first item of the tuple.
-                # See https://github.com/dask/dask/issues/5893
-                return dsk
-
             block_columns = block.indices[1][0]
             if isinstance(block_columns, str) or np.issubdtype(
                 type(block_columns), np.integer
@@ -99,6 +99,7 @@ def optimize_dataframe_getitem(dsk, keys):
                 block_columns = [block_columns]
             update_blocks[dep] = block
             if block.indices[1][1] is None:
+                # Not a column selection unless `indices` are `None`
                 columns |= set(block_columns)
 
         # Project columns and update blocks

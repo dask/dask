@@ -170,6 +170,8 @@ def test_make_timeseries_fancy_keywords():
 
 
 def test_make_timeseries_getitem_compute():
+    # See https://github.com/dask/dask/issues/7692
+
     df = dd.demo.make_timeseries()
     df2 = df[df.y > 0]
     df2.compute()
