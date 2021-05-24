@@ -97,8 +97,9 @@ def optimize_dataframe_getitem(dsk, keys):
                 type(block_columns), np.integer
             ):
                 block_columns = [block_columns]
-            columns |= set(block_columns)
             update_blocks[dep] = block
+            if block.indices[1][1] is None:
+                columns |= set(block_columns)
 
         # Project columns and update blocks
         old = layers[k]

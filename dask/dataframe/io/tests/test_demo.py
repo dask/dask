@@ -167,3 +167,9 @@ def test_make_timeseries_fancy_keywords():
 
     assert 100 < aa <= 10000000
     assert 1 < bb <= 100
+
+
+def test_make_timeseries_getitem_compute():
+    df = dd.demo.make_timeseries()
+    df2 = df[df.y > 0]
+    df2.compute()
