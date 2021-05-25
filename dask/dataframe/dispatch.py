@@ -19,6 +19,7 @@ categorical_dtype_dispatch = Dispatch("CategoricalDtype")
 concat_dispatch = Dispatch("concat")
 tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
+union_categoricals_dispatch = Dispatch("union_categoricals")
 
 
 def concat(
@@ -104,3 +105,8 @@ def make_meta_util(x, index=None, parent_meta=None):
         else:
             func = make_meta_obj.dispatch(type(x))
             return func(x, index=index)
+
+
+def union_categoricals(to_union, sort_categories=False, ignore_order=False):
+    func = union_categoricals_dispatch.dispatch(type(to_union[0]))
+    return func(to_union, sort_categories=sort_categories, ignore_order=ignore_order)
