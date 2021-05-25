@@ -14,7 +14,6 @@ from ..base import tokenize
 from ..blockwise import lol_tuples
 from ..highlevelgraph import HighLevelGraph
 from ..utils import (
-    Dispatch,
     deepmap,
     derived_from,
     funcname,
@@ -26,18 +25,11 @@ from . import chunk
 from .blockwise import blockwise
 from .core import Array, _concatenate2, handle_out, implements
 from .creation import arange, diagonal
-from .numpy_compat import divide as np_divide
-from .numpy_compat import ma_divide
+
+# Keep empty_lookup here for backwards compatibility
+from .dispatch import divide_lookup, empty_lookup  # noqa: F401
 from .utils import compute_meta, full_like_safe, is_arraylike, validate_axis
 from .wrap import ones, zeros
-
-# Generic functions to support chunks of different types
-empty_lookup = Dispatch("empty")
-empty_lookup.register((object, np.ndarray), np.empty)
-empty_lookup.register(np.ma.masked_array, np.ma.empty)
-divide_lookup = Dispatch("divide")
-divide_lookup.register((object, np.ndarray), np_divide)
-divide_lookup.register(np.ma.masked_array, ma_divide)
 
 
 def divide(a, b, dtype=None):

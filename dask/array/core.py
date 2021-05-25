@@ -36,7 +36,6 @@ from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import (
-    Dispatch,
     IndexCallable,
     M,
     SerializableLock,
@@ -60,18 +59,13 @@ from ..utils import (
 )
 from . import chunk
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
+
+# Keep einsum_lookup and tensordot_lookup here for backwards compatibility
+from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
 from .numpy_compat import _Recurser
 from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
-
-
-concatenate_lookup = Dispatch("concatenate")
-tensordot_lookup = Dispatch("tensordot")
-einsum_lookup = Dispatch("einsum")
-concatenate_lookup.register((object, np.ndarray), np.concatenate)
-tensordot_lookup.register((object, np.ndarray), np.tensordot)
-einsum_lookup.register((object, np.ndarray), np.einsum)
 
 unknown_chunk_message = (
     "\n\n"

@@ -34,7 +34,6 @@ from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..optimization import SubgraphCallable
 from ..utils import (
-    Dispatch,
     IndexCallable,
     M,
     OperatorMethodMixin,
@@ -56,6 +55,12 @@ from ..utils import (
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
+from .dispatch import (
+    get_parallel_type,
+    group_split_dispatch,
+    hash_object_dispatch,
+    meta_nonempty,
+)
 from .optimize import optimize
 from .utils import (
     PANDAS_GT_100,
@@ -63,9 +68,7 @@ from .utils import (
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
-    group_split_dispatch,
     has_known_categories,
-    hash_object_dispatch,
     index_summary,
     insert_meta_param_description,
     is_categorical_dtype,
@@ -73,7 +76,6 @@ from .utils import (
     is_index_like,
     is_series_like,
     make_meta_util,
-    meta_nonempty,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -6745,34 +6747,6 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ["..."] * npartitions, index=index, name=s.name)
-
-
-get_parallel_type = Dispatch("get_parallel_type")
-
-
-@get_parallel_type.register(pd.Series)
-def get_parallel_type_series(_):
-    return Series
-
-
-@get_parallel_type.register(pd.DataFrame)
-def get_parallel_type_dataframe(_):
-    return DataFrame
-
-
-@get_parallel_type.register(pd.Index)
-def get_parallel_type_index(_):
-    return Index
-
-
-@get_parallel_type.register(_Frame)
-def get_parallel_type_frame(o):
-    return get_parallel_type(o._meta)
-
-
-@get_parallel_type.register(object)
-def get_parallel_type_object(_):
-    return Scalar
 
 
 def has_parallel_type(x):

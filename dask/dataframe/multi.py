@@ -82,12 +82,11 @@ from .core import (
     prefix_reduction,
     suffix_reduction,
 )
+from .dispatch import group_split_dispatch, hash_object_dispatch
 from .io import from_pandas
 from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
 from .utils import (
     asciitable,
-    group_split_dispatch,
-    hash_object_dispatch,
     is_dataframe_like,
     is_series_like,
     make_meta_util,
