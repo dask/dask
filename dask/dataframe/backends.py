@@ -26,6 +26,7 @@ from .dispatch import (
     make_meta,
     meta_nonempty,
     tolist_dispatch,
+    union_categoricals_dispatch,
 )
 from .extensions import make_array_nonempty, make_scalar
 from .utils import (
@@ -280,6 +281,15 @@ def _nonempty_series(s, idx=None):
     if PANDAS_GT_100:
         out.attrs = s.attrs
     return out
+
+
+@union_categoricals_dispatch.register(
+    (pd.DataFrame, pd.Series, pd.Index, pd.Categorical)
+)
+def union_categoricals_pandas(to_union, sort_categories=False, ignore_order=False):
+    return pd.api.types.union_categoricals(
+        to_union, sort_categories=sort_categories, ignore_order=ignore_order
+    )
 
 
 @get_parallel_type.register(pd.Series)

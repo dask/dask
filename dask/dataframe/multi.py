@@ -66,7 +66,7 @@ from tlz import first, merge_sorted, unique
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..layers import BroadcastJoinLayer
-from ..utils import Dispatch, M, apply
+from ..utils import M, apply
 from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
@@ -231,17 +231,6 @@ required = {
 }
 allowed_left = ("inner", "left", "leftsemi", "leftanti")
 allowed_right = ("inner", "right")
-union_categoricals_dispatch = Dispatch("union_categoricals")
-
-
-@union_categoricals_dispatch.register((pd.DataFrame, pd.Series, pd.Index, pd.Categorical))
-def union_categoricals_pandas(to_union, sort_categories=False, ignore_order=False):
-    return pd.api.types.union_categoricals(to_union, sort_categories=sort_categories, ignore_order=ignore_order)
-
-
-def union_categoricals(to_union, sort_categories=False, ignore_order=False):
-    func = union_categoricals_dispatch.dispatch(type(to_union[0]))
-    return func(to_union, sort_categories=sort_categories, ignore_order=ignore_order)
 
 
 def merge_chunk(lhs, *args, **kwargs):
@@ -271,7 +260,7 @@ def merge_chunk(lhs, *args, **kwargs):
 
             dtype = "category"
             if left is not None and right is not None:
-                dtype = union_categoricals(
+                dtype = methods.union_categoricals(
                     [left.astype("category"), right.astype("category")]
                 ).dtype
 
