@@ -4,9 +4,13 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+import dask.array as da
+import dask.dataframe as dd
+
 from ..utils import Dispatch
 
 make_meta = Dispatch("make_meta")
+make_meta_obj = Dispatch("make_meta_obj")
 meta_nonempty = Dispatch("meta_nonempty")
 hash_object_dispatch = Dispatch("hash_object_dispatch")
 group_split_dispatch = Dispatch("group_split_dispatch")
@@ -77,6 +81,30 @@ def categorical_dtype(meta, categories=None, ordered=False):
 def tolist(obj):
     func = tolist_dispatch.dispatch(type(obj))
     return func(obj)
+
+
+def make_meta_util(x, index=None, parent_meta=None):
+    if isinstance(
+        x,
+        (
+            dd._Frame,
+            dd.core.Scalar,
+            dd.groupby._GroupBy,
+            dd.accessor.Accessor,
+            da.Array,
+        ),
+    ):
+        return x._meta
+
+    try:
+        return make_meta(x, index=index)
+    except TypeError:
+        if parent_meta is not None:
+            func = make_meta_obj.dispatch(type(parent_meta))
+            return func(x, index=index)
+        else:
+            func = make_meta_obj.dispatch(type(x))
+            return func(x, index=index)
 
 
 def union_categoricals(to_union, sort_categories=False, ignore_order=False):

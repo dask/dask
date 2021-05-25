@@ -47,7 +47,7 @@ def _get_categories(df, columns, index):
     for col in columns:
         x = df[col]
         if is_categorical_dtype(x):
-            res[col] = pd.Series(x.cat.categories)
+            res[col] = x._constructor(x.cat.categories)
         else:
             res[col] = x.dropna().drop_duplicates()
     if index:
