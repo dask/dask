@@ -15,12 +15,13 @@ Conversation happens in the following places:
     asked
 2.  **Bug reports and feature requests** are managed on the `GitHub issue
     tracker`_
-3.  **Chat** occurs on at `gitter.im/dask/dask <https://gitter.im/dask/dask>`_
+3.  **Chat** occurs on `gitter.im/dask/dask <https://gitter.im/dask/dask>`_
     for general conversation and `gitter.im/dask/dev
     <https://gitter.im/dask/dev>`_ for developer conversation.  Note that
     because gitter chat is not searchable by future users we discourage usage
     questions and bug reports on gitter and instead ask people to use Stack
-    Overflow or GitHub.
+    Overflow or GitHub. You can also find the community chatting in 
+    `https://dask.slack.com/ <https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g>`_.
 4.  **Monthly developer meeting** happens the first Thursday of the month at
     10:00 US Central Time in `this video meeting <https://zoom.us/j/802251830>`_.
     Meeting notes are available at
