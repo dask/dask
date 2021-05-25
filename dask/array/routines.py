@@ -249,10 +249,6 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(transpose(m, axes_list), axes[1])
 
 
-alphabet = "abcdefghijklmnopqrstuvwxyz"
-ALPHABET = alphabet.upper()
-
-
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
