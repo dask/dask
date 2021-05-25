@@ -60,7 +60,7 @@ from functools import partial, wraps
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal, union_categoricals
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
 from tlz import first, merge_sorted, unique
 
 from ..base import is_dask_collection, tokenize
@@ -260,8 +260,8 @@ def merge_chunk(lhs, *args, **kwargs):
 
             dtype = "category"
             if left is not None and right is not None:
-                dtype = union_categoricals(
-                    [left.astype("category").values, right.astype("category").values]
+                dtype = methods.union_categoricals(
+                    [left.astype("category"), right.astype("category")]
                 ).dtype
 
             if left is not None:

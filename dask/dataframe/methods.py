@@ -14,6 +14,7 @@ from .dispatch import (  # noqa: F401
     is_categorical_dtype_dispatch,
     tolist,
     tolist_dispatch,
+    union_categoricals,
 )
 from .utils import is_dataframe_like, is_index_like, is_series_like
 
