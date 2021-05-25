@@ -24,6 +24,7 @@ from .dispatch import (
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
     make_meta,
+    make_meta_obj,
     meta_nonempty,
     tolist_dispatch,
     union_categoricals_dispatch,
@@ -66,7 +67,16 @@ def make_meta_index(x, index=None):
     return x[0:0]
 
 
-@make_meta.register(object)
+meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+try:
+    import scipy.sparse as sp
+
+    meta_object_types += (sp.spmatrix,)
+except ImportError:
+    pass
+
+
+@make_meta_obj.register(meta_object_types)
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
@@ -94,9 +104,8 @@ def make_meta_object(x, index=None):
     >>> make_meta('i8')                         # doctest: +SKIP
     1
     """
-    if hasattr(x, "_meta"):
-        return x._meta
-    elif is_arraylike(x) and x.shape:
+
+    if is_arraylike(x) and x.shape:
         return x[:0]
 
     if index is not None:
@@ -516,5 +525,6 @@ def is_categorical_dtype_pandas(obj):
 @get_parallel_type.register_lazy("cudf")
 @meta_nonempty.register_lazy("cudf")
 @make_meta.register_lazy("cudf")
+@make_meta_obj.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401

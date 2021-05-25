@@ -16,7 +16,7 @@ from dask.dataframe.utils import (
     is_dataframe_like,
     is_index_like,
     is_series_like,
-    make_meta,
+    make_meta_util,
     meta_nonempty,
     raise_on_meta_error,
     shard_df_on_index,
@@ -40,84 +40,92 @@ def test_make_meta():
     )
 
     # Pandas dataframe
-    meta = make_meta(df)
+    meta = make_meta_util(df)
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, type(df.index))
 
     # Pandas series
-    meta = make_meta(df.a)
+    meta = make_meta_util(df.a)
     assert len(meta) == 0
     assert meta.dtype == df.a.dtype
     assert isinstance(meta.index, type(df.index))
 
     # Pandas index
-    meta = make_meta(df.index)
+    meta = make_meta_util(df.index)
     assert isinstance(meta, type(df.index))
     assert len(meta) == 0
 
     # Dask object
     ddf = dd.from_pandas(df, npartitions=2)
-    assert make_meta(ddf) is ddf._meta
+    assert make_meta_util(ddf) is ddf._meta
 
     # Dict
-    meta = make_meta({"a": "i8", "b": "O", "c": "f8"})
+    meta = make_meta_util({"a": "i8", "b": "O", "c": "f8"}, parent_meta=pd.DataFrame())
     assert isinstance(meta, pd.DataFrame)
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes).all()
     assert isinstance(meta.index, pd.RangeIndex)
 
     # Iterable
-    meta = make_meta([("a", "i8"), ("c", "f8"), ("b", "O")])
+    meta = make_meta_util(
+        [("a", "i8"), ("c", "f8"), ("b", "O")], parent_meta=pd.DataFrame()
+    )
     assert (meta.columns == ["a", "c", "b"]).all()
     assert len(meta) == 0
     assert (meta.dtypes == df.dtypes[meta.dtypes.index]).all()
     assert isinstance(meta.index, pd.RangeIndex)
 
     # Tuple
-    meta = make_meta(("a", "i8"))
+    meta = make_meta_util(("a", "i8"), parent_meta=pd.DataFrame())
     assert isinstance(meta, pd.Series)
     assert len(meta) == 0
     assert meta.dtype == "i8"
     assert meta.name == "a"
 
     # With index
-    meta = make_meta({"a": "i8", "b": "i4"}, index=pd.Int64Index([1, 2], name="foo"))
+    meta = make_meta_util(
+        {"a": "i8", "b": "i4"},
+        index=pd.Int64Index([1, 2], name="foo"),
+        parent_meta=pd.DataFrame(),
+    )
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
-    meta = make_meta(("a", "i8"), index=pd.Int64Index([1, 2], name="foo"))
+    meta = make_meta_util(
+        ("a", "i8"), index=pd.Int64Index([1, 2], name="foo"), parent_meta=pd.DataFrame()
+    )
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
 
     # Categoricals
-    meta = make_meta({"a": "category"})
+    meta = make_meta_util({"a": "category"}, parent_meta=df)
     assert len(meta.a.cat.categories) == 1
     assert meta.a.cat.categories[0] == UNKNOWN_CATEGORIES
-    meta = make_meta(("a", "category"))
+    meta = make_meta_util(("a", "category"), parent_meta=df)
     assert len(meta.cat.categories) == 1
     assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
 
     # Numpy scalar
-    meta = make_meta(np.float64(1.0))
+    meta = make_meta_util(np.float64(1.0), parent_meta=df)
     assert isinstance(meta, np.float64)
 
     # Python scalar
-    meta = make_meta(1.0)
+    meta = make_meta_util(1.0, parent_meta=df)
     assert isinstance(meta, np.float64)
 
     # Timestamp
     x = pd.Timestamp(2000, 1, 1)
-    meta = make_meta(x)
+    meta = make_meta_util(x, parent_meta=df)
     assert meta is x
 
     # Dtype expressions
-    meta = make_meta("i8")
+    meta = make_meta_util("i8", parent_meta=df)
     assert isinstance(meta, np.int64)
-    meta = make_meta(float)
+    meta = make_meta_util(float, parent_meta=df)
     assert isinstance(meta, np.dtype(float).type)
-    meta = make_meta(np.dtype("bool"))
+    meta = make_meta_util(np.dtype("bool"), parent_meta=df)
     assert isinstance(meta, np.bool_)
-    assert pytest.raises(TypeError, lambda: make_meta(None))
+    assert pytest.raises(TypeError, lambda: make_meta_util(None))
 
 
 def test_meta_nonempty():
