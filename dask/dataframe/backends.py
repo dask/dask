@@ -70,7 +70,7 @@ meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
 try:
     import scipy.sparse as sp
 
-    meta_object_types += (sp.csr_matrix,)
+    meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
 
