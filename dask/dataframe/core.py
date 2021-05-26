@@ -4535,7 +4535,7 @@ class DataFrame(_Frame):
 
         if not is_dataframe_like(other):
             # TODO: make this check better
-            if isinstance(other, list) and is_dataframe_like(other[0]):
+            if isinstance(other, list) and all([is_dataframe_like(o) for o in other]):
                 return _merge_multi(
                     self,
                     other,
