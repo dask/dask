@@ -750,7 +750,7 @@ def searchsorted(a, v, side="left", sorter=None):
         list(range(1, v.ndim + 1)),
         side,
         None,
-        dtype=dtype,
+        meta=meta,
         adjust_chunks={0: 1},  # one row for each block in a
     )
 
