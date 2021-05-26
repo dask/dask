@@ -755,8 +755,8 @@ def searchsorted(a, v, side="left", sorter=None):
     )
 
     # add offsets to take account of the position of each block within the array a
-    a_chunk_sizes = np.array(a.chunks[0])
-    a_chunk_offsets = np.cumsum(np.insert(a_chunk_sizes, 0, 0))[:-1]
+    a_chunk_sizes = array_safe((0, *a.chunks[0]), like=meta_from_array(a))
+    a_chunk_offsets = np.cumsum(a_chunk_sizes)[:-1]
     a_chunk_offsets = a_chunk_offsets[(Ellipsis,) + v.ndim * (np.newaxis,)]
     a_offsets = asarray(a_chunk_offsets, chunks=1)
     out = where(out < 0, out, out + a_offsets)
