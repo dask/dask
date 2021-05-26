@@ -1634,7 +1634,7 @@ def test_combine():
     df1 = pd.DataFrame(
         {
             "A": np.random.choice([1, 2, np.nan], 100),
-            "B": np.random.choice(["a", "b", np.nan], 100),
+            "B": np.random.choice(["a", "b", "nan"], 100),
         }
     )
 
@@ -1679,7 +1679,7 @@ def test_combine_first():
     df1 = pd.DataFrame(
         {
             "A": np.random.choice([1, 2, np.nan], 100),
-            "B": np.random.choice(["a", "b", np.nan], 100),
+            "B": np.random.choice(["a", "b", "nan"], 100),
         }
     )
 
