@@ -497,16 +497,17 @@ async def test_map_blocks_block_info(c, s, a, b):
     np = pytest.importorskip("numpy")
 
     def func(x, y, block_info):
+        with open("blockinfo.txt", "a") as f:
+            print(block_info, file=f, flush=True)
         return np.array([[block_info]], dtype=object)
 
     a = da.ones((4,), chunks=2)
     b = da.ones((3, 2), chunks=(1, 2))
-    # optimize_graph=False ensures that the _BlockInfo is serialized to the
+    out = da.map_blocks(func, a, b, dtype=object, chunks=((1, 1, 1), (1, 1)))
+    print(out)
+    # optimize_graph=False ensures that the _BlockInfoDep is serialized to the
     # scheduler, rather than materialised on the client.
-    blocks = await c.compute(
-        da.map_blocks(func, a, b, meta=np.ndarray((), dtype=object), chunks=(1, 1)),
-        optimize_graph=False,
-    )
+    blocks = await c.compute(out, optimize_graph=False)
     assert blocks.shape == (3, 2)
     assert blocks[2, 1] == {
         0: {
