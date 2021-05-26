@@ -498,6 +498,9 @@ def test_groupby_set_index():
 @pytest.mark.filterwarnings(
     "ignore:0 should be:DeprecationWarning"
 )  # fixed in new pandas.
+@pytest.mark.filterwarnings(
+    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
+)  # PANDAS_GT_130 https://github.com/pandas-dev/pandas/issues/41683
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
