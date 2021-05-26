@@ -5078,9 +5078,9 @@ def _merge_multi(
 ):
     # TODO: make these checks better
     if not isinstance(others, list):
-        raise ValueError("pass a list of dataframes in")
-    if not is_dataframe_like(others[0]):
-        raise ValueError("pass a list of dataframes in")
+        raise ValueError("other must be DataFrame or list of DataFrames")
+    if not all([is_dataframe_like(other) for other in others]):
+        raise ValueError("other must be DataFrame or list of DataFrames")
     if how not in ["inner", "left"]:
         raise ValueError("merge_multi only supports left or inner joins")
 
