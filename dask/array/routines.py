@@ -740,7 +740,7 @@ def searchsorted(a, v, side="left", sorter=None):
         )
 
     # call np.searchsorted for each pair of blocks in a and v
-    dtype = np.searchsorted(np.array([0]), np.array([0])).dtype
+    meta = np.searchsorted(a._meta, v._meta)
     out = blockwise(
         _searchsorted_block,
         list(range(v.ndim + 1)),
