@@ -50,7 +50,7 @@ class ParquetFunctionWrapper:
         kwargs,
         common_kwargs,
     ):
-        self.read_partition = engine.read_partition
+        self.engine = engine
         self.fs = fs
         self.meta = meta
         self.columns = columns
