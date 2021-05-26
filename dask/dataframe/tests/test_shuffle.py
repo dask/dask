@@ -80,6 +80,19 @@ def test_shuffle_npartitions_task():
     assert set(map(tuple, sc.values.tolist())) == set(map(tuple, df.values.tolist()))
 
 
+def test_shuffle_npartitions_lt_input_partitions_task():
+    df = pd.DataFrame({"x": np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=20)
+    s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=5, max_branch=2)
+    sc = s.compute(scheduler="sync")
+    assert s.npartitions == 5
+    assert set(s.dask).issuperset(set(ddf.dask))
+
+    assert len(sc) == len(df)
+    assert list(s.columns) == list(df.columns)
+    assert set(map(tuple, sc.values.tolist())) == set(map(tuple, df.values.tolist()))
+
+
 @pytest.mark.parametrize("method", ["disk", "tasks"])
 def test_index_with_non_series(method):
     from dask.dataframe.tests.test_multi import list_eq
