@@ -199,7 +199,7 @@ def reshape(x, shape, merge_chunks=True):
     if np.isnan(sum(x.shape)):
         raise ValueError(
             "Array chunk size or shape is unknown. shape: %s\n\n"
-            "Possible solution with x.compute_chunk_sizes()" % x.shape
+            "Possible solution with x.compute_chunk_sizes()" % str(x.shape)
         )
 
     if reduce(mul, shape, 1) != x.size:
