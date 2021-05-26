@@ -19,13 +19,14 @@ from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
+    _map_freq_to_period_start,
     aca,
     has_parallel_type,
     is_broadcastable,
     repartition_divisions,
     total_mem_usage,
 )
-from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta_util
 from dask.utils import M, put_lines
 
 dsk = {
@@ -33,7 +34,9 @@ dsk = {
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
     ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
 }
-meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
+meta = make_meta_util(
+    {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
+)
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 CHECK_FREQ = {}
@@ -214,6 +217,20 @@ def test_column_names():
     assert (d["a"] + d["b"]).name is None
 
 
+def test_columns_named_divisions_and_meta():
+    # https://github.com/dask/dask/issues/7599
+    df = pd.DataFrame(
+        {"_meta": [1, 2, 3, 4], "divisions": ["a", "b", "c", "d"]},
+        index=[0, 1, 3, 5],
+    )
+    ddf = dd.from_pandas(df, 2)
+
+    assert ddf.divisions == (0, 3, 5)
+    assert_eq(ddf["divisions"], df.divisions)
+    assert all(ddf._meta.columns == ["_meta", "divisions"])
+    assert_eq(ddf["_meta"], df._meta)
+
+
 def test_index_names():
     assert d.index.name is None
 
@@ -224,9 +241,6 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
-@pytest.mark.xfail(
-    dd._compat.PANDAS_GT_130, reason="https://github.com/dask/dask/issues/7444"
-)
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -472,7 +486,7 @@ def test_describe_empty():
         df_none.describe(), ddf_none.describe(percentiles_method="dask").compute()
     )
 
-    with pytest.raises(ValueError):
+    with pytest.raises((ValueError, RuntimeWarning)):
         ddf_len0.describe(percentiles_method="dask").compute()
 
     with pytest.raises(ValueError):
@@ -1370,7 +1384,7 @@ def test_quantile_for_possibly_unsorted_q():
 
 
 def test_quantile_tiny_partitions():
-    """ See https://github.com/dask/dask/issues/6551 """
+    """See https://github.com/dask/dask/issues/6551"""
     df = pd.DataFrame({"a": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=3)
     r = ddf["a"].quantile(0.5).compute()
@@ -1507,7 +1521,7 @@ def test_unknown_divisions():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta({"a": "i8", "b": "i8"})
+    meta = make_meta_util({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
     d = dd.DataFrame(dsk, "x", meta, [None, None, None, None])
     full = d.compute(scheduler="sync")
 
@@ -2075,6 +2089,34 @@ def test_repartition_freq_day():
     )
 
 
+@pytest.mark.parametrize(
+    "freq, expected_freq",
+    [
+        ("M", "MS"),
+        ("MS", "MS"),
+        ("2M", "2MS"),
+        ("Q", "QS"),
+        ("Q-FEB", "QS-FEB"),
+        ("2Q", "2QS"),
+        ("2Q-FEB", "2QS-FEB"),
+        ("2QS-FEB", "2QS-FEB"),
+        ("BQ", "BQS"),
+        ("2BQ", "2BQS"),
+        ("SM", "SMS"),
+        ("A", "AS"),
+        ("A-JUN", "AS-JUN"),
+        ("BA", "BAS"),
+        ("2BA", "2BAS"),
+        ("BY", "BAS"),
+        ("Y", "AS"),
+        (pd.Timedelta(seconds=1), pd.Timedelta(seconds=1)),
+    ],
+)
+def test_map_freq_to_period_start(freq, expected_freq):
+    new_freq = _map_freq_to_period_start(freq)
+    assert new_freq == expected_freq
+
+
 def test_repartition_input_errors():
     df = pd.DataFrame({"x": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=1)
@@ -2236,7 +2278,7 @@ def test_sample_raises():
 
 
 def test_empty_max():
-    meta = make_meta({"x": "i8"})
+    meta = make_meta_util({"x": "i8"}, parent_meta=pd.DataFrame())
     a = dd.DataFrame(
         {("x", 0): pd.DataFrame({"x": [1]}), ("x", 1): pd.DataFrame({"x": []})},
         "x",

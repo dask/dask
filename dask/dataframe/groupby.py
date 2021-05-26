@@ -27,7 +27,7 @@ from .utils import (
     insert_meta_param_description,
     is_dataframe_like,
     is_series_like,
-    make_meta,
+    make_meta_util,
     raise_on_meta_error,
 )
 
@@ -1182,7 +1182,7 @@ class _GroupBy:
         )
 
     def _cum_agg(self, token, chunk, aggregate, initial):
-        """ Wrapper for cumulative groupby operation """
+        """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
         columns = meta.name if is_series_like(meta) else meta.columns
         index = self.index if isinstance(self.index, list) else [self.index]
@@ -1673,7 +1673,7 @@ class _GroupBy:
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta(meta)
+        meta = make_meta_util(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(
@@ -1762,7 +1762,7 @@ class _GroupBy:
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta(meta)
+        meta = make_meta_util(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(
@@ -1963,6 +1963,6 @@ def _value_counts(x, **kwargs):
 
 
 def _value_counts_aggregate(series_gb):
-    to_concat = {k: v.sum(level=1) for k, v in series_gb}
+    to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
     names = list(series_gb.obj.index.names)
     return pd.Series(pd.concat(to_concat, names=names))

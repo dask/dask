@@ -211,7 +211,7 @@ def order(dsk, dependencies=None):
         )
 
     def finish_now_key(x):
-        """ Determine the order of dependents that are ready to run and be released"""
+        """Determine the order of dependents that are ready to run and be released"""
         return (-len(dependencies[x]), StrComparable(x))
 
     # Computing this for all keys can sometimes be relatively expensive :(

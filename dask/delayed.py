@@ -109,7 +109,11 @@ def unpack_collections(expr):
 
     if is_dataclass(expr):
         args, collections = unpack_collections(
-            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
+            [
+                [f.name, getattr(expr, f.name)]
+                for f in fields(expr)
+                if hasattr(expr, f.name)  # if init=False, field might not exist
+            ]
         )
 
         return (apply, typ, (), (dict, args)), collections
@@ -187,7 +191,11 @@ def to_task_dask(expr):
 
     if is_dataclass(expr):
         args, dsk = to_task_dask(
-            [[f.name, getattr(expr, f.name)] for f in fields(expr)]
+            [
+                [f.name, getattr(expr, f.name)]
+                for f in fields(expr)
+                if hasattr(expr, f.name)  # if init=False, field might not exist
+            ]
         )
 
         return (apply, typ, (), (dict, args)), dsk
@@ -435,11 +443,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         task = quote(obj)
         collections = set()
 
+    if not (nout is None or (type(nout) is int and nout >= 0)):
+        raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
     if task is obj:
-        if not (nout is None or (type(nout) is int and nout >= 0)):
-            raise ValueError(
-                "nout must be None or a non-negative integer, got %s" % nout
-            )
         if not name:
             try:
                 prefix = obj.__name__
@@ -453,7 +459,7 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
             name = "%s-%s" % (type(obj).__name__, tokenize(task, pure=pure))
         layer = {name: task}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
-        return Delayed(name, graph)
+        return Delayed(name, graph, nout)
 
 
 def right(method):
@@ -713,5 +719,5 @@ except AttributeError:
 
 
 def single_key(seq):
-    """ Pick out the only element of this list, a list of keys """
+    """Pick out the only element of this list, a list of keys"""
     return seq[0]

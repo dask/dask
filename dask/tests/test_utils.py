@@ -100,7 +100,7 @@ def test_dispatch():
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
 
     def f(a):
-        """ My Docstring """
+        """My Docstring"""
         return a
 
     foo.register(object, f)

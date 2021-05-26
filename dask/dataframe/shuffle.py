@@ -17,7 +17,7 @@ from ..sizeof import sizeof
 from ..utils import M, digit
 from . import methods
 from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
-from .utils import group_split_dispatch, hash_object_dispatch
+from .dispatch import group_split_dispatch, hash_object_dispatch
 
 logger = logging.getLogger(__name__)
 
@@ -74,7 +74,7 @@ def sort_values(
     partition_size=128e6,
     **kwargs,
 ):
-    """ See DataFrame.sort_values for docstring """
+    """See DataFrame.sort_values for docstring"""
     if not ascending:
         raise NotImplementedError("The ascending= keyword is not supported")
     if not isinstance(by, str):
@@ -127,7 +127,7 @@ def set_index(
     partition_size=128e6,
     **kwargs,
 ):
-    """ See _Frame.set_index for docstring """
+    """See _Frame.set_index for docstring"""
     if isinstance(index, Series) and index._name == df.index._name:
         return df
     if isinstance(index, (DataFrame, tuple, list)):
@@ -346,6 +346,11 @@ def shuffle(
 
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
+    elif hasattr(index, "to_frame"):
+        # If this is an index, we should still convert to a
+        # DataFrame. Otherwise, the hashed values of a column
+        # selection will not match (important when merging).
+        index = index.to_frame()
 
     partitions = index.map_partitions(
         partitioning_index,
@@ -369,7 +374,7 @@ def shuffle(
 
 
 def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
-    """ Shuffle dataframe so that column separates along divisions """
+    """Shuffle dataframe so that column separates along divisions"""
     divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
@@ -725,14 +730,23 @@ def cleanup_partd_files(p, keys):
 
 
 def collect(p, part, meta, barrier_token):
-    """ Collect partitions from partd, yield dataframes """
+    """Collect partitions from partd, yield dataframes"""
     with ensure_cleanup_on_exception(p):
         res = p.get(part)
         return res if len(res) > 0 else meta
 
 
 def set_partitions_pre(s, divisions):
-    partitions = divisions.searchsorted(s, side="right") - 1
+    try:
+        partitions = divisions.searchsorted(s, side="right") - 1
+    except TypeError:
+        # When `searchsorted` fails with `TypeError`, it may be
+        # caused by nulls in `s`. Try again with the null-values
+        # explicitly mapped to the first partition.
+        partitions = np.empty(len(s), dtype="int32")
+        partitions[s.isna()] = 0
+        not_null = s.notna()
+        partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
     partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
     return partitions
 
@@ -862,7 +876,7 @@ def get_overlap(df, index):
 
 
 def fix_overlap(ddf, overlap):
-    """ Ensures that the upper bound on each partition of ddf (except the last) is exclusive """
+    """Ensures that the upper bound on each partition of ddf (except the last) is exclusive"""
     name = "fix-overlap-" + tokenize(ddf, overlap)
     n = len(ddf.divisions) - 1
     dsk = {(name, i): (ddf._name, i) for i in range(n)}

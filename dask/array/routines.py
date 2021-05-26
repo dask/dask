@@ -14,7 +14,7 @@ from ..compatibility import apply
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, funcname, is_arraylike
+from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
 from .core import (
     Array,
@@ -162,33 +162,41 @@ def transpose(a, axes=None):
     if axes:
         if len(axes) != a.ndim:
             raise ValueError("axes don't match array")
+        axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     else:
         axes = tuple(range(a.ndim))[::-1]
-    axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     return blockwise(
         np.transpose, axes, a, tuple(range(a.ndim)), dtype=a.dtype, axes=axes
     )
 
 
-def flip(m, axis):
+def flip(m, axis=None):
     """
     Reverse element order along axis.
 
     Parameters
     ----------
-    axis : int
-        Axis to reverse element order of.
+    m : array_like
+        Input array.
+    axis : None or int or tuple of ints, optional
+        Axis or axes to reverse element order of. None will reverse all axes.
 
     Returns
     -------
-    reversed array : ndarray
+    dask.array.Array
+        The flipped array.
     """
 
     m = asanyarray(m)
 
     sl = m.ndim * [slice(None)]
+    if axis is None:
+        axis = range(m.ndim)
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
     try:
-        sl[axis] = slice(None, None, -1)
+        for ax in axis:
+            sl[ax] = slice(None, None, -1)
     except IndexError as e:
         raise ValueError(
             "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
@@ -239,10 +247,6 @@ def rot90(m, k=1, axes=(0, 1)):
     else:
         # k == 3
         return flip(transpose(m, axes_list), axes[1])
-
-
-alphabet = "abcdefghijklmnopqrstuvwxyz"
-ALPHABET = alphabet.upper()
 
 
 def _tensordot(a, b, axes):
@@ -321,11 +325,18 @@ def vdot(a, b):
 
 
 def _matmul(a, b):
-    chunk = np.matmul(a, b)
+    xp = np
+
+    if is_cupy_type(a):
+        import cupy
+
+        xp = cupy
+
+    chunk = xp.matmul(a, b)
     # Since we have performed the contraction via matmul
     # but blockwise expects all dimensions back, we need
     # to add one dummy dimension back
-    return chunk[..., np.newaxis]
+    return chunk[..., xp.newaxis]
 
 
 @derived_from(np)
@@ -1611,7 +1622,7 @@ def _asarray_isnull(values):
 
 
 def isnull(values):
-    """ pandas.isnull for dask arrays """
+    """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
     import pandas as pd  # noqa
 
@@ -1619,7 +1630,7 @@ def isnull(values):
 
 
 def notnull(values):
-    """ pandas.notnull for dask arrays """
+    """pandas.notnull for dask arrays"""
     return ~isnull(values)
 
 

@@ -1,4 +1,5 @@
 import copy
+from unittest import mock
 
 import pytest
 
@@ -40,6 +41,7 @@ from dask.array.core import (
     stack,
     store,
 )
+from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import broadcast_dimensions
@@ -48,6 +50,8 @@ from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
+
+from .test_dispatch import EncapsulateNDArray
 
 
 def test_getem():
@@ -439,6 +443,28 @@ def test_stack_unknown_chunksizes():
     c_x = da.stack([a_x, b_x], axis=1, allow_unknown_chunksizes=True)
 
     assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=1))
+
+    m_df = pd.DataFrame({"m": np.arange(12) * 100})
+    n_df = pd.DataFrame({"n": np.arange(12) * 1000})
+
+    m_ddf = dd.from_pandas(m_df, sort=False, npartitions=3)
+    n_ddf = dd.from_pandas(n_df, sort=False, npartitions=3)
+
+    m_x = m_ddf.values
+    n_x = n_ddf.values
+
+    assert np.isnan(m_x.shape[0])
+    assert np.isnan(n_x.shape[0])
+
+    with pytest.raises(ValueError) as exc_info:
+        da.stack([[a_x, b_x], [m_x, n_x]])
+
+    assert "shape" in str(exc_info.value)
+    assert "nan" in str(exc_info.value)
+
+    c_x = da.stack([[a_x, b_x], [m_x, n_x]], allow_unknown_chunksizes=True)
+
+    assert_eq(c_x, np.stack([[a_df.values, b_df.values], [m_df.values, n_df.values]]))
 
 
 def test_concatenate():
@@ -2637,6 +2663,25 @@ def test_concatenate3_2():
             ]
         ),
     )
+
+
+@pytest.mark.skipif(not _numpy_117, reason="NEP-18 is not enabled by default")
+@pytest.mark.parametrize("one_d", [True, False])
+@mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
+def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
+    x = EncapsulateNDArray(np.arange(10))
+    concat = [x, x] if one_d else [[x[None]], [x[None]]]
+    result = concatenate3(concat)
+    assert type(result) is type(x)
+    mock_concatenate2.assert_called()
+    mock_concatenate2.reset_mock()
+
+    # When all the inputs are supported by plain `np.concatenate`, we should take the concatenate3
+    # fastpath of allocating the full array up front and writing blocks into it.
+    concat = [x.arr, x.arr] if one_d else [[x.arr[None]], [x.arr[None]]]
+    plain_np_result = concatenate3(concat)
+    mock_concatenate2.assert_not_called()
+    assert type(plain_np_result) is np.ndarray
 
 
 def test_map_blocks3():

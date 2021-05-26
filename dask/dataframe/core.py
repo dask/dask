@@ -32,8 +32,8 @@ from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
+from ..optimization import SubgraphCallable
 from ..utils import (
-    Dispatch,
     IndexCallable,
     M,
     OperatorMethodMixin,
@@ -55,6 +55,12 @@ from ..utils import (
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
+from .dispatch import (
+    get_parallel_type,
+    group_split_dispatch,
+    hash_object_dispatch,
+    meta_nonempty,
+)
 from .optimize import optimize
 from .utils import (
     PANDAS_GT_100,
@@ -62,17 +68,14 @@ from .utils import (
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
-    group_split_dispatch,
     has_known_categories,
-    hash_object_dispatch,
     index_summary,
     insert_meta_param_description,
     is_categorical_dtype,
     is_dataframe_like,
     is_index_like,
     is_series_like,
-    make_meta,
-    meta_nonempty,
+    make_meta_util,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -109,7 +112,7 @@ def finalize(results):
 
 
 class Scalar(DaskMethodsMixin, OperatorMethodMixin):
-    """ A Dask object to represent a pandas scalar"""
+    """A Dask object to represent a pandas scalar"""
 
     def __init__(self, dsk, name, meta, divisions=None):
         # divisions is ignored, only present to be compatible with other
@@ -118,7 +121,9 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = make_meta(meta)
+        self._parent_meta = pd.Series(dtype="float64")
+
+        meta = make_meta_util(meta, parent_meta=self._parent_meta)
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError(
                 "Expected meta to specify scalar, got "
@@ -262,7 +267,7 @@ def _scalar_binary(op, self, other, inv=False):
         (op, other_key, (self._name, 0)) if inv else (op, (self._name, 0), other_key)
     )
 
-    other_meta = make_meta(other)
+    other_meta = make_meta_util(other, parent_meta=self._parent_meta)
     other_meta_nonempty = meta_nonempty(other_meta)
     if inv:
         meta = op(other_meta_nonempty, self._meta_nonempty)
@@ -298,7 +303,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = make_meta(meta)
+        meta = make_meta_util(meta)
         if not self._is_partition_type(meta):
             raise TypeError(
                 "Expected meta to specify type {0}, got type "
@@ -369,7 +374,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
     @property
     def _meta_nonempty(self):
-        """ A non-empty version of `_meta` with fake data."""
+        """A non-empty version of `_meta` with fake data."""
         return meta_nonempty(self._meta)
 
     @property
@@ -506,7 +511,7 @@ Dask Name: {name}, {task} tasks"""
         return len(self.divisions) > 0 and self.divisions[0] is not None
 
     def clear_divisions(self):
-        """ Forget division information """
+        """Forget division information"""
         divisions = (None,) * (self.npartitions + 1)
         return type(self)(self.dask, self._name, self._meta, divisions)
 
@@ -1454,13 +1459,13 @@ Dask Name: {name}, {task} tasks"""
         return arr
 
     def to_hdf(self, path_or_buf, key, mode="a", append=False, **kwargs):
-        """ See dd.to_hdf docstring for more information """
+        """See dd.to_hdf docstring for more information"""
         from .io import to_hdf
 
         return to_hdf(self, path_or_buf, key, mode, append, **kwargs)
 
     def to_csv(self, filename, **kwargs):
-        """ See dd.to_csv docstring for more information """
+        """See dd.to_csv docstring for more information"""
         from .io import to_csv
 
         return to_csv(self, filename, **kwargs)
@@ -1479,7 +1484,7 @@ Dask Name: {name}, {task} tasks"""
         compute=True,
         parallel=False,
     ):
-        """ See dd.to_sql docstring for more information """
+        """See dd.to_sql docstring for more information"""
         from .io import to_sql
 
         return to_sql(
@@ -1498,7 +1503,7 @@ Dask Name: {name}, {task} tasks"""
         )
 
     def to_json(self, filename, *args, **kwargs):
-        """ See dd.to_json docstring for more information """
+        """See dd.to_json docstring for more information"""
         from .io import to_json
 
         return to_json(self, filename, *args, **kwargs)
@@ -1883,6 +1888,7 @@ Dask Name: {name}, {task} tasks"""
                 token=name,
                 meta=meta,
                 enforce_metadata=False,
+                parent_meta=self._meta,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
@@ -2052,13 +2058,19 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
+                parent_meta=self._meta,
             )
             return handle_out(out, result)
         else:
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + "std"
             result = map_partitions(
-                np.sqrt, v, meta=meta, token=name, enforce_metadata=False
+                np.sqrt,
+                v,
+                meta=meta,
+                token=name,
+                enforce_metadata=False,
+                parent_meta=self._meta,
             )
             return handle_out(out, result)
 
@@ -2289,6 +2301,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                parent_meta=self._meta,
             )
         else:
             num = self._get_numeric_data()
@@ -2296,7 +2309,12 @@ Dask Name: {name}, {task} tasks"""
             n = num.count(split_every=split_every)
             name = self._token_prefix + "sem"
             result = map_partitions(
-                np.sqrt, v / n, meta=meta, token=name, enforce_metadata=False
+                np.sqrt,
+                v / n,
+                meta=meta,
+                token=name,
+                enforce_metadata=False,
+                parent_meta=self._meta,
             )
 
             if isinstance(self, DataFrame):
@@ -2332,6 +2350,7 @@ Dask Name: {name}, {task} tasks"""
                 token=keyname,
                 enforce_metadata=False,
                 meta=(q, "f8"),
+                parent_meta=self._meta,
             )
         else:
             _raise_if_object_series(self, "quantile")
@@ -2513,7 +2532,7 @@ Dask Name: {name}, {task} tasks"""
     def _cum_agg(
         self, op_name, chunk, aggregate, axis, skipna=True, chunk_kwargs=None, out=None
     ):
-        """ Wrapper for cumulative operation """
+        """Wrapper for cumulative operation"""
 
         axis = self._validate_axis(axis)
 
@@ -2761,7 +2780,7 @@ Dask Name: {name}, {task} tasks"""
 
     @classmethod
     def _bind_operator_method(cls, name, op, original=pd.DataFrame):
-        """ bind operator method like DataFrame.add to this class """
+        """bind operator method like DataFrame.add to this class"""
         raise NotImplementedError
 
     @derived_from(pd.DataFrame)
@@ -2993,7 +3012,7 @@ class Series(_Frame):
 
     @property
     def ndim(self):
-        """ Return dimensionality """
+        """Return dimensionality"""
         return 1
 
     @property
@@ -3012,12 +3031,12 @@ class Series(_Frame):
 
     @property
     def dtype(self):
-        """ Return data type """
+        """Return data type"""
         return self._meta.dtype
 
     @cache_readonly
     def dt(self):
-        """ Namespace of datetime methods """
+        """Namespace of datetime methods"""
         return DatetimeAccessor(self)
 
     @cache_readonly
@@ -3026,7 +3045,7 @@ class Series(_Frame):
 
     @cache_readonly
     def str(self):
-        """ Namespace for string methods """
+        """Namespace for string methods"""
         return StringAccessor(self)
 
     def __dir__(self):
@@ -3042,7 +3061,7 @@ class Series(_Frame):
 
     @property
     def nbytes(self):
-        """ Number of bytes """
+        """Number of bytes"""
         return self.reduction(
             methods.nbytes, np.sum, token="nbytes", meta=int, split_every=False
         )
@@ -3051,7 +3070,7 @@ class Series(_Frame):
         return _repr_data_series(self._meta, self._repr_divisions)
 
     def __repr__(self):
-        """ have to overwrite footer """
+        """have to overwrite footer"""
         if self.name is not None:
             footer = "Name: {name}, dtype: {dtype}".format(
                 name=self.name, dtype=self.dtype
@@ -3176,7 +3195,7 @@ Dask Name: {name}, {task} tasks""".format(
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return Series(graph, name, self._meta, self.divisions)
         raise NotImplementedError(
-            "Series getitem in only supported for other series objects "
+            "Series getitem is only supported for other series objects "
             "with matching partition structure"
         )
 
@@ -3354,7 +3373,11 @@ Dask Name: {name}, {task} tasks""".format(
         if meta is no_default:
             meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
-            meta = make_meta(meta, index=getattr(make_meta(self), "index", None))
+            meta = make_meta_util(
+                meta,
+                index=getattr(make_meta_util(self), "index", None),
+                parent_meta=self._meta,
+            )
 
         return type(self)(graph, name, meta, self.divisions)
 
@@ -3406,7 +3429,7 @@ Dask Name: {name}, {task} tasks""".format(
         return self.map_partitions(M.combine_first, other)
 
     def to_bag(self, index=False):
-        """ Create a Dask Bag from a Series """
+        """Create a Dask Bag from a Series"""
         from .io import to_bag
 
         return to_bag(self, index)
@@ -3422,7 +3445,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @classmethod
     def _bind_operator_method(cls, name, op, original=pd.Series):
-        """ bind operator method like Series.add to this class """
+        """bind operator method like Series.add to this class"""
 
         def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
@@ -3438,7 +3461,7 @@ Dask Name: {name}, {task} tasks""".format(
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison, original=pd.Series):
-        """ bind comparison method like Series.eq to this class """
+        """bind comparison method like Series.eq to this class"""
 
         def meth(self, other, level=None, fill_value=None, axis=0):
             if level is not None:
@@ -3710,7 +3733,11 @@ class Index(Series):
             raise NotImplementedError()
 
         return self.map_partitions(
-            M.to_frame, index, name, meta=self._meta.to_frame(index, name)
+            M.to_frame,
+            index,
+            name,
+            meta=self._meta.to_frame(index, name),
+            transform_divisions=False,
         )
 
     @insert_meta_param_description(pad=12)
@@ -3759,6 +3786,35 @@ class DataFrame(_Frame):
     _is_partition_type = staticmethod(is_dataframe_like)
     _token_prefix = "dataframe-"
     _accessors = set()
+
+    def __init__(self, dsk, name, meta, divisions):
+        super().__init__(dsk, name, meta, divisions)
+        if self.dask.layers[name].collection_annotations is None:
+            self.dask.layers[name].collection_annotations = {
+                "type": type(self),
+                "divisions": self.divisions,
+                "dataframe_type": type(self._meta),
+                "series_dtypes": {
+                    col: self._meta[col].dtype
+                    if hasattr(self._meta[col], "dtype")
+                    else None
+                    for col in self._meta.columns
+                },
+            }
+        else:
+            self.dask.layers[name].collection_annotations.update(
+                {
+                    "type": type(self),
+                    "divisions": self.divisions,
+                    "dataframe_type": type(self._meta),
+                    "series_dtypes": {
+                        col: self._meta[col].dtype
+                        if hasattr(self._meta[col], "dtype")
+                        else None
+                        for col in self._meta.columns
+                    },
+                }
+            )
 
     def __array_wrap__(self, array, context=None):
         if isinstance(context, tuple) and len(context) > 0:
@@ -3901,7 +3957,8 @@ class DataFrame(_Frame):
         except AttributeError:
             columns = ()
 
-        if key in columns:
+        # exclude protected attributes from setitem
+        if key in columns and key not in ["divisions", "dask", "_name", "_meta"]:
             self[key] = value
         else:
             object.__setattr__(self, key, value)
@@ -3926,7 +3983,7 @@ class DataFrame(_Frame):
 
     @property
     def ndim(self):
-        """ Return dimensionality """
+        """Return dimensionality"""
         return 2
 
     @property
@@ -3950,7 +4007,7 @@ class DataFrame(_Frame):
 
     @property
     def dtypes(self):
-        """ Return data types """
+        """Return data types"""
         return self._meta.dtypes
 
     @derived_from(pd.DataFrame)
@@ -4018,7 +4075,7 @@ class DataFrame(_Frame):
         This function operates exactly like ``pandas.set_index`` except with
         different performance costs (dask dataframe ``set_index`` is much more expensive).
         Under normal operation this function does an initial pass over the index column
-        to compute approximate qunatiles to serve as future divisions. It then passes
+        to compute approximate quantiles to serve as future divisions. It then passes
         over the data a second time, splitting up each input partition into several
         pieces and sharing those pieces to all of the output partitions now in
         sorted order.
@@ -4301,7 +4358,7 @@ class DataFrame(_Frame):
         return to_bag(self, index)
 
     def to_parquet(self, path, *args, **kwargs):
-        """ See dd.to_parquet docstring for more information """
+        """See dd.to_parquet docstring for more information"""
         from .io import to_parquet
 
         return to_parquet(self, path, *args, **kwargs)
@@ -4539,7 +4596,7 @@ class DataFrame(_Frame):
 
     @classmethod
     def _bind_operator_method(cls, name, op, original=pd.DataFrame):
-        """ bind operator method like DataFrame.add to this class """
+        """bind operator method like DataFrame.add to this class"""
 
         # name must be explicitly passed for div method whose name is truediv
 
@@ -4588,7 +4645,7 @@ class DataFrame(_Frame):
 
     @classmethod
     def _bind_comparison_method(cls, name, comparison, original=pd.DataFrame):
-        """ bind comparison method like DataFrame.eq to this class """
+        """bind comparison method like DataFrame.eq to this class"""
 
         def meth(self, other, axis="columns", level=None):
             if level is not None:
@@ -4694,7 +4751,7 @@ class DataFrame(_Frame):
                 M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
             )
             warnings.warn(meta_warning(meta))
-
+        kwds.update({"parent_meta": self._meta})
         return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
@@ -5352,7 +5409,7 @@ def hash_shard(
 
 
 def split_evenly(df, k):
-    """ Split dataframe into k roughly equal parts """
+    """Split dataframe into k roughly equal parts"""
     divisions = np.linspace(0, len(df), k + 1).astype(int)
     return {i: df.iloc[divisions[i] : divisions[i + 1]] for i in range(k)}
 
@@ -5569,15 +5626,17 @@ def apply_concat_apply(
         meta = _emulate(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
-    meta = make_meta(
-        meta, index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None)
+    meta = make_meta_util(
+        meta,
+        index=(getattr(make_meta_util(dfs[0]), "index", None) if dfs else None),
+        parent_meta=dfs[0]._meta,
     )
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
 
     divisions = [None] * (split_out + 1)
 
-    return new_dd_object(graph, b, meta, divisions)
+    return new_dd_object(graph, b, meta, divisions, parent_meta=dfs[0]._meta)
 
 
 aca = apply_concat_apply
@@ -5643,6 +5702,7 @@ def map_partitions(
     $META
     """
     name = kwargs.pop("token", None)
+    parent_meta = kwargs.pop("parent_meta", None)
 
     if has_keyword(func, "partition_info"):
         kwargs["partition_info"] = {"number": -1, "divisions": None}
@@ -5660,14 +5720,16 @@ def map_partitions(
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
-    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    meta_index = getattr(make_meta_util(dfs[0]), "index", None) if dfs else None
+    if parent_meta is None and dfs:
+        parent_meta = dfs[0]._meta
 
     if meta is no_default:
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
-        meta = make_meta(meta, index=meta_index)
+        meta = make_meta_util(meta, index=meta_index, parent_meta=parent_meta)
 
     if has_keyword(func, "partition_info"):
         kwargs["partition_info"] = "__dummy__"
@@ -5681,10 +5743,10 @@ def map_partitions(
     elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
-        meta = make_meta(_concat([meta]), index=meta_index)
+        meta = make_meta_util(_concat([meta]), index=meta_index)
 
     # Ensure meta is empty series
-    meta = make_meta(meta)
+    meta = make_meta_util(meta, parent_meta=parent_meta)
 
     args2 = []
     dependencies = []
@@ -5745,17 +5807,22 @@ def map_partitions(
         dsk = dict(dsk)
 
         for k, v in dsk.items():
-            vv = v
-            v = v[0]
+            subgraph = v[0]
             number = k[-1]
             assert isinstance(number, int)
             info = {"number": number, "division": divisions[number]}
-            v = copy.copy(v)  # Need to copy and unpack subgraph callable
-            v.dsk = copy.copy(v.dsk)
-            [(key, task)] = v.dsk.items()
-            task = subs(task, {"__dummy__": info})
-            v.dsk[key] = task
-            dsk[k] = (v,) + vv[1:]
+            # Replace the __dummy__ keyword argument with `info`
+            subgraph_dsk = copy.copy(subgraph.dsk)
+            [(key, task)] = subgraph_dsk.items()
+            subgraph_dsk[key] = subs(task, {"__dummy__": info})
+            dsk[k] = (
+                SubgraphCallable(
+                    dsk=subgraph_dsk,
+                    outkey=subgraph.outkey,
+                    inkeys=subgraph.inkeys,
+                    name=f"{subgraph.name}-info-{tokenize(info)}",
+                ),
+            ) + v[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     return new_dd_object(graph, name, meta, divisions)
@@ -6040,7 +6107,9 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
         return Scalar(graph, name, "f8")
-    meta = make_meta([(c, "f8") for c in df.columns], index=df.columns)
+    meta = make_meta_util(
+        [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
+    )
     return DataFrame(graph, name, meta, (df.columns[0], df.columns[-1]))
 
 
@@ -6364,9 +6433,12 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
 
 def repartition_freq(df, freq=None):
-    """ Repartition a timeseries dataframe by a new frequency """
+    """Repartition a timeseries dataframe by a new frequency"""
     if not isinstance(df.divisions[0], pd.Timestamp):
         raise TypeError("Can only repartition on frequency for timeseries")
+
+    freq = _map_freq_to_period_start(freq)
+
     try:
         start = df.divisions[0].ceil(freq)
     except ValueError:
@@ -6382,6 +6454,45 @@ def repartition_freq(df, freq=None):
             divisions = [df.divisions[0]] + divisions
 
     return df.repartition(divisions=divisions)
+
+
+def _map_freq_to_period_start(freq):
+    """Ensure that the frequency pertains to the **start** of a period.
+
+    If e.g. `freq='M'`, then the divisions are:
+        - 2021-31-1 00:00:00 (start of February partition)
+        - 2021-2-28 00:00:00 (start of March partition)
+        - ...
+
+    but this **should** be:
+        - 2021-2-1 00:00:00 (start of February partition)
+        - 2021-3-1 00:00:00 (start of March partition)
+        - ...
+
+    Therefore, we map `freq='M'` to `freq='MS'` (same for quarter and year).
+    """
+
+    if not isinstance(freq, str):
+        return freq
+
+    offset = pd.tseries.frequencies.to_offset(freq)
+    offset_type_name = type(offset).__name__
+
+    if not offset_type_name.endswith("End"):
+        return freq
+
+    new_offset = offset_type_name[: -len("End")] + "Begin"
+    try:
+        new_offset_type = getattr(pd.tseries.offsets, new_offset)
+        if "-" in freq:
+            _, anchor = freq.split("-")
+            anchor = "-" + anchor
+        else:
+            anchor = ""
+        n = str(offset.n) if offset.n != 1 else ""
+        return f"{n}{new_offset_type._prefix}{anchor}"
+    except AttributeError:
+        return freq
 
 
 def repartition_size(df, size):
@@ -6421,7 +6532,7 @@ def total_mem_usage(df, index=True, deep=False):
 
 
 def repartition_npartitions(df, npartitions):
-    """ Repartition dataframe to a smaller number of partitions """
+    """Repartition dataframe to a smaller number of partitions"""
     new_name = "repartition-%d-%s" % (npartitions, tokenize(df))
     if df.npartitions == npartitions:
         return df
@@ -6619,7 +6730,7 @@ def idxmaxmin_row(x, fn=None, skipna=True):
 
 
 def idxmaxmin_combine(x, fn=None, skipna=True):
-    if len(x) == 0:
+    if len(x) <= 1:
         return x
     return (
         x.groupby(level=0)
@@ -6741,40 +6852,12 @@ def _repr_data_series(s, index):
     return pd.Series([dtype] + ["..."] * npartitions, index=index, name=s.name)
 
 
-get_parallel_type = Dispatch("get_parallel_type")
-
-
-@get_parallel_type.register(pd.Series)
-def get_parallel_type_series(_):
-    return Series
-
-
-@get_parallel_type.register(pd.DataFrame)
-def get_parallel_type_dataframe(_):
-    return DataFrame
-
-
-@get_parallel_type.register(pd.Index)
-def get_parallel_type_index(_):
-    return Index
-
-
-@get_parallel_type.register(_Frame)
-def get_parallel_type_frame(o):
-    return get_parallel_type(o._meta)
-
-
-@get_parallel_type.register(object)
-def get_parallel_type_object(_):
-    return Scalar
-
-
 def has_parallel_type(x):
-    """ Does this object have a dask dataframe equivalent? """
+    """Does this object have a dask dataframe equivalent?"""
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions):
+def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
@@ -7073,7 +7156,7 @@ def series_map(base_series, map_series):
 
     meta = map_series._meta.copy()
     meta.index = base_series._meta.index
-    meta = make_meta(meta)
+    meta = make_meta_util(meta)
 
     dependencies = [base_series, map_series, base_series.index]
     graph = HighLevelGraph.from_collections(

@@ -60,7 +60,7 @@ from functools import partial, wraps
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal, union_categoricals
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
 from tlz import first, merge_sorted, unique
 
 from ..base import is_dask_collection, tokenize
@@ -82,15 +82,14 @@ from .core import (
     prefix_reduction,
     suffix_reduction,
 )
+from .dispatch import group_split_dispatch, hash_object_dispatch
 from .io import from_pandas
 from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
 from .utils import (
     asciitable,
-    group_split_dispatch,
-    hash_object_dispatch,
     is_dataframe_like,
     is_series_like,
-    make_meta,
+    make_meta_util,
     strip_unknown_categories,
 )
 
@@ -261,8 +260,8 @@ def merge_chunk(lhs, *args, **kwargs):
 
             dtype = "category"
             if left is not None and right is not None:
-                dtype = union_categoricals(
-                    [left.astype("category").values, right.astype("category").values]
+                dtype = methods.union_categoricals(
+                    [left.astype("category"), right.astype("category")]
                 ).dtype
 
             if left is not None:
@@ -287,7 +286,7 @@ def merge_chunk(lhs, *args, **kwargs):
 
 
 def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwargs):
-    """ Join two partitioned dataframes along their index """
+    """Join two partitioned dataframes along their index"""
     how = kwargs.get("how", "left")
     kwargs["left_index"] = left_index
     kwargs["right_index"] = right_index
@@ -364,7 +363,10 @@ def hash_join(
     )
 
     # dummy result
-    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
+    # Avoid using dummy data for a collection it is empty
+    _lhs_meta = lhs._meta_nonempty if len(lhs.columns) else lhs._meta
+    _rhs_meta = rhs._meta_nonempty if len(rhs.columns) else rhs._meta
+    meta = _lhs_meta.merge(_rhs_meta, **kwargs)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
@@ -768,7 +770,7 @@ def pair_partitions(L, R):
 
 
 def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
-    """ merge_asof but potentially adding rows to the beginning/end of right """
+    """merge_asof but potentially adding rows to the beginning/end of right"""
     frames = []
     if prev is not None:
         frames.append(prev)
@@ -976,7 +978,7 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
 
 
 def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
-    """ Concatenate indexed dataframes together along the index """
+    """Concatenate indexed dataframes together along the index"""
     warn = axis != 0
     kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
@@ -1020,7 +1022,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
 
     kwargs.update({"ignore_order": ignore_order})
 
-    meta = make_meta(
+    meta = make_meta_util(
         methods.concat(
             [df._meta_nonempty for df in dfs],
             join=join,

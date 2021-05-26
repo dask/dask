@@ -21,7 +21,7 @@ from .creation import arange
 
 
 def doc_wraps(func):
-    """ Copy docstring from one function to another """
+    """Copy docstring from one function to another"""
     warnings.warn(
         "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
         FutureWarning,
@@ -112,7 +112,6 @@ class RandomState:
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph
         dsk = {}
-        dsks = []
         lookup = {}
         small_args = []
         dependencies = []
@@ -121,7 +120,6 @@ class RandomState:
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -137,7 +135,6 @@ class RandomState:
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -165,7 +162,6 @@ class RandomState:
                     arg.append(ar)
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         arg.append((lookup[i],) + block)
                     else:  # np.ndarray
                         arg.append((getitem, lookup[i], slc))
@@ -175,7 +171,6 @@ class RandomState:
                     kwrg[k] = ar
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         kwrg[k] = (lookup[k],) + block
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
