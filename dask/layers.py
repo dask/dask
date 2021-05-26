@@ -122,7 +122,7 @@ class SlicingLayer(Layer):
         self.shape = shape
 
     def __repr__(self):
-        return "SlicingLayer<name='{}'".format(self.name)
+        return "SlicingLayer<name='{}'".format(self.out_name)
 
     @property
     def _dict(self):
