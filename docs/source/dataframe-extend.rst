@@ -39,7 +39,7 @@ non-empty non-Dask object:
 
 .. code-block:: python
 
-   from dask.dataframe import make_meta
+   from dask.dataframe.utils import make_meta
 
    @make_meta.register(MyDataFrame)
    def make_meta_dataframe(df):
