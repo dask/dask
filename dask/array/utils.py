@@ -201,7 +201,7 @@ def _not_empty(x):
 
 
 def _check_dsk(dsk):
-    """ Check that graph is well named and non-overlapping """
+    """Check that graph is well named and non-overlapping"""
     if not isinstance(dsk, HighLevelGraph):
         return
 
@@ -509,7 +509,7 @@ def asanyarray_safe(a, like, **kwargs):
 
 
 def validate_axis(axis, ndim):
-    """ Validate an input to axis= keywords """
+    """Validate an input to axis= keywords"""
     if isinstance(axis, (tuple, list)):
         return tuple(validate_axis(ax, ndim) for ax in axis)
     if not isinstance(axis, numbers.Integral):
@@ -563,6 +563,26 @@ def svd_flip(u, v, u_based_decision=False):
     # Force all singular vectors into same half-space
     u, v = u * signs, v * signs.T
     return u, v
+
+
+def scipy_linalg_safe(func_name, *args, **kwargs):
+    # need to evaluate at least the first input array
+    # for gpu/cpu checking
+    a = args[0]
+    if is_cupy_type(a):
+        import cupyx.scipy.linalg
+
+        func = getattr(cupyx.scipy.linalg, func_name)
+    else:
+        import scipy.linalg
+
+        func = getattr(scipy.linalg, func_name)
+
+    return func(*args, **kwargs)
+
+
+def solve_triangular_safe(a, b, lower=False):
+    return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
 
 
 def _is_nep18_active():

@@ -17,7 +17,7 @@ from .io import _link
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
-    """ A wrapper function around pd_to_hdf that enables locking"""
+    """A wrapper function around pd_to_hdf that enables locking"""
 
     if lock:
         lock.acquire()
@@ -395,7 +395,7 @@ def _read_single_hdf(
 
 
 def _pd_read_hdf(path, key, lock, kwargs):
-    """ Read from hdf5 file with a lock """
+    """Read from hdf5 file with a lock"""
     if lock:
         lock.acquire()
     try:

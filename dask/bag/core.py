@@ -131,7 +131,7 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
 
 
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
-    """ Optimize a dask from a dask Bag. """
+    """Optimize a dask from a dask Bag."""
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     kwargs = {}
@@ -329,7 +329,7 @@ class StringAccessor:
 
 
 def robust_wraps(wrapper):
-    """ A weak version of wraps that only copies doc. """
+    """A weak version of wraps that only copies doc."""
 
     def _(wrapped):
         wrapped.__doc__ = wrapper.__doc__
@@ -1047,31 +1047,31 @@ class Bag(DaskMethodsMixin):
             return Bag(graph, fmt, 1)
 
     def sum(self, split_every=None):
-        """ Sum all elements """
+        """Sum all elements"""
         return self.reduction(sum, sum, split_every=split_every)
 
     def max(self, split_every=None):
-        """ Maximum element """
+        """Maximum element"""
         return self.reduction(max, max, split_every=split_every)
 
     def min(self, split_every=None):
-        """ Minimum element """
+        """Minimum element"""
         return self.reduction(min, min, split_every=split_every)
 
     def any(self, split_every=None):
-        """ Are any of the elements truthy? """
+        """Are any of the elements truthy?"""
         return self.reduction(any, any, split_every=split_every)
 
     def all(self, split_every=None):
-        """ Are all elements truthy? """
+        """Are all elements truthy?"""
         return self.reduction(all, all, split_every=split_every)
 
     def count(self, split_every=None):
-        """ Count the number of elements. """
+        """Count the number of elements."""
         return self.reduction(count, sum, split_every=split_every)
 
     def mean(self):
-        """ Arithmetic mean """
+        """Arithmetic mean"""
 
         def mean_chunk(seq):
             total, n = 0.0, 0
@@ -1087,13 +1087,13 @@ class Bag(DaskMethodsMixin):
         return self.reduction(mean_chunk, mean_aggregate, split_every=False)
 
     def var(self, ddof=0):
-        """ Variance """
+        """Variance"""
         return self.reduction(
             chunk.var_chunk, partial(chunk.var_aggregate, ddof=ddof), split_every=False
         )
 
     def std(self, ddof=0):
-        """ Standard deviation """
+        """Standard deviation"""
         return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
@@ -1166,7 +1166,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(graph, name, self.npartitions)
 
     def product(self, other):
-        """ Cartesian product between two bags. """
+        """Cartesian product between two bags."""
         assert isinstance(other, Bag)
         name = "product-" + tokenize(self, other)
         n, m = self.npartitions, other.npartitions
@@ -1564,7 +1564,7 @@ class Bag(DaskMethodsMixin):
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            meta = dd.utils.make_meta(meta)
+            meta = dd.utils.make_meta_util(meta, parent_meta=pd.DataFrame())
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)
@@ -1682,7 +1682,7 @@ def accumulate_part(binop, seq, initial, is_first=False):
 
 
 def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
-    """ Partition a bag along a grouper, store partitions on disk. """
+    """Partition a bag along a grouper, store partitions on disk."""
     for block in partition_all(nelements, sequence):
         d = groupby(grouper, block)
         d2 = defaultdict(list)
@@ -1693,7 +1693,7 @@ def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
 
 
 def collect(grouper, group, p, barrier_token):
-    """ Collect partitions from disk and yield k,v group pairs. """
+    """Collect partitions from disk and yield k,v group pairs."""
     d = groupby(grouper, p.get(group, lock=False))
     return list(d.items())
 

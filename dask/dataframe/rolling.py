@@ -12,7 +12,7 @@ from ..utils import M, derived_from, funcname, has_keyword
 from . import methods
 from ._compat import PANDAS_VERSION
 from .core import _emulate
-from .utils import make_meta
+from .utils import make_meta_util
 
 
 def overlap_chunk(
@@ -103,7 +103,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = kwargs.pop("meta")
     else:
         meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta, index=df._meta.index)
+    meta = make_meta_util(meta, index=df._meta.index, parent_meta=df._meta)
 
     name = "{0}-{1}".format(func_name, token)
     name_a = "overlap-prepend-" + tokenize(df, before)

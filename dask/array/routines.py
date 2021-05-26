@@ -14,7 +14,7 @@ from ..compatibility import apply
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, funcname, is_arraylike
+from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
 from .core import (
     Array,
@@ -170,25 +170,33 @@ def transpose(a, axes=None):
     )
 
 
-def flip(m, axis):
+def flip(m, axis=None):
     """
     Reverse element order along axis.
 
     Parameters
     ----------
-    axis : int
-        Axis to reverse element order of.
+    m : array_like
+        Input array.
+    axis : None or int or tuple of ints, optional
+        Axis or axes to reverse element order of. None will reverse all axes.
 
     Returns
     -------
-    reversed array : ndarray
+    dask.array.Array
+        The flipped array.
     """
 
     m = asanyarray(m)
 
     sl = m.ndim * [slice(None)]
+    if axis is None:
+        axis = range(m.ndim)
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
     try:
-        sl[axis] = slice(None, None, -1)
+        for ax in axis:
+            sl[ax] = slice(None, None, -1)
     except IndexError as e:
         raise ValueError(
             "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
@@ -239,10 +247,6 @@ def rot90(m, k=1, axes=(0, 1)):
     else:
         # k == 3
         return flip(transpose(m, axes_list), axes[1])
-
-
-alphabet = "abcdefghijklmnopqrstuvwxyz"
-ALPHABET = alphabet.upper()
 
 
 def _tensordot(a, b, axes):
@@ -321,11 +325,18 @@ def vdot(a, b):
 
 
 def _matmul(a, b):
-    chunk = np.matmul(a, b)
+    xp = np
+
+    if is_cupy_type(a):
+        import cupy
+
+        xp = cupy
+
+    chunk = xp.matmul(a, b)
     # Since we have performed the contraction via matmul
     # but blockwise expects all dimensions back, we need
     # to add one dummy dimension back
-    return chunk[..., np.newaxis]
+    return chunk[..., xp.newaxis]
 
 
 @derived_from(np)
@@ -703,6 +714,56 @@ def digitize(a, bins, right=False):
     bins = asarray_safe(bins, like=meta_from_array(a))
     dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
+
+
+def _searchsorted_block(x, y, side):
+    res = np.searchsorted(x, y, side=side)
+    # 0 is only correct for the first block of a, but blockwise doesn't have a way
+    # of telling which block is being operated on (unlike map_blocks),
+    # so set all 0 values to a special value and set back at the end of searchsorted
+    res[res == 0] = -1
+    return res[np.newaxis, :]
+
+
+@derived_from(np)
+def searchsorted(a, v, side="left", sorter=None):
+    if a.ndim != 1:
+        raise ValueError("Input array a must be one dimensional")
+
+    if sorter is not None:
+        raise NotImplementedError(
+            "da.searchsorted with a sorter argument is not supported"
+        )
+
+    # call np.searchsorted for each pair of blocks in a and v
+    meta = np.searchsorted(a._meta, v._meta)
+    out = blockwise(
+        _searchsorted_block,
+        list(range(v.ndim + 1)),
+        a,
+        [0],
+        v,
+        list(range(1, v.ndim + 1)),
+        side,
+        None,
+        meta=meta,
+        adjust_chunks={0: 1},  # one row for each block in a
+    )
+
+    # add offsets to take account of the position of each block within the array a
+    a_chunk_sizes = array_safe((0, *a.chunks[0]), like=meta_from_array(a))
+    a_chunk_offsets = np.cumsum(a_chunk_sizes)[:-1]
+    a_chunk_offsets = a_chunk_offsets[(Ellipsis,) + v.ndim * (np.newaxis,)]
+    a_offsets = asarray(a_chunk_offsets, chunks=1)
+    out = where(out < 0, out, out + a_offsets)
+
+    # combine the results from each block (of a)
+    out = out.max(axis=0)
+
+    # fix up any -1 values
+    out[out == -1] = 0
+
+    return out
 
 
 # TODO: dask linspace doesn't support delayed values
@@ -1611,7 +1672,7 @@ def _asarray_isnull(values):
 
 
 def isnull(values):
-    """ pandas.isnull for dask arrays """
+    """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
     import pandas as pd  # noqa
 
@@ -1619,7 +1680,7 @@ def isnull(values):
 
 
 def notnull(values):
-    """ pandas.notnull for dask arrays """
+    """pandas.notnull for dask arrays"""
     return ~isnull(values)
 
 

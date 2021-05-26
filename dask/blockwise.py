@@ -5,6 +5,7 @@ from typing import (
     Any,
     Hashable,
     Iterable,
+    List,
     Mapping,
     Optional,
     Sequence,
@@ -15,7 +16,7 @@ from typing import (
 
 import tlz as toolz
 
-from .base import clone_key, get_name_from_key
+from .base import clone_key, get_name_from_key, tokenize
 from .compatibility import prod
 from .core import flatten, keys_in_tasks, reverse_dict
 from .delayed import unpack_collections
@@ -30,21 +31,160 @@ from .utils import (
 )
 
 
-class BlockwiseIODeps:
-    """Index-argument mapping for Blockwise IO dependencies"""
+class BlockwiseDep:
+    """Blockwise-IO argument
 
-    def __getitem__(self, idx: tuple):
+    This is the base class for indexable Blockwise-IO arguments.
+    When constructing a ``Blockwise`` Layer, one or more of the
+    collection tuples passed in with ``indices`` may contain a
+    ``BlockwiseDep`` instance (in place of a "real" collection name).
+    This allows a new collection to be created (via IO) within a
+    ``Blockwise`` layer.
+
+    All ``BlockwiseDep`` instances must define a ``numblocks``
+    attribute to speficy the number of blocks/partitions the
+    object can support along each dimension. The object should
+    also define a ``produces_tasks`` attribute to specify if
+    any nested tasks will be passed to the Blockwise function.
+
+    See Also
+    --------
+    dask.blockwise.Blockwise
+    dask.blockwise.BlockwiseDepDict
+    """
+
+    numblocks: Tuple[int, ...]
+    produces_tasks: bool
+
+    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
+        """Return Blockwise-function arguments for a specific index"""
         raise NotImplementedError(
-            "Must define `__getitem__` for `BlockwiseIODeps` subclass."
+            "Must define `__getitem__` for `BlockwiseDep` subclass."
+        )
+
+    def get(self, idx: Tuple[int, ...], default) -> Any:
+        """BlockwiseDep ``__getitem__`` Wrapper"""
+        try:
+            return self.__getitem__(idx)
+        except KeyError:
+            return default
+
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
+        """Client-side serialization for ``BlockwiseDep`` objects.
+
+        Should return a ``state`` dictionary, with msgpack-serializable
+        values, that can be used to initialize a new ``BlockwiseDep`` object
+        on a scheduler process.
+        """
+        raise NotImplementedError(
+            "Must define `__dask_distributed_pack__` for `BlockwiseDep` subclass."
         )
 
     @classmethod
-    def __dask_distributed_pack__(cls, cls_path: str, *args):
-        return (cls_path, *args)
+    def __dask_distributed_unpack__(cls, state):
+        """Scheduler-side deserialization for ``BlockwiseDep`` objects.
+
+        Should use an input ``state`` dictionary to initialize a new
+        ``BlockwiseDep`` object.
+        """
+        raise NotImplementedError(
+            "Must define `__dask_distributed_unpack__` for `BlockwiseDep` subclass."
+        )
+
+    def __repr__(self) -> str:
+        return f"<{type(self).__name__} {self.numblocks}>"
+
+
+class BlockwiseDepDict(BlockwiseDep):
+    """Dictionary-based Blockwise-IO argument
+
+    This is a dictionary-backed instance of ``BlockwiseDep``.
+    The purpose of this class is to simplify the construction
+    of IO-based Blockwise Layers with block/partition-dependent
+    function arguments that are difficult to calculate at
+    graph-materialization time.
+
+    Examples
+    --------
+
+    Specify an IO-based function for the Blockwise Layer. Note
+    that the function will be passed a single input object when
+    the task is executed (e.g. a single ``tuple`` or ``dict``):
+
+    >>> import pandas as pd  # doctest: +SKIP
+    >>> func = lambda x: pd.read_csv(**x)  # doctest: +SKIP
+
+    Use ``BlockwiseDepDict`` to define the input argument to
+    ``func`` for each block/partition:
+
+    >>> dep = BlockwiseDepDict(
+    ...     mapping={
+    ...         (0,) : {
+    ...             "filepath_or_buffer": "data.csv",
+    ...             "skiprows": 1,
+    ...             "nrows": 2,
+    ...             "names": ["a", "b"],
+    ...         },
+    ...         (1,) : {
+    ...             "filepath_or_buffer": "data.csv",
+    ...             "skiprows": 3,
+    ...             "nrows": 2,
+    ...             "names": ["a", "b"],
+    ...         },
+    ...     }
+    ... )  # doctest: +SKIP
+
+    Construct a Blockwise Layer with ``dep`` speficied
+    in the ``indices`` list:
+
+    >>> layer = Blockwise(
+    ...     output="collection-name",
+    ...     output_indices="i",
+    ...     dsk={"collection-name": (func, '_0')},
+    ...     indices=[(dep, "i")],
+    ...     numblocks={},
+    ... )  # doctest: +SKIP
+
+    See Also
+    --------
+    dask.blockwise.Blockwise
+    dask.blockwise.BlockwiseDep
+    """
+
+    def __init__(
+        self,
+        mapping: dict,
+        numblocks: Optional[Tuple[int, ...]] = None,
+        produces_tasks: bool = False,
+    ):
+        self.mapping = mapping
+        self.produces_tasks = produces_tasks
+
+        # By default, assume 1D shape
+        self.numblocks = numblocks or (len(mapping),)
+
+    def __getitem__(self, idx: Tuple[int, ...]) -> Any:
+        return self.mapping[idx]
+
+    def __dask_distributed_pack__(
+        self, required_indices: Optional[List[Tuple[int, ...]]] = None
+    ):
+        from distributed.protocol import to_serialize
+
+        if required_indices is None:
+            required_indices = self.mapping.keys()
+
+        return {
+            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
+            "numblocks": self.numblocks,
+            "produces_tasks": self.produces_tasks,
+        }
 
     @classmethod
-    def __dask_distributed_unpack__(cls, cls_path: str, *args):
-        return (cls_path, *args)
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)
 
 
 def subs(task, substitution):
@@ -64,7 +204,7 @@ def subs(task, substitution):
 
 
 def index_subs(ind, substitution):
-    """ A simple subs function that works both on tuples and strings """
+    """A simple subs function that works both on tuples and strings"""
     if ind is None:
         return ind
     else:
@@ -186,10 +326,12 @@ class Blockwise(Layer):
     dsk: dict
         A small graph to apply per-output-block.  May include keys from the
         input indices.
-    indices: Tuple[str, Tuple[str, ...]]
+    indices: Tuple[Tuple[str, Optional[Tuple[str, ...]]], ...]
         An ordered mapping from input key name, like ``'x'``
         to input indices, like ``('i', 'j')``
-        Or includes literals, which have ``None`` for an index value
+        Or includes literals, which have ``None`` for an index value.
+        In place of input-key names, the first tuple element may also be a
+        ``BlockwiseDep`` object.
     numblocks: Mapping[key, Sequence[int]]
         Number of blocks along each dimension for each input
     concatenate: bool
@@ -205,21 +347,12 @@ class Blockwise(Layer):
         to materialize the low-level graph).
     annotations: dict (optional)
         Layer annotations
-    io_deps: dict[dict or tuple] (optional)
+    io_deps: Dict[str, BlockwiseDep] (optional)
         Dictionary containing the mapping between "place-holder" collection
-        keys and the arguments needed to generate those collections internally.
-        The outer-most dict keys are the names of place-holder collections
-        being generated within this Blockwise layer (e.g. "read-parquet").
-        Since these collections do not actually exist outside this layer, any
-        key with a name in this set will be excluded from the external
-        dependencies.  The inner-most elements of io_deps correspond to the
-        mapping between place-holder collection indices, e.g ``(1,)``,
-        and any chunk/partition-specific arguments needed by the underlying
-        IO function. If ``io_deps[key]`` corresponds to a tuple, the first
-        two elements of that tuple must contain the dask module path and the
-        name for the desired ``BlockwiseIODeps``-based mapping, respectively.
-        The remaining tuple elements should be initialization arguments.
-        See ``make_blockwise_graph`` for usage.
+        keys and ``BlockwiseDep``-based objects.
+        **WARNING**: This argument should only be used internally (for culling,
+        fusion and cloning of existing Blockwise layers). Explicit use of this
+        argument will be deprecated in the future.
 
     See Also
     --------
@@ -241,23 +374,36 @@ class Blockwise(Layer):
         output: str,
         output_indices: Iterable[str],
         dsk: Mapping[str, tuple],
-        indices: Iterable[Tuple[str, Optional[Iterable[str]]]],
+        indices: Iterable[Tuple[Union[str, BlockwiseDep], Optional[Iterable[str]]]],
         numblocks: Mapping[str, Sequence[int]],
         concatenate: bool = None,
         new_axes: Mapping[str, int] = None,
         output_blocks: Set[Tuple[int, ...]] = None,
         annotations: Mapping[str, Any] = None,
-        io_deps: Optional[Mapping[str, Union[dict, tuple]]] = None,
+        io_deps: Optional[Mapping[str, BlockwiseDep]] = None,
     ):
         super().__init__(annotations=annotations)
         self.output = output
         self.output_indices = tuple(output_indices)
         self.output_blocks = output_blocks
         self.dsk = dsk
-        self.indices = tuple(
-            (name, tuple(ind) if ind is not None else ind) for name, ind in indices
-        )
+
+        # Remove `BlockwiseDep` arguments from input indices
+        # and add them to `self.io_deps`.
+        # TODO: Remove `io_deps` and handle indexable objects
+        # in `self.indices` throughout `Blockwise`.
+        self.indices = []
         self.numblocks = numblocks
+        self.io_deps = io_deps or {}
+        for dep, ind in indices:
+            name = dep
+            if isinstance(dep, BlockwiseDep):
+                name = tokenize(dep)
+                self.io_deps[name] = dep
+                self.numblocks[name] = dep.numblocks
+            self.indices.append((name, tuple(ind) if ind is not None else ind))
+        self.indices = tuple(self.indices)
+
         # optimize_blockwise won't merge where `concatenate` doesn't match, so
         # enforce a canonical value if there are no axes for reduction.
         output_indices_set = set(self.output_indices)
@@ -270,7 +416,6 @@ class Blockwise(Layer):
             concatenate = None
         self.concatenate = concatenate
         self.new_axes = new_axes or {}
-        self.io_deps = io_deps or {}
 
     @property
     def dims(self):
@@ -343,7 +488,6 @@ class Blockwise(Layer):
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
         from distributed.protocol import to_serialize
-        from distributed.protocol.serialize import import_allowed_module
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
         from distributed.worker import dumps_function
@@ -364,9 +508,41 @@ class Blockwise(Layer):
         dsk = (SubgraphCallable(dsk, self.output, tuple(keys2)),)
         dsk, dsk_unpacked_futures = unpack_remotedata(dsk, byte_keys=True)
 
-        # Dump the function if concatenate is False, because
-        # we will not need to construct a nested task
-        func = to_serialize(dsk[0]) if self.concatenate else dumps_function(dsk[0])
+        # Handle `io_deps` serialization. Assume each element
+        # is a `BlockwiseDep`-based object.
+        packed_io_deps = {}
+        inline_tasks = False
+        for name, blockwise_dep in self.io_deps.items():
+            packed_io_deps[name] = {
+                "__module__": blockwise_dep.__module__,
+                "__name__": type(blockwise_dep).__name__,
+                # TODO: Pass a `required_indices` list to __pack__
+                "state": blockwise_dep.__dask_distributed_pack__(),
+            }
+            inline_tasks = inline_tasks or blockwise_dep.produces_tasks
+
+        # Dump (pickle + cache) the function here if we know `make_blockwise_graph`
+        # will NOT be producing "nested" tasks (via `__dask_distributed_unpack__`).
+        #
+        # If `make_blockwise_graph` DOES need to produce nested tasks later on, it
+        # will need to call `to_serialize` on the entire task.  That will be a
+        # problem if the function was already pickled here. Therefore, we want to
+        # call `to_serialize` on the function if we know there will be nested tasks.
+        #
+        # We know there will be nested tasks if either:
+        #   (1) `concatenate=True`   # Check `self.concatenate`
+        #   (2) `inline_tasks=True`  # Check `BlockwiseDep.produces_tasks`
+        #
+        # We do not call `to_serialize` in ALL cases, because that code path does
+        # not cache the function on the scheduler or worker (or warn if there are
+        # large objects being passed into the graph).  However, in the future,
+        # single-pass serialization improvements should allow us to remove this
+        # special logic altogether.
+        func = (
+            to_serialize(dsk[0])
+            if (self.concatenate or inline_tasks)
+            else dumps_function(dsk[0])
+        )
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -383,24 +559,6 @@ class Blockwise(Layer):
 
         # All blockwise tasks will depend on the futures in `indices`
         global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
-
-        # Handle `io_deps` serialization.
-        # If `io_deps[<collection_key>]` is just a dict, we rely
-        # entirely on msgpack.  It is up to the `Blockwise` layer to
-        # ensure that all arguments are msgpack serializable. To enable
-        # more control over serialization, a `BlockwiseIODeps` mapping
-        # subclass can be defined with the necessary
-        # `__dask_distributed_{pack,unpack}__` methods.
-        packed_io_deps = {}
-        for name, input_map in self.io_deps.items():
-            if isinstance(input_map, tuple):
-                # Use the `__dask_distributed_pack__` definition for the
-                # specified `BlockwiseIODeps` subclass
-                module_name, attr_name = input_map[0].rsplit(".", 1)
-                io_dep_map = getattr(import_allowed_module(module_name), attr_name)
-                packed_io_deps[name] = io_dep_map.__dask_distributed_pack__(*input_map)
-            else:
-                packed_io_deps[name] = input_map
 
         return {
             "output": self.output,
@@ -420,6 +578,8 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.protocol.serialize import import_allowed_module
+
         # Make sure we convert list items back from tuples in `indices`.
         # The msgpack serialization will have converted lists into
         # tuples, and tuples may be stringified during graph
@@ -428,6 +588,15 @@ class Blockwise(Layer):
             list(ind) if is_list else ind
             for ind, is_list in zip(state["indices"], state["is_list"])
         ]
+
+        # Unpack io_deps state
+        io_deps = {}
+        for replace_name, packed_dep in state["io_deps"].items():
+            mod = import_allowed_module(packed_dep["__module__"])
+            dep_cls = getattr(mod, packed_dep["__name__"])
+            io_deps[replace_name] = dep_cls.__dask_distributed_unpack__(
+                packed_dep["state"]
+            )
 
         layer_dsk, layer_deps = make_blockwise_graph(
             state["func"],
@@ -442,7 +611,7 @@ class Blockwise(Layer):
             return_key_deps=True,
             deserializing=True,
             func_future_args=state["func_future_args"],
-            io_deps=state["io_deps"],
+            io_deps=io_deps,
         )
         g_deps = state["global_dependencies"]
 
@@ -822,23 +991,7 @@ def make_blockwise_graph(
         key_deps = {}
 
     if deserializing:
-        from distributed.protocol.serialize import import_allowed_module, to_serialize
-        from distributed.worker import dumps_function
-    else:
-        from importlib import import_module as import_allowed_module
-
-    # Check if there are tuple arguments in `io_deps`.
-    # If so, we must use this tuple to construct the actual
-    # IO-argument mapping.
-    io_arg_mappings = {}
-    for arg, val in io_deps.items():
-        if isinstance(val, tuple):
-            _args = io_deps[arg]
-            module_name, attr_name = _args[0].rsplit(".", 1)
-            io_dep_map = getattr(import_allowed_module(module_name), attr_name)
-            if deserializing:
-                _args = io_dep_map.__dask_distributed_unpack__(*_args)
-            io_arg_mappings[arg] = io_dep_map(*_args[1:])
+        from distributed.protocol.serialize import to_serialize
 
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
@@ -902,13 +1055,7 @@ def make_blockwise_graph(
                     # We don't want to stringify keys for args
                     # we are replacing here
                     idx = tups[1:]
-                    if arg in io_arg_mappings:
-                        args.append(io_arg_mappings[arg][idx])
-                    else:
-                        # The required inputs for the IO function
-                        # are specified explicitly in `io_deps`
-                        # (Or the index is the only required arg)
-                        args.append(io_deps[arg].get(idx, idx))
+                    args.append(io_deps[arg].get(idx, idx))
                 elif deserializing:
                     args.append(stringify_collection_keys(tups))
                 else:
@@ -919,7 +1066,7 @@ def make_blockwise_graph(
             deps.update(func_future_args)
             args += list(func_future_args)
 
-        if deserializing and not concatenate:
+        if deserializing and isinstance(func, bytes):
             # Construct a function/args/kwargs dict if we
             # do not have a nested task (i.e. concatenate=False).
             # TODO: Avoid using the iterate_collection-version
@@ -927,7 +1074,7 @@ def make_blockwise_graph(
             # Serialized/Serialize objects in args and/or kwargs.
             if kwargs:
                 dsk[out_key] = {
-                    "function": dumps_function(apply),
+                    "function": func,
                     "args": to_serialize(args),
                     "kwargs": to_serialize(kwargs2),
                 }
