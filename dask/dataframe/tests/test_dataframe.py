@@ -4671,6 +4671,41 @@ def test_dot_nan():
     assert_eq(s2.dot(df), dask_s2.dot(dask_df))
 
 
+# TODO: Can the setup here go into a fixture? or just a private function?
+def test_pairwise_rejects_right_join():
+    base_df = dd.from_pandas(
+        pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]), 3
+    )
+    dfs = [
+        dd.from_pandas(
+            pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]), 3
+        ),
+        dd.from_pandas(
+            pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]), 3
+        ),
+    ]
+
+    with pytest.raises(ValueError):
+        base_df.join(dfs, how="right")
+
+
+def test_pairwise_rejects_inner_join():
+    base_df = dd.from_pandas(
+        pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]), 3
+    )
+    dfs = [
+        dd.from_pandas(
+            pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]), 3
+        ),
+        dd.from_pandas(
+            pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]), 3
+        ),
+    ]
+
+    with pytest.raises(ValueError):
+        base_df.join(dfs, how="inner")
+
+
 def test_pairwise_merge_results_in_identical_output_df():
     seed("dask")
     dfs_to_merge = []
