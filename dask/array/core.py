@@ -44,13 +44,9 @@ from ..utils import (
     derived_from,
     factors,
     format_bytes,
-<<<<<<< HEAD
     funcname,
     has_keyword,
     ignoring,
-=======
-    typename,
->>>>>>> Just change Array to is_arraylike
     is_arraylike,
     is_dataframe_like,
     is_index_like,
