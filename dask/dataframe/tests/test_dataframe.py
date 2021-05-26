@@ -1,7 +1,6 @@
 import warnings
 from itertools import product
 from operator import add
-from random import seed, getrandbits
 
 import numpy as np
 import pandas as pd
@@ -4707,14 +4706,13 @@ def test_pairwise_rejects_inner_join():
 
 
 def test_pairwise_merge_results_in_identical_output_df():
-    seed("dask")
     dfs_to_merge = []
     ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), 3)
     for i in range(10):
         df = pd.DataFrame(
             {
-                f"{i}A": [getrandbits(5), getrandbits(5), getrandbits(5)],
-                f"{i}B": [getrandbits(5), getrandbits(5), getrandbits(5)],
+                f"{i}A": [4, 5, 6],
+                f"{i}B": [3,2,1],
             },
             index=[0, 1, 3],
         )
