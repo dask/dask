@@ -167,7 +167,7 @@ class BlockwiseDepDict(BlockwiseDep):
         self.produces_tasks = produces_tasks
 
         # By default, assume 1D shape
-        self.numblocks = numblocks or (len(mapping),)
+        self.numblocks = numblocks if numblocks is not None else (len(mapping),)
 
     def __getitem__(self, idx: Tuple[int, ...]) -> Any:
         return self.mapping[idx]
