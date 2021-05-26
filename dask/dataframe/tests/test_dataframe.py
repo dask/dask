@@ -1,6 +1,7 @@
 import warnings
 from itertools import product
 from operator import add
+from random import seed, getrandbits
 
 import numpy as np
 import pandas as pd
@@ -2646,13 +2647,13 @@ def test_to_timestamp():
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
 
@@ -4626,3 +4627,28 @@ def test_dot_nan():
 
     assert_eq(s1.dot(s2), dask_s1.dot(dask_s2))
     assert_eq(s2.dot(df), dask_s2.dot(dask_df))
+
+
+def test_pairwise_merge_results_in_identical_output_df():
+    seed("dask")
+    dfs_to_merge = []
+    ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), 3)
+    for i in range(10):
+        df = pd.DataFrame(
+            {
+                f"{i}A": [getrandbits(5), getrandbits(5), getrandbits(5)],
+                f"{i}B": [getrandbits(5), getrandbits(5), getrandbits(5)],
+            },
+            index=[0, 1, 3],
+        )
+        ddf = dd.from_pandas(df, 3)
+        dfs_to_merge.append(ddf)
+
+    for ddf in dfs_to_merge:
+        ddf_loop = ddf_loop.join(ddf, how="left")
+
+    ddf_pairwise = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), 3)
+
+    ddf_pairwise = ddf_pairwise.join(dfs_to_merge)
+
+    tm.assert_frame_equal(ddf_pairwise.compute(), ddf_loop.compute())

@@ -5036,7 +5036,7 @@ def _merge_multi(
         shuffle=shuffle,
     )
 
-    return left.merge(
+    return left.join(
         joined_others_df,
         on=on,
         how=how,
@@ -5077,7 +5077,9 @@ def _recursive_pairwise_outer_join(
 
     # Base case 2: merge the two provided dataframe to be merged with `left`
     if number_of_dataframes_to_merge == 2:
-        merged_ddf = dataframes_to_merge[0].merge(how="outer", **merge_options)
+        merged_ddf = dataframes_to_merge[0].join(
+            dataframes_to_merge[1], how="outer", **merge_options
+        )
         return merged_ddf
 
     # Recursive case: split the list of dfs into two ~even sizes and continue down
