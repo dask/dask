@@ -624,6 +624,37 @@ def test_digitize():
             )
 
 
+@pytest.mark.parametrize(
+    "a, a_chunks, v, v_chunks",
+    [
+        [[], 1, [], 1],
+        [[0], 1, [0], 1],
+        [[-10, 0, 10, 20, 30], 3, [11, 30], 2],
+        [[-10, 0, 10, 20, 30], 3, [11, 30, -20, 1, -10, 10, 37, 11], 5],
+        [[-10, 0, 10, 20, 30], 3, [[11, 30, -20, 1, -10, 10, 37, 11]], 5],
+        [[-10, 0, 10, 20, 30], 3, [[7, 0], [-10, 10], [11, -1], [15, 15]], (2, 2)],
+    ],
+)
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_searchsorted(a, a_chunks, v, v_chunks, side):
+    a = np.array(a)
+    v = np.array(v)
+
+    ad = da.asarray(a, chunks=a_chunks)
+    vd = da.asarray(v, chunks=v_chunks)
+
+    out = da.searchsorted(ad, vd, side)
+
+    assert out.shape == vd.shape
+    assert out.chunks == vd.chunks
+    assert_eq(out, np.searchsorted(a, v, side))
+
+
+def test_searchsorted_sorter_not_implemented():
+    with pytest.raises(NotImplementedError):
+        da.searchsorted(da.asarray([1, 0]), da.asarray([1]), sorter=da.asarray([1, 0]))
+
+
 def test_histogram():
     # Test for normal, flattened input
     n = 100
