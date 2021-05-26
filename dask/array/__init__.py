@@ -133,6 +133,7 @@ try:
         roll,
         rot90,
         round,
+        searchsorted,
         shape,
         squeeze,
         swapaxes,

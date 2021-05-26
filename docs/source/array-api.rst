@@ -188,6 +188,7 @@ Top level user functions:
    rollaxis
    rot90
    round
+   searchsorted
    sign
    signbit
    sin
