@@ -2468,9 +2468,12 @@ Dask Name: {name}, {task} tasks"""
     ):
 
         if self._meta.ndim == 1:
-            return self._describe_1d(
+            meta = self._meta_nonempty.describe(datetime_is_numeric=datetime_is_numeric)
+            output = self._describe_1d(
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
             )
+            output._meta = meta
+            return output
         elif (include is None) and (exclude is None):
             _include = [np.number, np.timedelta64]
             if datetime_is_numeric:

@@ -495,6 +495,41 @@ def test_describe(include, exclude, percentiles, subset):
             )
 
 
+def test_describe_without_datetime_is_numeric():
+    data = {
+        "a": ["aaa", "bbb", "bbb", None, None, "zzz"] * 2,
+        "c": [None, 0, 1, 2, 3, 4] * 2,
+        "d": [None, 0, 1] * 4,
+        "e": [
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 00:00:00.006000"),
+            pd.Timestamp("2017-05-09 07:56:23.858694"),
+            pd.Timestamp("2017-05-09 05:59:58.938999"),
+            None,
+            None,
+        ]
+        * 2,
+    }
+    # Arrange
+    df = pd.DataFrame(data)
+    ddf = dd.from_pandas(df, 2)
+
+    # Assert
+    assert_eq(ddf.describe(), df.describe())
+
+    # Check series
+    for col in ["a", "c"]:
+        assert_eq(df[col].describe(), ddf[col].describe())
+
+    with pytest.warns(
+        FutureWarning,
+        match=(
+            "Treating datetime data as categorical rather than numeric in `.describe` is deprecated"
+        ),
+    ):
+        assert_eq(df.e.describe(), ddf.e.describe())
+
+
 def test_describe_empty():
     df_none = pd.DataFrame({"A": [None, None]})
     ddf_none = dd.from_pandas(df_none, 2)
