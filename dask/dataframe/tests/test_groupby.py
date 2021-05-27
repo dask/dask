@@ -500,7 +500,7 @@ def test_groupby_set_index():
 )  # fixed in new pandas.
 @pytest.mark.filterwarnings(
     "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
-)  # PANDAS_GT_130 https://github.com/pandas-dev/pandas/issues/41683
+)  #  _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -715,6 +715,9 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
+@pytest.mark.filterwarnings(
+    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
+)  # _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
