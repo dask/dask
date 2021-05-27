@@ -2753,6 +2753,46 @@ def test_chunksize_files(
         assert_eq(ddf1, ddf2, check_divisions=False, check_index=False)
 
 
+@write_read_engines()
+def test_chunksize_tuple(tmpdir, write_engine, read_engine):
+
+    chunksize = (
+        "1MiB",
+        "a=[^/]*/",  # Aggregate files within the same a=* partition
+    )
+    partition_on = ["a", "b"]
+    df_size = 100
+    df1 = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.choice(["small", "large"], size=df_size),
+            "c": np.random.random(size=df_size),
+            "d": np.random.randint(1, 5, size=df_size),
+        }
+    )
+    ddf1 = dd.from_pandas(df1, npartitions=9)
+
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine=write_engine,
+        partition_on=partition_on,
+        write_index=False,
+    )
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine=read_engine,
+        chunksize=chunksize,
+    )
+
+    # Check that files where aggregated as expected
+    assert ddf2.npartitions == 3
+
+    # Check that the final data is correct
+    df2 = ddf2.compute().sort_values(["c", "d"])
+    df1 = df1.sort_values(["c", "d"])
+    assert_eq(df1[["c", "d"]], df2[["c", "d"]], check_index=False)
+
+
 @pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):

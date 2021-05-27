@@ -1,5 +1,6 @@
 import copy
 import math
+import re
 import warnings
 from distutils.version import LooseVersion
 
@@ -190,12 +191,29 @@ def read_parquet(
         size of the task graph, but will add minor overhead to ``read_partition``.
         By default (None), ``ArrowDatasetEngine`` will set this option to
         ``False`` when there are filters.
-    chunksize : int, str, default None
+    chunksize : int, str, tuple, default None
         The target output partition size. If specified, adjacent row-groups
         and/or files will be aggregated into the same output partition until
-        the cumulative parquet-storage size reaches this value. Note that
+        the cumulative parquet-storage size reaches this value. By default,
         inter-file aggregation will only occur if said files are stored in
         the same directory.
+
+        Note that a non-default chunksize-aggregation range can be specified
+        by passing ``chunksize`` as a tuple with two elements. The first
+        element should be the usual int or str-based representation of the
+        desired partition size. The second element should be a string
+        specifying the aggregation range. The value "file" declares that
+        aggregation may only occur within a single file. The value "directory"
+        declares that aggregation may only occur within an immediate directory.
+        If a different string value is specified it will be used for regular
+        expression matching in the file path. For example, when reading a dataset
+        partitioned by multiple columns, like "month" and "day", we can set
+        the aggregation range to be the "day" partition by passing something
+        like the following for ``chunksize``::
+
+            ``chunksize=("1MiB", "day=[^/]*/")``
+
+        Note that the example above assumes a "/" directory separator.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -1140,6 +1158,17 @@ def aggregate_row_groups(parts, stats, chunksize, fs):
 
     parts_agg = []
     stats_agg = []
+
+    # Check if `chunksize` includes custom aggregation options
+    aggregation_range = "directory"
+    if isinstance(chunksize, tuple):
+        if len(chunksize) != 2:
+            raise ValueError(
+                "A tuple-based chunksize argument must contain two elements."
+            )
+        aggregation_range = chunksize[1]
+        chunksize = chunksize[0]
+
     chunksize = parse_bytes(chunksize)
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
@@ -1147,24 +1176,36 @@ def aggregate_row_groups(parts, stats, chunksize, fs):
 
         # Criteria #1 for aggregating parts: parts are within the same file
         same_path = stat["file_path_0"] == next_stat["file_path_0"]
+        multi_path_allowed = False
 
-        # Criteria #2 for aggregating parts: The part does not include
-        # row-group information, or both parts include the same kind
-        # of row_group aggregation (all None, or all indices)
-        multi_path_allowed = len(part["piece"]) == 1
-        if not (same_path or multi_path_allowed):
-            rgs = set(list(part["piece"][1]) + list(next_part[-1]["piece"][1]))
-            multi_path_allowed = (rgs == {None}) or (None not in rgs)
+        if aggregation_range != "file":
 
-        # Criteria #3 for aggregating parts: The parts are stored
-        # in the same directory. This allows us to handle partitioned
-        # datasets in a reliable way.
-        if not same_path and multi_path_allowed:
-            # Make sure files are in the same directory before aggregating
-            # TODO: Make this check optional?
-            root = stat["file_path_0"].split(fs.sep)[:-1]
-            next_root = next_stat["file_path_0"].split(fs.sep)[:-1]
-            multi_path_allowed = root == next_root
+            # Criteria #2 for aggregating parts: The part does not include
+            # row-group information, or both parts include the same kind
+            # of row_group aggregation (all None, or all indices)
+            multi_path_allowed = len(part["piece"]) == 1
+            if not (same_path or multi_path_allowed):
+                rgs = set(list(part["piece"][1]) + list(next_part[-1]["piece"][1]))
+                multi_path_allowed = (rgs == {None}) or (None not in rgs)
+
+            # Criteria #3 for aggregating parts: The parts are stored
+            # in the same directory. This allows us to handle partitioned
+            # datasets in a reliable way.
+            if not same_path and multi_path_allowed:
+                if aggregation_range == "directory":
+                    # Make sure files share the same directory
+                    root = stat["file_path_0"].split(fs.sep)[:-1]
+                    next_root = next_stat["file_path_0"].split(fs.sep)[:-1]
+                    multi_path_allowed = root == next_root
+                else:
+                    # Use regular-expression matching to check if files may
+                    # be aggregated.
+                    root = re.findall(aggregation_range, stat["file_path_0"])
+                    next_root = re.findall(aggregation_range, next_stat["file_path_0"])
+                    if len(root) == 1 and len(next_root) == 1:
+                        multi_path_allowed = root[0] == next_root[0]
+                    else:
+                        multi_path_allowed = False
 
         if (same_path or multi_path_allowed) and (
             (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
