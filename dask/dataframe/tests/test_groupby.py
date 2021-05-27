@@ -12,9 +12,6 @@ from dask.dataframe._compat import PANDAS_GT_100, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
-# TODO(pandas) Categorical.set_levels(inplace=True) is deprecated
-pytestmark = pytest.mark.filterwarnings("ignore:inplace is deprecated:FutureWarning")
-
 AGG_FUNCS = [
     "sum",
     "mean",
@@ -501,6 +498,9 @@ def test_groupby_set_index():
 @pytest.mark.filterwarnings(
     "ignore:0 should be:DeprecationWarning"
 )  # fixed in new pandas.
+@pytest.mark.filterwarnings(
+    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
+)  #  _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_split_apply_combine_on_series(empty):
     if empty:
         pdf = pd.DataFrame({"a": [1.0], "b": [1.0]}, index=[0]).iloc[:0]
@@ -715,6 +715,9 @@ def test_split_apply_combine_on_series(empty):
 
 
 @pytest.mark.parametrize("keyword", ["split_every", "split_out"])
+@pytest.mark.filterwarnings(
+    "ignore:Promotion of numbers and bools to strings is deprecated:FutureWarning"
+)  # _numpy_121 https://github.com/numpy/numpy/issues/19078
 def test_groupby_reduction_split(keyword):
     pdf = pd.DataFrame(
         {"a": [1, 2, 6, 4, 4, 6, 4, 3, 7] * 100, "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 100}
@@ -1856,6 +1859,9 @@ def test_groupby_select_column_agg(func):
     assert_eq(actual, expected)
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Dropping of nuisance columns:FutureWarning"
+)  # https://github.com/dask/dask/issues/7714
 @pytest.mark.parametrize(
     "func",
     [
@@ -2468,6 +2474,12 @@ def test_groupby_aggregate_categorical_observed(
 
     def agg(grp, **kwargs):
         return getattr(grp, agg_func)(**kwargs)
+
+    # only include numeric columns when passing to "min" or "max"
+    # pandas default is numeric_only=False
+    if ordered_cats is False and agg_func in ["min", "max"] and groupby == "cat_1":
+        pdf = pdf[["cat_1", "value_1"]]
+        ddf = ddf[["cat_1", "value_1"]]
 
     assert_eq(
         agg(pdf.groupby(groupby, observed=observed)),
