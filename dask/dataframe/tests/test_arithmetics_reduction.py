@@ -1152,6 +1152,9 @@ def test_reductions_frame(split_every):
     assert_dask_graph(ddf1.mean(axis=1, split_every=split_every), "dataframe-mean")
 
 
+@pytest.mark.filterwarnings(
+    "ignore:Dropping of nuisance columns:FutureWarning"
+)  # https://github.com/dask/dask/issues/7714
 def test_reductions_frame_dtypes():
     df = pd.DataFrame(
         {
