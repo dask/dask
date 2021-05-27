@@ -167,3 +167,13 @@ def test_make_timeseries_fancy_keywords():
 
     assert 100 < aa <= 10000000
     assert 1 < bb <= 100
+
+
+def test_make_timeseries_getitem_compute():
+    # See https://github.com/dask/dask/issues/7692
+
+    df = dd.demo.make_timeseries()
+    df2 = df[df.y > 0]
+    df3 = df2.compute()
+    assert df3["y"].min() > 0
+    assert list(df.columns) == list(df3.columns)
