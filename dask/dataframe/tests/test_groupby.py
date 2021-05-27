@@ -2444,7 +2444,7 @@ def test_groupby_sort_true_split_out():
     not dd._compat.PANDAS_GT_100, reason="observed only supported for newer pandas"
 )
 @pytest.mark.parametrize("known_cats", [True, False])
-@pytest.mark.parametrize("ordered_cats", [False])
+@pytest.mark.parametrize("ordered_cats", [True, False])
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
 @pytest.mark.parametrize("observed", [True, False])
 def test_groupby_aggregate_categorical_observed(
