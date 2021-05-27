@@ -492,9 +492,8 @@ class _BlockInfo:
 def _pass_block_info(func, block_info, block_id, *args, **kwargs):
     """Helper for :func:`dask.array.map_blocks` to pass `block_info` or `block_id`.
 
-    For each element of `keys`, a corresponding element of args is changed
-    to a keyword argument with that key, before all arguments are passed on
-    to `func`.
+    `block_id` must always be passed. If `block_info` is not needed it may be
+    ``None``.
     """
     if has_keyword(func, "block_id"):
         kwargs.update(block_id=block_id)
