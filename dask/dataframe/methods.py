@@ -203,12 +203,14 @@ def describe_numeric_aggregate(
 
     if is_datetime_col:
         mean = pd.to_datetime(mean)
-        std = pd.NaT
         min = pd.to_datetime(min)
         max = pd.to_datetime(max)
         q = q.apply(lambda x: pd.to_datetime(x))
 
-    part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
+    if is_datetime_col:
+        part1 = typ([count, mean, min], index=["count", "mean", "min"])
+    else:
+        part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
     q.index = ["{0:g}%".format(l * 100) for l in tolist(q.index)]
     if is_series_like(q) and typ != type(q):

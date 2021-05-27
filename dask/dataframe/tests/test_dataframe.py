@@ -415,10 +415,6 @@ def test_describe_numeric(method, test_values):
     assert_eq(df.describe(), ddf.describe(split_every=2, percentiles_method=method))
 
 
-# TODO(pandas) deal with this describe warning instead of ignoring
-@pytest.mark.filterwarnings(
-    "ignore:Treating datetime data as categorical|casting:FutureWarning"
-)
 @pytest.mark.parametrize(
     "include,exclude,percentiles,subset",
     [
@@ -470,8 +466,18 @@ def test_describe(include, exclude, percentiles, subset):
     ddf = dd.from_pandas(df, 2)
 
     # Act
-    desc_ddf = ddf.describe(include=include, exclude=exclude, percentiles=percentiles)
-    desc_df = df.describe(include=include, exclude=exclude, percentiles=percentiles)
+    desc_ddf = ddf.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        datetime_is_numeric=True,
+    )
+    desc_df = df.describe(
+        include=include,
+        exclude=exclude,
+        percentiles=percentiles,
+        datetime_is_numeric=True,
+    )
 
     # Assert
     assert_eq(desc_ddf, desc_df)
@@ -480,8 +486,12 @@ def test_describe(include, exclude, percentiles, subset):
     if subset is None:
         for col in ["a", "c", "e", "g"]:
             assert_eq(
-                df[col].describe(include=include, exclude=exclude),
-                ddf[col].describe(include=include, exclude=exclude),
+                df[col].describe(
+                    include=include, exclude=exclude, datetime_is_numeric=True
+                ),
+                ddf[col].describe(
+                    include=include, exclude=exclude, datetime_is_numeric=True
+                ),
             )
 
 

@@ -2472,27 +2472,26 @@ Dask Name: {name}, {task} tasks"""
                 self, split_every, percentiles, percentiles_method, datetime_is_numeric
             )
         elif (include is None) and (exclude is None):
-            include = [np.number, np.timedelta64]
+            _include = [np.number, np.timedelta64]
             if datetime_is_numeric:
-                include.append(np.datetime64)
-            data = self._meta.select_dtypes(include=include)
+                _include.append(np.datetime64)
+            data = self._meta.select_dtypes(include=_include)
 
             # when some numerics/timedeltas are found, by default keep them
             if len(data.columns) == 0:
                 chosen_columns = self._meta.columns
             else:
                 # check if there are timedelta, boolean, or datetime columns
-                include = [np.timedelta64, bool]
+                _include = [np.timedelta64, bool]
                 if datetime_is_numeric:
-                    include.append(np.datetime64)
-                bools_and_times = self._meta.select_dtypes(include=include)
+                    _include.append(np.datetime64)
+                bools_and_times = self._meta.select_dtypes(include=_include)
                 if len(bools_and_times.columns) == 0:
                     return self._describe_numeric(
                         self,
                         split_every,
                         percentiles,
                         percentiles_method,
-                        datetime_is_numeric,
                     )
                 else:
                     chosen_columns = data.columns
@@ -2545,7 +2544,7 @@ Dask Name: {name}, {task} tasks"""
             )
         elif is_timedelta64_dtype(data._meta):
             return self._describe_numeric(
-                data.dropna().astype("i8"),
+                data.dropna(),
                 split_every=split_every,
                 percentiles=percentiles,
                 percentiles_method=percentiles_method,
@@ -2573,11 +2572,12 @@ Dask Name: {name}, {task} tasks"""
         is_timedelta_column=False,
         is_datetime_column=False,
     ):
+        from .numeric import to_numeric
 
-        if not is_datetime_column:
-            num = data._get_numeric_data()
+        if is_timedelta_column or is_datetime_column:
+            num = to_numeric(data)
         else:
-            num = pd.to_numeric(data)
+            num = data._get_numeric_data()
 
         if data.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
@@ -2621,6 +2621,8 @@ Dask Name: {name}, {task} tasks"""
     def _describe_nonnumeric_1d(
         self, data, split_every=False, datetime_is_numeric=False
     ):
+        from .numeric import to_numeric
+
         vcounts = data.value_counts(split_every=split_every)
         count_nonzero = vcounts[vcounts != 0]
         count_unique = count_nonzero.size
@@ -2633,6 +2635,11 @@ Dask Name: {name}, {task} tasks"""
             # most common value
             vcounts._head(1, npartitions=1, compute=False, safe=False),
         ]
+
+        if is_datetime64_any_dtype(data._meta) and not datetime_is_numeric:
+            min_ts = to_numeric(data.dropna()).min(split_every=split_every)
+            max_ts = to_numeric(data.dropna()).max(split_every=split_every)
+            stats.extend([min_ts, max_ts])
 
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name
