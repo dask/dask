@@ -2464,24 +2464,35 @@ Dask Name: {name}, {task} tasks"""
         percentiles_method="default",
         include=None,
         exclude=None,
+        datetime_is_numeric=False,
     ):
 
         if self._meta.ndim == 1:
-            return self._describe_1d(self, split_every, percentiles, percentiles_method)
+            return self._describe_1d(
+                self, split_every, percentiles, percentiles_method, datetime_is_numeric
+            )
         elif (include is None) and (exclude is None):
-            data = self._meta.select_dtypes(include=[np.number, np.timedelta64])
+            include = [np.number, np.timedelta64]
+            if datetime_is_numeric:
+                include.append(np.datetime64)
+            data = self._meta.select_dtypes(include=include)
 
             # when some numerics/timedeltas are found, by default keep them
             if len(data.columns) == 0:
                 chosen_columns = self._meta.columns
             else:
-                # check if there are timedelta or boolean columns
-                bools_and_timedeltas = self._meta.select_dtypes(
-                    include=[np.timedelta64, "bool"]
-                )
-                if len(bools_and_timedeltas.columns) == 0:
+                # check if there are timedelta, boolean, or datetime columns
+                include = [np.timedelta64, bool]
+                if datetime_is_numeric:
+                    include.append(np.datetime64)
+                bools_and_times = self._meta.select_dtypes(include=include)
+                if len(bools_and_times.columns) == 0:
                     return self._describe_numeric(
-                        self, split_every, percentiles, percentiles_method
+                        self,
+                        split_every,
+                        percentiles,
+                        percentiles_method,
+                        datetime_is_numeric,
                     )
                 else:
                     chosen_columns = data.columns
@@ -2495,7 +2506,11 @@ Dask Name: {name}, {task} tasks"""
 
         stats = [
             self._describe_1d(
-                self[col_idx], split_every, percentiles, percentiles_method
+                self[col_idx],
+                split_every,
+                percentiles,
+                percentiles_method,
+                datetime_is_numeric,
             )
             for col_idx in chosen_columns
         ]
@@ -2504,14 +2519,23 @@ Dask Name: {name}, {task} tasks"""
         name = "describe--" + tokenize(self, split_every)
         layer = {(name, 0): (methods.describe_aggregate, stats_names)}
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = self._meta_nonempty.describe(include=include, exclude=exclude)
+        meta = self._meta_nonempty.describe(
+            include=include, exclude=exclude, datetime_is_numeric=datetime_is_numeric
+        )
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _describe_1d(
-        self, data, split_every=False, percentiles=None, percentiles_method="default"
+        self,
+        data,
+        split_every=False,
+        percentiles=None,
+        percentiles_method="default",
+        datetime_is_numeric=False,
     ):
         if is_bool_dtype(data._meta):
-            return self._describe_nonnumeric_1d(data, split_every=split_every)
+            return self._describe_nonnumeric_1d(
+                data, split_every=split_every, datetime_is_numeric=datetime_is_numeric
+            )
         elif is_numeric_dtype(data._meta):
             return self._describe_numeric(
                 data,
@@ -2527,8 +2551,18 @@ Dask Name: {name}, {task} tasks"""
                 percentiles_method=percentiles_method,
                 is_timedelta_column=True,
             )
+        elif is_datetime64_any_dtype(data._meta) and datetime_is_numeric:
+            return self._describe_numeric(
+                data.dropna(),
+                split_every=split_every,
+                percentiles=percentiles,
+                percentiles_method=percentiles_method,
+                is_datetime_column=True,
+            )
         else:
-            return self._describe_nonnumeric_1d(data, split_every=split_every)
+            return self._describe_nonnumeric_1d(
+                data, split_every=split_every, datetime_is_numeric=datetime_is_numeric
+            )
 
     def _describe_numeric(
         self,
@@ -2537,9 +2571,13 @@ Dask Name: {name}, {task} tasks"""
         percentiles=None,
         percentiles_method="default",
         is_timedelta_column=False,
+        is_datetime_column=False,
     ):
 
-        num = data._get_numeric_data()
+        if not is_datetime_column:
+            num = data._get_numeric_data()
+        else:
+            num = pd.to_numeric(data)
 
         if data.ndim == 2 and len(num.columns) == 0:
             raise ValueError("DataFrame contains only non-numeric data.")
@@ -2573,13 +2611,16 @@ Dask Name: {name}, {task} tasks"""
                 stats_names,
                 colname,
                 is_timedelta_column,
+                is_datetime_column,
             )
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
         meta = num._meta_nonempty.describe()
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
-    def _describe_nonnumeric_1d(self, data, split_every=False):
+    def _describe_nonnumeric_1d(
+        self, data, split_every=False, datetime_is_numeric=False
+    ):
         vcounts = data.value_counts(split_every=split_every)
         count_nonzero = vcounts[vcounts != 0]
         count_unique = count_nonzero.size
@@ -2593,11 +2634,6 @@ Dask Name: {name}, {task} tasks"""
             vcounts._head(1, npartitions=1, compute=False, safe=False),
         ]
 
-        if is_datetime64_any_dtype(data._meta):
-            min_ts = data.dropna().astype("i8").min(split_every=split_every)
-            max_ts = data.dropna().astype("i8").max(split_every=split_every)
-            stats.extend([min_ts, max_ts])
-
         stats_names = [(s._name, 0) for s in stats]
         colname = data._meta.name
 
@@ -2606,7 +2642,7 @@ Dask Name: {name}, {task} tasks"""
             (name, 0): (methods.describe_nonnumeric_aggregate, stats_names, colname)
         }
         graph = HighLevelGraph.from_collections(name, layer, dependencies=stats)
-        meta = data._meta_nonempty.describe()
+        meta = data._meta_nonempty.describe(datetime_is_numeric=datetime_is_numeric)
         return new_dd_object(graph, name, meta, divisions=[None, None])
 
     def _cum_agg(

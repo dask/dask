@@ -183,7 +183,9 @@ def describe_aggregate(values):
     return pd.concat(values, axis=1, sort=False).reindex(names)
 
 
-def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
+def describe_numeric_aggregate(
+    stats, name=None, is_timedelta_col=False, is_datetime_col=False
+):
     assert len(stats) == 6
     count, mean, std, min, q, max = stats
 
@@ -198,6 +200,13 @@ def describe_numeric_aggregate(stats, name=None, is_timedelta_col=False):
         min = pd.to_timedelta(min)
         max = pd.to_timedelta(max)
         q = q.apply(lambda x: pd.to_timedelta(x))
+
+    if is_datetime_col:
+        mean = pd.to_datetime(mean)
+        std = pd.NaT
+        min = pd.to_datetime(min)
+        max = pd.to_datetime(max)
+        q = q.apply(lambda x: pd.to_datetime(x))
 
     part1 = typ([count, mean, std, min], index=["count", "mean", "std", "min"])
 
