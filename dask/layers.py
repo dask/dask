@@ -1,5 +1,6 @@
 import operator
 from collections import defaultdict
+from functools import partial
 from itertools import product
 from typing import List, Optional, Tuple
 
@@ -196,7 +197,7 @@ class ArrayOverlapLayer(Layer):
             from dask.array.core import concatenate3
 
         dims = list(map(len, chunks))
-        expand_key2 = toolz.partial(expand_key, dims=dims, axes=axes)
+        expand_key2 = partial(expand_key, dims=dims, axes=axes)
 
         # Make keys for each of the surrounding sub-arrays
         interior_keys = toolz.pipe(
