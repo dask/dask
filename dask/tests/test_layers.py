@@ -69,7 +69,7 @@ def _array_creation(tmpdir):
 
 def _array_map_overlap(tmpdir):
     da = pytest.importorskip("dask.array")
-    array = da.ones((100,)) + da.zeros((100,))
+    array = da.ones((100,))
     return array.map_overlap(lambda x: x, depth=1)
 
 
@@ -163,6 +163,7 @@ def _read_csv(tmpdir):
         (_pq_fastparquet, "pandas."),
         (_read_csv, "pandas."),
         (_array_creation, "numpy."),
+        (_array_map_overlap, "numpy"),
     ],
 )
 @pytest.mark.parametrize("optimize_graph", [True, False])
