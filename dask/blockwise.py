@@ -259,12 +259,9 @@ def blockwise(
     new_axes = {index_subs((k,), sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
-    argpairs = toolz.partition(2, arrind_pairs)
-
-    # separate argpairs into two separate tuples
     inputs = []
     inputs_indices = []
-    for name, index in argpairs:
+    for name, index in toolz.partition(2, arrind_pairs):
         inputs.append(name)
         inputs_indices.append(index)
 
@@ -498,9 +495,19 @@ class Blockwise(Layer):
         # Embed literals in `dsk`
         keys2 = []
         indices2 = []
+        global_dependencies = set()
         for key, (val, index) in zip(keys, self.indices):
-            if index is None:  # Literal
-                dsk[key] = val
+            if index is None:
+                try:
+                    val_is_a_key = val in all_hlg_keys
+                except TypeError:  # not hashable
+                    val_is_a_key = False
+                if val_is_a_key:
+                    keys2.append(key)
+                    indices2.append((val, index))
+                    global_dependencies.add(val)
+                else:
+                    dsk[key] = val  # Literal
             else:
                 keys2.append(key)
                 indices2.append((val, index))
@@ -558,7 +565,7 @@ class Blockwise(Layer):
                 raise CancelledError(stringify(future.key))
 
         # All blockwise tasks will depend on the futures in `indices`
-        global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
+        global_dependencies |= {stringify(f.key) for f in indices_unpacked_futures}
 
         return {
             "output": self.output,
