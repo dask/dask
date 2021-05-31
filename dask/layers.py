@@ -240,12 +240,12 @@ def _expand_keys_around_center(k, dims, name=None, axes=None):
 
     Examples
     --------
-    >>> _expand_keys_around_center(('x', 2, 3), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # doctest: +NORMALIZE_WHITESPACE # noqa: E501
+    >>> _expand_keys_around_center(('x', 2, 3), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # noqa: E501 # doctest: +NORMALIZE_WHITESPACE
     [[('y', 1.1, 2.1), ('y', 1.1, 3), ('y', 1.1, 3.9)],
      [('y',   2, 2.1), ('y',   2, 3), ('y',   2, 3.9)],
      [('y', 2.9, 2.1), ('y', 2.9, 3), ('y', 2.9, 3.9)]]
 
-    >>> _expand_keys_around_center(('x', 0, 4), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # doctest: +NORMALIZE_WHITESPACE # noqa: E501
+    >>> _expand_keys_around_center(('x', 0, 4), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # noqa: E501 # doctest: +NORMALIZE_WHITESPACE
     [[('y',   0, 3.1), ('y',   0,   4)],
      [('y', 0.9, 3.1), ('y', 0.9,   4)]]
     """
