@@ -67,17 +67,15 @@ def make_meta_index(x, index=None):
     return x[0:0]
 
 
-@make_meta.register(dict)
-def make_meta_from_dict(x, index=None):
-    return pd.DataFrame.from_dict(x)
-
-
-@make_meta.register((list, tuple))
-def make_meta_from_list(x, index=None):
-    return pd.DataFrame({col: pd.Series([], dtype=dtype) for col, dtype in x})
-
-
-meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+meta_object_types = (
+    pd.Series,
+    pd.DataFrame,
+    pd.Index,
+    pd.MultiIndex,
+    dict,
+    list,
+    tuple,
+)
 try:
     import scipy.sparse as sp
 
@@ -86,6 +84,7 @@ except ImportError:
     pass
 
 
+@make_meta.register((dict, list, tuple))
 @make_meta_obj.register(meta_object_types)
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
