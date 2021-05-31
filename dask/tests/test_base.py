@@ -961,9 +961,9 @@ def test_visualize():
 )
 def test_visualize_highlevelgraph():
     graphviz = pytest.importorskip("graphviz")
-    with tmpdir():
+    with tmpdir() as d:
         x = da.arange(5, chunks=2)
-        viz = x.dask.visualize()
+        viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
         # check visualization will automatically render in the jupyter notebook
         assert isinstance(viz, graphviz.dot.Digraph)
 
