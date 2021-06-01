@@ -56,6 +56,16 @@ def test_apply_gufunc_axes_input_validation_01():
         apply_gufunc(foo, "(i)->()", a, axes=[0, 0])
 
 
+def test_apply_gufunc_axes_args_validation():
+    def add(x, y):
+        return x + y
+
+    a = da.from_array(np.array([1, 2, 3]), chunks=2, name="a")
+    b = da.from_array(np.array([1, 2, 3]), chunks=2, name="b")
+    with pytest.raises(ValueError):
+        apply_gufunc(add, "(),()->()", a, b, 0, output_dtypes=a.dtype)
+
+
 def test__validate_normalize_axes_01():
     with pytest.raises(ValueError):
         _validate_normalize_axes([(1, 0)], None, False, [("i", "j")], ("j",))
