@@ -487,18 +487,6 @@ async def test_futures_in_subgraphs(c, s, a, b):
 
 
 @gen_cluster(client=True)
-async def test_annotation_pack_unpack(c, s, a, b):
-    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
-
-    annotations = {"workers": ("alice",)}
-    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
-
-    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
-    annotations = unpacked_hlg["annotations"]
-    assert annotations == {"workers": {"n": ("alice",)}}
-
-
-@gen_cluster(client=True)
 async def test_map_partitions_da_input(c, s, a, b):
     """Check that map_partitions can handle a dask array input"""
     np = pytest.importorskip("numpy")
@@ -513,4 +501,16 @@ async def test_map_partitions_da_input(c, s, a, b):
 
     df = datasets.timeseries(freq="1d").persist()
     arr = da.ones((1,), chunks=1).persist()
-    await c.compute(df.map_partitions(f, arr, meta=df._meta, enforce_metadata=False))
+    await c.compute(df.map_partitions(f, arr, meta=df._meta))
+
+
+@gen_cluster(client=True)
+async def test_annotation_pack_unpack(c, s, a, b):
+    hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
+
+    annotations = {"workers": ("alice",)}
+    packed_hlg = hlg.__dask_distributed_pack__(c, ["n"], annotations)
+
+    unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
+    annotations = unpacked_hlg["annotations"]
+    assert annotations == {"workers": {"n": ("alice",)}}
