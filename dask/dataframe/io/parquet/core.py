@@ -206,6 +206,7 @@ def read_parquet(
         specifying the aggregation range. The value "file" declares that
         aggregation may only occur within a single file. The value "directory"
         declares that aggregation may only occur within an immediate directory.
+        The value "all" declares that there are no aggregation boundaries at all.
         If a different string value is specified it will be used for regular
         expression matching in the file path. For example, when reading a dataset
         partitioned by multiple columns, like "month" and "day", we can set
