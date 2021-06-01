@@ -192,11 +192,12 @@ def read_parquet(
         By default (None), ``ArrowDatasetEngine`` will set this option to
         ``False`` when there are filters.
     chunksize : int, str, tuple, default None
-        The target output partition size. If specified, adjacent row-groups
-        and/or files will be aggregated into the same output partition until
-        the cumulative parquet-storage size reaches this value. By default,
-        inter-file aggregation will only occur if said files are stored in
-        the same directory.
+        The desired size of each output ``DataFrame`` partition in terms of total
+        (uncompressed) parquet storage space. If specified, adjacent row-groups
+        and/or files will be aggregated into the same output partition until the
+        cumulative ``total_byte_size`` parquet-metadata statistic reaches this
+        value. By default, inter-file aggregation will only occur if said files
+        are stored in the same directory.
 
         Note that a non-default chunksize-aggregation range can be specified
         by passing ``chunksize`` as a tuple with two elements. The first
