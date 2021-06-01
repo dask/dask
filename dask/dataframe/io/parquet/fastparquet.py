@@ -765,7 +765,11 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts, index)
 
     @classmethod
-    def read_partition(cls, fs, piece, columns, index, categories=(), **kwargs):
+    def multi_support(cls):
+        return cls == FastParquetEngine
+
+    @classmethod
+    def read_partition(cls, fs, pieces, columns, index, categories=(), **kwargs):
 
         null_index_name = False
         if isinstance(index, list):
@@ -785,25 +789,56 @@ class FastParquetEngine(Engine):
         # the desired row_group
         parquet_file = kwargs.pop("parquet_file", None)
 
-        if isinstance(piece, tuple):
-            if isinstance(piece[0], str):
-                # We have a path to read from
-                assert parquet_file is None
-                parquet_file = ParquetFile(
-                    piece[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
-                )
-                rg_indices = piece[1] or list(range(len(parquet_file.row_groups)))
+        # Always convert pieces to list
+        if not isinstance(pieces, list):
+            pieces = [pieces]
 
-                # `piece[1]` will contain row-group indices
-                row_groups = [parquet_file.row_groups[rg] for rg in rg_indices]
+        sample = pieces[0]
+        if isinstance(sample, tuple):
+            if isinstance(sample[0], str):
+                # We have paths to read from
+                assert parquet_file is None
+
+                row_groups = []
+                rg_offset = 0
+                parquet_file = ParquetFile(
+                    [p[0] for p in pieces],
+                    open_with=fs.open,
+                    sep=fs.sep,
+                    **kwargs.get("file", {}),
+                )
+                for piece in pieces:
+                    _pf = (
+                        parquet_file
+                        if len(pieces) == 1
+                        else ParquetFile(
+                            piece[0],
+                            open_with=fs.open,
+                            sep=fs.sep,
+                            **kwargs.get("file", {}),
+                        )
+                    )
+                    n_local_row_groups = len(_pf.row_groups)
+                    local_rg_indices = piece[1] or list(range(n_local_row_groups))
+                    row_groups += [
+                        parquet_file.row_groups[rg + rg_offset]
+                        for rg in local_rg_indices
+                    ]
+                    rg_offset += n_local_row_groups
+
             elif parquet_file:
-                # `piece[1]` will contain actual row-group objects,
-                # but they may be pickled
-                row_groups = piece[0]
-                if isinstance(row_groups, bytes):
-                    row_groups = pickle.loads(row_groups)
-                parquet_file.fmd.row_groups = row_groups
+
+                row_groups = []
+                for piece in pieces:
+                    # `piece[1]` will contain actual row-group objects,
+                    # but they may be pickled
+                    rgs = piece[0]
+                    if isinstance(rgs, bytes):
+                        rgs = pickle.loads(rgs)
+                    row_groups += rgs
+
                 # NOTE: May lose cats after `_set_attrs` call
+                parquet_file.fmd.row_groups = row_groups
                 save_cats = parquet_file.cats
                 parquet_file._set_attrs()
                 parquet_file.cats = save_cats
