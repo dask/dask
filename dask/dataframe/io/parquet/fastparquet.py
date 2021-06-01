@@ -825,6 +825,7 @@ class FastParquetEngine(Engine):
                         for rg in local_rg_indices
                     ]
                     rg_offset += n_local_row_groups
+                update_parquet_file = len(row_groups) < len(parquet_file.row_groups)
 
             elif parquet_file:
 
@@ -836,14 +837,17 @@ class FastParquetEngine(Engine):
                     if isinstance(rgs, bytes):
                         rgs = pickle.loads(rgs)
                     row_groups += rgs
+                update_parquet_file = True
 
-                # NOTE: May lose cats after `_set_attrs` call
+            else:
+                raise ValueError("Neither path nor ParquetFile detected!")
+
+            if update_parquet_file:
                 parquet_file.fmd.row_groups = row_groups
+                # NOTE: May lose cats after `_set_attrs` call
                 save_cats = parquet_file.cats
                 parquet_file._set_attrs()
                 parquet_file.cats = save_cats
-            else:
-                raise ValueError("Neither path nor ParquetFile detected!")
 
             if null_index_name:
                 if "__index_level_0__" in parquet_file.columns:
@@ -855,19 +859,29 @@ class FastParquetEngine(Engine):
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
 
-            # Read necessary row-groups and concatenate
-            dfs = []
-            for row_group in row_groups:
-                dfs.append(
-                    parquet_file.read_row_group_file(
-                        row_group,
-                        columns,
-                        categories,
-                        index=index,
-                        **kwargs.get("read", {}),
-                    )
+            if set(columns).issubset(
+                parquet_file.columns + list(parquet_file.cats.keys())
+            ):
+                # Convert ParquetFile to pandas
+                return parquet_file.to_pandas(
+                    columns=columns,
+                    categories=categories,
+                    index=index,
                 )
-            return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+            else:
+                # Read necessary row-groups and concatenate
+                dfs = []
+                for row_group in row_groups:
+                    dfs.append(
+                        parquet_file.read_row_group_file(
+                            row_group,
+                            columns,
+                            categories,
+                            index=index,
+                            **kwargs.get("read", {}),
+                        )
+                    )
+                return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
 
         else:
             # `piece` is NOT a tuple

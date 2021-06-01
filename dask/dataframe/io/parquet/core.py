@@ -1193,7 +1193,9 @@ def aggregate_row_groups(parts, stats, chunksize, fs):
             # in the same directory. This allows us to handle partitioned
             # datasets in a reliable way.
             if not same_path and multi_path_allowed:
-                if aggregation_range == "directory":
+                if aggregation_range == "all":
+                    multi_path_allowed = True
+                elif aggregation_range == "directory":
                     # Make sure files share the same directory
                     root = stat["file_path_0"].split(fs.sep)[:-1]
                     next_root = next_stat["file_path_0"].split(fs.sep)[:-1]
