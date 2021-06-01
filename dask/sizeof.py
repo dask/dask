@@ -40,9 +40,7 @@ def sizeof_array(o):
 
 @sizeof.register(list)
 @sizeof.register(tuple)
-@sizeof.register(set)
-@sizeof.register(frozenset)
-def sizeof_python_collection(seq):
+def sizeof_python_list_and_tuple(seq):
     num_items = len(seq)
     samples = 10
     if num_items > samples:
@@ -52,6 +50,13 @@ def sizeof_python_collection(seq):
         return int(s)
     else:
         return getsizeof(seq) + sum(map(sizeof, seq))
+
+
+@sizeof.register(set)
+@sizeof.register(frozenset)
+def sizeof_python_sets(seq):
+    # As of Python v3.9, it is deprecated to call random.sample() on sets
+    return sizeof_python_list_and_tuple(list(seq))
 
 
 @sizeof.register(dict)
