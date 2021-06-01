@@ -489,12 +489,12 @@ significantly.".format(
             leaf_arr = leaf_arr[slices]
 
         tidcs = [None] * len(leaf_arr.shape)
-        for i, oa in zip(range(-len(oax), 0), oax):
-            tidcs[oa] = i
+        for ii, oa in zip(range(-len(oax), 0), oax):
+            tidcs[oa] = ii
         j = 0
-        for i in range(len(tidcs)):
-            if tidcs[i] is None:
-                tidcs[i] = j
+        for ii in range(len(tidcs)):
+            if tidcs[ii] is None:
+                tidcs[ii] = j
                 j += 1
         leaf_arr = leaf_arr.transpose(tidcs)
         leaf_arrs.append(leaf_arr)
