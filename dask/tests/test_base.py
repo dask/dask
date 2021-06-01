@@ -933,7 +933,7 @@ def test_compute_nested():
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
-def test_visualize():
+def test_visualize(monkeypatch):
     pytest.importorskip("graphviz")
     with tmpdir() as d:
         x = da.arange(5, chunks=2)
@@ -953,6 +953,17 @@ def test_visualize():
         x = Tuple(dsk, ["a", "b", "c"])
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
+
+        test_list = []
+        _mock_get_display_cls = dask.dot._get_display_cls
+
+        def mock_fx(format):
+            test_list.append(True)
+            return _mock_get_display_cls(format)
+
+        monkeypatch.setattr(dask.dot, "_get_display_cls", mock_fx)
+        visualize(x, filename=None)
+        assert True in test_list
 
 
 @pytest.mark.skipif("not da")

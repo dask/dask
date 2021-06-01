@@ -281,6 +281,9 @@ def graphviz_to_file(g, filename, format):
         filename, format = os.path.splitext(filename)
         format = format[1:].lower()
 
+    if format is None:
+        format = "png"
+
     data = g.pipe(format=format)
     if not data:
         raise RuntimeError(
