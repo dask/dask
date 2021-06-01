@@ -163,7 +163,7 @@ def _read_csv(tmpdir):
         (_pq_fastparquet, "pandas."),
         (_read_csv, "pandas."),
         (_array_creation, "numpy."),
-        (_array_map_overlap, "numpy"),
+        (_array_map_overlap, "numpy."),
     ],
 )
 @pytest.mark.parametrize("optimize_graph", [True, False])
