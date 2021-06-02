@@ -18,7 +18,7 @@ except (ImportError, SyntaxError):
 
 try:
     import pyarrow
-    from pyarrow.hdfs import HadoopFileSystem
+    from pyarrow.fs import HadoopFileSystem
 except ImportError:
     pyarrow = None
 
