@@ -4363,6 +4363,12 @@ class DataFrame(_Frame):
 
         return to_parquet(self, path, *args, **kwargs)
 
+    def to_orc(self, path, *args, **kwargs):
+        """See dd.to_orc docstring for more information"""
+        from .io import to_orc
+
+        return to_orc(self, path, *args, **kwargs)
+
     @derived_from(pd.DataFrame)
     def to_string(self, max_rows=5):
         # option_context doesn't affect

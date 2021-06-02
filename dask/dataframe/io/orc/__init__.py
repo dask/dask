@@ -1,1 +1,1 @@
-from .core import read_orc
+from .core import read_orc, to_orc

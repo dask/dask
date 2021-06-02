@@ -3,6 +3,8 @@ import shutil
 import tempfile
 from distutils.version import LooseVersion
 
+import numpy as np
+import pandas as pd
 import pytest
 
 import dask.dataframe as dd
@@ -82,3 +84,26 @@ def test_orc_multiple(orc_files):
     assert_eq(d2[columns], dd.concat([d, d])[columns], check_index=False)
     d2 = read_orc(os.path.dirname(orc_files[0]) + "/*.orc")
     assert_eq(d2[columns], dd.concat([d, d])[columns], check_index=False)
+
+
+@pytest.mark.skipif(
+    LooseVersion(pa.__version__) < "4.0.0",
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
+def test_orc_roundtrip(tmpdir):
+    tmp = str(tmpdir)
+    data = pd.DataFrame(
+        {
+            "i32": np.arange(1000, dtype=np.int32),
+            "i64": np.arange(1000, dtype=np.int64),
+            "f": np.arange(1000, dtype=np.float64),
+            "bhello": np.random.choice(["hello", "yo", "people"], size=1000).astype(
+                "O"
+            ),
+        }
+    )
+    df = dd.from_pandas(data, chunksize=500)
+    df.to_orc(tmp, write_index=False)
+
+    df2 = dd.read_orc(tmp)
+    df2.compute()

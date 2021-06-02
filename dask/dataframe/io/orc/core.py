@@ -1,10 +1,13 @@
 import copy
 
 from fsspec.core import get_fs_token_paths
+from fsspec.utils import stringify_path
 
 from ....base import tokenize
+from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
+from ....utils import apply
 from ...core import new_dd_object
 
 
@@ -51,8 +54,19 @@ class ORCEngine:
         raise NotImplementedError()
 
     @classmethod
-    def write_partition(cls, df, path, fs, **kwargs):
+    def write_partition(cls, df, path, fs, filename, **kwargs):
         raise NotImplementedError
+
+
+def _get_engine(engine):
+    # Get engine
+    if engine == "pyarrow":
+        from .arrow import ArrowORCEngine
+
+        return ArrowORCEngine
+    elif not isinstance(engine, ORCEngine):
+        raise TypeError("engine must be 'pyarrow', or an ORCEngine object")
+    return engine
 
 
 def read_orc(
@@ -69,7 +83,7 @@ def read_orc(
     path: str or list(str)
         Location of file(s), which can be a full URL with protocol
         specifier, and may include glob character if a single string.
-    engine: str or ORCEngine
+    engine: 'pyarrow' or ORCEngine
         Backend ORC engine to use for IO. Default is "pyarrow".
     columns: None or list(str)
         Columns to load. If None, loads all.
@@ -90,13 +104,8 @@ def read_orc(
     ...                  'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
     """
 
-    # Set engine
-    if engine == "pyarrow":
-        from .arrow import ArrowORCEngine
-
-        engine = ArrowORCEngine
-    elif not isinstance(engine, ORCEngine):
-        raise TypeError("engine must be 'pyarrow', or an ORCEngine object")
+    # Get engine
+    engine = _get_engine(engine)
 
     # Process file path(s)
     storage_options = storage_options or {}
@@ -126,3 +135,99 @@ def read_orc(
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     return new_dd_object(graph, output_name, meta, [None] * (len(parts) + 1))
+
+
+def to_orc(
+    df,
+    path,
+    engine="pyarrow",
+    write_index=True,
+    storage_options=None,
+    compute=True,
+    compute_kwargs=None,
+):
+    """Store Dask.dataframe to ORC files
+
+    Notes
+    -----
+    Each partition will be written to a separate file.
+
+    Parameters
+    ----------
+    df : dask.dataframe.DataFrame
+    path : string or pathlib.Path
+        Destination directory for data.  Prepend with protocol like ``s3://``
+        or ``hdfs://`` for remote data.
+    engine : 'pyarrow' or ORCEngine
+        Parquet library to use. If only one library is installed, it will use
+        that one; if both, it will use 'fastparquet'.
+    write_index : boolean, default True
+        Whether or not to write the index. Defaults to True.
+    storage_options : dict, default None
+        Key/value pairs to be passed on to the file-system backend, if any.
+    compute : bool, default True
+        If True (default) then the result is computed immediately. If False
+        then a ``dask.delayed`` object is returned for future computation.
+    compute_kwargs : dict, default True
+        Options to be passed in to the compute method
+
+    Examples
+    --------
+    >>> df = dd.read_csv(...)  # doctest: +SKIP
+    >>> df.to_orc('/path/to/output/', ...)  # doctest: +SKIP
+
+    See Also
+    --------
+    read_orc: Read ORC data to dask.dataframe
+    """
+
+    # Get engine
+    engine = _get_engine(engine)
+
+    if hasattr(path, "name"):
+        path = stringify_path(path)
+    fs, _, _ = get_fs_token_paths(path, mode="wb", storage_options=storage_options)
+    # Trim any protocol information from the path before forwarding
+    path = fs._strip_protocol(path)
+
+    if not write_index:
+        # Not writing index - might as well drop it
+        df = df.reset_index(drop=True)
+
+    # Use i_offset and df.npartitions to define file-name list
+    fs.mkdirs(path, exist_ok=True)
+    filenames = [f"part.{i}.orc" for i in range(df.npartitions)]
+
+    # Construct IO graph
+    dsk = {}
+    name = "to-parquet-" + tokenize(
+        df,
+        fs,
+        path,
+        engine,
+        write_index,
+        storage_options,
+    )
+    part_tasks = []
+    for d, filename in enumerate(filenames):
+        dsk[(name, d)] = (
+            apply,
+            engine.write_partition,
+            [
+                (df._name, d),
+                path,
+                fs,
+                filename,
+            ],
+        )
+        part_tasks.append((name, d))
+    dsk[name] = (lambda x: None, part_tasks)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    out = Delayed(name, graph)
+
+    # Compute or return future
+    if compute:
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+        out = out.compute(**compute_kwargs)
+    return out

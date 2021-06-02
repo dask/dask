@@ -17,16 +17,6 @@ class ArrowORCEngine:
         **kwargs,
     ):
 
-        if LooseVersion(pa.__version__) == "0.10.0":
-            raise RuntimeError(
-                "Due to a bug in pyarrow 0.10.0, the ORC reader is "
-                "unavailable. Please either downgrade pyarrow to "
-                "0.9.0, or use the pyarrow master branch (in which "
-                "this issue is fixed).\n\n"
-                "For more information see: "
-                "https://issues.apache.org/jira/browse/ARROW-3009"
-            )
-
         schema = None
         parts = []
         for path in paths:
@@ -72,8 +62,10 @@ class ArrowORCEngine:
             return pa.Table.from_batches(batches).to_pandas(date_as_object=False)
 
     @classmethod
-    def write_partition(cls, df, path, fs, **kwargs):
-        raise NotImplementedError
+    def write_partition(cls, df, path, fs, filename, **kwargs):
+        table = pa.Table.from_pandas(df)
+        with fs.open(fs.sep.join([path, filename]), "wb") as f:
+            orc.write_table(f, table)
 
 
 def _read_orc_stripes(fs, path, stripes, schema, columns):
