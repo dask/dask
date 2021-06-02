@@ -1,3 +1,4 @@
+import itertools
 import random
 import sys
 from array import array
@@ -40,23 +41,22 @@ def sizeof_array(o):
 
 @sizeof.register(list)
 @sizeof.register(tuple)
-def sizeof_python_list_and_tuple(seq):
-    num_items = len(seq)
-    samples = 10
-    if num_items > samples:
-        s = getsizeof(seq) + num_items / samples * sum(
-            map(sizeof, random.sample(seq, samples))
-        )
-        return int(s)
-    else:
-        return getsizeof(seq) + sum(map(sizeof, seq))
-
-
 @sizeof.register(set)
 @sizeof.register(frozenset)
-def sizeof_python_sets(seq):
-    # As of Python v3.9, it is deprecated to call random.sample() on sets
-    return sizeof_python_list_and_tuple(list(seq))
+def sizeof_python_collection(seq):
+    num_items = len(seq)
+    num_samples = 10
+    if num_items > num_samples:
+        if isinstance(seq, (set, frozenset)):
+            # As of Python v3.9, it is deprecated to call random.sample() on
+            # sets but since sets are unordered anyways we can simply pick
+            # the first `num_samples` items.
+            samples = itertools.islice(seq, num_samples)
+        else:
+            samples = random.sample(seq, num_samples)
+        return getsizeof(seq) + int(num_items / num_samples * sum(map(sizeof, samples)))
+    else:
+        return getsizeof(seq) + sum(map(sizeof, seq))
 
 
 @sizeof.register(dict)
