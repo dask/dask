@@ -91,7 +91,8 @@ def make_meta(x, index=None, parent_meta=None):
     Parameters
     ----------
     x : Object of any type.
-        This can be an object of type Dask-like or Frame-like.
+        This can be an object of type Dask-like/Frame-like/any arbitrary
+        type.
     index :  Index, optional
         Any index to use in the metadata. This is a pass-through
         parameter to dispatches registered.
