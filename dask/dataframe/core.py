@@ -65,6 +65,7 @@ from .optimize import optimize
 from .utils import (
     PANDAS_GT_100,
     PANDAS_GT_110,
+    PANDAS_GT_120,
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
@@ -3880,6 +3881,14 @@ class DataFrame(_Frame):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
+                    if PANDAS_GT_120:
+                        warnings.warn(
+                            "Indexing a DataFrame with a datetimelike index using a single "
+                            "string to slice the rows, like `frame[string]`, is deprecated "
+                            "and will be removed in a future version. Use `frame.loc[string]` "
+                            "instead.",
+                            FutureWarning,
+                        )
                     return self.loc[key]
 
             # error is raised from pandas

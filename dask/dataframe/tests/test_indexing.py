@@ -429,10 +429,13 @@ def test_getitem_timestamp_str():
     )
     ddf = dd.from_pandas(df, 10)
 
-    # partial string slice
-    # TODO(pandas) starting with pandas 1.2, __getitem__ with an implicit slice
-    # is deprecated -> should we deprecate this in dask as well?
-    assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    else:
+        assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
 
     df = pd.DataFrame(
@@ -440,8 +443,8 @@ def test_getitem_timestamp_str():
         index=pd.date_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df.loc["2011-01"], ddf["2011-01"])
-    assert_eq(df.loc["2011"], ddf["2011"])
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
+    assert_eq(df.loc["2011"], ddf.loc["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
@@ -486,9 +489,12 @@ def test_getitem_period_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    # TODO(pandas) starting with pandas 1.2, __getitem__ with an implicit slice
-    # is deprecated -> should we deprecate this in dask as well?
-    if not PANDAS_GT_120:
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    else:
         assert_eq(df["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
@@ -498,8 +504,21 @@ def test_getitem_period_str():
         index=pd.period_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    if not PANDAS_GT_120:
+
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011-01"], ddf["2011-01"])
+    else:
         assert_eq(df["2011-01"], ddf["2011-01"])
+
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011"], ddf["2011"])
+    else:
         assert_eq(df["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
