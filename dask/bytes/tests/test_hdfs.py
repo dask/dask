@@ -31,7 +31,7 @@ basedir = "/tmp/test-dask"
 
 @pytest.fixture
 def hdfs(request):
-    hdfs = pyarrow.hdfs.connect(host="localhost", port=8020)
+    hdfs = pyarrow.fs.HadoopFileSystem(host="localhost", port=8020)
 
     if hdfs.exists(basedir):
         hdfs.rm(basedir, recursive=True)
