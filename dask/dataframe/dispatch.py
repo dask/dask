@@ -93,8 +93,7 @@ def make_meta(x, index=None, parent_meta=pd.DataFrame()):
     Parameters
     ----------
     x : Object of any type.
-        This can be an object of type Dask-like/Frame-like/any arbitrary
-        type.
+        Object to construct meta-data from.
     index :  Index, optional
         Any index to use in the metadata. This is a pass-through
         parameter to dispatches registered.
