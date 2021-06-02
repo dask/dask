@@ -493,7 +493,7 @@ def test_getitem_period_str():
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
-            assert_eq(df["2011-01-02"], ddf["2011-01-02"])
+            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
     else:
         assert_eq(df["2011-01-02"], ddf["2011-01-02"])
     assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
@@ -509,11 +509,17 @@ def test_getitem_period_str():
         with pytest.warns(
             FutureWarning, match="Indexing a DataFrame with a datetimelike"
         ):
-            assert_eq(df["2011-01"], ddf["2011-01"])
+            assert_eq(df.loc["2011-01"], ddf["2011-01"])
     else:
         assert_eq(df["2011-01"], ddf["2011-01"])
 
-    assert_eq(df.loc["2011"], ddf.loc["2011"])
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011"], ddf["2011"])
+    else:
+        assert_eq(df["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
