@@ -85,7 +85,7 @@ def tolist(obj):
     return func(obj)
 
 
-def make_meta(x, index=None, parent_meta=pd.DataFrame()):
+def make_meta(x, index=None, parent_meta=None):
     """
     This method creates meta-data based on the type of ``x``,
     and ``parent_meta`` if supplied.
@@ -97,14 +97,14 @@ def make_meta(x, index=None, parent_meta=pd.DataFrame()):
     index :  Index, optional
         Any index to use in the metadata. This is a pass-through
         parameter to dispatches registered.
-    parent_meta : Frame-like, default pd.DataFrame()
+    parent_meta : Object, default None
         If ``x`` is of arbitrary types and thus Dask cannot determine
         which back-end to be used to generate the meta-data for this
         object type, in which case ``parent_meta`` will be used to
         determine which back-end to select and dispatch to. To use
         utilize this parameter ``make_meta_obj`` has be dispatched.
-        The default is a pandas DataFrame thats chooses pandas as
-        backend.
+        If ``parent_meta`` is ``None``, a pandas DataFrame is used for
+        ``parent_meta`` thats chooses pandas as the backend.
 
     Returns
     -------
@@ -122,6 +122,8 @@ def make_meta(x, index=None, parent_meta=pd.DataFrame()):
         ),
     ):
         return x._meta
+    elif parent_meta is None:
+        parent_meta = pd.DataFrame()
 
     try:
         return make_meta_dispatch(x, index=index)
