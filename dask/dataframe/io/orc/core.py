@@ -43,7 +43,7 @@ class ORCEngine:
     """The API necessary to provide a new ORC reader/writer"""
 
     @classmethod
-    def read_metadata(cls, fs, paths, columns, partition_stripes, **kwargs):
+    def read_metadata(cls, fs, paths, columns, partition_stripe_count, **kwargs):
         raise NotImplementedError()
 
     @classmethod
@@ -59,7 +59,7 @@ def read_orc(
     path,
     engine="pyarrow",
     columns=None,
-    partition_stripes=None,
+    partition_stripe_count=1,
     storage_options=None,
 ):
     """Read dataframe from ORC file(s)
@@ -67,10 +67,16 @@ def read_orc(
     Parameters
     ----------
     path: str or list(str)
-        Location of file(s), which can be a full URL with protocol specifier,
-        and may include glob character if a single string.
+        Location of file(s), which can be a full URL with protocol
+        specifier, and may include glob character if a single string.
+    engine: str or ORCEngine
+        Backend ORC engine to use for IO. Default is "pyarrow".
     columns: None or list(str)
         Columns to load. If None, loads all.
+    partition_stripe_count: int or False
+        Maximum number of ORC stripes to include in each output-DataFrame
+        partition. Use False to specify a 1-to-1 mapping between files
+        and partitions. Default is 1.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
 
@@ -84,6 +90,7 @@ def read_orc(
     ...                  'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
     """
 
+    # Set engine
     if engine == "pyarrow":
         from .arrow import ArrowORCEngine
 
@@ -91,20 +98,23 @@ def read_orc(
     elif not isinstance(engine, ORCEngine):
         raise TypeError("engine must be 'pyarrow', or an ORCEngine object")
 
+    # Process file path(s)
     storage_options = storage_options or {}
     fs, fs_token, paths = get_fs_token_paths(
         path, mode="rb", storage_options=storage_options
     )
 
-    partition_stripes = partition_stripes or 1
+    # Let backend engine generate a list of parts
+    # from the ORC metadata.  The backend should also
+    # return the schema and DataFrame-collection metadata
     parts, schema, meta = engine.read_metadata(
         fs,
         paths,
         columns,
-        partition_stripes,
+        partition_stripe_count,
     )
 
-    # Create Blockwise layer
+    # Construct and return a Blockwise layer
     label = "read-orc-"
     output_name = label + tokenize(fs_token, path, columns)
     layer = DataFrameIOLayer(
@@ -114,6 +124,5 @@ def read_orc(
         ORCFunctionWrapper(fs, columns, schema, engine),
         label=label,
     )
-
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
     return new_dd_object(graph, output_name, meta, [None] * (len(parts) + 1))

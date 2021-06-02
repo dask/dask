@@ -55,12 +55,12 @@ def orc_files():
         shutil.rmtree(d, ignore_errors=True)
 
 
-@pytest.mark.parametrize("partition_stripes", [1, 2])
-def test_orc_single(orc_files, partition_stripes):
+@pytest.mark.parametrize("partition_stripe_count", [1, 2])
+def test_orc_single(orc_files, partition_stripe_count):
     fn = orc_files[0]
-    d = read_orc(fn, partition_stripes=partition_stripes)
+    d = read_orc(fn, partition_stripe_count=partition_stripe_count)
     assert len(d) == 70000
-    assert d.npartitions == 8 / partition_stripes
+    assert d.npartitions == 8 / partition_stripe_count
     d2 = read_orc(fn, columns=["time", "date"])
     assert_eq(d[columns], d2[columns], check_index=False)
 

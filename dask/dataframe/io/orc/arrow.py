@@ -13,7 +13,7 @@ class ArrowORCEngine:
         fs,
         paths,
         columns,
-        partition_stripes,
+        partition_stripe_count,
         **kwargs,
     ):
 
@@ -40,7 +40,10 @@ class ArrowORCEngine:
                 for stripe in range(o.nstripes):
                     # TODO: Can filter out stripes here
                     _stripes.append(stripe)
-                    if len(_stripes) >= partition_stripes:
+                    if (
+                        partition_stripe_count
+                        and len(_stripes) >= partition_stripe_count
+                    ):
                         parts.append([(path, _stripes)])
                         _stripes = []
             if _stripes:
@@ -74,11 +77,8 @@ class ArrowORCEngine:
 
 
 def _read_orc_stripes(fs, path, stripes, schema, columns):
-    """Construct a list of RecordBatch objects
-
-    Each ORC stripe will corresonpond to a single RecordBatch.
-    """
-
+    # Construct a list of RecordBatch objects.
+    # Each ORC stripe will corresonpond to a single RecordBatch.
     if columns is None:
         columns = list(schema)
 
