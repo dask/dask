@@ -4,6 +4,8 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+import pandas as pd
+
 import dask.array as da
 import dask.dataframe as dd
 
@@ -83,7 +85,7 @@ def tolist(obj):
     return func(obj)
 
 
-def make_meta(x, index=None, parent_meta=None):
+def make_meta(x, index=None, parent_meta=pd.DataFrame()):
     """
     This method creates meta-data based on the type of ``x``,
     and ``parent_meta`` if supplied.
@@ -95,12 +97,14 @@ def make_meta(x, index=None, parent_meta=None):
     index :  Index, optional
         Any index to use in the metadata. This is a pass-through
         parameter to dispatches registered.
-    parent_meta : Object, optional
+    parent_meta : Frame-like, default pd.DataFrame()
         If ``x`` is of arbitrary types and thus Dask cannot determine
         which back-end to be used to generate the meta-data for this
         object type, in which case ``parent_meta`` will be used to
         determine which back-end to select and dispatch to. To use
         utilize this parameter ``make_meta_obj`` has be dispatched.
+        The default is a pandas DataFrame thats chooses pandas as
+        backend.
 
     Returns
     -------
