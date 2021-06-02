@@ -122,8 +122,6 @@ def make_meta(x, index=None, parent_meta=None):
         ),
     ):
         return x._meta
-    elif parent_meta is None:
-        parent_meta = pd.DataFrame()
 
     try:
         return make_meta_dispatch(x, index=index)
@@ -132,7 +130,9 @@ def make_meta(x, index=None, parent_meta=None):
             func = make_meta_obj.dispatch(type(parent_meta))
             return func(x, index=index)
         else:
-            func = make_meta_obj.dispatch(type(x))
+            # Default to using the pandas backend
+            # if ``parent_meta`` is not specified
+            func = make_meta_obj.dispatch(pd.DataFrame)
             return func(x, index=index)
 
 
