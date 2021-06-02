@@ -18,6 +18,7 @@ except (ImportError, SyntaxError):
 
 try:
     import pyarrow
+    from pyarrow.hdfs import HadoopFileSystem
 except ImportError:
     pyarrow = None
 
@@ -31,7 +32,7 @@ basedir = "/tmp/test-dask"
 
 @pytest.fixture
 def hdfs(request):
-    hdfs = pyarrow.fs.HadoopFileSystem(host="localhost", port=8020)
+    hdfs = HadoopFileSystem(host="localhost", port=8020)
 
     if hdfs.exists(basedir):
         hdfs.rm(basedir, recursive=True)
