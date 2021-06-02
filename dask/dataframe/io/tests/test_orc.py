@@ -55,13 +55,15 @@ def orc_files():
         shutil.rmtree(d, ignore_errors=True)
 
 
-def test_orc_single(orc_files):
+@pytest.mark.parametrize("partition_stripes", [1, 2])
+def test_orc_single(orc_files, partition_stripes):
     fn = orc_files[0]
-    d = read_orc(fn)
+    d = read_orc(fn, partition_stripes=partition_stripes)
     assert len(d) == 70000
-    assert d.npartitions == 8
+    assert d.npartitions == 8 / partition_stripes
     d2 = read_orc(fn, columns=["time", "date"])
-    assert_eq(d[columns], d2[columns])
+    assert_eq(d[columns], d2[columns], check_index=False)
+
     with pytest.raises(ValueError, match="nonexist"):
         read_orc(fn, columns=["time", "nonexist"])
 
