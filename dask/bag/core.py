@@ -1564,7 +1564,7 @@ class Bag(DaskMethodsMixin):
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            meta = dd.utils.make_meta_util(meta, parent_meta=pd.DataFrame())
+            meta = dd.utils.make_meta(meta, parent_meta=pd.DataFrame())
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)

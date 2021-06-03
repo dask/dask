@@ -33,7 +33,7 @@ Conversation happens in the following places:
 
     You can subscribe to this calendar to be notified of changes:
 
-    * `Google Calendar <https://calendar.google.com/calendar/embed?src=4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com>`__
+    * `Google Calendar <https://calendar.google.com/calendar/u/0?cid=NGwwdnRzMGMxY2dkYnE1amhjb2dqNTVzZnNAZ3JvdXAuY2FsZW5kYXIuZ29vZ2xlLmNvbQ>`__
     * `iCal <https://calendar.google.com/calendar/ical/4l0vts0c1cgdbq5jhcogj55sfs%40group.calendar.google.com/public/basic.ics>`__
 
 .. _`Stack Overflow with the #dask tag`: https://stackoverflow.com/questions/tagged/dask
