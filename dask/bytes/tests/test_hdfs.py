@@ -20,7 +20,7 @@ except (ImportError, SyntaxError):
 if not os.environ.get("DASK_RUN_HDFS_TESTS", ""):
     pytestmark = pytest.mark.skip(reason="HDFS tests not configured to run")
 
-import pyarrow
+pyarrow = pytest.importorskip("pyarrow")
 
 # from pyarrow.fs import HadoopFileSystem
 from pyarrow.hdfs import _connect
