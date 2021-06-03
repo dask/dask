@@ -17,11 +17,12 @@ class ORCFunctionWrapper:
     Reads ORC data from disk to produce a partition.
     """
 
-    def __init__(self, fs, columns, schema, engine):
+    def __init__(self, fs, columns, schema, engine, index):
         self.fs = fs
         self.columns = columns
         self.schema = schema
         self.engine = engine
+        self.index = index
 
     def project_columns(self, columns):
         """Return a new ORCFunctionWrapper object with
@@ -34,19 +35,22 @@ class ORCFunctionWrapper:
         return func
 
     def __call__(self, parts):
-        return self.engine.read_partition(
+        _df = self.engine.read_partition(
             self.fs,
             parts,
             self.schema,
             self.columns,
         )
+        if self.index:
+            _df.set_index(self.index, inplace=True)
+        return _df
 
 
 class ORCEngine:
     """The API necessary to provide a new ORC reader/writer"""
 
     @classmethod
-    def read_metadata(cls, fs, paths, columns, partition_stripe_count, **kwargs):
+    def read_metadata(cls, fs, paths, columns, index, partition_stripe_count, **kwargs):
         raise NotImplementedError()
 
     @classmethod
@@ -73,6 +77,7 @@ def read_orc(
     path,
     engine="pyarrow",
     columns=None,
+    index=None,
     partition_stripe_count=1,
     storage_options=None,
 ):
@@ -87,6 +92,8 @@ def read_orc(
         Backend ORC engine to use for IO. Default is "pyarrow".
     columns: None or list(str)
         Columns to load. If None, loads all.
+    index: str
+        Column name to set as index.
     partition_stripe_count: int or False
         Maximum number of ORC stripes to include in each output-DataFrame
         partition. Use False to specify a 1-to-1 mapping between files
@@ -120,6 +127,7 @@ def read_orc(
         fs,
         paths,
         columns,
+        index,
         partition_stripe_count,
     )
 
@@ -130,7 +138,7 @@ def read_orc(
         output_name,
         columns,
         parts,
-        ORCFunctionWrapper(fs, columns, schema, engine),
+        ORCFunctionWrapper(fs, columns, schema, engine, index),
         label=label,
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})

@@ -13,9 +13,15 @@ class ArrowORCEngine:
         fs,
         paths,
         columns,
+        index,
         partition_stripe_count,
         **kwargs,
     ):
+
+        # Convert root directory to file list.
+        # TODO: Handle hive-partitioned data
+        if len(paths) == 1 and fs.isdir(paths[0]):
+            paths = fs.find(paths[0])
 
         schema = None
         parts = []
@@ -48,7 +54,8 @@ class ArrowORCEngine:
                 )
 
         columns = list(schema) if columns is None else columns
-        meta = _meta_from_dtypes(columns, schema, [], [])
+        index = [index] if isinstance(index, str) else index
+        meta = _meta_from_dtypes(columns, schema, index, [])
         return parts, schema, meta
 
     @classmethod
@@ -65,7 +72,7 @@ class ArrowORCEngine:
     def write_partition(cls, df, path, fs, filename, **kwargs):
         table = pa.Table.from_pandas(df)
         with fs.open(fs.sep.join([path, filename]), "wb") as f:
-            orc.write_table(f, table)
+            orc.write_table(table, f)
 
 
 def _read_orc_stripes(fs, path, stripes, schema, columns):

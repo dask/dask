@@ -90,7 +90,9 @@ def test_orc_multiple(orc_files):
     LooseVersion(pa.__version__) < "4.0.0",
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
-def test_orc_roundtrip(tmpdir):
+@pytest.mark.parametrize("index", [None, "i32"])
+@pytest.mark.parametrize("columns", [None, ["i32", "i64", "f"]])
+def test_orc_roundtrip(tmpdir, index, columns):
     tmp = str(tmpdir)
     data = pd.DataFrame(
         {
@@ -102,8 +104,15 @@ def test_orc_roundtrip(tmpdir):
             ),
         }
     )
+    if index:
+        data.set_index(index, inplace=True)
     df = dd.from_pandas(data, chunksize=500)
-    df.to_orc(tmp, write_index=False)
+    if columns:
+        data = data[[c for c in columns if c != index]]
 
-    df2 = dd.read_orc(tmp)
-    df2.compute()
+    # Write
+    df.to_orc(tmp, write_index=bool(index))
+
+    # Read
+    df2 = dd.read_orc(tmp, index=index, columns=columns)
+    assert_eq(data, df2, check_index=bool(index))
