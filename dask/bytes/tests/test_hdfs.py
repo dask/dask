@@ -25,7 +25,7 @@ pyarrow = pytest.importorskip("pyarrow")
 try:
     from pyarrow.hdfs import _connect, _maybe_set_hadoop_classpath
 except ImportError:
-    try
+    try:
         from pyarrow._hdfs import connect as _connect, _maybe_set_hadoop_classpath
     except ImportError:
         pyarrow = False
