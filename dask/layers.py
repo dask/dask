@@ -161,8 +161,33 @@ class SlicingLayer(Layer):
             parts.add(tuple(_part))
         return parts
 
+    def cull(self, keys, all_keys):
+        """Cull a SlicingLayer HighLevelGraph layer."""
+        parts_out = self._keys_to_parts(keys)
+        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
+        if parts_out != self.parts_out:
+            culled_layer = self._cull(parts_out)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
+
+    def _cull_dependencies(self, keys, parts_out=None):
+        """Determine the necessary dependencies to produce `keys`.
+
+        For simple slicing, output chunks depend on which areas are sliced.
+        This method does not require graph materialization.
+        """
+        deps = defaultdict(set)
+        parts_out = parts_out or self._keys_to_parts(keys)
+        breakpoint()
+        for part in parts_out:
+            deps[(self.out_name, part)] |= {
+                (self.name_input, i) for i in range(self.new_blockdims)
+            }
+        return deps
+
     def _construct_graph(self, deserializing=False):
-        """Construct graph for a simple overlap operation."""
+        """Construct graph for a simple slicing operation."""
         out_name = self.out_name
         in_name = self.in_name
         blockdims = self.blockdims
