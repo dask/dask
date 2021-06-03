@@ -405,6 +405,14 @@ def rearrange_by_column(
     ignore_index=False,
 ):
     shuffle = shuffle or config.get("shuffle", None) or "disk"
+
+    # if the requested output partitions < input partitions
+    # we repartition first as shuffling overhead is
+    # proportionate to the number of input partitions
+
+    if npartitions is not None and npartitions < df.npartitions:
+        df = df.repartition(npartitions=npartitions)
+
     if shuffle == "disk":
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == "tasks":
