@@ -15,5 +15,5 @@ documentation:
   - dask/docs/**/*
 
 dispatch:
-  - dask/*/backends.py
-  - dask/*/dispatch.py
+  - dask/**/backends.py
+  - dask/**/dispatch.py
