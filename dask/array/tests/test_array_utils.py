@@ -36,6 +36,7 @@ def test_meta_from_array(asarray):
     assert meta_from_array(x, ndim=2).shape == (0, 0)
     assert meta_from_array(x, ndim=4).shape == (0, 0, 0, 0)
     assert meta_from_array(x, dtype="float64").dtype == "float64"
+    assert meta_from_array(x, dtype=float).dtype == "float64"
 
     x = da.ones((1,))
     assert isinstance(meta_from_array(x), np.ndarray)
