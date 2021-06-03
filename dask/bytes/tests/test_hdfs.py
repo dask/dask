@@ -26,7 +26,8 @@ try:
     from pyarrow.hdfs import _connect, _maybe_set_hadoop_classpath
 except ImportError:
     try:
-        from pyarrow._hdfs import connect as _connect, _maybe_set_hadoop_classpath
+        from pyarrow._hdfs import _maybe_set_hadoop_classpath
+        from pyarrow._hdfs import connect as _connect
     except ImportError:
         pyarrow = False
 
