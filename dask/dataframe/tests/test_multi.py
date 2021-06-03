@@ -21,7 +21,7 @@ from dask.dataframe.utils import (
     assert_eq,
     clear_known_categories,
     has_known_categories,
-    make_meta_util,
+    make_meta,
 )
 
 
@@ -1496,7 +1496,7 @@ def test_concat2():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta_util({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
+    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
     a = dd.DataFrame(dsk, "x", meta, [None, None])
     dsk = {
         ("y", 0): pd.DataFrame({"a": [10, 20, 30], "b": [40, 50, 60]}),
@@ -1509,7 +1509,7 @@ def test_concat2():
         ("y", 0): pd.DataFrame({"b": [10, 20, 30], "c": [40, 50, 60]}),
         ("y", 1): pd.DataFrame({"b": [40, 50, 60], "c": [30, 20, 10]}),
     }
-    meta = make_meta_util({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
+    meta = make_meta({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
     c = dd.DataFrame(dsk, "y", meta, [None, None])
 
     dsk = {
@@ -1520,7 +1520,7 @@ def test_concat2():
             {"b": [40, 50, 60], "c": [30, 20, 10], "d": [90, 80, 70]}, index=[3, 4, 5]
         ),
     }
-    meta = make_meta_util(
+    meta = make_meta(
         {"b": "i8", "c": "i8", "d": "i8"},
         index=pd.Index([], "i8"),
         parent_meta=pd.DataFrame(),
@@ -1934,7 +1934,7 @@ def test_append2():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta_util({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
+    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
     ddf1 = dd.DataFrame(dsk, "x", meta, [None, None])
 
     dsk = {
@@ -1948,7 +1948,7 @@ def test_append2():
         ("y", 0): pd.DataFrame({"b": [10, 20, 30], "c": [40, 50, 60]}),
         ("y", 1): pd.DataFrame({"b": [40, 50, 60], "c": [30, 20, 10]}),
     }
-    meta = make_meta_util({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
+    meta = make_meta({"b": "i8", "c": "i8"}, parent_meta=pd.DataFrame())
     ddf3 = dd.DataFrame(dsk, "y", meta, [None, None])
 
     assert_eq(ddf1.append(ddf2), ddf1.compute().append(ddf2.compute(), sort=False))
