@@ -1384,13 +1384,13 @@ def rewrite_blockwise(inputs):
             sub = {}
             # Map from (id(key), inds or None) -> index in indices. Used to deduplicate indices.
             index_map = {(id(k), inds): n for n, (k, inds) in enumerate(indices)}
-            for i, index in enumerate(new_indices):
+            for ii, index in enumerate(new_indices):
                 id_key = (id(index[0]), index[1])
                 if id_key in index_map:  # use old inputs if available
-                    sub[blockwise_token(i)] = blockwise_token(index_map[id_key])
+                    sub[blockwise_token(ii)] = blockwise_token(index_map[id_key])
                 else:
                     index_map[id_key] = len(indices)
-                    sub[blockwise_token(i)] = blockwise_token(len(indices))
+                    sub[blockwise_token(ii)] = blockwise_token(len(indices))
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
