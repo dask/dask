@@ -22,14 +22,20 @@ if not os.environ.get("DASK_RUN_HDFS_TESTS", ""):
 
 pyarrow = pytest.importorskip("pyarrow")
 
-# from pyarrow.fs import HadoopFileSystem
-from pyarrow.hdfs import _connect
+try:
+    from pyarrow.hdfs import _connect, _maybe_set_hadoop_classpath
+except ImportError:
+    try
+        from pyarrow._hdfs import connect as _connect, _maybe_set_hadoop_classpath
+    except ImportError:
+        pyarrow = False
 
 basedir = "/tmp/test-dask"
 
 
 @pytest.fixture
 def hdfs(request):
+    _maybe_set_hadoop_classpath()
     hdfs = _connect(host="localhost", port=8020)
 
     if hdfs.exists(basedir):
