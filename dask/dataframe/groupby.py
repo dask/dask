@@ -27,7 +27,7 @@ from .utils import (
     insert_meta_param_description,
     is_dataframe_like,
     is_series_like,
-    make_meta_util,
+    make_meta,
     raise_on_meta_error,
 )
 
@@ -1673,7 +1673,7 @@ class _GroupBy:
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta_util(meta, parent_meta=self._meta.obj)
+        meta = make_meta(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(
@@ -1762,7 +1762,7 @@ class _GroupBy:
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta_util(meta, parent_meta=self._meta.obj)
+        meta = make_meta(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(

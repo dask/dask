@@ -7,7 +7,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_120, PANDAS_VERSION
-from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta_util
+from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
 
 try:
     import scipy
@@ -22,7 +22,7 @@ def test_arithmetics():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
     }
-    meta = make_meta_util(
+    meta = make_meta(
         {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
     )
     ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
@@ -690,7 +690,7 @@ def test_reductions(split_every):
             index=[9, 9, 9],
         ),
     }
-    meta = make_meta_util(
+    meta = make_meta(
         {"a": "i8", "b": "i8", "c": "bool"},
         index=pd.Index([], "i8"),
         parent_meta=pd.DataFrame(),
@@ -972,7 +972,7 @@ def test_reduction_series_invalid_axis():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
     }
-    meta = make_meta_util(
+    meta = make_meta(
         {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
     )
     ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
@@ -1067,7 +1067,7 @@ def test_reductions_frame(split_every):
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
     }
-    meta = make_meta_util(
+    meta = make_meta(
         {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
     )
     ddf1 = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])

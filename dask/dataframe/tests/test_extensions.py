@@ -46,5 +46,5 @@ def test_reduction():
 
 
 def test_scalar():
-    result = dd.utils.make_meta_util(Decimal("1.0"), parent_meta=pd.DataFrame())
+    result = dd.utils.make_meta(Decimal("1.0"), parent_meta=pd.DataFrame())
     assert result == Decimal("1.0")

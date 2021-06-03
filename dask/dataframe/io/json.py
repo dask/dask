@@ -7,7 +7,7 @@ from ...base import compute as dask_compute
 from ...bytes import read_bytes
 from ...core import flatten
 from ...delayed import delayed
-from ..utils import insert_meta_param_description, make_meta_util
+from ..utils import insert_meta_param_description, make_meta
 from .io import from_delayed
 
 
@@ -198,7 +198,7 @@ def read_json(
         chunks = list(flatten(chunks))
         if meta is None:
             meta = read_json_chunk(first, encoding, errors, engine, kwargs)
-        meta = make_meta_util(meta)
+        meta = make_meta(meta)
         parts = [
             delayed(read_json_chunk)(chunk, encoding, errors, engine, kwargs, meta=meta)
             for chunk in chunks

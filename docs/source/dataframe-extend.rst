@@ -39,21 +39,38 @@ non-empty non-Dask object:
 
 .. code-block:: python
 
-   from dask.dataframe.utils import make_meta
+   from dask.dataframe.dispatch import make_meta_dispatch
 
-   @make_meta.register(MyDataFrame)
-   def make_meta_dataframe(df):
+   @make_meta_dispatch.register(MyDataFrame)
+   def make_meta_dataframe(df, index=None):
        return df.head(0)
 
 
-   @make_meta.register(MySeries)
-   def make_meta_series(s):
+   @make_meta_dispatch.register(MySeries)
+   def make_meta_series(s, index=None):
        return s.head(0)
 
 
-   @make_meta.register(MyIndex)
-   def make_meta_index(ind):
+   @make_meta_dispatch.register(MyIndex)
+   def make_meta_index(ind, index=None):
        return ind[:0]
+
+For dispatching any arbitrary ``object`` types to a respective back-end, we
+recommend registering a dispatch for ``make_meta_obj``:
+
+.. code-block:: python
+
+    from dask.dataframe.dispatch import make_meta_obj
+
+    @make_meta_obj.register(MyDataFrame)
+    def make_meta_object(x, index=None):
+        if isinstance(x, dict):
+            return MyDataFrame()
+        elif isinstance(x, int):
+            return MySeries
+        .
+        .
+        .
 
 
 Additionally, you should create a similar function that returns a non-empty
