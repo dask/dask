@@ -111,6 +111,7 @@ class SlicingLayer(Layer):
         out_name,
         in_name,
         blockdims,
+        new_blockdims,
         index,
         shape,
     ):
@@ -118,6 +119,7 @@ class SlicingLayer(Layer):
         self.out_name = out_name
         self.in_name = in_name
         self.blockdims = blockdims
+        self.new_blockdims = new_blockdims
         self.index = index
         self.shape = shape
 
