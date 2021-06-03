@@ -1491,6 +1491,22 @@ def test_piecewise_otherwise():
     )
 
 
+def test_select():
+    conditions = [
+        np.array([False, False, False, False]),
+        np.array([False, True, False, True]),
+        np.array([False, False, True, True]),
+    ]
+    choices = [
+        np.array([1, 2, 3, 4]),
+        np.array([5, 6, 7, 8]),
+        np.array([9, 10, 11, 12]),
+    ]
+    d_conditions = da.from_array(conditions, chunks=(3, 2))
+    d_choices = da.from_array(choices)
+    assert_eq(np.select(conditions, choices), da.select(d_conditions, d_choices))
+
+
 def test_argwhere():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)

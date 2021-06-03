@@ -1843,6 +1843,22 @@ def piecewise(x, condlist, funclist, *args, **kw):
     )
 
 
+@derived_from(np)
+def select(condlist, choicelist, default=0):
+    return blockwise(
+        np.select,
+        "m",
+        condlist,
+        "nm",
+        choicelist,
+        "nm",
+        dtype=result_type(*choicelist),
+        name="select",
+        concatenate=True,
+        default=default,
+    )
+
+
 def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
     """
     Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
