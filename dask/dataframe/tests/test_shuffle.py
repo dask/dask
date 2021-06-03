@@ -71,8 +71,21 @@ def test_shuffle_npartitions_task():
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
     s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=17, max_branch=4)
-    sc = s.compute(scheduler="sync")
+    sc = s.compute()
     assert s.npartitions == 17
+    assert set(s.dask).issuperset(set(ddf.dask))
+
+    assert len(sc) == len(df)
+    assert list(s.columns) == list(df.columns)
+    assert set(map(tuple, sc.values.tolist())) == set(map(tuple, df.values.tolist()))
+
+
+def test_shuffle_npartitions_lt_input_partitions_task():
+    df = pd.DataFrame({"x": np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=20)
+    s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=5, max_branch=2)
+    sc = s.compute()
+    assert s.npartitions == 5
     assert set(s.dask).issuperset(set(ddf.dask))
 
     assert len(sc) == len(df)
