@@ -146,6 +146,19 @@ class SlicingLayer(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
+    def _keys_to_parts(self, keys):
+        """Simple utility to convert keys to array chunk indices."""
+        parts = set()
+        for key in keys:
+            try:
+                _name, *_part = key
+            except ValueError:
+                continue
+            if _name != self.out_name:
+                continue
+            parts.add(tuple(_part))
+        return parts
+
     def _construct_graph(self, deserializing=False):
         """Construct graph for a simple overlap operation."""
         out_name = self.out_name
