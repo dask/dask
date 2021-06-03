@@ -16,23 +16,21 @@ try:
 except (ImportError, SyntaxError):
     distributed = None
 
-try:
-    import pyarrow
-    from pyarrow.fs import HadoopFileSystem
-except ImportError:
-    pyarrow = None
-
 
 if not os.environ.get("DASK_RUN_HDFS_TESTS", ""):
     pytestmark = pytest.mark.skip(reason="HDFS tests not configured to run")
 
+import pyarrow
+
+# from pyarrow.fs import HadoopFileSystem
+from pyarrow.hdfs import _connect
 
 basedir = "/tmp/test-dask"
 
 
 @pytest.fixture
 def hdfs(request):
-    hdfs = HadoopFileSystem(host="localhost", port=8020)
+    hdfs = _connect(host="localhost", port=8020)
 
     if hdfs.exists(basedir):
         hdfs.rm(basedir, recursive=True)
