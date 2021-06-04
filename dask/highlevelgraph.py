@@ -695,6 +695,10 @@ class HighLevelGraph(Mapping):
     def __iter__(self):
         return iter(self.to_dict())
 
+    def is_materialized(self):
+        """Checks whether all high level graph layers are fully materialized."""
+        return all([layer.is_materialized() for layer in self.layers.values()])
+
     def to_dict(self) -> dict:
         """Efficiently convert to plain dict. This method is faster than dict(self)."""
         try:
