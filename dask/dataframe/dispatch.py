@@ -54,9 +54,6 @@ def concat(
         Whether to ignore the order when doing the union of categoricals.
         Default is False.
     """
-
-    print("~~ James was here ~~")
-
     if len(dfs) == 1:
         return dfs[0]
     else:
