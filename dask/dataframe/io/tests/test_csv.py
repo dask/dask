@@ -1652,3 +1652,18 @@ def test_read_csv_groupby_get_group(tmpdir):
     ddfs = ddf1.groupby("foo")
 
     assert_eq(df1, ddfs.get_group(10).compute())
+
+
+def test_csv_getitem_column_order(tmpdir):
+    # See: https://github.com/dask/dask/issues/7759
+
+    path = os.path.join(str(tmpdir), "test.csv")
+    columns = list("abcdefghijklmnopqrstuvwxyz")
+    values = list(range(len(columns)))
+
+    df1 = pd.DataFrame([{c: v for c, v in zip(columns, values)}])
+    df1.to_csv(path)
+
+    columns = list("hczkylape")
+    df2 = dd.read_csv(path)[columns].head(1)
+    assert_eq(df1[columns], df2)
