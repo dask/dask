@@ -209,6 +209,7 @@ def test_blockwise_cull(flat):
         out_keys = layer.get_output_keys()
         assert out_keys == {(layer.output, *select)}
         assert not layer.is_materialized()
+    assert not x.dask.is_materialized()
 
 
 def test_highlevelgraph_dicts_deprecation():
@@ -236,7 +237,9 @@ def test_len_does_not_materialize():
 
     assert hg.layers["a"].is_materialized()
     assert not hg.layers["b"].is_materialized()
+    assert not hg.is_materialized()  # check if all HLG layers are materialized
 
     assert len(hg) == len(a) + len(b) == 7
 
     assert not hg.layers["b"].is_materialized()
+    assert not hg.is_materialized()  # check if all HLG layers are materialized
