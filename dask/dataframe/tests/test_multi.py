@@ -2356,19 +2356,19 @@ def test_pairwise_merge_results_in_identical_output_df(
     for i in range(10):
         df = pd.DataFrame(
             {
-                f"{i}A": [4, 5, 6],
-                f"{i}B": [3, 2, 1],
+                f"{i}A": [5, 6, 7, 8],
+                f"{i}B": [4, 3, 2, 1],
             },
-            index=[0, 1, 3],
+            index=[0, 1, 2, 3],
         )
         ddf = dd.from_pandas(df, npartitions_other)
         dfs_to_merge.append(ddf)
 
-    ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), npartitions_base)
+    ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 3]), npartitions_base)
     for ddf in dfs_to_merge:
         ddf_loop = ddf_loop.join(ddf, how=how)
 
-    ddf_pairwise = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), npartitions_base)
+    ddf_pairwise = dd.from_pandas(pd.DataFrame(index=[0, 1, 3]), npartitions_base)
 
     ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 
