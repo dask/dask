@@ -2,6 +2,7 @@ import abc
 import collections.abc
 import copy
 import warnings
+from html import escape
 from typing import (
     AbstractSet,
     Any,
@@ -1052,6 +1053,67 @@ class HighLevelGraph(Mapping):
             unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
 
         return {"dsk": dsk, "deps": deps, "annotations": anno}
+
+    def _repr_html_(self):
+        highlevelgraph_info = escape(self.__str__())
+        html = f"""
+        <div style="">
+            <div>
+                <div style="
+                    width: 24px;
+                    height: 24px;
+                    background-color: #FFF7E5;
+                    border: 3px solid #FF6132;
+                    border-radius: 5px;
+                    position: absolute;"> </div>
+                <div style="margin-left: 48px;">
+                    <h3 style="margin-bottom: 0px;">HighLevelGraph</h3>
+                    <p style="color: #9D9D9D; margin-bottom:
+        0px;">{highlevelgraph_info}</p>
+        """
+        for i, (key, layer) in enumerate(self.layers.items()):
+            key_shortname = key.rsplit("-", 1)[0]  # removes token
+            dependencies = self.dependencies[key]
+            info = layer_info_dict(layer, dependencies)
+            layer_info_table = html_from_dict(info)
+            layer_html = f"""
+            <div style="">
+                <details style="margin-left: 48px;">
+                <summary style="margin-bottom: 20px; margin-top: 20px;">
+                <h3 style="display: inline;">Layer {i}: {key_shortname}</h3>
+                </summary>
+                {key}
+                {layer_info_table}
+                </details>
+            </div>
+            """
+            html += layer_html
+        self.html = html
+        return html
+
+
+def layer_info_dict(layer, dependencies):
+    info = {
+        "layer_type": type(layer).__name__,
+        "is_materialized": layer.is_materialized(),
+        "dependencies": dependencies,
+    }
+    return info
+
+
+def html_from_dict(info):
+    html = """<table>"""
+    suffix = """</table>"""
+    for key, val in info.items():
+        table_row = f"""
+          <tr>
+            <th>{key}</th>
+            <td>{val}</td>
+          </tr>
+        """
+        html += table_row
+    html += suffix
+    return html
 
 
 def to_graphviz(
