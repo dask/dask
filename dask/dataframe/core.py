@@ -4534,7 +4534,9 @@ class DataFrame(_Frame):
             other = other.to_frame()
 
         if not is_dataframe_like(other):
-            if not isinstance(other, list) or not all([is_dataframe_like(o) for o in other]):
+            if not isinstance(other, list) or not all(
+                [is_dataframe_like(o) for o in other]
+            ):
                 raise ValueError("other must be DataFrame or list of DataFrames")
             if how not in ["outer", "left"]:
                 raise ValueError("merge_multi only supports left or outer joins")
@@ -5065,6 +5067,7 @@ class DataFrame(_Frame):
             and (np.isscalar(key) or isinstance(key, tuple))
             and key in self.columns
         )
+
 
 # bind operators
 for op in [
