@@ -353,6 +353,25 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
         dd.assert_eq(ddf, df, check_index=False)
 
 
+def test_blockwise_fusion_after_compute(c):
+    # See: https://github.com/dask/dask/issues/7720
+
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Simple sequence of Dask-Dataframe manipulations
+    df = pd.DataFrame({"x": [1, 2, 3] * 5})
+    series = dd.from_pandas(df, npartitions=2)["x"]
+    result = series < 3
+
+    # Trigger an optimization of the `series` graph
+    # (which `result` depends on), then compute `result`.
+    # This is essentially a test of `rewrite_blockwise`.
+    series_len = len(series)
+    assert series_len == 15
+    assert df.x[result.compute()].sum() == 15
+
+
 @gen_cluster(client=True)
 async def test_blockwise_numpy_args(c, s, a, b):
     """Test pack/unpack of blockwise that includes a NumPy literal argument"""
