@@ -2347,9 +2347,11 @@ def test_pairwise_rejects_unsupported_join_types(how):
 
 
 @pytest.mark.parametrize("how", ["left", "outer"])
-@pytest.mark.parametrize("npartitions_base", [1,2,3])
-@pytest.mark.parametrize("npartitions_other", [1,2,3])
-def test_pairwise_merge_results_in_identical_output_df(how, npartitions_base, npartitions_other):
+@pytest.mark.parametrize("npartitions_base", [1, 2, 3])
+@pytest.mark.parametrize("npartitions_other", [1, 2, 3])
+def test_pairwise_merge_results_in_identical_output_df(
+    how, npartitions_base, npartitions_other
+):
     dfs_to_merge = []
     for i in range(10):
         df = pd.DataFrame(
