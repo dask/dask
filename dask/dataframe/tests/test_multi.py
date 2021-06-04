@@ -2325,3 +2325,49 @@ def test_merge_tasks_large_to_small(how, npartitions, base):
         pd_result.sort_values("y"),
         check_index=False,
     )
+
+
+@pytest.mark.parametrize("how", ["right", "inner"])
+def test_pairwise_rejects_unsupported_join_types(how):
+    base_df = dd.from_pandas(
+        pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]), 3
+    )
+    dfs = [
+        dd.from_pandas(
+            pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]), 3
+        ),
+        dd.from_pandas(
+            pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]), 3
+        ),
+    ]
+
+    with pytest.raises(ValueError) as e:
+        base_df.join(dfs, how=how)
+    e.match("merge_multi only supports left or outer joins")
+
+
+@pytest.mark.parametrize("how", ["left", "outer"])
+@pytest.mark.parametrize("npartitions_base", [1,2,3])
+@pytest.mark.parametrize("npartitions_other", [1,2,3])
+def test_pairwise_merge_results_in_identical_output_df(how, npartitions_base, npartitions_other):
+    dfs_to_merge = []
+    for i in range(10):
+        df = pd.DataFrame(
+            {
+                f"{i}A": [4, 5, 6],
+                f"{i}B": [3, 2, 1],
+            },
+            index=[0, 1, 3],
+        )
+        ddf = dd.from_pandas(df, npartitions_other)
+        dfs_to_merge.append(ddf)
+
+    ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), npartitions_base)
+    for ddf in dfs_to_merge:
+        ddf_loop = ddf_loop.join(ddf, how=how)
+
+    ddf_pairwise = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), npartitions_base)
+
+    ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
+
+    assert_eq(ddf_pairwise, ddf_loop)
