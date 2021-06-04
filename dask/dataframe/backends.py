@@ -23,9 +23,11 @@ from .dispatch import (
     group_split_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
-    make_meta,
+    make_meta_dispatch,
+    make_meta_obj,
     meta_nonempty,
     tolist_dispatch,
+    union_categoricals_dispatch,
 )
 from .extensions import make_array_nonempty, make_scalar
 from .utils import (
@@ -55,17 +57,26 @@ def _(x):
     return x
 
 
-@make_meta.register((pd.Series, pd.DataFrame))
+@make_meta_dispatch.register((pd.Series, pd.DataFrame))
 def make_meta_pandas(x, index=None):
     return x.iloc[:0]
 
 
-@make_meta.register(pd.Index)
+@make_meta_dispatch.register(pd.Index)
 def make_meta_index(x, index=None):
     return x[0:0]
 
 
-@make_meta.register(object)
+meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+try:
+    import scipy.sparse as sp
+
+    meta_object_types += (sp.spmatrix,)
+except ImportError:
+    pass
+
+
+@make_meta_obj.register(meta_object_types)
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
 
@@ -93,13 +104,12 @@ def make_meta_object(x, index=None):
     >>> make_meta('i8')                         # doctest: +SKIP
     1
     """
-    if hasattr(x, "_meta"):
-        return x._meta
-    elif is_arraylike(x) and x.shape:
+
+    if is_arraylike(x) and x.shape:
         return x[:0]
 
     if index is not None:
-        index = make_meta(index)
+        index = make_meta_dispatch(index)
 
     if isinstance(x, dict):
         return pd.DataFrame(
@@ -280,6 +290,15 @@ def _nonempty_series(s, idx=None):
     if PANDAS_GT_100:
         out.attrs = s.attrs
     return out
+
+
+@union_categoricals_dispatch.register(
+    (pd.DataFrame, pd.Series, pd.Index, pd.Categorical)
+)
+def union_categoricals_pandas(to_union, sort_categories=False, ignore_order=False):
+    return pd.api.types.union_categoricals(
+        to_union, sort_categories=sort_categories, ignore_order=ignore_order
+    )
 
 
 @get_parallel_type.register(pd.Series)
@@ -505,6 +524,7 @@ def is_categorical_dtype_pandas(obj):
 @group_split_dispatch.register_lazy("cudf")
 @get_parallel_type.register_lazy("cudf")
 @meta_nonempty.register_lazy("cudf")
-@make_meta.register_lazy("cudf")
+@make_meta_dispatch.register_lazy("cudf")
+@make_meta_obj.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401

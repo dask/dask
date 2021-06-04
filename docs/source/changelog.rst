@@ -1,6 +1,63 @@
 Changelog
 =========
 
+2021.06.0
+---------
+
+Released on June 4, 2021
+
+- Remove abstract tokens from graph keys in ``rewrite_blockwise`` (:pr:`7721`) `Richard (Rick) Zamora`_
+- Ensure correct column order in csv ``project_columns`` (:pr:`7761`) `Richard (Rick) Zamora`_
+- Renamed inner loop variables to avoid duplication (:pr:`7741`) `Boaz Mohar`_
+- Do not return delayed object from ``to_zarr`` (:pr:`7738`) `Chris Roat`
+- Array: correct number of outputs in ``apply_gufunc`` (:pr:`7669`) `Gabe Joseph`_
+- Rewrite ``da.fromfunction`` with ``da.blockwise`` (:pr:`7704`) `John A Kirkham`_
+- Rename ``make_meta_util`` to ``make_meta`` (:pr:`7743`) `GALI PREM SAGAR`_
+- Repartition before shuffle if the requested partitions are less than input partitions (:pr:`7715`) `Vibhu Jawa`_
+- Blockwise: handle constant key inputs (:pr:`7734`) `Mads R. B. Kristensen`_
+- Added raise to ``apply_gufunc`` (:pr:`7744`) `Boaz Mohar`_
+- Show failing tests summary in CI (:pr:`7735`) `Genevieve Buckley`_
+- ``sizeof`` sets in Python 3.9 (:pr:`7739`) `Mads R. B. Kristensen`_
+- Warn if using pandas datetimelike string in ``dataframe.__getitem__`` (:pr:`7749`) `Julia Signell`_
+- Highlight the ``client.dashboard_link`` (:pr:`7747`) `Genevieve Buckley`_
+- Easier link for subscribing to the Google calendar (:pr:`7733`) `Genevieve Buckley`_
+- Automatically show graph visualization in Jupyter notebooks (:pr:`7716`) `Genevieve Buckley`_
+- Add ``autofunction`` for ``unify_chunks`` in API docs (:pr:`7730`) `James Bourbeau`_
+
+
+2021.05.1
+---------
+
+Released on May 28, 2021
+
+- Pandas compatibility (:pr:`7712`) `Julia Signell`_
+- Fix ``optimize_dataframe_getitem`` bug (:pr:`7698`) `Richard (Rick) Zamora`_
+- Update ``make_meta`` import in docs (:pr:`7713`) `Benjamin Zaitlen`_
+- Implement ``da.searchsorted`` (:pr:`7696`) `Tom White`_
+- Fix format string in error message (:pr:`7706`) `Jiaming Yuan`_
+- Fix ``read_sql_table`` returning wrong result for single column loads (:pr:`7572`) `c-thiel`_
+- Add slack join link in ``support.rst`` (:pr:`7679`) `Naty Clementi`_
+- Remove unused alphabet variable (:pr:`7700`) `James Bourbeau`_
+- Fix meta creation incase of ``object`` (:pr:`7586`) `GALI PREM SAGAR`_
+- Add dispatch for ``union_categoricals`` (:pr:`7699`) `GALI PREM SAGAR`_
+- Consolidate array ``Dispatch`` objects (:pr:`7505`) `James Bourbeau`_
+- Move DataFrame ``dispatch.registers`` to their own file (:pr:`7503`) `Julia Signell`_
+- Fix delayed with ``dataclasses`` where ``init=False`` (:pr:`7656`) `Julia Signell`_
+- Allow a column to be named ``divisions`` (:pr:`7605`) `Julia Signell`_
+- Stack nd array with unknown chunks (:pr:`7562`) `Chris Roat`_
+- Promote the 2021 Dask User Survey (:pr:`7694`) `Genevieve Buckley`_
+- Fix typo in ``DataFrame.set_index()`` (:pr:`7691`) `James Lamb`_
+- Cleanup array API reference links (:pr:`7684`) `David Hoese`_
+- Accept ``axis`` tuple for ``flip`` to be consistent with NumPy (:pr:`7675`) `Andrew Champion`_
+- Bump ``pre-commit`` hook versions (:pr:`7676`) `James Bourbeau`_
+- Cleanup ``to_zarr`` docstring (:pr:`7683`) `David Hoese`_
+- Fix the docstring of ``read_orc`` (:pr:`7678`) `keewis`_
+- Doc ``ipyparallel`` & ``mpi4py`` ``concurrent.futures`` (:pr:`7665`) `John A Kirkham`_
+- Update tests to support CuPy 9 (:pr:`7671`) `Peter Andreas Entschev`_
+- Fix some ``HighLevelGraph`` documentation inaccuracies (:pr:`7662`) `Mads R. B. Kristensen`_
+- Fix spelling in Series ``getitem`` error message (:pr:`7659`) `Maisie Marshall`_
+
+
 2021.05.0
 ---------
 
@@ -4204,3 +4261,10 @@ Other
 .. _`Naty Clementi`: https://github.com/ncclementi
 .. _`JSKenyon`: https://github.com/jskenyon
 .. _`Freyam Mehta`: https://github.com/freyam
+.. _`Jiaming Yuan`: https://github.com/trivialfis
+.. _`c-thiel`: https://github.com/c-thiel
+.. _`Andrew Champion`: https://github.com/aschampion
+.. _`keewis`: https://github.com/keewis
+.. _`Maisie Marshall`: https://github.com/maisiemarshall
+.. _`Vibhu Jawa`: https://github.com/VibhuJawa
+.. _`Boaz Mohar`: https://github.com/boazmohar

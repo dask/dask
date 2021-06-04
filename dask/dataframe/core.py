@@ -59,13 +59,13 @@ from .dispatch import (
     get_parallel_type,
     group_split_dispatch,
     hash_object_dispatch,
-    make_meta,
     meta_nonempty,
 )
 from .optimize import optimize
 from .utils import (
     PANDAS_GT_100,
     PANDAS_GT_110,
+    PANDAS_GT_120,
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
@@ -76,6 +76,7 @@ from .utils import (
     is_dataframe_like,
     is_index_like,
     is_series_like,
+    make_meta,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -121,7 +122,9 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = make_meta(meta)
+        self._parent_meta = pd.Series(dtype="float64")
+
+        meta = make_meta(meta, parent_meta=self._parent_meta)
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError(
                 "Expected meta to specify scalar, got "
@@ -265,7 +268,7 @@ def _scalar_binary(op, self, other, inv=False):
         (op, other_key, (self._name, 0)) if inv else (op, (self._name, 0), other_key)
     )
 
-    other_meta = make_meta(other)
+    other_meta = make_meta(other, parent_meta=self._parent_meta)
     other_meta_nonempty = meta_nonempty(other_meta)
     if inv:
         meta = op(other_meta_nonempty, self._meta_nonempty)
@@ -1886,6 +1889,7 @@ Dask Name: {name}, {task} tasks"""
                 token=name,
                 meta=meta,
                 enforce_metadata=False,
+                parent_meta=self._meta,
             )
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
@@ -2055,13 +2059,19 @@ Dask Name: {name}, {task} tasks"""
                 skipna=skipna,
                 ddof=ddof,
                 enforce_metadata=False,
+                parent_meta=self._meta,
             )
             return handle_out(out, result)
         else:
             v = self.var(skipna=skipna, ddof=ddof, split_every=split_every)
             name = self._token_prefix + "std"
             result = map_partitions(
-                np.sqrt, v, meta=meta, token=name, enforce_metadata=False
+                np.sqrt,
+                v,
+                meta=meta,
+                token=name,
+                enforce_metadata=False,
+                parent_meta=self._meta,
             )
             return handle_out(out, result)
 
@@ -2292,6 +2302,7 @@ Dask Name: {name}, {task} tasks"""
                 axis=axis,
                 skipna=skipna,
                 ddof=ddof,
+                parent_meta=self._meta,
             )
         else:
             num = self._get_numeric_data()
@@ -2299,7 +2310,12 @@ Dask Name: {name}, {task} tasks"""
             n = num.count(split_every=split_every)
             name = self._token_prefix + "sem"
             result = map_partitions(
-                np.sqrt, v / n, meta=meta, token=name, enforce_metadata=False
+                np.sqrt,
+                v / n,
+                meta=meta,
+                token=name,
+                enforce_metadata=False,
+                parent_meta=self._meta,
             )
 
             if isinstance(self, DataFrame):
@@ -2335,6 +2351,7 @@ Dask Name: {name}, {task} tasks"""
                 token=keyname,
                 enforce_metadata=False,
                 meta=(q, "f8"),
+                parent_meta=self._meta,
             )
         else:
             _raise_if_object_series(self, "quantile")
@@ -3357,7 +3374,11 @@ Dask Name: {name}, {task} tasks""".format(
         if meta is no_default:
             meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
-            meta = make_meta(meta, index=getattr(make_meta(self), "index", None))
+            meta = make_meta(
+                meta,
+                index=getattr(make_meta(self), "index", None),
+                parent_meta=self._meta,
+            )
 
         return type(self)(graph, name, meta, self.divisions)
 
@@ -3860,6 +3881,14 @@ class DataFrame(_Frame):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
+                    if PANDAS_GT_120:
+                        warnings.warn(
+                            "Indexing a DataFrame with a datetimelike index using a single "
+                            "string to slice the rows, like `frame[string]`, is deprecated "
+                            "and will be removed in a future version. Use `frame.loc[string]` "
+                            "instead.",
+                            FutureWarning,
+                        )
                     return self.loc[key]
 
             # error is raised from pandas
@@ -4718,7 +4747,7 @@ class DataFrame(_Frame):
                 M.apply, self._meta_nonempty, func, args=args, udf=True, **kwds
             )
             warnings.warn(meta_warning(meta))
-
+        kwds.update({"parent_meta": self._meta})
         return map_partitions(M.apply, self, func, args=args, meta=meta, **kwds)
 
     @derived_from(pd.DataFrame)
@@ -5504,14 +5533,16 @@ def apply_concat_apply(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
     meta = make_meta(
-        meta, index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None)
+        meta,
+        index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None),
+        parent_meta=dfs[0]._meta,
     )
 
     graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
 
     divisions = [None] * (split_out + 1)
 
-    return new_dd_object(graph, b, meta, divisions)
+    return new_dd_object(graph, b, meta, divisions, parent_meta=dfs[0]._meta)
 
 
 aca = apply_concat_apply
@@ -5577,6 +5608,7 @@ def map_partitions(
     $META
     """
     name = kwargs.pop("token", None)
+    parent_meta = kwargs.pop("parent_meta", None)
 
     if has_keyword(func, "partition_info"):
         kwargs["partition_info"] = {"number": -1, "divisions": None}
@@ -5595,13 +5627,15 @@ def map_partitions(
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
     meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
+    if parent_meta is None and dfs:
+        parent_meta = dfs[0]._meta
 
     if meta is no_default:
         # Use non-normalized kwargs here, as we want the real values (not
         # delayed values)
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
-        meta = make_meta(meta, index=meta_index)
+        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
 
     if has_keyword(func, "partition_info"):
         kwargs["partition_info"] = "__dummy__"
@@ -5618,7 +5652,7 @@ def map_partitions(
         meta = make_meta(_concat([meta]), index=meta_index)
 
     # Ensure meta is empty series
-    meta = make_meta(meta)
+    meta = make_meta(meta, parent_meta=parent_meta)
 
     args2 = []
     dependencies = []
@@ -5979,7 +6013,9 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
         return Scalar(graph, name, "f8")
-    meta = make_meta([(c, "f8") for c in df.columns], index=df.columns)
+    meta = make_meta(
+        [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
+    )
     return DataFrame(graph, name, meta, (df.columns[0], df.columns[-1]))
 
 
@@ -6727,7 +6763,7 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions):
+def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
