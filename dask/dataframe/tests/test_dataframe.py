@@ -4670,8 +4670,8 @@ def test_dot_nan():
     assert_eq(s2.dot(df), dask_s2.dot(dask_df))
 
 
-# TODO: Can the setup here go into a fixture? or just a private function?
-def test_pairwise_rejects_right_join():
+@pytest.mark.parametrize("how", ["right", "inner"])
+def test_pairwise_rejects_unsupported_join_types(how):
     base_df = dd.from_pandas(
         pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]), 3
     )
@@ -4684,46 +4684,31 @@ def test_pairwise_rejects_right_join():
         ),
     ]
 
-    with pytest.raises(ValueError):
-        base_df.join(dfs, how="right")
+    with pytest.raises(ValueError) as e:
+        base_df.join(dfs, how=how)
+    e.match("merge_multi only supports left or outer joins")
 
 
-def test_pairwise_rejects_inner_join():
-    base_df = dd.from_pandas(
-        pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]), 3
-    )
-    dfs = [
-        dd.from_pandas(
-            pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]), 3
-        ),
-        dd.from_pandas(
-            pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]), 3
-        ),
-    ]
-
-    with pytest.raises(ValueError):
-        base_df.join(dfs, how="inner")
-
-
-def test_pairwise_merge_results_in_identical_output_df():
+@pytest.mark.parametrize("how", ["left", "outer"])
+def test_pairwise_merge_results_in_identical_output_df(how):
     dfs_to_merge = []
-    ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), 3)
     for i in range(10):
         df = pd.DataFrame(
             {
                 f"{i}A": [4, 5, 6],
-                f"{i}B": [3,2,1],
+                f"{i}B": [3, 2, 1],
             },
             index=[0, 1, 3],
         )
         ddf = dd.from_pandas(df, 3)
         dfs_to_merge.append(ddf)
 
+    ddf_loop = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), 3)
     for ddf in dfs_to_merge:
-        ddf_loop = ddf_loop.join(ddf, how="left")
+        ddf_loop = ddf_loop.join(ddf, how=how)
 
     ddf_pairwise = dd.from_pandas(pd.DataFrame(index=[0, 1, 2, 3]), 3)
 
-    ddf_pairwise = ddf_pairwise.join(dfs_to_merge)
+    ddf_pairwise = ddf_pairwise.join(dfs_to_merge, how=how)
 
-    tm.assert_frame_equal(ddf_pairwise.compute(), ddf_loop.compute())
+    assert_eq(ddf_pairwise, ddf_loop)

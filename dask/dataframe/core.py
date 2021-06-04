@@ -5081,8 +5081,8 @@ def _merge_multi(
         raise ValueError("other must be DataFrame or list of DataFrames")
     if not all([is_dataframe_like(other) for other in others]):
         raise ValueError("other must be DataFrame or list of DataFrames")
-    if how not in ["inner", "left"]:
-        raise ValueError("merge_multi only supports left or inner joins")
+    if how not in ["outer", "left"]:
+        raise ValueError("merge_multi only supports left or outer joins")
 
     joined_others_df = _recursive_pairwise_outer_join(
         others,
