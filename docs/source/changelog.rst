@@ -1,6 +1,30 @@
 Changelog
 =========
 
+2021.06.0
+---------
+
+Released on June 4, 2021
+
+- Remove abstract tokens from graph keys in ``rewrite_blockwise`` (:pr:`7721`) `Richard (Rick) Zamora`_
+- Ensure correct column order in csv ``project_columns`` (:pr:`7761`) `Richard (Rick) Zamora`_
+- Renamed inner loop variables to avoid duplication (:pr:`7741`) `Boaz Mohar`_
+- Do not return delayed object from ``to_zarr`` (:pr:`7738`) `Chris Roat`
+- Array: correct number of outputs in ``apply_gufunc`` (:pr:`7669`) `Gabe Joseph`_
+- Rewrite ``da.fromfunction`` with ``da.blockwise`` (:pr:`7704`) `John A Kirkham`_
+- Rename ``make_meta_util`` to ``make_meta`` (:pr:`7743`) `GALI PREM SAGAR`_
+- Repartition before shuffle if the requested partitions are less than input partitions (:pr:`7715`) `Vibhu Jawa`_
+- Blockwise: handle constant key inputs (:pr:`7734`) `Mads R. B. Kristensen`_
+- Added raise to ``apply_gufunc`` (:pr:`7744`) `Boaz Mohar`_
+- Show failing tests summary in CI (:pr:`7735`) `Genevieve Buckley`_
+- ``sizeof`` sets in Python 3.9 (:pr:`7739`) `Mads R. B. Kristensen`_
+- Warn if using pandas datetimelike string in ``dataframe.__getitem__`` (:pr:`7749`) `Julia Signell`_
+- Highlight the ``client.dashboard_link`` (:pr:`7747`) `Genevieve Buckley`_
+- Easier link for subscribing to the Google calendar (:pr:`7733`) `Genevieve Buckley`_
+- Automatically show graph visualization in Jupyter notebooks (:pr:`7716`) `Genevieve Buckley`_
+- Add ``autofunction`` for ``unify_chunks`` in API docs (:pr:`7730`) `James Bourbeau`_
+
+
 2021.05.1
 ---------
 
@@ -4242,3 +4266,5 @@ Other
 .. _`Andrew Champion`: https://github.com/aschampion
 .. _`keewis`: https://github.com/keewis
 .. _`Maisie Marshall`: https://github.com/maisiemarshall
+.. _`Vibhu Jawa`: https://github.com/VibhuJawa
+.. _`Boaz Mohar`: https://github.com/boazmohar
