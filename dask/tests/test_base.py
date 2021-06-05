@@ -933,7 +933,7 @@ def test_compute_nested():
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
-def test_visualize(monkeypatch):
+def test_visualize():
     pytest.importorskip("graphviz")
     with tmpdir() as d:
         x = da.arange(5, chunks=2)
