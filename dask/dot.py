@@ -275,9 +275,8 @@ def graphviz_to_file(g, filename, format):
     fmts = [".png", ".pdf", ".dot", ".svg", ".jpeg", ".jpg"]
 
     if format is None and filename is None:
-        format = "png"
-
-    if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
+        pass
+    elif format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
         filename, format = os.path.splitext(filename)
         format = format[1:].lower()
 

@@ -954,16 +954,27 @@ def test_visualize(monkeypatch):
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
 
-        test_list = []
-        _mock_get_display_cls = dask.dot._get_display_cls
 
-        def mock_fx(format):
-            test_list.append(True)
-            return _mock_get_display_cls(format)
+@pytest.mark.skipif("not da")
+@pytest.mark.skipif(
+    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
+)
+def test_visualize_no_filename(monkeypatch):
+    pytest.importorskip("graphviz")
+    pytest.importorskip("dask.dot")
 
-        monkeypatch.setattr(dask.dot, "_get_display_cls", mock_fx)
-        visualize(x, filename=None)
-        assert True in test_list
+    x = da.arange(10)
+
+    test_list = []
+    _mock_get_display_cls = dask.dot._get_display_cls
+
+    def mock_fx(format):
+        test_list.append(True)
+        return _mock_get_display_cls(format)
+
+    monkeypatch.setattr(dask.dot, "_get_display_cls", mock_fx)
+    visualize(x, filename=None)
+    assert True in test_list
 
 
 @pytest.mark.skipif("not da")
