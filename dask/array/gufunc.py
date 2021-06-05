@@ -340,7 +340,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     args = [asarray(a) for a in args]
 
     if len(input_coredimss) != len(args):
-        ValueError(
+        raise ValueError(
             "According to `signature`, `func` requires %d arguments, but %s given"
             % (len(input_coredimss), len(args))
         )

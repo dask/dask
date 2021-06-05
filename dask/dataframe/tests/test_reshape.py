@@ -4,7 +4,7 @@ import pytest
 
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
-from dask.dataframe.utils import assert_eq, make_meta_util
+from dask.dataframe.utils import assert_eq, make_meta
 
 
 @pytest.mark.parametrize(
@@ -149,7 +149,7 @@ def test_get_dummies_errors():
     # unknown categories
     df = pd.DataFrame({"x": list("abcbc"), "y": list("bcbcb")})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf._meta = make_meta_util(
+    ddf._meta = make_meta(
         {"x": "category", "y": "category"}, parent_meta=pd.DataFrame()
     )
 
@@ -259,7 +259,7 @@ def test_pivot_table_errors():
     assert msg in str(err.value)
 
     # unknown categories
-    ddf._meta = make_meta_util(
+    ddf._meta = make_meta(
         {"A": object, "B": float, "C": "category"}, parent_meta=pd.DataFrame()
     )
     msg = "'columns' must have known categories"

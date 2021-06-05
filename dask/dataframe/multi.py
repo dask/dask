@@ -89,7 +89,7 @@ from .utils import (
     asciitable,
     is_dataframe_like,
     is_series_like,
-    make_meta_util,
+    make_meta,
     strip_unknown_categories,
 )
 
@@ -1022,7 +1022,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
 
     kwargs.update({"ignore_order": ignore_order})
 
-    meta = make_meta_util(
+    meta = make_meta(
         methods.concat(
             [df._meta_nonempty for df in dfs],
             join=join,
