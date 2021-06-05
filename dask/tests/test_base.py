@@ -972,8 +972,11 @@ def test_visualize_no_filename(monkeypatch):
         test_list.append(True)
         return _mock_get_display_cls(format)
 
+    # using monkey patching to ensure dask.dot._get_display_cls gets called
     monkeypatch.setattr(dask.dot, "_get_display_cls", mock_fx)
-    visualize(x, filename=None)
+
+    x.visualize(filename=None)
+
     assert True in test_list
 
 
