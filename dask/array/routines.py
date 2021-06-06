@@ -1847,11 +1847,11 @@ def piecewise(x, condlist, funclist, *args, **kw):
 def select(condlist, choicelist, default=0):
     return blockwise(
         np.select,
-        "m",
+        tuple(range(1, choicelist[0].ndim + 1)),
         condlist,
-        "nm",
+        tuple(range(choicelist[0].ndim + 1)),
         choicelist,
-        "nm",
+        tuple(range(choicelist[0].ndim + 1)),
         dtype=result_type(*choicelist),
         name="select",
         concatenate=True,
