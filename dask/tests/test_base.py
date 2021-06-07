@@ -965,11 +965,11 @@ def test_visualize_no_filename(monkeypatch):
 
     x = da.arange(10)
 
-    test_list = []
+    was_mock_function_called = []
     _mock_get_display_cls = dask.dot._get_display_cls
 
     def mock_fx(format):
-        test_list.append(True)
+        was_mock_function_called.append(True)
         return _mock_get_display_cls(format)
 
     # using monkey patching to ensure dask.dot._get_display_cls gets called
@@ -977,7 +977,7 @@ def test_visualize_no_filename(monkeypatch):
 
     x.visualize(filename=None)
 
-    assert True in test_list
+    assert True in was_mock_function_called
 
 
 @pytest.mark.skipif("not da")
