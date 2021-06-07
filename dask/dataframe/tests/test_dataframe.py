@@ -2205,9 +2205,8 @@ def test_from_delayed_lazy_if_meta_provided():
 
 def test_from_delayed_empty_meta_provided():
     ddf = dd.from_delayed([], meta=dict(a=float))
-    df = ddf.compute()
     expected = pd.DataFrame({"a": [0.1]}).iloc[:0]
-    assert_eq(df, expected)
+    assert_eq(ddf, expected)
 
 
 def test_fillna_duplicate_index():
