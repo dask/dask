@@ -113,6 +113,11 @@ def test_make_meta():
     meta = make_meta(x, parent_meta=df)
     assert meta is x
 
+    # DatetimeTZDtype
+    x = pd.DatetimeTZDtype(tz="UTC")
+    meta = make_meta(x)
+    assert meta == pd.Timestamp(1, tz=x.tz, unit=x.unit)
+
     # Dtype expressions
     meta = make_meta("i8", parent_meta=df)
     assert isinstance(meta, np.int64)
@@ -284,6 +289,11 @@ def test_meta_nonempty_scalar():
     x = pd.Timestamp(2000, 1, 1)
     meta = meta_nonempty(x)
     assert meta is x
+
+    # DatetimeTZDtype
+    x = pd.DatetimeTZDtype(tz="UTC")
+    meta = meta_nonempty(x)
+    assert meta == pd.Timestamp(1, tz=x.tz, unit=x.unit)
 
 
 def test_raise_on_meta_error():
