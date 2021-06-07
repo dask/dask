@@ -1507,6 +1507,15 @@ def test_select():
     assert_eq(np.select(conditions, choices), da.select(d_conditions, d_choices))
 
 
+def test_select_multidimension():
+    x = np.random.random((100, 100))
+    y = da.from_array(x, chunks=(50, 50))
+    res_x = np.select([x < 0, x > 2, x > 1], [x, x * 2, x * 3], default=1)
+    res_y = da.select([y < 0, y > 2, y > 1], [y, y * 2, y * 3], default=1)
+    assert isinstance(res_y, da.Array)
+    assert_eq(res_y, res_x)
+
+
 def test_argwhere():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
