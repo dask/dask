@@ -584,16 +584,18 @@ def from_delayed(
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
         for df in dfs
     ]
+
     for df in dfs:
         if not isinstance(df, Delayed):
             raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
 
-    parent_meta = delayed(make_meta)(dfs[0]).compute()
-
     if meta is None:
-        meta = parent_meta
+        meta = delayed(make_meta)(dfs[0]).compute()
     else:
-        meta = make_meta(meta, parent_meta=parent_meta)
+        meta = make_meta(meta)
+
+    if not dfs:
+        dfs = [delayed(make_meta)(meta)]
 
     name = prefix + "-" + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)
