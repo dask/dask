@@ -3,6 +3,17 @@ import pandas as pd
 from ._compat import PANDAS_GT_100
 from .extensions import make_array_nonempty, make_scalar
 
+
+@make_array_nonempty.register(pd.DatetimeTZDtype)
+def _dtype(dtype):
+    return pd.array([pd.Timestamp(1), pd.NaT], dtype=dtype)
+
+
+@make_scalar.register(pd.DatetimeTZDtype)
+def _(x):
+    return pd.Timestamp(1, tz=x.tz, unit=x.unit)
+
+
 if PANDAS_GT_100:
 
     @make_array_nonempty.register(pd.StringDtype)
