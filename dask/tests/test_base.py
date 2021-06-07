@@ -954,30 +954,9 @@ def test_visualize():
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
 
-
-@pytest.mark.skipif("not da")
-@pytest.mark.skipif(
-    sys.flags.optimize, reason="graphviz exception with Python -OO flag"
-)
-def test_visualize_no_filename(monkeypatch):
-    pytest.importorskip("graphviz")
-    pytest.importorskip("dask.dot")
-
-    x = da.arange(10)
-
-    was_mock_function_called = []
-    _mock_get_display_cls = dask.dot._get_display_cls
-
-    def mock_fx(format):
-        was_mock_function_called.append(True)
-        return _mock_get_display_cls(format)
-
-    # using monkey patching to ensure dask.dot._get_display_cls gets called
-    monkeypatch.setattr(dask.dot, "_get_display_cls", mock_fx)
-
-    x.visualize(filename=None)
-
-    assert True in was_mock_function_called
+        # To check whether visualize() works when called with no filename
+        # Test will fail if the fucntion raises an error
+        x.visualize(filename=None)
 
 
 @pytest.mark.skipif("not da")
