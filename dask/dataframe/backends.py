@@ -76,6 +76,12 @@ except ImportError:
     pass
 
 
+@meta_nonempty.register(pd.DatetimeTZDtype)
+@make_meta_dispatch.register(pd.DatetimeTZDtype)
+def make_meta_pandas_datetime_tz(x, index=None):
+    return _nonempty_scalar(x)
+
+
 @make_meta_obj.register(meta_object_types)
 def make_meta_object(x, index=None):
     """Create an empty pandas object containing the desired metadata.
