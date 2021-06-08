@@ -114,6 +114,7 @@ class SlicingLayer(Layer):
         new_blockdims,
         index,
         shape,
+        parts_out=None,
     ):
         super().__init__()
         self.out_name = out_name
@@ -122,6 +123,7 @@ class SlicingLayer(Layer):
         self.new_blockdims = new_blockdims
         self.index = index
         self.shape = shape
+        self.parts_out = parts_out
 
     def __repr__(self):
         return "SlicingLayer<name='{}'".format(self.out_name)
@@ -170,6 +172,17 @@ class SlicingLayer(Layer):
             return culled_layer, culled_deps
         else:
             return self, culled_deps
+
+    def _cull(self, parts_out):
+        return SlicingLayer(
+            out_name=self.out_name,
+            in_name=self.in_name,
+            blockdims=self.blockdims,
+            new_blockdims=self.new_blockdims,
+            index=self.index,
+            shape=self.shape,
+            parts_out=parts_out,
+        )
 
     def _cull_dependencies(self, keys, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
