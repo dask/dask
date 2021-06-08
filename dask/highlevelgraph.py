@@ -472,13 +472,15 @@ class Layer(collections.abc.Mapping):
 
     def _repr_html_(self, layer_index="", highlevelgraph_key=None):
         unmaterialized_layer_icon = """
-            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="14.5" cy="14.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none"
+                xmlns="http://www.w3.org/2000/svg" style="position: absolute;">
+                <circle cx="16" cy="16" r="14" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
             </svg>
         """
         materialized_layer_icon = """
-            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="14.5" cy="14.5" r="13.5" fill="#8F8F8F" stroke="#1D1D1D" stroke-width="2"/>
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none"
+                xmlns="http://www.w3.org/2000/svg" style="position: absolute;">
+                <circle cx="16" cy="16" r="14" fill="#8F8F8F" stroke="#1D1D1D" stroke-width="2"/>
             </svg>
         """
         if self.is_materialized():
@@ -497,18 +499,15 @@ class Layer(collections.abc.Mapping):
         layer_info_table = html_from_dict(info)
         html = f"""
             <div style="">
-                <details style="margin-left: 0px;">
-                <summary style="margin-bottom: 10px; margin-top: 10px;">
-                    <div style="
-                        width: 48px;
-                        height: 48px;
-                        border-radius: 5px;
-                        position: absolute;"> {layer_icon} </div>
-                    <h3 style="display: inline; margin-left: 24px">
-                        Layer{layer_index}: {shortname}</h3>
-                </summary>
-                <p style="color: #5D5851; margin-bottom: 0px;">{highlevelgraph_key}</p>
-                {layer_info_table}
+                {layer_icon}
+                <details style="margin-left: 32px;">
+                    <summary style="margin-bottom: 10px; margin-top: 10px;">
+                        <h3 style="display: inline;">Layer{layer_index}: {shortname}</h3>
+                        <p style="color: #5D5851; margin-top: -0.25em; margin-bottom: 0px; margin-left: 1.5em;">
+                            {highlevelgraph_key}
+                        </p>
+                    </summary>
+                    {layer_info_table}
                 </details>
             </div>
             """
@@ -1128,34 +1127,39 @@ class HighLevelGraph(Mapping):
                     36.567Z" fill="#1D1D1D"/>
             </svg>
         """
+        layers_html = ""
+        for i, (key, layer) in enumerate(self.layers.items()):
+            layers_html += layer._repr_html_(
+                layer_index=f" {i}", highlevelgraph_key=key
+            )
+
         html = f"""
             <div>
                 <div>
-                    <div style="width: 48px; height: 48px; border-radius: 5px; position: absolute;">
+                    <div style="width: 52px; height: 52px; position: absolute;">
                         {highlevelgraph_icon}
                     </div>
-                    <div style="margin-left: 62px;">
+                    <div style="margin-left: 64px;">
                         <h3 style="margin-bottom: 0px;">HighLevelGraph</h3>
                         <p style="color: #5D5851; margin-bottom:0px;">
                             {highlevelgraph_info}
                         </p>
+                        {layers_html}
                     </div>
                 </div>
-        """  # missing a closing </div> tags, must be appended at the end
-        for i, (key, layer) in enumerate(self.layers.items()):
-            html += layer._repr_html_(layer_index=f" {i}", highlevelgraph_key=key)
-        html += "</div>"
+            </div>
+        """
         return html
 
 
 def html_from_dict(info):
-    html = """<table>"""
+    html = """<table style="width: 100%;">"""
     suffix = """</table>"""
     for key, val in info.items():
         table_row = f"""
           <tr>
-            <th>{key}</th>
-            <td>{val}</td>
+            <th style="text-align: left;">{key}</th>
+            <td style="text-align: left;">{val}</td>
           </tr>
         """
         html += table_row
