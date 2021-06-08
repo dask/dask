@@ -954,6 +954,10 @@ def test_visualize():
         visualize(x, filename=os.path.join(d, "mydask.png"))
         assert os.path.exists(os.path.join(d, "mydask.png"))
 
+        # To see if visualize() works when the filename parameter is set to None
+        # If the function raises an error, the test will fail
+        x.visualize(filename=None)
+
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
