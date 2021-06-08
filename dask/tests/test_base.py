@@ -955,7 +955,7 @@ def test_visualize():
         assert os.path.exists(os.path.join(d, "mydask.png"))
 
         # To see if visualize() works when the filename parameter is set to None
-        # If the function returns an error, the test will fail
+        # If the function raises an error, the test will fail
         x.visualize(filename=None)
 
 
