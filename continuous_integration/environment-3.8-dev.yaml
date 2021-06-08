@@ -29,7 +29,7 @@ dependencies:
   - bcolz
   - blosc
   - s3fs
-  - fsspec=2021.5.0
+  - fsspec
   - boto3
   - botocore
   - aiohttp
