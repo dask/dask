@@ -5,7 +5,9 @@ from collections.abc import Set
 import pytest
 
 import dask
+import dask.array as da
 from dask.blockwise import Blockwise, blockwise_token
+from dask.datasets import timeseries
 from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
 from dask.utils_test import inc
 
@@ -128,12 +130,21 @@ def test_cull_layers():
         assert culled.dependencies[k] is hg.dependencies[k]
 
 
-def test_highlevelgraph_repr_html():
-    hg = HighLevelGraph(
-        {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}}, {"a": set(), "b": set()}
-    )
-    html = hg._repr_html_()
-    return xml.etree.ElementTree.fromstring(html) is not None
+@pytest.mark.parametrize(
+    "highlevelgraph",
+    [
+        HighLevelGraph(
+            {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}},
+            {"a": set(), "b": set()},
+        ),
+        timeseries().shuffle("id", shuffle="tasks").head(compute=False).dask,
+        da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4].dask,
+    ],
+)
+def test_repr_html_hlg_layers(highlevelgraph):
+    assert xml.etree.ElementTree.fromstring(highlevelgraph._repr_html_()) is not None
+    for layer in highlevelgraph.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 def annot_map_fn(key):

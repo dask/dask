@@ -470,6 +470,59 @@ class Layer(collections.abc.Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def _repr_html_(self, layer_index="", highlevelgraph_key=None):
+        unmaterialized_layer_icon = """
+            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="14.5" cy="14.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
+            </svg>
+        """
+        materialized_layer_icon = """
+            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="14.5" cy="14.5" r="13.5" fill="#8F8F8F" stroke="#1D1D1D" stroke-width="2"/>
+            </svg>
+        """
+        if self.is_materialized():
+            layer_icon = materialized_layer_icon
+        else:
+            layer_icon = unmaterialized_layer_icon
+
+        if highlevelgraph_key is not None:
+            shortname = highlevelgraph_key.rsplit("-", 1)[0]  # removes token
+        elif hasattr(self, "name"):
+            shortname = self.name.rsplit("-", 1)[0]  # remove token
+        else:
+            shortname = self.__class__.__name__
+
+        info = self.layer_info_dict()
+        layer_info_table = html_from_dict(info)
+        html = f"""
+            <div style="">
+                <details style="margin-left: 0px;">
+                <summary style="margin-bottom: 10px; margin-top: 10px;">
+                    <div style="
+                        width: 48px;
+                        height: 48px;
+                        border-radius: 5px;
+                        position: absolute;"> {layer_icon} </div>
+                    <h3 style="display: inline; margin-left: 24px">
+                        Layer{layer_index}: {shortname}</h3>
+                </summary>
+                <p style="color: #5D5851; margin-bottom: 0px;">{highlevelgraph_key}</p>
+                {layer_info_table}
+                </details>
+            </div>
+            """
+        return html
+
+    def layer_info_dict(self):
+        # dependencies = self.get_dependencies()
+        info = {
+            "layer_type": type(self).__name__,
+            "is_materialized": self.is_materialized(),
+            # "dependencies": dependencies,
+        }
+        return info
+
 
 class MaterializedLayer(Layer):
     """Fully materialized layer of `Layer`
@@ -1056,16 +1109,6 @@ class HighLevelGraph(Mapping):
 
     def _repr_html_(self):
         highlevelgraph_info = escape(self.__str__())
-        unmaterialized_layer_icon = """
-            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="14.5" cy="14.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
-            </svg>
-        """
-        materialized_layer_icon = """
-            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
-                <circle cx="14.5" cy="14.5" r="13.5" fill="#8F8F8F" stroke="#1D1D1D" stroke-width="2"/>
-            </svg>
-        """
         highlevelgraph_icon = """
             <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="61.5" cy="36.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
@@ -1085,65 +1128,26 @@ class HighLevelGraph(Mapping):
                 <path d="M45.25 36.567C45.5833 36.7594 45.5833 37.2406 45.25 37.433L42.25 39.1651C41.9167
                     39.3575 41.5 39.117 41.5 38.7321V35.2679C41.5 34.883 41.9167 34.6425 42.25 34.8349L45.25
                     36.567Z" fill="#1D1D1D"/>
-            </svg>"""
-        html = f"""
-        <div style="">
-            <div>
-                <div style="
-                    width: 48px;
-                    height: 48px;
-                    border-radius: 5px;
-                    position: absolute;"> {highlevelgraph_icon} </div>
-                <div style="margin-left: 62px;">
-                    <h3 style="margin-bottom: 0px;">HighLevelGraph</h3>
-                    <p style="color: #5D5851; margin-bottom:
-        0px;">{highlevelgraph_info}</p>
-
-        <div style="">
-            <details open style="margin-left: 0px;">
-                <summary style="margin-bottom: 0px; margin-top: 5px;">
-                <h3 style="display: inline;">Layers</h3>
-            </summary>
+            </svg>
         """
+        html = f"""
+            <div>
+                <div>
+                    <div style="width: 48px; height: 48px; border-radius: 5px; position: absolute;">
+                        {highlevelgraph_icon}
+                    </div>
+                    <div style="margin-left: 62px;">
+                        <h3 style="margin-bottom: 0px;">HighLevelGraph</h3>
+                        <p style="color: #5D5851; margin-bottom:0px;">
+                            {highlevelgraph_info}
+                        </p>
+                    </div>
+                </div>
+        """  # missing two closing </div> tags, must be appended at the end
         for i, (key, layer) in enumerate(self.layers.items()):
-            key_shortname = key.rsplit("-", 1)[0]  # removes token
-            dependencies = self.dependencies[key]
-            info = layer_info_dict(layer, dependencies)
-            layer_info_table = html_from_dict(info)
-            if layer.is_materialized():
-                layer_icon = materialized_layer_icon
-            else:
-                layer_icon = unmaterialized_layer_icon
-
-            layer_html = f"""
-            <div style="">
-                <details style="margin-left: 0px;">
-                <summary style="margin-bottom: 20px; margin-top: 20px;">
-                    <div style="
-                        width: 48px;
-                        height: 48px;
-                        border-radius: 5px;
-                        position: absolute;"> {layer_icon} </div>
-                    <h3 style="display: inline; margin-left: 24px">
-                        Layer {i}: {key_shortname}</h3>
-                </summary>
-                <p style="color: #5D5851; margin-bottom: 0px;">{key}</p>
-                {layer_info_table}
-                </details>
-            </div>
-            """
-            html += layer_html
-        self.html = html
+            html += layer._repr_html_(layer_index=f" {i}", highlevelgraph_key=key)
+        html += "</div>"
         return html
-
-
-def layer_info_dict(layer, dependencies):
-    info = {
-        "layer_type": type(layer).__name__,
-        "is_materialized": layer.is_materialized(),
-        "dependencies": dependencies,
-    }
-    return info
 
 
 def html_from_dict(info):
