@@ -1,4 +1,5 @@
 import warnings
+import xml.etree.ElementTree
 from itertools import product
 from operator import add
 
@@ -26,6 +27,7 @@ from dask.dataframe.core import (
     total_mem_usage,
 )
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.datasets import timeseries
 from dask.utils import M, put_lines
 
 dsk = {
@@ -4610,6 +4612,14 @@ def test_dask_layers():
         ddi.key[0]: {dds._name},
     }
     assert ddi.__dask_layers__() == (ddi.key[0],)
+
+
+def test_repr_html_dataframe_highlevelgraph():
+    x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
+    hg = x.dask
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 @pytest.mark.skipif(
