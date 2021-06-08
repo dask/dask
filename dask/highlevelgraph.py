@@ -515,11 +515,9 @@ class Layer(collections.abc.Mapping):
         return html
 
     def layer_info_dict(self):
-        # dependencies = self.get_dependencies()
         info = {
             "layer_type": type(self).__name__,
             "is_materialized": self.is_materialized(),
-            # "dependencies": dependencies,
         }
         return info
 
@@ -1143,7 +1141,7 @@ class HighLevelGraph(Mapping):
                         </p>
                     </div>
                 </div>
-        """  # missing two closing </div> tags, must be appended at the end
+        """  # missing a closing </div> tags, must be appended at the end
         for i, (key, layer) in enumerate(self.layers.items()):
             html += layer._repr_html_(layer_index=f" {i}", highlevelgraph_key=key)
         html += "</div>"
