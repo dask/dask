@@ -404,6 +404,28 @@ async def test_blockwise_numpy_kwargs(c, s, a, b):
     assert res == 1000
 
 
+def test_blockwise_different_optimization(c):
+    # Regression test for incorrect results due to SubgraphCallable.__eq__
+    # not correctly handling subgraphs with the same outputs and arity but
+    # different internals (GH-7632). The bug is triggered by distributed
+    # because it uses a function cache.
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    u = da.from_array(np.arange(3))
+    v = da.from_array(np.array([10 + 2j, 7 - 3j, 8 + 1j]))
+    cv = v.conj()
+    x = u * cv
+    (cv,) = dask.optimize(cv)
+    y = u * cv
+    expected = np.array([0 + 0j, 7 + 3j, 16 - 2j])
+    with dask.config.set({"optimization.fuse.active": False}):
+        x_value = x.compute()
+        y_value = y.compute()
+    np.testing.assert_equal(x_value, expected)
+    np.testing.assert_equal(y_value, expected)
+
+
 @gen_cluster(client=True)
 async def test_combo_of_layer_types(c, s, a, b):
     """Check pack/unpack of a HLG that has every type of Layers!"""
