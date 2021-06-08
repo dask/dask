@@ -1,5 +1,5 @@
 import os
-import xml
+import xml.etree.ElementTree
 from collections.abc import Set
 
 import pytest
