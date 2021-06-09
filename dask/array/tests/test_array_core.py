@@ -444,6 +444,28 @@ def test_stack_unknown_chunksizes():
 
     assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=1))
 
+    m_df = pd.DataFrame({"m": np.arange(12) * 100})
+    n_df = pd.DataFrame({"n": np.arange(12) * 1000})
+
+    m_ddf = dd.from_pandas(m_df, sort=False, npartitions=3)
+    n_ddf = dd.from_pandas(n_df, sort=False, npartitions=3)
+
+    m_x = m_ddf.values
+    n_x = n_ddf.values
+
+    assert np.isnan(m_x.shape[0])
+    assert np.isnan(n_x.shape[0])
+
+    with pytest.raises(ValueError) as exc_info:
+        da.stack([[a_x, b_x], [m_x, n_x]])
+
+    assert "shape" in str(exc_info.value)
+    assert "nan" in str(exc_info.value)
+
+    c_x = da.stack([[a_x, b_x], [m_x, n_x]], allow_unknown_chunksizes=True)
+
+    assert_eq(c_x, np.stack([[a_df.values, b_df.values], [m_df.values, n_df.values]]))
+
 
 def test_concatenate():
     a, b, c = [
@@ -4211,18 +4233,6 @@ def test_zarr_return_stored(compute):
         assert isinstance(a2, Array)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
-
-
-def test_to_zarr_delayed_creates_no_metadata():
-    pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.from_array([42])
-        result = a.to_zarr(d, compute=False)
-        assert not os.listdir(d)  # No .zarray file
-        # Verify array still created upon compute.
-        result.compute()
-        a2 = da.from_zarr(d)
-        assert_eq(a, a2)
 
 
 def test_zarr_inline_array():

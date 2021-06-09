@@ -65,13 +65,6 @@ def meta_from_array(x, ndim=None, dtype=None):
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
-    if (
-        not hasattr(x, "shape")
-        or not hasattr(x, "dtype")
-        or not isinstance(x.shape, tuple)
-    ):
-        return x
-
     if isinstance(x, list) or isinstance(x, tuple):
         ndims = [
             0
@@ -83,6 +76,13 @@ def meta_from_array(x, ndim=None, dtype=None):
         ]
         a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]
         return a if isinstance(x, list) else tuple(x)
+
+    if (
+        not hasattr(x, "shape")
+        or not hasattr(x, "dtype")
+        or not isinstance(x.shape, tuple)
+    ):
+        return x
 
     if ndim is None:
         ndim = x.ndim
@@ -156,8 +156,10 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 else:
                     return None
             except ValueError as e:
-                # min/max functions have no identity, attempt to use the first meta
-                if "zero-size array to reduction operation" in str(e):
+                # min/max functions have no identity, just use the same input type when there's only one
+                if len(
+                    args_meta
+                ) == 1 and "zero-size array to reduction operation" in str(e):
                     meta = args_meta[0]
                 else:
                     return None
@@ -201,7 +203,7 @@ def _not_empty(x):
 
 
 def _check_dsk(dsk):
-    """ Check that graph is well named and non-overlapping """
+    """Check that graph is well named and non-overlapping"""
     if not isinstance(dsk, HighLevelGraph):
         return
 
@@ -509,7 +511,7 @@ def asanyarray_safe(a, like, **kwargs):
 
 
 def validate_axis(axis, ndim):
-    """ Validate an input to axis= keywords """
+    """Validate an input to axis= keywords"""
     if isinstance(axis, (tuple, list)):
         return tuple(validate_axis(ax, ndim) for ax in axis)
     if not isinstance(axis, numbers.Integral):

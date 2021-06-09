@@ -21,7 +21,7 @@ from .creation import arange
 
 
 def doc_wraps(func):
-    """ Copy docstring from one function to another """
+    """Copy docstring from one function to another"""
     warnings.warn(
         "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
         FutureWarning,

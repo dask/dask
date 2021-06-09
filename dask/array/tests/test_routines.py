@@ -190,10 +190,12 @@ def test_moveaxis_rollaxis_numpy_api():
     [
         ("flipud", {}),
         ("fliplr", {}),
+        ("flip", {}),
         ("flip", {"axis": 0}),
         ("flip", {"axis": 1}),
         ("flip", {"axis": 2}),
         ("flip", {"axis": -1}),
+        ("flip", {"axis": (0, 2)}),
     ],
 )
 @pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
@@ -201,9 +203,13 @@ def test_flip(funcname, kwargs, shape):
     axis = kwargs.get("axis")
     if axis is None:
         if funcname == "flipud":
-            axis = 0
+            axis = (0,)
         elif funcname == "fliplr":
-            axis = 1
+            axis = (1,)
+        elif funcname == "flip":
+            axis = range(len(shape))
+    elif not isinstance(axis, tuple):
+        axis = (axis,)
 
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=1)
@@ -212,7 +218,8 @@ def test_flip(funcname, kwargs, shape):
     da_func = getattr(da, funcname)
 
     try:
-        range(np_a.ndim)[axis]
+        for ax in axis:
+            range(np_a.ndim)[ax]
     except IndexError:
         with pytest.raises(ValueError):
             da_func(da_a, **kwargs)
@@ -617,6 +624,37 @@ def test_digitize():
             assert_eq(
                 da.digitize(d, bins, right=right), np.digitize(x, bins, right=right)
             )
+
+
+@pytest.mark.parametrize(
+    "a, a_chunks, v, v_chunks",
+    [
+        [[], 1, [], 1],
+        [[0], 1, [0], 1],
+        [[-10, 0, 10, 20, 30], 3, [11, 30], 2],
+        [[-10, 0, 10, 20, 30], 3, [11, 30, -20, 1, -10, 10, 37, 11], 5],
+        [[-10, 0, 10, 20, 30], 3, [[11, 30, -20, 1, -10, 10, 37, 11]], 5],
+        [[-10, 0, 10, 20, 30], 3, [[7, 0], [-10, 10], [11, -1], [15, 15]], (2, 2)],
+    ],
+)
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_searchsorted(a, a_chunks, v, v_chunks, side):
+    a = np.array(a)
+    v = np.array(v)
+
+    ad = da.asarray(a, chunks=a_chunks)
+    vd = da.asarray(v, chunks=v_chunks)
+
+    out = da.searchsorted(ad, vd, side)
+
+    assert out.shape == vd.shape
+    assert out.chunks == vd.chunks
+    assert_eq(out, np.searchsorted(a, v, side))
+
+
+def test_searchsorted_sorter_not_implemented():
+    with pytest.raises(NotImplementedError):
+        da.searchsorted(da.asarray([1, 0]), da.asarray([1]), sorter=da.asarray([1, 0]))
 
 
 def test_histogram():

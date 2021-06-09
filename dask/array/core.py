@@ -36,7 +36,6 @@ from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
 from ..sizeof import sizeof
 from ..utils import (
-    Dispatch,
     IndexCallable,
     M,
     SerializableLock,
@@ -60,18 +59,13 @@ from ..utils import (
 )
 from . import chunk
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
+
+# Keep einsum_lookup and tensordot_lookup here for backwards compatibility
+from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
 from .numpy_compat import _Recurser
 from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
-
-
-concatenate_lookup = Dispatch("concatenate")
-tensordot_lookup = Dispatch("tensordot")
-einsum_lookup = Dispatch("einsum")
-concatenate_lookup.register((object, np.ndarray), np.concatenate)
-tensordot_lookup.register((object, np.ndarray), np.tensordot)
-einsum_lookup.register((object, np.ndarray), np.einsum)
 
 unknown_chunk_message = (
     "\n\n"
@@ -84,7 +78,7 @@ unknown_chunk_message = (
 
 
 class PerformanceWarning(Warning):
-    """ A warning given when bad chunking may cause poor performance """
+    """A warning given when bad chunking may cause poor performance"""
 
 
 def getter(a, b, asarray=True, lock=None):
@@ -432,7 +426,7 @@ def normalize_arg(x):
 
 
 def _pass_extra_kwargs(func, keys, *args, **kwargs):
-    """Helper for :func:`map_blocks` to pass `block_info` or `block_id`.
+    """Helper for :func:`dask.array.map_blocks` to pass `block_info` or `block_id`.
 
     For each element of `keys`, a corresponding element of args is changed
     to a keyword argument with that key, before all arguments re passed on
@@ -919,7 +913,7 @@ def store(
     lock: boolean or threading.Lock, optional
         Whether or not to lock the data stores while storing.
         Pass True (lock each file individually), False (don't lock) or a
-        particular ``threading.Lock`` object to be shared among all writes.
+        particular :class:`threading.Lock` object to be shared among all writes.
     regions: tuple of slices or list of tuples of slices
         Each ``region`` tuple in ``regions`` should be such that
         ``target[region].shape = source.shape``
@@ -927,7 +921,7 @@ def store(
         respectively. If this is a tuple, the contents will be assumed to be
         slices, so do not provide a tuple of tuples.
     compute: boolean, optional
-        If true compute immediately, return ``dask.delayed.Delayed`` otherwise
+        If true compute immediately, return :class:`dask.delayed.Delayed` otherwise
     return_stored: boolean, optional
         Optionally return the stored result (default False).
 
@@ -1093,7 +1087,7 @@ class Array(DaskMethodsMixin):
     A parallel nd-array comprised of many numpy arrays arranged in a grid.
 
     This constructor is for advanced uses only.  For normal use see the
-    ``da.from_array`` function.
+    :func:`dask.array.from_array` function.
 
     Parameters
     ----------
@@ -1460,17 +1454,17 @@ class Array(DaskMethodsMixin):
 
     @cached_property
     def size(self):
-        """ Number of elements in array """
+        """Number of elements in array"""
         return reduce(mul, self.shape, 1)
 
     @property
     def nbytes(self):
-        """ Number of bytes in array """
+        """Number of bytes in array"""
         return self.size * self.dtype.itemsize
 
     @property
     def itemsize(self):
-        """ Length of one array element in bytes """
+        """Length of one array element in bytes"""
         return self.dtype.itemsize
 
     @property
@@ -1965,7 +1959,9 @@ class Array(DaskMethodsMixin):
     def topk(self, k, axis=-1, split_every=None):
         """The top k elements of an array.
 
-        See ``da.topk`` for docstring"""
+        See :func:`dask.array.topk` for docstring.
+
+        """
         from .reductions import topk
 
         return topk(self, k, axis=axis, split_every=split_every)
@@ -1973,7 +1969,9 @@ class Array(DaskMethodsMixin):
     def argtopk(self, k, axis=-1, split_every=None):
         """The indices of the top k elements of an array.
 
-        See ``da.argtopk`` for docstring"""
+        See :func:`dask.array.argtopk` for docstring.
+
+        """
         from .reductions import argtopk
 
         return argtopk(self, k, axis=axis, split_every=split_every)
@@ -2366,7 +2364,7 @@ class Array(DaskMethodsMixin):
 
         Note that this function will attempt to automatically determine the output
         array type before computing it, please refer to the ``meta`` keyword argument
-        in ``map_blocks`` if you expect that the function will not succeed when
+        in :func:`map_blocks <dask.array.core.map_blocks>` if you expect that the function will not succeed when
         operating on 0-d arrays.
 
         Parameters
@@ -2385,7 +2383,7 @@ class Array(DaskMethodsMixin):
             calling the map function.
             Set this to False if your mapping function already does this for you
         **kwargs:
-            Other keyword arguments valid in ``map_blocks``
+            Other keyword arguments valid in :func:`map_blocks <dask.array.core.map_blocks>`.
 
         Examples
         --------
@@ -2489,7 +2487,7 @@ class Array(DaskMethodsMixin):
     def rechunk(
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
-        """ See da.rechunk for docstring """
+        """See da.rechunk for docstring"""
         from . import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
@@ -2587,13 +2585,13 @@ class Array(DaskMethodsMixin):
         return c
 
     def to_delayed(self, optimize_graph=True):
-        """Convert into an array of ``dask.delayed`` objects, one per chunk.
+        """Convert into an array of :class:`dask.delayed.Delayed` objects, one per chunk.
 
         Parameters
         ----------
         optimize_graph : bool, optional
             If True [default], the graph is optimized before converting into
-            ``dask.delayed`` objects.
+            :class:`dask.delayed.Delayed` objects.
 
         See Also
         --------
@@ -2625,14 +2623,14 @@ class Array(DaskMethodsMixin):
 
         See https://zarr.readthedocs.io for details about the format.
 
-        See function ``to_zarr()`` for parameters.
+        See function :func:`dask.array.to_zarr` for parameters.
         """
         return to_zarr(self, *args, **kwargs)
 
     def to_tiledb(self, uri, *args, **kwargs):
         """Save array to the TileDB storage manager
 
-        See function ``to_tiledb()`` for argument documentation.
+        See function :func:`dask.array.to_tiledb` for argument documentation.
 
         See https://docs.tiledb.io for details about the format and engine.
         """
@@ -2712,7 +2710,7 @@ def normalize_chunks(chunks, shape=None, limit=None, dtype=None, previous_chunks
     >>> normalize_chunks(("auto",), shape=(20,), limit=5, dtype='uint8')
     ((5, 5, 5, 5),)
 
-    You can also use byte sizes (see ``dask.utils.parse_bytes``) in place of
+    You can also use byte sizes (see :func:`dask.utils.parse_bytes`) in place of
     "auto" to ask for a particular size
 
     >>> normalize_chunks("1kiB", shape=(2000,), dtype='float32')
@@ -3014,8 +3012,8 @@ def from_array(
         arrays, as Dask can then recognise that they're the same and
         avoid duplicate computations. However, it can also be slow, and if the
         array is not contiguous it is copied for hashing. If the array uses
-        stride tricks (such as ``np.broadcast_to`` or
-        ``skimage.util.view_as_windows``) to have a larger logical
+        stride tricks (such as :func:`numpy.broadcast_to` or
+        :func:`skimage.util.view_as_windows`) to have a larger logical
         than physical size, this copy can cause excessive memory usage.
 
         If you don't need the deduplication provided by hashing, use
@@ -3242,12 +3240,13 @@ def from_zarr(
         Any additional parameters for the storage backend (ignored for local
         paths)
     chunks: tuple of ints or tuples of ints
-        Passed to ``da.from_array``, allows setting the chunks on
+        Passed to :func:`dask.array.from_array`, allows setting the chunks on
         initialisation, if the chunking scheme in the on-disc dataset is not
         optimal for the calculations to follow.
     name : str, optional
          An optional keyname for the array.  Defaults to hashing the input
-    kwargs: passed to ``zarr.Array``.
+    kwargs:
+        Passed to :class:`zarr.core.Array`.
     inline_array : bool, default False
         Whether to inline the zarr Array in the values of the task graph.
         See :meth:`dask.array.from_array` for an explanation.
@@ -3303,10 +3302,13 @@ def to_zarr(
         paths)
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
-        where overwrite=True will replace the existing data.  Note that this
-        check is done at computation time, not during graph creation.
-    compute, return_stored: see ``store()``
-    kwargs: passed to the ``zarr.create()`` function, e.g., compression options
+        where overwrite=True will replace the existing data.
+    compute: bool
+        See :func:`~dask.array.store` for more details.
+    return_stored: bool
+        See :func:`~dask.array.store` for more details.
+    **kwargs:
+        Passed to the :func:`zarr.creation.create` function, e.g., compression options.
 
     Raises
     ------
@@ -3315,6 +3317,7 @@ def to_zarr(
 
     See Also
     --------
+    dask.array.store
     dask.array.Array.compute_chunk_sizes
 
     """
@@ -3354,14 +3357,7 @@ def to_zarr(
 
     chunks = [c[0] for c in arr.chunks]
 
-    # The zarr.create function has the side-effect of immediately
-    # creating metadata on disk.  This may not be desired,
-    # particularly if compute=False.  The caller may be creating many
-    # arrays on a slow filesystem, with the desire that any I/O be
-    # sharded across workers (not done serially on the originating
-    # machine).  Or the caller may decide later to not to do this
-    # computation, and so nothing should be written to disk.
-    z = delayed(zarr.create)(
+    z = zarr.create(
         shape=arr.shape,
         chunks=chunks,
         dtype=arr.dtype,
@@ -3548,8 +3544,8 @@ def unify_chunks(*args, **kwargs):
     Unify chunks across a sequence of arrays
 
     This utility function is used within other common operations like
-    ``map_blocks`` and ``blockwise``.  It is not commonly used by end-users
-    directly.
+    :func:`dask.array.core.map_blocks` and :func:`dask.array.core.blockwise`.
+    It is not commonly used by end-users directly.
 
     Parameters
     ----------
@@ -3872,7 +3868,7 @@ def concatenate(seq, axis=0, allow_unknown_chunksizes=False):
     """
     from . import wrap
 
-    seq = [asarray(a) for a in seq]
+    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to concatenate")
@@ -4038,7 +4034,7 @@ def insert_to_ooc(
         Where to store results too.
     lock: Lock-like or bool, optional
         Whether to lock or with what (default is ``True``,
-        which means a ``threading.Lock`` instance).
+        which means a :class:`threading.Lock` instance).
     region: slice-like, optional
         Where in ``out`` to store ``arr``'s results
         (default is ``None``, meaning all of ``out``).
@@ -4116,13 +4112,18 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, **kwargs):
+def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
     ----------
     a : array-like
         Input data, in any form that can be converted to a dask array.
+    allow_unknown_chunksizes: bool
+        Allow unknown chunksizes, such as come from converting from dask
+        dataframes.  Dask.array is unable to verify that chunks line up.  If
+        data comes from differently aligned sources then this can cause
+        unexpected results.
 
     Returns
     -------
@@ -4148,7 +4149,7 @@ def asarray(a, **kwargs):
     elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
         return asarray(a.data)
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a)
+        return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         a = np.asarray(a)
     return from_array(a, getitem=getter_inline, **kwargs)
@@ -4590,7 +4591,7 @@ def deepfirst(seq):
 
 
 def shapelist(a):
-    """ Get the shape of nested list """
+    """Get the shape of nested list"""
     if type(a) is list:
         return tuple([len(a)] + list(shapelist(a[0])))
     else:
@@ -4683,7 +4684,7 @@ def stack(seq, axis=0, allow_unknown_chunksizes=False):
     """
     from . import wrap
 
-    seq = [asarray(a) for a in seq]
+    seq = [asarray(a, allow_unknown_chunksizes=allow_unknown_chunksizes) for a in seq]
 
     if not seq:
         raise ValueError("Need array(s) to stack")
@@ -4823,7 +4824,7 @@ def concatenate3(arrays):
 
 
 def concatenate_axes(arrays, axes):
-    """ Recursively call np.concatenate along axes """
+    """Recursively call np.concatenate along axes"""
     if len(axes) != ndimlist(arrays):
         raise ValueError("Length of axes should equal depth of nested arrays")
 
@@ -5085,13 +5086,13 @@ def _get_axis(indexes):
 
 
 def _vindex_slice(block, points):
-    """ Pull out point-wise slices from block """
+    """Pull out point-wise slices from block"""
     points = [p if isinstance(p, slice) else list(p) for p in points]
     return block[tuple(points)]
 
 
 def _vindex_transpose(block, axis):
-    """ Rotate block so that points are on the first dimension """
+    """Rotate block so that points are on the first dimension"""
     axes = [axis] + list(range(axis)) + list(range(axis + 1, block.ndim))
     return block.transpose(axes)
 
@@ -5153,7 +5154,7 @@ def to_npy_stack(dirname, x, axis=0):
         |-- info
 
     The ``info`` file stores the dtype, chunks, and axis information of the array.
-    You can load these stacks with the ``da.from_npy_stack`` function.
+    You can load these stacks with the :func:`dask.array.from_npy_stack` function.
 
     >>> y = da.from_npy_stack('data/')  # doctest: +SKIP
 
@@ -5186,7 +5187,7 @@ def to_npy_stack(dirname, x, axis=0):
 def from_npy_stack(dirname, mmap_mode="r"):
     """Load dask array from stack of npy files
 
-    See ``da.to_npy_stack`` for docstring
+    See :func:`dask.array.to_npy_stack` for docstring.
 
     Parameters
     ----------
