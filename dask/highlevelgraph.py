@@ -469,7 +469,7 @@ class Layer(collections.abc.Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
-    def _repr_html_(self, layer_index="", highlevelgraph_key=None):
+    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
         unmaterialized_layer_icon = """
             <svg width="24" height="24" viewBox="0 0 32 32" fill="none"
                 xmlns="http://www.w3.org/2000/svg" style="position: absolute;">
@@ -487,7 +487,7 @@ class Layer(collections.abc.Mapping):
         else:
             layer_icon = unmaterialized_layer_icon
 
-        if highlevelgraph_key is not None:
+        if highlevelgraph_key != "":
             shortname = key_split(highlevelgraph_key)
         elif hasattr(self, "name"):
             shortname = key_split(self.name)
@@ -504,8 +504,8 @@ class Layer(collections.abc.Mapping):
                         <h3 style="display: inline;">Layer{layer_index}: {shortname}</h3>
                     </summary>
                     <p style="color: #5D5851; margin-top: -0.25em; margin-bottom: 0px; margin-left: 0px;">
-                            {highlevelgraph_key}
-                        </p>
+                        {highlevelgraph_key}
+                    </p>
                     {layer_info_table}
                 </details>
             </div>
