@@ -6,6 +6,7 @@ from collections.abc import Iterator
 from dataclasses import fields, is_dataclass
 
 from tlz import concat, curry, merge, unique
+from typing import TypeVar
 
 from . import config, threaded
 from .base import (
@@ -22,6 +23,8 @@ from .optimization import cull
 from .utils import OperatorMethodMixin, apply, ensure_dict, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
+
+D = TypeVar("D")
 
 
 def unzip(ls, nout):
@@ -230,7 +233,9 @@ def tokenize(*args, **kwargs):
 
 
 @curry
-def delayed(obj, name=None, pure=None, nout=None, traverse=True):
+def delayed(
+    obj: D, name=None, pure: bool = None, nout: int = None, traverse: bool = True
+):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
