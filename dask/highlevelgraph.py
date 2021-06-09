@@ -96,6 +96,7 @@ class Layer(collections.abc.Mapping):
         """Return whether the layer is materialized or not"""
         return True
 
+    @abc.abstractmethod
     def get_output_keys(self) -> AbstractSet:
         """Return a set of all output keys
 
@@ -110,7 +111,7 @@ class Layer(collections.abc.Mapping):
         keys: AbstractSet
             All output keys
         """
-        return self.keys()
+        return self.keys()  # this implementation will materialize the graph
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
@@ -497,6 +498,9 @@ class MaterializedLayer(Layer):
 
     def is_materialized(self):
         return True
+
+    def get_output_keys(self):
+        return self.keys()
 
 
 class HighLevelGraph(Mapping):
