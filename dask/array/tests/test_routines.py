@@ -1508,8 +1508,8 @@ def test_select():
 
 
 def test_select_multidimension():
-    x = np.random.random((100, 100))
-    y = da.from_array(x, chunks=(50, 50))
+    x = np.random.random((100, 50, 2))
+    y = da.from_array(x, chunks=(50, 50, 1))
     res_x = np.select([x < 0, x > 2, x > 1], [x, x * 2, x * 3], default=1)
     res_y = da.select([y < 0, y > 2, y > 1], [y, y * 2, y * 3], default=1)
     assert isinstance(res_y, da.Array)

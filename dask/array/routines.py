@@ -1865,11 +1865,13 @@ def select(condlist, choicelist, default=0):
     try:
         intermediate_dtype = result_type(*choicelist)
     except TypeError as e:
-        msg = f"Choicelist elements do not have a common dtype."
+        msg = "Choicelist elements do not have a common dtype."
         raise TypeError(msg) from e
 
-    condargs = [arg for elem in condlist for arg in (elem, tuple(range(len(elem.ndim)))]
-    choiceargs = [arg for elem in choicelist for arg in (elem, tuple(range(len(elem.ndim)))]
+    blockwise_shape = tuple(range(choicelist[0].ndim))
+
+    condargs = [arg for elem in condlist for arg in (elem, blockwise_shape)]
+    choiceargs = [arg for elem in choicelist for arg in (elem, blockwise_shape)]
 
     return blockwise(
         _select,
