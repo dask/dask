@@ -1868,13 +1868,8 @@ def select(condlist, choicelist, default=0):
         msg = f"Choicelist elements do not have a common dtype: {e}"
         raise TypeError(msg) from None
 
-    max_choice_dim = max([len(choice.shape) for choice in choicelist])
-    blockwise_shape = (0,)
-    if max_choice_dim > 1:
-        blockwise_shape = (0, 1)
-
-    condargs = [arg for elem in condlist for arg in (elem, blockwise_shape)]
-    choiceargs = [arg for elem in choicelist for arg in (elem, blockwise_shape)]
+    condargs = [arg for elem in condlist for arg in (elem, tuple(range(len(elem.ndim)))]
+    choiceargs = [arg for elem in choicelist for arg in (elem, tuple(range(len(elem.ndim)))]
 
     return blockwise(
         _select,
