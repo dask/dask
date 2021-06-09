@@ -2,7 +2,6 @@ import abc
 import collections.abc
 import copy
 import warnings
-from html import escape
 from typing import (
     AbstractSet,
     Any,
@@ -1105,7 +1104,7 @@ class HighLevelGraph(Mapping):
         return {"dsk": dsk, "deps": deps, "annotations": anno}
 
     def _repr_html_(self):
-        highlevelgraph_info = escape(self.__str__())
+        highlevelgraph_info = f"{type(self).__name__} with {len(self.layers)} layers."
         highlevelgraph_icon = """
             <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <circle cx="61.5" cy="36.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
