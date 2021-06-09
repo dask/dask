@@ -1843,18 +1843,46 @@ def piecewise(x, condlist, funclist, *args, **kw):
     )
 
 
+def _select(*args, **kwargs):
+    split_at = len(args) // 2
+    condlist = args[:split_at]
+    choicelist = args[split_at:]
+    return np.select(condlist, choicelist, **kwargs)
+
+
 @derived_from(np)
 def select(condlist, choicelist, default=0):
+    # Making the same checks that np.select
+    # Check the size of condlist and choicelist are the same, or abort.
+    if len(condlist) != len(choicelist):
+        raise ValueError("list of cases must be same length as list of conditions")
+
+    if len(condlist) == 0:
+        raise ValueError("select with an empty condition list is not possible")
+
+    choicelist = [asarray(choice) for choice in choicelist]
+
+    try:
+        intermediate_dtype = result_type(*choicelist)
+    except TypeError as e:
+        msg = f"Choicelist elements do not have a common dtype: {e}"
+        raise TypeError(msg) from None
+
+    max_choice_dim = max([len(choice.shape) for choice in choicelist])
+    blockwise_shape = (0,)
+    if max_choice_dim > 1:
+        blockwise_shape = (0, 1)
+
+    condargs = [arg for elem in condlist for arg in (elem, blockwise_shape)]
+    choiceargs = [arg for elem in choicelist for arg in (elem, blockwise_shape)]
+
     return blockwise(
-        np.select,
-        tuple(range(1, choicelist[0].ndim + 1)),
-        condlist,
-        tuple(range(choicelist[0].ndim + 1)),
-        choicelist,
-        tuple(range(choicelist[0].ndim + 1)),
-        dtype=result_type(*choicelist),
+        _select,
+        blockwise_shape,
+        *condargs,
+        *choiceargs,
+        dtype=intermediate_dtype,
         name="select",
-        concatenate=True,
         default=default,
     )
 
