@@ -19,7 +19,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, ignoring, stringify
+from .utils import ensure_dict, ignoring, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -488,9 +488,9 @@ class Layer(collections.abc.Mapping):
             layer_icon = unmaterialized_layer_icon
 
         if highlevelgraph_key is not None:
-            shortname = highlevelgraph_key.rsplit("-", 1)[0]  # removes token
+            shortname = key_split(highlevelgraph_key)
         elif hasattr(self, "name"):
-            shortname = self.name.rsplit("-", 1)[0]  # remove token
+            shortname = key_split(self.name)
         else:
             shortname = self.__class__.__name__
 
