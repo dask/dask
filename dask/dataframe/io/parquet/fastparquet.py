@@ -603,6 +603,7 @@ class FastParquetEngine(Engine):
         paths,
         fs,
         chunksize,
+        aggregate_files,
     ):
 
         # Organize row-groups by file
@@ -628,6 +629,7 @@ class FastParquetEngine(Engine):
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
+            aggregate_files,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
@@ -696,6 +698,7 @@ class FastParquetEngine(Engine):
             paths,
             fs,
             chunksize,
+            aggregate_files,
         )
 
     @classmethod

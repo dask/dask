@@ -301,12 +301,19 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
+    if chunksize or (
+        split_row_groups and int(split_row_groups) > 1 and aggregate_files
+    ):
+        # Require `gather_statistics=True` if `chunksize` is used,
+        # or if `split_row_groups>1` and we are aggregating files.
+        gather_statistics = True
+
     read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
         index=index,
-        gather_statistics=True if chunksize else gather_statistics,
+        gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
@@ -331,7 +338,14 @@ def read_parquet(
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
-        parts, statistics, filters, index, chunksize, fs, aggregate_files
+        parts,
+        statistics,
+        filters,
+        index,
+        chunksize,
+        split_row_groups,
+        fs,
+        aggregate_files,
     )
 
     # Account for index and columns arguments.
@@ -1040,7 +1054,7 @@ def apply_filters(parts, statistics, filters):
 
 
 def process_statistics(
-    parts, statistics, filters, index, chunksize, fs, aggregate_files
+    parts, statistics, filters, index, chunksize, split_row_groups, fs, aggregate_files
 ):
     """Process row-group column statistics in metadata
     Used in read_parquet.
@@ -1061,9 +1075,9 @@ def process_statistics(
             parts, statistics = apply_filters(parts, statistics, filters)
 
         # Aggregate parts/statistics if we are splitting by row-group
-        if chunksize:
+        if chunksize or (split_row_groups and int(split_row_groups) > 1):
             parts, statistics = aggregate_row_groups(
-                parts, statistics, chunksize, fs, aggregate_files
+                parts, statistics, chunksize, split_row_groups, fs, aggregate_files
             )
 
         out = sorted_columns(statistics)
@@ -1171,14 +1185,19 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_row_groups(parts, stats, chunksize, fs, aggregate_files):
+def aggregate_row_groups(
+    parts, stats, chunksize, split_row_groups, fs, aggregate_files
+):
     if not stats[0].get("file_path_0", None):
         return parts, stats
 
     parts_agg = []
     stats_agg = []
 
-    chunksize = parse_bytes(chunksize)
+    use_row_group_criteria = split_row_groups and int(split_row_groups) > 1
+    use_chunksize_criteria = bool(chunksize)
+    if use_chunksize_criteria:
+        chunksize = parse_bytes(chunksize)
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
@@ -1214,15 +1233,39 @@ def aggregate_row_groups(parts, stats, chunksize, fs, aggregate_files):
                         f"{aggregate_files} not supported for `aggregate_files`"
                     )
 
+        def _check_row_group_criteria(stat, next_stat):
+            if use_row_group_criteria:
+                return (next_stat["num-row-groups"] + stat["num-row-groups"]) <= int(
+                    split_row_groups
+                )
+            else:
+                return False
+
+        def _check_chunksize_criteria(stat, next_stat):
+            if use_chunksize_criteria:
+                return (
+                    next_stat["total_byte_size"] + stat["total_byte_size"]
+                ) <= chunksize
+            else:
+                return False
+
+        stat["num-row-groups"] = stat.get("num-row-groups", 1)
+        next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
+
         if (same_path or multi_path_allowed) and (
-            (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
+            (
+                _check_row_group_criteria(stat, next_stat)
+                or _check_chunksize_criteria(stat, next_stat)
+            )
         ):
+
             # Update part list
             next_part.append(part)
 
             # Update Statistics
             next_stat["total_byte_size"] += stat["total_byte_size"]
             next_stat["num-rows"] += stat["num-rows"]
+            next_stat["num-row-groups"] += stat["num-row-groups"]
             for col, col_add in zip(next_stat["columns"], stat["columns"]):
                 if col["name"] != col_add["name"]:
                     raise ValueError("Columns are different!!")

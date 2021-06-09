@@ -1270,6 +1270,7 @@ class ArrowDatasetEngine(Engine):
             fs,
             read_from_paths,
             chunksize,
+            aggregate_files,
         )
 
     @classmethod
@@ -1498,6 +1499,7 @@ class ArrowDatasetEngine(Engine):
         fs,
         read_from_paths,
         chunksize,
+        aggregate_files,
     ):
         """Process row-groups and statistics.
 
@@ -1534,6 +1536,7 @@ class ArrowDatasetEngine(Engine):
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
+            aggregate_files,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
@@ -2010,6 +2013,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         fs,
         read_from_paths,
         chunksize,
+        aggregate_files,
     ):
         """Process row-groups and statistics.
 
@@ -2035,6 +2039,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
+            aggregate_files,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
