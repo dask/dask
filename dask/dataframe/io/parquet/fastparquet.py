@@ -296,16 +296,22 @@ class FastParquetEngine(Engine):
         index_cols,
         filters,
         chunksize,
+        aggregate_files,
     ):
         # Cannot gather_statistics if our `parts` is already a list
         # of paths, or if we are building a multi-index (for now).
         # We also don't "need" to gather statistics if we don't
         # want to apply any filters or calculate divisions.
+        if split_row_groups is None:
+            split_row_groups = False
+        _need_aggregation_stats = chunksize or (
+            int(split_row_groups) > 1 and aggregate_files
+        )
         if (
             isinstance(parts, list) and len(parts) and isinstance(parts[0], str)
         ) or len(index_cols) > 1:
             gather_statistics = False
-        elif chunksize is None and filters is None and len(index_cols) == 0:
+        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
         # Make sure gather_statistics allows filtering
@@ -338,8 +344,6 @@ class FastParquetEngine(Engine):
         # statistics are needed for part aggregation.
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
-        if split_row_groups is None:
-            split_row_groups = False
 
         return (
             gather_statistics,
@@ -359,6 +363,7 @@ class FastParquetEngine(Engine):
         base_path,
         paths,
         chunksize,
+        aggregate_files,
     ):
         """Organize row-groups by file."""
 
@@ -369,7 +374,7 @@ class FastParquetEngine(Engine):
         # order for partitioned data. Re-sort by path
         if (
             pqpartitions is not None
-            and chunksize
+            and aggregate_files
             and pf.row_groups
             and pf.row_groups[0].columns[0].file_path
         ):
@@ -472,7 +477,7 @@ class FastParquetEngine(Engine):
                             cmax = pd.Timestamp(cmax, tz=tz)
                         last = cmax_last.get(name, None)
 
-                        if not (filters or chunksize):
+                        if not (filters or chunksize or aggregate_files):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -500,7 +505,7 @@ class FastParquetEngine(Engine):
                         cmax_last[name] = cmax
                     else:
                         if (
-                            not (filters or chunksize)
+                            not (filters or chunksize or aggregate_files)
                             and column.meta_data.num_values > 0
                         ):
                             # We are collecting statistics for divisions
@@ -623,6 +628,7 @@ class FastParquetEngine(Engine):
             base_path,
             paths,
             chunksize,
+            aggregate_files,
         )
 
         # Convert organized row-groups to parts
@@ -683,6 +689,7 @@ class FastParquetEngine(Engine):
             index_cols,
             filters,
             chunksize,
+            aggregate_files,
         )
 
         # Process row-groups and return `(parts, stats)`

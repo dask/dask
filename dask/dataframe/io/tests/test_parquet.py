@@ -2645,7 +2645,7 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
         }
     )
     dd.from_pandas(df, npartitions=4).to_parquet(
-        str(tmpdir), engine="pyarrow", row_group_size=row_group_size
+        str(tmpdir), engine="pyarrow", row_group_size=row_group_size, write_index=False
     )
 
     # Read back with both `split_row_groups>1` and
@@ -2661,7 +2661,7 @@ def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
     npartitions_expected = math.ceil((size / row_group_size) / split_row_groups)
     assert ddf2.npartitions == npartitions_expected
     assert len(ddf2) == size
-    assert_eq(df, ddf2)
+    assert_eq(df, ddf2, check_index=False)
 
 
 def test_split_row_groups_filter(tmpdir, engine):

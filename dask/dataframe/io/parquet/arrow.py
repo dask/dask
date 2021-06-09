@@ -1254,6 +1254,7 @@ class ArrowDatasetEngine(Engine):
             filters,
             partition_info,
             chunksize,
+            aggregate_files,
         )
 
         # Convert metadata into `parts` and `stats`
@@ -1284,6 +1285,7 @@ class ArrowDatasetEngine(Engine):
         filters,
         partition_info,
         chunksize,
+        aggregate_files,
     ):
         """Update read_parquet options given up-to-data metadata.
 
@@ -1300,13 +1302,18 @@ class ArrowDatasetEngine(Engine):
         # want to apply any filters or calculate divisions. Note
         # that the `ArrowDatasetEngine` doesn't even require
         # `gather_statistics=True` for filtering.
+        if split_row_groups is None:
+            split_row_groups = False
+        _need_aggregation_stats = chunksize or (
+            int(split_row_groups) > 1 and aggregate_files
+        )
         if (
             isinstance(metadata, list)
             and len(metadata)
             and isinstance(metadata[0], str)
         ) or len(index_cols) > 1:
             gather_statistics = False
-        elif chunksize is None and filters is None and len(index_cols) == 0:
+        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
         # Determine which columns need statistics.
@@ -1328,8 +1335,6 @@ class ArrowDatasetEngine(Engine):
         # statistics are needed for part aggregation.
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
-        if split_row_groups is None:
-            split_row_groups = False
 
         return (
             gather_statistics,
@@ -1346,6 +1351,7 @@ class ArrowDatasetEngine(Engine):
         stat_col_indices,
         filters,
         chunksize,
+        aggregate_files,
     ):
         """Organize row-groups by file.
 
@@ -1405,7 +1411,7 @@ class ArrowDatasetEngine(Engine):
                             cmin = statistics[name]["min"]
                             cmax = statistics[name]["max"]
                             last = cmax_last.get(name, None)
-                            if not (filters or chunksize):
+                            if not (filters or chunksize or aggregate_files):
                                 # Only think about bailing if we don't need
                                 # stats for filtering
                                 if cmin is None or (last and cmin < last):
@@ -1520,6 +1526,7 @@ class ArrowDatasetEngine(Engine):
             stat_col_indices,
             filters,
             chunksize,
+            aggregate_files,
         )
 
         # Check if we need to pass a fragment for each output partition.
@@ -1889,6 +1896,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         stat_col_indices,
         filters,
         chunksize,
+        aggregate_files,
     ):
         """Organize row-groups by file.
 
@@ -1896,7 +1904,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         """
 
         sorted_row_group_indices = range(metadata.num_row_groups)
-        if chunksize:
+        if aggregate_files:
             sorted_row_group_indices = sorted(
                 range(metadata.num_row_groups),
                 key=lambda x: metadata.row_group(x).column(0).file_path,
@@ -1945,7 +1953,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmin = column.statistics.min
                         cmax = column.statistics.max
                         last = cmax_last.get(name, None)
-                        if not (filters or chunksize):
+                        if not (filters or chunksize or aggregate_files):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -1974,7 +1982,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmax_last[name] = cmax
                     else:
 
-                        if not (filters or chunksize) and column.num_values > 0:
+                        if (
+                            not (filters or chunksize or aggregate_files)
+                            and column.num_values > 0
+                        ):
                             # We are collecting statistics for divisions
                             # only (no filters) - Lets bail.
                             gather_statistics = False
@@ -2033,6 +2044,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             stat_col_indices,
             filters,
             chunksize,
+            aggregate_files,
         )
 
         # Convert organized row-groups to parts
