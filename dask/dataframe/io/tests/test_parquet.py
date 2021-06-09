@@ -2799,7 +2799,7 @@ def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_
             "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
             "b": np.random.choice(["small", "large"], size=df_size),
             "c": np.random.random(size=df_size),
-            "d": np.random.randint(1, 5, size=df_size),
+            "d": np.random.randint(1, 100, size=df_size),
         }
     )
     ddf1 = dd.from_pandas(df1, npartitions=9)
