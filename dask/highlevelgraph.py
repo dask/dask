@@ -502,10 +502,10 @@ class Layer(collections.abc.Mapping):
                 <details style="margin-left: 32px;">
                     <summary style="margin-bottom: 10px; margin-top: 10px;">
                         <h3 style="display: inline;">Layer{layer_index}: {shortname}</h3>
-                        <p style="color: #5D5851; margin-top: -0.25em; margin-bottom: 0px; margin-left: 1.5em;">
+                    </summary>
+                    <p style="color: #5D5851; margin-top: -0.25em; margin-bottom: 0px; margin-left: 0px;">
                             {highlevelgraph_key}
                         </p>
-                    </summary>
                     {layer_info_table}
                 </details>
             </div>
