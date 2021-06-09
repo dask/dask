@@ -471,7 +471,7 @@ def ensure_minimum_chunksize(size, chunks):
     return tuple(output)
 
 
-def overlap(x, depth, boundary):
+def overlap(x, depth, boundary, allow_rechunk=True):
     """Share boundaries between neighboring blocks
 
     Parameters
@@ -485,13 +485,16 @@ def overlap(x, depth, boundary):
         The boundary condition on each axis. Options are 'reflect', 'periodic',
         'nearest', 'none', or an array value.  Such a value will fill the
         boundary with that value.
+    allow_rechunk: Optional, bool, keyword only
+        Allows rechunking, otherwise chunk sizes need to match and core
+        dimensions are to consist only of one chunk.
 
     The depth input informs how many cells to overlap between neighboring
     blocks ``{0: 2, 2: 5}`` means share two cells in 0 axis, 5 cells in 2 axis.
     Axes missing from this input will not be overlapped.
 
     Any axis containing chunks smaller than depth will be rechunked if
-    possible.
+    possible, provided the keyword ``allow_rechunk`` is True (recommended).
 
     Examples
     --------
@@ -529,12 +532,15 @@ def overlap(x, depth, boundary):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
-    # rechunk if new chunks are needed to fit depth in every chunk
-    depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
-    new_chunks = tuple(
-        ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
-    )
-    x1 = x.rechunk(new_chunks)
+    if allow_rechunk is True:
+        # rechunk if new chunks are needed to fit depth in every chunk
+        depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
+        new_chunks = tuple(
+            ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
+        )
+        x1 = x.rechunk(new_chunks)
+    else:
+        x1 = x
 
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
