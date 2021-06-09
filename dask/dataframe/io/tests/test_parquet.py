@@ -2733,7 +2733,7 @@ def test_chunksize_files(
         str(tmpdir),
         engine=read_engine,
         chunksize=chunksize,
-        aggregate_files=partition_on if partition_on else True,
+        aggregate_files=None if partition_on else True,
     )
 
     # Check that files where aggregated as expected
