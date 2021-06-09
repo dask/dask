@@ -65,6 +65,7 @@ from .optimize import optimize
 from .utils import (
     PANDAS_GT_100,
     PANDAS_GT_110,
+    PANDAS_GT_120,
     check_matching_columns,
     clear_known_categories,
     drop_by_shallow_copy,
@@ -75,7 +76,7 @@ from .utils import (
     is_dataframe_like,
     is_index_like,
     is_series_like,
-    make_meta_util,
+    make_meta,
     raise_on_meta_error,
     valid_divisions,
 )
@@ -123,7 +124,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         self._name = name
         self._parent_meta = pd.Series(dtype="float64")
 
-        meta = make_meta_util(meta, parent_meta=self._parent_meta)
+        meta = make_meta(meta, parent_meta=self._parent_meta)
         if is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta):
             raise TypeError(
                 "Expected meta to specify scalar, got "
@@ -267,7 +268,7 @@ def _scalar_binary(op, self, other, inv=False):
         (op, other_key, (self._name, 0)) if inv else (op, (self._name, 0), other_key)
     )
 
-    other_meta = make_meta_util(other, parent_meta=self._parent_meta)
+    other_meta = make_meta(other, parent_meta=self._parent_meta)
     other_meta_nonempty = meta_nonempty(other_meta)
     if inv:
         meta = op(other_meta_nonempty, self._meta_nonempty)
@@ -303,7 +304,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
         self._name = name
-        meta = make_meta_util(meta)
+        meta = make_meta(meta)
         if not self._is_partition_type(meta):
             raise TypeError(
                 "Expected meta to specify type {0}, got type "
@@ -3387,9 +3388,9 @@ Dask Name: {name}, {task} tasks""".format(
         if meta is no_default:
             meta = _emulate(M.map, self, arg, na_action=na_action, udf=True)
         else:
-            meta = make_meta_util(
+            meta = make_meta(
                 meta,
-                index=getattr(make_meta_util(self), "index", None),
+                index=getattr(make_meta(self), "index", None),
                 parent_meta=self._meta,
             )
 
@@ -3894,6 +3895,14 @@ class DataFrame(_Frame):
 
             if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
                 if key not in self._meta.columns:
+                    if PANDAS_GT_120:
+                        warnings.warn(
+                            "Indexing a DataFrame with a datetimelike index using a single "
+                            "string to slice the rows, like `frame[string]`, is deprecated "
+                            "and will be removed in a future version. Use `frame.loc[string]` "
+                            "instead.",
+                            FutureWarning,
+                        )
                     return self.loc[key]
 
             # error is raised from pandas
@@ -5537,9 +5546,9 @@ def apply_concat_apply(
         meta = _emulate(
             aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
         )
-    meta = make_meta_util(
+    meta = make_meta(
         meta,
-        index=(getattr(make_meta_util(dfs[0]), "index", None) if dfs else None),
+        index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None),
         parent_meta=dfs[0]._meta,
     )
 
@@ -5631,7 +5640,7 @@ def map_partitions(
     args = _maybe_from_pandas(args)
     args = _maybe_align_partitions(args)
     dfs = [df for df in args if isinstance(df, _Frame)]
-    meta_index = getattr(make_meta_util(dfs[0]), "index", None) if dfs else None
+    meta_index = getattr(make_meta(dfs[0]), "index", None) if dfs else None
     if parent_meta is None and dfs:
         parent_meta = dfs[0]._meta
 
@@ -5640,7 +5649,7 @@ def map_partitions(
         # delayed values)
         meta = _emulate(func, *args, udf=True, **kwargs)
     else:
-        meta = make_meta_util(meta, index=meta_index, parent_meta=parent_meta)
+        meta = make_meta(meta, index=meta_index, parent_meta=parent_meta)
 
     if has_keyword(func, "partition_info"):
         kwargs["partition_info"] = "__dummy__"
@@ -5654,10 +5663,10 @@ def map_partitions(
     elif not (has_parallel_type(meta) or is_arraylike(meta) and meta.shape):
         # If `meta` is not a pandas object, the concatenated results will be a
         # different type
-        meta = make_meta_util(_concat([meta]), index=meta_index)
+        meta = make_meta(_concat([meta]), index=meta_index)
 
     # Ensure meta is empty series
-    meta = make_meta_util(meta, parent_meta=parent_meta)
+    meta = make_meta(meta, parent_meta=parent_meta)
 
     args2 = []
     dependencies = []
@@ -6018,7 +6027,7 @@ def cov_corr(df, min_periods=None, corr=False, scalar=False, split_every=False):
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
     if scalar:
         return Scalar(graph, name, "f8")
-    meta = make_meta_util(
+    meta = make_meta(
         [(c, "f8") for c in df.columns], index=df.columns, parent_meta=df._meta
     )
     return DataFrame(graph, name, meta, (df.columns[0], df.columns[-1]))
@@ -7067,7 +7076,7 @@ def series_map(base_series, map_series):
 
     meta = map_series._meta.copy()
     meta.index = base_series._meta.index
-    meta = make_meta_util(meta)
+    meta = make_meta(meta)
 
     dependencies = [base_series, map_series, base_series.index]
     graph = HighLevelGraph.from_collections(
