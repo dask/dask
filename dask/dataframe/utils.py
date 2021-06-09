@@ -9,31 +9,32 @@ from contextlib import contextmanager
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import (
-    is_categorical_dtype,
-    is_datetime64tz_dtype,
-    is_interval_dtype,
-    is_period_dtype,
-    is_scalar,
-    is_sparse,
-)
+from pandas.api.types import is_scalar  # noqa: F401
+from pandas.api.types import is_categorical_dtype
 
 from ..base import is_dask_collection
 from ..core import get_deps
 from ..local import get_sync
-from ..utils import Dispatch, asciitable, is_arraylike
+from ..utils import is_arraylike  # noqa: F401
+from ..utils import asciitable
 from ..utils import is_dataframe_like as dask_is_dataframe_like
 from ..utils import is_index_like as dask_is_index_like
 from ..utils import is_series_like as dask_is_series_like
 from ..utils import typename
-
-# register pandas extension types
-from . import _dtypes  # noqa: F401
+from . import _dtypes  # noqa: F401 register pandas extension types
 from . import methods
-
-# include these here for compat
 from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
-from .extensions import make_array_nonempty, make_scalar
+from .dispatch import make_meta  # noqa : F401
+from .dispatch import make_meta_obj, meta_nonempty  # noqa : F401
+from .extensions import make_scalar
+
+meta_object_types = (pd.Series, pd.DataFrame, pd.Index, pd.MultiIndex)
+try:
+    import scipy.sparse as sp
+
+    meta_object_types += (sp.spmatrix,)
+except ImportError:
+    pass
 
 
 def is_integer_na_dtype(t):
@@ -284,218 +285,6 @@ def _empty_series(name, dtype, index=None):
     return pd.Series([], dtype=dtype, name=name, index=index)
 
 
-make_meta = Dispatch("make_meta")
-
-
-@make_meta.register((pd.Series, pd.DataFrame))
-def make_meta_pandas(x, index=None):
-    return x.iloc[:0]
-
-
-@make_meta.register(pd.Index)
-def make_meta_index(x, index=None):
-    return x[0:0]
-
-
-@make_meta.register(object)
-def make_meta_object(x, index=None):
-    """Create an empty pandas object containing the desired metadata.
-
-    Parameters
-    ----------
-    x : dict, tuple, list, pd.Series, pd.DataFrame, pd.Index, dtype, scalar
-        To create a DataFrame, provide a `dict` mapping of `{name: dtype}`, or
-        an iterable of `(name, dtype)` tuples. To create a `Series`, provide a
-        tuple of `(name, dtype)`. If a pandas object, names, dtypes, and index
-        should match the desired output. If a dtype or scalar, a scalar of the
-        same dtype is returned.
-    index :  pd.Index, optional
-        Any pandas index to use in the metadata. If none provided, a
-        `RangeIndex` will be used.
-
-    Examples
-    --------
-
-    >>> make_meta([('a', 'i8'), ('b', 'O')])    # doctest: +SKIP
-    Empty DataFrame
-    Columns: [a, b]
-    Index: []
-    >>> make_meta(('a', 'f8'))                  # doctest: +SKIP
-    Series([], Name: a, dtype: float64)
-    >>> make_meta('i8')                         # doctest: +SKIP
-    1
-    """
-    if hasattr(x, "_meta"):
-        return x._meta
-    elif is_arraylike(x) and x.shape:
-        return x[:0]
-
-    if index is not None:
-        index = make_meta(index)
-
-    if isinstance(x, dict):
-        return pd.DataFrame(
-            {c: _empty_series(c, d, index=index) for (c, d) in x.items()}, index=index
-        )
-    if isinstance(x, tuple) and len(x) == 2:
-        return _empty_series(x[0], x[1], index=index)
-    elif isinstance(x, (list, tuple)):
-        if not all(isinstance(i, tuple) and len(i) == 2 for i in x):
-            raise ValueError(
-                "Expected iterable of tuples of (name, dtype), got {0}".format(x)
-            )
-        return pd.DataFrame(
-            {c: _empty_series(c, d, index=index) for (c, d) in x},
-            columns=[c for c, d in x],
-            index=index,
-        )
-    elif not hasattr(x, "dtype") and x is not None:
-        # could be a string, a dtype object, or a python type. Skip `None`,
-        # because it is implictly converted to `dtype('f8')`, which we don't
-        # want here.
-        try:
-            dtype = np.dtype(x)
-            return _scalar_from_dtype(dtype)
-        except Exception:
-            # Continue on to next check
-            pass
-
-    if is_scalar(x):
-        return _nonempty_scalar(x)
-
-    raise TypeError("Don't know how to create metadata from {0}".format(x))
-
-
-_numeric_index_types = (pd.Int64Index, pd.Float64Index, pd.UInt64Index)
-
-meta_nonempty = Dispatch("meta_nonempty")
-
-
-@meta_nonempty.register(object)
-def meta_nonempty_object(x):
-    """Create a nonempty pandas object from the given metadata.
-
-    Returns a pandas DataFrame, Series, or Index that contains two rows
-    of fake data.
-    """
-    if is_scalar(x):
-        return _nonempty_scalar(x)
-    else:
-        raise TypeError(
-            "Expected Pandas-like Index, Series, DataFrame, or scalar, "
-            "got {0}".format(typename(type(x)))
-        )
-
-
-@meta_nonempty.register(pd.DataFrame)
-def meta_nonempty_dataframe(x):
-    idx = meta_nonempty(x.index)
-    dt_s_dict = dict()
-    data = dict()
-    for i, c in enumerate(x.columns):
-        series = x.iloc[:, i]
-        dt = series.dtype
-        if dt not in dt_s_dict:
-            dt_s_dict[dt] = _nonempty_series(x.iloc[:, i], idx=idx)
-        data[i] = dt_s_dict[dt]
-    res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
-    res.columns = x.columns
-    if PANDAS_GT_100:
-        res.attrs = x.attrs
-    return res
-
-
-@meta_nonempty.register(pd.Index)
-def _nonempty_index(idx):
-    typ = type(idx)
-    if typ is pd.RangeIndex:
-        return pd.RangeIndex(2, name=idx.name)
-    elif typ in _numeric_index_types:
-        return typ([1, 2], name=idx.name)
-    elif typ is pd.Index:
-        return pd.Index(["a", "b"], name=idx.name)
-    elif typ is pd.DatetimeIndex:
-        start = "1970-01-01"
-        # Need a non-monotonic decreasing index to avoid issues with
-        # partial string indexing see https://github.com/dask/dask/issues/2389
-        # and https://github.com/pandas-dev/pandas/issues/16515
-        # This doesn't mean `_meta_nonempty` should ever rely on
-        # `self.monotonic_increasing` or `self.monotonic_decreasing`
-        try:
-            return pd.date_range(
-                start=start, periods=2, freq=idx.freq, tz=idx.tz, name=idx.name
-            )
-        except ValueError:  # older pandas versions
-            data = [start, "1970-01-02"] if idx.freq is None else None
-            return pd.DatetimeIndex(
-                data, start=start, periods=2, freq=idx.freq, tz=idx.tz, name=idx.name
-            )
-    elif typ is pd.PeriodIndex:
-        return pd.period_range(
-            start="1970-01-01", periods=2, freq=idx.freq, name=idx.name
-        )
-    elif typ is pd.TimedeltaIndex:
-        start = np.timedelta64(1, "D")
-        try:
-            return pd.timedelta_range(
-                start=start, periods=2, freq=idx.freq, name=idx.name
-            )
-        except ValueError:  # older pandas versions
-            start = np.timedelta64(1, "D")
-            data = [start, start + 1] if idx.freq is None else None
-            return pd.TimedeltaIndex(
-                data, start=start, periods=2, freq=idx.freq, name=idx.name
-            )
-    elif typ is pd.CategoricalIndex:
-        if len(idx.categories) == 0:
-            data = pd.Categorical(_nonempty_index(idx.categories), ordered=idx.ordered)
-        else:
-            data = pd.Categorical.from_codes(
-                [-1, 0], categories=idx.categories, ordered=idx.ordered
-            )
-        return pd.CategoricalIndex(data, name=idx.name)
-    elif typ is pd.MultiIndex:
-        levels = [_nonempty_index(l) for l in idx.levels]
-        codes = [[0, 0] for i in idx.levels]
-        try:
-            return pd.MultiIndex(levels=levels, codes=codes, names=idx.names)
-        except TypeError:  # older pandas versions
-            return pd.MultiIndex(levels=levels, labels=codes, names=idx.names)
-
-    raise TypeError(
-        "Don't know how to handle index of type {0}".format(typename(type(idx)))
-    )
-
-
-hash_object_dispatch = Dispatch("hash_object_dispatch")
-
-
-@hash_object_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def hash_object_pandas(
-    obj, index=True, encoding="utf8", hash_key=None, categorize=True
-):
-    return pd.util.hash_pandas_object(
-        obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
-    )
-
-
-group_split_dispatch = Dispatch("group_split_dispatch")
-
-
-@group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def group_split_pandas(df, c, k, ignore_index=False):
-    indexer, locations = pd._libs.algos.groupsort_indexer(
-        c.astype(np.int64, copy=False), k
-    )
-    df2 = df.take(indexer)
-    locations = locations.cumsum()
-    parts = [
-        df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
-        for a, b in zip(locations[:-1], locations[1:])
-    ]
-    return dict(zip(range(k), parts))
-
-
 _simple_fake_mapping = {
     "b": np.bool_(True),
     "V": np.void(b" "),
@@ -520,19 +309,6 @@ def _scalar_from_dtype(dtype):
         raise TypeError("Can't handle dtype: {0}".format(dtype))
 
 
-@make_scalar.register(np.dtype)
-def _(dtype):
-    return _scalar_from_dtype(dtype)
-
-
-@make_scalar.register(pd.Timestamp)
-@make_scalar.register(pd.Timedelta)
-@make_scalar.register(pd.Period)
-@make_scalar.register(pd.Interval)
-def _(x):
-    return x
-
-
 def _nonempty_scalar(x):
     if type(x) in make_scalar._lookup:
         return make_scalar(x)
@@ -542,55 +318,6 @@ def _nonempty_scalar(x):
         return make_scalar(dtype)
 
     raise TypeError("Can't handle meta of type '{0}'".format(typename(type(x))))
-
-
-@meta_nonempty.register(pd.Series)
-def _nonempty_series(s, idx=None):
-    # TODO: Use register dtypes with make_array_nonempty
-    if idx is None:
-        idx = _nonempty_index(s.index)
-    dtype = s.dtype
-    if len(s) > 0:
-        # use value from meta if provided
-        data = [s.iloc[0]] * 2
-    elif is_datetime64tz_dtype(dtype):
-        entry = pd.Timestamp("1970-01-01", tz=dtype.tz)
-        data = [entry, entry]
-    elif is_categorical_dtype(dtype):
-        if len(s.cat.categories):
-            data = [s.cat.categories[0]] * 2
-            cats = s.cat.categories
-        else:
-            data = _nonempty_index(s.cat.categories)
-            cats = s.cat.categories[:0]
-        data = pd.Categorical(data, categories=cats, ordered=s.cat.ordered)
-    elif is_integer_na_dtype(dtype):
-        data = pd.array([1, None], dtype=dtype)
-    elif is_float_na_dtype(dtype):
-        data = pd.array([1.0, None], dtype=dtype)
-    elif is_period_dtype(dtype):
-        # pandas 0.24.0+ should infer this to be Series[Period[freq]]
-        freq = dtype.freq
-        data = [pd.Period("2000", freq), pd.Period("2001", freq)]
-    elif is_sparse(dtype):
-        entry = _scalar_from_dtype(dtype.subtype)
-        if PANDAS_GT_100:
-            data = pd.array([entry, entry], dtype=dtype)
-        else:
-            data = pd.SparseArray([entry, entry], dtype=dtype)
-    elif is_interval_dtype(dtype):
-        entry = _scalar_from_dtype(dtype.subtype)
-        data = pd.array([entry, entry], dtype=dtype)
-    elif type(dtype) in make_array_nonempty._lookup:
-        data = make_array_nonempty(dtype)
-    else:
-        entry = _scalar_from_dtype(dtype)
-        data = np.array([entry, entry], dtype=dtype)
-
-    out = pd.Series(data, name=s.name, index=idx)
-    if PANDAS_GT_100:
-        out.attrs = s.attrs
-    return out
 
 
 def is_dataframe_like(df):

@@ -492,7 +492,7 @@ def to_parquet(
     if overwrite:
         if isinstance(fs, LocalFileSystem):
             working_dir = fs.expand_path(".")[0]
-            if path == working_dir:
+            if path.rstrip("/") == working_dir.rstrip("/"):
                 raise ValueError(
                     "Cannot clear the contents of the current working directory!"
                 )

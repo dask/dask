@@ -115,10 +115,10 @@ class Layer(collections.abc.Mapping):
     def cull(
         self, keys: set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, set]]:
-        """Return a new Layer with only the tasks required to calculate `keys` and
-        a map of external key dependencies.
+        """Remove unnecessary tasks from the layer
 
-        In other words, remove unnecessary tasks from the layer.
+        In other words, return a new Layer with only the tasks required to
+        calculate `keys` and a map of external key dependencies.
 
         Examples
         --------
@@ -434,7 +434,7 @@ class Layer(collections.abc.Mapping):
 
         This method is called by the scheduler in Distributed in order to unpack
         the state of a layer and merge it into its global task graph. The method
-        should update `dsk` and `dependencies`, which are the already materialized
+        can use `dsk` and `dependencies`, which are the already materialized
         state of the preceding layers in the high level graph. The layers of the
         high level graph are unpacked in topological order.
 
@@ -587,7 +587,7 @@ class HighLevelGraph(Mapping):
 
     @classmethod
     def _from_collection(cls, name, layer, collection):
-        """ `from_collections` optimized for a single collection """
+        """`from_collections` optimized for a single collection"""
         if is_dask_collection(collection):
             graph = collection.__dask_graph__()
             if isinstance(graph, HighLevelGraph):
@@ -809,7 +809,8 @@ class HighLevelGraph(Mapping):
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
-        return graphviz_to_file(g, filename, format)
+        graphviz_to_file(g, filename, format)
+        return g
 
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
@@ -964,8 +965,7 @@ class HighLevelGraph(Mapping):
 
         The approach is to delegate the packaging to each layer in the high level graph
         by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
-        on each layer. If the layer doesn't implement packaging, we materialize the
-        layer and pack it.
+        on each layer.
 
         Parameters
         ----------

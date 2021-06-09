@@ -223,7 +223,7 @@ def generate_day(
     freq=pd.Timedelta(seconds=60),
     random_state=None,
 ):
-    """ Generate a day of financial data from open/close high/low values """
+    """Generate a day of financial data from open/close high/low values"""
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
     if not isinstance(date, pd.Timestamp):

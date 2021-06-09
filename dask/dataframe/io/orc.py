@@ -57,6 +57,7 @@ def _read_orc_stripe(fs, path, stripe, columns=None):
 
 def read_orc(path, columns=None, storage_options=None):
     """Read dataframe from ORC file(s)
+
     Parameters
     ----------
     path: str or list(str)
@@ -66,9 +67,11 @@ def read_orc(path, columns=None, storage_options=None):
         Columns to load. If None, loads all.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
+
     Returns
     -------
     Dask.DataFrame (even if there is only one column)
+
     Examples
     --------
     >>> df = dd.read_orc('https://github.com/apache/orc/raw/'

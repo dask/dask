@@ -19,7 +19,7 @@ from .io import _link
 
 
 def _pd_to_hdf(pd_to_hdf, lock, args, kwargs=None):
-    """ A wrapper function around pd_to_hdf that enables locking"""
+    """A wrapper function around pd_to_hdf that enables locking"""
 
     if lock:
         lock.acquire()
@@ -294,7 +294,7 @@ class HDFFunctionWrapper:
         return HDFFunctionWrapper(columns, self.dim, self.lock, self.common_kwargs)
 
     def __call__(self, part):
-        """ Read from hdf5 file with a lock """
+        """Read from hdf5 file with a lock"""
 
         path, key, kwargs = part
         if self.lock:

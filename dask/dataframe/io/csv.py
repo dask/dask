@@ -67,6 +67,8 @@ class CSVFunctionWrapper:
         """Return a new CSVFunctionWrapper object with
         a sub-column projection.
         """
+        # Make sure columns is ordered correctly
+        columns = [c for c in self.head.columns if c in columns]
         if columns == self.columns:
             return self
         return CSVFunctionWrapper(
