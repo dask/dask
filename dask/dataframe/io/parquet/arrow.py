@@ -1,4 +1,5 @@
 import json
+import re
 import warnings
 from collections import defaultdict
 from datetime import datetime
@@ -19,6 +20,7 @@ from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from .core import create_metadata_file
 from .utils import (
     Engine,
+    _check_aggregate_files,
     _flatten_filters,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -164,12 +166,22 @@ def _get_all_partition_keys(ds):
     """
     categories = defaultdict(list)
     pkeys = defaultdict(list)
+    file_frag = None
     for file_frag in ds.get_fragments():
         keys = pa_ds._get_partition_keys(file_frag.partition_expression)
         pkeys[file_frag.path] = keys
         for k, v in keys.items():
             if v not in categories[k]:
                 categories[k].append(v)
+
+    if file_frag is not None:
+        # Check/correct order of `categories` using last file_frag
+        cat_keys = [
+            o.split(" =")[0]
+            for o in re.findall("[^(]* =", str(file_frag.partition_expression))
+        ]
+        if set(categories) == set(cat_keys):
+            return {k: categories[k] for k in cat_keys}, pkeys
     return categories, pkeys
 
 
@@ -492,6 +504,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups=None,
         read_from_paths=None,
         chunksize=None,
+        aggregate_files=None,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
@@ -520,6 +533,12 @@ class ArrowDatasetEngine(Engine):
             schema, index, categories, partition_info
         )
 
+        # Check the `aggregate_files` setting
+        aggregate_files = _check_aggregate_files(
+            aggregate_files,
+            partition_info["partition_names"],
+        )
+
         # Finally, construct our list of `parts`
         # (and a corresponding list of statistics)
         parts, stats, common_kwargs = cls._construct_parts(
@@ -535,13 +554,15 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             read_from_paths,
             chunksize,
+            aggregate_files,
         )
 
-        # Add `common_kwargs` to the first element of `parts`.
-        # We can return as a separate element in the future, but
-        # should avoid breaking the API for now.
+        # Add `common_kwargs` and `aggregate_files` to the first
+        # element of `parts`. We can return as a separate element
+        # in the future, but should avoid breaking the API for now.
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
+            parts[0]["aggregate_files"] = aggregate_files
 
         return (meta, stats, parts, index)
 
@@ -1188,6 +1209,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         read_from_paths,
         chunksize,
+        aggregate_files,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1743,12 +1765,13 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         #          values (or partition "keys") will be represented as a list
         #          of tuples. E.g. `[("year", 2020), ("state", "CA")]`
         #    - "partition_names" : (list)  This is a list containing the names
-        #          of partitioned columns.
+        #          of partitioned columns.  This list must be ordered correctly
+        #          by partition level.
         fn_partitioned = False
         if dataset.partitions is not None:
             fn_partitioned = True
             partition_info["partition_names"] = [
-                n for n in dataset.partitions.partition_names if n is not None
+                n.name for n in list(dataset.partitions) if n.name is not None
             ]
             partition_info["partitions"] = dataset.partitions
             for piece in dataset.pieces:

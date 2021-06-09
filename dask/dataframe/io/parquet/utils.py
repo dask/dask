@@ -18,7 +18,7 @@ class Engine:
         index=None,
         gather_statistics=None,
         filters=None,
-        **kwargs
+        **kwargs,
     ):
         """Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -109,7 +109,7 @@ class Engine:
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs
+        **kwargs,
     ):
         """Perform engine-specific initialization steps for this dataset
 
@@ -621,3 +621,35 @@ def _row_groups_to_parts(
                 stats.append(stat)
 
     return parts, stats
+
+
+def _check_aggregate_files(file_aggregation, partition_names):
+    # Check the `file_aggregation` setting.
+    #
+    # Note that `partition_names` must be ordered. `True` means that we allow
+    # aggregation of any two files. `False` means that we will never aggregate
+    # files.  If a string is specified, it must be the name of a partition
+    # column, and the "partition depth" of that column will be used for
+    # aggregation.  Note that we always convert the string into the partition
+    # "depth" to simplify the aggregation logic.
+
+    if file_aggregation is None and partition_names:
+        # file_aggregation is None, and we are reading a hive-partitioned
+        # dataset.  Set the aggregation range to be the final partition
+        # level (partition "depth" of 1)
+        file_aggregation = 1
+
+    elif isinstance(file_aggregation, str):
+        if file_aggregation in partition_names:
+            # file_aggregation corresponds to a partition column. Reset the
+            # value of this variable to reflect the partition "depth" (in the
+            # range of 1 to the total number of partition levels)
+            file_aggregation = len(partition_names) - partition_names.index(
+                file_aggregation
+            )
+        else:
+            raise ValueError(
+                f"{file_aggregation} is not a recognized directory partition."
+            )
+
+    return file_aggregation

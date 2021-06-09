@@ -1,6 +1,5 @@
 import copy
 import math
-import re
 import warnings
 from distutils.version import LooseVersion
 
@@ -103,6 +102,7 @@ def read_parquet(
     split_row_groups=None,
     read_from_paths=None,
     chunksize=None,
+    aggregate_files=None,
     **kwargs,
 ):
     """
@@ -191,31 +191,44 @@ def read_parquet(
         size of the task graph, but will add minor overhead to ``read_partition``.
         By default (None), ``ArrowDatasetEngine`` will set this option to
         ``False`` when there are filters.
-    chunksize : int, str, tuple, default None
+    chunksize : int or str, default None
         The desired size of each output ``DataFrame`` partition in terms of total
         (uncompressed) parquet storage space. If specified, adjacent row-groups
         and/or files will be aggregated into the same output partition until the
         cumulative ``total_byte_size`` parquet-metadata statistic reaches this
-        value. By default, inter-file aggregation will only occur if said files
-        are stored in the same directory.
+        value. Use `aggregate_files` to enable/disable inter-file aggregation.
+    aggregate_files : bool or str, default None
+        Whether distinct file paths may be aggregated into the same output
+        partition. This parameter is only used when `chunksize` is specified.
+        A setting of True means that any two file paths may be aggregated into
+        the same output partition, while False means that inter-file aggregation
+        is prohibited.
 
-        Note that a non-default chunksize-aggregation range can be specified
-        by passing ``chunksize`` as a tuple with two elements. The first
-        element should be the usual int or str-based representation of the
-        desired partition size. The second element should be a string
-        specifying the aggregation range. The value "file" declares that
-        aggregation may only occur within a single file. The value "directory"
-        declares that aggregation may only occur within an immediate directory.
-        The value "all" declares that there are no aggregation boundaries at all.
-        If a different string value is specified it will be used for regular
-        expression matching in the file path. For example, when reading a dataset
-        partitioned by multiple columns, like "month" and "day", we can set
-        the aggregation range to be the "day" partition by passing something
-        like the following for ``chunksize``::
+        For "hive-partitioned" datasets, a "partition"-column name can also be
+        specified. In this case, we allow the aggregation of any two files
+        sharing a file path up to, and including, the corresponding directory name.
+        For example, if ``aggregate_files`` is set to ``"section"`` for the
+        directory structure below, ``03.parquet`` and ``04.parquet`` may be
+        aggregated together, but ``01.parquet`` and ``02.parquet`` cannot be.
+        If, however, ``aggregate_files`` is set to ``"region"``, ``01.parquet``
+        may be aggregated with ``02.parquet``, and ``03.parquet`` may be aggregated
+        with ``04.parquet``::
 
-            ``chunksize=("1MiB", "day=[^/]*/")``
+            dataset-path/
+            ├── region=1/
+            │   ├── section=a/
+            │   │   └── 01.parquet
+            │   ├── section=b/
+            │   └── └── 02.parquet
+            └── region=2/
+                ├── section=a/
+                │   ├── 03.parquet
+                └── └── 04.parquet
 
-        Note that the example above assumes a "/" directory separator.
+        Note that the default behavior of ``aggregate_files`` is False, unless
+        the dataset is hive-partitioned.  For hive-partitioned data, the default
+        setting is the least-signficant partition name (which is equivalent to
+        ``"section"`` in the example above).
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -249,6 +262,7 @@ def read_parquet(
             split_row_groups=split_row_groups,
             read_from_paths=read_from_paths,
             chunksize=chunksize,
+            aggregate_files=aggregate_files,
         )
         return df[columns]
 
@@ -268,6 +282,7 @@ def read_parquet(
         split_row_groups,
         read_from_paths,
         chunksize,
+        aggregate_files,
     )
 
     if isinstance(engine, str):
@@ -296,6 +311,7 @@ def read_parquet(
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
         chunksize=chunksize,
+        aggregate_files=aggregate_files,
         **kwargs,
     )
 
@@ -307,18 +323,15 @@ def read_parquet(
     # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
     common_kwargs = {}
-    if len(read_metadata_result) > 4:
-        # Engine may return common_kwargs as a separate element
-        common_kwargs = read_metadata_result[4]
-    elif len(parts):
-        # If the engine does not return a dedicated
-        # common_kwargs argument, it may be stored in
-        # the first element of `parts`
+    if len(parts):
+        # For now, `common_kwargs` and `aggregate_files`
+        # may be stored in the first element of `parts`
         common_kwargs = parts[0].pop("common_kwargs", {})
+        aggregate_files = parts[0].pop("aggregate_files", aggregate_files)
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
-        parts, statistics, filters, index, chunksize, fs
+        parts, statistics, filters, index, chunksize, fs, aggregate_files
     )
 
     # Account for index and columns arguments.
@@ -1026,7 +1039,9 @@ def apply_filters(parts, statistics, filters):
     return out_parts, out_statistics
 
 
-def process_statistics(parts, statistics, filters, index, chunksize, fs):
+def process_statistics(
+    parts, statistics, filters, index, chunksize, fs, aggregate_files
+):
     """Process row-group column statistics in metadata
     Used in read_parquet.
     """
@@ -1047,7 +1062,9 @@ def process_statistics(parts, statistics, filters, index, chunksize, fs):
 
         # Aggregate parts/statistics if we are splitting by row-group
         if chunksize:
-            parts, statistics = aggregate_row_groups(parts, statistics, chunksize, fs)
+            parts, statistics = aggregate_row_groups(
+                parts, statistics, chunksize, fs, aggregate_files
+            )
 
         out = sorted_columns(statistics)
 
@@ -1154,22 +1171,12 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_row_groups(parts, stats, chunksize, fs):
+def aggregate_row_groups(parts, stats, chunksize, fs, aggregate_files):
     if not stats[0].get("file_path_0", None):
         return parts, stats
 
     parts_agg = []
     stats_agg = []
-
-    # Check if `chunksize` includes custom aggregation options
-    aggregation_range = "directory"
-    if isinstance(chunksize, tuple):
-        if len(chunksize) != 2:
-            raise ValueError(
-                "A tuple-based chunksize argument must contain two elements."
-            )
-        aggregation_range = chunksize[1]
-        chunksize = chunksize[0]
 
     chunksize = parse_bytes(chunksize)
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
@@ -1180,7 +1187,7 @@ def aggregate_row_groups(parts, stats, chunksize, fs):
         same_path = stat["file_path_0"] == next_stat["file_path_0"]
         multi_path_allowed = False
 
-        if aggregation_range != "file":
+        if aggregate_files:
 
             # Criteria #2 for aggregating parts: The part does not include
             # row-group information, or both parts include the same kind
@@ -1190,26 +1197,22 @@ def aggregate_row_groups(parts, stats, chunksize, fs):
                 rgs = set(list(part["piece"][1]) + list(next_part[-1]["piece"][1]))
                 multi_path_allowed = (rgs == {None}) or (None not in rgs)
 
-            # Criteria #3 for aggregating parts: The parts are stored
-            # in the same directory. This allows us to handle partitioned
-            # datasets in a reliable way.
+            # Criteria #3 for aggregating parts: The parts share a
+            # directory at the "depth" allowed by `aggregate_files`
             if not same_path and multi_path_allowed:
-                if aggregation_range == "all":
+                if aggregate_files is True:
                     multi_path_allowed = True
-                elif aggregation_range == "directory":
+                elif isinstance(aggregate_files, int):
                     # Make sure files share the same directory
-                    root = stat["file_path_0"].split(fs.sep)[:-1]
-                    next_root = next_stat["file_path_0"].split(fs.sep)[:-1]
+                    root = stat["file_path_0"].split(fs.sep)[:-aggregate_files]
+                    next_root = next_stat["file_path_0"].split(fs.sep)[
+                        :-aggregate_files
+                    ]
                     multi_path_allowed = root == next_root
                 else:
-                    # Use regular-expression matching to check if files may
-                    # be aggregated.
-                    root = re.findall(aggregation_range, stat["file_path_0"])
-                    next_root = re.findall(aggregation_range, next_stat["file_path_0"])
-                    if len(root) == 1 and len(next_root) == 1:
-                        multi_path_allowed = root[0] == next_root[0]
-                    else:
-                        multi_path_allowed = False
+                    raise ValueError(
+                        f"{aggregate_files} not supported for `aggregate_files`"
+                    )
 
         if (same_path or multi_path_allowed) and (
             (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize

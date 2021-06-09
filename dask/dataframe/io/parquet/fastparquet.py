@@ -27,6 +27,7 @@ from ..utils import _meta_from_dtypes
 #########################
 from .utils import (
     Engine,
+    _check_aggregate_files,
     _flatten_filters,
     _normalize_index_columns,
     _parse_pandas_metadata,
@@ -657,6 +658,7 @@ class FastParquetEngine(Engine):
         split_row_groups,
         gather_statistics,
         chunksize,
+        aggregate_files,
     ):
 
         # Check if `parts` is just a list of paths
@@ -707,6 +709,7 @@ class FastParquetEngine(Engine):
         filters=None,
         split_row_groups=True,
         chunksize=None,
+        aggregate_files=None,
         **kwargs,
     ):
         # Define the parquet-file (pf) object to use for metadata,
@@ -727,6 +730,12 @@ class FastParquetEngine(Engine):
             index,
         ) = cls._generate_dd_meta(pf, index, categories)
 
+        # Check the `aggregate_files` setting
+        aggregate_files = _check_aggregate_files(
+            aggregate_files,
+            list(pf.cats),
+        )
+
         # Break `pf` into a list of `parts`
         parts, stats = cls._construct_parts(
             fs,
@@ -741,6 +750,7 @@ class FastParquetEngine(Engine):
             split_row_groups,
             gather_statistics,
             chunksize,
+            aggregate_files,
         )
 
         # Cannot allow `None` in columns if the user has specified index=False
@@ -752,6 +762,7 @@ class FastParquetEngine(Engine):
         # should avoid breaking the API for now.
         if len(parts):
             parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
+            parts[0]["aggregate_files"] = aggregate_files
 
         if len(parts) and len(parts[0]["piece"]) == 1:
 

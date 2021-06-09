@@ -2733,6 +2733,7 @@ def test_chunksize_files(
         str(tmpdir),
         engine=read_engine,
         chunksize=chunksize,
+        aggregate_files=partition_on if partition_on else True,
     )
 
     # Check that files where aggregated as expected
@@ -2754,12 +2755,10 @@ def test_chunksize_files(
 
 
 @write_read_engines()
-def test_chunksize_tuple(tmpdir, write_engine, read_engine):
+@pytest.mark.parametrize("aggregate_files", ["a", "b"])
+def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_files):
 
-    chunksize = (
-        "1MiB",
-        "a=[^/]*/",  # Aggregate files within the same a=* partition
-    )
+    chunksize = "1MiB"
     partition_on = ["a", "b"]
     df_size = 100
     df1 = pd.DataFrame(
@@ -2782,10 +2781,14 @@ def test_chunksize_tuple(tmpdir, write_engine, read_engine):
         str(tmpdir),
         engine=read_engine,
         chunksize=chunksize,
+        aggregate_files=aggregate_files,
     )
 
     # Check that files where aggregated as expected
-    assert ddf2.npartitions == 3
+    if aggregate_files == "a":
+        assert ddf2.npartitions == 3
+    elif aggregate_files == "b":
+        assert ddf2.npartitions == 6
 
     # Check that the final data is correct
     df2 = ddf2.compute().sort_values(["c", "d"])
@@ -2834,6 +2837,7 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         split_row_groups=True,
         gather_statistics=True,
         index="index",
+        aggregate_files=True,
     )
 
     assert_eq(ddf1, ddf2, check_divisions=False)
