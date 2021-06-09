@@ -590,7 +590,7 @@ def _row_groups_to_parts(
             for i in _rgs:
 
                 i_end = i + split_row_groups
-                if aggregate_files:
+                if aggregate_files is True:
                     if residual and i == 0:
                         i_end = residual
                         residual = 0
