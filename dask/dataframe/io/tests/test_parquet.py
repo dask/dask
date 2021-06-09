@@ -2631,6 +2631,39 @@ def test_split_row_groups_int(tmpdir, split_row_groups, gather_statistics, engin
     assert ddf2.npartitions == 2 * math.ceil(expected_rg_cout / split_row_groups)
 
 
+@pytest.mark.parametrize("split_row_groups", [8, 25])
+def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
+    # Use pyarrow to write a multi-file dataset with
+    # multiple row-groups per file
+    check_pyarrow()
+    row_group_size = 10
+    size = 800
+    df = pd.DataFrame(
+        {
+            "i32": np.arange(size, dtype=np.int32),
+            "f": np.arange(size, dtype=np.float64),
+        }
+    )
+    dd.from_pandas(df, npartitions=4).to_parquet(
+        str(tmpdir), engine="pyarrow", row_group_size=row_group_size
+    )
+
+    # Read back with both `split_row_groups>1` and
+    # `aggregate_files=True`
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine=engine,
+        split_row_groups=split_row_groups,
+        aggregate_files=True,
+    )
+
+    # Check that we are aggregating files as expected
+    npartitions_expected = math.ceil((size / row_group_size) / split_row_groups)
+    assert ddf2.npartitions == npartitions_expected
+    assert len(ddf2) == size
+    assert_eq(df, ddf2)
+
+
 def test_split_row_groups_filter(tmpdir, engine):
     check_pyarrow()
     tmp = str(tmpdir)

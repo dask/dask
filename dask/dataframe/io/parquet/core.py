@@ -199,10 +199,11 @@ def read_parquet(
         value. Use `aggregate_files` to enable/disable inter-file aggregation.
     aggregate_files : bool or str, default None
         Whether distinct file paths may be aggregated into the same output
-        partition. This parameter is only used when `chunksize` is specified.
-        A setting of True means that any two file paths may be aggregated into
-        the same output partition, while False means that inter-file aggregation
-        is prohibited.
+        partition. This parameter requires `gather_statistics=True`, and is
+        only used when `chunksize` is specified or when `split_row_groups` is
+        an integer >1. A setting of True means that any two file paths may be
+        aggregated into the same output partition, while False means that
+        inter-file aggregation is prohibited.
 
         For "hive-partitioned" datasets, a "partition"-column name can also be
         specified. In this case, we allow the aggregation of any two files
