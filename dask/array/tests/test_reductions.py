@@ -13,6 +13,7 @@ import dask.config as config
 from dask.array.utils import assert_eq as _assert_eq
 from dask.array.utils import same_keys
 from dask.core import get_deps
+from dask.utils import key_split
 
 
 def assert_eq(a, b):
@@ -700,6 +701,24 @@ def test_median(axis, keepdims, func):
         getattr(da, func)(d, axis=axis, keepdims=keepdims),
         getattr(np, func)(x, axis=axis, keepdims=keepdims),
     )
+
+
+@pytest.mark.parametrize("func", ["median", "nanmedian"])
+@pytest.mark.parametrize("axis", [0, [0, 2], 1])
+def test_median_does_not_rechunk_if_whole_axis_in_one_chunk(axis, func):
+    x = np.arange(100).reshape((2, 5, 10))
+    d = da.from_array(x, chunks=(2, 1, 10))
+
+    actual = getattr(da, func)(d, axis=axis)
+    expected = getattr(np, func)(x, axis=axis)
+    assert_eq(actual, expected)
+    does_rechunk = any(
+        ["rechunk" in key_split(k) for k in actual.__dask_graph__().keys()]
+    )
+    if axis == 1:
+        assert does_rechunk
+    else:
+        assert not does_rechunk
 
 
 @pytest.mark.parametrize("method", ["sum", "mean", "prod"])
