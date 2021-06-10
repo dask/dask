@@ -1569,7 +1569,7 @@ def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
 @derived_from(np)
 def median(a, axis=None, keepdims=False, out=None):
     """
-    This works by automatically chunking the reduced axes to a single chunk
+    This works by automatically chunking the reduced axes to a single chunk if necessary
     and then calling ``numpy.median`` function across the remaining dimensions
     """
     if axis is None:
@@ -1583,7 +1583,9 @@ def median(a, axis=None, keepdims=False, out=None):
 
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
-    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
         np.median,
@@ -1616,7 +1618,9 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
 
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
-    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
         np.nanmedian,
