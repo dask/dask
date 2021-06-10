@@ -1103,6 +1103,13 @@ class HighLevelGraph(Mapping):
 
         return {"dsk": dsk, "deps": deps, "annotations": anno}
 
+    def __repr__(self) -> str:
+        representation = f"{type(self).__name__} with {len(self.layers)} layers.\n"
+        representation += f"<{self.__class__.__module__}.{self.__class__.__name__} object at {hex(id(self))}>\n"
+        for i, layerkey in enumerate(self._toposort_layers()):
+            representation += f" {i}. {layerkey}\n"
+        return representation
+
     def _repr_html_(self):
         highlevelgraph_info = f"{type(self).__name__} with {len(self.layers)} layers."
         highlevelgraph_icon = """
