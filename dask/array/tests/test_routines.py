@@ -1516,6 +1516,21 @@ def test_select_multidimension():
     assert_eq(res_y, res_x)
 
 
+def test_select_return_dtype():
+    d = np.array([1, 2, 3, np.nan, 5, 7])
+    m = np.isnan(d)
+    assert_eq(np.select([m], [d]), da.select([m], [d]), equal_nan=True)
+
+
+@pytest.mark.xfail(reason="broadcasting in select not implemented yet")
+def test_select_broadcasting():
+    conditions = [np.array(True), np.array([False, True, False])]
+    choices = [1, np.arange(12).reshape(4, 3)]
+    assert_eq(np.select(conditions, choices), da.select(conditions, choices))
+    # default can broadcast too:
+    assert_eq(np.select([True], [0], default=[0]), da.select([True], [0], default=[0]))
+
+
 def test_argwhere():
     for shape, chunks in [(0, ()), ((0, 0), (0, 0)), ((15, 16), (4, 5))]:
         x = np.random.randint(10, size=shape)
