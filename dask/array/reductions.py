@@ -1585,13 +1585,7 @@ def median(a, axis=None, keepdims=False, out=None):
 
     # rechunk if reduced axes are not contained in a single chunk
     # cannot use `any` to check since `any` is defined in this file
-    needs_rechunk = False
-    for ax in axis:
-        if a.numblocks[ax] > 1:
-            needs_rechunk = True
-            break
-
-    if needs_rechunk:
+    if any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
