@@ -1519,14 +1519,18 @@ def test_select_multidimension():
 def test_select_return_dtype():
     d = np.array([1, 2, 3, np.nan, 5, 7])
     m = np.isnan(d)
-    assert_eq(np.select([m], [d]), da.select([m], [d]), equal_nan=True)
+    d_d = da.from_array(d)
+    d_m = da.isnan(d_d)
+    assert_eq(np.select([m], [d]), da.select([d_m], [d_d]), equal_nan=True)
 
 
-@pytest.mark.xfail(reason="broadcasting in select not implemented yet")
+@pytest.mark.xfail(reason="broadcasting in da.select() not implemented yet")
 def test_select_broadcasting():
     conditions = [np.array(True), np.array([False, True, False])]
     choices = [1, np.arange(12).reshape(4, 3)]
-    assert_eq(np.select(conditions, choices), da.select(conditions, choices))
+    d_conditions = da.from_array(conditions)
+    d_choices = da.from_array(choices)
+    assert_eq(np.select(conditions, choices), da.select(d_conditions, d_choices))
     # default can broadcast too:
     assert_eq(np.select([True], [0], default=[0]), da.select([True], [0], default=[0]))
 
