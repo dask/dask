@@ -1127,7 +1127,8 @@ class HighLevelGraph(Mapping):
             </svg>
         """
         layers_html = ""
-        for i, (key, layer) in enumerate(self.layers.items()):
+        for i, key in enumerate(self._toposort_layers()):
+            layer = self.layers[key]
             layers_html += layer._repr_html_(
                 layer_index=f" {i}", highlevelgraph_key=key
             )
