@@ -1,6 +1,7 @@
 import abc
 import collections.abc
 import copy
+import html
 import warnings
 from typing import (
     AbstractSet,
@@ -517,6 +518,12 @@ class Layer(collections.abc.Mapping):
             "layer_type": type(self).__name__,
             "is_materialized": self.is_materialized(),
         }
+        if self.annotations is not None:
+            for key, val in self.annotations.items():
+                info[key] = html.escape(str(val))
+        if self.collection_annotations is not None:
+            for key, val in self.collection_annotations.items():
+                info[key] = html.escape(str(val))
         return info
 
 
