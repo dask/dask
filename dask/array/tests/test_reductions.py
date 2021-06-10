@@ -13,7 +13,6 @@ import dask.config as config
 from dask.array.utils import assert_eq as _assert_eq
 from dask.array.utils import same_keys
 from dask.core import get_deps
-from dask.utils import key_split
 
 
 def assert_eq(a, b):
