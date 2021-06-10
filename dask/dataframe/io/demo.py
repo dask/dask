@@ -1,5 +1,3 @@
-import copy
-
 import numpy as np
 import pandas as pd
 
@@ -72,11 +70,11 @@ class MakeTimeseriesPart:
     Makes a timeseries partition.
     """
 
-    def __init__(self, dtypes, freq, kwargs):
-        self.dtypes = dtypes
+    def __init__(self, dtypes, freq, kwargs, columns=None):
+        self.columns = columns or list(dtypes.keys())
+        self.dtypes = {c: dtypes[c] for c in self.columns}
         self.freq = freq
         self.kwargs = kwargs
-        self.columns = None
 
     def project_columns(self, columns):
         """Return a new MakeTimeseriesPart object with
@@ -84,10 +82,12 @@ class MakeTimeseriesPart:
         """
         if columns == self.columns:
             return self
-        func = copy.deepcopy(self)
-        func.columns = columns
-        func.dtypes = {c: self.dtypes[c] for c in columns}
-        return func
+        return MakeTimeseriesPart(
+            self.dtypes,
+            self.freq,
+            self.kwargs,
+            columns=columns,
+        )
 
     def __call__(self, part):
         divisions, state_data = part
