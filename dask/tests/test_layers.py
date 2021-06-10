@@ -5,9 +5,12 @@ import pytest
 distributed = pytest.importorskip("distributed")
 
 import sys
+from operator import getitem
 
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
+
+from dask.layers import fractional_slice
 
 
 class SchedulerImportCheck(SchedulerPlugin):
@@ -62,6 +65,31 @@ def _array_creation(tmpdir):
 
     # Perform a computation using HLG-based array creation
     return da.ones((100,)) + da.zeros((100,))
+
+
+def _array_map_overlap(tmpdir):
+    da = pytest.importorskip("dask.array")
+    array = da.ones((100,))
+    return array.map_overlap(lambda x: x, depth=1)
+
+
+def test_fractional_slice():
+    assert fractional_slice(("x", 4.9), {0: 2}) == (getitem, ("x", 5), (slice(0, 2),))
+
+    assert fractional_slice(("x", 3, 5.1), {0: 2, 1: 3}) == (
+        getitem,
+        ("x", 3, 5),
+        (slice(None, None, None), slice(-3, None)),
+    )
+
+    assert fractional_slice(("x", 2.9, 5.1), {0: 2, 1: 3}) == (
+        getitem,
+        ("x", 3, 5),
+        (slice(0, 2), slice(-3, None)),
+    )
+
+    fs = fractional_slice(("x", 4.9), {0: 2})
+    assert isinstance(fs[1][1], int)
 
 
 def _pq_pyarrow(tmpdir):
@@ -135,6 +163,7 @@ def _read_csv(tmpdir):
         (_pq_fastparquet, "pandas."),
         (_read_csv, "pandas."),
         (_array_creation, "numpy."),
+        (_array_map_overlap, "numpy."),
     ],
 )
 @pytest.mark.parametrize("optimize_graph", [True, False])

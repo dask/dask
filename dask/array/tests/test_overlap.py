@@ -10,8 +10,6 @@ from dask.array.overlap import (
     boundaries,
     constant,
     ensure_minimum_chunksize,
-    fractional_slice,
-    getitem,
     nearest,
     overlap,
     overlap_internal,
@@ -22,25 +20,6 @@ from dask.array.overlap import (
 from dask.array.utils import assert_eq, same_keys
 
 from ..lib.stride_tricks import sliding_window_view
-
-
-def test_fractional_slice():
-    assert fractional_slice(("x", 4.9), {0: 2}) == (getitem, ("x", 5), (slice(0, 2),))
-
-    assert fractional_slice(("x", 3, 5.1), {0: 2, 1: 3}) == (
-        getitem,
-        ("x", 3, 5),
-        (slice(None, None, None), slice(-3, None)),
-    )
-
-    assert fractional_slice(("x", 2.9, 5.1), {0: 2, 1: 3}) == (
-        getitem,
-        ("x", 3, 5),
-        (slice(0, 2), slice(-3, None)),
-    )
-
-    fs = fractional_slice(("x", 4.9), {0: 2})
-    assert isinstance(fs[1][1], int)
 
 
 def test_overlap_internal():
