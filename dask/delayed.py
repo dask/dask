@@ -237,7 +237,7 @@ def delayed(
     pure: Optional[bool] = None,
     nout: Optional[int] = None,
     traverse: bool = True
-):
+) -> "Delayed":
 
     """Wraps a function or object to produce a ``Delayed``.
 
