@@ -4,12 +4,14 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+import pandas as pd
+
 import dask.array as da
 import dask.dataframe as dd
 
 from ..utils import Dispatch
 
-make_meta = Dispatch("make_meta")
+make_meta_dispatch = Dispatch("make_meta_dispatch")
 make_meta_obj = Dispatch("make_meta_obj")
 meta_nonempty = Dispatch("meta_nonempty")
 hash_object_dispatch = Dispatch("hash_object_dispatch")
@@ -83,7 +85,32 @@ def tolist(obj):
     return func(obj)
 
 
-def make_meta_util(x, index=None, parent_meta=None):
+def make_meta(x, index=None, parent_meta=None):
+    """
+    This method creates meta-data based on the type of ``x``,
+    and ``parent_meta`` if supplied.
+
+    Parameters
+    ----------
+    x : Object of any type.
+        Object to construct meta-data from.
+    index :  Index, optional
+        Any index to use in the metadata. This is a pass-through
+        parameter to dispatches registered.
+    parent_meta : Object, default None
+        If ``x`` is of arbitrary types and thus Dask cannot determine
+        which back-end to be used to generate the meta-data for this
+        object type, in which case ``parent_meta`` will be used to
+        determine which back-end to select and dispatch to. To use
+        utilize this parameter ``make_meta_obj`` has be dispatched.
+        If ``parent_meta`` is ``None``, a pandas DataFrame is used for
+        ``parent_meta`` thats chooses pandas as the backend.
+
+    Returns
+    -------
+    A valid meta-data
+    """
+
     if isinstance(
         x,
         (
@@ -97,13 +124,15 @@ def make_meta_util(x, index=None, parent_meta=None):
         return x._meta
 
     try:
-        return make_meta(x, index=index)
+        return make_meta_dispatch(x, index=index)
     except TypeError:
         if parent_meta is not None:
             func = make_meta_obj.dispatch(type(parent_meta))
             return func(x, index=index)
         else:
-            func = make_meta_obj.dispatch(type(x))
+            # Default to using the pandas backend
+            # if ``parent_meta`` is not specified
+            func = make_meta_obj.dispatch(pd.DataFrame)
             return func(x, index=index)
 
 

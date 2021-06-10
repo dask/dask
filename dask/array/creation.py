@@ -1,11 +1,12 @@
+import itertools
 from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
 from numbers import Integral, Number
-from operator import add, getitem
+from operator import getitem
 
 import numpy as np
-from tlz import accumulate, sliding_window
+from tlz import sliding_window
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -15,6 +16,7 @@ from .core import (
     Array,
     asarray,
     block,
+    blockwise,
     broadcast_arrays,
     broadcast_to,
     cached_cumsum,
@@ -706,37 +708,21 @@ def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
     return m
 
 
-def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
-    def offset_func(*args, **kwargs):
-        args2 = list(map(add, args, offset))
-        return func(*args2, **kwargs)
-
-    return np.fromfunction(offset_func, shape, dtype=dtype, **func_kwargs)
-
-
 @derived_from(np)
 def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
-    chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    name = "fromfunction-" + tokenize(func, chunks, shape, dtype, kwargs)
-    keys = product([name], *(range(len(bd)) for bd in chunks))
-
-    def accumulate_gen(chunks):
-        for bd in chunks:
-            yield accumulate(add, (0,) + bd[:-1])
-
-    aggdims = accumulate_gen(chunks)
-    offsets = product(*aggdims)
-    shapes = product(*chunks)
     dtype = dtype or float
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
-    values = [
-        (_np_fromfunction, func, shp, dtype, offset, kwargs)
-        for offset, shp in zip(offsets, shapes)
-    ]
+    inds = tuple(range(len(shape)))
 
-    dsk = dict(zip(keys, values))
+    arrs = [arange(s, dtype=dtype, chunks=c) for s, c in zip(shape, chunks)]
+    arrs = meshgrid(*arrs, indexing="ij")
 
-    return Array(dsk, name, chunks, dtype=dtype)
+    args = sum(zip(arrs, itertools.repeat(inds)), ())
+
+    res = blockwise(func, inds, *args, token="fromfunction", **kwargs)
+
+    return res
 
 
 @derived_from(np)
