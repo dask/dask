@@ -1844,6 +1844,10 @@ def piecewise(x, condlist, funclist, *args, **kw):
 
 
 def _select(*args, **kwargs):
+    """
+    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    splits them in half to create ``condlist`` and ``choicelist`` params.
+    """
     split_at = len(args) // 2
     condlist = args[:split_at]
     choicelist = args[split_at:]
