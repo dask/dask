@@ -1584,8 +1584,7 @@ def median(a, axis=None, keepdims=False, out=None):
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
     # rechunk if reduced axes are not contained in a single chunk
-    # cannot use `any` to check since `any` is defined in this file
-    if any(a.numblocks[ax] > 1 for ax in axis):
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
@@ -1620,14 +1619,7 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
     # rechunk if reduced axes are not contained in a single chunk
-    # cannot use `any` to check since `any` is defined in this file
-    needs_rechunk = False
-    for ax in axis:
-        if a.numblocks[ax] > 1:
-            needs_rechunk = True
-            break
-
-    if needs_rechunk:
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
         a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
