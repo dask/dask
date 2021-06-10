@@ -4,9 +4,9 @@ import uuid
 import warnings
 from collections.abc import Iterator
 from dataclasses import fields, is_dataclass
+from typing import TypeVar
 
 from tlz import concat, curry, merge, unique
-from typing import TypeVar
 
 from . import config, threaded
 from .base import (
