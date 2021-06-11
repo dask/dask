@@ -1172,7 +1172,7 @@ def html_from_dict(info):
     for key, val in info.items():
         table_row = f"""
           <tr>
-            <th style="text-align: left;">{key}</th>
+            <th style="text-align: left; width: 150px;">{key}</th>
             <td style="text-align: left;">{val}</td>
           </tr>
         """
