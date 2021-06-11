@@ -532,15 +532,20 @@ def overlap(x, depth, boundary, allow_rechunk=True):
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
+    depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
+    new_chunks = tuple(
+        ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
+    )
     if allow_rechunk is True:
         # rechunk if new chunks are needed to fit depth in every chunk
-        depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
-        new_chunks = tuple(
-            ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
-        )
         x1 = x.rechunk(new_chunks)
     else:
-        x1 = x
+        raise ValueError(
+            "Overlap depth is larger than smallest chunksize.\n"
+            "Please set allow_rechunk=True to rechunk automatically.\n"
+            f"Input chunks: {x.chunks}\n"
+            f"Required chunks: {new_chunks}\n"
+        )
 
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
@@ -807,7 +812,11 @@ def map_overlap(
     assert_int_chunksize(args)
     if not trim and "chunks" not in kwargs:
         kwargs["chunks"] = args[0].chunks
-    args = [overlap(x, depth=d, boundary=b) for x, d, b in zip(args, depth, boundary)]
+    allow_rechunk = kwargs.get("allow_rechunk", True)
+    args = [
+        overlap(x, depth=d, boundary=b, allow_rechunk=allow_rechunk)
+        for x, d, b in zip(args, depth, boundary)
+    ]
     assert_int_chunksize(args)
     x = map_blocks(func, *args, **kwargs)
     assert_int_chunksize([x])
