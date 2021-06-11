@@ -529,6 +529,7 @@ def overlap(x, depth, boundary, allow_rechunk=True):
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100],
            [100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100, 100]])
     """
+    # import pdb; pdb.set_trace()
     depth2 = coerce_depth(x.ndim, depth)
     boundary2 = coerce_boundary(x.ndim, boundary)
 
@@ -810,9 +811,10 @@ def map_overlap(
         assert all(type(c) is int for x in xs for cc in x.chunks for c in cc)
 
     assert_int_chunksize(args)
+    # import pdb; pdb.set_trace()
     if not trim and "chunks" not in kwargs:
         kwargs["chunks"] = args[0].chunks
-    allow_rechunk = kwargs.get("allow_rechunk", True)
+    allow_rechunk = kwargs.pop("allow_rechunk", True)
     args = [
         overlap(x, depth=d, boundary=b, allow_rechunk=allow_rechunk)
         for x, d, b in zip(args, depth, boundary)
