@@ -287,6 +287,7 @@ def test_overlap():
 
 
 def test_overlap_allow_rechunk_kwarg():
+    # The smallest array chunk is too small to fit overlap depth
     arr = da.arange(6, chunks=5)
     da.overlap.overlap(arr, 2, "reflect", allow_rechunk=True)
     arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=True)
@@ -294,6 +295,9 @@ def test_overlap_allow_rechunk_kwarg():
         da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
     with pytest.raises(ValueError):
         arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=False)
+    # No rechunking required
+    arr = da.arange(6, chunks=4)
+    da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
 
 
 def test_asymmetric_overlap_boundary_exception():
