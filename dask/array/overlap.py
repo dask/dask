@@ -533,19 +533,22 @@ def overlap(x, depth, boundary, allow_rechunk=True):
     boundary2 = coerce_boundary(x.ndim, boundary)
 
     depths = [max(d) if isinstance(d, tuple) else d for d in depth2.values()]
-    new_chunks = tuple(
-        ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
-    )
-    if allow_rechunk is True:
-        # rechunk if new chunks are needed to fit depth in every chunk
-        x1 = x.rechunk(new_chunks)
-    else:
+    original_chunks_too_small = any([min(c) < d for d, c in zip(depths, x.chunks)])
+    if original_chunks_too_small is True and allow_rechunk is False:
         raise ValueError(
             "Overlap depth is larger than smallest chunksize.\n"
             "Please set allow_rechunk=True to rechunk automatically.\n"
+            f"Overlap depths required: {depths}\n"
             f"Input chunks: {x.chunks}\n"
-            f"Required chunks: {new_chunks}\n"
         )
+    elif original_chunks_too_small is False and allow_rechunk is False:
+        x1 = x
+    else:
+        # rechunk if new chunks are needed to fit depth in every chunk
+        new_chunks = tuple(
+            ensure_minimum_chunksize(size, c) for size, c in zip(depths, x.chunks)
+        )
+        x1 = x.rechunk(new_chunks)  # this is a no-op if x.chunks == new_chunks
 
     x2 = boundaries(x1, depth2, boundary2)
     x3 = overlap_internal(x2, depth2)
