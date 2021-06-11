@@ -311,7 +311,7 @@ def linspace(
         bs_space = bs - 1 if endpoint else bs
         blockstop = blockstart + (bs_space * step)
         task = (
-            partial(np.linspace, endpoint=endpoint, dtype=dtype),
+            partial(chunk.linspace, endpoint=endpoint, dtype=dtype),
             blockstart,
             blockstop,
             bs,

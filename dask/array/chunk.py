@@ -265,6 +265,18 @@ def arange(start, stop, step, length, dtype, like=None):
     return res[:-1] if len(res) > length else res
 
 
+def linspace(start, stop, num, endpoint=True, dtype=None):
+    from .core import Array
+
+    if isinstance(start, Array):
+        start = start.compute()
+
+    if isinstance(stop, Array):
+        stop = stop.compute()
+
+    return np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
+
+
 def astype(x, astype_dtype=None, **kwargs):
     return x.astype(astype_dtype, **kwargs)
 
