@@ -2061,12 +2061,12 @@ def test_repartition_freq_month():
     assert_eq(df, ddf)
 
     assert ddf.divisions == (
-        pd.Timestamp("2015-1-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-2-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-3-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-4-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 23:50:00", freq="10T"),
+        pd.Timestamp("2015-1-1 00:00:00"),
+        pd.Timestamp("2015-2-1 00:00:00"),
+        pd.Timestamp("2015-3-1 00:00:00"),
+        pd.Timestamp("2015-4-1 00:00:00"),
+        pd.Timestamp("2015-5-1 00:00:00"),
+        pd.Timestamp("2015-5-1 23:50:00"),
     )
 
     assert ddf.npartitions == 5
@@ -2084,8 +2084,8 @@ def test_repartition_freq_day():
     assert_eq(ddf, pdf)
     assert ddf.npartitions == 2
     assert ddf.divisions == (
-        pd.Timestamp("2020-1-1", freq="D"),
-        pd.Timestamp("2020-1-2", freq="D"),
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-2"),
         pd.Timestamp("2020-1-2"),
     )
 
@@ -2189,6 +2189,26 @@ def test_fillna():
     ddf = dd.from_pandas(df, npartitions=5, sort=False)
     pytest.raises(ValueError, lambda: ddf.fillna(method="pad").compute())
     assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
+
+
+def test_from_delayed_lazy_if_meta_provided():
+    """Ensure that the graph is 100% lazily evaluted if meta is provided"""
+
+    @dask.delayed
+    def raise_exception():
+        raise RuntimeError()
+
+    tasks = [raise_exception()]
+    ddf = dd.from_delayed(tasks, meta=dict(a=float))
+
+    with pytest.raises(RuntimeError):
+        ddf.compute()
+
+
+def test_from_delayed_empty_meta_provided():
+    ddf = dd.from_delayed([], meta=dict(a=float))
+    expected = pd.DataFrame({"a": [0.1]}).iloc[:0]
+    assert_eq(ddf, expected)
 
 
 def test_fillna_duplicate_index():
@@ -2690,13 +2710,13 @@ def test_to_timestamp():
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
 
@@ -2842,6 +2862,20 @@ def test_applymap():
     assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
 
     assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+
+
+def test_add_prefix():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"))
+    assert_eq(ddf.x.add_prefix("abc"), df.x.add_prefix("abc"))
+
+
+def test_add_suffix():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"))
+    assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"))
 
 
 def test_abs():

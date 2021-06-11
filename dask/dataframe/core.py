@@ -1680,6 +1680,20 @@ Dask Name: {name}, {task} tasks"""
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
+    def add_prefix(self, prefix):
+        res = self.map_partitions(M.add_prefix, prefix)
+        if self.known_divisions and is_series_like(self):
+            res.divisions = tuple(prefix + str(division) for division in self.divisions)
+        return res
+
+    @derived_from(pd.DataFrame)
+    def add_suffix(self, suffix):
+        res = self.map_partitions(M.add_suffix, suffix)
+        if self.known_divisions and is_series_like(self):
+            res.divisions = tuple(str(division) + suffix for division in self.divisions)
+        return res
+
+    @derived_from(pd.DataFrame)
     def abs(self):
         _raise_if_object_series(self, "abs")
         meta = self._meta_nonempty.abs()
@@ -4545,7 +4559,23 @@ class DataFrame(_Frame):
             other = other.to_frame()
 
         if not is_dataframe_like(other):
-            raise ValueError("other must be DataFrame")
+            if not isinstance(other, list) or not all(
+                [is_dataframe_like(o) for o in other]
+            ):
+                raise ValueError("other must be DataFrame or list of DataFrames")
+            if how not in ["outer", "left"]:
+                raise ValueError("merge_multi only supports left or outer joins")
+
+            from .multi import _recursive_pairwise_outer_join
+
+            other = _recursive_pairwise_outer_join(
+                other,
+                on=on,
+                lsuffix=lsuffix,
+                rsuffix=rsuffix,
+                npartitions=npartitions,
+                shuffle=shuffle,
+            )
 
         from .multi import merge
 

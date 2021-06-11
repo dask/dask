@@ -34,6 +34,7 @@ from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
+from ..layers import reshapelist
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
@@ -4602,19 +4603,6 @@ def shapelist(a):
         return tuple([len(a)] + list(shapelist(a[0])))
     else:
         return ()
-
-
-def reshapelist(shape, seq):
-    """Reshape iterator to nested shape
-
-    >>> reshapelist((2, 3), range(6))
-    [[0, 1, 2], [3, 4, 5]]
-    """
-    if len(shape) == 1:
-        return list(seq)
-    else:
-        n = int(len(seq) / shape[0])
-        return [reshapelist(shape[1:], part) for part in partition(n, seq)]
 
 
 def transposelist(arrays, axes, extradims=0):

@@ -1,14 +1,17 @@
 import operator
 from collections import defaultdict
+from functools import partial
+from itertools import product
 from typing import List, Optional, Tuple
 
 import tlz as toolz
+from tlz.curried import map
 
 from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
-from .core import keys_in_tasks
+from .core import flatten, keys_in_tasks
 from .highlevelgraph import Layer
-from .utils import apply, insert, stringify, stringify_collection_keys
+from .utils import apply, concrete, insert, stringify, stringify_collection_keys
 
 #
 ##
@@ -98,6 +101,238 @@ class BlockwiseCreateArray(Blockwise):
             indices=[(CreateArrayDeps(chunks), out_ind)],
             numblocks={},
         )
+
+
+class ArrayOverlapLayer(Layer):
+    """Simple HighLevelGraph array overlap layer.
+
+    Lazily computed High-level graph layer for a array overlap operations.
+
+    Parameters
+    ----------
+    name : str
+        Name of new output overlap array.
+    array : Dask array
+    axes: Mapping
+        Axes dictionary indicating overlap in each dimension,
+        e.g. ``{'0': 1, '1': 1}``
+    """
+
+    def __init__(
+        self,
+        name,
+        axes,
+        chunks,
+        numblocks,
+        token,
+    ):
+        super().__init__()
+        self.name = name
+        self.axes = axes
+        self.chunks = chunks
+        self.numblocks = numblocks
+        self.token = token
+        self._cached_keys = None
+
+    def __repr__(self):
+        return "ArrayOverlapLayer<name='{}'".format(self.name)
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    def get_output_keys(self):
+        return self.keys()  # FIXME! this implementation materializes the graph
+
+    def _dask_keys(self):
+        if self._cached_keys is not None:
+            return self._cached_keys
+
+        name, chunks, numblocks = self.name, self.chunks, self.numblocks
+
+        def keys(*args):
+            if not chunks:
+                return [(name,)]
+            ind = len(args)
+            if ind + 1 == len(numblocks):
+                result = [(name,) + args + (i,) for i in range(numblocks[ind])]
+            else:
+                result = [keys(*(args + (i,))) for i in range(numblocks[ind])]
+            return result
+
+        self._cached_keys = result = keys()
+        return result
+
+    def _construct_graph(self, deserializing=False):
+        """Construct graph for a simple overlap operation."""
+        axes = self.axes
+        chunks = self.chunks
+        name = self.name
+        dask_keys = self._dask_keys()
+
+        getitem_name = "getitem-" + self.token
+        overlap_name = "overlap-" + self.token
+
+        if deserializing:
+            # Use CallableLazyImport objects to avoid importing dataframe
+            # module on the scheduler
+            concatenate3 = CallableLazyImport("dask.array.core.concatenate3")
+        else:
+            # Not running on distributed scheduler - Use explicit functions
+            from dask.array.core import concatenate3
+
+        dims = list(map(len, chunks))
+        expand_key2 = partial(_expand_keys_around_center, dims=dims, axes=axes)
+
+        # Make keys for each of the surrounding sub-arrays
+        interior_keys = toolz.pipe(
+            dask_keys, flatten, map(expand_key2), map(flatten), toolz.concat, list
+        )
+        interior_slices = {}
+        overlap_blocks = {}
+        for k in interior_keys:
+            frac_slice = fractional_slice((name,) + k, axes)
+            if (name,) + k != frac_slice:
+                interior_slices[(getitem_name,) + k] = frac_slice
+            else:
+                interior_slices[(getitem_name,) + k] = (name,) + k
+                overlap_blocks[(overlap_name,) + k] = (
+                    concatenate3,
+                    (concrete, expand_key2((None,) + k, name=getitem_name)),
+                )
+
+        dsk = toolz.merge(interior_slices, overlap_blocks)
+        return dsk
+
+    @classmethod
+    def __dask_distributed_unpack__(cls, state):
+        return cls(**state)._construct_graph(deserializing=True)
+
+
+def _expand_keys_around_center(k, dims, name=None, axes=None):
+    """Get all neighboring keys around center
+
+    Parameters
+    ----------
+    k: tuple
+        They key around which to generate new keys
+    dims: Sequence[int]
+        The number of chunks in each dimension
+    name: Option[str]
+        The name to include in the output keys, or none to include no name
+    axes: Dict[int, int]
+        The axes active in the expansion.  We don't expand on non-active axes
+
+    Examples
+    --------
+    >>> _expand_keys_around_center(('x', 2, 3), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # noqa: E501 # doctest: +NORMALIZE_WHITESPACE
+    [[('y', 1.1, 2.1), ('y', 1.1, 3), ('y', 1.1, 3.9)],
+     [('y',   2, 2.1), ('y',   2, 3), ('y',   2, 3.9)],
+     [('y', 2.9, 2.1), ('y', 2.9, 3), ('y', 2.9, 3.9)]]
+
+    >>> _expand_keys_around_center(('x', 0, 4), dims=[5, 5], name='y', axes={0: 1, 1: 1})  # noqa: E501 # doctest: +NORMALIZE_WHITESPACE
+    [[('y',   0, 3.1), ('y',   0,   4)],
+     [('y', 0.9, 3.1), ('y', 0.9,   4)]]
+    """
+
+    def inds(i, ind):
+        rv = []
+        if ind - 0.9 > 0:
+            rv.append(ind - 0.9)
+        rv.append(ind)
+        if ind + 0.9 < dims[i] - 1:
+            rv.append(ind + 0.9)
+        return rv
+
+    shape = []
+    for i, ind in enumerate(k[1:]):
+        num = 1
+        if ind > 0:
+            num += 1
+        if ind < dims[i] - 1:
+            num += 1
+        shape.append(num)
+
+    args = [
+        inds(i, ind) if any((axes.get(i, 0),)) else [ind] for i, ind in enumerate(k[1:])
+    ]
+    if name is not None:
+        args = [[name]] + args
+    seq = list(product(*args))
+    shape2 = [d if any((axes.get(i, 0),)) else 1 for i, d in enumerate(shape)]
+    result = reshapelist(shape2, seq)
+    return result
+
+
+def reshapelist(shape, seq):
+    """Reshape iterator to nested shape
+
+    >>> reshapelist((2, 3), range(6))
+    [[0, 1, 2], [3, 4, 5]]
+    """
+    if len(shape) == 1:
+        return list(seq)
+    else:
+        n = int(len(seq) / shape[0])
+        return [reshapelist(shape[1:], part) for part in toolz.partition(n, seq)]
+
+
+def fractional_slice(task, axes):
+    """
+
+    >>> fractional_slice(('x', 5.1), {0: 2})  # doctest: +SKIP
+    (getitem, ('x', 6), (slice(0, 2),))
+
+    >>> fractional_slice(('x', 3, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
+    (getitem, ('x', 3, 5), (slice(None, None, None), slice(-3, None)))
+
+    >>> fractional_slice(('x', 2.9, 5.1), {0: 2, 1: 3})  # doctest: +SKIP
+    (getitem, ('x', 3, 5), (slice(0, 2), slice(-3, None)))
+    """
+    rounded = (task[0],) + tuple(int(round(i)) for i in task[1:])
+
+    index = []
+    for i, (t, r) in enumerate(zip(task[1:], rounded[1:])):
+        depth = axes.get(i, 0)
+        if isinstance(depth, tuple):
+            left_depth = depth[0]
+            right_depth = depth[1]
+        else:
+            left_depth = depth
+            right_depth = depth
+
+        if t == r:
+            index.append(slice(None, None, None))
+        elif t < r and right_depth:
+            index.append(slice(0, right_depth))
+        elif t > r and left_depth:
+            index.append(slice(-left_depth, None))
+        else:
+            index.append(slice(0, 0))
+    index = tuple(index)
+
+    if all(ind == slice(None, None, None) for ind in index):
+        return task
+    else:
+        return (operator.getitem, rounded, index)
 
 
 #

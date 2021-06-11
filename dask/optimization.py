@@ -1,5 +1,6 @@
 import math
 import numbers
+import uuid
 from enum import Enum
 
 from . import config, core, utils
@@ -940,10 +941,12 @@ class SubgraphCallable:
 
     __slots__ = ("dsk", "outkey", "inkeys", "name")
 
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
+    def __init__(self, dsk, outkey, inkeys, name=None):
         self.dsk = dsk
         self.outkey = outkey
         self.inkeys = inkeys
+        if name is None:
+            name = f"subgraph_callable-{uuid.uuid4()}"
         self.name = name
 
     def __repr__(self):
@@ -969,4 +972,4 @@ class SubgraphCallable:
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
 
     def __hash__(self):
-        return hash(tuple((self.outkey, tuple(self.inkeys), self.name)))
+        return hash(tuple((self.outkey, frozenset(self.inkeys), self.name)))
