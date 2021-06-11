@@ -30,11 +30,11 @@ The following packages may be of interest
 - `blazingSQL`_, part of the Rapids project, implements SQL queries using ``cuDF``
   and Dask, for execution on CUDA/GPU-enabled hardware, including referencing
   externally-stored data.
-  
+
 - `dask-sql`_ adds a SQL query layer on top of Dask.
   The API matches blazingSQL but it uses CPU instead of GPU. It still under development
   and not ready for a production use-case.
-  
+
 - `fugue-sql`_ adds an abstract layer that makes code portable between across differing
   computing frameworks such as Pandas, Spark and Dask.
 
@@ -42,7 +42,7 @@ The following packages may be of interest
   ``SQLite``, which may be useful for small toy examples (this package has not been
   maintained for some time).
 
-.. _blazingSQL: https://docs.blazingdb.com/docs
+.. _blazingSQL: https://docs.blazingsql.com/
 .. _dask-sql: https://dask-sql.readthedocs.io/en/latest/
 .. _fugue-sql: https://fugue-tutorials.readthedocs.io/en/latest/tutorials/fugue_sql/index.html
 .. _pandasql: https://github.com/yhat/pandasql/
