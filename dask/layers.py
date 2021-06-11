@@ -159,6 +159,9 @@ class ArrayOverlapLayer(Layer):
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
+    def get_output_keys(self):
+        return self.keys()  # FIXME! this implementation materializes the graph
+
     def _dask_keys(self):
         if self._cached_keys is not None:
             return self._cached_keys
