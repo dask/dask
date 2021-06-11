@@ -286,11 +286,14 @@ def test_overlap():
     assert g.chunks == ((8, 8), (5, 5))
 
 
-def test_overlap_allow_rechunk():
+def test_overlap_allow_rechunk_kwarg():
     arr = da.arange(6, chunks=5)
     da.overlap.overlap(arr, 2, "reflect", allow_rechunk=True)
+    arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=True)
     with pytest.raises(ValueError):
         da.overlap.overlap(arr, 2, "reflect", allow_rechunk=False)
+    with pytest.raises(ValueError):
+        arr.map_overlap(lambda x: x, 2, "reflect", allow_rechunk=False)
 
 
 def test_asymmetric_overlap_boundary_exception():
