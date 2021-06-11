@@ -180,8 +180,8 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_cov(window, center):
     # DataFrame
-    prolling = df.drop("a", 1).rolling(window, center=center)
-    drolling = ddf.drop("a", 1).rolling(window, center=center)
+    prolling = df.drop("a", axis=1).rolling(window, center=center)
+    drolling = ddf.drop("a", axis=1).rolling(window, center=center)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series
@@ -310,8 +310,8 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
-    prolling = ts.drop("a", 1).rolling(window)
-    drolling = dts.drop("a", 1).rolling(window)
+    prolling = ts.drop("a", axis=1).rolling(window)
+    drolling = dts.drop("a", axis=1).rolling(window)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series

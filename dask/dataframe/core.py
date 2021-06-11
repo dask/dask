@@ -1680,6 +1680,20 @@ Dask Name: {name}, {task} tasks"""
             return handle_out(out, result)
 
     @derived_from(pd.DataFrame)
+    def add_prefix(self, prefix):
+        res = self.map_partitions(M.add_prefix, prefix)
+        if self.known_divisions and is_series_like(self):
+            res.divisions = tuple(prefix + str(division) for division in self.divisions)
+        return res
+
+    @derived_from(pd.DataFrame)
+    def add_suffix(self, suffix):
+        res = self.map_partitions(M.add_suffix, suffix)
+        if self.known_divisions and is_series_like(self):
+            res.divisions = tuple(str(division) + suffix for division in self.divisions)
+        return res
+
+    @derived_from(pd.DataFrame)
     def abs(self):
         _raise_if_object_series(self, "abs")
         meta = self._meta_nonempty.abs()
