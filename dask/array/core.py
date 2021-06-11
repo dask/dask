@@ -1300,7 +1300,11 @@ class Array(DaskMethodsMixin):
 
     @property
     def dtype(self):
-        return self._meta.dtype
+        if isinstance(self._meta, tuple):
+            dtype = self._meta[0].dtype
+        else:
+            dtype = self._meta.dtype
+        return dtype
 
     @property
     def _chunks(self):
