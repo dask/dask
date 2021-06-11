@@ -760,7 +760,7 @@ Core
 - HTTP error for new ``fsspec`` (:pr:`6446`) `Martin Durant`_
 - When ``RecursionError`` is raised, return uuid from ``tokenize`` function (:pr:`6437`) `Julia Signell`_
 - Install deps of upstream-dev packages (:pr:`6431`) `Tom Augspurger`_
-- Use updated link in ``setup.cfg`` (:pr:`6426`) `Zhengnan`_
+- Use updated link in ``setup.cfg`` (:pr:`6426`) `Zhengnan Zhao`_
 
 DataFrame
 ^^^^^^^^^
@@ -817,7 +817,7 @@ Documentation
 - Unpin ``numpydoc`` following 1.1 release (:pr:`6407`) `Gil Forsyth`_
 - Numpydoc formatting (:pr:`6402`) `Matthias Bussonnier`_
 - Add instructions for using conda when installing code for development (:pr:`6399`) `Ray Bell`_
-- Update ``visualize`` docstrings (:pr:`6383`) `Zhengnan`_
+- Update ``visualize`` docstrings (:pr:`6383`) `Zhengnan Zhao`_
 
 
 2.20.0 / 2020-07-02
@@ -4171,7 +4171,7 @@ Other
 .. _`Richard (Rick) Zamora`: https://github.com/rjzamora
 .. _`Mark Boer`: https://github.com/mark-boer
 .. _`Florian Jetter`: https://github.com/fjetter
-.. _`Adam Lewis`: https://github.com/balast
+.. _`Adam Lewis`: https://github.com/Adam-D-Lewis
 .. _`David Chudzicki`: https://github.com/dchudz
 .. _`Nick Evans`: https://github.com/nre
 .. _`Kai Mühlbauer`: https://github.com/kmuehlbauer
@@ -4198,7 +4198,6 @@ Other
 .. _`Roberto Panai`: https://github.com/rpanai
 .. _`Clark Zinzow`: https://github.com/clarkzinzow
 .. _`Tom McTiernan`: https://github.com/tmct
-.. _`Zhengnan`: https://github.com/ZhengnanZhao
 .. _`joshreback`: https://github.com/joshreback
 .. _`Jun Han (Johnson) Ooi`: https://github.com/tebesfinwo
 .. _`Jim Circadian`: https://github.com/JimCircadian
