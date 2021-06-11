@@ -45,7 +45,7 @@ among the various worker processes or threads:
    client = Client(processes=False)  # start local workers as threads
 
 If you have `Bokeh <https://bokeh.pydata.org>`_ installed, then this starts up a
-diagnostic dashboard at http://localhost:8787 .
+diagnostic dashboard at ``http://localhost:8787`` .
 
 Submit Tasks
 ------------
@@ -289,6 +289,8 @@ Additionally, for iterative algorithms, you can add more futures into the
            new_future = client.submit(...)
            seq.add(new_future)  # add back into the loop
 
+or use ``seq.update(futures)`` to add multiple futures at once.
+
 
 Fire and Forget
 ---------------
@@ -440,6 +442,8 @@ Coordination Primitives
    Queue
    Variable
    Lock
+   Event
+   Semaphore
    Pub
    Sub
 
@@ -449,7 +453,7 @@ Sometimes situations arise where tasks, workers, or clients need to coordinate
 with each other in ways beyond normal task scheduling with futures.  In these
 cases Dask provides additional primitives to help in complex situations.
 
-Dask provides distributed versions of coordination primitives like locks,
+Dask provides distributed versions of coordination primitives like locks, events,
 queues, global variables, and pub-sub systems that, where appropriate, match
 their in-memory counterparts.  These can be used to control access to external
 resources, track progress of ongoing computations, or share data in
@@ -623,6 +627,88 @@ This can be useful if you want to control concurrent access to some external
 resource like a database or un-thread-safe library.
 
 
+Events
+~~~~~~
+
+.. autosummary::
+   Event
+
+Dask Events mimic ``asyncio.Event`` objects, but on a cluster scope.
+They hold a single flag which can be set or cleared.
+Clients can wait until the event flag is set.
+Different from a ``Lock``, every client can set or clear the flag and there
+is no "ownership" of an event.
+
+You can use events to e.g. synchronize multiple clients:
+
+.. code-block:: python
+
+   # One one client
+   from dask.distributed import Event
+
+   event = Event("my-event-1")
+   event.wait()
+
+The call to wait will block until the event is set, e.g. in another client
+
+.. code-block:: python
+
+   # In another client
+   from dask.distributed import Event
+
+   event = Event("my-event-1")
+
+   # do some work
+
+   event.set()
+
+Events can be set, cleared and waited on multiple times.
+Every waiter referencing the same event name will be notified on event set
+(and not only the first one as in the case of a lock):
+
+.. code-block:: python
+
+   from dask.distributed import Event
+
+   def wait_for_event(x):
+      event = Event("my-event")
+
+      event.wait()
+      # at this point, all function calls
+      # are in sync once the event is set
+
+   futures = client.map(wait_for_event, range(10))
+
+   Event("my-event").set()
+   client.gather(futures)
+
+
+Semaphore
+~~~~~~~~~
+
+.. autosummary::
+   Semaphore
+
+Similar to the single-valued ``Lock`` it is also possible to use a cluster-wide
+semaphore to coordinate and limit access to a sensitive resource like a
+database.
+
+.. code-block:: python
+
+   from dask.distributed import Semaphore
+
+   sem = Semaphore(max_leases=2, name="database")
+
+   def access_limited(val, sem):
+      with sem:
+         # Interact with the DB
+         return
+
+   futures = client.map(access_limited, range(10), sem=sem)
+   client.gather(futures)
+   sem.close()
+
+
 Publish-Subscribe
 ~~~~~~~~~~~~~~~~~
 
@@ -707,6 +793,17 @@ Attribute access is synchronous and blocking:
 Example: Parameter Server
 ~~~~~~~~~~~~~~~~~~~~~~~~~
 
+This example will perform the following minimization with a parameter server:
+
+.. math::
+
+   \min_{p\in\mathbb{R}^{1000}} \sum_{i=1}^{1000} (p_i - 1)^2
+
+This is a simple minimization that will serve as an illustrative example.
+
+The Dask Actor will serve as the parameter server that will hold the model.
+The client will calculate the gradient of the loss function above.
+
 .. code-block:: python
 
    import numpy as np
@@ -724,16 +821,26 @@ Example: Parameter Server
        def get(self, key):
            return self.data[key]
 
+   def train(params, lr=0.1):
+       grad = 2 * (params - 1)  # gradient of (params - 1)**2
+       new_params = params - lr * grad
+       return new_params
+
    ps_future = client.submit(ParameterServer, actor=True)
    ps = ps_future.result()
 
    ps.put('parameters', np.random.random(1000))
+   for k in range(20):
+       params = ps.get('parameters').result()
+       new_params = train(params)
+       ps.put('parameters', new_params)
+       print(new_params.mean())
+       # k=0: "0.5988202981316124"
+       # k=10: "0.9569236575164062"
 
-   def train(batch, ps):
-       params = ps.get('parameters')
-
-   for batch in batches:
-
+This example works, and the loss function is minimized. The (simple) equation
+above is minimize, so each :math:`p_i` converges to 1. If desired, this example
+could be adapted to machine learning with a more complex function to minimize.
 
 Asynchronous Operation
 ~~~~~~~~~~~~~~~~~~~~~~
@@ -830,6 +937,9 @@ API
    :members:
 
 .. autoclass:: Lock
+   :members:
+
+.. autoclass:: Event
    :members:
 
 .. autoclass:: Pub

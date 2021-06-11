@@ -1,21 +1,17 @@
-import numpy as np
 import re
 
-try:
-    from cytoolz import concat, merge, unique
-except ImportError:
-    from toolz import concat, merge, unique
+import numpy as np
+from tlz import concat, merge, unique
 
-from .core import Array, asarray, blockwise, getitem, apply_infer_dtype
-from .utils import meta_from_array
-from ..highlevelgraph import HighLevelGraph
 from ..core import flatten
-
+from ..highlevelgraph import HighLevelGraph
+from .core import Array, apply_infer_dtype, asarray, blockwise, getitem
+from .utils import meta_from_array
 
 # Modified version of `numpy.lib.function_base._parse_gufunc_signature`
 # Modifications:
 #   - Allow for zero input arguments
-# See https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+# See https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
 _DIMENSION_NAME = r"\w+"
 _CORE_DIMENSION_LIST = "(?:{0:}(?:,{0:})*,?)?".format(_DIMENSION_NAME)
 _ARGUMENT = r"\({}\)".format(_CORE_DIMENSION_LIST)
@@ -40,7 +36,7 @@ def _parse_gufunc_signature(signature):
     Returns
     -------
     Tuple of input and output core dimensions parsed from the signature, each
-    of the form List[Tuple[str, ...]], except for one output. For one  output
+    of the form List[Tuple[str, ...]], except for one output. For one output
     core dimension is not a list, but of the form Tuple[str, ...]
     """
     signature = signature.replace(" ", "")
@@ -175,7 +171,20 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
     return input_axes, output_axes
 
 
-def apply_gufunc(func, signature, *args, **kwargs):
+def apply_gufunc(
+    func,
+    signature,
+    *args,
+    axes=None,
+    axis=None,
+    keepdims=False,
+    output_dtypes=None,
+    output_sizes=None,
+    vectorize=None,
+    allow_rechunk=False,
+    meta=None,
+    **kwargs,
+):
     """
     Apply a generalized ufunc or similar python function to arrays.
 
@@ -184,7 +193,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     are considered loop dimensions and are required to broadcast
     naturally against each other.
 
-    In other terms, this function is like np.vectorize, but for
+    In other terms, this function is like ``np.vectorize``, but for
     the blocks of dask arrays. If the function itself shall also
     be vectorized use ``vectorize=True`` for convenience.
 
@@ -230,7 +239,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
@@ -243,6 +252,9 @@ def apply_gufunc(func, signature, *args, **kwargs):
         dimensions are to consist only of one chunk.
         Warning: enabling this can increase memory usage significantly.
         Defaults to ``False``.
+    meta: Optional, tuple, keyword only
+        tuple of empty ndarrays describing the shape and dtype of the output of the gufunc.
+        Defaults to ``None``.
     **kwargs : dict
         Extra keyword arguments to pass to `func`
 
@@ -273,16 +285,8 @@ def apply_gufunc(func, signature, *args, **kwargs):
     References
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
-    axes = kwargs.pop("axes", None)
-    axis = kwargs.pop("axis", None)
-    keepdims = kwargs.pop("keepdims", False)
-    output_dtypes = kwargs.pop("output_dtypes", None)
-    output_sizes = kwargs.pop("output_sizes", None)
-    vectorize = kwargs.pop("vectorize", None)
-    allow_rechunk = kwargs.pop("allow_rechunk", False)
-
     # Input processing:
     ## Signature
     if not isinstance(signature, str):
@@ -292,38 +296,65 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
     nout = None if not isinstance(output_coredimss, list) else len(output_coredimss)
 
-    ## Determine and handle output_dtypes
-    if output_dtypes is None:
-        if vectorize:
-            tempfunc = np.vectorize(func, signature=signature)
-        else:
-            tempfunc = func
-        output_dtypes = apply_infer_dtype(
-            tempfunc, args, kwargs, "apply_gufunc", "output_dtypes", nout
+    ## Consolidate onto `meta`
+    if meta is not None and output_dtypes is not None:
+        raise ValueError(
+            "Only one of `meta` and `output_dtypes` should be given (`meta` is preferred)."
         )
-
-    if isinstance(output_dtypes, (tuple, list)):
-        if nout is None:
-            if len(output_dtypes) > 1:
-                raise ValueError(
-                    (
-                        "Must specify single dtype or list of one dtype "
-                        "for `output_dtypes` for function with one output"
-                    )
-                )
-            otypes = output_dtypes
-            output_dtypes = output_dtypes[0]
-        else:
-            otypes = output_dtypes
-    else:
-        if nout is not None:
-            raise ValueError(
-                "Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs"
+    if meta is None:
+        if output_dtypes is None:
+            ## Infer `output_dtypes`
+            if vectorize:
+                tempfunc = np.vectorize(func, signature=signature)
+            else:
+                tempfunc = func
+            output_dtypes = apply_infer_dtype(
+                tempfunc, args, kwargs, "apply_gufunc", "output_dtypes", nout
             )
-        otypes = [output_dtypes]
+
+        ## Turn `output_dtypes` into `meta`
+        if (
+            nout is None
+            and isinstance(output_dtypes, (tuple, list))
+            and len(output_dtypes) == 1
+        ):
+            output_dtypes = output_dtypes[0]
+        sample = args[0] if args else None
+        if nout is None:
+            meta = meta_from_array(sample, dtype=output_dtypes)
+        else:
+            meta = tuple(meta_from_array(sample, dtype=odt) for odt in output_dtypes)
+
+    ## Normalize `meta` format
+    meta = meta_from_array(meta)
+    if isinstance(meta, list):
+        meta = tuple(meta)
+
+    ## Validate `meta`
+    if nout is None:
+        if isinstance(meta, tuple):
+            if len(meta) == 1:
+                meta = meta[0]
+            else:
+                raise ValueError(
+                    "For a function with one output, must give a single item for `output_dtypes`/`meta`, "
+                    "not a tuple or list."
+                )
+    else:
+        if not isinstance(meta, tuple):
+            raise ValueError(
+                f"For a function with {nout} outputs, must give a tuple or list for `output_dtypes`/`meta`, "
+                "not a single item."
+            )
+        if len(meta) != nout:
+            raise ValueError(
+                f"For a function with {nout} outputs, must give a tuple or list of {nout} items for "
+                f"`output_dtypes`/`meta`, not {len(meta)}."
+            )
 
     ## Vectorize function, if required
     if vectorize:
+        otypes = [x.dtype for x in meta] if isinstance(meta, tuple) else [meta.dtype]
         func = np.vectorize(func, signature=signature, otypes=otypes)
 
     ## Miscellaneous
@@ -340,7 +371,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     args = [asarray(a) for a in args]
 
     if len(input_coredimss) != len(args):
-        ValueError(
+        raise ValueError(
             "According to `signature`, `func` requires %d arguments, but %s given"
             % (len(input_coredimss), len(args))
         )
@@ -390,7 +421,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ### Assert correct partitioning, for case:
     for dim, sizes in dimsizess.items():
         #### Check that the arrays have same length for same dimensions or dimension `1`
-        if set(sizes).union({1}) != {1, max(sizes)}:
+        if set(sizes) | {1} != {1, max(sizes)}:
             raise ValueError(
                 "Dimension `'{}'` with different lengths in arrays".format(dim)
             )
@@ -420,32 +451,25 @@ significantly.".format(
     ### Use existing `blockwise` but only with loopdims to enforce
     ### concatenation for coredims that appear also at the output
     ### Modifying `blockwise` could improve things here.
-    try:
-        tmp = blockwise(  # First try to compute meta
-            func, loop_output_dims, *arginds, concatenate=True, **kwargs
-        )
-    except ValueError:
-        # If computing meta doesn't work, provide it explicitly based on
-        # provided dtypes
-        sample = arginds[0]._meta
-        if isinstance(output_dtypes, tuple):
-            meta = tuple(
-                meta_from_array(sample, dtype=odt)
-                for ocd, odt in zip(output_coredimss, output_dtypes)
-            )
-        else:
-            meta = tuple(
-                meta_from_array(sample, dtype=odt)
-                for ocd, odt in zip((output_coredimss,), (output_dtypes,))
-            )
-        tmp = blockwise(
-            func, loop_output_dims, *arginds, concatenate=True, meta=meta, **kwargs
-        )
+    tmp = blockwise(
+        func, loop_output_dims, *arginds, concatenate=True, meta=meta, **kwargs
+    )
 
-    if isinstance(tmp._meta, tuple):
-        metas = tmp._meta
+    # NOTE: we likely could just use `meta` instead of `tmp._meta`,
+    # but we use it and validate it anyway just to be sure nothing odd has happened.
+    metas = tmp._meta
+    if nout is None:
+        assert not isinstance(
+            metas, (list, tuple)
+        ), f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        metas = (metas,)
     else:
-        metas = (tmp._meta,)
+        assert isinstance(
+            metas, (list, tuple)
+        ), f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
+        assert (
+            len(metas) == nout
+        ), f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape
@@ -456,7 +480,6 @@ significantly.".format(
     ### *) Treat direct output
     if nout is None:
         output_coredimss = [output_coredimss]
-        output_dtypes = [output_dtypes]
 
     ## Split output
     leaf_arrs = []
@@ -484,20 +507,20 @@ significantly.".format(
             leaf_arr = leaf_arr[slices]
 
         tidcs = [None] * len(leaf_arr.shape)
-        for i, oa in zip(range(-len(oax), 0), oax):
-            tidcs[oa] = i
+        for ii, oa in zip(range(-len(oax), 0), oax):
+            tidcs[oa] = ii
         j = 0
-        for i in range(len(tidcs)):
-            if tidcs[i] is None:
-                tidcs[i] = j
+        for ii in range(len(tidcs)):
+            if tidcs[ii] is None:
+                tidcs[ii] = j
                 j += 1
         leaf_arr = leaf_arr.transpose(tidcs)
         leaf_arrs.append(leaf_arr)
 
-    return leaf_arrs if nout else leaf_arrs[0]  # Undo *) from above
+    return (*leaf_arrs,) if nout else leaf_arrs[0]  # Undo *) from above
 
 
-class gufunc(object):
+class gufunc:
     """
     Binds `pyfunc` into ``dask.array.apply_gufunc`` when called.
 
@@ -541,7 +564,7 @@ class gufunc(object):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
@@ -554,6 +577,9 @@ class gufunc(object):
         dimensions are to consist only of one chunk.
         Warning: enabling this can increase memory usage significantly.
         Defaults to ``False``.
+    meta: Optional, tuple, keyword only
+        tuple of empty ndarrays describing the shape and dtype of the output of the gufunc.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -580,10 +606,21 @@ class gufunc(object):
     >>> c.compute().shape
     (10, 20, 30, 40)
 
+    >>> a = da.ones((1, 5, 10), chunks=(-1, -1, -1))
+    >>> def stats(x):
+    ...     return np.atleast_1d(x.mean()), np.atleast_1d(x.max())
+    >>> meta = (np.array((), dtype=np.float64), np.array((), dtype=np.float64))
+    >>> gustats = da.gufunc(stats, signature="(i,j)->(),()", meta=meta)
+    >>> result = gustats(a)
+    >>> result[0].compute().shape
+    (1,)
+    >>> result[1].compute().shape
+    (1,)
+
     References
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
 
     def __init__(self, pyfunc, **kwargs):
@@ -596,6 +633,7 @@ class gufunc(object):
         self.output_sizes = kwargs.pop("output_sizes", None)
         self.output_dtypes = kwargs.pop("output_dtypes", None)
         self.allow_rechunk = kwargs.pop("allow_rechunk", False)
+        self.meta = kwargs.pop("meta", None)
         if kwargs:
             raise TypeError("Unsupported keyword argument(s) provided")
 
@@ -631,7 +669,8 @@ class gufunc(object):
             output_sizes=self.output_sizes,
             output_dtypes=self.output_dtypes,
             allow_rechunk=self.allow_rechunk or kwargs.pop("allow_rechunk", False),
-            **kwargs
+            meta=self.meta,
+            **kwargs,
         )
 
 
@@ -671,7 +710,7 @@ def as_gufunc(signature=None, **kwargs):
     output_dtypes : Optional, dtype or list of dtypes, keyword only
         Valid numpy dtype specification or list thereof.
         If not given, a call of ``func`` with a small set of data
-        is performed in order to try to  automatically determine the
+        is performed in order to try to automatically determine the
         output dtypes.
     output_sizes : dict, optional, keyword only
         Optional mapping from dimension names to sizes for outputs. Only used if
@@ -684,6 +723,9 @@ def as_gufunc(signature=None, **kwargs):
         dimensions are to consist only of one chunk.
         Warning: enabling this can increase memory usage significantly.
         Defaults to ``False``.
+    meta: Optional, tuple, keyword only
+        tuple of empty ndarrays describing the shape and dtype of the output of the gufunc.
+        Defaults to ``None``.
 
     Returns
     -------
@@ -713,7 +755,7 @@ def as_gufunc(signature=None, **kwargs):
     References
     ----------
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
-    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api.generalized-ufuncs.html
+    .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
     _allowedkeys = {
         "vectorize",
@@ -723,8 +765,9 @@ def as_gufunc(signature=None, **kwargs):
         "output_sizes",
         "output_dtypes",
         "allow_rechunk",
+        "meta",
     }
-    if set(_allowedkeys).issubset(kwargs.keys()):
+    if kwargs.keys() - _allowedkeys:
         raise TypeError("Unsupported keyword argument(s) provided")
 
     def _as_gufunc(pyfunc):

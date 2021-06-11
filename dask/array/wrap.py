@@ -2,16 +2,19 @@ from functools import partial
 from itertools import product
 
 import numpy as np
-
-try:
-    from cytoolz import curry
-except ImportError:
-    from toolz import curry
+from tlz import curry
 
 from ..base import tokenize
+from ..layers import BlockwiseCreateArray
 from ..utils import funcname
 from .core import Array, normalize_chunks
-from .utils import meta_from_array
+from .utils import (
+    empty_like_safe,
+    full_like_safe,
+    meta_from_array,
+    ones_like_safe,
+    zeros_like_safe,
+)
 
 
 def _parse_wrap_args(func, args, kwargs, shape):
@@ -21,6 +24,7 @@ def _parse_wrap_args(func, args, kwargs, shape):
     if not isinstance(shape, (tuple, list)):
         shape = (shape,)
 
+    name = kwargs.pop("name", None)
     chunks = kwargs.pop("chunks", "auto")
 
     dtype = kwargs.pop("dtype", None)
@@ -29,7 +33,6 @@ def _parse_wrap_args(func, args, kwargs, shape):
     dtype = np.dtype(dtype)
 
     chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    name = kwargs.pop("name", None)
 
     name = name or funcname(func) + "-" + tokenize(
         func, shape, chunks, dtype, args, kwargs
@@ -65,14 +68,15 @@ def wrap_func_shape_as_first_arg(func, *args, **kwargs):
     chunks = parsed["chunks"]
     name = parsed["name"]
     kwargs = parsed["kwargs"]
-
-    keys = product([name], *[range(len(bd)) for bd in chunks])
-    shapes = product(*chunks)
     func = partial(func, dtype=dtype, **kwargs)
-    vals = ((func,) + (s,) + args for s in shapes)
 
-    dsk = dict(zip(keys, vals))
-    return Array(dsk, name, chunks, dtype=dtype)
+    graph = BlockwiseCreateArray(
+        name,
+        func,
+        shape,
+        chunks,
+    )
+    return Array(graph, name, chunks, dtype=dtype, meta=kwargs.get("meta", None))
 
 
 def wrap_func_like(func, *args, **kwargs):
@@ -124,8 +128,8 @@ def wrap(wrap_func, func, **kwargs):
     template = """
     Blocked variant of %(name)s
 
-    Follows the signature of %(name)s exactly except that it also requires a
-    keyword argument chunks=(...)
+    Follows the signature of %(name)s exactly except that it also features
+    optional keyword arguments ``chunks: int, tuple, or dict`` and ``name: str``.
 
     Original signature follows below.
     """
@@ -137,16 +141,90 @@ def wrap(wrap_func, func, **kwargs):
 
 w = wrap(wrap_func_shape_as_first_arg)
 
-ones = w(np.ones, dtype="f8")
-zeros = w(np.zeros, dtype="f8")
-empty = w(np.empty, dtype="f8")
-full = w(np.full)
+
+@curry
+def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
+    if shape == ():
+        return np.broadcast_to(func(meta, shape=(), *args, **kwargs), shape)
+    else:
+        return np.broadcast_to(func(meta, shape=1, *args, **kwargs), shape)
+
+
+def broadcast_trick(func):
+    """
+    Provide a decorator to wrap common numpy function with a broadcast trick.
+
+    Dask arrays are currently immutable; thus when we know an array is uniform,
+    we can replace the actual data by a single value and have all elements point
+    to it, thus reducing the size.
+
+    >>> x = np.broadcast_to(1, (100,100,100))
+    >>> x.base.nbytes
+    8
+
+    Those array are not only more efficient locally, but dask serialisation is
+    aware of the _real_ size of those array and thus can send them around
+    efficiently and schedule accordingly.
+
+    Note that those array are read-only and numpy will refuse to assign to them,
+    so should be safe.
+    """
+
+    inner = _broadcast_trick_inner(func)
+
+    if func.__doc__ is not None:
+        inner.__doc__ = func.__doc__
+        inner.__name__ = func.__name__
+        if inner.__name__.endswith("_like_safe"):
+            inner.__name__ = inner.__name__[:-10]
+    return inner
+
+
+ones = w(broadcast_trick(ones_like_safe), dtype="f8")
+zeros = w(broadcast_trick(zeros_like_safe), dtype="f8")
+empty = w(broadcast_trick(empty_like_safe), dtype="f8")
 
 
 w_like = wrap(wrap_func_like_safe)
 
 
-ones_like = w_like(np.ones, func_like=np.ones_like)
-zeros_like = w_like(np.zeros, func_like=np.zeros_like)
 empty_like = w_like(np.empty, func_like=np.empty_like)
-full_like = w_like(np.full, func_like=np.full_like)
+
+
+# full and full_like require special casing due to argument check on fill_value
+# Generate wrapped functions only once
+_full = w(broadcast_trick(full_like_safe))
+_full_like = w_like(np.full, func_like=np.full_like)
+
+# workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472
+_full.__doc__ = _full.__doc__.replace(
+    "array([0.1,  0.1,  0.1,  0.1,  0.1,  0.1])",
+    "array([0.1, 0.1, 0.1, 0.1, 0.1, 0.1])",
+)
+
+
+def full(shape, fill_value, *args, **kwargs):
+    # np.isscalar has somewhat strange behavior:
+    # https://docs.scipy.org/doc/numpy/reference/generated/numpy.isscalar.html
+    if np.ndim(fill_value) != 0:
+        raise ValueError(
+            f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
+        )
+    return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
+
+
+def full_like(a, fill_value, *args, **kwargs):
+    if np.ndim(fill_value) != 0:
+        raise ValueError(
+            f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
+        )
+    return _full_like(
+        a=a,
+        fill_value=fill_value,
+        *args,
+        **kwargs,
+    )
+
+
+full.__doc__ = _full.__doc__
+full_like.__doc__ = _full_like.__doc__

@@ -1,27 +1,27 @@
 import numbers
 import warnings
-from itertools import product
+from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
+from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..utils import derived_from, ignoring, random_state_data, skip_doctest
 from .core import (
-    normalize_chunks,
     Array,
-    slices_from_chunks,
     asarray,
     broadcast_shapes,
     broadcast_to,
+    normalize_chunks,
+    slices_from_chunks,
 )
 from .creation import arange
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, derived_from, skip_doctest
 
 
 def doc_wraps(func):
-    """ Copy docstring from one function to another """
+    """Copy docstring from one function to another"""
     warnings.warn(
         "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
         FutureWarning,
@@ -35,7 +35,7 @@ def doc_wraps(func):
     return _
 
 
-class RandomState(object):
+class RandomState:
     """
     Mersenne Twister pseudo-random number generator
 
@@ -75,26 +75,25 @@ class RandomState(object):
     def seed(self, seed=None):
         self._numpy_state.seed(seed)
 
-    def _wrap(self, funcname, *args, **kwargs):
-        """ Wrap numpy random function to produce dask.array random function
+    def _wrap(
+        self, funcname, *args, size=None, chunks="auto", extra_chunks=(), **kwargs
+    ):
+        """Wrap numpy random function to produce dask.array random function
 
         extra_chunks should be a chunks tuple to append to the end of chunks
         """
-        size = kwargs.pop("size", None)
-        chunks = kwargs.pop("chunks", "auto")
-        extra_chunks = kwargs.pop("extra_chunks", ())
-
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        args_shapes = {ar.shape for ar in args if isinstance(ar, (Array, np.ndarray))}
-        args_shapes.union(
-            {ar.shape for ar in kwargs.values() if isinstance(ar, (Array, np.ndarray))}
+        shapes = list(
+            {
+                ar.shape
+                for ar in chain(args, kwargs.values())
+                if isinstance(ar, (Array, np.ndarray))
+            }
         )
-
-        shapes = list(args_shapes)
         if size is not None:
-            shapes += [size]
+            shapes.append(size)
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
         chunks = normalize_chunks(
@@ -113,7 +112,6 @@ class RandomState(object):
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph
         dsk = {}
-        dsks = []
         lookup = {}
         small_args = []
         dependencies = []
@@ -122,7 +120,6 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -138,7 +135,6 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -166,7 +162,6 @@ class RandomState(object):
                     arg.append(ar)
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         arg.append((lookup[i],) + block)
                     else:  # np.ndarray
                         arg.append((getitem, lookup[i], slc))
@@ -176,7 +171,6 @@ class RandomState(object):
                     kwrg[k] = ar
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         kwrg[k] = (lookup[k],) + block
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
@@ -198,21 +192,21 @@ class RandomState(object):
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
         return Array(graph, name, chunks + extra_chunks, meta=meta)
 
-    @derived_from(np.random.RandomState)
-    def beta(self, a, b, size=None, chunks="auto"):
-        return self._wrap("beta", a, b, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def beta(self, a, b, size=None, chunks="auto", **kwargs):
+        return self._wrap("beta", a, b, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def binomial(self, n, p, size=None, chunks="auto"):
-        return self._wrap("binomial", n, p, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def binomial(self, n, p, size=None, chunks="auto", **kwargs):
+        return self._wrap("binomial", n, p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def chisquare(self, df, size=None, chunks="auto"):
-        return self._wrap("chisquare", df, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def chisquare(self, df, size=None, chunks="auto", **kwargs):
+        return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
     with ignoring(AttributeError):
 
-        @derived_from(np.random.RandomState)
+        @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):
             dependencies = []
             # Normalize and validate `a`
@@ -284,53 +278,53 @@ class RandomState(object):
             )
             return Array(graph, name, chunks, dtype=dtype)
 
-    # @derived_from(np.random.RandomState)
+    # @derived_from(np.random.RandomState, skipblocks=1)
     # def dirichlet(self, alpha, size=None, chunks="auto"):
 
-    @derived_from(np.random.RandomState)
-    def exponential(self, scale=1.0, size=None, chunks="auto"):
-        return self._wrap("exponential", scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def exponential(self, scale=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("exponential", scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def f(self, dfnum, dfden, size=None, chunks="auto"):
-        return self._wrap("f", dfnum, dfden, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def f(self, dfnum, dfden, size=None, chunks="auto", **kwargs):
+        return self._wrap("f", dfnum, dfden, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def gamma(self, shape, scale=1.0, size=None, chunks="auto"):
-        return self._wrap("gamma", shape, scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def gamma(self, shape, scale=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("gamma", shape, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def geometric(self, p, size=None, chunks="auto"):
-        return self._wrap("geometric", p, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def geometric(self, p, size=None, chunks="auto", **kwargs):
+        return self._wrap("geometric", p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def gumbel(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
-        return self._wrap("gumbel", loc, scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def gumbel(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("gumbel", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def hypergeometric(self, ngood, nbad, nsample, size=None, chunks="auto"):
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def hypergeometric(self, ngood, nbad, nsample, size=None, chunks="auto", **kwargs):
         return self._wrap(
-            "hypergeometric", ngood, nbad, nsample, size=size, chunks=chunks
+            "hypergeometric", ngood, nbad, nsample, size=size, chunks=chunks, **kwargs
         )
 
-    @derived_from(np.random.RandomState)
-    def laplace(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
-        return self._wrap("laplace", loc, scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def laplace(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("laplace", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def logistic(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
-        return self._wrap("logistic", loc, scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def logistic(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("logistic", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def lognormal(self, mean=0.0, sigma=1.0, size=None, chunks="auto"):
-        return self._wrap("lognormal", mean, sigma, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def lognormal(self, mean=0.0, sigma=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("lognormal", mean, sigma, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def logseries(self, p, size=None, chunks="auto"):
-        return self._wrap("logseries", p, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def logseries(self, p, size=None, chunks="auto", **kwargs):
+        return self._wrap("logseries", p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def multinomial(self, n, pvals, size=None, chunks="auto"):
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def multinomial(self, n, pvals, size=None, chunks="auto", **kwargs):
         return self._wrap(
             "multinomial",
             n,
@@ -340,27 +334,31 @@ class RandomState(object):
             extra_chunks=((len(pvals),),),
         )
 
-    @derived_from(np.random.RandomState)
-    def negative_binomial(self, n, p, size=None, chunks="auto"):
-        return self._wrap("negative_binomial", n, p, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def negative_binomial(self, n, p, size=None, chunks="auto", **kwargs):
+        return self._wrap("negative_binomial", n, p, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def noncentral_chisquare(self, df, nonc, size=None, chunks="auto"):
-        return self._wrap("noncentral_chisquare", df, nonc, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def noncentral_chisquare(self, df, nonc, size=None, chunks="auto", **kwargs):
+        return self._wrap(
+            "noncentral_chisquare", df, nonc, size=size, chunks=chunks, **kwargs
+        )
 
-    @derived_from(np.random.RandomState)
-    def noncentral_f(self, dfnum, dfden, nonc, size=None, chunks="auto"):
-        return self._wrap("noncentral_f", dfnum, dfden, nonc, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def noncentral_f(self, dfnum, dfden, nonc, size=None, chunks="auto", **kwargs):
+        return self._wrap(
+            "noncentral_f", dfnum, dfden, nonc, size=size, chunks=chunks, **kwargs
+        )
 
-    @derived_from(np.random.RandomState)
-    def normal(self, loc=0.0, scale=1.0, size=None, chunks="auto"):
-        return self._wrap("normal", loc, scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def normal(self, loc=0.0, scale=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("normal", loc, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def pareto(self, a, size=None, chunks="auto"):
-        return self._wrap("pareto", a, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def pareto(self, a, size=None, chunks="auto", **kwargs):
+        return self._wrap("pareto", a, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
+    @derived_from(np.random.RandomState, skipblocks=1)
     def permutation(self, x):
         from .slicing import shuffle_slice
 
@@ -371,79 +369,85 @@ class RandomState(object):
         self._numpy_state.shuffle(index)
         return shuffle_slice(x, index)
 
-    @derived_from(np.random.RandomState)
-    def poisson(self, lam=1.0, size=None, chunks="auto"):
-        return self._wrap("poisson", lam, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def poisson(self, lam=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("poisson", lam, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def power(self, a, size=None, chunks="auto"):
-        return self._wrap("power", a, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def power(self, a, size=None, chunks="auto", **kwargs):
+        return self._wrap("power", a, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def randint(self, low, high=None, size=None, chunks="auto", dtype="l"):
-        return self._wrap("randint", low, high, size=size, chunks=chunks, dtype=dtype)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def randint(self, low, high=None, size=None, chunks="auto", dtype="l", **kwargs):
+        return self._wrap(
+            "randint", low, high, size=size, chunks=chunks, dtype=dtype, **kwargs
+        )
 
-    @derived_from(np.random.RandomState)
-    def random_integers(self, low, high=None, size=None, chunks="auto"):
-        return self._wrap("random_integers", low, high, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def random_integers(self, low, high=None, size=None, chunks="auto", **kwargs):
+        return self._wrap(
+            "random_integers", low, high, size=size, chunks=chunks, **kwargs
+        )
 
-    @derived_from(np.random.RandomState)
-    def random_sample(self, size=None, chunks="auto"):
-        return self._wrap("random_sample", size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def random_sample(self, size=None, chunks="auto", **kwargs):
+        return self._wrap("random_sample", size=size, chunks=chunks, **kwargs)
 
     random = random_sample
 
-    @derived_from(np.random.RandomState)
-    def rayleigh(self, scale=1.0, size=None, chunks="auto"):
-        return self._wrap("rayleigh", scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def rayleigh(self, scale=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("rayleigh", scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def standard_cauchy(self, size=None, chunks="auto"):
-        return self._wrap("standard_cauchy", size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def standard_cauchy(self, size=None, chunks="auto", **kwargs):
+        return self._wrap("standard_cauchy", size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def standard_exponential(self, size=None, chunks="auto"):
-        return self._wrap("standard_exponential", size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def standard_exponential(self, size=None, chunks="auto", **kwargs):
+        return self._wrap("standard_exponential", size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def standard_gamma(self, shape, size=None, chunks="auto"):
-        return self._wrap("standard_gamma", shape, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def standard_gamma(self, shape, size=None, chunks="auto", **kwargs):
+        return self._wrap("standard_gamma", shape, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def standard_normal(self, size=None, chunks="auto"):
-        return self._wrap("standard_normal", size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def standard_normal(self, size=None, chunks="auto", **kwargs):
+        return self._wrap("standard_normal", size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def standard_t(self, df, size=None, chunks="auto"):
-        return self._wrap("standard_t", df, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def standard_t(self, df, size=None, chunks="auto", **kwargs):
+        return self._wrap("standard_t", df, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def tomaxint(self, size=None, chunks="auto"):
-        return self._wrap("tomaxint", size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def tomaxint(self, size=None, chunks="auto", **kwargs):
+        return self._wrap("tomaxint", size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def triangular(self, left, mode, right, size=None, chunks="auto"):
-        return self._wrap("triangular", left, mode, right, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def triangular(self, left, mode, right, size=None, chunks="auto", **kwargs):
+        return self._wrap(
+            "triangular", left, mode, right, size=size, chunks=chunks, **kwargs
+        )
 
-    @derived_from(np.random.RandomState)
-    def uniform(self, low=0.0, high=1.0, size=None, chunks="auto"):
-        return self._wrap("uniform", low, high, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def uniform(self, low=0.0, high=1.0, size=None, chunks="auto", **kwargs):
+        return self._wrap("uniform", low, high, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def vonmises(self, mu, kappa, size=None, chunks="auto"):
-        return self._wrap("vonmises", mu, kappa, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def vonmises(self, mu, kappa, size=None, chunks="auto", **kwargs):
+        return self._wrap("vonmises", mu, kappa, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def wald(self, mean, scale, size=None, chunks="auto"):
-        return self._wrap("wald", mean, scale, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def wald(self, mean, scale, size=None, chunks="auto", **kwargs):
+        return self._wrap("wald", mean, scale, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def weibull(self, a, size=None, chunks="auto"):
-        return self._wrap("weibull", a, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def weibull(self, a, size=None, chunks="auto", **kwargs):
+        return self._wrap("weibull", a, size=size, chunks=chunks, **kwargs)
 
-    @derived_from(np.random.RandomState)
-    def zipf(self, a, size=None, chunks="auto"):
-        return self._wrap("zipf", a, size=size, chunks=chunks)
+    @derived_from(np.random.RandomState, skipblocks=1)
+    def zipf(self, a, size=None, chunks="auto", **kwargs):
+        return self._wrap("zipf", a, size=size, chunks=chunks, **kwargs)
 
 
 def _choice(state_data, a, size, replace, p):

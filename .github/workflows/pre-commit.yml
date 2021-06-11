@@ -1,0 +1,16 @@
+name: Linting
+
+on:
+  push:
+    branches: main
+  pull_request:
+    branches: main
+
+jobs:
+  checks:
+    name: "pre-commit hooks"
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/setup-python@v2
+      - uses: pre-commit/action@v2.0.0

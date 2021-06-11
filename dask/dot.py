@@ -1,10 +1,9 @@
-import re
 import os
+import re
 from functools import partial
 
-from .core import istask, get_dependencies, ishashable
-from .utils import funcname, import_required, key_split, apply
-
+from .core import get_dependencies, ishashable, istask
+from .utils import apply, funcname, import_required, key_split
 
 graphviz = import_required(
     "graphviz",
@@ -104,8 +103,8 @@ def label(x, cache=None):
     return s
 
 
-def box_label(key):
-    """ Label boxes in graph by chunk index
+def box_label(key, verbose=False):
+    """Label boxes in graph by chunk index
 
     >>> box_label(('x', 1, 2, 3))
     '(1, 2, 3)'
@@ -119,6 +118,8 @@ def box_label(key):
         if len(key) == 1:
             [key] = key
         return str(key)
+    elif verbose:
+        return str(key)
     else:
         return ""
 
@@ -128,15 +129,19 @@ def to_graphviz(
     data_attributes=None,
     function_attributes=None,
     rankdir="BT",
-    graph_attr={},
+    graph_attr=None,
     node_attr=None,
     edge_attr=None,
-    **kwargs
+    collapse_outputs=False,
+    verbose=False,
+    **kwargs,
 ):
     if data_attributes is None:
         data_attributes = {}
     if function_attributes is None:
         function_attributes = {}
+    if graph_attr is None:
+        graph_attr = {}
 
     graph_attr = graph_attr or {}
     graph_attr["rankdir"] = rankdir
@@ -146,37 +151,47 @@ def to_graphviz(
     )
 
     seen = set()
+    connected = set()
 
     for k, v in dsk.items():
         k_name = name(k)
-        if k_name not in seen:
-            seen.add(k_name)
-            attrs = data_attributes.get(k, {})
-            attrs.setdefault("label", box_label(k))
-            attrs.setdefault("shape", "box")
-            g.node(k_name, **attrs)
-
         if istask(v):
-            func_name = name((k, "function"))
-            if func_name not in seen:
+            func_name = name((k, "function")) if not collapse_outputs else k_name
+            if collapse_outputs or func_name not in seen:
                 seen.add(func_name)
-                attrs = function_attributes.get(k, {})
+                attrs = function_attributes.get(k, {}).copy()
                 attrs.setdefault("label", key_split(k))
                 attrs.setdefault("shape", "circle")
                 g.node(func_name, **attrs)
-            g.edge(func_name, k_name)
+            if not collapse_outputs:
+                g.edge(func_name, k_name)
+                connected.add(func_name)
+                connected.add(k_name)
 
             for dep in get_dependencies(dsk, k):
                 dep_name = name(dep)
                 if dep_name not in seen:
                     seen.add(dep_name)
-                    attrs = data_attributes.get(dep, {})
-                    attrs.setdefault("label", box_label(dep))
+                    attrs = data_attributes.get(dep, {}).copy()
+                    attrs.setdefault("label", box_label(dep, verbose))
                     attrs.setdefault("shape", "box")
                     g.node(dep_name, **attrs)
                 g.edge(dep_name, func_name)
+                connected.add(dep_name)
+                connected.add(func_name)
+
         elif ishashable(v) and v in dsk:
-            g.edge(name(v), k_name)
+            v_name = name(v)
+            g.edge(v_name, k_name)
+            connected.add(v_name)
+            connected.add(k_name)
+
+        if (not collapse_outputs or k_name in connected) and k_name not in seen:
+            seen.add(k_name)
+            attrs = data_attributes.get(k, {}).copy()
+            attrs.setdefault("label", box_label(k, verbose))
+            attrs.setdefault("shape", "box")
+            g.node(k_name, **attrs)
     return g
 
 
@@ -218,17 +233,18 @@ def dot_graph(dsk, filename="mydask", format=None, **kwargs):
     """
     Render a task graph using dot.
 
-    If `filename` is not None, write a file to disk with that name in the
-    format specified by `format`.  `filename` should not include an extension.
+    If `filename` is not None, write a file to disk with the specified name and extension.
+    If no extension is specified, '.png' will be used by default.
 
     Parameters
     ----------
     dsk : dict
         The graph to display.
     filename : str or None, optional
-        The name (without an extension) of the file to write to disk.  If
-        `filename` is None, no file will be written, and we communicate with
-        dot using only pipes.  Default is 'mydask'.
+        The name of the file to write to disk. If the provided `filename`
+        doesn't include an extension, '.png' will be used by default.
+        If `filename` is None, no file will be written, and we communicate
+        with dot using only pipes.  Default is 'mydask'.
     format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
         Format in which to write output file.  Default is 'png'.
     **kwargs
@@ -257,7 +273,12 @@ def dot_graph(dsk, filename="mydask", format=None, **kwargs):
 
 def graphviz_to_file(g, filename, format):
     fmts = [".png", ".pdf", ".dot", ".svg", ".jpeg", ".jpg"]
-    if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
+
+    if (
+        format is None
+        and filename is not None
+        and any(filename.lower().endswith(fmt) for fmt in fmts)
+    ):
         filename, format = os.path.splitext(filename)
         format = format[1:].lower()
 
@@ -276,7 +297,7 @@ def graphviz_to_file(g, filename, format):
 
     display_cls = _get_display_cls(format)
 
-    if not filename:
+    if filename is None:
         return display_cls(data=data)
 
     full_filename = ".".join([filename, format])

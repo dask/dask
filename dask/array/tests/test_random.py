@@ -6,11 +6,11 @@ import numpy as np
 
 import dask
 import dask.array as da
-from dask.utils import key_split
 from dask.array.core import Array
-from dask.array.random import random, exponential, normal
+from dask.array.random import exponential, normal, random
 from dask.array.utils import assert_eq
 from dask.multiprocessing import _dumps, _loads
+from dask.utils import key_split
 
 
 def test_RandomState():
@@ -196,12 +196,17 @@ def test_array_broadcasting():
     assert da.random.normal(
         np.ones((1, 4)), da.ones((2, 3, 4), chunks=(2, 3, 4)), chunks=(2, 3, 4)
     ).compute().shape == (2, 3, 4)
-    assert da.random.normal(
-        scale=np.ones((1, 4)),
-        loc=da.ones((2, 3, 4), chunks=(2, 3, 4)),
-        size=(2, 2, 3, 4),
-        chunks=(2, 2, 3, 4),
-    ).compute().shape == (2, 2, 3, 4)
+    assert (
+        da.random.normal(
+            scale=np.ones((1, 4)),
+            loc=da.ones((2, 3, 4), chunks=(2, 3, 4)),
+            size=(2, 2, 3, 4),
+            chunks=(2, 2, 3, 4),
+        )
+        .compute()
+        .shape
+        == (2, 2, 3, 4)
+    )
 
     with pytest.raises(ValueError):
         da.random.normal(arr, np.ones((3, 1)), size=(2, 3, 4), chunks=3)
@@ -364,3 +369,18 @@ def test_doc_wraps_deprecated():
         @da.random.doc_wraps(np.random.normal)
         def f():
             pass
+
+
+def test_raises_bad_kwarg():
+    with pytest.raises(Exception) as info:
+        da.random.standard_normal(size=(10,), dtype="float64")
+
+    assert "dtype" in str(info.value)
+
+
+def test_randomstate_kwargs():
+    cupy = pytest.importorskip("cupy")
+
+    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    x = rs.standard_normal((10, 5), dtype=np.float32)
+    assert x.dtype == np.float32

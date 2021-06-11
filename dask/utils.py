@@ -1,22 +1,27 @@
-from datetime import timedelta
 import functools
 import inspect
 import os
+import re
 import shutil
 import sys
 import tempfile
-import re
-from errno import ENOENT
+import uuid
+from _thread import RLock
 from collections.abc import Iterator
 from contextlib import contextmanager
+from datetime import datetime, timedelta
+from errno import ENOENT
+from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
-import uuid
+from typing import Dict, Iterable, Mapping, Optional, TypeVar
 from weakref import WeakValueDictionary
 
 from .core import get_deps
-from .optimization import key_split  # noqa: F401
+
+K = TypeVar("K")
+V = TypeVar("V")
 
 
 system_encoding = sys.getdefaultencoding()
@@ -32,7 +37,7 @@ def apply(func, args, kwargs=None):
 
 
 def deepmap(func, *seqs):
-    """ Apply function inside nested lists
+    """Apply function inside nested lists
 
     >>> inc = lambda x: x + 1
     >>> deepmap(inc, [[1, 2], [3, 4]])
@@ -61,7 +66,7 @@ def homogeneous_deepmap(func, seq):
 
 
 def ndeepmap(n, func, seq):
-    """ Call a function on every element within a nested container
+    """Call a function on every element within a nested container
 
     >>> def inc(x):
     ...     return x + 1
@@ -94,8 +99,8 @@ def import_required(mod_name, error_msg):
     """
     try:
         return import_module(mod_name)
-    except ImportError:
-        raise RuntimeError(error_msg)
+    except ImportError as e:
+        raise RuntimeError(error_msg) from e
 
 
 @contextmanager
@@ -169,8 +174,8 @@ def noop_context():
     yield
 
 
-class IndexCallable(object):
-    """ Provide getitem syntax for functions
+class IndexCallable:
+    """Provide getitem syntax for functions
 
     >>> def inc(x):
     ...     return x + 1
@@ -191,9 +196,11 @@ class IndexCallable(object):
 
 @contextmanager
 def filetexts(d, open=open, mode="t", use_tmpdir=True):
-    """ Dumps a number of textfiles to disk
+    """Dumps a number of textfiles to disk
 
-    d - dict
+    Parameters
+    ----------
+    d : dict
         a mapping from filename to text like {'a.csv': '1,1\n2,2'}
 
     Since this is meant for use in tests, this context manager will
@@ -224,7 +231,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
 
 
 def concrete(seq):
-    """ Make nested iterators concrete lists
+    """Make nested iterators concrete lists
 
     >>> data = [[1, 2], [3, 4]]
     >>> seq = iter(map(iter, data))
@@ -239,7 +246,7 @@ def concrete(seq):
 
 
 def pseudorandom(n, p, random_state=None):
-    """ Pseudorandom array of integer indexes
+    """Pseudorandom array of integer indexes
 
     >>> pseudorandom(5, [0.5, 0.5], random_state=123)
     array([1, 0, 0, 1, 1], dtype=int8)
@@ -381,7 +388,7 @@ def getargspec(func):
 
 
 def takes_multiple_arguments(func, varargs=True):
-    """ Does this function take multiple arguments?
+    """Does this function take multiple arguments?
 
     >>> def f(x, y): pass
     >>> takes_multiple_arguments(f)
@@ -399,7 +406,7 @@ def takes_multiple_arguments(func, varargs=True):
     >>> takes_multiple_arguments(f)
     True
 
-    >>> class Thing(object):
+    >>> class Thing:
     ...     def __init__(self, a): pass
     >>> takes_multiple_arguments(Thing)
     False
@@ -437,7 +444,7 @@ def get_named_args(func):
     ]
 
 
-class Dispatch(object):
+class Dispatch:
     """Simple single dispatch."""
 
     def __init__(self, name=None):
@@ -564,7 +571,7 @@ def extra_titles(doc):
     return "\n".join(lines)
 
 
-def ignore_warning(doc, cls, name, extra=""):
+def ignore_warning(doc, cls, name, extra="", skipblocks=0):
     """Expand docstring by adding disclaimer and extra text"""
     import inspect
 
@@ -583,6 +590,11 @@ def ignore_warning(doc, cls, name, extra=""):
         # Insert our warning
         head = doc[: i + 2]
         tail = doc[i + 2 :]
+        while skipblocks > 0:
+            i = tail.find("\n\n")
+            head = tail[: i + 2]
+            tail = tail[i + 2 :]
+            skipblocks -= 1
         # Indentation of next line
         indent = re.match(r"\s*", tail).group(0)
         # Insert the warning, indented, with a blank line before and after
@@ -597,7 +609,7 @@ def ignore_warning(doc, cls, name, extra=""):
 
 
 def unsupported_arguments(doc, args):
-    """ Mark unsupported arguments with a disclaimer """
+    """Mark unsupported arguments with a disclaimer"""
     lines = doc.split("\n")
     for arg in args:
         subset = [
@@ -611,8 +623,8 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=[], extra=""):
-    """ Helper function for derived_from to ease testing """
+def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
+    """Helper function for derived_from to ease testing"""
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
@@ -627,7 +639,9 @@ def _derived_from(cls, method, ua_args=[], extra=""):
 
     # Insert disclaimer that this is a copied docstring
     if doc:
-        doc = ignore_warning(doc, cls, method.__name__, extra=extra)
+        doc = ignore_warning(
+            doc, cls, method.__name__, extra=extra, skipblocks=skipblocks
+        )
     elif extra:
         doc += extra.rstrip("\n") + "\n\n"
 
@@ -649,7 +663,7 @@ def _derived_from(cls, method, ua_args=[], extra=""):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=[]):
+def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -666,13 +680,20 @@ def derived_from(original_klass, version=None, ua_args=[]):
     ua_args : list
         List of keywords which Dask doesn't support. Keywords existing in
         original but not in Dask will automatically be added.
+    skipblocks : int
+        How many text blocks (paragraphs) to skip from the start of the
+        docstring. Useful for cases where the target has extra front-matter.
     """
 
     def wrapper(method):
         try:
             extra = getattr(method, "__doc__", None) or ""
             method.__doc__ = _derived_from(
-                original_klass, method, ua_args=ua_args, extra=extra
+                original_klass,
+                method,
+                ua_args=ua_args,
+                extra=extra,
+                skipblocks=skipblocks,
             )
             return method
 
@@ -744,9 +765,9 @@ def typename(typ):
 
 
 def ensure_bytes(s):
-    """ Turn string or bytes to bytes
+    """Turn string or bytes to bytes
 
-    >>> ensure_bytes(u'123')
+    >>> ensure_bytes('123')
     b'123'
     >>> ensure_bytes('123')
     b'123'
@@ -762,9 +783,9 @@ def ensure_bytes(s):
 
 
 def ensure_unicode(s):
-    """ Turn string or bytes to bytes
+    """Turn string or bytes to bytes
 
-    >>> ensure_unicode(u'123')
+    >>> ensure_unicode('123')
     '123'
     >>> ensure_unicode('123')
     '123'
@@ -806,11 +827,9 @@ def insert(tup, loc, val):
 
 
 def dependency_depth(dsk):
-    import toolz
-
     deps, _ = get_deps(dsk)
 
-    @toolz.memoize
+    @lru_cache(maxsize=None)
     def max_depth_by_deps(key):
         if not deps[key]:
             return 1
@@ -858,7 +877,7 @@ def put_lines(buf, lines):
 _method_cache = {}
 
 
-class methodcaller(object):
+class methodcaller:
     """
     Return a callable object that calls the given method on its operand.
 
@@ -889,7 +908,7 @@ class methodcaller(object):
     __repr__ = __str__
 
 
-class itemgetter(object):
+class itemgetter:
     """
     Return a callable object that gets an item from the operand
 
@@ -912,7 +931,7 @@ class itemgetter(object):
         return type(self) is type(other) and self.index == other.index
 
 
-class MethodCache(object):
+class MethodCache:
     """Attribute access on this object returns a methodcaller for that
     attribute.
 
@@ -930,7 +949,7 @@ class MethodCache(object):
 M = MethodCache()
 
 
-class SerializableLock(object):
+class SerializableLock:
     _locks = WeakValueDictionary()
     """ A Serializable per-process Lock
 
@@ -996,7 +1015,7 @@ class SerializableLock(object):
 
 def get_scheduler_lock(collection=None, scheduler=None):
     """Get an instance of the appropriate lock for a certain situation based on
-       scheduler used."""
+    scheduler used."""
     from . import multiprocessing
     from .base import get_scheduler
 
@@ -1008,27 +1027,39 @@ def get_scheduler_lock(collection=None, scheduler=None):
     return SerializableLock()
 
 
-def ensure_dict(d):
+def ensure_dict(d: Mapping[K, V], *, copy: bool = False) -> Dict[K, V]:
+    """Convert a generic Mapping into a dict.
+    Optimize use case of :class:`~dask.highlevelgraph.HighLevelGraph`.
+
+    Parameters
+    ----------
+    d : Mapping
+    copy : bool
+        If True, guarantee that the return value is always a shallow copy of d;
+        otherwise it may be the input itself.
+    """
     if type(d) is dict:
-        return d
-    elif hasattr(d, "dicts"):
-        result = {}
-        seen = set()
-        for dd in d.dicts.values():
-            dd_id = id(dd)
-            if dd_id not in seen:
-                result.update(dd)
-                seen.add(dd_id)
-        return result
-    return dict(d)
+        return d.copy() if copy else d  # type: ignore
+    try:
+        layers = d.layers  # type: ignore
+    except AttributeError:
+        return dict(d)
+
+    unique_layers = {id(layer): layer for layer in layers.values()}
+    result = {}
+    for layer in unique_layers.values():
+        result.update(layer)
+    return result
 
 
-class OperatorMethodMixin(object):
+class OperatorMethodMixin:
     """A mixin for dynamically implementing operators"""
+
+    __slots__ = ()
 
     @classmethod
     def _bind_operator(cls, op):
-        """ bind operator to this class """
+        """bind operator to this class"""
         name = op.__name__
 
         if name.endswith("_"):
@@ -1052,12 +1083,12 @@ class OperatorMethodMixin(object):
 
     @classmethod
     def _get_unary_operator(cls, op):
-        """ Must return a method used by unary operator """
+        """Must return a method used by unary operator"""
         raise NotImplementedError
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
-        """ Must return a method used by binary operator """
+        """Must return a method used by binary operator"""
         raise NotImplementedError
 
 
@@ -1077,7 +1108,18 @@ def partial_by_order(*args, **kwargs):
 
 
 def is_arraylike(x):
-    """ Is this object a numpy array or something similar?
+    """Is this object a numpy array or something similar?
+
+    This function tests specifically for an object that already has
+    array attributes (e.g. np.ndarray, dask.array.Array, cupy.ndarray,
+    sparse.COO), **NOT** for something that can be coerced into an
+    array object (e.g. Python lists and tuples). It is meant for dask
+    developers and developers of downstream libraries.
+
+    Note that this function does not correspond with NumPy's
+    definition of array_like, which includes any object that can be
+    coerced into an array (see definition in the NumPy glossary):
+    https://numpy.org/doc/stable/glossary.html
 
     Examples
     --------
@@ -1093,17 +1135,24 @@ def is_arraylike(x):
     """
     from .base import is_dask_collection
 
+    is_duck_array = hasattr(x, "__array_function__") or hasattr(x, "__array_ufunc__")
+
     return bool(
         hasattr(x, "shape")
         and isinstance(x.shape, tuple)
         and hasattr(x, "dtype")
         and not any(is_dask_collection(n) for n in x.shape)
+        # We special case scipy.sparse and cupyx.scipy.sparse arrays as having partial
+        # support for them is useful in scenerios where we mostly call `map_partitions`
+        # or `map_blocks` with scikit-learn functions on dask arrays and dask dataframes.
+        # https://github.com/dask/dask/pull/3738
+        and (is_duck_array or "scipy.sparse" in typename(type(x)))
     )
 
 
 def is_dataframe_like(df):
-    """ Looks like a Pandas DataFrame """
-    typ = type(df)
+    """Looks like a Pandas DataFrame"""
+    typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
         and all(hasattr(df, name) for name in ("dtypes", "columns"))
@@ -1112,8 +1161,8 @@ def is_dataframe_like(df):
 
 
 def is_series_like(s):
-    """ Looks like a Pandas Series """
-    typ = type(s)
+    """Looks like a Pandas Series"""
+    typ = s.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
         and all(hasattr(s, name) for name in ("dtype", "name"))
@@ -1122,12 +1171,17 @@ def is_series_like(s):
 
 
 def is_index_like(s):
-    """ Looks like a Pandas Index """
-    typ = type(s)
+    """Looks like a Pandas Index"""
+    typ = s.__class__
     return (
         all(hasattr(s, name) for name in ("name", "dtype"))
         and "index" in typ.__name__.lower()
     )
+
+
+def is_cupy_type(x):
+    # TODO: avoid explicit reference to CuPy
+    return "cupy" in str(type(x))
 
 
 def natural_sort_key(s):
@@ -1160,7 +1214,7 @@ def natural_sort_key(s):
 
 
 def factors(n):
-    """ Return the factors of an integer
+    """Return the factors of an integer
 
     https://stackoverflow.com/a/6800214/616616
     """
@@ -1169,8 +1223,9 @@ def factors(n):
 
 
 def parse_bytes(s):
-    """ Parse byte string to numbers
+    """Parse byte string to numbers
 
+    >>> from dask.utils import parse_bytes
     >>> parse_bytes('100')
     100
     >>> parse_bytes('100 MB')
@@ -1197,7 +1252,7 @@ def parse_bytes(s):
     if isinstance(s, (int, float)):
         return int(s)
     s = s.replace(" ", "")
-    if not s[0].isdigit():
+    if not any(char.isdigit() for char in s):
         s = "1" + s
 
     for i in range(len(s) - 1, -1, -1):
@@ -1210,13 +1265,13 @@ def parse_bytes(s):
 
     try:
         n = float(prefix)
-    except ValueError:
-        raise ValueError("Could not interpret '%s' as a number" % prefix)
+    except ValueError as e:
+        raise ValueError("Could not interpret '%s' as a number" % prefix) from e
 
     try:
         multiplier = byte_sizes[suffix.lower()]
-    except KeyError:
-        raise ValueError("Could not interpret '%s' as a byte unit" % suffix)
+    except KeyError as e:
+        raise ValueError("Could not interpret '%s' as a byte unit" % suffix) from e
 
     result = n * multiplier
     return int(result)
@@ -1242,8 +1297,9 @@ byte_sizes.update({k[:-1]: v for k, v in byte_sizes.items() if k and "i" in k})
 
 
 def format_time(n):
-    """ format integers as time
+    """format integers as time
 
+    >>> from dask.utils import format_time
     >>> format_time(1)
     '1.00 s'
     >>> format_time(0.001234)
@@ -1260,33 +1316,105 @@ def format_time(n):
     return "%.2f us" % (n * 1e6)
 
 
-def format_bytes(n):
-    """ Format bytes as text
+def format_time_ago(n: datetime) -> str:
+    """Calculate a '3 hours ago' type string from a Python datetime.
 
+    Examples
+    --------
+    >>> from datetime import datetime, timedelta
+
+    >>> now = datetime.now()
+    >>> format_time_ago(now)
+    'Just now'
+
+    >>> past = datetime.now() - timedelta(minutes=1)
+    >>> format_time_ago(past)
+    '1 minute ago'
+
+    >>> past = datetime.now() - timedelta(minutes=2)
+    >>> format_time_ago(past)
+    '2 minutes ago'
+
+    >>> past = datetime.now() - timedelta(hours=1)
+    >>> format_time_ago(past)
+    '1 hour ago'
+
+    >>> past = datetime.now() - timedelta(hours=6)
+    >>> format_time_ago(past)
+    '6 hours ago'
+
+    >>> past = datetime.now() - timedelta(days=1)
+    >>> format_time_ago(past)
+    '1 day ago'
+
+    >>> past = datetime.now() - timedelta(days=5)
+    >>> format_time_ago(past)
+    '5 days ago'
+
+    >>> past = datetime.now() - timedelta(days=8)
+    >>> format_time_ago(past)
+    '1 week ago'
+
+    >>> past = datetime.now() - timedelta(days=16)
+    >>> format_time_ago(past)
+    '2 weeks ago'
+
+    >>> past = datetime.now() - timedelta(days=190)
+    >>> format_time_ago(past)
+    '6 months ago'
+
+    >>> past = datetime.now() - timedelta(days=800)
+    >>> format_time_ago(past)
+    '2 years ago'
+
+    """
+    units = {
+        "years": lambda diff: diff.days / 365,
+        "months": lambda diff: diff.days / 30.436875,  # Average days per month
+        "weeks": lambda diff: diff.days / 7,
+        "days": lambda diff: diff.days,
+        "hours": lambda diff: diff.seconds / 3600,
+        "minutes": lambda diff: diff.seconds % 3600 / 60,
+    }
+    diff = datetime.now() - n
+    for unit in units:
+        dur = int(units[unit](diff))
+        if dur > 0:
+            if dur == 1:  # De-pluralize
+                unit = unit[:-1]
+            return "%s %s ago" % (dur, unit)
+    return "Just now"
+
+
+def format_bytes(n: int) -> str:
+    """Format bytes as text
+
+    >>> from dask.utils import format_bytes
     >>> format_bytes(1)
     '1 B'
     >>> format_bytes(1234)
-    '1.23 kB'
+    '1.21 kiB'
     >>> format_bytes(12345678)
-    '12.35 MB'
+    '11.77 MiB'
     >>> format_bytes(1234567890)
-    '1.23 GB'
+    '1.15 GiB'
     >>> format_bytes(1234567890000)
-    '1.23 TB'
+    '1.12 TiB'
     >>> format_bytes(1234567890000000)
-    '1.23 PB'
+    '1.10 PiB'
+
+    For all values < 2**60, the output is always <= 10 characters.
     """
-    if n > 1e15:
-        return "%0.2f PB" % (n / 1e15)
-    if n > 1e12:
-        return "%0.2f TB" % (n / 1e12)
-    if n > 1e9:
-        return "%0.2f GB" % (n / 1e9)
-    if n > 1e6:
-        return "%0.2f MB" % (n / 1e6)
-    if n > 1e3:
-        return "%0.2f kB" % (n / 1000)
-    return "%d B" % n
+    for prefix, k in (
+        ("Pi", 2 ** 50),
+        ("Ti", 2 ** 40),
+        ("Gi", 2 ** 30),
+        ("Mi", 2 ** 20),
+        ("ki", 2 ** 10),
+    ):
+        if n >= k * 0.9:
+            return f"{n / k:.2f} {prefix}B"
+    return f"{n} B"
 
 
 timedelta_sizes = {
@@ -1314,10 +1442,12 @@ timedelta_sizes.update({k.upper(): v for k, v in timedelta_sizes.items()})
 
 
 def parse_timedelta(s, default="seconds"):
-    """ Parse timedelta string to number of seconds
+    """Parse timedelta string to number of seconds
 
     Examples
     --------
+    >>> from datetime import timedelta
+    >>> from dask.utils import parse_timedelta
     >>> parse_timedelta('3s')
     3
     >>> parse_timedelta('3.5 seconds')
@@ -1370,3 +1500,246 @@ def ndimlist(seq):
         return 1
     else:
         return 1 + ndimlist(seq[0])
+
+
+def iter_chunks(sizes, max_size):
+    """Split sizes into chunks of total max_size each
+
+    Parameters
+    ----------
+    sizes : iterable of numbers
+        The sizes to be chunked
+    max_size : number
+        Maximum total size per chunk.
+        It must be greater or equal than each size in sizes
+    """
+    chunk, chunk_sum = [], 0
+    iter_sizes = iter(sizes)
+    size = next(iter_sizes, None)
+    while size is not None:
+        assert size <= max_size
+        if chunk_sum + size <= max_size:
+            chunk.append(size)
+            chunk_sum += size
+            size = next(iter_sizes, None)
+        else:
+            assert chunk
+            yield chunk
+            chunk, chunk_sum = [], 0
+    if chunk:
+        yield chunk
+
+
+hex_pattern = re.compile("[a-f]+")
+
+
+def key_split(s):
+    """
+    >>> key_split('x')
+    'x'
+    >>> key_split('x-1')
+    'x'
+    >>> key_split('x-1-2-3')
+    'x'
+    >>> key_split(('x-2', 1))
+    'x'
+    >>> key_split("('x-2', 1)")
+    'x'
+    >>> key_split('hello-world-1')
+    'hello-world'
+    >>> key_split(b'hello-world-1')
+    'hello-world'
+    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
+    'data'
+    >>> key_split('<module.submodule.myclass object at 0xdaf372')
+    'myclass'
+    >>> key_split(None)
+    'Other'
+    >>> key_split('x-abcdefab')  # ignores hex
+    'x'
+    >>> key_split('_(x)')  # strips unpleasant characters
+    'x'
+    """
+    if type(s) is bytes:
+        s = s.decode()
+    if type(s) is tuple:
+        s = s[0]
+    try:
+        words = s.split("-")
+        if not words[0][0].isalpha():
+            result = words[0].strip("_'()\"")
+        else:
+            result = words[0]
+        for word in words[1:]:
+            if word.isalpha() and not (
+                len(word) == 8 and hex_pattern.match(word) is not None
+            ):
+                result += "-" + word
+            else:
+                break
+        if len(result) == 32 and re.match(r"[a-f0-9]{32}", result):
+            return "data"
+        else:
+            if result[0] == "<":
+                result = result.strip("<>").split()[0].split(".")[-1]
+            return result
+    except Exception:
+        return "Other"
+
+
+def stringify(obj, exclusive: Optional[Iterable] = None):
+    """Convert an object to a string
+
+    If ``exclusive`` is specified, search through `obj` and convert
+    values that are in ``exclusive``.
+
+    Note that when searching through dictionaries, only values are
+    converted, not the keys.
+
+    Parameters
+    ----------
+    obj : Any
+        Object (or values within) to convert to string
+    exclusive: Iterable, optional
+        Set of values to search for when converting values to strings
+
+    Returns
+    -------
+    result : type(obj)
+        Stringified copy of ``obj`` or ``obj`` itself if it is already a
+        string or bytes.
+
+    Examples
+    --------
+    >>> stringify(b'x')
+    b'x'
+    >>> stringify('x')
+    'x'
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)})
+    "{('a', 0): ('a', 0), ('a', 1): ('a', 1)}"
+    >>> stringify({('a',0):('a',0), ('a',1): ('a',1)}, exclusive={('a',0)})
+    {('a', 0): "('a', 0)", ('a', 1): ('a', 1)}
+    """
+
+    typ = type(obj)
+    if typ is str or typ is bytes:
+        return obj
+    elif exclusive is None:
+        return str(obj)
+
+    if typ is tuple and obj:
+        from .optimization import SubgraphCallable
+
+        obj0 = obj[0]
+        if type(obj0) is SubgraphCallable:
+            obj0 = obj0
+            return (
+                SubgraphCallable(
+                    stringify(obj0.dsk, exclusive),
+                    obj0.outkey,
+                    stringify(obj0.inkeys, exclusive),
+                    obj0.name,
+                ),
+            ) + tuple(stringify(x, exclusive) for x in obj[1:])
+        elif callable(obj0):
+            return (obj0,) + tuple(stringify(x, exclusive) for x in obj[1:])
+
+    if typ is list:
+        return [stringify(v, exclusive) for v in obj]
+    if typ is dict:
+        return {k: stringify(v, exclusive) for k, v in obj.items()}
+    try:
+        if obj in exclusive:
+            return stringify(obj)
+    except TypeError:  # `obj` not hashable
+        pass
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify(v, exclusive) for v in obj)
+    return obj
+
+
+def stringify_collection_keys(obj):
+    """Convert all collection keys in ``obj`` to strings.
+
+    This is a specialized version of ``stringify()`` that only converts keys
+    of the form: ``("a string", ...)``
+    """
+
+    typ = type(obj)
+    if typ is tuple and obj:
+        obj0 = obj[0]
+        if type(obj0) is str or type(obj0) is bytes:
+            return stringify(obj)
+        if callable(obj0):
+            return (obj0,) + tuple(stringify_collection_keys(x) for x in obj[1:])
+    if typ is list:
+        return [stringify_collection_keys(v) for v in obj]
+    if typ is dict:
+        return {k: stringify_collection_keys(v) for k, v in obj.items()}
+    if typ is tuple:  # If the tuple itself isn't a key, check its elements
+        return tuple(stringify_collection_keys(v) for v in obj)
+    return obj
+
+
+try:
+    _cached_property = functools.cached_property
+except AttributeError:
+    # TODO: Copied from functools.cached_property in python 3.8. Remove when minimum
+    # supported python version is 3.8:
+    _NOT_FOUND = object()
+
+    class _cached_property:
+        def __init__(self, func):
+            self.func = func
+            self.attrname = None
+            self.__doc__ = func.__doc__
+            self.lock = RLock()
+
+        def __set_name__(self, owner, name):
+            if self.attrname is None:
+                self.attrname = name
+            elif name != self.attrname:
+                raise TypeError(
+                    "Cannot assign the same cached_property to two different names "
+                    f"({self.attrname!r} and {name!r})."
+                )
+
+        def __get__(self, instance, owner=None):
+            if instance is None:
+                return self
+            if self.attrname is None:
+                raise TypeError(
+                    "Cannot use cached_property instance without calling __set_name__ on it."
+                )
+            try:
+                cache = instance.__dict__
+            except AttributeError:  # not all objects have __dict__ (e.g. class defines slots)
+                msg = (
+                    f"No '__dict__' attribute on {type(instance).__name__!r} "
+                    f"instance to cache {self.attrname!r} property."
+                )
+                raise TypeError(msg) from None
+            val = cache.get(self.attrname, _NOT_FOUND)
+            if val is _NOT_FOUND:
+                with self.lock:
+                    # check if another thread filled cache while we awaited lock
+                    val = cache.get(self.attrname, _NOT_FOUND)
+                    if val is _NOT_FOUND:
+                        val = self.func(instance)
+                        try:
+                            cache[self.attrname] = val
+                        except TypeError:
+                            msg = (
+                                f"The '__dict__' attribute on {type(instance).__name__!r} instance "
+                                f"does not support item assignment for caching {self.attrname!r} property."
+                            )
+                            raise TypeError(msg) from None
+            return val
+
+
+class cached_property(_cached_property):
+    """Read only version of functools.cached_property."""
+
+    def __set__(self, instance, val):
+        """Raise an error when attempting to set a cached property."""
+        raise AttributeError("Can't set attribute")

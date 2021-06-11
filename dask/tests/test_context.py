@@ -1,9 +1,11 @@
-from dask.context import globalmethod
-import dask.array as da
+import pytest
+
 import dask
+from dask.context import globalmethod
 
 
 def test_with_get():
+    da = pytest.importorskip("dask.array")
     var = [0]
 
     def myget(dsk, keys, **kwargs):
@@ -32,7 +34,7 @@ def bar():
     return "bar"
 
 
-class Foo(object):
+class Foo:
     @globalmethod(key="f")
     def f():
         return 1

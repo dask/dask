@@ -1,4 +1,5 @@
 import random
+from distutils.version import LooseVersion
 
 import numpy as np
 import pytest
@@ -6,7 +7,7 @@ import pytest
 import dask
 import dask.array as da
 from dask.array.numpy_compat import _numpy_117
-from dask.array.utils import assert_eq, IS_NEP18_ACTIVE
+from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
 
 sparse = pytest.importorskip("sparse")
 if sparse:
@@ -30,7 +31,13 @@ functions = [
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
-    lambda x: x.mean(),
+    pytest.param(
+        lambda x: x.mean(),
+        marks=pytest.mark.skipif(
+            sparse.__version__ >= LooseVersion("0.12.0"),
+            reason="https://github.com/dask/dask/issues/7169",
+        ),
+    ),
     lambda x: x.moment(order=0),
     pytest.param(
         lambda x: x.std(),
@@ -52,6 +59,8 @@ functions = [
     lambda x: x.sum(axis=(1, 2)),
     lambda x: x.astype(np.complex128),
     lambda x: x.map_blocks(lambda x: x * 2),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=True),
+    lambda x: x.map_overlap(lambda x: x * 2, depth=0, trim=False),
     lambda x: x.round(1),
     lambda x: x.reshape((x.shape[0] * x.shape[1], x.shape[2])),
     lambda x: abs(x),
@@ -82,7 +91,7 @@ def test_basic(func):
 
 
 @pytest.mark.skipif(
-    sparse.__version__ < "0.7.0+10",
+    sparse.__version__ < LooseVersion("0.7.0+10"),
     reason="fixed in https://github.com/pydata/sparse/pull/256",
 )
 def test_tensordot():

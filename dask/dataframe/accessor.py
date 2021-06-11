@@ -1,6 +1,7 @@
+from functools import partial
+
 import numpy as np
 import pandas as pd
-from toolz import partial
 
 from ..utils import derived_from
 
@@ -13,7 +14,7 @@ def maybe_wrap_pandas(obj, x):
     return x
 
 
-class Accessor(object):
+class Accessor:
     """
     Base class for pandas Accessor objects cat, dt, and str.
 
@@ -75,7 +76,7 @@ class Accessor(object):
 
     @property
     def _delegates(self):
-        return set(dir(self._meta)).difference(self._not_implemented)
+        return set(dir(self._meta)) - self._not_implemented
 
     def __dir__(self):
         o = self._delegates
@@ -94,7 +95,7 @@ class Accessor(object):
 
 
 class DatetimeAccessor(Accessor):
-    """ Accessor object for datetimelike properties of the Series values.
+    """Accessor object for datetimelike properties of the Series values.
 
     Examples
     --------
@@ -106,7 +107,7 @@ class DatetimeAccessor(Accessor):
 
 
 class StringAccessor(Accessor):
-    """ Accessor object for string properties of the Series values.
+    """Accessor object for string properties of the Series values.
 
     Examples
     --------
@@ -123,10 +124,14 @@ class StringAccessor(Accessor):
             if n == -1:
                 raise NotImplementedError(
                     "To use the expand parameter you must specify the number of "
-                    "expected output columns with the n= parameter"
+                    "expected splits with the n= parameter. Usually n splits result in n+1 output columns."
                 )
             else:
-                meta = type(self._series._meta)([" ".join(["a"] * 2 * n)])
+                delimiter = " " if pat is None else pat
+                meta = self._series._meta._constructor(
+                    [delimiter.join(["a"] * (n + 1))],
+                    index=self._series._meta_nonempty[:1].index,
+                )
                 meta = meta.str.split(n=n, expand=expand, pat=pat)
         else:
             meta = (self._series.name, object)
@@ -134,10 +139,18 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def cat(self, others=None, sep=None, na_rep=None):
-        from .core import Series, Index
+        from .core import Index, Series
 
         if others is None:
-            raise NotImplementedError("x.str.cat() with `others == None`")
+
+            def str_cat_none(x):
+
+                if isinstance(x, (Series, Index)):
+                    x = x.compute()
+
+                return x.str.cat(sep=sep, na_rep=na_rep)
+
+            return self._series.reduction(chunk=str_cat_none, aggregate=str_cat_none)
 
         valid_types = (Series, Index, pd.Series, pd.Index)
         if isinstance(others, valid_types):
@@ -151,10 +164,8 @@ class StringAccessor(Accessor):
 
     @derived_from(pd.core.strings.StringMethods)
     def extractall(self, pat, flags=0):
-        # TODO: metadata inference here won't be necessary for pandas >= 0.23.0
-        meta = self._series._meta.str.extractall(pat, flags=flags)
         return self._series.map_partitions(
-            str_extractall, pat, flags, meta=meta, token="str-extractall"
+            str_extractall, pat, flags, token="str-extractall"
         )
 
     def __getitem__(self, index):
@@ -166,7 +177,7 @@ def str_extractall(series, pat, flags):
 
 
 def str_get(series, index):
-    """ Implements series.str[index] """
+    """Implements series.str[index]"""
     return series.str[index]
 
 

@@ -92,8 +92,8 @@ You can specify configuration values in YAML files like the following:
        work-stealing: True
        allowed-failures: 5
 
-      admin:
-        log-format: '%(name)s - %(levelname)s - %(message)s'
+       admin:
+         log-format: '%(name)s - %(levelname)s - %(message)s'
 
 These files can live in any of the following locations:
 
@@ -152,7 +152,6 @@ as lists, dictionaries, and so on with normal Python syntax.
 Environment variables take precedence over configuration values found in YAML
 files.
 
-
 Defaults
 ~~~~~~~~
 
@@ -203,6 +202,61 @@ Note that the ``set`` function treats underscores and hyphens identically.
 For example, ``dask.config.set({'scheduler.work-stealing': True})`` is
 equivalent to ``dask.config.set({'scheduler.work_stealing': True})``.
 
+Distributing configuration
+~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+It may also be desirable to package up your whole Dask configuration for use on
+another machine. This is used in some Dask Distributed libraries to ensure remote components
+have the same configuration as your local system.
+
+This is typically handled by the downstream libraries which use base64 encoding to pass
+config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+.. autosummary::
+   dask.config.serialize
+   dask.config.deserialize
+
+Conversion Utility
+~~~~~~~~~~~~~~~~~~
+
+It is possible to configure Dask inline with dot notation, with YAML or via environment variables. You can enter
+your own configuration items below to convert back and forth.
+
+.. warning::
+   This utility is designed to improve understanding of converting between different notations
+   and does not claim to be a perfect implementation. Please use for reference only.
+
+**YAML**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilYAML" name="configConvertUtilYAML" rows="10" cols="50" class="configTextArea" wrap="off">
+   distributed:
+     logging:
+       distributed: info
+       bokeh: critical
+       tornado: critical
+   </textarea>
+
+**Environment variable**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilEnv" name="configConvertUtilEnv" rows="10" cols="50" class="configTextArea" wrap="off">
+   export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"
+   export DASK_DISTRIBUTED__LOGGING__BOKEH="critical"
+   export DASK_DISTRIBUTED__LOGGING__TORNADO="critical"
+   </textarea>
+
+**Inline with dot notation**
+
+.. raw:: html
+
+   <textarea id="configConvertUtilCode" name="configConvertUtilCode" rows="10" cols="50" class="configTextArea" wrap="off">
+   >>> dask.config.set({"distributed.logging.distributed": "info"})
+   >>> dask.config.set({"distributed.logging.bokeh": "critical"})
+   >>> dask.config.set({"distributed.logging.tornado": "critical"})
+   </textarea>
 
 Updating Configuration
 ----------------------
@@ -330,7 +384,7 @@ Downstream projects typically follow the following convention:
        fn = os.path.join(os.path.dirname(__file__), 'foo.yaml')
 
        with open(fn) as f:
-           defaults = yaml.load(f)
+           defaults = yaml.safe_load(f)
 
        dask.config.update_defaults(defaults)
 

@@ -1,8 +1,8 @@
 import pytest
 
 import dask
-from dask.order import ndependencies, order
 from dask.core import get_deps
+from dask.order import ndependencies, order
 from dask.utils_test import add, inc
 
 
@@ -351,7 +351,7 @@ def test_local_parents_of_reduction(abcde):
     b1, b2, b3 = [b + i for i in "123"]
     c1, c2, c3 = [c + i for i in "123"]
 
-    expected = [a3, a2, a1, b3, b2, b1, c3, c2, c1]
+    expected = [a3, b3, c3, a2, a1, b2, b1, c2, c1]
 
     log = []
 
@@ -417,14 +417,14 @@ def test_nearest_neighbor(abcde):
 
 
 def test_string_ordering():
-    """ Prefer ordering tasks by name first """
+    """Prefer ordering tasks by name first"""
     dsk = {("a", 1): (f,), ("a", 2): (f,), ("a", 3): (f,)}
     o = order(dsk)
     assert o == {("a", 1): 0, ("a", 2): 1, ("a", 3): 2}
 
 
 def test_string_ordering_dependents():
-    """ Prefer ordering tasks by name first even when in dependencies """
+    """Prefer ordering tasks by name first even when in dependencies"""
     dsk = {("a", 1): (f, "b"), ("a", 2): (f, "b"), ("a", 3): (f, "b"), "b": (f,)}
     o = order(dsk)
     assert o == {"b": 0, ("a", 1): 1, ("a", 2): 2, ("a", 3): 3}
@@ -546,7 +546,7 @@ def test_map_overlap(abcde):
 
 
 def test_use_structure_not_keys(abcde):
-    """ See https://github.com/dask/dask/issues/5584#issuecomment-554963958
+    """See https://github.com/dask/dask/issues/5584#issuecomment-554963958
 
     We were using key names to infer structure, which could result in funny behavior.
     """
@@ -586,7 +586,7 @@ def test_use_structure_not_keys(abcde):
 
 
 def test_dont_run_all_dependents_too_early(abcde):
-    """ From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372 """
+    """From https://github.com/dask/dask-ml/issues/206#issuecomment-395873372"""
     a, b, c, d, e = abcde
     depth = 10
     dsk = {(a, 0): 0, (b, 0): 1, (c, 0): 2, (d, 0): (f, (a, 0), (b, 0), (c, 0))}
@@ -601,7 +601,7 @@ def test_dont_run_all_dependents_too_early(abcde):
 
 
 def test_many_branches_use_ndependencies(abcde):
-    """ From https://github.com/dask/dask/pull/5646#issuecomment-562700533
+    """From https://github.com/dask/dask/pull/5646#issuecomment-562700533
 
     Sometimes we need larger or wider DAGs to test behavior.  This test
     ensures we choose the branch with more work twice in successtion.
@@ -656,3 +656,224 @@ def test_order_cycle():
 
 def test_order_empty():
     assert order({}) == {}
+
+
+def test_switching_dependents(abcde):
+    r"""
+
+    a7 a8  <-- do these last
+    | /
+    a6                e6
+    |                /
+    a5   c5    d5  e5
+    |    |    /   /
+    a4   c4 d4  e4
+    |  \ | /   /
+    a3   b3---/
+    |
+    a2
+    |
+    a1
+    |
+    a0  <-- start here
+
+    Test that we are able to switch to better dependents.
+    In this graph, we expect to start at a0.  To compute a4, we need to compute b3.
+    After computing b3, three "better" paths become available.
+    Confirm that we take the better paths before continuing down `a` path.
+
+    This test is pretty specific to how `order` is implemented
+    and is intended to increase code coverage.
+    """
+    a, b, c, d, e = abcde
+    dsk = {
+        (a, 0): 0,
+        (a, 1): (f, (a, 0)),
+        (a, 2): (f, (a, 1)),
+        (a, 3): (f, (a, 2)),
+        (a, 4): (f, (a, 3), (b, 3)),
+        (a, 5): (f, (a, 4)),
+        (a, 6): (f, (a, 5)),
+        (a, 7): (f, (a, 6)),
+        (a, 8): (f, (a, 6)),
+        (b, 3): 1,
+        (c, 4): (f, (b, 3)),
+        (c, 5): (f, (c, 4)),
+        (d, 4): (f, (b, 3)),
+        (d, 5): (f, (d, 4)),
+        (e, 4): (f, (b, 3)),
+        (e, 5): (f, (e, 4)),
+        (e, 6): (f, (e, 5)),
+    }
+    o = order(dsk)
+
+    assert o[(a, 0)] == 0  # probably
+    assert o[(a, 5)] > o[(c, 5)]
+    assert o[(a, 5)] > o[(d, 5)]
+    assert o[(a, 5)] > o[(e, 6)]
+
+
+def test_order_with_equal_dependents(abcde):
+    """From https://github.com/dask/dask/issues/5859#issuecomment-608422198
+
+    See the visualization of `(maxima, argmax)` example from the above comment.
+
+    This DAG has enough structure to exercise more parts of `order`
+
+    """
+    a, b, c, d, e = abcde
+    dsk = {}
+    abc = [a, b, c, d]
+    for x in abc:
+        dsk.update(
+            {
+                (x, 0): 0,
+                (x, 1): (f, (x, 0)),
+                (x, 2, 0): (f, (x, 0)),
+                (x, 2, 1): (f, (x, 1)),
+            }
+        )
+        for i, y in enumerate(abc):
+            dsk.update(
+                {
+                    (x, 3, i): (f, (x, 2, 0), (y, 2, 1)),  # cross x and y
+                    (x, 4, i): (f, (x, 3, i)),
+                    (x, 5, i, 0): (f, (x, 4, i)),
+                    (x, 5, i, 1): (f, (x, 4, i)),
+                    (x, 6, i, 0): (f, (x, 5, i, 0)),
+                    (x, 6, i, 1): (f, (x, 5, i, 1)),
+                }
+            )
+    o = order(dsk)
+    total = 0
+    for x in abc:
+        for i in range(len(abc)):
+            val = o[(x, 6, i, 1)] - o[(x, 6, i, 0)]
+            assert val > 0  # ideally, val == 2
+            total += val
+    assert total <= 32  # ideally, this should be 2 * 16 = 32
+
+    # Add one to the end of the nine bundles
+    dsk2 = dict(dsk)
+    for x in abc:
+        for i in range(len(abc)):
+            dsk2[(x, 7, i, 0)] = (f, (x, 6, i, 0))
+    o = order(dsk2)
+    total = 0
+    for x in abc:
+        for i in range(len(abc)):
+            val = o[(x, 7, i, 0)] - o[(x, 6, i, 1)]
+            assert val > 0  # ideally, val == 3
+            total += val
+    assert total <= 165  # ideally, this should be 3 * 16 == 48
+
+    # Remove one from each of the nine bundles
+    dsk3 = dict(dsk)
+    for x in abc:
+        for i in range(len(abc)):
+            del dsk3[(x, 6, i, 1)]
+    o = order(dsk3)
+    total = 0
+    for x in abc:
+        for i in range(len(abc)):
+            val = o[(x, 6, i, 0)] - o[(x, 5, i, 1)]
+            assert val > 0  # ideally, val == 2
+            total += val
+    assert total <= 119  # ideally, this should be 2 * 16 == 32
+
+    # Remove another one from each of the nine bundles
+    dsk4 = dict(dsk3)
+    for x in abc:
+        for i in range(len(abc)):
+            del dsk4[(x, 6, i, 0)]
+    o = order(dsk4)
+    total = 0
+    for x in abc:
+        for i in range(len(abc)):
+            assert o[(x, 5, i, 1)] - o[(x, 5, i, 0)] == 1
+
+
+def test_terminal_node_backtrack():
+    r"""
+    https://github.com/dask/dask/issues/6745
+
+    We have
+
+    1. A terminal node that depends on the entire graph ('s')
+    2. Some shared dependencies near the roots ('a1', 'a4')
+    3. But the left and right halves are disconnected, other
+       than the terminal node.
+
+                       s
+               /   /       \   \
+              /   /         \   \
+            s00  s10       s01  s11
+             |    |         |    |
+            b00  b10       b01  b11
+            / \  / \       / \ / \
+           a0  a1  a2    a3  a4  a5
+
+    Previously we started at 'a', and worked up to 's00'. We'd like to finish
+    's00' completely, so we progress to 's' and work through its dependencies.
+
+    Ideally, we would choose 's10', since we've already computed one of its
+    (eventual) dependencies: 'a1'. However, all of 's00' through 's11' had
+    equal metrics so we fell back to the name tie-breaker and started on
+    's01' (via 'a3', a4', 'b01', ...).
+    """
+    dsk = {
+        # left half
+        ("a", 0): (0,),
+        ("a", 1): (1,),
+        ("a", 2): (2,),
+        ("b", 0): (f, ("a", 0), ("a", 1)),
+        ("b", 1): (f, ("a", 1), ("a", 2)),
+        ("store", 0, 0): ("b", 0),
+        ("store", 1, 0): ("b", 1),
+        # right half
+        ("a", 3): (3,),
+        ("a", 4): (4,),
+        ("a", 5): (5,),
+        ("b", 2): (f, ("a", 3), ("a", 4)),
+        ("b", 3): (f, ("a", 4), ("a", 5)),
+        ("store", 0, 1): ("b", 2),
+        ("store", 1, 1): ("b", 3),
+        "store": (
+            f,
+            ("store", 0, 0),
+            ("store", 1, 0),
+            ("store", 0, 1),
+            ("store", 1, 1),
+        ),
+    }
+    o = order(dsk)
+    assert o[("a", 2)] < o[("a", 3)]
+
+
+def test_array_store_final_order(tmpdir):
+    # https://github.com/dask/dask/issues/6745
+    # This essentially tests the same thing as test_terminal_node_backtrack,
+    # but with the graph actually generated by da.store.
+    da = pytest.importorskip("dask.array")
+    zarr = pytest.importorskip("zarr")
+    import numpy as np
+
+    arrays = [da.from_array(np.ones((110, 4)), chunks=(100, 2)) for i in range(4)]
+    x = da.concatenate(arrays, axis=0).rechunk((100, 2))
+
+    store = zarr.DirectoryStore(tmpdir)
+    root = zarr.group(store, overwrite=True)
+    dest = root.empty_like(name="dest", data=x, chunks=x.chunksize, overwrite=True)
+    d = x.store(dest, lock=False, compute=False)
+    o = order(d.dask)
+
+    # Find the lowest store. Dask starts here.
+    stores = [k for k in o if isinstance(k, tuple) and k[0].startswith("store-")]
+    first_store = min(stores, key=lambda k: o[k])
+    first_store
+    connected_stores = [k for k in stores if k[-1] == first_store[-1]]
+    disconnected_stores = [k for k in stores if k[-1] != first_store[-1]]
+
+    connected_max = max([v for k, v in o.items() if k in connected_stores])
+    disconnected_min = min([v for k, v in o.items() if k in disconnected_stores])
+    assert connected_max < disconnected_min

@@ -69,14 +69,14 @@ increase the sample size for each partition.
 
 """
 import math
+
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_datetime64tz_dtype
+from tlz import merge, merge_sorted, take
 
-from toolz import merge, merge_sorted, take
-
-from ..utils import random_state_data
 from ..base import tokenize
+from ..utils import is_cupy_type, random_state_data
 from .core import Series
 from .utils import is_categorical_dtype
 
@@ -225,9 +225,10 @@ def create_merge_tree(func, keys, token):
         width = tree_width(prev_width)
         groups = tree_groups(prev_width, width)
         keys = [(token, level, i) for i in range(width)]
-        rv.update(
-            (key, (func, list(take(num, prev_keys)))) for num, key in zip(groups, keys)
-        )
+
+        for num, key in zip(groups, keys):
+            rv[key] = (func, list(take(num, prev_keys)))
+
         prev_width = width
         prev_keys = iter(keys)
         level += 1
@@ -237,7 +238,7 @@ def create_merge_tree(func, keys, token):
 def percentiles_to_weights(qs, vals, length):
     """Weigh percentile values by length and the difference between percentiles
 
-    >>> percentiles = np.array([0, 25, 50, 90, 100])
+    >>> percentiles = np.array([0., 25., 50., 90., 100.])
     >>> values = np.array([2, 3, 5, 8, 13])
     >>> length = 10
     >>> percentiles_to_weights(percentiles, values, length)
@@ -412,9 +413,20 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     if is_categorical_dtype(data):
         data = data.codes
         interpolation = "nearest"
+    elif np.issubdtype(data.dtype, np.integer) and not is_cupy_type(data):
+        # CuPy doesn't currently support "nearest" interpolation,
+        # so it's special cased in the condition above.
+        interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
-    if interpolation == "linear" and np.issubdtype(data.dtype, np.integer):
+    if (
+        is_cupy_type(data)
+        and interpolation == "linear"
+        and np.issubdtype(data.dtype, np.integer)
+    ):
         vals = np.round(vals).astype(data.dtype)
+        if qs[0] == 0:
+            # Ensure the 0th quantile is the minimum value of the data
+            vals[0] = data.min()
     vals_and_weights = percentiles_to_weights(qs, vals, length)
     return vals_and_weights
 
@@ -428,8 +440,7 @@ def dtype_info(df):
 
 
 def partition_quantiles(df, npartitions, upsample=1.0, random_state=None):
-    """ Approximate quantiles of Series used for repartitioning
-    """
+    """Approximate quantiles of Series used for repartitioning"""
     assert isinstance(df, Series)
     # currently, only Series has quantile method
     # Index.quantile(list-like) must be pd.Series, not pd.Index

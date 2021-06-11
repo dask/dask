@@ -9,10 +9,9 @@ try:
 except ImportError:
     scipy = None
 
+from ..utils import derived_from, skip_doctest
 from .core import concatenate as _concatenate
 from .creation import arange as _arange
-from ..utils import derived_from
-
 
 chunk_error = (
     "Dask array only supports taking an FFT along an axis that \n"
@@ -24,7 +23,7 @@ chunk_error = (
 fft_preamble = """
     Wrapping of %s
 
-    The axis along which the FFT is applied must have a one chunk. To change
+    The axis along which the FFT is applied must have only one chunk. To change
     the array's chunking use dask.Array.rechunk.
 
     The %s docstring follows below:
@@ -33,7 +32,7 @@ fft_preamble = """
 
 
 def _fft_out_chunks(a, s, axes):
-    """ For computing the output chunks of [i]fft*"""
+    """For computing the output chunks of [i]fft*"""
     if s is None:
         return a.chunks
     chunks = list(a.chunks)
@@ -43,7 +42,7 @@ def _fft_out_chunks(a, s, axes):
 
 
 def _rfft_out_chunks(a, s, axes):
-    """ For computing the output chunks of rfft*"""
+    """For computing the output chunks of rfft*"""
     if s is None:
         s = [a.chunks[axis][0] for axis in axes]
     s = list(s)
@@ -55,7 +54,7 @@ def _rfft_out_chunks(a, s, axes):
 
 
 def _irfft_out_chunks(a, s, axes):
-    """ For computing the output chunks of irfft*"""
+    """For computing the output chunks of irfft*"""
     if s is None:
         s = [a.chunks[axis][0] for axis in axes]
         s[-1] = 2 * (s[-1] - 1)
@@ -112,7 +111,7 @@ _out_chunk_fns = {
 
 
 def fft_wrap(fft_func, kind=None, dtype=None):
-    """ Wrap 1D, 2D, and ND real and complex FFT functions
+    """Wrap 1D, 2D, and ND real and complex FFT functions
 
     Takes a function that behaves like ``numpy.fft`` functions and
     a specified kind to match it to that are named after the functions
@@ -137,8 +136,9 @@ def fft_wrap(fft_func, kind=None, dtype=None):
 
     Examples
     --------
-    >>> parallel_fft = fft_wrap(np.fft.fft)
-    >>> parallel_ifft = fft_wrap(np.fft.ifft)
+    >>> import dask.array.fft as dff
+    >>> parallel_fft = dff.fft_wrap(np.fft.fft)
+    >>> parallel_ifft = dff.fft_wrap(np.fft.ifft)
     """
     if scipy is not None:
         if fft_func is scipy.fftpack.rfft:
@@ -210,6 +210,7 @@ def fft_wrap(fft_func, kind=None, dtype=None):
     if fft_func.__doc__ is not None:
         func.__doc__ = fft_preamble % (2 * (func_fullname,))
         func.__doc__ += fft_func.__doc__
+        func.__doc__ = skip_doctest(func.__doc__)
     func.__name__ = func_name
     return func
 

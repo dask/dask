@@ -1,11 +1,13 @@
+import sys
+
 import numpy as np
 import pandas as pd
+from pandas.api.types import is_list_like, is_scalar
 
-from .core import Series, DataFrame, map_partitions, apply_concat_apply
-from . import methods
-from .utils import is_categorical_dtype, is_scalar, has_known_categories
 from ..utils import M
-import sys
+from . import methods
+from .core import DataFrame, Series, apply_concat_apply, map_partitions
+from .utils import has_known_categories
 
 ###############################################################
 # Dummies
@@ -60,7 +62,6 @@ def get_dummies(
 
     dtype : dtype, default np.uint8
         Data type for new columns. Only a single dtype is allowed.
-        Only valid if pandas is 0.23.0 or newer.
 
         .. versionadded:: 0.18.2
 
@@ -130,7 +131,7 @@ def get_dummies(
     )
 
     if isinstance(data, Series):
-        if not is_categorical_dtype(data):
+        if not methods.is_categorical_dtype(data):
             raise NotImplementedError(not_cat_msg)
         if not has_known_categories(data):
             raise NotImplementedError(unknown_cat_msg)
@@ -140,7 +141,7 @@ def get_dummies(
                 raise NotImplementedError(not_cat_msg)
             columns = data._meta.select_dtypes(include=["category"]).columns
         else:
-            if not all(is_categorical_dtype(data[c]) for c in columns):
+            if not all(methods.is_categorical_dtype(data[c]) for c in columns):
                 raise NotImplementedError(not_cat_msg)
 
         if not all(has_known_categories(data[c]) for c in columns):
@@ -186,7 +187,8 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
     """
     Create a spreadsheet-style pivot table as a DataFrame. Target ``columns``
     must have category dtype to infer result's ``columns``.
-    ``index``, ``columns``, ``values`` and ``aggfunc`` must be all scalar.
+    ``index``, ``columns``, and ``aggfunc`` must be all scalar.
+    ``values`` can be scalar or list-like.
 
     Parameters
     ----------
@@ -195,8 +197,8 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         column to be index
     columns : scalar
         column to be columns
-    values : scalar
-        column to aggregate
+    values : scalar or list(scalar)
+        column(s) to aggregate
     aggfunc : {'mean', 'sum', 'count'}, default 'mean'
 
     Returns
@@ -212,7 +214,7 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
         raise ValueError("'index' must be the name of an existing column")
     if not is_scalar(columns) or columns is None:
         raise ValueError("'columns' must be the name of an existing column")
-    if not is_categorical_dtype(df[columns]):
+    if not methods.is_categorical_dtype(df[columns]):
         raise ValueError("'columns' must be category dtype")
     if not has_known_categories(df[columns]):
         raise ValueError(
@@ -220,14 +222,26 @@ def pivot_table(df, index=None, columns=None, values=None, aggfunc="mean"):
             "`df[columns].cat.as_known()` beforehand to ensure "
             "known categories"
         )
-    if not is_scalar(values) or values is None:
-        raise ValueError("'values' must be the name of an existing column")
+    if not (
+        is_list_like(values)
+        and all([is_scalar(v) for v in values])
+        or is_scalar(values)
+    ):
+        raise ValueError("'values' must refer to an existing column or columns")
     if not is_scalar(aggfunc) or aggfunc not in ("mean", "sum", "count"):
         raise ValueError("aggfunc must be either 'mean', 'sum' or 'count'")
 
     # _emulate can't work for empty data
     # the result must have CategoricalIndex columns
-    new_columns = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
+
+    columns_contents = pd.CategoricalIndex(df[columns].cat.categories, name=columns)
+    if is_scalar(values):
+        new_columns = columns_contents
+    else:
+        new_columns = pd.MultiIndex.from_product(
+            (sorted(values), columns_contents), names=[None, columns]
+        )
+
     meta = pd.DataFrame(
         columns=new_columns, dtype=np.float64, index=pd.Index(df._meta[index])
     )

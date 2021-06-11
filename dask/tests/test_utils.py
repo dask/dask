@@ -3,34 +3,40 @@ import functools
 import operator
 import pickle
 
-import numpy as np
 import pytest
+from tlz import curry
 
+from dask import get
+from dask.highlevelgraph import HighLevelGraph
+from dask.optimization import SubgraphCallable
 from dask.utils import (
-    getargspec,
-    takes_multiple_arguments,
     Dispatch,
-    random_state_data,
-    memory_repr,
-    methodcaller,
     M,
-    skip_doctest,
     SerializableLock,
-    funcname,
-    ndeepmap,
+    asciitable,
+    derived_from,
     ensure_dict,
     extra_titles,
-    asciitable,
-    itemgetter,
-    partial_by_order,
+    format_bytes,
+    funcname,
+    getargspec,
     has_keyword,
-    derived_from,
-    parse_timedelta,
-    parse_bytes,
     is_arraylike,
+    itemgetter,
+    iter_chunks,
+    memory_repr,
+    methodcaller,
+    ndeepmap,
+    parse_bytes,
+    parse_timedelta,
+    partial_by_order,
+    random_state_data,
+    skip_doctest,
+    stringify,
+    stringify_collection_keys,
+    takes_multiple_arguments,
 )
 from dask.utils_test import inc
-from dask.highlevelgraph import HighLevelGraph
 
 
 def test_getargspec():
@@ -49,7 +55,7 @@ def test_getargspec():
     wrapper.__wrapped__ = func
     assert getargspec(wrapper).args == ["x", "y"]
 
-    class MyType(object):
+    class MyType:
         def __init__(self, x, y):
             pass
 
@@ -63,11 +69,11 @@ def test_takes_multiple_arguments():
     def multi(a, b, c):
         return a, b, c
 
-    class Singular(object):
+    class Singular:
         def __init__(self, a):
             pass
 
-    class Multi(object):
+    class Multi:
         def __init__(self, a, b):
             pass
 
@@ -94,12 +100,12 @@ def test_dispatch():
     foo.register(tuple, lambda a: tuple(foo(i) for i in a))
 
     def f(a):
-        """ My Docstring """
+        """My Docstring"""
         return a
 
     foo.register(object, f)
 
-    class Bar(object):
+    class Bar:
         pass
 
     b = Bar()
@@ -152,6 +158,7 @@ def test_dispatch_lazy():
 
 
 def test_random_state_data():
+    np = pytest.importorskip("numpy")
     seed = 37
     state = np.random.RandomState(seed)
     n = 10000
@@ -339,7 +346,7 @@ def test_funcname():
     assert funcname(M.sum) == "sum"
     assert funcname(lambda: 1) == "lambda"
 
-    class Foo(object):
+    class Foo:
         pass
 
     assert funcname(Foo) == "Foo"
@@ -358,9 +365,7 @@ def test_funcname_long():
 
 
 def test_funcname_toolz():
-    toolz = pytest.importorskip("toolz")
-
-    @toolz.curry
+    @curry
     def foo(a, b, c):
         pass
 
@@ -412,17 +417,18 @@ def test_ndeepmap():
 def test_ensure_dict():
     d = {"x": 1}
     assert ensure_dict(d) is d
-    hlg = HighLevelGraph.from_collections("x", d)
-    assert type(ensure_dict(hlg)) is dict
-    assert ensure_dict(hlg) == d
 
     class mydict(dict):
         pass
 
-    md = mydict()
-    md["x"] = 1
-    assert type(ensure_dict(md)) is dict
-    assert ensure_dict(md) == d
+    d2 = ensure_dict(d, copy=True)
+    d3 = ensure_dict(HighLevelGraph.from_collections("x", d))
+    d4 = ensure_dict(mydict(d))
+
+    for di in (d2, d3, d4):
+        assert type(di) is dict
+        assert di is not d
+        assert di == d
 
 
 def test_itemgetter():
@@ -454,7 +460,7 @@ def test_has_keyword():
 def test_derived_from():
     class Foo:
         def f(a, b):
-            """ A super docstring
+            """A super docstring
 
             An explanation
 
@@ -525,6 +531,7 @@ def test_parse_bytes():
     assert parse_bytes("1e6 kB") == 1000000000
     assert parse_bytes("MB") == 1000000
     assert parse_bytes(123) == 123
+    assert parse_bytes(".5GB") == 500000000
 
 
 def test_parse_timedelta():
@@ -556,6 +563,8 @@ def test_parse_timedelta():
 
 
 def test_is_arraylike():
+    np = pytest.importorskip("numpy")
+
     assert is_arraylike(0) is False
     assert is_arraylike(()) is False
     assert is_arraylike(0) is False
@@ -565,3 +574,88 @@ def test_is_arraylike():
     assert is_arraylike(np.empty(())) is True
     assert is_arraylike(np.empty((0,))) is True
     assert is_arraylike(np.empty((0, 0))) is True
+
+
+def test_iter_chunks():
+    sizes = [14, 8, 5, 9, 7, 9, 1, 19, 8, 19]
+    assert list(iter_chunks(sizes, 19)) == [
+        [14],
+        [8, 5],
+        [9, 7],
+        [9, 1],
+        [19],
+        [8],
+        [19],
+    ]
+    assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
+    assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
+
+
+def test_stringify():
+    obj = "Hello"
+    assert stringify(obj) is obj
+    obj = b"Hello"
+    assert stringify(obj) is obj
+    dsk = {"x": 1}
+
+    assert stringify(dsk) == str(dsk)
+    assert stringify(dsk, exclusive=()) == dsk
+
+    dsk = {("x", 1): (inc, 1)}
+    assert stringify(dsk) == str({("x", 1): (inc, 1)})
+    assert stringify(dsk, exclusive=()) == {("x", 1): (inc, 1)}
+
+    dsk = {("x", 1): (inc, 1), ("x", 2): (inc, ("x", 1))}
+    assert stringify(dsk, exclusive=dsk) == {
+        ("x", 1): (inc, 1),
+        ("x", 2): (inc, str(("x", 1))),
+    }
+
+    dsks = [
+        {"x": 1},
+        {("x", 1): (inc, 1), ("x", 2): (inc, ("x", 1))},
+        {("x", 1): (sum, [1, 2, 3]), ("x", 2): (sum, [("x", 1), ("x", 1)])},
+    ]
+    for dsk in dsks:
+        sdsk = {stringify(k): stringify(v, exclusive=dsk) for k, v in dsk.items()}
+        keys = list(dsk)
+        skeys = [str(k) for k in keys]
+        assert all(isinstance(k, str) for k in sdsk)
+        assert get(dsk, keys) == get(sdsk, skeys)
+
+    dsk = {("y", 1): (SubgraphCallable({"x": ("y", 1)}, "x", (("y", 1),)), (("z", 1),))}
+    dsk = stringify(dsk, exclusive=set(dsk) | {("z", 1)})
+    assert dsk[("y", 1)][0].dsk["x"] == "('y', 1)"
+    assert dsk[("y", 1)][1][0] == "('z', 1)"
+
+
+def test_stringify_collection_keys():
+    obj = "Hello"
+    assert stringify_collection_keys(obj) is obj
+
+    obj = [("a", 0), (b"a", 0), (1, 1)]
+    res = stringify_collection_keys(obj)
+    assert res[0] == str(obj[0])
+    assert res[1] == str(obj[1])
+    assert res[2] == obj[2]
+
+
+@pytest.mark.parametrize(
+    "n,expect",
+    [
+        (0, "0 B"),
+        (920, "920 B"),
+        (930, "0.91 kiB"),
+        (921.23 * 2 ** 10, "921.23 kiB"),
+        (931.23 * 2 ** 10, "0.91 MiB"),
+        (921.23 * 2 ** 20, "921.23 MiB"),
+        (931.23 * 2 ** 20, "0.91 GiB"),
+        (921.23 * 2 ** 30, "921.23 GiB"),
+        (931.23 * 2 ** 30, "0.91 TiB"),
+        (921.23 * 2 ** 40, "921.23 TiB"),
+        (931.23 * 2 ** 40, "0.91 PiB"),
+        (2 ** 60, "1024.00 PiB"),
+    ],
+)
+def test_format_bytes(n, expect):
+    assert format_bytes(int(n)) == expect

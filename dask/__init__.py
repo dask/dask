@@ -7,7 +7,14 @@ try:
 except ImportError:
     pass
 try:
-    from .base import visualize, compute, persist, optimize, is_dask_collection
+    from .base import (
+        annotate,
+        compute,
+        is_dask_collection,
+        optimize,
+        persist,
+        visualize,
+    )
 except ImportError:
     pass
 

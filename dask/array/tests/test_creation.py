@@ -4,13 +4,13 @@ pytest.importorskip("numpy")
 
 import numpy as np
 import pytest
-from toolz import concat
+from tlz import concat
 
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
-from dask.array.utils import assert_eq, same_keys, AxisError
-from dask.array.numpy_compat import _numpy_117
+from dask.array.numpy_compat import _numpy_117, _numpy_118
+from dask.array.utils import AxisError, assert_eq, same_keys
 
 
 @pytest.mark.parametrize(
@@ -29,8 +29,10 @@ from dask.array.numpy_compat import _numpy_117
 @pytest.mark.parametrize("cast_shape", [tuple, list, np.asarray])
 @pytest.mark.parametrize("cast_chunks", [tuple, list, np.asarray])
 @pytest.mark.parametrize("shape, chunks", [((10, 10), (4, 4))])
+@pytest.mark.parametrize("name", [None, "my-name"])
+@pytest.mark.parametrize("order", ["C", "F"])
 @pytest.mark.parametrize("dtype", ["i4"])
-def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
+def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name, order):
     np_func = getattr(np, funcname)
     da_func = getattr(da, funcname)
     shape = cast_shape(shape)
@@ -48,17 +50,67 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks):
     if "like" in funcname:
         a = np.random.randint(0, 10, shape).astype(dtype)
 
-        np_r = np_func(a)
-        da_r = da_func(a, chunks=chunks)
+        np_r = np_func(a, order=order)
+        da_r = da_func(a, order=order, chunks=chunks, name=name)
     else:
-        np_r = np_func(shape, dtype=dtype)
-        da_r = da_func(shape, dtype=dtype, chunks=chunks)
+        np_r = np_func(shape, order=order, dtype=dtype)
+        da_r = da_func(shape, order=order, dtype=dtype, chunks=chunks, name=name)
 
     assert np_r.shape == da_r.shape
     assert np_r.dtype == da_r.dtype
 
     if "empty" not in funcname:
         assert (np_r == np.asarray(da_r)).all()
+
+    if name is None:
+        assert funcname.split("_")[0] in da_r.name
+    else:
+        assert da_r.name == name
+
+    if "order" == "F":
+        assert np.isfortran(da_r.compute())
+    else:
+        assert not np.isfortran(da_r.compute())
+
+
+@pytest.mark.skipif(
+    not _numpy_117, reason="requires NumPy>=1.17 for shape argument support"
+)
+@pytest.mark.parametrize(
+    "funcname, kwargs",
+    [
+        ("empty_like", {}),
+        ("ones_like", {}),
+        ("zeros_like", {}),
+        ("full_like", {"fill_value": 5}),
+    ],
+)
+@pytest.mark.parametrize(
+    "shape, chunks, out_shape",
+    [
+        ((10, 10), (4, 4), None),
+        ((10, 10), (4, 4), (20, 3)),
+        ((10, 10), (4), (20)),
+        ((10, 10, 10), (4, 2), (5, 5)),
+        ((2, 3, 5, 7), None, (3, 5, 7)),
+        ((2, 3, 5, 7), (2, 5, 3), (3, 5, 7)),
+        ((2, 3, 5, 7), (2, 5, 3, "auto", 3), (11,) + (2, 3, 5, 7)),
+        ((2, 3, 5, 7), "auto", (3, 5, 7)),
+    ],
+)
+@pytest.mark.parametrize("dtype", ["i4"])
+def test_arr_like_shape(funcname, kwargs, shape, dtype, chunks, out_shape):
+    np_func = getattr(np, funcname)
+    da_func = getattr(da, funcname)
+    a = np.random.randint(0, 10, shape).astype(dtype)
+    np_r = np_func(a, shape=out_shape, **kwargs)
+    da_r = da_func(a, chunks=chunks, shape=out_shape, **kwargs)
+
+    assert np_r.shape == da_r.shape
+    assert np_r.dtype == da_r.dtype
+
+    if "empty" not in funcname:
+        assert_eq(np_r, da_r)
 
 
 @pytest.mark.parametrize("endpoint", [True, False])
@@ -313,53 +365,21 @@ def test_meshgrid_inputcoercion():
     assert_eq(z, z_d)
 
 
-def test_tril_triu():
-    A = np.random.randn(20, 20)
-    for chk in [5, 4]:
-        dA = da.from_array(A, (chk, chk))
-
-        assert np.allclose(da.triu(dA).compute(), np.triu(A))
-        assert np.allclose(da.tril(dA).compute(), np.tril(A))
-
-        for k in [
-            -25,
-            -20,
-            -19,
-            -15,
-            -14,
-            -9,
-            -8,
-            -6,
-            -5,
-            -1,
-            1,
-            4,
-            5,
-            6,
-            8,
-            10,
-            11,
-            15,
-            16,
-            19,
-            20,
-            21,
-        ]:
-            assert np.allclose(da.triu(dA, k).compute(), np.triu(A, k))
-            assert np.allclose(da.tril(dA, k).compute(), np.tril(A, k))
-
-
-def test_tril_triu_errors():
-    A = np.random.randint(0, 11, (10, 10, 10))
-    dA = da.from_array(A, chunks=(5, 5, 5))
-    pytest.raises(ValueError, lambda: da.triu(dA))
-
-
-def test_tril_triu_non_square_arrays():
-    A = np.random.randint(0, 11, (30, 35))
-    dA = da.from_array(A, chunks=(5, 5))
-    assert_eq(da.triu(dA), np.triu(A))
-    assert_eq(da.tril(dA), np.tril(A))
+@pytest.mark.parametrize(
+    "N, M, k, dtype, chunks",
+    [
+        (3, None, 0, float, "auto"),
+        (4, None, 0, float, "auto"),
+        (3, 4, 0, bool, "auto"),
+        (3, None, 1, int, "auto"),
+        (3, None, -1, int, "auto"),
+        (3, None, 2, int, 1),
+        (6, 8, -2, int, (3, 4)),
+        (6, 8, 0, int, (3, "auto")),
+    ],
+)
+def test_tri(N, M, k, dtype, chunks):
+    assert_eq(da.tri(N, M, k, dtype, chunks), np.tri(N, M, k, dtype))
 
 
 def test_eye():
@@ -442,7 +462,7 @@ def test_diagonal():
     assert_eq(da.diagonal(v, axis1=-1), np.diagonal(v, axis1=-1))
     assert_eq(da.diagonal(v, offset=1, axis1=-1), np.diagonal(v, offset=1, axis1=-1))
 
-    # Heterogenous chunks.
+    # Heterogeneous chunks.
     v = np.arange(2 * 3 * 4 * 5 * 6).reshape((2, 3, 4, 5, 6))
     v = da.from_array(v, chunks=(1, (1, 2), (1, 2, 1), (2, 1, 2), (5, 1)))
 
@@ -540,7 +560,7 @@ def test_repeat():
     x = np.random.random((10, 11, 13))
     d = da.from_array(x, chunks=(4, 5, 3))
 
-    repeats = [1, 2, 5]
+    repeats = [0, 1, 2, 5]
     axes = [-3, -2, -1, 0, 1, 2]
 
     for r in repeats:
@@ -640,6 +660,16 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
+        pytest.param(
+            (10, 11),
+            (4, 5),
+            0,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
@@ -683,6 +713,16 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
+        pytest.param(
+            (10,),
+            (3,),
+            1,
+            "empty",
+            {},
+            marks=pytest.mark.skipif(
+                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
+            ),
+        ),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
@@ -692,13 +732,76 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     np_r = np.pad(np_a, pad_width, mode, **kwargs)
     da_r = da.pad(da_a, pad_width, mode, **kwargs)
 
+    if mode == "empty":
+        # empty pads lead to undefined values which may be different
+        assert_eq(np_r[pad_width:-pad_width], da_r[pad_width:-pad_width])
+    else:
+        assert_eq(np_r, da_r)
+
+
+@pytest.mark.parametrize("dtype", [np.uint8, np.int16, np.float32, bool])
+@pytest.mark.parametrize(
+    "pad_widths", [2, (2,), (2, 3), ((2, 3),), ((3, 1), (0, 0), (2, 0))]
+)
+@pytest.mark.parametrize(
+    "mode",
+    [
+        "constant",
+        "edge",
+        pytest.param(
+            "linear_ramp",
+            marks=pytest.mark.skipif(
+                not _numpy_118, reason="numpy changed pad behaviour"
+            ),
+        ),
+        "maximum",
+        "mean",
+        "minimum",
+        pytest.param(
+            "reflect",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "symmetric",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "wrap",
+            marks=pytest.mark.skip(
+                reason="Bug when pad_width is larger than dimension: https://github.com/dask/dask/issues/5303"
+            ),
+        ),
+        pytest.param(
+            "median",
+            marks=pytest.mark.skip(reason="Not implemented"),
+        ),
+        pytest.param(
+            "empty",
+            marks=pytest.mark.skip(
+                reason="Empty leads to undefined values, which may be different"
+            ),
+        ),
+    ],
+)
+def test_pad_3d_data(dtype, pad_widths, mode):
+    np_a = np.arange(2 * 3 * 4).reshape(2, 3, 4).astype(dtype)
+    da_a = da.from_array(np_a, chunks="auto")
+
+    np_r = np.pad(np_a, pad_widths, mode=mode)
+    da_r = da.pad(da_a, pad_widths, mode=mode)
+
     assert_eq(np_r, da_r)
 
 
 @pytest.mark.parametrize("kwargs", [{}, {"scaler": 2}])
 def test_pad_udf(kwargs):
-    def udf_pad(vector, pad_width, iaxis, kwargs):
-        scaler = kwargs.get("scaler", 1)
+    def udf_pad(vector, pad_width, iaxis, inner_kwargs):
+        assert kwargs == inner_kwargs
+        scaler = inner_kwargs.get("scaler", 1)
         vector[: pad_width[0]] = -scaler * pad_width[0]
         vector[-pad_width[1] :] = scaler * pad_width[1]
         return vector
@@ -710,8 +813,8 @@ def test_pad_udf(kwargs):
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=chunks)
 
-    np_r = np.pad(np_a, pad_width, udf_pad, kwargs=kwargs)
-    da_r = da.pad(da_a, pad_width, udf_pad, kwargs=kwargs)
+    np_r = np.pad(np_a, pad_width, udf_pad, **kwargs)
+    da_r = da.pad(da_a, pad_width, udf_pad, **kwargs)
 
     assert_eq(np_r, da_r)
 

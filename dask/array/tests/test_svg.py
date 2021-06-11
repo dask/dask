@@ -1,7 +1,9 @@
+import xml.etree.ElementTree
+
+import pytest
+
 import dask.array as da
 from dask.array.svg import draw_sizes
-import xml.etree.ElementTree
-import pytest
 
 
 def parses(text):
@@ -52,7 +54,7 @@ def test_errors():
     assert "unknown chunk sizes" in str(excpt.value)
 
 
-def test_repr_html():
+def test_repr_html_size_units():
     x = da.ones((10000, 5000))
     x = da.ones((3000, 10000), chunks=(1000, 1000))
     text = x._repr_html_()
@@ -77,6 +79,13 @@ def test_draw_sizes():
     assert b > c
     assert a < b * 5
     assert b < c * 5
+
+
+def test_too_many_lines_fills_sides_darker():
+    data = da.ones((16000, 2400, 3600), chunks=(1, 2400, 3600))
+    text = data.to_svg()
+    assert "8B4903" in text
+    assert text.count("\n") < 300
 
 
 def test_3d():

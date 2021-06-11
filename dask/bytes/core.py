@@ -1,23 +1,8 @@
 import copy
+import os
 
-from fsspec.core import (  # noqa: F401
-    OpenFile,  # noqa: F401
-    open_files,  # noqa: F401
-    get_fs_token_paths,  # noqa: F401
-    expand_paths_if_needed,  # noqa: F401
-    _expand_paths,  # noqa: F401
-    get_compression,  # noqa: F401
-)
-from fsspec.core import open as open_file  # noqa: F401
-from fsspec.utils import (  # noqa: F401
-    read_block,  # noqa: F401
-    seek_delimiter,  # noqa: F401
-    infer_storage_options,  # noqa: F401
-    stringify_path,  # noqa: F401
-    infer_compression,  # noqa: F401
-)
-from fsspec import get_mapper  # noqa: F401
-from fsspec.compression import compr  # noqa: F401
+from fsspec.core import OpenFile, get_fs_token_paths
+from fsspec.utils import infer_compression, read_block
 
 from ..base import tokenize
 from ..delayed import delayed
@@ -90,6 +75,9 @@ def read_bytes(
         represented in the corresponding block.
 
     """
+    if not isinstance(urlpath, (str, list, tuple, os.PathLike)):
+        raise TypeError("Path should be a string, os.PathLike, list or tuple")
+
     fs, fs_token, paths = get_fs_token_paths(urlpath, mode="rb", storage_options=kwargs)
 
     if len(paths) == 0:

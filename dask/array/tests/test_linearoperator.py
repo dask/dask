@@ -3,8 +3,9 @@ import pytest
 pytest.importorskip("scipy")
 
 import numpy as np
-import dask.array as da
 import scipy.sparse.linalg
+
+import dask.array as da
 
 
 def test_LinearOperator():

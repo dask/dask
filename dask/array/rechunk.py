@@ -5,27 +5,29 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
-import math
 import heapq
-
-from itertools import product, chain, count
-from operator import getitem, add, mul, itemgetter
+import math
+from functools import reduce
+from itertools import chain, count, product
+from operator import add, getitem, itemgetter, mul
+from typing import Tuple
+from warnings import warn
 
 import numpy as np
-import toolz
-from toolz import accumulate, reduce
+import tlz as toolz
+from tlz import accumulate
 
+from .. import config
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
-from .core import concatenate3, Array, normalize_chunks
+from .core import Array, concatenate3, normalize_chunks
 from .utils import validate_axis
 from .wrap import empty
-from .. import config
 
 
 def cumdims_label(chunks, const):
-    """ Internal utility for cumulative sum with label.
+    """Internal utility for cumulative sum with label.
 
     >>> cumdims_label(((5, 3, 3), (2, 2, 1)), 'n')  # doctest: +NORMALIZE_WHITESPACE
     [(('n', 0), ('n', 5), ('n', 8), ('n', 11)),
@@ -111,7 +113,7 @@ def _intersect_1d(breaks):
 
 
 def _old_to_new(old_chunks, new_chunks):
-    """ Helper to build old_chunks to new_chunks.
+    """Helper to build old_chunks to new_chunks.
 
     Handles missing values, as long as the missing dimension
     is unchanged.
@@ -181,7 +183,7 @@ def intersect_chunks(old_chunks, new_chunks):
     return cross
 
 
-def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
+def rechunk(x, chunks="auto", threshold=None, block_size_limit=None, balance=False):
     """
     Convert blocks in dask array x for new chunks.
 
@@ -199,6 +201,12 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     block_size_limit: int, optional
         The maximum block size (in bytes) we want to produce
         Defaults to the configuration value ``array.chunk-size``
+    balance : bool, default False
+        If True, try to make each chunk to be the same size.
+
+        This means ``balance=True`` will remove any small leftover chunks, so
+        using ``x.rechunk(chunks=len(x) // N, balance=True)``
+        will almost certainly result in ``N`` chunks.
 
     Examples
     --------
@@ -218,7 +226,23 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
     dimension to attain blocks of a uniform block size
 
     >>> y = x.rechunk({0: -1, 1: 'auto'}, block_size_limit=1e8)
+
+    If a chunk size does not divide the dimension then rechunk will leave any
+    unevenness to the last chunk.
+
+    >>> x.rechunk(chunks=(400, -1)).chunks
+    ((400, 400, 200), (1000,))
+
+    However if you want more balanced chunks, and don't mind Dask choosing a
+    different chunksize for you then you can use the ``balance=True`` option.
+
+    >>> x.rechunk(chunks=(400, -1), balance=True).chunks
+    ((500, 500), (1000,))
     """
+    # don't rechunk if array is empty
+    if x.ndim > 0 and all(s == 0 for s in x.shape):
+        return x
+
     if isinstance(chunks, dict):
         chunks = {validate_axis(c, x.ndim): v for c, v in chunks.items()}
         for i in range(x.ndim):
@@ -230,11 +254,16 @@ def rechunk(x, chunks="auto", threshold=None, block_size_limit=None):
         chunks, x.shape, limit=block_size_limit, dtype=x.dtype, previous_chunks=x.chunks
     )
 
-    if chunks == x.chunks:
+    # Now chunks are tuple of tuples
+    if not balance and (chunks == x.chunks):
         return x
     ndim = x.ndim
     if not len(chunks) == ndim:
         raise ValueError("Provided chunks are not consistent with shape")
+
+    if balance:
+        chunks = tuple([_balance_chunksizes(chunk) for chunk in chunks])
+
     new_shapes = tuple(map(sum, chunks))
 
     for new, old in zip(new_shapes, x.shape):
@@ -259,8 +288,7 @@ def _largest_block_size(chunks):
 
 
 def estimate_graph_size(old_chunks, new_chunks):
-    """ Estimate the graph size during a rechunk computation.
-    """
+    """Estimate the graph size during a rechunk computation."""
     # Estimate the number of intermediate blocks that will be produced
     # (we don't use intersect_chunks() which is much more expensive)
     crossed_size = reduce(
@@ -274,7 +302,7 @@ def estimate_graph_size(old_chunks, new_chunks):
 
 
 def divide_to_width(desired_chunks, max_width):
-    """ Minimally divide the given chunks so as to make the largest chunk
+    """Minimally divide the given chunks so as to make the largest chunk
     width less or equal than *max_width*.
     """
     chunks = []
@@ -289,7 +317,7 @@ def divide_to_width(desired_chunks, max_width):
 
 
 def merge_to_number(desired_chunks, max_number):
-    """ Minimally merge the given chunks so as to drop the number of
+    """Minimally merge the given chunks so as to drop the number of
     chunks below *max_number*, while minimizing the largest width.
     """
     if len(desired_chunks) <= max_number:
@@ -446,7 +474,7 @@ def find_split_rechunk(old_chunks, new_chunks, graph_size_limit):
 def plan_rechunk(
     old_chunks, new_chunks, itemsize, threshold=None, block_size_limit=None
 ):
-    """ Plan an iterative rechunking from *old_chunks* to *new_chunks*.
+    """Plan an iterative rechunking from *old_chunks* to *new_chunks*.
     The plan aims to minimize the rechunk graph size.
 
     Parameters
@@ -526,8 +554,7 @@ def plan_rechunk(
 
 
 def _compute_rechunk(x, chunks):
-    """ Compute the rechunk of *x* to the given *chunks*.
-    """
+    """Compute the rechunk of *x* to the given *chunks*."""
     if x.size == 0:
         # Special case for empty array, as the algorithm below does not behave correctly
         return empty(x.shape, chunks=chunks, dtype=x.dtype)
@@ -587,7 +614,7 @@ def _compute_rechunk(x, chunks):
     return Array(graph, merge_name, chunks, meta=x)
 
 
-class _PrettyBlocks(object):
+class _PrettyBlocks:
     def __init__(self, blocks):
         self.blocks = blocks
 
@@ -658,3 +685,50 @@ def format_plan(plan):
     [(3*[10], 2*[15]), ([30], 3*[10])]
     """
     return [format_chunks(c) for c in plan]
+
+
+def _get_chunks(n, chunksize):
+    leftover = n % chunksize
+    n_chunks = n // chunksize
+
+    chunks = [chunksize] * n_chunks
+    if leftover:
+        chunks.append(leftover)
+    return tuple(chunks)
+
+
+def _balance_chunksizes(chunks: Tuple[int, ...]) -> Tuple[int, ...]:
+    """
+    Balance the chunk sizes
+
+    Parameters
+    ----------
+    chunks : Tuple[int, ...]
+        Chunk sizes for Dask array.
+
+    Returns
+    -------
+    new_chunks : Tuple[int, ...]
+        New chunks for Dask array with balanced sizes.
+    """
+    median_len = np.median(chunks).astype(int)
+    n_chunks = len(chunks)
+    eps = median_len // 2
+    if min(chunks) <= 0.5 * max(chunks):
+        n_chunks -= 1
+
+    new_chunks = [
+        _get_chunks(sum(chunks), chunk_len)
+        for chunk_len in range(median_len - eps, median_len + eps + 1)
+    ]
+    possible_chunks = [c for c in new_chunks if len(c) == n_chunks]
+    if not len(possible_chunks):
+        warn(
+            "chunk size balancing not possible with given chunks. "
+            "Try increasing the chunk size."
+        )
+        return chunks
+
+    diffs = [max(c) - min(c) for c in possible_chunks]
+    best_chunk_size = np.argmin(diffs)
+    return possible_chunks[best_chunk_size]

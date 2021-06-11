@@ -155,16 +155,16 @@ commonly.
 Web Diagnostics
 ~~~~~~~~~~~~~~~
 
-First, the distributed scheduler has a number of `diagnostic web pages
-<https://distributed.dask.org/en/latest/web.html>`_ showing dozens of
+First, the distributed scheduler has a number of `diagnostic tools
+<https://distributed.dask.org/en/latest/diagnosing-performance.html>`_ showing dozens of
 recorded metrics like CPU, memory, network, and disk use, a history of previous
 tasks, allocation of tasks to workers, worker memory pressure, work stealing,
 open file handle limits, etc.  *Many* problems can be correctly diagnosed by
 inspecting these pages.  By default, these are available at
 ``http://scheduler:8787/``, ``http://scheduler:8788/``, and ``http://worker:8789/``,
 where ``scheduler`` and ``worker`` should be replaced by the addresses of the
-scheduler and each of the workers. See `web diagnostic docs
-<https://distributed.dask.org/en/latest/web.html>`_ for more information.
+scheduler and each of the workers. See `diagnosing performance docs
+<https://distributed.dask.org/en/latest/diagnosing-performance.html>`_ for more information.
 
 Logs
 ~~~~
@@ -179,7 +179,8 @@ launching Dask on your own, they will probably dump to the screen unless you
 <https://en.wikipedia.org/wiki/Redirection_(computing)#Redirecting_to_and_from_the_standard_file_handles>`_
 .
 
-You can control the logging verbosity in the ``~/.dask/config.yaml`` file.
+You can control the logging verbosity in the :doc:`configuration`, for example,
+the ``~/.config/dask/*.yaml`` files.
 Defaults currently look like the following:
 
 .. code-block:: yaml
@@ -189,8 +190,41 @@ Defaults currently look like the following:
      distributed.client: warning
      bokeh: error
 
+Logging for specific components like ``distributed.client``,  ``distributed.scheduler``,
+``distributed.nanny``,  ``distributed.worker``, etc. can each be independently configured.
 So, for example, you could add a line like ``distributed.worker: debug`` to get
 *very* verbose output from the workers.
+
+Furthermore, you can explicitly assign handlers to loggers. The following example
+assigns both file ("output.log") and console output to the scheduler and workers.
+See the `python logging`_ documentation for information on the meaning of
+specific terms here.
+
+.. code-block:: yaml
+
+    logging:
+      version: 1
+      handlers:
+        file:
+          class: logging.handlers.RotatingFileHandler
+          filename: output.log
+          level: INFO
+        console:
+          class: logging.StreamHandler
+          level: INFO
+      loggers:
+        distributed.worker:
+          level: INFO
+          handlers:
+            - file
+            - console
+        distributed.scheduler:
+          level: INFO
+          handlers:
+            - file
+            - console
+
+.. _python logging: https://docs.python.org/3/library/logging.html
 
 
 LocalCluster
@@ -198,7 +232,7 @@ LocalCluster
 
 If you are using the distributed scheduler from a single machine, you may be
 setting up workers manually using the command line interface or you may be
-using `LocalCluster <https://distributed.dask.org/en/latest/local-cluster.html>`_
+using `LocalCluster <https://distributed.dask.org/en/latest/api.html#cluster>`_
 which is what runs when you just call ``Client()``:
 
 .. code-block:: python

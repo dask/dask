@@ -21,25 +21,23 @@ as loading of configuration, is done using ordinary python method.
 The following remote services are well supported and tested against the main
 codebase:
 
-- **Local or Network File System**: ``file://`` - the local file system, default in the absence of any protocol
+- **Local or Network File System**: ``file://`` - the local file system, default in the absence of any protocol.
 
 - **Hadoop File System**: ``hdfs://`` - Hadoop Distributed File System, for resilient, replicated
   files within a cluster. This uses PyArrow_ as the backend.
 
 - **Amazon S3**: ``s3://`` - Amazon S3 remote binary store, often used with Amazon EC2,
-  using the library s3fs_
+  using the library s3fs_.
 
-- **Google Cloud Storage**: ``gcs://`` or ``gs:`` - Google Cloud Storage, typically used with Google Compute
-  resource using gcsfs_ (in development)
+- **Google Cloud Storage**: ``gcs://`` or ``gs://`` - Google Cloud Storage, typically used with Google Compute
+  resource using gcsfs_.
 
-- **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers
+- **Microsoft Azure Storage**: ``adl://``, ``abfs://`` or ``az://`` - Microsoft Azure Storage using adlfs_.
 
-- **Azure Datalake Storage**: ``adl://``, for use with the Microsoft
-  Azure platform, using azure-data-lake-store-python_, is unavailable in the current release of
-  ``fsspec``, but a new version using Microsoft's "protocol 2" should come soon.
+- **HTTP(s)**: ``http://`` or ``https://`` for reading data directly from HTTP web servers.
 
-``fsspec`` also provides other file systems that may be of interest to Dask users, such as
-ssh, ftp and webhdfs. See the documentation for more information.
+`fsspec`_ also provides other file systems that may be of interest to Dask users, such as
+ssh, ftp, webhdfs and dropbox. See the documentation for more information.
 
 When specifying a storage location, a URL should be provided using the general
 form ``protocol://path/to/data``.  If no protocol is provided, the local
@@ -47,11 +45,11 @@ file system is assumed (same as ``file://``).
 
 .. _fsspec: https://filesystem-spec.readthedocs.io/
 .. _s3fs: https://s3fs.readthedocs.io/
-.. _azure-data-lake-store-python: https://github.com/Azure/azure-data-lake-store-python
-.. _gcsfs: https://github.com/dask/gcsfs/
+.. _adlfs: https://github.com/dask/adlfs
+.. _gcsfs: https://gcsfs.readthedocs.io/en/latest/
 .. _PyArrow: https://arrow.apache.org/docs/python/
 
-Lower-level details on how Dask handles remote data is described is described
+Lower-level details on how Dask handles remote data is described
 below in the Internals section
 
 Optional Parameters
@@ -133,7 +131,7 @@ The following additional options may be passed to the ``PyArrow`` driver via
 PyArrow's ``libhdfs`` driver can also be affected by a few environment
 variables. For more information on these, see the `PyArrow documentation`_.
 
-.. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems.html#hadoop-file-system-hdfs
+.. _PyArrow documentation: https://arrow.apache.org/docs/python/filesystems_deprecated.html#hadoop-file-system-hdfs
 
 
 Amazon S3
@@ -142,7 +140,7 @@ Amazon S3
 Amazon S3 (Simple Storage Service) is a web service offered by Amazon Web
 Services.
 
-The S3 back-end available to Dask is s3fs, and is importable when Dask is
+The S3 back-end available to Dask is s3fs_, and is importable when Dask is
 imported.
 
 Authentication for S3 is provided by the underlying library boto3. As described
@@ -188,7 +186,7 @@ The following parameters may be passed to s3fs using ``storage_options``:
 
 .. _boto3 client: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html#boto3.session.Session.client
 .. _boto3 Session: https://boto3.amazonaws.com/v1/documentation/api/latest/reference/core/session.html
-.. _here: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/configuration.html#shared-credentials-file
+.. _here: https://boto3.amazonaws.com/v1/documentation/api/latest/guide/credentials.html#shared-credentials-file
 .. _s3fs.S3FileSystem: https://s3fs.readthedocs.io/en/latest/api.html#s3fs.core.S3FileSystem
 .. _boto3 client's config: https://botocore.amazonaws.com/v1/documentation/api/latest/reference/config.html
 
@@ -250,22 +248,17 @@ using any method that works for you and then pass its credentials directly:
     gcs = GCSFileSystem(...)
     dask_function(..., storage_options={'token': gcs.session.credentials})
 
-Azure
------
+Microsoft Azure Storage
+-----------------------
 
-.. warning::
+Microsoft Azure Storage is comprised of Data Lake Storage (Gen1) and Blob Storage (Gen2).
+These are identified by the protocol identifiers ``adl`` and ``abfs``, respectively,
+provided by the adlfs_ back-end.
 
-    Support for `AzureDLFileSystem`_ (ADL) is not currently offered. We hope to provide both
-    datalake and blob support using Protocol 2 soon.
+Authentication for ``adl`` requires ``tenant_id``, ``client_id`` and ``client_secret``
+in the ``storage_options`` dictionary.
 
-.. Parameters ``tenant_id``, ``client_id``, and ``client_secret`` are required for
-authentication in ``storage_options=``,
-and all other parameters will be passed on to the AzureDLFileSystem_ constructor
-(follow the link for further information). The auth parameters are passed directly to
-workers, so this should only be used within a secure cluster.
-
-.. _AzureDLFileSystem: https://azure-datalake-store.readthedocs.io/en/latest/api.html#azure.datalake.store.core.AzureDLFileSystem
-
+Authentication for ``abfs`` requires ``account_name`` and ``account_key`` in ``storage_options``.
 
 HTTP(S)
 -------
@@ -331,7 +324,6 @@ to be installed.
 
 These functions are not used for all data sources.  Some data sources like HDF5
 are quite particular and receive custom treatment.
-
 
 Delimiters
 ^^^^^^^^^^

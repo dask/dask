@@ -1,31 +1,139 @@
 from collections.abc import Mapping
 from io import BytesIO
-from warnings import warn, catch_warnings, simplefilter
+from warnings import catch_warnings, simplefilter, warn
+
+from ...highlevelgraph import HighLevelGraph
+from ...layers import DataFrameIOLayer
 
 try:
     import psutil
 except ImportError:
     psutil = None
 
+import fsspec.implementations.local
 import numpy as np
 import pandas as pd
+from fsspec.compression import compr
+from fsspec.core import get_fs_token_paths
+from fsspec.core import open as open_file
+from fsspec.core import open_files
+from fsspec.utils import infer_compression
 from pandas.api.types import (
-    is_integer_dtype,
-    is_float_dtype,
-    is_object_dtype,
-    is_datetime64_any_dtype,
     CategoricalDtype,
+    is_datetime64_any_dtype,
+    is_float_dtype,
+    is_integer_dtype,
+    is_object_dtype,
 )
 
-# this import checks for the importability of fsspec
-from ...bytes import read_bytes, open_file, open_files
+from ...base import tokenize
+from ...bytes import read_bytes
+from ...core import flatten
 from ...delayed import delayed
 from ...utils import asciitable, parse_bytes
+from ..core import new_dd_object
 from ..utils import clear_known_categories
-from .io import from_delayed
 
-import fsspec.implementations.local
-from fsspec.compression import compr
+
+class CSVFunctionWrapper:
+    """
+    CSV Function-Wrapper Class
+    Reads CSV data from disk to produce a partition (given a key).
+    """
+
+    def __init__(
+        self,
+        full_columns,
+        columns,
+        colname,
+        head,
+        header,
+        reader,
+        dtypes,
+        enforce,
+        kwargs,
+    ):
+        self.full_columns = full_columns
+        self.columns = columns
+        self.colname = colname
+        self.head = head
+        self.header = header
+        self.reader = reader
+        self.dtypes = dtypes
+        self.enforce = enforce
+        self.kwargs = kwargs
+
+    def project_columns(self, columns):
+        """Return a new CSVFunctionWrapper object with
+        a sub-column projection.
+        """
+        # Make sure columns is ordered correctly
+        columns = [c for c in self.head.columns if c in columns]
+        if columns == self.columns:
+            return self
+        return CSVFunctionWrapper(
+            self.full_columns,
+            columns,
+            self.colname,
+            self.head[columns],
+            self.header,
+            self.reader,
+            {c: self.dtypes[c] for c in columns},
+            self.enforce,
+            self.kwargs,
+        )
+
+    def __call__(self, part):
+
+        # Part will be a 3-element tuple
+        block, path, is_first = part
+
+        # Construct `path_info`
+        if path is not None:
+            path_info = (
+                self.colname,
+                path,
+                sorted(list(self.head[self.colname].cat.categories)),
+            )
+        else:
+            path_info = None
+
+        # Deal with arguments that are special
+        # for the first block of each file
+        write_header = False
+        rest_kwargs = self.kwargs.copy()
+        if not is_first:
+            write_header = True
+            rest_kwargs.pop("skiprows", None)
+
+        # Deal with column projection
+        columns = self.full_columns
+        project_after_read = False
+        if self.columns is not None:
+            if self.kwargs:
+                # To be safe, if any kwargs are defined, avoid
+                # changing `usecols` here. Instead, we can just
+                # select columns after the read
+                project_after_read = True
+            else:
+                columns = self.columns
+                rest_kwargs["usecols"] = columns
+
+        # Call `pandas_read_text`
+        df = pandas_read_text(
+            self.reader,
+            block,
+            self.header,
+            rest_kwargs,
+            self.dtypes,
+            columns,
+            write_header,
+            self.enforce,
+            path_info,
+        )
+        if project_after_read:
+            return df[self.columns]
+        return df
 
 
 def pandas_read_text(
@@ -39,7 +147,7 @@ def pandas_read_text(
     enforce=False,
     path=None,
 ):
-    """ Convert a block of bytes to a Pandas DataFrame
+    """Convert a block of bytes to a Pandas DataFrame
 
     Parameters
     ----------
@@ -54,7 +162,7 @@ def pandas_read_text(
     dtypes : dict
         DTypes to assign to columns
     path : tuple
-        A tuple containing path column name, path to file, and all paths.
+        A tuple containing path column name, path to file, and an ordered list of paths.
 
     See Also
     --------
@@ -83,7 +191,7 @@ def pandas_read_text(
 
 
 def coerce_dtypes(df, dtypes):
-    """ Coerce dataframe to dtypes safely
+    """Coerce dataframe to dtypes safely
 
     Operates in place
 
@@ -180,12 +288,12 @@ def text_blocks_to_pandas(
     header,
     head,
     kwargs,
-    collection=True,
     enforce=False,
     specified_dtypes=None,
     path=None,
+    blocksize=None,
 ):
-    """ Convert blocks of bytes to a dask.dataframe or other high-level object
+    """Convert blocks of bytes to a dask.dataframe
 
     This accepts a list of lists of values of bytes where each list corresponds
     to one file, and the value of bytes concatenate to comprise the entire
@@ -202,16 +310,14 @@ def text_blocks_to_pandas(
         all blocks
     head : pd.DataFrame
         An example Pandas DataFrame to be used for metadata.
-        Can be ``None`` if ``collection==False``
     kwargs : dict
         Keyword arguments to pass down to ``reader``
-    collection: boolean, optional (defaults to True)
     path : tuple, optional
-        A tuple containing column name for path and list of all paths
+        A tuple containing column name for path and the path_converter if provided
 
     Returns
     -------
-    A dask.dataframe or list of delayed values
+    A dask.dataframe
     """
     dtypes = head.dtypes.to_dict()
     # dtypes contains only instances of CategoricalDtype, which causes issues
@@ -221,8 +327,6 @@ def text_blocks_to_pandas(
     # 2. contain 'category' for data inferred types
     categoricals = head.select_dtypes(include=["category"]).columns
 
-    known_categoricals = []
-    unknown_categoricals = categoricals
     if isinstance(specified_dtypes, Mapping):
         known_categoricals = [
             k
@@ -231,11 +335,7 @@ def text_blocks_to_pandas(
             and specified_dtypes.get(k).categories is not None
         ]
         unknown_categoricals = categoricals.difference(known_categoricals)
-    elif (
-        isinstance(specified_dtypes, CategoricalDtype)
-        and specified_dtypes.categories is None
-    ):
-        known_categoricals = []
+    else:
         unknown_categoricals = categoricals
 
     # Fixup the dtypes
@@ -243,60 +343,78 @@ def text_blocks_to_pandas(
         dtypes[k] = "category"
 
     columns = list(head.columns)
-    delayed_pandas_read_text = delayed(pandas_read_text, pure=True)
-    dfs = []
-    colname, paths = path or (None, None)
 
-    for i, blocks in enumerate(block_lists):
-        if not blocks:
-            continue
-        if path:
-            path_info = (colname, paths[i], paths)
-        else:
-            path_info = None
-        df = delayed_pandas_read_text(
-            reader,
-            blocks[0],
-            header,
-            kwargs,
-            dtypes,
-            columns,
-            write_header=False,
-            enforce=enforce,
-            path=path_info,
+    blocks = tuple(flatten(block_lists))
+    # Create mask of first blocks from nested block_lists
+    is_first = tuple(block_mask(block_lists))
+
+    if path:
+        colname, path_converter = path
+        paths = [b[1].path for b in blocks]
+        if path_converter:
+            paths = [path_converter(p) for p in paths]
+        head = head.assign(
+            **{
+                colname: pd.Categorical.from_codes(
+                    np.zeros(len(head), dtype=int), set(paths)
+                )
+            }
+        )
+        path = (colname, paths)
+
+    if len(unknown_categoricals):
+        head = clear_known_categories(head, cols=unknown_categoricals)
+
+    # Define parts
+    parts = []
+    colname, paths = path or (None, None)
+    for i in range(len(blocks)):
+        parts.append(
+            [
+                blocks[i],
+                paths[i] if paths else None,
+                is_first[i],
+            ]
         )
 
-        dfs.append(df)
-        rest_kwargs = kwargs.copy()
-        rest_kwargs.pop("skiprows", None)
-        for b in blocks[1:]:
-            dfs.append(
-                delayed_pandas_read_text(
-                    reader,
-                    b,
-                    header,
-                    rest_kwargs,
-                    dtypes,
-                    columns,
-                    enforce=enforce,
-                    path=path_info,
-                )
-            )
+    # Create Blockwise layer
+    label = "read-csv-"
+    name = label + tokenize(reader, columns, enforce, head, blocksize)
+    layer = DataFrameIOLayer(
+        name,
+        columns,
+        parts,
+        CSVFunctionWrapper(
+            columns,
+            None,
+            colname,
+            head,
+            header,
+            reader,
+            dtypes,
+            enforce,
+            kwargs,
+        ),
+        label=label,
+        produces_tasks=True,
+    )
+    graph = HighLevelGraph({name: layer}, {name: set()})
+    return new_dd_object(graph, name, head, (None,) * (len(blocks) + 1))
 
-    if collection:
-        if path:
-            head = head.assign(
-                **{
-                    colname: pd.Categorical.from_codes(
-                        np.zeros(len(head), dtype=int), paths
-                    )
-                }
-            )
-        if len(unknown_categoricals):
-            head = clear_known_categories(head, cols=unknown_categoricals)
-        return from_delayed(dfs, head)
-    else:
-        return dfs
+
+def block_mask(block_lists):
+    """
+    Yields a flat iterable of booleans to mark the zeroth elements of the
+    nested input ``block_lists`` in a flattened output.
+
+    >>> list(block_mask([[1, 2], [3, 4], [5]]))
+    [True, False, True, False, True]
+    """
+    for block in block_lists:
+        if not block:
+            continue
+        yield True
+        yield from (False for _ in block[1:])
 
 
 def auto_blocksize(total_memory, cpu_count):
@@ -305,30 +423,36 @@ def auto_blocksize(total_memory, cpu_count):
     return min(blocksize, int(64e6))
 
 
+def _infer_block_size():
+    default = 2 ** 25
+    if psutil is not None:
+        with catch_warnings():
+            simplefilter("ignore", RuntimeWarning)
+            mem = psutil.virtual_memory().total
+            cpu = psutil.cpu_count()
+
+        if mem and cpu:
+            return auto_blocksize(mem, cpu)
+
+    return default
+
+
 # guess blocksize if psutil is installed or use acceptable default one if not
-if psutil is not None:
-    with catch_warnings():
-        simplefilter("ignore", RuntimeWarning)
-        TOTAL_MEM = psutil.virtual_memory().total
-        CPU_COUNT = psutil.cpu_count()
-        AUTO_BLOCKSIZE = auto_blocksize(TOTAL_MEM, CPU_COUNT)
-else:
-    AUTO_BLOCKSIZE = 2 ** 25
+AUTO_BLOCKSIZE = _infer_block_size()
 
 
 def read_pandas(
     reader,
     urlpath,
-    blocksize=AUTO_BLOCKSIZE,
-    collection=True,
+    blocksize="default",
     lineterminator=None,
-    compression=None,
+    compression="infer",
     sample=256000,
     enforce=False,
     assume_missing=False,
     storage_options=None,
     include_path_column=False,
-    **kwargs
+    **kwargs,
 ):
     reader_name = reader.__name__
     if lineterminator is not None and len(lineterminator) == 1:
@@ -374,6 +498,19 @@ def read_pandas(
     else:
         path_converter = None
 
+    # If compression is "infer", inspect the (first) path suffix and
+    # set the proper compression option if the suffix is recongnized.
+    if compression == "infer":
+        # Translate the input urlpath to a simple path list
+        paths = get_fs_token_paths(urlpath, mode="rb", storage_options=storage_options)[
+            2
+        ]
+
+        # Infer compression from first path
+        compression = infer_compression(paths[0])
+
+    if blocksize == "default":
+        blocksize = AUTO_BLOCKSIZE
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
     if blocksize and compression:
@@ -402,14 +539,12 @@ def read_pandas(
         sample=sample,
         compression=compression,
         include_path=include_path_column,
-        **(storage_options or {})
+        **(storage_options or {}),
     )
 
     if include_path_column:
         b_sample, values, paths = b_out
-        if path_converter:
-            paths = [path_converter(path) for path in paths]
-        path = (include_path_column, paths)
+        path = (include_path_column, path_converter)
     else:
         b_sample, values = b_out
         path = None
@@ -459,16 +594,18 @@ def read_pandas(
             if is_integer_dtype(head[c].dtype) and c not in specified_dtypes:
                 head[c] = head[c].astype(float)
 
+    values = [[list(dsk.dask.values()) for dsk in block] for block in values]
+
     return text_blocks_to_pandas(
         reader,
         values,
         header,
         head,
         kwargs,
-        collection=collection,
         enforce=enforce,
         specified_dtypes=specified_dtypes,
         path=path,
+        blocksize=blocksize,
     )
 
 
@@ -504,12 +641,10 @@ urlpath : string or list
     can pass a globstring or a list of paths, with the caveat that they
     must all have the same protocol.
 blocksize : str, int or None, optional
-    Number of bytes by which to cut up larger files. Default value is
-    computed based on available physical memory and the number of cores.
-    If ``None``, use a single block for each file.
-    Can be a number like 64000000 or a string like "64MB"
-collection : boolean, optional
-    Return a dask.dataframe if True or list of dask.delayed objects if False
+    Number of bytes by which to cut up larger files. Default value is computed
+    based on available physical memory and the number of cores, up to a maximum
+    of 64MB. Can be a number like ``64000000` or a string like ``"64MB"``. If
+    ``None``, a single block is used for each file.
 sample : int, optional
     Number of bytes to use when determining dtypes
 assume_missing : bool, optional
@@ -552,22 +687,20 @@ at the cost of reduced parallelism.
 def make_reader(reader, reader_name, file_type):
     def read(
         urlpath,
-        blocksize=AUTO_BLOCKSIZE,
-        collection=True,
+        blocksize="default",
         lineterminator=None,
-        compression=None,
+        compression="infer",
         sample=256000,
         enforce=False,
         assume_missing=False,
         storage_options=None,
         include_path_column=False,
-        **kwargs
+        **kwargs,
     ):
         return read_pandas(
             reader,
             urlpath,
             blocksize=blocksize,
-            collection=collection,
             lineterminator=lineterminator,
             compression=compression,
             sample=sample,
@@ -575,7 +708,7 @@ def make_reader(reader, reader_name, file_type):
             assume_missing=assume_missing,
             storage_options=storage_options,
             include_path_column=include_path_column,
-            **kwargs
+            **kwargs,
         )
 
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name, file_type=file_type)
@@ -606,7 +739,8 @@ def to_csv(
     scheduler=None,
     storage_options=None,
     header_first_partition_only=None,
-    **kwargs
+    compute_kwargs=None,
+    **kwargs,
 ):
     """
     Store Dask DataFrame to CSV files
@@ -654,13 +788,10 @@ def to_csv(
 
     Parameters
     ----------
+    df : dask.DataFrame
+        Data to save
     filename : string
         Path glob indicating the naming scheme for the output files
-    name_function : callable, default None
-        Function accepting an integer (partition index) and producing a
-        string to replace the asterisk in the given filename globstring.
-        Should preserve the lexicographic order of partitions. Not
-        supported when `single_file` is `True`.
     single_file : bool, default False
         Whether to save everything into a single CSV file. Under the
         single file mode, each partition is appended at the end of the
@@ -668,69 +799,35 @@ def to_csv(
         append mode and thus the single file mode, especially on cloud
         storage systems such as S3 or GCS. A warning will be issued when
         writing to a file that is not backed by a local filesystem.
-    compression : string or None
-        String like 'gzip' or 'xz'.  Must support efficient random access.
-        Filenames with extensions corresponding to known compression
-        algorithms (gz, bz2) will be compressed accordingly automatically
-    sep : character, default ','
-        Field delimiter for the output file
-    na_rep : string, default ''
-        Missing data representation
-    float_format : string, default None
-        Format string for floating point numbers
-    columns : sequence, optional
-        Columns to write
-    header : boolean or list of string, default True
-        Write out column names. If a list of string is given it is assumed
-        to be aliases for the column names
+    encoding : string, optional
+        A string representing the encoding to use in the output file,
+        defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
+    mode : str
+        Python write mode, default 'w'
+    name_function : callable, default None
+        Function accepting an integer (partition index) and producing a
+        string to replace the asterisk in the given filename globstring.
+        Should preserve the lexicographic order of partitions. Not
+        supported when `single_file` is `True`.
+    compression : string, optional
+        a string representing the compression to use in the output file,
+        allowed values are 'gzip', 'bz2', 'xz',
+        only used when the first argument is a filename
+    compute : bool
+        If true, immediately executes. If False, returns a set of delayed
+        objects, which can be computed at a later time.
+    storage_options : dict
+        Parameters passed on to the backend filesystem class.
     header_first_partition_only : boolean, default None
         If set to `True`, only write the header row in the first output
         file. By default, headers are written to all partitions under
         the multiple file mode (`single_file` is `False`) and written
         only once under the single file mode (`single_file` is `True`).
         It must not be `False` under the single file mode.
-    index : boolean, default True
-        Write row names (index)
-    index_label : string or sequence, or False, default None
-        Column label for index column(s) if desired. If None is given, and
-        `header` and `index` are True, then the index names are used. A
-        sequence should be given if the DataFrame uses MultiIndex.  If
-        False do not print fields for index names. Use index_label=False
-        for easier importing in R
-    nanRep : None
-        deprecated, use na_rep
-    mode : str
-        Python write mode, default 'w'
-    encoding : string, optional
-        A string representing the encoding to use in the output file,
-        defaults to 'ascii' on Python 2 and 'utf-8' on Python 3.
-    compression : string, optional
-        a string representing the compression to use in the output file,
-        allowed values are 'gzip', 'bz2', 'xz',
-        only used when the first argument is a filename
-    line_terminator : string, default '\\n'
-        The newline character or character sequence to use in the output
-        file
-    quoting : optional constant from csv module
-        defaults to csv.QUOTE_MINIMAL
-    quotechar : string (length 1), default '\"'
-        character used to quote fields
-    doublequote : boolean, default True
-        Control quoting of `quotechar` inside a field
-    escapechar : string (length 1), default None
-        character used to escape `sep` and `quotechar` when appropriate
-    chunksize : int or None
-        rows to write at a time
-    tupleize_cols : boolean, default False
-        write multi_index columns as a list of tuples (if True)
-        or new (expanded format) if False)
-    date_format : string, default None
-        Format string for datetime objects
-    decimal: string, default '.'
-        Character recognized as decimal separator. E.g. use ',' for
-        European data
-    storage_options: dict
-        Parameters passed on to the backend filesystem class.
+    compute_kwargs : dict, optional
+        Options to be passed in to the compute method
+    kwargs : dict, optional
+        Additional parameters to pass to `pd.DataFrame.to_csv()`
 
     Returns
     -------
@@ -755,7 +852,7 @@ def to_csv(
         compression=compression,
         encoding=encoding,
         newline="",
-        **(storage_options or {})
+        **(storage_options or {}),
     )
     to_csv_chunk = delayed(_write_csv, pure=False)
     dfs = df.to_delayed()
@@ -777,7 +874,7 @@ def to_csv(
             mode=mode,
             name_function=name_function,
             num=df.npartitions,
-            **file_options
+            **file_options,
         )
         values = [to_csv_chunk(dfs[0], files[0], **kwargs)]
         if header_first_partition_only:
@@ -786,7 +883,33 @@ def to_csv(
             [to_csv_chunk(d, f, **kwargs) for d, f in zip(dfs[1:], files[1:])]
         )
     if compute:
-        delayed(values).compute(scheduler=scheduler)
+        if compute_kwargs is None:
+            compute_kwargs = dict()
+
+        if scheduler is not None:
+            warn(
+                "The 'scheduler' keyword argument for `to_csv()` is deprecated and"
+                "will be removed in a future version. "
+                "Please use the `compute_kwargs` argument instead. "
+                f"For example, df.to_csv(..., compute_kwargs={{scheduler: {scheduler}}})",
+                FutureWarning,
+            )
+
+        if (
+            scheduler is not None
+            and compute_kwargs.get("scheduler") is not None
+            and compute_kwargs.get("scheduler") != scheduler
+        ):
+            raise ValueError(
+                f"Differing values for 'scheduler' have been passed in.\n"
+                f"scheduler argument: {scheduler}\n"
+                f"via compute_kwargs: {compute_kwargs.get('scheduler')}"
+            )
+
+        if scheduler is not None and compute_kwargs.get("scheduler") is None:
+            compute_kwargs["scheduler"] = scheduler
+
+        delayed(values).compute(**compute_kwargs)
         return [f.path for f in files]
     else:
         return values

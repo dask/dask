@@ -2,7 +2,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.utils import meta_from_array, assert_eq
+from dask.array.utils import assert_eq, meta_from_array
 
 asarrays = [np.asarray]
 
@@ -36,6 +36,7 @@ def test_meta_from_array(asarray):
     assert meta_from_array(x, ndim=2).shape == (0, 0)
     assert meta_from_array(x, ndim=4).shape == (0, 0, 0, 0)
     assert meta_from_array(x, dtype="float64").dtype == "float64"
+    assert meta_from_array(x, dtype=float).dtype == "float64"
 
     x = da.ones((1,))
     assert isinstance(meta_from_array(x), np.ndarray)
@@ -43,6 +44,17 @@ def test_meta_from_array(asarray):
     assert meta_from_array(123) == 123
     assert meta_from_array("foo") == "foo"
     assert meta_from_array(np.dtype("float32")) == np.dtype("float32")
+
+
+@pytest.mark.parametrize("meta", ["", "str", u"", u"str", b"", b"str"])
+@pytest.mark.parametrize("dtype", [None, "bool", "int", "float"])
+def test_meta_from_array_literal(meta, dtype):
+    if dtype is None:
+        assert meta_from_array(meta, dtype=dtype).dtype.kind in "SU"
+    else:
+        assert (
+            meta_from_array(meta, dtype=dtype).dtype == np.array([], dtype=dtype).dtype
+        )
 
 
 def test_meta_from_array_type_inputs():
@@ -57,7 +69,7 @@ def test_meta_from_array_type_inputs():
         chunks=(5, 5),
         shape=(5, 5),
         meta=np.ndarray,
-        dtype=np.float,
+        dtype=float,
     )
     assert_eq(x, x)
 

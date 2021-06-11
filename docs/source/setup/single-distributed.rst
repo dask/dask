@@ -20,7 +20,7 @@ set.
    from dask.distributed import Client
    client = Client()
 
-You can navigate to http://localhost:8787/status to see the diagnostic
+You can navigate to ``http://localhost:8787/status`` to see the diagnostic
 dashboard if you have Bokeh installed.
 
 Client
@@ -34,8 +34,8 @@ Client with no arguments
    from dask.distributed import Client
    client = Client()
 
-This sets up a scheduler in your local process and several processes running
-single-threaded Workers.
+This sets up a scheduler in your local process along with a number of workers and
+threads per worker related to the number of cores in your machine.
 
 If you want to run workers in your same process, you can pass the
 ``processes=False`` keyword argument.

@@ -1,6 +1,7 @@
+#!/bin/bash
 set -xe
 
-docker exec -it $CONTAINER_ID conda install -y -q dask pyarrow">=0.14.0" fsspec -c conda-forge
-docker exec -it $CONTAINER_ID python -m pip install -e .
+docker exec hdfs conda install -y -q dask pyarrow">=0.14.0,!=2.0.0" fsspec pyyaml openjdk -c conda-forge
+docker exec hdfs python -m pip install -e .
 
 set +xe

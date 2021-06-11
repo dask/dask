@@ -151,7 +151,7 @@ those on Hadoop, HPC, Kubernetes, and Cloud clusters.
     To help with this, you'll likely want to use `Dask-Yarn <https://yarn.dask.org>`_.
 
 2.  **HPC**: If you have an HPC machine that runs resource managers like SGE,
-    SLLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
+    SLURM, PBS, LSF, Torque, Condor, or other job batch queuing systems, then
     users can launch Dask on these systems today using either:
 
     - `Dask Jobqueue <https://jobqueue.dask.org>`_ , which uses typical
@@ -384,10 +384,6 @@ for tables and Zarr or HDF5 for arrays.
 Does Dask have a SQL interface?
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-No. Dask provides no SQL support.  Dask dataframe looks like and uses Pandas
-for these sorts of operations.  It would be great to see someone build a SQL
-interface on top of Pandas, which Dask could then use, but this is out of scope
-for the core Dask project itself.
-
-As with Pandas though, we do support a ``dask.dataframe.from_sql`` command for
-efficiently pulling data out of SQL databases for Pandas computations.
+Dask supports various ways to communicate with SQL databases, some
+requiring extra packages to be installed; see the section
+:doc:`dataframe-sql`.

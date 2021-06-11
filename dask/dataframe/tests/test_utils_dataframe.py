@@ -2,23 +2,25 @@ import re
 
 import numpy as np
 import pandas as pd
+import pytest
+
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    shard_df_on_index,
-    meta_nonempty,
-    make_meta,
-    raise_on_meta_error,
-    check_meta,
+    PANDAS_GT_100,
+    PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
+    check_matching_columns,
+    check_meta,
     is_dataframe_like,
-    is_series_like,
     is_index_like,
-    PANDAS_GT_0240,
+    is_series_like,
+    make_meta,
+    meta_nonempty,
+    raise_on_meta_error,
+    shard_df_on_index,
 )
-
-import pytest
 
 
 def test_shard_df_on_index():
@@ -80,7 +82,10 @@ def test_make_meta():
     assert meta.name == "a"
 
     # With index
-    meta = make_meta({"a": "i8", "b": "i4"}, index=pd.Int64Index([1, 2], name="foo"))
+    meta = make_meta(
+        {"a": "i8", "b": "i4"},
+        index=pd.Int64Index([1, 2], name="foo"),
+    )
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
     meta = make_meta(("a", "i8"), index=pd.Int64Index([1, 2], name="foo"))
@@ -94,24 +99,29 @@ def test_make_meta():
     assert meta.cat.categories == []
 
     # Numpy scalar
-    meta = make_meta(np.float64(1.0))
+    meta = make_meta(np.float64(1.0), parent_meta=df)
     assert isinstance(meta, np.float64)
 
     # Python scalar
-    meta = make_meta(1.0)
+    meta = make_meta(1.0, parent_meta=df)
     assert isinstance(meta, np.float64)
 
     # Timestamp
     x = pd.Timestamp(2000, 1, 1)
-    meta = make_meta(x)
+    meta = make_meta(x, parent_meta=df)
     assert meta is x
 
+    # DatetimeTZDtype
+    x = pd.DatetimeTZDtype(tz="UTC")
+    meta = make_meta(x)
+    assert meta == pd.Timestamp(1, tz=x.tz, unit=x.unit)
+
     # Dtype expressions
-    meta = make_meta("i8")
+    meta = make_meta("i8", parent_meta=df)
     assert isinstance(meta, np.int64)
-    meta = make_meta(float)
+    meta = make_meta(float, parent_meta=df)
     assert isinstance(meta, np.dtype(float).type)
-    meta = make_meta(np.dtype("bool"))
+    meta = make_meta(np.dtype("bool"), parent_meta=df)
     assert isinstance(meta, np.bool_)
     assert pytest.raises(TypeError, lambda: make_meta(None))
 
@@ -126,11 +136,12 @@ def test_meta_nonempty():
             "E": np.int32(1),
             "F": pd.Timestamp("2016-01-01"),
             "G": pd.date_range("2016-01-01", periods=3, tz="America/New_York"),
-            "H": pd.Timedelta("1 hours", "ms"),
+            "H": pd.Timedelta("1 hours"),
             "I": np.void(b" "),
             "J": pd.Categorical([UNKNOWN_CATEGORIES] * 3),
+            "K": pd.Categorical([None, None, None]),
         },
-        columns=list("DCBAHGFEIJ"),
+        columns=list("DCBAHGFEIJK"),
     )
     df2 = df1.iloc[0:0]
     df3 = meta_nonempty(df2)
@@ -144,9 +155,10 @@ def test_meta_nonempty():
     assert df3["E"][0].dtype == "i4"
     assert df3["F"][0] == pd.Timestamp("1970-01-01 00:00:00")
     assert df3["G"][0] == pd.Timestamp("1970-01-01 00:00:00", tz="America/New_York")
-    assert df3["H"][0] == pd.Timedelta("1", "ms")
+    assert df3["H"][0] == pd.Timedelta("1")
     assert df3["I"][0] == "foo"
     assert df3["J"][0] == UNKNOWN_CATEGORIES
+    assert len(df3["K"].cat.categories) == 0
 
     s = meta_nonempty(df2["A"])
     assert s.dtype == df2["A"].dtype
@@ -236,11 +248,7 @@ def test_meta_nonempty_index():
 
     levels = [pd.Int64Index([1], name="a"), pd.Float64Index([1.0], name="b")]
     codes = [[0], [0]]
-    if PANDAS_GT_0240:
-        kwargs = {"codes": codes}
-    else:
-        kwargs = {"labels": codes}
-    idx = pd.MultiIndex(levels=levels, names=["a", "b"], **kwargs)
+    idx = pd.MultiIndex(levels=levels, names=["a", "b"], codes=codes)
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):
@@ -255,12 +263,8 @@ def test_meta_nonempty_index():
     ]
 
     codes = [[0], [0], [0]]
-    if PANDAS_GT_0240:
-        kwargs = {"codes": codes}
-    else:
-        kwargs = {"labels": codes}
 
-    idx = pd.MultiIndex(levels=levels, names=["a", "b", "timedelta"], **kwargs)
+    idx = pd.MultiIndex(levels=levels, names=["a", "b", "timedelta"], codes=codes)
     res = meta_nonempty(idx)
     assert type(res) is pd.MultiIndex
     for idx1, idx2 in zip(idx.levels, res.levels):
@@ -283,6 +287,11 @@ def test_meta_nonempty_scalar():
     x = pd.Timestamp(2000, 1, 1)
     meta = meta_nonempty(x)
     assert meta is x
+
+    # DatetimeTZDtype
+    x = pd.DatetimeTZDtype(tz="UTC")
+    meta = meta_nonempty(x)
+    assert meta == pd.Timestamp(1, tz=x.tz, unit=x.unit)
 
 
 def test_raise_on_meta_error():
@@ -358,12 +367,28 @@ def test_check_meta():
         "+--------+----------+----------+\n"
         "| Column | Found    | Expected |\n"
         "+--------+----------+----------+\n"
-        "| a      | object   | category |\n"
-        "| c      | -        | float64  |\n"
-        "| e      | category | -        |\n"
+        "| 'a'    | object   | category |\n"
+        "| 'c'    | -        | float64  |\n"
+        "| 'e'    | category | -        |\n"
         "+--------+----------+----------+"
     )
     assert str(err.value) == exp
+
+
+def test_check_matching_columns_raises_appropriate_errors():
+    df = pd.DataFrame(columns=["a", "b", "c"])
+
+    meta = pd.DataFrame(columns=["b", "a", "c"])
+    with pytest.raises(ValueError, match="Order of columns does not match"):
+        assert check_matching_columns(meta, df)
+
+    meta = pd.DataFrame(columns=["a", "b", "c", "d"])
+    with pytest.raises(ValueError, match="Missing: \\['d'\\]"):
+        assert check_matching_columns(meta, df)
+
+    meta = pd.DataFrame(columns=["a", "b"])
+    with pytest.raises(ValueError, match="Extra:   \\['c'\\]"):
+        assert check_matching_columns(meta, df)
 
 
 def test_check_meta_typename():
@@ -411,6 +436,32 @@ def test_is_dataframe_like(monkeypatch, frame_value_counts):
     assert is_index_like(ddf.index)
     assert not is_index_like(pd.Index)
 
+    # The following checks support of class wrappers, which
+    # requires the comparions of `x.__class__` instead of `type(x)`
+    class DataFrameWrapper:
+        __class__ = pd.DataFrame
+
+    wrap = DataFrameWrapper()
+    wrap.dtypes = None
+    wrap.columns = None
+    assert is_dataframe_like(wrap)
+
+    class SeriesWrapper:
+        __class__ = pd.Series
+
+    wrap = SeriesWrapper()
+    wrap.dtype = None
+    wrap.name = None
+    assert is_series_like(wrap)
+
+    class IndexWrapper:
+        __class__ = pd.Index
+
+    wrap = IndexWrapper()
+    wrap.dtype = None
+    wrap.name = None
+    assert is_index_like(wrap)
+
 
 def test_apply_and_enforce_message():
     def func():
@@ -422,3 +473,19 @@ def test_apply_and_enforce_message():
 
     with pytest.raises(ValueError, match=re.escape("Missing: ['D']")):
         apply_and_enforce(_func=func, _meta=meta)
+
+
+@pytest.mark.skipif(not PANDAS_GT_100, reason="Only pandas>1")
+def test_nonempty_series_sparse():
+    ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
+    with pytest.warns(None) as w:
+        meta_nonempty(ser)
+
+    assert len(w) == 0
+
+
+@pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
+def test_nonempty_series_nullable_float():
+    ser = pd.Series([], dtype="Float64")
+    non_empty = meta_nonempty(ser)
+    assert non_empty.dtype == "Float64"

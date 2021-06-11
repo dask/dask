@@ -1,32 +1,35 @@
+import itertools
 from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
-from operator import add, getitem
 from numbers import Integral, Number
+from operator import getitem
 
 import numpy as np
-from toolz import accumulate, sliding_window
+from tlz import sliding_window
 
-from ..highlevelgraph import HighLevelGraph
 from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
 from ..utils import derived_from
 from . import chunk
 from .core import (
     Array,
     asarray,
+    block,
+    blockwise,
+    broadcast_arrays,
+    broadcast_to,
+    cached_cumsum,
+    concatenate,
     normalize_chunks,
     stack,
-    concatenate,
-    block,
-    broadcast_to,
-    broadcast_arrays,
-    cached_cumsum,
 )
-from .wrap import empty, ones, zeros, full
+from .ufunc import greater_equal, rint
 from .utils import AxisError, meta_from_array, zeros_like_safe
+from .wrap import empty, full, ones, zeros
 
 
-def empty_like(a, dtype=None, chunks=None):
+def empty_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
     Return a new array with the same shape and type as a given array.
 
@@ -37,9 +40,17 @@ def empty_like(a, dtype=None, chunks=None):
         returned array.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -63,14 +74,18 @@ def empty_like(a, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
     return empty(
-        a.shape,
+        shape,
         dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
     )
 
 
-def ones_like(a, dtype=None, chunks=None):
+def ones_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
     Return an array of ones with the same shape and type as a given array.
 
@@ -81,9 +96,17 @@ def ones_like(a, dtype=None, chunks=None):
         the returned array.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -100,14 +123,18 @@ def ones_like(a, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
     return ones(
-        a.shape,
+        shape,
         dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
     )
 
 
-def zeros_like(a, dtype=None, chunks=None):
+def zeros_like(a, dtype=None, order="C", chunks=None, name=None, shape=None):
     """
     Return an array of zeros with the same shape and type as a given array.
 
@@ -118,9 +145,17 @@ def zeros_like(a, dtype=None, chunks=None):
         the returned array.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -137,14 +172,18 @@ def zeros_like(a, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
     return zeros(
-        a.shape,
+        shape,
         dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
     )
 
 
-def full_like(a, fill_value, dtype=None, chunks=None):
+def full_like(a, fill_value, order="C", dtype=None, chunks=None, name=None, shape=None):
     """
     Return a full array with the same shape and type as a given array.
 
@@ -157,9 +196,17 @@ def full_like(a, fill_value, dtype=None, chunks=None):
         Fill value.
     dtype : data-type, optional
         Overrides the data type of the result.
+    order : {'C', 'F'}, optional
+        Whether to store multidimensional data in C- or Fortran-contiguous
+        (row- or column-wise) order in memory.
     chunks : sequence of ints
         The number of samples on each block. Note that the last block will have
         fewer samples if ``len(array) % chunks != 0``.
+    name : str, optional
+        An optional keyname for the array. Defaults to hashing the input
+        keyword arguments.
+    shape : int or sequence of ints, optional.
+        Overrides the shape of the result.
 
     Returns
     -------
@@ -178,12 +225,30 @@ def full_like(a, fill_value, dtype=None, chunks=None):
     """
 
     a = asarray(a, name=False)
+    shape, chunks = _get_like_function_shapes_chunks(a, chunks, shape)
     return full(
-        a.shape,
+        shape,
         fill_value,
         dtype=(dtype or a.dtype),
-        chunks=(chunks if chunks is not None else a.chunks),
+        order=order,
+        chunks=chunks,
+        name=name,
+        meta=a._meta,
     )
+
+
+def _get_like_function_shapes_chunks(a, chunks, shape):
+    """
+    Helper function for finding shapes and chunks for *_like()
+    array creation functions.
+    """
+    if shape is None:
+        shape = a.shape
+        if chunks is None:
+            chunks = a.chunks
+    elif chunks is None:
+        chunks = "auto"
+    return shape, chunks
 
 
 def linspace(
@@ -315,6 +380,9 @@ def arange(*args, **kwargs):
 
     num = int(max(np.ceil((stop - start) / step), 0))
 
+    like = kwargs.pop("like", None)
+    meta = meta_from_array(like) if like is not None else None
+
     dtype = kwargs.pop("dtype", None)
     if dtype is None:
         dtype = np.arange(start, stop, step * num if num else step).dtype
@@ -331,11 +399,18 @@ def arange(*args, **kwargs):
     for i, bs in enumerate(chunks[0]):
         blockstart = start + (elem_count * step)
         blockstop = start + ((elem_count + bs) * step)
-        task = (chunk.arange, blockstart, blockstop, step, bs, dtype)
+        task = (
+            partial(chunk.arange, like=like),
+            blockstart,
+            blockstop,
+            step,
+            bs,
+            dtype,
+        )
         dsk[(name, i)] = task
         elem_count += bs
 
-    return Array(dsk, name, chunks, dtype=dtype)
+    return Array(dsk, name, chunks, dtype=dtype, meta=meta)
 
 
 @derived_from(np)
@@ -613,138 +688,41 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
     return Array(graph, name, shape=shape, chunks=chunks, meta=meta)
 
 
-def triu(m, k=0):
-    """
-    Upper triangle of an array with elements above the `k`-th diagonal zeroed.
+@derived_from(np)
+def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
+    _min_int = np.lib.twodim_base._min_int
 
-    Parameters
-    ----------
-    m : array_like, shape (M, N)
-        Input array.
-    k : int, optional
-        Diagonal above which to zero elements.  `k = 0` (the default) is the
-        main diagonal, `k < 0` is below it and `k > 0` is above.
+    if M is None:
+        M = N
 
-    Returns
-    -------
-    triu : ndarray, shape (M, N)
-        Upper triangle of `m`, of same shape and data-type as `m`.
+    chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
 
-    See Also
-    --------
-    tril : lower triangle of an array
-    """
-    if m.ndim != 2:
-        raise ValueError("input must be 2 dimensional")
-    if m.chunks[0][0] != m.chunks[1][0]:
-        msg = (
-            "chunks must be a square. "
-            "Use .rechunk method to change the size of chunks."
-        )
-        raise NotImplementedError(msg)
+    m = greater_equal(
+        arange(N, chunks=chunks[0][0], dtype=_min_int(0, N), like=like).reshape(1, N).T,
+        arange(-k, M - k, chunks=chunks[1][0], dtype=_min_int(-k, M - k), like=like),
+    )
 
-    rdim = len(m.chunks[0])
-    hdim = len(m.chunks[1])
-    chunk = m.chunks[0][0]
+    # Avoid making a copy if the requested type is already bool
+    m = m.astype(dtype, copy=False)
 
-    token = tokenize(m, k)
-    name = "triu-" + token
-
-    dsk = {}
-    for i in range(rdim):
-        for j in range(hdim):
-            if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (
-                    partial(zeros_like_safe, shape=(m.chunks[0][i], m.chunks[1][j])),
-                    m._meta,
-                )
-            elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
-                dsk[(name, i, j)] = (np.triu, (m.name, i, j), k - (chunk * (j - i)))
-            else:
-                dsk[(name, i, j)] = (m.name, i, j)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
-
-
-def tril(m, k=0):
-    """
-    Lower triangle of an array with elements above the `k`-th diagonal zeroed.
-
-    Parameters
-    ----------
-    m : array_like, shape (M, M)
-        Input array.
-    k : int, optional
-        Diagonal above which to zero elements.  `k = 0` (the default) is the
-        main diagonal, `k < 0` is below it and `k > 0` is above.
-
-    Returns
-    -------
-    tril : ndarray, shape (M, M)
-        Lower triangle of `m`, of same shape and data-type as `m`.
-
-    See Also
-    --------
-    triu : upper triangle of an array
-    """
-    if m.ndim != 2:
-        raise ValueError("input must be 2 dimensional")
-    if not len(set(m.chunks[0] + m.chunks[1])) == 1:
-        msg = (
-            "All chunks must be a square matrix to perform lu decomposition. "
-            "Use .rechunk method to change the size of chunks."
-        )
-        raise ValueError(msg)
-
-    rdim = len(m.chunks[0])
-    hdim = len(m.chunks[1])
-    chunk = m.chunks[0][0]
-
-    token = tokenize(m, k)
-    name = "tril-" + token
-
-    dsk = {}
-    for i in range(rdim):
-        for j in range(hdim):
-            if chunk * (j - i + 1) < k:
-                dsk[(name, i, j)] = (m.name, i, j)
-            elif chunk * (j - i - 1) < k <= chunk * (j - i + 1):
-                dsk[(name, i, j)] = (np.tril, (m.name, i, j), k - (chunk * (j - i)))
-            else:
-                dsk[(name, i, j)] = (
-                    partial(zeros_like_safe, shape=(m.chunks[0][i], m.chunks[1][j])),
-                    m._meta,
-                )
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[m])
-    return Array(graph, name, shape=m.shape, chunks=m.chunks, meta=m)
-
-
-def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
-    def offset_func(*args, **kwargs):
-        args2 = list(map(add, args, offset))
-        return func(*args2, **kwargs)
-
-    return np.fromfunction(offset_func, shape, dtype=dtype, **func_kwargs)
+    return m
 
 
 @derived_from(np)
 def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
-    chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    name = "fromfunction-" + tokenize(func, chunks, shape, dtype, kwargs)
-    keys = list(product([name], *[range(len(bd)) for bd in chunks]))
-    aggdims = [list(accumulate(add, (0,) + bd[:-1])) for bd in chunks]
-    offsets = list(product(*aggdims))
-    shapes = list(product(*chunks))
     dtype = dtype or float
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
-    values = [
-        (_np_fromfunction, func, shp, dtype, offset, kwargs)
-        for offset, shp in zip(offsets, shapes)
-    ]
+    inds = tuple(range(len(shape)))
 
-    dsk = dict(zip(keys, values))
+    arrs = [arange(s, dtype=dtype, chunks=c) for s, c in zip(shape, chunks)]
+    arrs = meshgrid(*arrs, indexing="ij")
 
-    return Array(dsk, name, chunks, dtype=dtype)
+    args = sum(zip(arrs, itertools.repeat(inds)), ())
+
+    res = blockwise(func, inds, *args, token="fromfunction", **kwargs)
+
+    return res
 
 
 @derived_from(np)
@@ -763,7 +741,9 @@ def repeat(a, repeats, axis=None):
     elif not 0 <= axis <= a.ndim - 1:
         raise ValueError("axis(=%d) out of bounds" % axis)
 
-    if repeats == 1:
+    if repeats == 0:
+        return a[tuple(slice(None) if d != axis else slice(0) for d in range(a.ndim))]
+    elif repeats == 1:
         return a
 
     cchunks = cached_cumsum(a.chunks[axis], initial_zero=True)
@@ -835,7 +815,7 @@ def expand_pad_value(array, pad_value):
         and len(pad_value) == 2
         and all(isinstance(pw, Number) for pw in pad_value)
     ):
-        pad_value = tuple((pad_value[0], pad_value[1]) for _ in range(array.ndim))
+        pad_value = array.ndim * (tuple(pad_value),)
     elif (
         isinstance(pad_value, Sequence)
         and len(pad_value) == array.ndim
@@ -843,7 +823,15 @@ def expand_pad_value(array, pad_value):
         and all((len(pw) == 2) for pw in pad_value)
         and all(all(isinstance(w, Number) for w in pw) for pw in pad_value)
     ):
-        pad_value = tuple((pw[0], pw[1]) for pw in pad_value)
+        pad_value = tuple(tuple(pw) for pw in pad_value)
+    elif (
+        isinstance(pad_value, Sequence)
+        and len(pad_value) == 1
+        and isinstance(pad_value[0], Sequence)
+        and len(pad_value[0]) == 2
+        and all(isinstance(pw, Number) for pw in pad_value[0])
+    ):
+        pad_value = array.ndim * (tuple(pad_value[0]),)
     else:
         raise TypeError("`pad_value` must be composed of integral typed values.")
 
@@ -874,6 +862,8 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     Helper function to find the linear ramp for a chunk.
     """
 
+    from .utils import empty_like_safe
+
     num1 = num + 1
 
     shape = list(start.shape)
@@ -882,7 +872,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = np.empty(shape, dtype=dtype)
+    result = empty_like_safe(start, shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)
@@ -893,14 +883,14 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     return result
 
 
-def pad_edge(array, pad_width, mode, *args):
+def pad_edge(array, pad_width, mode, **kwargs):
     """
     Helper function for padding edges.
 
     Handles the cases where the only the values on the edge are needed.
     """
 
-    args = tuple(expand_pad_value(array, e) for e in args)
+    kwargs = {k: expand_pad_value(array, v) for k, v in kwargs.items()}
 
     result = array
     for d in range(array.ndim):
@@ -908,8 +898,13 @@ def pad_edge(array, pad_width, mode, *args):
         pad_arrays = [result, result]
 
         if mode == "constant":
-            constant_values = args[0][d]
-            constant_values = [asarray(c).astype(result.dtype) for c in constant_values]
+            from .utils import asarray_safe
+
+            constant_values = kwargs["constant_values"][d]
+            constant_values = [
+                asarray_safe(c, like=meta_from_array(array), dtype=result.dtype)
+                for c in constant_values
+            ]
 
             pad_arrays = [
                 broadcast_to(v, s, c)
@@ -929,7 +924,7 @@ def pad_edge(array, pad_width, mode, *args):
                     for a, s, c in zip(pad_arrays, pad_shapes, pad_chunks)
                 ]
             elif mode == "linear_ramp":
-                end_values = args[0][d]
+                end_values = kwargs["end_values"][d]
 
                 pad_arrays = [
                     a.map_blocks(
@@ -945,13 +940,18 @@ def pad_edge(array, pad_width, mode, *args):
                         zip(pad_arrays, end_values, pad_width[d], pad_chunks)
                     )
                 ]
+        elif mode == "empty":
+            pad_arrays = [
+                empty_like(array, shape=s, dtype=array.dtype, chunks=c)
+                for s, c in zip(pad_shapes, pad_chunks)
+            ]
 
         result = concatenate([pad_arrays[0], result, pad_arrays[1]], axis=d)
 
     return result
 
 
-def pad_reuse(array, pad_width, mode, *args):
+def pad_reuse(array, pad_width, mode, **kwargs):
     """
     Helper function for padding boundaries with values in the array.
 
@@ -960,8 +960,14 @@ def pad_reuse(array, pad_width, mode, *args):
     boundary constraints.
     """
 
-    if mode in ["reflect", "symmetric"] and "odd" in args:
-        raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
+    if mode in {"reflect", "symmetric"}:
+        reflect_type = kwargs.get("reflect", "even")
+        if reflect_type == "odd":
+            raise NotImplementedError("`pad` does not support `reflect_type` of `odd`.")
+        if reflect_type != "even":
+            raise ValueError(
+                "unsupported value for reflect_type, must be one of (`even`, `odd`)"
+            )
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -1002,7 +1008,7 @@ def pad_reuse(array, pad_width, mode, *args):
     return result
 
 
-def pad_stats(array, pad_width, mode, *args):
+def pad_stats(array, pad_width, mode, stat_length):
     """
     Helper function for padding boundaries with statistics from the array.
 
@@ -1014,7 +1020,7 @@ def pad_stats(array, pad_width, mode, *args):
     if mode == "median":
         raise NotImplementedError("`pad` does not support `mode` of `median`.")
 
-    stat_length = expand_pad_value(array, args[0])
+    stat_length = expand_pad_value(array, stat_length)
 
     result = np.empty(array.ndim * (3,), dtype=object)
     for idx in np.ndindex(result.shape):
@@ -1056,6 +1062,11 @@ def pad_stats(array, pad_width, mode, *args):
 
             result_idx = broadcast_to(result_idx, pad_shape, chunks=pad_chunks)
 
+            if mode == "mean":
+                if np.issubdtype(array.dtype, np.integer):
+                    result_idx = rint(result_idx)
+                result_idx = result_idx.astype(array.dtype)
+
         result[idx] = result_idx
 
     result = block(result.tolist())
@@ -1082,7 +1093,7 @@ def pad_udf(array, pad_width, mode, **kwargs):
     boundaries.
     """
 
-    result = pad_edge(array, pad_width, "constant", 0)
+    result = pad_edge(array, pad_width, "constant", constant_values=0)
 
     chunks = result.chunks
     for d in range(result.ndim):
@@ -1106,37 +1117,51 @@ def pad_udf(array, pad_width, mode, **kwargs):
 
 
 @derived_from(np)
-def pad(array, pad_width, mode, **kwargs):
+def pad(array, pad_width, mode="constant", **kwargs):
     array = asarray(array)
 
     pad_width = expand_pad_value(array, pad_width)
 
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        kwargs.setdefault("stat_length", array.shape)
+    if callable(mode):
+        return pad_udf(array, pad_width, mode, **kwargs)
+
+    # Make sure that no unsupported keywords were passed for the current mode
+    allowed_kwargs = {
+        "empty": [],
+        "edge": [],
+        "wrap": [],
+        "constant": ["constant_values"],
+        "linear_ramp": ["end_values"],
+        "maximum": ["stat_length"],
+        "mean": ["stat_length"],
+        "median": ["stat_length"],
+        "minimum": ["stat_length"],
+        "reflect": ["reflect_type"],
+        "symmetric": ["reflect_type"],
+    }
+    try:
+        unsupported_kwargs = set(kwargs) - set(allowed_kwargs[mode])
+    except KeyError as e:
+        raise ValueError("mode '{}' is not supported".format(mode)) from e
+    if unsupported_kwargs:
+        raise ValueError(
+            "unsupported keyword arguments for mode '{}': {}".format(
+                mode, unsupported_kwargs
+            )
+        )
+
+    if mode in {"maximum", "mean", "median", "minimum"}:
+        stat_length = kwargs.get("stat_length", tuple((n, n) for n in array.shape))
+        return pad_stats(array, pad_width, mode, stat_length)
     elif mode == "constant":
         kwargs.setdefault("constant_values", 0)
+        return pad_edge(array, pad_width, mode, **kwargs)
     elif mode == "linear_ramp":
         kwargs.setdefault("end_values", 0)
-    elif mode in ["reflect", "symmetric"]:
-        kwargs.setdefault("reflect_type", "even")
-    elif mode in ["edge", "wrap"]:
-        if kwargs:
-            raise TypeError("Got unsupported keyword arguments.")
-    elif callable(mode):
-        kwargs.setdefault("kwargs", {})
-    else:
-        raise ValueError("Got an unsupported `mode`.")
-
-    if not callable(mode) and len(kwargs) > 1:
-        raise TypeError("Got too many keyword arguments.")
-
-    if mode in ["maximum", "mean", "median", "minimum"]:
-        return pad_stats(array, pad_width, mode, *kwargs.values())
-    elif mode in ["constant", "edge", "linear_ramp"]:
-        return pad_edge(array, pad_width, mode, *kwargs.values())
+        return pad_edge(array, pad_width, mode, **kwargs)
+    elif mode in {"edge", "empty"}:
+        return pad_edge(array, pad_width, mode)
     elif mode in ["reflect", "symmetric", "wrap"]:
-        return pad_reuse(array, pad_width, mode, *kwargs.values())
-    elif callable(mode):
-        return pad_udf(array, pad_width, mode, **kwargs)
-    else:
-        raise ValueError("Unsupported mode selected.")
+        return pad_reuse(array, pad_width, mode, **kwargs)
+
+    assert False, "unreachable"

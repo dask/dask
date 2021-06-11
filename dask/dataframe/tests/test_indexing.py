@@ -1,23 +1,26 @@
-import pandas as pd
 import numpy as np
-
+import pandas as pd
 import pytest
 
+import dask
 import dask.dataframe as dd
-
-from dask.dataframe._compat import tm, PANDAS_GT_100
+from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm
 from dask.dataframe.indexing import _coerce_loc_index
-from dask.dataframe.utils import assert_eq, make_meta, PANDAS_VERSION
-
+from dask.dataframe.utils import assert_eq, make_meta
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
     ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
 }
-meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
+meta = make_meta(
+    {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
+)
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
+CHECK_FREQ = {}
+if PANDAS_GT_110:
+    CHECK_FREQ["check_freq"] = False
 
 
 def test_loc():
@@ -111,6 +114,15 @@ def test_loc_with_array():
 
     assert sorted(d.loc[(d.a % 2).values].dask) == sorted(d.loc[(d.a % 2).values].dask)
     assert sorted(d.loc[(d.a % 2).values].dask) != sorted(d.loc[(d.a % 3).values].dask)
+
+
+def test_loc_with_function():
+    assert_eq(d.loc[lambda df: df["a"] > 3, :], full.loc[lambda df: df["a"] > 3, :])
+
+    def _col_loc_fun(_df):
+        return _df.columns.str.contains("b")
+
+    assert_eq(d.loc[:, _col_loc_fun], full.loc[:, _col_loc_fun])
 
 
 def test_loc_with_array_different_partition():
@@ -359,24 +371,35 @@ def test_loc_timestamp_str():
     assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
     assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
-    assert_eq(df.loc["2011-01-02 10:00"].to_frame().T, ddf.loc["2011-01-02 10:00"])
+    assert_eq(
+        df.loc["2011-01-02 10:00"].to_frame().T,
+        ddf.loc["2011-01-02 10:00"],
+        **CHECK_FREQ
+    )
 
     # series
-    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"])
-    assert_eq(df.A.loc["2011-01-02":"2011-01-10"], ddf.A.loc["2011-01-02":"2011-01-10"])
+    assert_eq(df.A.loc["2011-01-02"], ddf.A.loc["2011-01-02"], **CHECK_FREQ)
+    assert_eq(
+        df.A.loc["2011-01-02":"2011-01-10"],
+        ddf.A.loc["2011-01-02":"2011-01-10"],
+        **CHECK_FREQ
+    )
 
     # slice with timestamp (dask result must be DataFrame)
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02")],
+        **CHECK_FREQ
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
         ddf.loc[pd.Timestamp("2011-01-02") : pd.Timestamp("2011-01-10")],
+        **CHECK_FREQ
     )
     assert_eq(
         df.loc[pd.Timestamp("2011-01-02 10:00")].to_frame().T,
         ddf.loc[pd.Timestamp("2011-01-02 10:00")],
+        **CHECK_FREQ
     )
 
     df = pd.DataFrame(
@@ -406,26 +429,55 @@ def test_getitem_timestamp_str():
     )
     ddf = dd.from_pandas(df, 10)
 
-    # partial string slice
-    assert_eq(df["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], df["2011-01-02":"2011-01-10"])
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    else:
+        assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
 
     df = pd.DataFrame(
         {"A": np.random.randn(100), "B": np.random.randn(100)},
         index=pd.date_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df["2011-01"], ddf["2011-01"])
-    assert_eq(df["2011"], ddf["2011"])
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
+    assert_eq(df.loc["2011"], ddf.loc["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
 
 
+@pytest.mark.xfail(
+    not PANDAS_GT_110, reason=".loc partial index with PeriodIndex not yet supported"
+)
 def test_loc_period_str():
     # .loc with PeriodIndex doesn't support partial string indexing
     # https://github.com/pydata/pandas/issues/13429
-    pass
+    # -> this started working in pandas 1.1
+    df = pd.DataFrame(
+        {"A": np.random.randn(100), "B": np.random.randn(100)},
+        index=pd.period_range("2011-01-01", freq="H", periods=100),
+    )
+    ddf = dd.from_pandas(df, 10)
+
+    # partial string slice
+    assert_eq(df.loc["2011-01-02"], ddf.loc["2011-01-02"])
+    assert_eq(df.loc["2011-01-02":"2011-01-10"], ddf.loc["2011-01-02":"2011-01-10"])
+    # same reso, dask result is always DataFrame
+
+    df = pd.DataFrame(
+        {"A": np.random.randn(100), "B": np.random.randn(100)},
+        index=pd.period_range("2011-01-01", freq="D", periods=100),
+    )
+    ddf = dd.from_pandas(df, 50)
+    assert_eq(df.loc["2011-01"], ddf.loc["2011-01"])
+    assert_eq(df.loc["2011"], ddf.loc["2011"])
+
+    assert_eq(df.loc["2011-01":"2012-05"], ddf.loc["2011-01":"2012-05"])
+    assert_eq(df.loc["2011":"2015"], ddf.loc["2011":"2015"])
 
 
 def test_getitem_period_str():
@@ -437,8 +489,14 @@ def test_getitem_period_str():
     ddf = dd.from_pandas(df, 10)
 
     # partial string slice
-    assert_eq(df["2011-01-02"], ddf["2011-01-02"])
-    assert_eq(df["2011-01-02":"2011-01-10"], df["2011-01-02":"2011-01-10"])
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011-01-02"], ddf["2011-01-02"])
+    else:
+        assert_eq(df["2011-01-02"], ddf["2011-01-02"])
+    assert_eq(df["2011-01-02":"2011-01-10"], ddf["2011-01-02":"2011-01-10"])
     # same reso, dask result is always DataFrame
 
     df = pd.DataFrame(
@@ -446,8 +504,22 @@ def test_getitem_period_str():
         index=pd.period_range("2011-01-01", freq="D", periods=100),
     )
     ddf = dd.from_pandas(df, 50)
-    assert_eq(df["2011-01"], ddf["2011-01"])
-    assert_eq(df["2011"], ddf["2011"])
+
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011-01"], ddf["2011-01"])
+    else:
+        assert_eq(df["2011-01"], ddf["2011-01"])
+
+    if PANDAS_GT_120:
+        with pytest.warns(
+            FutureWarning, match="Indexing a DataFrame with a datetimelike"
+        ):
+            assert_eq(df.loc["2011"], ddf["2011"])
+    else:
+        assert_eq(df["2011"], ddf["2011"])
 
     assert_eq(df["2011-01":"2012-05"], ddf["2011-01":"2012-05"])
     assert_eq(df["2011":"2015"], ddf["2011":"2015"])
@@ -489,7 +561,6 @@ def test_to_frame():
     assert_eq(df.index.to_frame(), ddf.index.to_frame())
 
 
-@pytest.mark.skipif(PANDAS_VERSION < "0.24.0", reason="No renaming for index")
 def test_to_frame_name():
     # Test for time index
     df = pd.DataFrame(
@@ -540,3 +611,67 @@ def test_iloc_raises():
 
     with pytest.raises(IndexError):
         ddf.iloc[:, [5, 6]]
+
+
+def test_iloc_duplicate_columns():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+    df.columns = ["A", "A", "C"]
+    ddf.columns = ["A", "A", "C"]
+
+    selection = ddf.iloc[:, 2]
+    # Check that `iloc` is called instead of getitem
+    assert any([key.startswith("iloc") for key in selection.dask.layers.keys()])
+
+    select_first = ddf.iloc[:, 1]
+    assert_eq(select_first, df.iloc[:, 1])
+
+    select_zeroth = ddf.iloc[:, 0]
+    assert_eq(select_zeroth, df.iloc[:, 0])
+
+    select_list_cols = ddf.iloc[:, [0, 2]]
+    assert_eq(select_list_cols, df.iloc[:, [0, 2]])
+
+    select_negative = ddf.iloc[:, -1:-3:-1]
+    assert_eq(select_negative, df.iloc[:, -1:-3:-1])
+
+
+def test_iloc_dispatch_to_getitem():
+    df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
+    ddf = dd.from_pandas(df, 2)
+
+    selection = ddf.iloc[:, 2]
+
+    assert all([not key.startswith("iloc") for key in selection.dask.layers.keys()])
+    assert any([key.startswith("getitem") for key in selection.dask.layers.keys()])
+
+    select_first = ddf.iloc[:, 1]
+    assert_eq(select_first, df.iloc[:, 1])
+
+    select_zeroth = ddf.iloc[:, 0]
+    assert_eq(select_zeroth, df.iloc[:, 0])
+
+    select_list_cols = ddf.iloc[:, [0, 2]]
+    assert_eq(select_list_cols, df.iloc[:, [0, 2]])
+
+    select_negative = ddf.iloc[:, -1:-3:-1]
+    assert_eq(select_negative, df.iloc[:, -1:-3:-1])
+
+
+def test_iloc_out_of_order_selection():
+    df = pd.DataFrame({"A": [1] * 100, "B": [2] * 100, "C": [3] * 100, "D": [4] * 100})
+    ddf = dd.from_pandas(df, 2)
+    ddf = ddf[["C", "A", "B"]]
+    a = ddf.iloc[:, 0]
+    b = ddf.iloc[:, 1]
+    c = ddf.iloc[:, 2]
+
+    assert a.name == "C"
+    assert b.name == "A"
+    assert c.name == "B"
+
+    a1, b1, c1 = dask.compute(a, b, c)
+
+    assert a1.name == "C"
+    assert b1.name == "A"
+    assert c1.name == "B"

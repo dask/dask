@@ -8,22 +8,23 @@ import pytest
 
 import dask.config
 from dask.config import (
-    update,
-    merge,
-    collect,
-    collect_yaml,
-    collect_env,
-    get,
-    ensure_file,
-    set,
-    config,
-    rename,
-    update_defaults,
-    refresh,
-    expand_environment_variables,
     canonical_name,
+    collect,
+    collect_env,
+    collect_yaml,
+    config,
+    deserialize,
+    ensure_file,
+    expand_environment_variables,
+    get,
+    merge,
+    refresh,
+    rename,
+    serialize,
+    set,
+    update,
+    update_defaults,
 )
-
 from dask.utils import tmpfile
 
 yaml = pytest.importorskip("yaml")
@@ -178,13 +179,10 @@ def test_collect():
             assert config == expected
 
 
-def test_collect_env_none():
-    os.environ["DASK_FOO"] = "bar"
-    try:
-        config = collect([])
-        assert config == {"foo": "bar"}
-    finally:
-        del os.environ["DASK_FOO"]
+def test_collect_env_none(monkeypatch):
+    monkeypatch.setenv("DASK_FOO", "bar")
+    config = collect([])
+    assert config == {"foo": "bar"}
 
 
 def test_get():
@@ -365,12 +363,9 @@ def test_refresh():
         ({"a": "A", "b": [1, "2", "$FOO"]}, {"a": "A", "b": [1, "2", "foo"]}),
     ],
 )
-def test_expand_environment_variables(inp, out):
-    try:
-        os.environ["FOO"] = "foo"
-        assert expand_environment_variables(inp) == out
-    finally:
-        del os.environ["FOO"]
+def test_expand_environment_variables(monkeypatch, inp, out):
+    monkeypatch.setenv("FOO", "foo")
+    assert expand_environment_variables(inp) == out
 
 
 def test_env_var_canonical_name(monkeypatch):
@@ -418,3 +413,93 @@ def test_core_file():
     assert "temporary-directory" in dask.config.config
     assert "dataframe" in dask.config.config
     assert "shuffle-compression" in dask.config.get("dataframe")
+
+
+def test_schema():
+    jsonschema = pytest.importorskip("jsonschema")
+
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    jsonschema.validate(config, schema)
+
+
+def test_schema_is_complete():
+    config_fn = os.path.join(os.path.dirname(__file__), "..", "dask.yaml")
+    schema_fn = os.path.join(os.path.dirname(__file__), "..", "dask-schema.yaml")
+
+    with open(config_fn) as f:
+        config = yaml.safe_load(f)
+
+    with open(schema_fn) as f:
+        schema = yaml.safe_load(f)
+
+    def test_matches(c, s):
+        for k, v in c.items():
+            if list(c) != list(s["properties"]):
+                raise ValueError(
+                    "\nThe dask.yaml and dask-schema.yaml files are not in sync.\n"
+                    "This usually happens when we add a new configuration value,\n"
+                    "but don't add the schema of that value to the dask-schema.yaml file\n"
+                    "Please modify these files to include the missing values: \n\n"
+                    "    dask.yaml:        {}\n"
+                    "    dask-schema.yaml: {}\n\n"
+                    "Examples in these files should be a good start, \n"
+                    "even if you are not familiar with the jsonschema spec".format(
+                        sorted(c), sorted(s["properties"])
+                    )
+                )
+            if isinstance(v, dict):
+                test_matches(c[k], s["properties"][k])
+
+    test_matches(config, schema)
+
+
+def test_deprecations():
+    with pytest.warns(Warning) as info:
+        with dask.config.set(fuse_ave_width=123):
+            assert dask.config.get("optimization.fuse.ave-width") == 123
+
+    assert "optimization.fuse.ave-width" in str(info[0].message)
+
+
+def test_get_override_with():
+    with dask.config.set({"foo": "bar"}):
+        # If override_with is None get the config key
+        assert dask.config.get("foo") == "bar"
+        assert dask.config.get("foo", override_with=None) == "bar"
+
+        # Otherwise pass the default straight through
+        assert dask.config.get("foo", override_with="baz") == "baz"
+        assert dask.config.get("foo", override_with=False) is False
+        assert dask.config.get("foo", override_with=True) is True
+        assert dask.config.get("foo", override_with=123) == 123
+        assert dask.config.get("foo", override_with={"hello": "world"}) == {
+            "hello": "world"
+        }
+        assert dask.config.get("foo", override_with=["one"]) == ["one"]
+
+
+def test_config_serialization():
+    # Use context manager without changing the value to ensure test side effects are restored
+    with dask.config.set({"array.svg.size": dask.config.get("array.svg.size")}):
+
+        # Take a round trip through the serialization
+        serialized = serialize({"array": {"svg": {"size": 150}}})
+        config = deserialize(serialized)
+
+        dask.config.update(dask.config.global_config, config)
+        assert dask.config.get("array.svg.size") == 150
+
+
+def test_config_inheritance():
+    config = collect_env(
+        {"DASK_INTERNAL_INHERIT_CONFIG": serialize({"array": {"svg": {"size": 150}}})}
+    )
+    assert dask.config.get("array.svg.size", config=config) == 150

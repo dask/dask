@@ -1,17 +1,18 @@
 import datetime
 import inspect
-
-import pandas as pd
-from pandas.core.window import Rolling as pd_Rolling
 from numbers import Integral
 
+import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype
+from pandas.core.window import Rolling as pd_Rolling
+
 from ..base import tokenize
-from ..utils import M, funcname, derived_from, has_keyword
 from ..highlevelgraph import HighLevelGraph
+from ..utils import M, derived_from, funcname, has_keyword
+from . import methods
 from ._compat import PANDAS_VERSION
 from .core import _emulate
 from .utils import make_meta
-from . import methods
 
 
 def overlap_chunk(
@@ -77,7 +78,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     dd.DataFrame.map_overlap
     """
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
-        if not df.index._meta_nonempty.is_all_dates:
+        if not is_datetime64_any_dtype(df.index._meta_nonempty.inferred_type):
             raise TypeError(
                 "Must have a `DatetimeIndex` when using string offset "
                 "for `before` and `after`"
@@ -102,7 +103,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = kwargs.pop("meta")
     else:
         meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta, index=df._meta.index)
+    meta = make_meta(meta, index=df._meta.index, parent_meta=df._meta)
 
     name = "{0}-{1}".format(func_name, token)
     name_a = "overlap-prepend-" + tokenize(df, before)
@@ -117,13 +118,13 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     )
 
     if before and isinstance(before, Integral):
-        dsk.update(
-            {
-                (name_a, i): (M.tail, (df_name, i), before)
-                for i in range(df.npartitions - 1)
-            }
-        )
-        prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+
+        prevs = [None]
+        for i in range(df.npartitions - 1):
+            key = (name_a, i)
+            dsk[key] = (M.tail, (df_name, i), before)
+            prevs.append(key)
+
     elif isinstance(before, datetime.timedelta):
         # Assumes monotonic (increasing?) index
         divs = pd.Series(df.divisions)
@@ -135,6 +136,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
 
         if (before > deltas).any():
             pt_z = divs[0]
+            prevs = [None]
             for i in range(df.npartitions - 1):
                 # Select all indexes of relevant partitions between the current partition and
                 # the partition with the highest division outside the rolling window (before)
@@ -148,56 +150,48 @@ def map_overlap(func, df, before, after, *args, **kwargs):
                     first = first - deltas[j]
                     j = j - 1
 
-                dsk.update(
-                    {
-                        (name_a, i): (
-                            _tail_timedelta,
-                            [(df_name, k) for k in range(j, i + 1)],
-                            (df_name, i + 1),
-                            before,
-                        )
-                    }
+                key = (name_a, i)
+                dsk[key] = (
+                    _tail_timedelta,
+                    [(df_name, k) for k in range(j, i + 1)],
+                    (df_name, i + 1),
+                    before,
                 )
-
-            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+                prevs.append(key)
 
         else:
-            dsk.update(
-                {
-                    (name_a, i): (
-                        _tail_timedelta,
-                        [(df_name, i)],
-                        (df_name, i + 1),
-                        before,
-                    )
-                    for i in range(df.npartitions - 1)
-                }
-            )
-            prevs = [None] + [(name_a, i) for i in range(df.npartitions - 1)]
+            prevs = [None]
+            for i in range(df.npartitions - 1):
+                key = (name_a, i)
+                dsk[key] = (
+                    _tail_timedelta,
+                    [(df_name, i)],
+                    (df_name, i + 1),
+                    before,
+                )
+                prevs.append(key)
     else:
         prevs = [None] * df.npartitions
 
     if after and isinstance(after, Integral):
-        dsk.update(
-            {
-                (name_b, i): (M.head, (df_name, i), after)
-                for i in range(1, df.npartitions)
-            }
-        )
-        nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (M.head, (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
     elif isinstance(after, datetime.timedelta):
         # TODO: Do we have a use-case for this? Pandas doesn't allow negative rolling windows
         deltas = pd.Series(df.divisions).diff().iloc[1:-1]
         if (after > deltas).any():
             raise ValueError(timedelta_partition_message)
 
-        dsk.update(
-            {
-                (name_b, i): (_head_timedelta, (df_name, i - 0), (df_name, i), after)
-                for i in range(1, df.npartitions)
-            }
-        )
-        nexts = [(name_b, i) for i in range(1, df.npartitions)] + [None]
+        nexts = []
+        for i in range(1, df.npartitions):
+            key = (name_b, i)
+            dsk[key] = (_head_timedelta, (df_name, i - 0), (df_name, i), after)
+            nexts.append(key)
+        nexts.append(None)
     else:
         nexts = [None] * df.npartitions
 
@@ -260,7 +254,7 @@ def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
     return getattr(rolling, name)(*args, **kwargs)
 
 
-class Rolling(object):
+class Rolling:
     """Provides rolling window calculations."""
 
     def __init__(

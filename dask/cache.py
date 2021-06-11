@@ -1,13 +1,14 @@
-from .callbacks import Callback
-from timeit import default_timer
-from numbers import Number
 import sys
+from numbers import Number
+from timeit import default_timer
+
+from .callbacks import Callback
 
 overhead = sys.getsizeof(1.23) * 4 + sys.getsizeof(()) * 4
 
 
 class Cache(Callback):
-    """ Use cache for computation
+    """Use cache for computation
 
     Examples
     --------
@@ -33,7 +34,7 @@ class Cache(Callback):
         except ImportError as ex:
             raise ImportError(
                 'Cache requires cachey, "{ex}" problem ' "importing".format(ex=str(ex))
-            )
+            ) from ex
         self._nbytes = cachey.nbytes
         if isinstance(cache, Number):
             cache = cachey.Cache(cache, *args, **kwargs)

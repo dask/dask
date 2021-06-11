@@ -3,6 +3,7 @@ Control global computation context
 """
 import threading
 from functools import partial
+
 from . import config
 
 _globals = config.config
@@ -12,7 +13,7 @@ thread_state = threading.local()
 
 
 def globalmethod(default=None, key=None, falsey=None):
-    """ Allow function to be taken over by globals
+    """Allow function to be taken over by globals
 
     This modifies a method so that occurrences of it may be taken over by
     functions registered in the global options. Can be used as a decorator or a
@@ -31,7 +32,7 @@ def globalmethod(default=None, key=None, falsey=None):
     Examples
     --------
     >>> import dask
-    >>> class Foo(object):
+    >>> class Foo:
     ...     @globalmethod(key='bar', falsey=lambda: 3)
     ...     def bar():
     ...         return 1
@@ -50,7 +51,7 @@ def globalmethod(default=None, key=None, falsey=None):
     return GlobalMethod(default=default, key=key, falsey=falsey)
 
 
-class GlobalMethod(object):
+class GlobalMethod:
     def __init__(self, default, key, falsey=None):
         self._default = default
         self._key = key

@@ -1,15 +1,21 @@
 import copyreg
 import multiprocessing
+import multiprocessing.pool
+import os
 import pickle
 import sys
 import traceback
+from concurrent.futures import ProcessPoolExecutor
 from functools import partial
 from warnings import warn
 
+import cloudpickle
+
 from . import config
+from .local import MultiprocessingPoolExecutor, get_async, reraise
+from .optimization import cull, fuse
 from .system import CPU_COUNT
-from .local import reraise, get_async  # TODO: get better get
-from .optimization import fuse, cull
+from .utils import ensure_dict
 
 
 def _reduce_method_descriptor(m):
@@ -19,23 +25,8 @@ def _reduce_method_descriptor(m):
 # type(set.union) is used as a proxy to <class 'method_descriptor'>
 copyreg.pickle(type(set.union), _reduce_method_descriptor)
 
-
-try:
-    import cloudpickle
-
-    _dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
-    _loads = cloudpickle.loads
-except ImportError:
-
-    def _dumps(obj):
-        try:
-            return pickle.dumps(obj, protocol=pickle.HIGHEST_PROTOCOL)
-        except (pickle.PicklingError, AttributeError) as exc:
-            raise ModuleNotFoundError(
-                "Please install cloudpickle to use the multiprocessing scheduler"
-            ) from exc
-
-    _loads = pickle.loads
+_dumps = partial(cloudpickle.dumps, protocol=pickle.HIGHEST_PROTOCOL)
+_loads = cloudpickle.loads
 
 
 def _process_get_id():
@@ -56,7 +47,7 @@ def _process_get_id():
 # To enable testing of the ``RemoteException`` class even when tblib is
 # installed, we don't wrap the class in the try block below
 class RemoteException(Exception):
-    """ Remote Exception
+    """Remote Exception
 
     Contains the exception and traceback from a remotely run task
     """
@@ -82,7 +73,7 @@ exceptions = dict()
 
 
 def remote_exception(exc, tb):
-    """ Metaclass that wraps exception type in RemoteException """
+    """Metaclass that wraps exception type in RemoteException"""
     if type(exc) in exceptions:
         typ = exceptions[type(exc)]
         return typ(exc, tb)
@@ -137,21 +128,17 @@ and on Windows, because they each only support a single context.
 
 
 def get_context():
-    """ Return the current multiprocessing context."""
+    """Return the current multiprocessing context."""
+    # fork context does fork()-without-exec(), which can lead to deadlocks,
+    # so default to "spawn".
+    context_name = config.get("multiprocessing.context", "spawn")
     if sys.platform == "win32":
-        # Just do the default, since we can't change it:
-        if config.get("multiprocessing.context", None) is not None:
+        if context_name != "spawn":
+            # Only spawn is supported on Win32, can't change it:
             warn(_CONTEXT_UNSUPPORTED, UserWarning)
         return multiprocessing
-    context_name = config.get("multiprocessing.context", None)
-    # The default context on OSX was switched from "fork" to "spawn" in
-    # Python 3.8. We keep "fork" as the default here for backwards
-    # compatibility and to avoid raising a RuntimeError when using the
-    # multiprocessing scheduler in a Python script that is not in a
-    # if __name__ == "__main__" block
-    if context_name is None and sys.platform == "darwin":
-        context_name = "fork"
-    return multiprocessing.get_context(context_name)
+    else:
+        return multiprocessing.get_context(context_name)
 
 
 def get(
@@ -162,9 +149,10 @@ def get(
     func_dumps=None,
     optimize_graph=True,
     pool=None,
+    chunksize=None,
     **kwargs
 ):
-    """ Multiprocessed get function appropriate for Bags
+    """Multiprocessed get function appropriate for Bags
 
     Parameters
     ----------
@@ -175,24 +163,43 @@ def get(
     num_workers : int
         Number of worker processes (defaults to number of cores)
     func_dumps : function
-        Function to use for function serialization
-        (defaults to cloudpickle.dumps if available, otherwise pickle.dumps)
+        Function to use for function serialization (defaults to cloudpickle.dumps)
     func_loads : function
-        Function to use for function deserialization
-        (defaults to cloudpickle.loads if available, otherwise pickle.loads)
+        Function to use for function deserialization (defaults to cloudpickle.loads)
     optimize_graph : bool
         If True [default], `fuse` is applied to the graph before computation.
+    pool : Executor or Pool
+        Some sort of `Executor` or `Pool` to use
+    chunksize: int, optional
+        Size of chunks to use when dispatching work.
+        Defaults to 5 as some batching is helpful.
+        If -1, will be computed to evenly divide ready work across workers.
     """
+    chunksize = chunksize or config.get("chunksize", 6)
     pool = pool or config.get("pool", None)
     num_workers = num_workers or config.get("num_workers", None) or CPU_COUNT
     if pool is None:
+        # In order to get consistent hashing in subprocesses, we need to set a
+        # consistent seed for the Python hash algorithm. Unfortunatley, there
+        # is no way to specify environment variables only for the Pool
+        # processes, so we have to rely on environment variables being
+        # inherited.
+        if os.environ.get("PYTHONHASHSEED") in (None, "0"):
+            # This number is arbitrary; it was chosen to commemorate
+            # https://github.com/dask/dask/issues/6640.
+            os.environ["PYTHONHASHSEED"] = "6640"
         context = get_context()
-        pool = context.Pool(num_workers, initializer=initialize_worker_process)
+        pool = ProcessPoolExecutor(
+            num_workers, mp_context=context, initializer=initialize_worker_process
+        )
         cleanup = True
     else:
+        if isinstance(pool, multiprocessing.pool.Pool):
+            pool = MultiprocessingPoolExecutor(pool)
         cleanup = False
 
     # Optimize Dask
+    dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     if optimize_graph:
         dsk3, dependencies = fuse(dsk2, keys, dependencies)
@@ -210,8 +217,8 @@ def get(
     try:
         # Run
         result = get_async(
-            pool.apply_async,
-            len(pool._pool),
+            pool.submit,
+            pool._max_workers,
             dsk3,
             keys,
             get_id=_process_get_id,
@@ -219,11 +226,12 @@ def get(
             loads=loads,
             pack_exception=pack_exception,
             raise_exception=reraise,
+            chunksize=chunksize,
             **kwargs
         )
     finally:
         if cleanup:
-            pool.close()
+            pool.shutdown()
     return result
 
 

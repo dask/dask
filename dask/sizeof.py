@@ -1,4 +1,7 @@
+import itertools
+import random
 import sys
+from array import array
 from distutils.version import LooseVersion
 
 from .utils import Dispatch
@@ -20,20 +23,50 @@ def sizeof_default(o):
     return getsizeof(o)
 
 
+@sizeof.register(bytes)
+@sizeof.register(bytearray)
+def sizeof_bytes(o):
+    return len(o)
+
+
+@sizeof.register(memoryview)
+def sizeof_memoryview(o):
+    return o.nbytes
+
+
+@sizeof.register(array)
+def sizeof_array(o):
+    return o.itemsize * len(o)
+
+
 @sizeof.register(list)
 @sizeof.register(tuple)
 @sizeof.register(set)
 @sizeof.register(frozenset)
 def sizeof_python_collection(seq):
-    return getsizeof(seq) + sum(map(sizeof, seq))
+    num_items = len(seq)
+    num_samples = 10
+    if num_items > num_samples:
+        if isinstance(seq, (set, frozenset)):
+            # As of Python v3.9, it is deprecated to call random.sample() on
+            # sets but since sets are unordered anyways we can simply pick
+            # the first `num_samples` items.
+            samples = itertools.islice(seq, num_samples)
+        else:
+            samples = random.sample(seq, num_samples)
+        return getsizeof(seq) + int(num_items / num_samples * sum(map(sizeof, samples)))
+    else:
+        return getsizeof(seq) + sum(map(sizeof, seq))
 
 
 @sizeof.register(dict)
 def sizeof_python_dict(d):
-    if len(d) > 10:
-        return getsizeof(d) + 1000 * len(d)
-    else:
-        return getsizeof(d) + sum(map(sizeof, d.keys())) + sum(map(sizeof, d.values()))
+    return (
+        getsizeof(d)
+        + sizeof(list(d.keys()))
+        + sizeof(list(d.values()))
+        - 2 * sizeof(list())
+    )
 
 
 @sizeof.register_lazy("cupy")
@@ -72,13 +105,16 @@ def register_numpy():
 
     @sizeof.register(np.ndarray)
     def sizeof_numpy_ndarray(x):
+        if 0 in x.strides:
+            xs = x[tuple(slice(None) if s != 0 else slice(1) for s in x.strides)]
+            return xs.nbytes
         return int(x.nbytes)
 
 
 @sizeof.register_lazy("pandas")
 def register_pandas():
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     def object_size(x):
         if not len(x):

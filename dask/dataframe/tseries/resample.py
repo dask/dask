@@ -1,12 +1,12 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
-from ..core import DataFrame, Series
 from ...base import tokenize
-from ...utils import derived_from
 from ...highlevelgraph import HighLevelGraph
-from .._compat import PANDAS_GT_0240
+from ...utils import derived_from
+from .. import methods
+from ..core import DataFrame, Series
 
 
 def getnanos(rule):
@@ -31,19 +31,22 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-    if PANDAS_GT_0240:
-        new_index = pd.date_range(
-            start.tz_localize(None),
-            end.tz_localize(None),
-            freq=rule,
-            closed=reindex_closed,
-            name=out.index.name,
-        ).tz_localize(start.tz, nonexistent="shift_forward")
 
-    else:
-        new_index = pd.date_range(
-            start, end, freq=rule, closed=reindex_closed, name=out.index.name
+    new_index = pd.date_range(
+        start.tz_localize(None),
+        end.tz_localize(None),
+        freq=rule,
+        closed=reindex_closed,
+        name=out.index.name,
+    ).tz_localize(start.tz, nonexistent="shift_forward")
+
+    if not out.index.isin(new_index).all():
+        raise ValueError(
+            "Index is not contained within new index. This can often be "
+            "resolved by using larger partitions, or unambiguous "
+            "frequencies: 'Q', 'A'..."
         )
+
     return out.reindex(new_index, fill_value=fill_value)
 
 
@@ -67,8 +70,8 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     else:
         outdivs = tempdivs
 
-    newdivs = newdivs.tolist()
-    outdivs = outdivs.tolist()
+    newdivs = methods.tolist(newdivs)
+    outdivs = methods.tolist(outdivs)
 
     # Adjust ends
     if newdivs[0] < divisions[0]:
@@ -78,7 +81,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
             setter = lambda a, val: a.append(val)
         else:
             setter = lambda a, val: a.__setitem__(-1, val)
-        setter(newdivs, divisions[-1])
+        setter(newdivs, divisions[-1] + res)
         if outdivs[-1] > divisions[-1]:
             setter(outdivs, outdivs[-1])
         elif outdivs[-1] < divisions[-1]:
@@ -87,8 +90,8 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 
-class Resampler(object):
-    """ Class for resampling timeseries data.
+class Resampler:
+    """Class for resampling timeseries data.
 
     This class is commonly encountered when using ``obj.resample(...)`` which
     return ``Resampler`` objects.
@@ -116,20 +119,11 @@ class Resampler(object):
             )
             raise ValueError(msg)
         self.obj = obj
-        rule = pd.tseries.frequencies.to_offset(rule)
-        day_nanos = pd.tseries.frequencies.Day().nanos
-
-        if getnanos(rule) and day_nanos % rule.nanos:
-            raise NotImplementedError(
-                "Resampling frequency %s that does"
-                " not evenly divide a day is not "
-                "implemented" % rule
-            )
-        self._rule = rule
+        self._rule = pd.tseries.frequencies.to_offset(rule)
         self._kwargs = kwargs
 
     def _agg(self, how, meta=None, fill_value=np.nan, how_args=(), how_kwargs={}):
-        """ Aggregate using one or more operations
+        """Aggregate using one or more operations
 
         Parameters
         ----------
@@ -223,7 +217,7 @@ class Resampler(object):
 
     @derived_from(pd_Resampler)
     def nunique(self):
-        return self._agg("nunique")
+        return self._agg("nunique", fill_value=0)
 
     @derived_from(pd_Resampler)
     def ohlc(self):
@@ -243,11 +237,11 @@ class Resampler(object):
 
     @derived_from(pd_Resampler)
     def size(self):
-        return self._agg("size")
+        return self._agg("size", fill_value=0)
 
     @derived_from(pd_Resampler)
     def sum(self):
-        return self._agg("sum")
+        return self._agg("sum", fill_value=0)
 
     @derived_from(pd_Resampler)
     def var(self):

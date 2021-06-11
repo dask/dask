@@ -1,6 +1,7 @@
+import pandas as pd
+
 import dask
 import dask.dataframe as dd
-import pandas as pd
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -16,7 +17,7 @@ def test_fuse_ave_width():
 
     s = (df.x + 1) + (df.x + 2)
 
-    with dask.config.set(fuse_ave_width=4):
+    with dask.config.set({"optimization.fuse.ave-width": 4}):
         a = s.__dask_optimize__(s.dask, s.__dask_keys__())
 
     b = s.__dask_optimize__(s.dask, s.__dask_keys__())

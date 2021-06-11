@@ -2,11 +2,12 @@ import os
 import posixpath
 
 import pytest
-from toolz import concat
+from fsspec.core import get_fs_token_paths, open_files
+from tlz import concat
 
 import dask
-from dask.bytes.core import read_bytes, open_files, get_fs_token_paths
-
+import dask.bag as db
+from dask.bytes.core import read_bytes
 
 try:
     import distributed
@@ -15,22 +16,28 @@ try:
 except (ImportError, SyntaxError):
     distributed = None
 
-try:
-    import pyarrow
-except ImportError:
-    pyarrow = None
-
 
 if not os.environ.get("DASK_RUN_HDFS_TESTS", ""):
     pytestmark = pytest.mark.skip(reason="HDFS tests not configured to run")
 
+pyarrow = pytest.importorskip("pyarrow")
+
+try:
+    from pyarrow.hdfs import _connect, _maybe_set_hadoop_classpath
+except ImportError:
+    try:
+        from pyarrow._hdfs import _maybe_set_hadoop_classpath
+        from pyarrow._hdfs import connect as _connect
+    except ImportError:
+        pyarrow = False
 
 basedir = "/tmp/test-dask"
 
 
 @pytest.fixture
 def hdfs(request):
-    hdfs = pyarrow.hdfs.connect(host="localhost", port=8020)
+    _maybe_set_hadoop_classpath()
+    hdfs = _connect(host="localhost", port=8020)
 
     if hdfs.exists(basedir):
         hdfs.rm(basedir, recursive=True)
@@ -144,12 +151,12 @@ def test_read_csv(hdfs):
 
 
 def test_read_text(hdfs):
-    db = pytest.importorskip("dask.bag")
     import multiprocessing as mp
+    from concurrent.futures import ProcessPoolExecutor
 
-    pool = mp.get_context("spawn").Pool(2)
+    ctx = mp.get_context("spawn")
 
-    with pool:
+    with ProcessPoolExecutor(2, ctx) as pool:
         with hdfs.open("%s/text.1.txt" % basedir, "wb") as f:
             f.write("Alice 100\nBob 200\nCharlie 300".encode())
 
@@ -173,8 +180,6 @@ def test_read_text(hdfs):
 
 
 def test_read_text_unicode(hdfs):
-    db = pytest.importorskip("dask.bag")
-
     data = b"abcd\xc3\xa9"
     fn = "%s/data.txt" % basedir
     with hdfs.open(fn, "wb") as f:
@@ -191,8 +196,8 @@ def test_read_text_unicode(hdfs):
 @require_pyarrow
 def test_parquet_pyarrow(hdfs):
     dd = pytest.importorskip("dask.dataframe")
-    import pandas as pd
     import numpy as np
+    import pandas as pd
 
     fn = "%s/test.parquet" % basedir
     hdfs_fn = "hdfs://%s" % fn

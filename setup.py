@@ -2,33 +2,32 @@
 
 import sys
 from os.path import exists
+
 from setuptools import setup
+
 import versioneer
 
-# NOTE: These are tested in `continuous_integration/travis/test_imports.sh` If
+# NOTE: These are tested in `continuous_integration/test_imports.sh` If
 # you modify these, make sure to change the corresponding line there.
 extras_require = {
-    "array": ["numpy >= 1.13.0", "toolz >= 0.7.3"],
-    "bag": [
-        "cloudpickle >= 0.2.1",
-        "fsspec >= 0.6.0",
-        "toolz >= 0.7.3",
-        "partd >= 0.3.10",
-    ],
-    "dataframe": [
-        "numpy >= 1.13.0",
-        "pandas >= 0.23.0",
-        "toolz >= 0.7.3",
-        "partd >= 0.3.10",
-        "fsspec >= 0.6.0",
-    ],
-    "distributed": ["distributed >= 2.0"],
-    "diagnostics": ["bokeh >= 1.0.0"],
-    "delayed": ["cloudpickle >= 0.2.1", "toolz >= 0.7.3"],
+    "array": ["numpy >= 1.16"],
+    "bag": [],  # keeping for backwards compatibility
+    "dataframe": ["numpy >= 1.16", "pandas >= 0.25.0"],
+    "distributed": ["distributed == 2021.06.0"],
+    "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
+    "delayed": [],  # keeping for backwards compatibility
 }
-extras_require["complete"] = sorted(
-    {"PyYaml"} | {v for req in extras_require.values() for v in req}
-)
+extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})
+# after complete is set, add in test
+extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist"]
+
+install_requires = [
+    "pyyaml",
+    "cloudpickle >= 1.1.1",
+    "fsspec >= 0.6.0",
+    "toolz >= 0.8.2",
+    "partd >= 0.3.10",
+]
 
 packages = [
     "dask",
@@ -61,14 +60,15 @@ setup(
     keywords="task-scheduling parallel numpy pandas pydata",
     classifiers=[
         "Programming Language :: Python :: 3",
-        "Programming Language :: Python :: 3.6",
         "Programming Language :: Python :: 3.7",
         "Programming Language :: Python :: 3.8",
+        "Programming Language :: Python :: 3.9",
+        "License :: OSI Approved :: BSD License",
     ],
     packages=packages + tests,
     long_description=open("README.rst").read() if exists("README.rst") else "",
-    python_requires=">=3.6",
-    install_requires=[],
+    python_requires=">=3.7",
+    install_requires=install_requires,
     setup_requires=setup_requires,
     tests_require=["pytest"],
     extras_require=extras_require,

@@ -1,0 +1,22 @@
+dataframe:
+  - dask/dataframe/*
+  - dask/dataframe/**/*
+
+array:
+  - dask/array/*
+  - dask/array/**/*
+
+io:
+  - dask/dataframe/io/*
+  - dask/dataframe/io/**/*
+
+documentation:
+  - dask/docs/*
+  - dask/docs/**/*
+
+dispatch:
+  - dask/array/backends.py
+  - dask/array/dispatch.py
+  - dask/dataframe/backends.py
+  - dask/dataframe/dispatch.py
+  - dask/dataframe/extensions.py

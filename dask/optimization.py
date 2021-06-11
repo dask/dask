@@ -1,33 +1,35 @@
 import math
 import numbers
-import re
+import uuid
+from enum import Enum
 
-from . import config, core
+from . import config, core, utils
 from .core import (
-    istask,
+    flatten,
     get_dependencies,
+    ishashable,
+    istask,
+    reverse_dict,
     subs,
     toposort,
-    flatten,
-    reverse_dict,
-    ishashable,
 )
 from .utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
-    """ Return new dask with only the tasks required to calculate keys.
+    """Return new dask with only the tasks required to calculate keys.
 
     In other words, remove unnecessary tasks from dask.
     ``keys`` may be a single key or list of keys.
 
     Examples
     --------
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
-    >>> dsk, dependencies = cull(d, 'out')  # doctest: +SKIP
-    >>> dsk  # doctest: +SKIP
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}    # doctest: +SKIP
+    >>> dsk, dependencies = cull(d, 'out')                      # doctest: +SKIP
+    >>> dsk                                                     # doctest: +SKIP
     {'x': 1, 'out': (add, 'x', 10)}
-    >>> dependencies  # doctest: +SKIP
+    >>> dependencies                                            # doctest: +SKIP
     {'x': set(), 'out': set(['x'])}
 
     Returns
@@ -38,27 +40,24 @@ def cull(dsk, keys):
     """
     if not isinstance(keys, (list, set)):
         keys = [keys]
-    out_keys = []
+
     seen = set()
     dependencies = dict()
-
+    out = {}
     work = list(set(flatten(keys)))
+
     while work:
         new_work = []
-        out_keys += work
-        deps = [
-            (k, get_dependencies(dsk, k, as_list=True))  # fuse needs lists
-            for k in work
-        ]
-        dependencies.update(deps)
-        for _, deplist in deps:
-            for d in deplist:
+        for k in work:
+            dependencies_k = get_dependencies(dsk, k, as_list=True)  # fuse needs lists
+            out[k] = dsk[k]
+            dependencies[k] = dependencies_k
+            for d in dependencies_k:
                 if d not in seen:
                     seen.add(d)
                     new_work.append(d)
-        work = new_work
 
-    out = {k: dsk[k] for k in out_keys}
+        work = new_work
 
     return out, dependencies
 
@@ -67,11 +66,11 @@ def default_fused_linear_keys_renamer(keys):
     """Create new keys for fused tasks"""
     typ = type(keys[0])
     if typ is str:
-        names = [key_split(x) for x in keys[:0:-1]]
+        names = [utils.key_split(x) for x in keys[:0:-1]]
         names.append(keys[0])
         return "-".join(names)
     elif typ is tuple and len(keys[0]) > 0 and isinstance(keys[0][0], str):
-        names = [key_split(x) for x in keys[:0:-1]]
+        names = [utils.key_split(x) for x in keys[:0:-1]]
         names.append(keys[0][0])
         return ("-".join(names),) + keys[0][1:]
     else:
@@ -79,7 +78,7 @@ def default_fused_linear_keys_renamer(keys):
 
 
 def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
-    """ Return new dask graph with linear sequence of tasks fused together.
+    """Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
     Supply ``dependencies`` from output of ``cull`` if available to avoid
@@ -228,7 +227,7 @@ def _flat_set(x):
 
 
 def inline(dsk, keys=None, inline_constants=True, dependencies=None):
-    """ Return new dask with the given keys inlined with their values.
+    """Return new dask with the given keys inlined with their values.
 
     Inlines all constants if ``inline_constants`` keyword is True. Note that
     the constant keys will remain in the graph, to remove them follow
@@ -236,14 +235,15 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
     Examples
     --------
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    >>> inline(d)  # doctest: +SKIP
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')} # doctest: +SKIP
+    >>> inline(d)       # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
 
-    >>> inline(d, keys='y')  # doctest: +SKIP
+    >>> inline(d, keys='y') # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
 
-    >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
+    >>> inline(d, keys='y', inline_constants=False) # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
     if dependencies and isinstance(next(iter(dependencies.values())), list):
@@ -290,7 +290,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 def inline_functions(
     dsk, output, fast_functions=None, inline_constants=False, dependencies=None
 ):
-    """ Inline cheap functions into larger operations
+    """Inline cheap functions into larger operations
 
     Examples
     --------
@@ -350,7 +350,7 @@ def unwrap_partial(func):
 
 
 def functions_of(task):
-    """ Set of functions contained within nested task
+    """Set of functions contained within nested task
 
     Examples
     --------
@@ -369,47 +369,75 @@ def functions_of(task):
             if type(task) in sequence_types:
                 if istask(task):
                     funcs.add(unwrap_partial(task[0]))
-                    new_work += task[1:]
+                    new_work.extend(task[1:])
                 else:
-                    new_work += task
+                    new_work.extend(task)
         work = new_work
 
     return funcs
 
 
-def default_fused_keys_renamer(keys):
-    """Create new keys for ``fuse`` tasks"""
+def default_fused_keys_renamer(keys, max_fused_key_length=120):
+    """Create new keys for ``fuse`` tasks.
+
+    The optional parameter `max_fused_key_length` is used to limit the maximum string length for each renamed key.
+    If this parameter is set to `None`, there is no limit.
+    """
     it = reversed(keys)
     first_key = next(it)
     typ = type(first_key)
+
+    if max_fused_key_length:  # Take into account size of hash suffix
+        max_fused_key_length -= 5
+
+    def _enforce_max_key_limit(key_name):
+        if max_fused_key_length and len(key_name) > max_fused_key_length:
+            name_hash = f"{hash(key_name):x}"[:4]
+            key_name = f"{key_name[:max_fused_key_length]}-{name_hash}"
+        return key_name
+
     if typ is str:
-        first_name = key_split(first_key)
-        names = {key_split(k) for k in it}
+        first_name = utils.key_split(first_key)
+        names = {utils.key_split(k) for k in it}
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key)
-        return "-".join(names)
+        concatenated_name = "-".join(names)
+        return _enforce_max_key_limit(concatenated_name)
     elif typ is tuple and len(first_key) > 0 and isinstance(first_key[0], str):
-        first_name = key_split(first_key)
-        names = {key_split(k) for k in it}
+        first_name = utils.key_split(first_key)
+        names = {utils.key_split(k) for k in it}
         names.discard(first_name)
         names = sorted(names)
         names.append(first_key[0])
-        return ("-".join(names),) + first_key[1:]
+        concatenated_name = "-".join(names)
+        return (_enforce_max_key_limit(concatenated_name),) + first_key[1:]
+
+
+# PEP-484 compliant singleton constant
+# https://www.python.org/dev/peps/pep-0484/#support-for-singleton-types-in-unions
+class Default(Enum):
+    token = 0
+
+    def __repr__(self) -> str:
+        return "<default>"
+
+
+_default = Default.token
 
 
 def fuse(
     dsk,
     keys=None,
     dependencies=None,
-    ave_width=None,
-    max_width=None,
-    max_height=None,
-    max_depth_new_edges=None,
-    rename_keys=None,
-    fuse_subgraphs=None,
+    ave_width=_default,
+    max_width=_default,
+    max_height=_default,
+    max_depth_new_edges=_default,
+    rename_keys=_default,
+    fuse_subgraphs=_default,
 ):
-    """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
+    """Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
     This trades parallelism opportunities for faster scheduling by making tasks
     less granular.  It can replace ``fuse_linear`` in optimization passes.
@@ -431,71 +459,88 @@ def fuse(
     dependencies: dict, optional
         {key: [list-of-keys]}.  Must be a list to provide count of each key
         This optional input often comes from ``cull``
-    ave_width: float (default 2)
+    ave_width: float (default 1)
         Upper limit for ``width = num_nodes / height``, a good measure of
-        parallelizability
-    max_width: int
-        Don't fuse if total width is greater than this
-    max_height: int
-        Don't fuse more than this many levels
-    max_depth_new_edges: int
-        Don't fuse if new dependencies are added after this many levels
-    rename_keys: bool or func, optional
+        parallelizability.
+        dask.config key: ``optimization.fuse.ave-width``
+    max_width: int (default infinite)
+        Don't fuse if total width is greater than this.
+        dask.config key: ``optimization.fuse.max-width``
+    max_height: int or None (default None)
+        Don't fuse more than this many levels. Set to None to dynamically
+        adjust to ``1.5 + ave_width * log(ave_width + 1)``.
+        dask.config key: ``optimization.fuse.max-height``
+    max_depth_new_edges: int or None (default None)
+        Don't fuse if new dependencies are added after this many levels.
+        Set to None to dynamically adjust to ave_width * 1.5.
+        dask.config key: ``optimization.fuse.max-depth-new-edges``
+    rename_keys: bool or func, optional (default True)
         Whether to rename the fused keys with ``default_fused_keys_renamer``
         or not.  Renaming fused keys can keep the graph more understandable
         and comprehensive, but it comes at the cost of additional processing.
         If False, then the top-most key will be used.  For advanced usage, a
         function to create the new name is also accepted.
-    fuse_subgraphs : bool, optional
+        dask.config key: ``optimization.fuse.rename-keys``
+    fuse_subgraphs : bool or None, optional (default None)
         Whether to fuse multiple tasks into ``SubgraphCallable`` objects.
+        Set to None to let the default optimizer of individual dask collections decide.
+        If no collection-specific default exists, None defaults to False.
+        dask.config key: ``optimization.fuse.subgraphs``
 
     Returns
     -------
-    dsk: output graph with keys fused
-    dependencies: dict mapping dependencies after fusion.  Useful side effect
-        to accelerate other downstream optimizations.
+    dsk
+        output graph with keys fused
+    dependencies
+        dict mapping dependencies after fusion.  Useful side effect to accelerate other
+        downstream optimizations.
     """
+
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
+        return dsk, dependencies
+
     if keys is not None and not isinstance(keys, set):
         if not isinstance(keys, list):
             keys = [keys]
         keys = set(flatten(keys))
 
-    # Assign reasonable, not too restrictive defaults
-    if ave_width is None:
-        if config.get("fuse_ave_width", None) is None:
-            ave_width = 1
-        else:
-            ave_width = config.get("fuse_ave_width", None)
-
-    if max_height is None:
-        if config.get("fuse_max_height", None) is None:
-            max_height = len(dsk)
-        else:
-            max_height = config.get("fuse_max_height", None)
-
-    max_depth_new_edges = (
-        max_depth_new_edges
-        or config.get("fuse_max_depth_new_edges", None)
-        or ave_width + 1.5
-    )
-    max_width = (
-        max_width
-        or config.get("fuse_max_width", None)
-        or 1.5 + ave_width * math.log(ave_width + 1)
-    )
-
+    # Read defaults from dask.yaml and/or user-defined config file
+    if ave_width is _default:
+        ave_width = config.get("optimization.fuse.ave-width")
+        assert ave_width is not _default
+    if max_height is _default:
+        max_height = config.get("optimization.fuse.max-height")
+        assert max_height is not _default
+    if max_depth_new_edges is _default:
+        max_depth_new_edges = config.get("optimization.fuse.max-depth-new-edges")
+        assert max_depth_new_edges is not _default
+    if max_depth_new_edges is None:
+        max_depth_new_edges = ave_width * 1.5
+    if max_width is _default:
+        max_width = config.get("optimization.fuse.max-width")
+        assert max_width is not _default
+    if max_width is None:
+        max_width = 1.5 + ave_width * math.log(ave_width + 1)
+    if fuse_subgraphs is _default:
+        fuse_subgraphs = config.get("optimization.fuse.subgraphs")
+        assert fuse_subgraphs is not _default
     if fuse_subgraphs is None:
-        fuse_subgraphs = config.get("fuse_subgraphs", False)
+        fuse_subgraphs = False
 
     if not ave_width or not max_height:
         return dsk, dependencies
 
-    if rename_keys is None:
-        rename_keys = config.get("fuse_rename_keys", True)
+    if rename_keys is _default:
+        rename_keys = config.get("optimization.fuse.rename-keys")
+        assert rename_keys is not _default
     if rename_keys is True:
         key_renamer = default_fused_keys_renamer
     elif rename_keys is False:
         key_renamer = None
+    elif not callable(rename_keys):
+        raise TypeError("rename_keys must be a boolean or callable")
     else:
         key_renamer = rename_keys
     rename_keys = key_renamer is not None
@@ -796,7 +841,7 @@ def fuse(
     if fuse_subgraphs:
         _inplace_fuse_subgraphs(rv, keys, deps, fused_trees, rename_keys)
 
-    if rename_keys:
+    if key_renamer:
         for root_key, fused_keys in fused_trees.items():
             alias = key_renamer(fused_keys)
             if alias is not None and alias not in rv:
@@ -879,66 +924,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
             fused_trees[outkey] = chain2
 
 
-# Defining `key_split` (used by key renamers in `fuse`) in utils.py
-# results in messy circular imports, so define it here instead.
-hex_pattern = re.compile("[a-f]+")
-
-
-def key_split(s):
-    """
-    >>> key_split('x')
-    'x'
-    >>> key_split('x-1')
-    'x'
-    >>> key_split('x-1-2-3')
-    'x'
-    >>> key_split(('x-2', 1))
-    'x'
-    >>> key_split("('x-2', 1)")
-    'x'
-    >>> key_split('hello-world-1')
-    'hello-world'
-    >>> key_split(b'hello-world-1')
-    'hello-world'
-    >>> key_split('ae05086432ca935f6eba409a8ecd4896')
-    'data'
-    >>> key_split('<module.submodule.myclass object at 0xdaf372')
-    'myclass'
-    >>> key_split(None)
-    'Other'
-    >>> key_split('x-abcdefab')  # ignores hex
-    'x'
-    >>> key_split('_(x)')  # strips unpleasant characters
-    'x'
-    """
-    if type(s) is bytes:
-        s = s.decode()
-    if type(s) is tuple:
-        s = s[0]
-    try:
-        words = s.split("-")
-        if not words[0][0].isalpha():
-            result = words[0].strip("_'()\"")
-        else:
-            result = words[0]
-        for word in words[1:]:
-            if word.isalpha() and not (
-                len(word) == 8 and hex_pattern.match(word) is not None
-            ):
-                result += "-" + word
-            else:
-                break
-        if len(result) == 32 and re.match(r"[a-f0-9]{32}", result):
-            return "data"
-        else:
-            if result[0] == "<":
-                result = result.strip("<>").split()[0].split(".")[-1]
-            return result
-    except Exception:
-        return "Other"
-
-
-class SubgraphCallable(object):
+class SubgraphCallable:
     """Create a callable object from a dask graph.
 
     Parameters
@@ -955,10 +941,12 @@ class SubgraphCallable(object):
 
     __slots__ = ("dsk", "outkey", "inkeys", "name")
 
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
+    def __init__(self, dsk, outkey, inkeys, name=None):
         self.dsk = dsk
         self.outkey = outkey
         self.inkeys = inkeys
+        if name is None:
+            name = f"subgraph_callable-{uuid.uuid4()}"
         self.name = name
 
     def __repr__(self):
@@ -967,10 +955,9 @@ class SubgraphCallable(object):
     def __eq__(self, other):
         return (
             type(self) is type(other)
-            and self.dsk == other.dsk
+            and self.name == other.name
             and self.outkey == other.outkey
             and set(self.inkeys) == set(other.inkeys)
-            and self.name == other.name
         )
 
     def __ne__(self, other):
@@ -983,3 +970,6 @@ class SubgraphCallable(object):
 
     def __reduce__(self):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
+
+    def __hash__(self):
+        return hash(tuple((self.outkey, frozenset(self.inkeys), self.name)))
