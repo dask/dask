@@ -1861,6 +1861,51 @@ def piecewise(x, condlist, funclist, *args, **kw):
     )
 
 
+def _select(*args, **kwargs):
+    """
+    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    splits them in half to create ``condlist`` and ``choicelist`` params.
+    """
+    split_at = len(args) // 2
+    condlist = args[:split_at]
+    choicelist = args[split_at:]
+    return np.select(condlist, choicelist, **kwargs)
+
+
+@derived_from(np)
+def select(condlist, choicelist, default=0):
+    # Making the same checks that np.select
+    # Check the size of condlist and choicelist are the same, or abort.
+    if len(condlist) != len(choicelist):
+        raise ValueError("list of cases must be same length as list of conditions")
+
+    if len(condlist) == 0:
+        raise ValueError("select with an empty condition list is not possible")
+
+    choicelist = [asarray(choice) for choice in choicelist]
+
+    try:
+        intermediate_dtype = result_type(*choicelist)
+    except TypeError as e:
+        msg = "Choicelist elements do not have a common dtype."
+        raise TypeError(msg) from e
+
+    blockwise_shape = tuple(range(choicelist[0].ndim))
+
+    condargs = [arg for elem in condlist for arg in (elem, blockwise_shape)]
+    choiceargs = [arg for elem in choicelist for arg in (elem, blockwise_shape)]
+
+    return blockwise(
+        _select,
+        blockwise_shape,
+        *condargs,
+        *choiceargs,
+        dtype=intermediate_dtype,
+        name="select",
+        default=default,
+    )
+
+
 def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
     """
     Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
