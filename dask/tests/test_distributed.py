@@ -316,11 +316,7 @@ def test_blockwise_array_creation(c, io, fuse):
 
 @pytest.mark.parametrize(
     "io",
-    [
-        "parquet-pyarrow",
-        "parquet-fastparquet",
-        "csv",
-    ],
+    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
@@ -342,6 +338,11 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
+    elif io == "hdf":
+        pytest.importorskip("tables")
+        fn = str(tmpdir.join("h5"))
+        ddf0.to_hdf(fn, "/data*")
+        ddf = dd.read_hdf(fn, "/data*")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
