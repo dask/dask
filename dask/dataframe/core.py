@@ -3792,8 +3792,9 @@ class DataFrame(_Frame):
         super().__init__(dsk, name, meta, divisions)
         if self.dask.layers[name].collection_annotations is None:
             self.dask.layers[name].collection_annotations = {
+                "npartitions": self.npartitions,
+                "columns": [col for col in self.columns],
                 "type": type(self),
-                "divisions": self.divisions,
                 "dataframe_type": type(self._meta),
                 "series_dtypes": {
                     col: self._meta[col].dtype
@@ -3805,8 +3806,9 @@ class DataFrame(_Frame):
         else:
             self.dask.layers[name].collection_annotations.update(
                 {
+                    "npartitions": self.npartitions,
+                    "columns": [col for col in self.columns],
                     "type": type(self),
-                    "divisions": self.divisions,
                     "dataframe_type": type(self._meta),
                     "series_dtypes": {
                         col: self._meta[col].dtype
