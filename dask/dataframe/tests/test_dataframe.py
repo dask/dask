@@ -1683,6 +1683,9 @@ def test_combine_first():
     assert_eq(ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The 'freq' argument in Timestamp is deprecated:FutureWarning"
+)  #  PANDAS_GT_130 https://github.com/pandas-dev/pandas/issues/41949
 def test_dataframe_picklable():
     from pickle import dumps, loads
 
