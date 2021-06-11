@@ -316,11 +316,7 @@ def test_blockwise_array_creation(c, io, fuse):
 
 @pytest.mark.parametrize(
     "io",
-    [
-        "parquet-pyarrow",
-        "parquet-fastparquet",
-        "csv",
-    ],
+    ["parquet-pyarrow", "parquet-fastparquet", "csv", "hdf"],
 )
 @pytest.mark.parametrize("fuse", [True, False, None])
 def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
@@ -342,6 +338,11 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
     elif io == "csv":
         ddf0.to_csv(str(tmpdir), index=False)
         ddf = dd.read_csv(os.path.join(str(tmpdir), "*"))
+    elif io == "hdf":
+        pytest.importorskip("tables")
+        fn = str(tmpdir.join("h5"))
+        ddf0.to_hdf(fn, "/data*")
+        ddf = dd.read_hdf(fn, "/data*")
 
     df = df[["x"]] + 10
     ddf = ddf[["x"]] + 10
@@ -351,6 +352,25 @@ def test_blockwise_dataframe_io(c, tmpdir, io, fuse):
         # dsk should not be a dict unless fuse is explicitly True
         assert isinstance(dsk, dict) == bool(fuse)
         dd.assert_eq(ddf, df, check_index=False)
+
+
+def test_blockwise_fusion_after_compute(c):
+    # See: https://github.com/dask/dask/issues/7720
+
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    # Simple sequence of Dask-Dataframe manipulations
+    df = pd.DataFrame({"x": [1, 2, 3] * 5})
+    series = dd.from_pandas(df, npartitions=2)["x"]
+    result = series < 3
+
+    # Trigger an optimization of the `series` graph
+    # (which `result` depends on), then compute `result`.
+    # This is essentially a test of `rewrite_blockwise`.
+    series_len = len(series)
+    assert series_len == 15
+    assert df.x[result.compute()].sum() == 15
 
 
 @gen_cluster(client=True)
@@ -383,6 +403,28 @@ async def test_blockwise_numpy_kwargs(c, s, a, b):
     arr = da.blockwise(fn, "x", da.ones(1000), "x", dtype=np.uint16, dt=np.uint16(42))
     res = await c.compute(arr.sum(), optimize_graph=False)
     assert res == 1000
+
+
+def test_blockwise_different_optimization(c):
+    # Regression test for incorrect results due to SubgraphCallable.__eq__
+    # not correctly handling subgraphs with the same outputs and arity but
+    # different internals (GH-7632). The bug is triggered by distributed
+    # because it uses a function cache.
+    da = pytest.importorskip("dask.array")
+    np = pytest.importorskip("numpy")
+
+    u = da.from_array(np.arange(3))
+    v = da.from_array(np.array([10 + 2j, 7 - 3j, 8 + 1j]))
+    cv = v.conj()
+    x = u * cv
+    (cv,) = dask.optimize(cv)
+    y = u * cv
+    expected = np.array([0 + 0j, 7 + 3j, 16 - 2j])
+    with dask.config.set({"optimization.fuse.active": False}):
+        x_value = x.compute()
+        y_value = y.compute()
+    np.testing.assert_equal(x_value, expected)
+    np.testing.assert_equal(y_value, expected)
 
 
 @gen_cluster(client=True)

@@ -1505,3 +1505,55 @@ def broadcast_join(
     )
 
     return new_dd_object(graph, name, meta, divisions)
+
+
+def _recursive_pairwise_outer_join(
+    dataframes_to_merge, on, lsuffix, rsuffix, npartitions, shuffle
+):
+    """
+    Schedule the merging of a list of dataframes in a pairwise method. This is a recursive function that results
+    in a much more efficient scheduling of merges than a simple loop
+    from:
+    [A] [B] [C] [D] -> [AB] [C] [D] -> [ABC] [D] -> [ABCD]
+    to:
+    [A] [B] [C] [D] -> [AB] [CD] -> [ABCD]
+    Note that either way, n-1 merges are still required, but using a pairwise reduction it can be completed in parallel.
+    :param dataframes_to_merge: A list of Dask dataframes to be merged together on their index
+    :return: A single Dask Dataframe, comprised of the pairwise-merges of all provided dataframes
+    """
+    number_of_dataframes_to_merge = len(dataframes_to_merge)
+
+    merge_options = {
+        "on": on,
+        "lsuffix": lsuffix,
+        "rsuffix": rsuffix,
+        "npartitions": npartitions,
+        "shuffle": shuffle,
+    }
+
+    # Base case 1: just return the provided dataframe and merge with `left`
+    if number_of_dataframes_to_merge == 1:
+        return dataframes_to_merge[0]
+
+    # Base case 2: merge the two provided dataframe to be merged with `left`
+    if number_of_dataframes_to_merge == 2:
+        merged_ddf = dataframes_to_merge[0].join(
+            dataframes_to_merge[1], how="outer", **merge_options
+        )
+        return merged_ddf
+
+    # Recursive case: split the list of dfs into two ~even sizes and continue down
+    else:
+        middle_index = number_of_dataframes_to_merge // 2
+        merged_ddf = _recursive_pairwise_outer_join(
+            [
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[:middle_index], **merge_options
+                ),
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[middle_index:], **merge_options
+                ),
+            ],
+            **merge_options,
+        )
+        return merged_ddf
