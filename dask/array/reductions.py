@@ -1527,7 +1527,7 @@ def argtopk(a, k, axis=-1, split_every=None):
     # Generate nodes where every chunk is a tuple of (a, original index of a)
     idx = arange(a.shape[axis], chunks=(a.chunks[axis],), dtype=np.intp)
     idx = idx[tuple(slice(None) if i == axis else np.newaxis for i in range(a.ndim))]
-    a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx, dtype=object)
+    a_plus_idx = a.map_blocks(chunk.argtopk_preprocess, idx, dtype=object, meta=a._meta)
 
     # chunk and combine steps of the reduction. They acquire in input a tuple
     # of (a, original indices of a) and return another tuple containing the top
