@@ -4557,7 +4557,23 @@ class DataFrame(_Frame):
             other = other.to_frame()
 
         if not is_dataframe_like(other):
-            raise ValueError("other must be DataFrame")
+            if not isinstance(other, list) or not all(
+                [is_dataframe_like(o) for o in other]
+            ):
+                raise ValueError("other must be DataFrame or list of DataFrames")
+            if how not in ["outer", "left"]:
+                raise ValueError("merge_multi only supports left or outer joins")
+
+            from .multi import _recursive_pairwise_outer_join
+
+            other = _recursive_pairwise_outer_join(
+                other,
+                on=on,
+                lsuffix=lsuffix,
+                rsuffix=rsuffix,
+                npartitions=npartitions,
+                shuffle=shuffle,
+            )
 
         from .multi import merge
 
