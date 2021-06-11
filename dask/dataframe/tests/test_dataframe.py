@@ -2059,12 +2059,12 @@ def test_repartition_freq_month():
     assert_eq(df, ddf)
 
     assert ddf.divisions == (
-        pd.Timestamp("2015-1-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-2-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-3-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-4-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 23:50:00", freq="10T"),
+        pd.Timestamp("2015-1-1 00:00:00"),
+        pd.Timestamp("2015-2-1 00:00:00"),
+        pd.Timestamp("2015-3-1 00:00:00"),
+        pd.Timestamp("2015-4-1 00:00:00"),
+        pd.Timestamp("2015-5-1 00:00:00"),
+        pd.Timestamp("2015-5-1 23:50:00"),
     )
 
     assert ddf.npartitions == 5
@@ -2082,8 +2082,8 @@ def test_repartition_freq_day():
     assert_eq(ddf, pdf)
     assert ddf.npartitions == 2
     assert ddf.divisions == (
-        pd.Timestamp("2020-1-1", freq="D"),
-        pd.Timestamp("2020-1-2", freq="D"),
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-2"),
         pd.Timestamp("2020-1-2"),
     )
 
