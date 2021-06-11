@@ -197,9 +197,6 @@ def raise_on_meta_error(funcname=None, udf=False):
         raise ValueError(msg) from e
 
 
-UNKNOWN_CATEGORIES = "__UNKNOWN_CATEGORIES__"
-
-
 def empty_categories(df_column):
     """Returns `pd.CategoricalDtype` with empty categories"""
     return pd.CategoricalDtype(pd.Index([], dtype=df_column.dtype.categories.dtype))
@@ -218,36 +215,6 @@ def has_known_categories(x):
     elif is_index_like(x) and hasattr(x, "categories"):
         return not x.categories.empty
     raise TypeError("Expected Series or CategoricalIndex")
-
-
-def strip_unknown_categories(x, just_drop_unknown=False):
-    """Replace any unknown categoricals with empty categoricals.
-
-    Useful for preventing ``UNKNOWN_CATEGORIES`` from leaking into results.
-    """
-    if isinstance(x, (pd.Series, pd.DataFrame)):
-        x = x.copy()
-        if isinstance(x, pd.DataFrame):
-            cat_mask = x.dtypes == "category"
-            if cat_mask.any():
-                cats = cat_mask[cat_mask].index
-                for c in cats:
-                    if not has_known_categories(x[c]):
-                        if just_drop_unknown:
-                            pass
-                            # x[c].cat.remove_categories(UNKNOWN_CATEGORIES, inplace=True)
-                        else:
-                            x[c] = x[c].cat.set_categories([])
-        elif isinstance(x, pd.Series):
-            if is_categorical_dtype(x.dtype) and not has_known_categories(x):
-                x = x.cat.set_categories([])
-        if isinstance(x.index, pd.CategoricalIndex) and not has_known_categories(
-            x.index
-        ):
-            x.index = x.index.set_categories([])
-    elif isinstance(x, pd.CategoricalIndex) and not has_known_categories(x):
-        x = x.set_categories([])
-    return x
 
 
 def clear_known_categories(x, cols=None, index=True):
@@ -292,7 +259,7 @@ def _empty_series(name, dtype, index=None):
         if type(dtype) == pd.CategoricalDtype:
             categories_dtype = dtype.categories.dtype
         else:
-            categories_dtype = np.object  # TODO: raise warning
+            categories_dtype = np.object_
         return pd.Series(
             pd.Categorical(pd.Index([], dtype=categories_dtype)), name=name, index=index
         ).iloc[:0]

@@ -132,9 +132,6 @@ def test_unknown_categoricals():
     assert_eq(ddf.w.value_counts(), df.w.value_counts())
     assert_eq(ddf.w.nunique(), df.w.nunique())
 
-    import ipdb
-
-    ipdb.set_trace()
     assert_eq(ddf.groupby(ddf.w).sum(), df.groupby(df.w).sum())
     # TODO: look at `ddf.groupby(ddf.w).obj.y`
     # See `def nunique` in dataframe/groupby.py
@@ -159,19 +156,13 @@ def test_categorize():
     # levels
     meta = clear_known_categories(frames4[0]).rename(columns={"y": "y_"})
     ddf = dd.DataFrame(
-        {
-            ("unknown", i): df.rename(columns={"y": "y_"})
-            for (i, df) in enumerate(frames3)
-        },
+        {("unknown", i): df for (i, df) in enumerate(frames3)},
         "unknown",
         meta,
         [None] * 4,
-    )
-    import ipdb
+    ).rename(columns={"y": "y_"})
 
-    ipdb.set_trace()
     ddf = ddf.assign(w=ddf.w.cat.set_categories(["x", "y", "z"]))
-
     assert ddf.w.cat.known
     assert not ddf.y_.cat.known
     assert not ddf.index.cat.known

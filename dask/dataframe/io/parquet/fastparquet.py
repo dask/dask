@@ -18,7 +18,6 @@ except ImportError:
     pass
 
 from ...methods import concat
-from ...utils import UNKNOWN_CATEGORIES
 from ..utils import _meta_from_dtypes
 
 #########################
@@ -271,12 +270,8 @@ class FastParquetEngine(Engine):
 
         for cat in categories:
             if cat in meta:
-                import ipdb
-
-                ipdb.set_trace()
-
                 meta[cat] = pd.Series(
-                    pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
+                    pd.Categorical([], categories=pd.Index([], dtype="object")),
                     index=meta.index,
                 )
 

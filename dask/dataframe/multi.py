@@ -85,13 +85,7 @@ from .core import (
 from .dispatch import group_split_dispatch, hash_object_dispatch
 from .io import from_pandas
 from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
-from .utils import (
-    asciitable,
-    is_dataframe_like,
-    is_series_like,
-    make_meta,
-    strip_unknown_categories,
-)
+from .utils import asciitable, is_dataframe_like, is_series_like, make_meta
 
 
 def align_partitions(*dfs):
@@ -988,7 +982,7 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **k
         filter_warning=warn,
         **kwargs,
     )
-    empties = [strip_unknown_categories(df._meta) for df in dfs]
+    empties = [df._meta for df in dfs]
 
     dfs2, divisions, parts = align_partitions(*dfs)
 
@@ -1030,7 +1024,6 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
             **kwargs,
         )
     )
-    empty = strip_unknown_categories(meta)
 
     name = "concat-{0}".format(tokenize(*dfs))
     dsk = {}
@@ -1079,7 +1072,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
                 dsk[(name, i)] = (
                     apply,
                     methods.concat,
-                    [[empty, key], 0, join, uniform, filter_warning],
+                    [[meta, key], 0, join, uniform, filter_warning],
                     kwargs,
                 )
             i += 1
