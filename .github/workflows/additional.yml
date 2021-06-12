@@ -61,9 +61,6 @@ jobs:
       needs.check-hdfs.outputs.test-hdfs == 'true'
       || (github.repository == 'dask/dask' && github.event_name != 'pull_request')
 
-    env:
-      COVERAGE: "true"
-
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -79,9 +76,6 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/hdfs/run_tests.sh
-
-      - name: Coverage
-        uses: codecov/codecov-action@v1
 
   doctest:
     runs-on: "ubuntu-latest"
