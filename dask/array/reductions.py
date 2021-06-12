@@ -1,4 +1,5 @@
 import builtins
+import contextlib
 import operator
 from collections.abc import Iterable
 from functools import partial
@@ -18,7 +19,6 @@ from ..utils import (
     derived_from,
     funcname,
     getargspec,
-    ignoring,
     is_series_like,
 )
 from . import chunk
@@ -327,7 +327,7 @@ def partial_reduce(
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
-        with ignoring(AttributeError):
+        with contextlib.suppress(AttributeError):
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
 
