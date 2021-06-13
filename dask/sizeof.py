@@ -2,7 +2,8 @@ import itertools
 import random
 import sys
 from array import array
-from distutils.version import LooseVersion
+
+from packaging.version import parse as parse_version
 
 from .utils import Dispatch
 
@@ -195,7 +196,7 @@ def register_pyarrow():
         return int(_get_col_size(data)) + 1000
 
     # Handle pa.Column for pyarrow < 0.15
-    if pa.__version__ < LooseVersion("0.15.0"):
+    if parse_version(pa.__version__) < parse_version("0.15.0"):
 
         @sizeof.register(pa.Column)
         def sizeof_pyarrow_column(col):

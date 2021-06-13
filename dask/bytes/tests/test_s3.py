@@ -5,10 +5,10 @@ import subprocess
 import sys
 import time
 from contextlib import contextmanager
-from distutils.version import LooseVersion
 from functools import partial
 
 import pytest
+from packaging.version import parse as parse_version
 
 s3fs = pytest.importorskip("s3fs")
 boto3 = pytest.importorskip("boto3")
@@ -438,13 +438,13 @@ def test_parquet(s3, engine, s3so, metadata_file):
     from dask.dataframe._compat import tm
 
     lib = pytest.importorskip(engine)
-    if engine == "pyarrow" and LooseVersion(lib.__version__) < "0.13.1":
+    lib_version = parse_version(lib.__version__)
+    if engine == "pyarrow" and lib_version < parse_version("0.13.1"):
         pytest.skip("pyarrow < 0.13.1 not supported for parquet")
     if (
         engine == "pyarrow"
-        and LooseVersion(lib.__version__) >= "2.0"
-        and LooseVersion(lib.__version__) < "3.0"
-        and LooseVersion(s3fs.__version__) > "0.5.0"
+        and lib_version.major == 2
+        and parse_version(s3fs.__version__) > parse_version("0.5.0")
     ):
         pytest.skip("#7056 - new s3fs not supported before pyarrow 3.0")
 
@@ -507,7 +507,7 @@ def test_parquet_wstoragepars(s3, s3so):
 
 def test_get_pyarrow_fs_s3(s3):
     pa = pytest.importorskip("pyarrow")
-    if pa.__version__ >= LooseVersion("2.0.0"):
+    if parse_version(pa.__version__).major >= 2:
         pytest.skip("fsspec no loger inherits from pyarrow>=2.0.")
     fs = DaskS3FileSystem(anon=True)
     assert isinstance(fs, pa.filesystem.FileSystem)

@@ -4,11 +4,11 @@ import os
 import sys
 import warnings
 from decimal import Decimal
-from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 import dask.dataframe as dd
@@ -25,12 +25,18 @@ try:
     import fastparquet
 except ImportError:
     fastparquet = False
+    fastparquet_version = parse_version("0")
+else:
+    fastparquet_version = parse_version(fastparquet.__version__)
 
 
 try:
     import pyarrow as pa
 except ImportError:
     pa = False
+    pa_version = parse_version("0")
+else:
+    pa_version = parse_version(pa.__version__)
 
 try:
     import pyarrow.parquet as pq
@@ -41,7 +47,7 @@ except ImportError:
 SKIP_FASTPARQUET = not fastparquet
 FASTPARQUET_MARK = pytest.mark.skipif(SKIP_FASTPARQUET, reason="fastparquet not found")
 
-if pq and pa.__version__ < LooseVersion("0.13.1"):
+if pq and pa_version < parse_version("0.13.1"):
     SKIP_PYARROW = True
     SKIP_PYARROW_REASON = "pyarrow >= 0.13.1 required for parquet"
 else:
@@ -49,8 +55,8 @@ else:
         sys.platform == "win32"
         and pa
         and (
-            (pa.__version__ == LooseVersion("0.16.0"))
-            or (pa.__version__ == LooseVersion("2.0.0"))
+            pa_version == parse_version("0.16.0")
+            or pa_version == parse_version("2.0.0")
         )
     ):
         SKIP_PYARROW = True
@@ -64,7 +70,7 @@ else:
         SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
 
-if pa and pa.__version__ < LooseVersion("1.0.0"):
+if pa and pa_version.major < 1:
     SKIP_PYARROW_DS = True
     SKIP_PYARROW_DS_REASON = "pyarrow >= 1.0.0 required for pyarrow dataset API"
 else:
@@ -147,7 +153,7 @@ write_read_engines_xfail = write_read_engines(
 
 if (
     fastparquet
-    and fastparquet.__version__ < LooseVersion("0.5")
+    and fastparquet_version < parse_version("0.5")
     and PANDAS_GT_110
     and not PANDAS_GT_121
 ):
@@ -822,7 +828,7 @@ def test_append_dict_column(tmpdir, engine):
 
     if engine == "fastparquet":
         pytest.xfail("Fastparquet engine is missing dict-column support")
-    elif pa.__version__ < LooseVersion("1.0.1"):
+    elif pa_version < parse_version("1.0.1"):
         pytest.skip("Newer PyArrow version required for dict-column support.")
 
     tmp = str(tmpdir)
@@ -981,7 +987,7 @@ def test_categories_unnamed_index(tmpdir, engine):
     # Check that we can handle an unnamed categorical index
     # https://github.com/dask/dask/issues/6885
 
-    if engine.startswith("pyarrow") and pa.__version__ < LooseVersion("0.15.0"):
+    if engine.startswith("pyarrow") and pa_version < parse_version("0.15.0"):
         pytest.skip("PyArrow>=0.15 Required.")
 
     tmpdir = str(tmpdir)
@@ -1166,7 +1172,7 @@ def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_succeeds_w_manual
 @pytest.mark.parametrize("index", [False, True])
 @pytest.mark.parametrize("schema", ["infer", "complex"])
 def test_pyarrow_schema_inference(tmpdir, index, engine, schema):
-    if pa.__version__ < LooseVersion("0.15.0"):
+    if pa_version < parse_version("0.15.0"):
         pytest.skip("PyArrow>=0.15 Required.")
     if schema == "complex":
         schema = {"index": pa.string(), "amount": pa.int64()}
@@ -1359,9 +1365,7 @@ def test_filters_v0(tmpdir, write_engine, read_engine):
 
     # Recent versions of pyarrow support full row-wise filtering
     # (fastparquet and older pyarrow versions do not)
-    pyarrow_row_filtering = (
-        read_engine == "pyarrow-dataset" and pa.__version__ >= LooseVersion("1.0.0")
-    )
+    pyarrow_row_filtering = read_engine == "pyarrow-dataset" and pa_version.major >= 1
 
     fn = str(tmpdir)
     df = pd.DataFrame({"at": ["ab", "aa", "ba", "da", "bb"]})
@@ -1462,7 +1466,7 @@ def test_pyarrow_filter_divisions(tmpdir):
         str(tmpdir.join("file.1.parquet")), engine="pyarrow", row_group_size=2
     )
 
-    if pa.__version__ >= LooseVersion("1.0.0"):
+    if pa_version.major >= 1:
         # Only works for ArrowDatasetEngine.
         # Legacy code will not apply filters on individual row-groups
         # when `split_row_groups=False`.
@@ -1637,7 +1641,7 @@ def test_parquet_select_cats(tmpdir, engine):
 
 
 def test_columns_name(tmpdir, engine):
-    if engine == "fastparquet" and fastparquet.__version__ <= LooseVersion("0.3.1"):
+    if engine == "fastparquet" and fastparquet_version <= parse_version("0.3.1"):
         pytest.skip("Fastparquet does not write column_indexes up to 0.3.1")
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"A": [1, 2]}, index=pd.Index(["a", "b"], name="idx"))
@@ -2041,9 +2045,7 @@ def test_to_parquet_with_get(tmpdir):
 def test_select_partitioned_column(tmpdir, engine):
     pytest.importorskip("snappy")
     if engine.startswith("pyarrow"):
-        import pyarrow as pa
-
-        if pa.__version__ < LooseVersion("0.9.0"):
+        if pa_version < parse_version("0.9.0"):
             pytest.skip("pyarrow<0.9.0 did not support this")
 
     fn = str(tmpdir)
@@ -2067,9 +2069,9 @@ def test_select_partitioned_column(tmpdir, engine):
 
 
 def test_with_tz(tmpdir, engine):
-    if engine.startswith("pyarrow") and pa.__version__ < LooseVersion("0.11.0"):
+    if engine.startswith("pyarrow") and pa_version < parse_version("0.11.0"):
         pytest.skip("pyarrow<0.11.0 did not support this")
-    if engine == "fastparquet" and fastparquet.__version__ < LooseVersion("0.3.0"):
+    if engine == "fastparquet" and fastparquet_version < parse_version("0.3.0"):
         pytest.skip("fastparquet<0.3.0 did not support this")
 
     with warnings.catch_warnings():
@@ -2278,7 +2280,7 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     if (
         schema == "infer"
         and engine.startswith("pyarrow")
-        and pa.__version__ < LooseVersion("0.15.0")
+        and pa_version < parse_version("0.15.0")
     ):
         pytest.skip("PyArrow>=0.15 Required.")
 
@@ -2814,9 +2816,7 @@ def test_filter_nonpartition_columns(
 
 @PYARROW_MARK
 def test_pandas_metadata_nullable_pyarrow(tmpdir):
-    if pa.__version__ < LooseVersion("0.16.0") or pd.__version__ < LooseVersion(
-        "1.0.0"
-    ):
+    if pa_version < parse_version("0.16.0") or parse_version(pd.__version__).major < 1:
         pytest.skip("PyArrow>=0.16 and Pandas>=1.0.0 Required.")
     tmpdir = str(tmpdir)
 
@@ -2837,7 +2837,7 @@ def test_pandas_metadata_nullable_pyarrow(tmpdir):
 
 @PYARROW_MARK
 def test_pandas_timestamp_overflow_pyarrow(tmpdir):
-    if pa.__version__ < LooseVersion("0.17.0"):
+    if pa_version < parse_version("0.17.0"):
         pytest.skip("PyArrow>=0.17 Required.")
 
     info = np.iinfo(np.dtype("int64"))
@@ -2947,7 +2947,7 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
 @fp_pandas_xfail
 def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
 
-    if write_engine.startswith("pyarrow") and pa.__version__ < LooseVersion("0.15.0"):
+    if write_engine.startswith("pyarrow") and pa_version < parse_version("0.15.0"):
         pytest.skip("PyArrow>=0.15 Required.")
 
     tmp = str(tmpdir)
@@ -3065,7 +3065,7 @@ def test_pyarrow_dataset_simple(tmpdir, engine):
 @PYARROW_MARK
 @pytest.mark.parametrize("test_filter", [True, False])
 def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
-    if pa.__version__ <= LooseVersion("0.17.1"):
+    if pa_version <= parse_version("0.17.1"):
         # Using pyarrow.dataset API does not produce
         # Categorical type for partitioned columns.
         pytest.skip("PyArrow>0.17.1 Required.")
@@ -3093,7 +3093,7 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 def test_pyarrow_dataset_read_from_paths(
     tmpdir, read_from_paths, test_filter_partitioned
 ):
-    if pa.__version__ <= LooseVersion("0.17.1"):
+    if pa_version <= parse_version("0.17.1"):
         # Using pyarrow.dataset API does not produce
         # Categorical type for partitioned columns.
         pytest.skip("PyArrow>0.17.1 Required.")
@@ -3123,7 +3123,7 @@ def test_pyarrow_dataset_read_from_paths(
 @PYARROW_MARK
 @pytest.mark.parametrize("split_row_groups", [True, False])
 def test_pyarrow_dataset_filter_partitioned(tmpdir, split_row_groups):
-    if pa.__version__ < LooseVersion("1.0.0"):
+    if pa_version.major < 1:
         # pyarrow.dataset API required.
         pytest.skip("PyArrow>=1.0.0 Required.")
 
