@@ -8,7 +8,7 @@ import pytest
 
 from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
 from dask.threaded import get
-from dask.utils import apply, tmpfile
+from dask.utils import apply
 
 try:
     import bokeh
@@ -345,16 +345,16 @@ def test_plot_multiple():
 
 
 @pytest.mark.skipif("not bokeh")
-def test_saves_file():
-    with tmpfile("html") as fn:
-        with prof:
-            get(dsk, "e")
-        # Run just to see that it doesn't error
-        prof.visualize(show=False, file_path=fn)
+def test_saves_file(tmp_path):
+    fn = os.path.join(tmp_path, "fn.html")
+    with prof:
+        get(dsk, "e")
+    # Run just to see that it doesn't error
+    prof.visualize(show=False, file_path=fn)
 
-        assert os.path.exists(fn)
-        with open(fn) as f:
-            assert "html" in f.read().lower()
+    assert os.path.exists(fn)
+    with open(fn) as f:
+        assert "html" in f.read().lower()
 
 
 @pytest.mark.skipif("not bokeh")

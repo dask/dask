@@ -30,7 +30,7 @@ from dask.bag.core import (
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
-from dask.utils import filetexts, tmpdir, tmpfile
+from dask.utils import filetexts
 from dask.utils_test import add, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
@@ -642,48 +642,48 @@ def test_read_text():
     pytest.raises(ValueError, lambda: db.read_text("non-existent-*-path"))
 
 
-def test_read_text_large():
-    with tmpfile() as fn:
-        with open(fn, "wb") as f:
-            f.write(("Hello, world!" + os.linesep).encode() * 100)
-        b = db.read_text(fn, blocksize=100)
-        c = db.read_text(fn)
-        assert len(b.dask) > 5
-        assert list(map(str, b.str.strip())) == list(map(str, c.str.strip()))
+def test_read_text_large(tmp_path):
+    fn = os.path.join(tmp_path, "fn")
+    with open(fn, "wb") as f:
+        f.write(("Hello, world!" + os.linesep).encode() * 100)
+    b = db.read_text(fn, blocksize=100)
+    c = db.read_text(fn)
+    assert len(b.dask) > 5
+    assert list(map(str, b.str.strip())) == list(map(str, c.str.strip()))
 
-        d = db.read_text([fn], blocksize=100)
-        assert list(b) == list(d)
-
-
-def test_read_text_encoding():
-    with tmpfile() as fn:
-        with open(fn, "wb") as f:
-            f.write(("你好！" + os.linesep).encode("gb18030") * 100)
-        b = db.read_text(fn, blocksize=100, encoding="gb18030")
-        c = db.read_text(fn, encoding="gb18030")
-        assert len(b.dask) > 5
-        b_enc = b.str.strip().map(lambda x: x.encode("utf-8"))
-        c_enc = c.str.strip().map(lambda x: x.encode("utf-8"))
-        assert list(b_enc) == list(c_enc)
-
-        d = db.read_text([fn], blocksize=100, encoding="gb18030")
-        assert list(b) == list(d)
+    d = db.read_text([fn], blocksize=100)
+    assert list(b) == list(d)
 
 
-def test_read_text_large_gzip():
-    with tmpfile("gz") as fn:
-        data = b"Hello, world!\n" * 100
-        f = GzipFile(fn, "wb")
-        f.write(data)
-        f.close()
+def test_read_text_encoding(tmp_path):
+    fn = os.path.join(tmp_path, "fn")
+    with open(fn, "wb") as f:
+        f.write(("你好！" + os.linesep).encode("gb18030") * 100)
+    b = db.read_text(fn, blocksize=100, encoding="gb18030")
+    c = db.read_text(fn, encoding="gb18030")
+    assert len(b.dask) > 5
+    b_enc = b.str.strip().map(lambda x: x.encode("utf-8"))
+    c_enc = c.str.strip().map(lambda x: x.encode("utf-8"))
+    assert list(b_enc) == list(c_enc)
 
-        with pytest.raises(ValueError):
-            # not allowed blocks when compressed
-            db.read_text(fn, blocksize=50, linedelimiter="\n")
+    d = db.read_text([fn], blocksize=100, encoding="gb18030")
+    assert list(b) == list(d)
 
-        c = db.read_text(fn, blocksize=None)
-        assert c.npartitions == 1
-        assert "".join(c.compute()) == data.decode()
+
+def test_read_text_large_gzip(tmp_path):
+    fn = os.path.join(tmp_path, "fn.gz")
+    data = b"Hello, world!\n" * 100
+    f = GzipFile(fn, "wb")
+    f.write(data)
+    f.close()
+
+    with pytest.raises(ValueError):
+        # not allowed blocks when compressed
+        db.read_text(fn, blocksize=50, linedelimiter="\n")
+
+    c = db.read_text(fn, blocksize=None)
+    assert c.npartitions == 1
+    assert "".join(c.compute()) == data.decode()
 
 
 @pytest.mark.xfail(reason="https://github.com/dask/dask/issues/6914")
@@ -887,22 +887,21 @@ ext_open = [("gz", GzipFile), ("bz2", BZ2File), ("", open)]
 
 
 @pytest.mark.parametrize("ext,myopen", ext_open)
-def test_to_textfiles(ext, myopen):
+def test_to_textfiles(ext, myopen, tmp_path):
     b = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
-    with tmpdir() as dir:
-        c = b.to_textfiles(os.path.join(dir, "*." + ext), compute=False)
-        dask.compute(*c, scheduler="sync")
-        assert os.path.exists(os.path.join(dir, "1." + ext))
+    c = b.to_textfiles(os.path.join(tmp_path, "*." + ext), compute=False)
+    dask.compute(*c, scheduler="sync")
+    assert os.path.exists(os.path.join(tmp_path, "1." + ext))
 
-        f = myopen(os.path.join(dir, "1." + ext), "rb")
-        text = f.read()
-        if hasattr(text, "decode"):
-            text = text.decode()
-        assert "xyz" in text
-        f.close()
+    f = myopen(os.path.join(tmp_path, "1." + ext), "rb")
+    text = f.read()
+    if hasattr(text, "decode"):
+        text = text.decode()
+    assert "xyz" in text
+    f.close()
 
 
-def test_to_textfiles_name_function_preserves_order():
+def test_to_textfiles_name_function_preserves_order(tmp_path):
     seq = [
         "a",
         "b",
@@ -922,19 +921,18 @@ def test_to_textfiles_name_function_preserves_order():
         "p",
     ]
     b = db.from_sequence(seq, npartitions=16)
-    with tmpdir() as dn:
-        b.to_textfiles(dn)
+    b.to_textfiles(tmp_path)
 
-        out = (
-            db.read_text(os.path.join(dn, "*"), encoding="ascii")
-            .map(str)
-            .map(str.strip)
-            .compute()
-        )
-        assert seq == out
+    out = (
+        db.read_text(os.path.join(tmp_path, "*"), encoding="ascii")
+        .map(str)
+        .map(str.strip)
+        .compute()
+    )
+    assert seq == out
 
 
-def test_to_textfiles_name_function_warn():
+def test_to_textfiles_name_function_warn(tmp_path):
     seq = [
         "a",
         "b",
@@ -954,54 +952,54 @@ def test_to_textfiles_name_function_warn():
         "p",
     ]
     a = db.from_sequence(seq, npartitions=16)
-    with tmpdir() as dn:
-        with pytest.warns(None):
-            a.to_textfiles(dn, name_function=str)
+    with pytest.warns(None):
+        a.to_textfiles(tmp_path, name_function=str)
 
 
-def test_to_textfiles_encoding():
+def test_to_textfiles_encoding(tmp_path):
     b = db.from_sequence(["汽车", "苹果", "天气"], npartitions=2)
     for ext, myopen in ext_open:
-        with tmpdir() as dir:
-            c = b.to_textfiles(
-                os.path.join(dir, "*." + ext), encoding="gb18030", compute=False
-            )
-            dask.compute(*c)
-            assert os.path.exists(os.path.join(dir, "1." + ext))
+        c = b.to_textfiles(
+            os.path.join(tmp_path, "*." + ext), encoding="gb18030", compute=False
+        )
+        dask.compute(*c)
+        assert os.path.exists(os.path.join(tmp_path, "1." + ext))
 
-            f = myopen(os.path.join(dir, "1." + ext), "rb")
-            text = f.read()
-            if hasattr(text, "decode"):
-                text = text.decode("gb18030")
-            assert "天气" in text
-            f.close()
+        f = myopen(os.path.join(tmp_path, "1." + ext), "rb")
+        text = f.read()
+        if hasattr(text, "decode"):
+            text = text.decode("gb18030")
+        assert "天气" in text
+        f.close()
 
 
-def test_to_textfiles_inputs():
+def test_to_textfiles_inputs(tmp_path_factory):
     B = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
-    with tmpfile() as a:
-        with tmpfile() as b:
-            B.to_textfiles([a, b])
-            assert os.path.exists(a)
-            assert os.path.exists(b)
+    a = os.path.join(tmp_path_factory.mktemp("dn"), "a")
+    b = os.path.join(tmp_path_factory.mktemp("dn"), "b")
 
-    with tmpdir() as dirname:
-        B.to_textfiles(dirname)
-        assert os.path.exists(dirname)
-        assert os.path.exists(os.path.join(dirname, "0.part"))
+    B.to_textfiles([a, b])
+    assert os.path.exists(a)
+    assert os.path.exists(b)
+
+    dirname = tmp_path_factory.mktemp("dn")
+    B.to_textfiles(dirname)
+    assert os.path.exists(dirname)
+    assert os.path.exists(os.path.join(dirname, "0.part"))
 
     with pytest.raises(TypeError):
         B.to_textfiles(5)
 
 
-def test_to_textfiles_endlines():
+def test_to_textfiles_endlines(tmp_path):
     b = db.from_sequence(["a", "b", "c"], npartitions=1)
-    with tmpfile() as fn:
-        for last_endline in False, True:
-            b.to_textfiles([fn], last_endline=last_endline)
-            with open(fn, "r") as f:
-                result = f.readlines()
-            assert result == ["a\n", "b\n", "c\n" if last_endline else "c"]
+
+    fn = os.path.join(tmp_path, "fn")
+    for last_endline in False, True:
+        b.to_textfiles([fn], last_endline=last_endline)
+        with open(fn, "r") as f:
+            result = f.readlines()
+        assert result == ["a\n", "b\n", "c\n" if last_endline else "c"]
 
 
 def test_string_namespace():
@@ -1077,13 +1075,13 @@ def test_bag_class_extend():
     assert isinstance(dictbag.get("a").get("b"), BagOfDicts)
 
 
-def test_gh715():
+def test_gh715(tmp_path):
     bin_data = "\u20ac".encode("utf-8")
-    with tmpfile() as fn:
-        with open(fn, "wb") as f:
-            f.write(bin_data)
-        a = db.read_text(fn)
-        assert a.compute()[0] == bin_data.decode("utf-8")
+    fn = os.path.join(tmp_path, "fn")
+    with open(fn, "wb") as f:
+        f.write(bin_data)
+    a = db.read_text(fn)
+    assert a.compute()[0] == bin_data.decode("utf-8")
 
 
 def test_bag_compute_forward_kwargs():
@@ -1333,11 +1331,10 @@ def test_groupby_tasks_3():
     # assert b.npartitions == 5
 
 
-def test_to_textfiles_empty_partitions():
-    with tmpdir() as d:
-        b = db.range(5, npartitions=5).filter(lambda x: x == 1).map(str)
-        b.to_textfiles(os.path.join(d, "*.txt"))
-        assert len(os.listdir(d)) == 5
+def test_to_textfiles_empty_partitions(tmp_path):
+    b = db.range(5, npartitions=5).filter(lambda x: x == 1).map(str)
+    b.to_textfiles(os.path.join(tmp_path, "*.txt"))
+    assert len(os.listdir(tmp_path)) == 5
 
 
 def test_reduction_empty():

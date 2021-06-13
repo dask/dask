@@ -4,16 +4,17 @@ from contextlib import contextmanager
 import pytest
 
 pytest.importorskip("skimage")
+from tempfile import TemporaryDirectory
+
 import numpy as np
 from skimage.io import imsave
 
 from dask.array.image import imread as da_imread
-from dask.utils import tmpdir
 
 
 @contextmanager
 def random_images(n, shape):
-    with tmpdir() as dirname:
+    with TemporaryDirectory() as dirname:
         for i in range(n):
             fn = os.path.join(dirname, "image.%d.png" % i)
             x = np.random.randint(0, 255, size=shape).astype("u1")

@@ -1,4 +1,6 @@
+import os.path
 from concurrent.futures import ThreadPoolExecutor
+from tempfile import TemporaryDirectory
 from threading import Lock
 
 import numpy as np
@@ -11,7 +13,6 @@ from dask.dataframe._compat import tm
 from dask.dataframe.io.io import _meta_from_array
 from dask.dataframe.utils import assert_eq, is_categorical_dtype
 from dask.delayed import Delayed, delayed
-from dask.utils import tmpfile
 
 ####################
 # Arrays and BColz #
@@ -194,15 +195,16 @@ def test_from_bcolz_no_lock():
 def test_from_bcolz_filename():
     bcolz = pytest.importorskip("bcolz")
 
-    with tmpfile(".bcolz") as fn:
+    with TemporaryDirectory() as fn:
+        root = os.path.join(fn, ".bcolz")
         t = bcolz.ctable(
             [[1, 2, 3], [1.0, 2.0, 3.0], ["a", "b", "a"]],
             names=["x", "y", "a"],
-            rootdir=fn,
+            rootdir=root,
         )
         t.flush()
 
-        d = dd.from_bcolz(fn, chunksize=2)
+        d = dd.from_bcolz(root, chunksize=2)
         assert list(d.x.compute()) == [1, 2, 3]
 
 

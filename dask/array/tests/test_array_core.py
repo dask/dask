@@ -50,7 +50,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -2002,43 +2002,43 @@ def test_store_multiprocessing_lock():
     assert st is None
 
 
-def test_to_hdf5():
+def test_to_hdf5(tmp_path_factory):
     h5py = pytest.importorskip("h5py")
     x = da.ones((4, 4), chunks=(2, 2))
     y = da.ones(4, chunks=2, dtype="i4")
 
-    with tmpfile(".hdf5") as fn:
-        x.to_hdf5(fn, "/x")
-        with h5py.File(fn, mode="r+") as f:
-            d = f["/x"]
+    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    x.to_hdf5(fn, "/x")
+    with h5py.File(fn, mode="r+") as f:
+        d = f["/x"]
 
-            assert_eq(d[:], x)
-            assert d.chunks == (2, 2)
+        assert_eq(d[:], x)
+        assert d.chunks == (2, 2)
 
-    with tmpfile(".hdf5") as fn:
-        x.to_hdf5(fn, "/x", chunks=None)
-        with h5py.File(fn, mode="r+") as f:
-            d = f["/x"]
+    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    x.to_hdf5(fn, "/x", chunks=None)
+    with h5py.File(fn, mode="r+") as f:
+        d = f["/x"]
 
-            assert_eq(d[:], x)
-            assert d.chunks is None
+        assert_eq(d[:], x)
+        assert d.chunks is None
 
-    with tmpfile(".hdf5") as fn:
-        x.to_hdf5(fn, "/x", chunks=(1, 1))
-        with h5py.File(fn, mode="r+") as f:
-            d = f["/x"]
+    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    x.to_hdf5(fn, "/x", chunks=(1, 1))
+    with h5py.File(fn, mode="r+") as f:
+        d = f["/x"]
 
-            assert_eq(d[:], x)
-            assert d.chunks == (1, 1)
+        assert_eq(d[:], x)
+        assert d.chunks == (1, 1)
 
-    with tmpfile(".hdf5") as fn:
-        da.to_hdf5(fn, {"/x": x, "/y": y})
+    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    da.to_hdf5(fn, {"/x": x, "/y": y})
 
-        with h5py.File(fn, mode="r+") as f:
-            assert_eq(f["/x"][:], x)
-            assert f["/x"].chunks == (2, 2)
-            assert_eq(f["/y"][:], y)
-            assert f["/y"].chunks == (2,)
+    with h5py.File(fn, mode="r+") as f:
+        assert_eq(f["/x"][:], x)
+        assert f["/x"].chunks == (2, 2)
+        assert_eq(f["/y"][:], y)
+        assert f["/y"].chunks == (2,)
 
 
 def test_to_dask_dataframe():
@@ -2560,15 +2560,15 @@ def test_asarray_dask_dataframe(asarray):
 
 
 @pytest.mark.parametrize("asarray", [da.asarray, da.asanyarray])
-def test_asarray_h5py(asarray):
+def test_asarray_h5py(asarray, tmp_path):
     h5py = pytest.importorskip("h5py")
 
-    with tmpfile(".hdf5") as fn:
-        with h5py.File(fn, mode="a") as f:
-            d = f.create_dataset("/x", shape=(2, 2), dtype=float)
-            x = asarray(d)
-            assert d in x.dask.values()
-            assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
+    fn = os.path.join(tmp_path, "fn")
+    with h5py.File(fn, mode="a") as f:
+        d = f.create_dataset("/x", shape=(2, 2), dtype=float)
+        x = asarray(d)
+        assert d in x.dask.values()
+        assert not any(isinstance(v, np.ndarray) for v in x.dask.values())
 
 
 def test_asarray_chunks():
@@ -2809,17 +2809,17 @@ def test_long_slice():
     assert_eq(d[8000:8200], x[8000:8200])
 
 
-def test_h5py_newaxis():
+def test_h5py_newaxis(tmp_path):
     h5py = pytest.importorskip("h5py")
 
-    with tmpfile("h5") as fn:
-        with h5py.File(fn, mode="a") as f:
-            x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
-            d = da.from_array(x, chunks=(5, 5))
-            assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
-            assert d[:, None, :].compute(scheduler="sync").shape == (10, 1, 10)
-            assert d[:, :, None].compute(scheduler="sync").shape == (10, 10, 1)
-            assert same_keys(d[:, :, None], d[:, :, None])
+    fn = os.path.join(tmp_path, "fn")
+    with h5py.File(fn, mode="a") as f:
+        x = f.create_dataset("/x", shape=(10, 10), dtype="f8")
+        d = da.from_array(x, chunks=(5, 5))
+        assert d[None, :, :].compute(scheduler="sync").shape == (1, 10, 10)
+        assert d[:, None, :].compute(scheduler="sync").shape == (10, 1, 10)
+        assert d[:, :, None].compute(scheduler="sync").shape == (10, 10, 1)
+        assert same_keys(d[:, :, None], d[:, :, None])
 
 
 def test_ellipsis_slicing():
@@ -2985,36 +2985,35 @@ def test_empty_array():
     assert_eq(np.arange(0), da.arange(0, chunks=5))
 
 
-def test_memmap():
-    with tmpfile("npy") as fn_1:
-        with tmpfile("npy") as fn_2:
-            try:
-                x = da.arange(100, chunks=15)
-                target = np.memmap(fn_1, shape=x.shape, mode="w+", dtype=x.dtype)
+def test_memmap(tmp_path_factory):
+    fn_1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    fn_2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    try:
+        x = da.arange(100, chunks=15)
+        target = np.memmap(fn_1, shape=x.shape, mode="w+", dtype=x.dtype)
 
-                x.store(target)
+        x.store(target)
 
-                assert_eq(target, x, check_type=False)
+        assert_eq(target, x, check_type=False)
 
-                np.save(fn_2, target)
+        np.save(fn_2, target)
 
-                assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
-            finally:
-                target._mmap.close()
+        assert_eq(np.load(fn_2, mmap_mode="r"), x, check_type=False)
+    finally:
+        target._mmap.close()
 
 
-def test_to_npy_stack():
+def test_to_npy_stack(tmp_path):
     x = np.arange(5 * 10 * 10).reshape((5, 10, 10))
     d = da.from_array(x, chunks=(2, 4, 4))
 
-    with tmpdir() as dirname:
-        stackdir = os.path.join(dirname, "test")
-        da.to_npy_stack(stackdir, d, axis=0)
-        assert os.path.exists(os.path.join(stackdir, "0.npy"))
-        assert (np.load(os.path.join(stackdir, "1.npy")) == x[2:4]).all()
+    stackdir = os.path.join(tmp_path, "test")
+    da.to_npy_stack(stackdir, d, axis=0)
+    assert os.path.exists(os.path.join(stackdir, "0.npy"))
+    assert (np.load(os.path.join(stackdir, "1.npy")) == x[2:4]).all()
 
-        e = da.from_npy_stack(stackdir)
-        assert_eq(d, e)
+    e = da.from_npy_stack(stackdir)
+    assert_eq(d, e)
 
 
 def test_view():
@@ -3046,20 +3045,21 @@ def test_view_fortran():
     assert_eq(x.T.view("i2").T, d.view("i2", order="F"))
 
 
-def test_h5py_tokenize():
+def test_h5py_tokenize(tmp_path_factory):
     h5py = pytest.importorskip("h5py")
-    with tmpfile("hdf5") as fn1:
-        with tmpfile("hdf5") as fn2:
-            f = h5py.File(fn1, mode="a")
-            g = h5py.File(fn2, mode="a")
+    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
 
-            f["x"] = np.arange(10).astype(float)
-            g["x"] = np.ones(10).astype(float)
+    f = h5py.File(fn1, mode="a")
+    g = h5py.File(fn2, mode="a")
 
-            x1 = f["x"]
-            x2 = g["x"]
+    f["x"] = np.arange(10).astype(float)
+    g["x"] = np.ones(10).astype(float)
 
-            assert tokenize(x1) != tokenize(x2)
+    x1 = f["x"]
+    x2 = g["x"]
+
+    assert tokenize(x1) != tokenize(x2)
 
 
 def test_map_blocks_with_changed_dimension():
@@ -4224,25 +4224,25 @@ def test_from_zarr_name():
     assert da.from_zarr(a, name="foo").name == "foo"
 
 
-def test_zarr_roundtrip():
+def test_zarr_roundtrip(tmp_path):
     pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(d)
-        a2 = da.from_zarr(d)
-        assert_eq(a, a2)
-        assert a2.chunks == a.chunks
+    d = str(tmp_path)
+    a = da.zeros((3, 3), chunks=(1, 1))
+    a.to_zarr(d)
+    a2 = da.from_zarr(d)
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
 
 
 @pytest.mark.parametrize("compute", [False, True])
-def test_zarr_return_stored(compute):
+def test_zarr_return_stored(compute, tmp_path):
     pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.zeros((3, 3), chunks=(1, 1))
-        a2 = a.to_zarr(d, compute=compute, return_stored=True)
-        assert isinstance(a2, Array)
-        assert_eq(a, a2, check_graph=False)
-        assert a2.chunks == a.chunks
+    d = str(tmp_path)
+    a = da.zeros((3, 3), chunks=(1, 1))
+    a2 = a.to_zarr(d, compute=compute, return_stored=True)
+    assert isinstance(a2, Array)
+    assert_eq(a, a2, check_graph=False)
+    assert a2.chunks == a.chunks
 
 
 def test_zarr_inline_array():
@@ -4272,47 +4272,47 @@ def test_to_zarr_unknown_chunks_raises():
         a.to_zarr({})
 
 
-def test_read_zarr_chunks():
+def test_read_zarr_chunks(tmp_path):
     pytest.importorskip("zarr")
+
     a = da.zeros((9,), chunks=(3,))
-    with tmpdir() as d:
-        a.to_zarr(d)
-        arr = da.from_zarr(d, chunks=(5,))
-        assert arr.chunks == ((5, 4),)
+    d = str(tmp_path)
+    a.to_zarr(d)
+    arr = da.from_zarr(d, chunks=(5,))
+    assert arr.chunks == ((5, 4),)
 
 
-def test_zarr_pass_mapper():
+def test_zarr_pass_mapper(tmp_path):
     pytest.importorskip("zarr")
     import zarr.storage
 
-    with tmpdir() as d:
-        mapper = zarr.storage.DirectoryStore(d)
-        a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(mapper)
-        a2 = da.from_zarr(mapper)
-        assert_eq(a, a2)
-        assert a2.chunks == a.chunks
+    mapper = zarr.storage.DirectoryStore(tmp_path)
+    a = da.zeros((3, 3), chunks=(1, 1))
+    a.to_zarr(mapper)
+    a2 = da.from_zarr(mapper)
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
 
 
-def test_zarr_group():
+def test_zarr_group(tmp_path):
     zarr = pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.zeros((3, 3), chunks=(1, 1))
-        a.to_zarr(d, component="test")
-        with pytest.raises((OSError, ValueError)):
-            a.to_zarr(d, component="test", overwrite=False)
-        a.to_zarr(d, component="test", overwrite=True)
+    d = str(tmp_path)
+    a = da.zeros((3, 3), chunks=(1, 1))
+    a.to_zarr(d, component="test")
+    with pytest.raises((OSError, ValueError)):
+        a.to_zarr(d, component="test", overwrite=False)
+    a.to_zarr(d, component="test", overwrite=True)
 
-        # second time is fine, group exists
-        a.to_zarr(d, component="test2", overwrite=False)
-        a.to_zarr(d, component="nested/test", overwrite=False)
-        group = zarr.open_group(d, mode="r")
-        assert list(group) == ["nested", "test", "test2"]
-        assert "test" in group["nested"]
+    # second time is fine, group exists
+    a.to_zarr(d, component="test2", overwrite=False)
+    a.to_zarr(d, component="nested/test", overwrite=False)
+    group = zarr.open_group(d, mode="r")
+    assert list(group) == ["nested", "test", "test2"]
+    assert "test" in group["nested"]
 
-        a2 = da.from_zarr(d, component="test")
-        assert_eq(a, a2)
-        assert a2.chunks == a.chunks
+    a2 = da.from_zarr(d, component="test")
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
 
 
 @pytest.mark.parametrize(
@@ -4333,52 +4333,53 @@ def test_regular_chunks(data):
     assert da.core._check_regular_chunks(chunkset) == expected
 
 
-def test_zarr_nocompute():
+def test_zarr_nocompute(tmp_path):
     pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.zeros((3, 3), chunks=(1, 1))
-        out = a.to_zarr(d, compute=False)
-        assert isinstance(out, Delayed)
-        dask.compute(out)
-        a2 = da.from_zarr(d)
-        assert_eq(a, a2)
-        assert a2.chunks == a.chunks
+    d = str(tmp_path)
+    a = da.zeros((3, 3), chunks=(1, 1))
+    out = a.to_zarr(d, compute=False)
+    assert isinstance(out, Delayed)
+    dask.compute(out)
+    a2 = da.from_zarr(d)
+    assert_eq(a, a2)
+    assert a2.chunks == a.chunks
 
 
-def test_tiledb_roundtrip():
+def test_tiledb_roundtrip(tmp_path_factory):
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
     # 2) load from existing tiledb.DenseArray
     # 3) write to existing tiledb.DenseArray
     a = da.random.random((3, 3))
-    with tmpdir() as uri:
-        da.to_tiledb(a, uri)
-        tdb = da.from_tiledb(uri)
 
-        assert_eq(a, tdb)
-        assert a.chunks == tdb.chunks
+    uri = str(tmp_path_factory.mktemp("uri"))
+    da.to_tiledb(a, uri)
+    tdb = da.from_tiledb(uri)
 
-        # from tiledb.array
-        with tiledb.open(uri) as t:
-            tdb2 = da.from_tiledb(t)
-            assert_eq(a, tdb2)
+    assert_eq(a, tdb)
+    assert a.chunks == tdb.chunks
 
-    with tmpdir() as uri2:
-        with tiledb.empty_like(uri2, a) as t:
-            a.to_tiledb(t)
-            assert_eq(da.from_tiledb(uri2), a)
+    # from tiledb.array
+    with tiledb.open(uri) as t:
+        tdb2 = da.from_tiledb(t)
+        assert_eq(a, tdb2)
+
+    uri2 = str(tmp_path_factory.mktemp("uri"))
+    with tiledb.empty_like(uri2, a) as t:
+        a.to_tiledb(t)
+        assert_eq(da.from_tiledb(uri2), a)
 
     # specific chunking
-    with tmpdir() as uri:
-        a = da.random.random((3, 3), chunks=(1, 1))
-        a.to_tiledb(uri)
-        tdb = da.from_tiledb(uri)
+    uri = str(tmp_path_factory.mktemp("uri"))
+    a = da.random.random((3, 3), chunks=(1, 1))
+    a.to_tiledb(uri)
+    tdb = da.from_tiledb(uri)
 
-        assert_eq(a, tdb)
-        assert a.chunks == tdb.chunks
+    assert_eq(a, tdb)
+    assert a.chunks == tdb.chunks
 
 
-def test_tiledb_multiattr():
+def test_tiledb_multiattr(tmp_path):
     tiledb = pytest.importorskip("tiledb")
     dom = tiledb.Domain(
         tiledb.Dim("x", (0, 1000), tile=100), tiledb.Dim("y", (0, 1000), tile=100)
@@ -4387,23 +4388,23 @@ def test_tiledb_multiattr():
         attrs=(tiledb.Attr("attr1"), tiledb.Attr("attr2")), domain=dom
     )
 
-    with tmpdir() as uri:
-        tiledb.DenseArray.create(uri, schema)
-        tdb = tiledb.DenseArray(uri, "w")
+    uri = str(tmp_path)
+    tiledb.DenseArray.create(uri, schema)
+    tdb = tiledb.DenseArray(uri, "w")
 
-        ar1 = np.random.randn(*tdb.schema.shape)
-        ar2 = np.random.randn(*tdb.schema.shape)
+    ar1 = np.random.randn(*tdb.schema.shape)
+    ar2 = np.random.randn(*tdb.schema.shape)
 
-        tdb[:] = {"attr1": ar1, "attr2": ar2}
-        tdb = tiledb.DenseArray(uri, "r")
+    tdb[:] = {"attr1": ar1, "attr2": ar2}
+    tdb = tiledb.DenseArray(uri, "r")
 
-        # basic round-trip from dask.array
-        d = da.from_tiledb(uri, attribute="attr2")
-        assert_eq(d, ar2)
+    # basic round-trip from dask.array
+    d = da.from_tiledb(uri, attribute="attr2")
+    assert_eq(d, ar2)
 
-        # smoke-test computation directly on the TileDB view
-        d = da.from_tiledb(uri, attribute="attr2")
-        assert_eq(np.mean(ar2), d.mean().compute(scheduler="threads"))
+    # smoke-test computation directly on the TileDB view
+    d = da.from_tiledb(uri, attribute="attr2")
+    assert_eq(np.mean(ar2), d.mean().compute(scheduler="threads"))
 
 
 def test_blocks_indexer():
@@ -4608,22 +4609,19 @@ def test_nbytes_auto():
         normalize_chunks(("10B", "10B"), shape=(10, 10), limit=20, dtype="float64")
 
 
-def test_auto_chunks_h5py():
+def test_auto_chunks_h5py(tmp_path):
     h5py = pytest.importorskip("h5py")
+    fn = os.path.join(tmp_path, "fn.hdf5")
+    with h5py.File(fn, mode="a") as f:
+        d = f.create_dataset("/x", shape=(1000, 1000), chunks=(32, 64), dtype="float64")
+        d[:] = 1
 
-    with tmpfile(".hdf5") as fn:
-        with h5py.File(fn, mode="a") as f:
-            d = f.create_dataset(
-                "/x", shape=(1000, 1000), chunks=(32, 64), dtype="float64"
-            )
-            d[:] = 1
-
-        with h5py.File(fn, mode="a") as f:
-            d = f["x"]
-            with dask.config.set({"array.chunk-size": "1 MiB"}):
-                x = da.from_array(d)
-                assert isinstance(x._meta, np.ndarray)
-                assert x.chunks == ((256, 256, 256, 232), (512, 488))
+    with h5py.File(fn, mode="a") as f:
+        d = f["x"]
+        with dask.config.set({"array.chunk-size": "1 MiB"}):
+            x = da.from_array(d)
+            assert isinstance(x._meta, np.ndarray)
+            assert x.chunks == ((256, 256, 256, 232), (512, 488))
 
 
 def test_no_warnings_from_blockwise():

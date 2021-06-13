@@ -9,7 +9,6 @@ import pytest
 from fsspec.core import open_files
 
 import dask.bag as db
-from dask.utils import tmpdir
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
@@ -20,26 +19,26 @@ if LooseVersion(fsspec.__version__) > "0.7.4":
 
 
 @pytest.fixture(scope="module")
-def dir_server():
-    with tmpdir() as d:
-        for fn in files:
-            with open(os.path.join(d, fn), "wb") as f:
-                f.write(b"a" * 10000)
+def dir_server(tmp_path_factory):
+    d = tmp_path_factory.mktemp("server")
+    for fn in files:
+        with open(os.path.join(d, fn), "wb") as f:
+            f.write(b"a" * 10000)
 
-        cmd = [sys.executable, "-m", "http.server", "8999"]
-        p = subprocess.Popen(cmd, cwd=d)
-        timeout = 10
-        while True:
-            try:
-                requests.get("http://localhost:8999")
-                break
-            except requests.exceptions.ConnectionError as e:
-                time.sleep(0.1)
-                timeout -= 0.1
-                if timeout < 0:
-                    raise RuntimeError("Server did not appear") from e
-        yield d
-        p.terminate()
+    cmd = [sys.executable, "-m", "http.server", "8999"]
+    p = subprocess.Popen(cmd, cwd=d)
+    timeout = 10
+    while True:
+        try:
+            requests.get("http://localhost:8999")
+            break
+        except requests.exceptions.ConnectionError as e:
+            time.sleep(0.1)
+            timeout -= 0.1
+            if timeout < 0:
+                raise RuntimeError("Server did not appear") from e
+    yield d
+    p.terminate()
 
 
 def test_simple(dir_server):

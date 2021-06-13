@@ -34,7 +34,6 @@ from dask.base import (
 from dask.core import literal
 from dask.delayed import Delayed
 from dask.diagnostics import Profiler
-from dask.utils import tmpdir, tmpfile
 from dask.utils_test import dec, import_or_none, inc
 
 da = import_or_none("dask.array")
@@ -156,44 +155,45 @@ def test_tokenize_numpy_memmap_offset(tmpdir):
 
 
 @pytest.mark.skipif("not np")
-def test_tokenize_numpy_memmap():
-    with tmpfile(".npy") as fn:
-        x = np.arange(5)
-        np.save(fn, x)
-        y = tokenize(np.load(fn, mmap_mode="r"))
+def test_tokenize_numpy_memmap(tmp_path_factory):
+    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    x = np.arange(5)
+    np.save(fn, x)
+    y = tokenize(np.load(fn, mmap_mode="r"))
 
-    with tmpfile(".npy") as fn:
-        x = np.arange(5)
-        np.save(fn, x)
-        z = tokenize(np.load(fn, mmap_mode="r"))
+    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    x = np.arange(5)
+    np.save(fn, x)
+    z = tokenize(np.load(fn, mmap_mode="r"))
 
     assert y != z
 
-    with tmpfile(".npy") as fn:
-        x = np.random.normal(size=(10, 10))
-        np.save(fn, x)
-        mm = np.load(fn, mmap_mode="r")
-        mm2 = np.load(fn, mmap_mode="r")
-        a = tokenize(mm[0, :])
-        b = tokenize(mm[1, :])
-        c = tokenize(mm[0:3, :])
-        d = tokenize(mm[:, 0])
-        assert len(set([a, b, c, d])) == 4
-        assert tokenize(mm) == tokenize(mm2)
-        assert tokenize(mm[1, :]) == tokenize(mm2[1, :])
+    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    x = np.random.normal(size=(10, 10))
+    np.save(fn, x)
+    mm = np.load(fn, mmap_mode="r")
+    mm2 = np.load(fn, mmap_mode="r")
+    a = tokenize(mm[0, :])
+    b = tokenize(mm[1, :])
+    c = tokenize(mm[0:3, :])
+    d = tokenize(mm[:, 0])
+    assert len(set([a, b, c, d])) == 4
+    assert tokenize(mm) == tokenize(mm2)
+    assert tokenize(mm[1, :]) == tokenize(mm2[1, :])
 
 
 @pytest.mark.skipif("not np")
-def test_tokenize_numpy_memmap_no_filename():
+def test_tokenize_numpy_memmap_no_filename(tmp_path_factory):
     # GH 1562:
-    with tmpfile(".npy") as fn1, tmpfile(".npy") as fn2:
-        x = np.arange(5)
-        np.save(fn1, x)
-        np.save(fn2, x)
+    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    x = np.arange(5)
+    np.save(fn1, x)
+    np.save(fn2, x)
 
-        a = np.load(fn1, mmap_mode="r")
-        b = a + a
-        assert tokenize(b) == tokenize(b)
+    a = np.load(fn1, mmap_mode="r")
+    b = a + a
+    assert tokenize(b) == tokenize(b)
 
 
 @pytest.mark.skipif("not np")
@@ -933,43 +933,43 @@ def test_compute_nested():
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
-def test_visualize():
+def test_visualize(tmp_path):
     pytest.importorskip("graphviz")
-    with tmpdir() as d:
-        x = da.arange(5, chunks=2)
-        x.visualize(filename=os.path.join(d, "mydask"))
-        assert os.path.exists(os.path.join(d, "mydask.png"))
+    d = str(tmp_path)
+    x = da.arange(5, chunks=2)
+    x.visualize(filename=os.path.join(d, "mydask"))
+    assert os.path.exists(os.path.join(d, "mydask.png"))
 
-        x.visualize(filename=os.path.join(d, "mydask.pdf"))
-        assert os.path.exists(os.path.join(d, "mydask.pdf"))
+    x.visualize(filename=os.path.join(d, "mydask.pdf"))
+    assert os.path.exists(os.path.join(d, "mydask.pdf"))
 
-        visualize(x, 1, 2, filename=os.path.join(d, "mydask.png"))
-        assert os.path.exists(os.path.join(d, "mydask.png"))
+    visualize(x, 1, 2, filename=os.path.join(d, "mydask.png"))
+    assert os.path.exists(os.path.join(d, "mydask.png"))
 
-        dsk = {"a": 1, "b": (add, "a", 2), "c": (mul, "a", 1)}
-        visualize(x, dsk, filename=os.path.join(d, "mydask.png"))
-        assert os.path.exists(os.path.join(d, "mydask.png"))
+    dsk = {"a": 1, "b": (add, "a", 2), "c": (mul, "a", 1)}
+    visualize(x, dsk, filename=os.path.join(d, "mydask.png"))
+    assert os.path.exists(os.path.join(d, "mydask.png"))
 
-        x = Tuple(dsk, ["a", "b", "c"])
-        visualize(x, filename=os.path.join(d, "mydask.png"))
-        assert os.path.exists(os.path.join(d, "mydask.png"))
+    x = Tuple(dsk, ["a", "b", "c"])
+    visualize(x, filename=os.path.join(d, "mydask.png"))
+    assert os.path.exists(os.path.join(d, "mydask.png"))
 
-        # To see if visualize() works when the filename parameter is set to None
-        # If the function raises an error, the test will fail
-        x.visualize(filename=None)
+    # To see if visualize() works when the filename parameter is set to None
+    # If the function raises an error, the test will fail
+    x.visualize(filename=None)
 
 
 @pytest.mark.skipif("not da")
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
-def test_visualize_highlevelgraph():
+def test_visualize_highlevelgraph(tmp_path):
     graphviz = pytest.importorskip("graphviz")
-    with tmpdir() as d:
-        x = da.arange(5, chunks=2)
-        viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
-        # check visualization will automatically render in the jupyter notebook
-        assert isinstance(viz, graphviz.dot.Digraph)
+    d = str(tmp_path)
+    x = da.arange(5, chunks=2)
+    viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
+    # check visualization will automatically render in the jupyter notebook
+    assert isinstance(viz, graphviz.dot.Digraph)
 
 
 @pytest.mark.skipif(
@@ -988,15 +988,15 @@ def test_visualize_lists(tmpdir):
 @pytest.mark.skipif(
     sys.flags.optimize, reason="graphviz exception with Python -OO flag"
 )
-def test_visualize_order():
+def test_visualize_order(tmp_path):
     pytest.importorskip("graphviz")
     pytest.importorskip("matplotlib.pyplot")
     x = da.arange(5, chunks=2)
-    with tmpfile(extension="dot") as fn:
-        x.visualize(color="order", filename=fn, cmap="RdBu")
-        with open(fn) as f:
-            text = f.read()
-        assert 'color="#' in text
+    fn = os.path.join(tmp_path, "fn.dot")
+    x.visualize(color="order", filename=fn, cmap="RdBu")
+    with open(fn) as f:
+        text = f.read()
+    assert 'color="#' in text
 
 
 def test_use_cloudpickle_to_tokenize_functions_in__main__():

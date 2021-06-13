@@ -25,7 +25,6 @@ from dask.config import (
     update,
     update_defaults,
 )
-from dask.utils import tmpfile
 
 yaml = pytest.importorskip("yaml")
 
@@ -62,38 +61,38 @@ def test_merge():
     assert c == expected
 
 
-def test_collect_yaml_paths():
+def test_collect_yaml_paths(tmp_path_factory):
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
     expected = {"x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    with tmpfile(extension="yaml") as fn1:
-        with tmpfile(extension="yaml") as fn2:
-            with open(fn1, "w") as f:
-                yaml.dump(a, f)
-            with open(fn2, "w") as f:
-                yaml.dump(b, f)
+    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
+    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
 
-            config = merge(*collect_yaml(paths=[fn1, fn2]))
-            assert config == expected
+    with open(fn1, "w") as f:
+        yaml.dump(a, f)
+    with open(fn2, "w") as f:
+        yaml.dump(b, f)
+
+    config = merge(*collect_yaml(paths=[fn1, fn2]))
+    assert config == expected
 
 
-def test_collect_yaml_dir():
+def test_collect_yaml_dir(tmp_path):
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
     expected = {"x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    with tmpfile() as dirname:
-        os.mkdir(dirname)
-        with open(os.path.join(dirname, "a.yaml"), mode="w") as f:
-            yaml.dump(a, f)
-        with open(os.path.join(dirname, "b.yaml"), mode="w") as f:
-            yaml.dump(b, f)
+    dirname = str(tmp_path)
+    with open(os.path.join(dirname, "a.yaml"), mode="w") as f:
+        yaml.dump(a, f)
+    with open(os.path.join(dirname, "b.yaml"), mode="w") as f:
+        yaml.dump(b, f)
 
-        config = merge(*collect_yaml(paths=[dirname]))
-        assert config == expected
+    config = merge(*collect_yaml(paths=[dirname]))
+    assert config == expected
 
 
 @contextmanager
@@ -161,22 +160,23 @@ def test_env():
     assert res == expected
 
 
-def test_collect():
+def test_collect(tmp_path_factory):
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
     env = {"DASK_W": 4}
 
     expected = {"w": 4, "x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    with tmpfile(extension="yaml") as fn1:
-        with tmpfile(extension="yaml") as fn2:
-            with open(fn1, "w") as f:
-                yaml.dump(a, f)
-            with open(fn2, "w") as f:
-                yaml.dump(b, f)
+    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
+    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
 
-            config = collect([fn1, fn2], env=env)
-            assert config == expected
+    with open(fn1, "w") as f:
+        yaml.dump(a, f)
+    with open(fn2, "w") as f:
+        yaml.dump(b, f)
+
+    config = collect([fn1, fn2], env=env)
+    assert config == expected
 
 
 def test_collect_env_none(monkeypatch):

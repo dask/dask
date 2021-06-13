@@ -6,6 +6,7 @@ import asyncio
 import os
 from functools import partial
 from operator import add
+from tempfile import TemporaryDirectory
 
 from tornado import gen
 
@@ -21,7 +22,7 @@ import dask.bag as db
 from dask import compute, delayed, persist
 from dask.delayed import Delayed
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
-from dask.utils import get_named_args, tmpdir
+from dask.utils import get_named_args
 
 if "should_check_state" in get_named_args(gen_cluster):
     gen_cluster = partial(gen_cluster, should_check_state=False)
@@ -202,7 +203,7 @@ def test_zarr_distributed_roundtrip():
     pytest.importorskip("zarr")
     assert_eq = da.utils.assert_eq
 
-    with tmpdir() as d:
+    with TemporaryDirectory() as d:
         a = da.zeros((3, 3), chunks=(1, 1))
         a.to_zarr(d)
         a2 = da.from_zarr(d)

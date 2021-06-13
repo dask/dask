@@ -345,9 +345,9 @@ def to_sql(
     3                ...     ...
     Dask Name: from_pandas, 2 tasks
 
-    >>> from dask.utils import tmpfile
+    >>> from tempfile import NamedTemporaryFile
     >>> from sqlalchemy import create_engine    # doctest: +SKIP
-    >>> with tmpfile() as f:                    # doctest: +SKIP
+    >>> with NamedTemporaryFile() as f:         # doctest: +SKIP
     ...     db = 'sqlite:///%s' %f              # doctest: +SKIP
     ...     ddf.to_sql('test', db)              # doctest: +SKIP
     ...     engine = create_engine(db, echo=False) # doctest: +SKIP

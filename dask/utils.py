@@ -162,6 +162,7 @@ def import_required(mod_name, error_msg):
         raise RuntimeError(error_msg) from e
 
 
+@_deprecated(use_instead="tmp_path or tmp_path_factory from pytest fixtures")
 @contextmanager
 def tmpfile(extension="", dir=None):
     extension = "." + extension.lstrip(".")
@@ -180,6 +181,7 @@ def tmpfile(extension="", dir=None):
                     os.remove(filename)
 
 
+@_deprecated(use_instead="tmp_path or tmp_path_factory from pytest fixtures")
 @contextmanager
 def tmpdir(dir=None):
     dirname = tempfile.mkdtemp(dir=dir)
@@ -198,17 +200,19 @@ def tmpdir(dir=None):
 
 @contextmanager
 def filetext(text, extension="", open=open, mode="w"):
-    with tmpfile(extension=extension) as filename:
-        f = open(filename, mode=mode)
-        try:
-            f.write(text)
-        finally:
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        with tmpfile(extension=extension) as filename:
+            f = open(filename, mode=mode)
             try:
-                f.close()
-            except AttributeError:
-                pass
+                f.write(text)
+            finally:
+                try:
+                    f.close()
+                except AttributeError:
+                    pass
 
-        yield filename
+            yield filename
 
 
 @contextmanager
@@ -223,9 +227,11 @@ def changed_cwd(new_cwd):
 
 @contextmanager
 def tmp_cwd(dir=None):
-    with tmpdir(dir) as dirname:
-        with changed_cwd(dirname):
-            yield dirname
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", category=FutureWarning)
+        with tmpdir(dir) as dirname:
+            with changed_cwd(dirname):
+                yield dirname
 
 
 @_deprecated(
