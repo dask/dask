@@ -589,7 +589,6 @@ def test_categorical(tmpdir, write_engine, read_engine):
     assert (df.x == ddf2.x.compute()).all()
 
 
-@FASTPARQUET_MARK
 def test_append(tmpdir, engine):
     """Test that appended parquet equal to the original one."""
     tmp = str(tmpdir)
@@ -640,7 +639,6 @@ def test_append_create(tmpdir, engine):
     assert_eq(df, ddf3)
 
 
-# @FASTPARQUET_MARK
 def test_append_with_partition(tmpdir, engine):
     tmp = str(tmpdir)
     df0 = pd.DataFrame(
@@ -2972,10 +2970,9 @@ def test_partitioned_preserve_index(tmpdir, write_engine, read_engine):
     assert_eq(expect, got)
 
 
-@PYARROW_MARK
 def test_from_pandas_preserve_none_index(tmpdir, engine):
-    if pa.__version__ < LooseVersion("0.15.0"):
-        pytest.skip("PyArrow>=0.15 Required.")
+    if engine.startswith("pyarrow"):
+        pytest.importorskip("pyarrow", minversion="0.15.0")
 
     fn = str(tmpdir.join("test.parquet"))
     df = pd.DataFrame({"a": [1, 2], "b": [4, 5], "c": [6, 7]}).set_index("c")
@@ -2991,12 +2988,9 @@ def test_from_pandas_preserve_none_index(tmpdir, engine):
     assert_eq(expect, got)
 
 
-@PYARROW_MARK
 def test_multi_partition_none_index_false(tmpdir, engine):
-    if pa.__version__ < LooseVersion("0.15.0"):
-        pytest.skip("PyArrow>=0.15 Required.")
-
     if engine.startswith("pyarrow"):
+        pytest.importorskip("pyarrow", minversion="0.15.0")
         write_engine = "pyarrow"
     else:
         assert engine == "fastparquet"
