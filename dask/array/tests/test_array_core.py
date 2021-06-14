@@ -1,3 +1,4 @@
+import contextlib
 import copy
 from unittest import mock
 
@@ -48,7 +49,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -2081,7 +2082,7 @@ def test_dtype_complex():
     assert_eq(da.exp(b).dtype, np.exp(y).dtype)
     assert_eq(da.floor(a).dtype, np.floor(x).dtype)
     assert_eq(da.isnan(b).dtype, np.isnan(y).dtype)
-    with ignoring(ImportError):
+    with contextlib.suppress(ImportError):
         assert da.isnull(b).dtype == "bool"
         assert da.notnull(b).dtype == "bool"
 

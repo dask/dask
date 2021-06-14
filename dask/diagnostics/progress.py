@@ -1,10 +1,10 @@
+import contextlib
 import sys
 import threading
 import time
 from timeit import default_timer
 
 from ..callbacks import Callback
-from ..utils import ignoring
 
 
 def format_time(t):
@@ -137,7 +137,7 @@ class ProgressBar(Callback):
         msg = "\r[{0:<{1}}] | {2}% Completed | {3}".format(
             bar, self._width, percent, elapsed
         )
-        with ignoring(ValueError):
+        with contextlib.suppress(ValueError):
             if self._file is not None:
                 self._file.write(msg)
                 self._file.flush()

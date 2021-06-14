@@ -1,5 +1,6 @@
 import abc
 import collections.abc
+import contextlib
 import copy
 import warnings
 from typing import (
@@ -19,7 +20,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, ignoring, stringify
+from .utils import ensure_dict, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -598,7 +599,7 @@ class HighLevelGraph(Mapping):
                 layers = ensure_dict(graph.layers, copy=True)
                 layers.update({name: layer})
                 deps = ensure_dict(graph.dependencies, copy=True)
-                with ignoring(AttributeError):
+                with contextlib.suppress(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
                 key = _get_some_layer_name(collection)
@@ -654,7 +655,7 @@ class HighLevelGraph(Mapping):
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    with ignoring(AttributeError):
+                    with contextlib.suppress(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)

@@ -1,3 +1,4 @@
+import contextlib
 import itertools
 from numbers import Number
 
@@ -9,7 +10,6 @@ np = pytest.importorskip("numpy")
 
 import dask.array as da
 from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
-from dask.utils import ignoring
 
 
 def test_array():
@@ -1408,7 +1408,7 @@ def test_extract():
 def test_isnull():
     x = np.array([1, np.nan])
     a = da.from_array(x, chunks=(2,))
-    with ignoring(ImportError):
+    with contextlib.suppress(ImportError):
         assert_eq(da.isnull(a), np.isnan(x))
         assert_eq(da.notnull(a), ~(np.isnan(x)))
 
@@ -1416,7 +1416,7 @@ def test_isnull():
 def test_isnull_result_is_an_array():
     # regression test for https://github.com/dask/dask/issues/3822
     arr = da.from_array(np.arange(3, dtype=np.int64), chunks=-1)
-    with ignoring(ImportError):
+    with contextlib.suppress(ImportError):
         result = da.isnull(arr[0]).compute()
         assert type(result) is np.ndarray
 

@@ -1,4 +1,5 @@
 """ A set of NumPy functions to apply per chunk """
+import contextlib
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 from numbers import Integral
@@ -7,7 +8,6 @@ import numpy as np
 from tlz import concat
 
 from ..core import flatten
-from ..utils import ignoring
 from . import numpy_compat as npcompat
 
 try:
@@ -71,17 +71,17 @@ nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanmean = np.nanmean
 
 var = np.var
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanvar = np.nanvar
 
 std = np.std
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanstd = np.nanstd
 
 

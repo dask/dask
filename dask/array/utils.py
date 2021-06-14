@@ -1,3 +1,4 @@
+import contextlib
 import difflib
 import functools
 import itertools
@@ -10,7 +11,7 @@ import numpy as np
 from tlz import concat, frequencies
 
 from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
+from ..utils import has_keyword, is_arraylike, is_cupy_type
 from .core import Array
 
 try:
@@ -167,7 +168,7 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:
-            with ignoring(AttributeError):
+            with contextlib.suppress(AttributeError):
                 meta = meta.astype(_dtype)
 
         if np.isscalar(meta):
