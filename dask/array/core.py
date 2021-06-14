@@ -1,3 +1,4 @@
+import contextlib
 import math
 import operator
 import os
@@ -47,7 +48,6 @@ from ..utils import (
     format_bytes,
     funcname,
     has_keyword,
-    ignoring,
     is_arraylike,
     is_dataframe_like,
     is_index_like,
@@ -4543,7 +4543,7 @@ def offset_func(func, offset, *args):
         args2 = list(map(add, args, offset))
         return func(*args2)
 
-    with ignoring(Exception):
+    with contextlib.suppress(Exception):
         _offset.__name__ = "offset_" + func.__name__
 
     return _offset
