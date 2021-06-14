@@ -803,28 +803,6 @@ def get_unsorted_columns(frames):
     return order
 
 
-def _concat_compat(frames, left, right):
-    if PANDAS_GT_100:
-        # join_axes removed
-        return (pd.concat, frames, 0, "outer", False, None, None, None, False, False)
-    else:
-        # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
-        # we only care about sort, to silence warnings.
-        return (
-            pd.concat,
-            frames,
-            0,
-            "outer",
-            None,
-            False,
-            None,
-            None,
-            None,
-            False,
-            False,
-        )
-
-
 def merge_asof_indexed(left, right, **kwargs):
     dsk = dict()
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
@@ -853,8 +831,7 @@ def merge_asof_indexed(left, right, **kwargs):
                     kwargs,
                 )
             )
-        args = _concat_compat(frames, left, right)
-        dsk[(name, i)] = args
+        dsk[(name, i)] = (methods.concat, frames)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     result = new_dd_object(graph, name, meta, left.divisions)
