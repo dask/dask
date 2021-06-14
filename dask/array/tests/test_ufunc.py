@@ -474,3 +474,12 @@ def test_divmod():
     expected = divmod(arr1, arr2)
     assert_eq(result[0], expected[0])
     assert_eq(result[1], expected[1])
+
+
+def test_dtype_kwarg():
+    x, y = da.asarray([1, 2, 3]), da.asarray([4, 5, 6])
+    assert x.dtype == np.dtype("int64")
+    assert y.dtype == np.dtype("int64")
+    z = np.add(x, y, dtype=np.float64)
+    assert z.dtype == np.dtype("float64")
+    assert z.compute().dtype == np.dtype("float64")
