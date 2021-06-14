@@ -1,5 +1,6 @@
 import abc
 import collections.abc
+import contextlib
 import copy
 import warnings
 from typing import (
@@ -19,7 +20,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, ignoring, stringify
+from .utils import ensure_dict, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -96,6 +97,7 @@ class Layer(collections.abc.Mapping):
         """Return whether the layer is materialized or not"""
         return True
 
+    @abc.abstractmethod
     def get_output_keys(self) -> AbstractSet:
         """Return a set of all output keys
 
@@ -110,15 +112,15 @@ class Layer(collections.abc.Mapping):
         keys: AbstractSet
             All output keys
         """
-        return self.keys()
+        return self.keys()  # this implementation will materialize the graph
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, set]]:
-        """Return a new Layer with only the tasks required to calculate `keys` and
-        a map of external key dependencies.
+        """Remove unnecessary tasks from the layer
 
-        In other words, remove unnecessary tasks from the layer.
+        In other words, return a new Layer with only the tasks required to
+        calculate `keys` and a map of external key dependencies.
 
         Examples
         --------
@@ -434,7 +436,7 @@ class Layer(collections.abc.Mapping):
 
         This method is called by the scheduler in Distributed in order to unpack
         the state of a layer and merge it into its global task graph. The method
-        should update `dsk` and `dependencies`, which are the already materialized
+        can use `dsk` and `dependencies`, which are the already materialized
         state of the preceding layers in the high level graph. The layers of the
         high level graph are unpacked in topological order.
 
@@ -497,6 +499,9 @@ class MaterializedLayer(Layer):
 
     def is_materialized(self):
         return True
+
+    def get_output_keys(self):
+        return self.keys()
 
 
 class HighLevelGraph(Mapping):
@@ -587,14 +592,14 @@ class HighLevelGraph(Mapping):
 
     @classmethod
     def _from_collection(cls, name, layer, collection):
-        """ `from_collections` optimized for a single collection """
+        """`from_collections` optimized for a single collection"""
         if is_dask_collection(collection):
             graph = collection.__dask_graph__()
             if isinstance(graph, HighLevelGraph):
                 layers = ensure_dict(graph.layers, copy=True)
                 layers.update({name: layer})
                 deps = ensure_dict(graph.dependencies, copy=True)
-                with ignoring(AttributeError):
+                with contextlib.suppress(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
                 key = _get_some_layer_name(collection)
@@ -650,7 +655,7 @@ class HighLevelGraph(Mapping):
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    with ignoring(AttributeError):
+                    with contextlib.suppress(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)
@@ -809,7 +814,8 @@ class HighLevelGraph(Mapping):
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
-        return graphviz_to_file(g, filename, format)
+        graphviz_to_file(g, filename, format)
+        return g
 
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
@@ -964,8 +970,7 @@ class HighLevelGraph(Mapping):
 
         The approach is to delegate the packaging to each layer in the high level graph
         by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
-        on each layer. If the layer doesn't implement packaging, we materialize the
-        layer and pack it.
+        on each layer.
 
         Parameters
         ----------

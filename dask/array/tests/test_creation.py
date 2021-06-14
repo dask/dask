@@ -142,6 +142,11 @@ def test_linspace(endpoint):
         da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask
     ) == sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask)
 
+    x = da.array([0.2, 6.4, 3.0, 1.6])
+    nparr = np.linspace(0, 2, 8, endpoint=endpoint)
+    darr = da.linspace(da.argmin(x), da.argmax(x) + 1, 8, endpoint=endpoint)
+    assert_eq(darr, nparr)
+
 
 def test_arange():
     darr = da.arange(77, chunks=13)

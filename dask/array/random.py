@@ -1,3 +1,4 @@
+import contextlib
 import numbers
 import warnings
 from itertools import chain, product
@@ -8,7 +9,7 @@ import numpy as np
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, ignoring, random_state_data, skip_doctest
+from ..utils import derived_from, random_state_data, skip_doctest
 from .core import (
     Array,
     asarray,
@@ -21,7 +22,7 @@ from .creation import arange
 
 
 def doc_wraps(func):
-    """ Copy docstring from one function to another """
+    """Copy docstring from one function to another"""
     warnings.warn(
         "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
         FutureWarning,
@@ -204,7 +205,7 @@ class RandomState:
     def chisquare(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
-    with ignoring(AttributeError):
+    with contextlib.suppress(AttributeError):
 
         @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):

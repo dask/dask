@@ -1,3 +1,4 @@
+import contextlib
 import os
 from distutils.version import LooseVersion
 from operator import add, mul
@@ -7,7 +8,7 @@ import pytest
 
 from dask.diagnostics import CacheProfiler, Profiler, ResourceProfiler
 from dask.threaded import get
-from dask.utils import apply, ignoring, tmpfile
+from dask.utils import apply, tmpfile
 
 try:
     import bokeh
@@ -44,7 +45,7 @@ def test_profiler_works_under_error():
     div = lambda x, y: x / y
     dsk = {"x": (div, 1, 1), "y": (div, "x", 2), "z": (div, "y", 0)}
 
-    with ignoring(ZeroDivisionError):
+    with contextlib.suppress(ZeroDivisionError):
         with prof:
             get(dsk, "z")
 

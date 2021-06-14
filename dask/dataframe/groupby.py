@@ -485,7 +485,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
     keys = list(col_mapping.keys())
     for level in range(len(result.columns.levels)):
-        result.columns.set_levels(keys, level=level, inplace=True)
+        result.columns = result.columns.set_levels(keys, level=level)
 
     result.index.set_names(idx_mapping, inplace=True)
 
@@ -1182,7 +1182,7 @@ class _GroupBy:
         )
 
     def _cum_agg(self, token, chunk, aggregate, initial):
-        """ Wrapper for cumulative groupby operation """
+        """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
         columns = meta.name if is_series_like(meta) else meta.columns
         index = self.index if isinstance(self.index, list) else [self.index]
@@ -1673,7 +1673,7 @@ class _GroupBy:
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta(meta)
+        meta = make_meta(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(
@@ -1762,7 +1762,7 @@ class _GroupBy:
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta(meta)
+        meta = make_meta(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(
