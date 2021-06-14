@@ -14,5 +14,6 @@ dependencies:
   - pandas=0.25.0
   # test dependencies
   - pytest
+  - pytest-cov
   - pytest-rerunfailures
   - pytest-xdist
