@@ -1,13 +1,13 @@
-from glob import glob
 import os
+from glob import glob
 
 try:
     from skimage.io import imread as sk_imread
 except (AttributeError, ImportError):
     pass
 
-from .core import Array
 from ..base import tokenize
+from .core import Array
 
 
 def add_leading_dimension(x):
@@ -15,7 +15,7 @@ def add_leading_dimension(x):
 
 
 def imread(filename, imread=None, preprocess=None):
-    """ Read a stack of images into a dask array
+    """Read a stack of images into a dask array
 
     Parameters
     ----------

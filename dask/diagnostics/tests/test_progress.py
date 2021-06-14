@@ -3,11 +3,10 @@ from operator import add, mul
 import pytest
 
 from dask.callbacks import Callback
-from dask.local import get_sync
 from dask.diagnostics import ProgressBar
 from dask.diagnostics.progress import format_time
+from dask.local import get_sync
 from dask.threaded import get as get_threaded
-
 
 dsk = {"a": 1, "b": 2, "c": (add, "a", "b"), "d": (mul, "a", "b"), "e": (mul, "c", "d")}
 
@@ -21,9 +20,9 @@ def check_bar_completed(capsys, width=40):
 
 
 def test_array_compute(capsys):
-    from dask.array import ones
+    da = pytest.importorskip("dask.array")
 
-    data = ones((100, 100), dtype="f4", chunks=(100, 100))
+    data = da.ones((100, 100), dtype="f4", chunks=(100, 100))
     with ProgressBar():
         out = data.sum().compute()
     assert out == 10000
@@ -41,7 +40,7 @@ def test_progressbar(capsys):
 
 
 def test_minimum_time(capsys):
-    with ProgressBar(1.0):
+    with ProgressBar(10.0):
         out = get_threaded(dsk, "e")
     out, err = capsys.readouterr()
     assert out == "" and err == ""

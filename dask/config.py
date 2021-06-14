@@ -1,13 +1,14 @@
 import ast
+import base64
 import builtins
-from collections.abc import Mapping
+import json
 import os
 import sys
 import threading
 import warnings
+from collections.abc import Mapping
 
 import yaml
-
 
 no_default = "__no_default__"
 
@@ -59,7 +60,7 @@ def canonical_name(k, config):
 
 
 def update(old, new, priority="new"):
-    """ Update a nested dictionary with values from another
+    """Update a nested dictionary with values from another
 
     This is like dict.update except that it smoothly merges nested values
 
@@ -102,7 +103,7 @@ def update(old, new, priority="new"):
 
 
 def merge(*dicts):
-    """ Update a sequence of nested dictionaries
+    """Update a sequence of nested dictionaries
 
     This prefers the values in the latter dictionaries to those in the former
 
@@ -124,7 +125,7 @@ def merge(*dicts):
 
 
 def collect_yaml(paths=paths):
-    """ Collect configuration from yaml files
+    """Collect configuration from yaml files
 
     This searches through a list of paths, expands to find all yaml or json
     files, and then parses each file.
@@ -167,7 +168,7 @@ def collect_yaml(paths=paths):
 
 
 def collect_env(env=None):
-    """ Collect config from environment variables
+    """Collect config from environment variables
 
     This grabs environment variables of the form "DASK_FOO__BAR_BAZ=123" and
     turns these into config variables of the form ``{"foo": {"bar-baz": 123}}``
@@ -176,10 +177,19 @@ def collect_env(env=None):
     -  Lower-cases the key text
     -  Treats ``__`` (double-underscore) as nested access
     -  Calls ``ast.literal_eval`` on the value
+
+    Any serialized config passed via ``DASK_INTERNAL_INHERIT_CONFIG`` is also set here.
+
     """
+
     if env is None:
         env = os.environ
-    d = {}
+
+    if "DASK_INTERNAL_INHERIT_CONFIG" in env:
+        d = deserialize(env["DASK_INTERNAL_INHERIT_CONFIG"])
+    else:
+        d = {}
+
     for name, value in env.items():
         if name.startswith("DASK_"):
             varname = name[5:].lower().replace("__", ".")
@@ -255,8 +265,8 @@ def ensure_file(source, destination=None, comment=True):
         pass
 
 
-class set(object):
-    """ Temporarily set configuration values within a context manager
+class set:
+    """Temporarily set configuration values within a context manager
 
     Parameters
     ----------
@@ -423,9 +433,12 @@ def refresh(config=config, defaults=defaults, **kwargs):
     update(config, collect(**kwargs))
 
 
-def get(key, default=no_default, config=config):
+def get(key, default=no_default, config=config, override_with=None):
     """
     Get elements from global config
+
+    If ``override_with`` is not None this value will be passed straight back.
+    Useful for getting kwarg defaults from Dask config.
 
     Use '.' for nested access
 
@@ -441,10 +454,18 @@ def get(key, default=no_default, config=config):
     >>> config.get('foo.x.y', default=123)  # doctest: +SKIP
     123
 
+    >>> config.get('foo.y', override_with=None)  # doctest: +SKIP
+    2
+
+    >>> config.get('foo.y', override_with=3)  # doctest: +SKIP
+    3
+
     See Also
     --------
     dask.config.set
     """
+    if override_with is not None:
+        return override_with
     keys = key.split(".")
     result = config
     for k in keys:
@@ -460,7 +481,7 @@ def get(key, default=no_default, config=config):
 
 
 def rename(aliases, config=config):
-    """ Rename old keys to new keys
+    """Rename old keys to new keys
 
     This helps migrate older configuration versions over time
     """
@@ -479,7 +500,7 @@ def rename(aliases, config=config):
 
 
 def update_defaults(new, config=config, defaults=defaults):
-    """ Add a new set of defaults to the configuration
+    """Add a new set of defaults to the configuration
 
     It does two things:
 
@@ -492,7 +513,7 @@ def update_defaults(new, config=config, defaults=defaults):
 
 
 def expand_environment_variables(config):
-    """ Expand environment variables in a nested config dictionary
+    """Expand environment variables in a nested config dictionary
 
     This function will recursively search through any nested dictionaries
     and/or lists.
@@ -532,7 +553,7 @@ deprecations = {
 
 
 def check_deprecations(key: str, deprecations: dict = deprecations):
-    """ Check if the provided value has been renamed or removed
+    """Check if the provided value has been renamed or removed
 
     Parameters
     ----------
@@ -575,9 +596,46 @@ def check_deprecations(key: str, deprecations: dict = deprecations):
         return key
 
 
+def serialize(data):
+    """Serialize config data into a string.
+
+    Typically used to pass config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+    Parameters
+    ----------
+    data: json-serializable object
+        The data to serialize
+
+    Returns
+    -------
+    serialized_data: str
+        The serialized data as a string
+
+    """
+    return base64.urlsafe_b64encode(json.dumps(data).encode()).decode()
+
+
+def deserialize(data):
+    """De-serialize config data into the original object.
+
+    Typically when receiving config via the ``DASK_INTERNAL_INHERIT_CONFIG`` environment variable.
+
+    Parameters
+    ----------
+    data: str
+        String serialied by :func:`dask.config.serialize`
+
+    Returns
+    -------
+    deserialized_data: obj
+        The de-serialized data
+
+    """
+    return json.loads(base64.urlsafe_b64decode(data.encode()).decode())
+
+
 def _initialize():
     fn = os.path.join(os.path.dirname(__file__), "dask.yaml")
-    ensure_file(source=fn)
 
     with open(fn) as f:
         _defaults = yaml.safe_load(f)

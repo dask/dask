@@ -1,15 +1,14 @@
 """ A set of NumPy functions to apply per chunk """
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
+from numbers import Integral
 
-from tlz import concat
 import numpy as np
-from . import numpy_compat as npcompat
+from tlz import concat
 
 from ..core import flatten
 from ..utils import ignoring
-
-from numbers import Integral
+from . import numpy_compat as npcompat
 
 try:
     from numpy import take_along_axis
@@ -87,7 +86,7 @@ with ignoring(AttributeError):
 
 
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
-    """ Coarsen array by applying reduction to fixed size neighborhoods
+    """Coarsen array by applying reduction to fixed size neighborhoods
 
     Parameters
     ----------
@@ -101,9 +100,9 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     Examples
     --------
     >>> x = np.array([1, 2, 3, 4, 5, 6])
-    >>> coarsen(np.sum, x, {0: 2})
+    >>> coarsen(np.sum, x, {0: 2})          #doctest: +SKIP
     array([ 3,  7, 11])
-    >>> coarsen(np.max, x, {0: 3})
+    >>> coarsen(np.max, x, {0: 3})          #doctest: +SKIP
     array([3, 6])
 
     Provide dictionary of scale per dimension
@@ -115,14 +114,14 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
            [12, 13, 14, 15, 16, 17],
            [18, 19, 20, 21, 22, 23]])
 
-    >>> coarsen(np.min, x, {0: 2, 1: 3})
+    >>> coarsen(np.min, x, {0: 2, 1: 3})    #doctest: +SKIP
     array([[ 0,  3],
            [12, 15]])
 
     You must avoid excess elements explicitly
 
     >>> x = np.array([1, 2, 3, 4, 5, 6, 7, 8])
-    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)
+    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)    #doctest: +SKIP
     array([1, 4])
     """
     # Insert singleton dimensions if they don't exist already
@@ -144,7 +143,7 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
 
 
 def trim(x, axes=None):
-    """ Trim boundaries off of array
+    """Trim boundaries off of array
 
     >>> x = np.arange(24).reshape((4, 6))
     >>> trim(x, axes={0: 0, 1: 1})
@@ -166,7 +165,7 @@ def trim(x, axes=None):
 
 
 def topk(a, k, axis, keepdims):
-    """ Chunk and combine function of topk
+    """Chunk and combine function of topk
 
     Extract the k largest elements from a on the given axis.
     If k is negative, extract the -k smallest elements instead.
@@ -184,7 +183,7 @@ def topk(a, k, axis, keepdims):
 
 
 def topk_aggregate(a, k, axis, keepdims):
-    """ Final aggregation function of topk
+    """Final aggregation function of topk
 
     Invoke topk one final time and then sort the results internally.
     """
@@ -202,7 +201,7 @@ def topk_aggregate(a, k, axis, keepdims):
 
 
 def argtopk_preprocess(a, idx):
-    """ Preparatory step for argtopk
+    """Preparatory step for argtopk
 
     Put data together with its original indices in a tuple.
     """
@@ -210,7 +209,7 @@ def argtopk_preprocess(a, idx):
 
 
 def argtopk(a_plus_idx, k, axis, keepdims):
-    """ Chunk and combine function of argtopk
+    """Chunk and combine function of argtopk
 
     Extract the indices of the k largest elements from a on the given axis.
     If k is negative, extract the indices of the -k smallest elements instead.
@@ -239,7 +238,7 @@ def argtopk(a_plus_idx, k, axis, keepdims):
 
 
 def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
-    """ Final aggregation function of argtopk
+    """Final aggregation function of argtopk
 
     Invoke argtopk one final time, sort the results internally, drop the data
     and return the index only.
@@ -259,9 +258,23 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     ]
 
 
-def arange(start, stop, step, length, dtype):
-    res = np.arange(start, stop, step, dtype)
+def arange(start, stop, step, length, dtype, like=None):
+    from .utils import arange_safe
+
+    res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
+
+
+def linspace(start, stop, num, endpoint=True, dtype=None):
+    from .core import Array
+
+    if isinstance(start, Array):
+        start = start.compute()
+
+    if isinstance(stop, Array):
+        stop = stop.compute()
+
+    return np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
 
 
 def astype(x, astype_dtype=None, **kwargs):
@@ -270,15 +283,21 @@ def astype(x, astype_dtype=None, **kwargs):
 
 def view(x, dtype, order="C"):
     if order == "C":
-        x = np.ascontiguousarray(x)
+        try:
+            x = np.ascontiguousarray(x, like=x)
+        except TypeError:
+            x = np.ascontiguousarray(x)
         return x.view(dtype)
     else:
-        x = np.asfortranarray(x)
+        try:
+            x = np.asfortranarray(x, like=x)
+        except TypeError:
+            x = np.asfortranarray(x)
         return x.T.view(dtype).T
 
 
 def slice_with_int_dask_array(x, idx, offset, x_size, axis):
-    """ Chunk function of `slice_with_int_dask_array_on_axis`.
+    """Chunk function of `slice_with_int_dask_array_on_axis`.
     Slice one chunk of x by one chunk of idx.
 
     Parameters
@@ -320,7 +339,7 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
 
 
 def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
-    """ Final aggregation function of `slice_with_int_dask_array_on_axis`.
+    """Final aggregation function of `slice_with_int_dask_array_on_axis`.
     Aggregate all chunks of x by one chunk of idx, reordering the output of
     `slice_with_int_dask_array`.
 

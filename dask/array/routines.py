@@ -2,43 +2,51 @@ import inspect
 import math
 import warnings
 from collections.abc import Iterable
-from functools import wraps, partial
-from numbers import Real, Integral
-from distutils.version import LooseVersion
+from functools import partial, wraps
+from numbers import Integral, Real
+from typing import List, Tuple
 
 import numpy as np
-from tlz import concat, sliding_window, interleave
+from tlz import concat, interleave, sliding_window
 
+from ..base import is_dask_collection, tokenize
 from ..compatibility import apply
 from ..core import flatten
-from ..base import tokenize, is_dask_collection
-from ..delayed import unpack_collections, Delayed
+from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import funcname, derived_from, is_arraylike
+from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
-from .creation import arange, diag, empty, indices
-from .utils import safe_wraps, validate_axis, meta_from_array, zeros_like_safe
-from .wrap import ones
-from .ufunc import multiply, sqrt
-
 from .core import (
     Array,
-    map_blocks,
-    elemwise,
-    asarray,
     asanyarray,
-    concatenate,
-    stack,
+    asarray,
     blockwise,
+    broadcast_arrays,
     broadcast_shapes,
-    is_scalar_for_elemwise,
     broadcast_to,
-    tensordot_lookup,
+    concatenate,
+    elemwise,
     implements,
+    is_scalar_for_elemwise,
+    map_blocks,
+    stack,
+    tensordot_lookup,
 )
-
+from .creation import arange, diag, empty, indices, tri
 from .einsumfuncs import einsum  # noqa
-from .numpy_compat import _unravel_index_keyword
+from .ufunc import multiply, sqrt
+from .utils import (
+    array_safe,
+    asarray_safe,
+    meta_from_array,
+    safe_wraps,
+    validate_axis,
+    zeros_like_safe,
+)
+from .wrap import ones
+
+# save built-in for histogram functions which use range as a kwarg.
+_range = range
 
 
 @derived_from(np)
@@ -155,33 +163,41 @@ def transpose(a, axes=None):
     if axes:
         if len(axes) != a.ndim:
             raise ValueError("axes don't match array")
+        axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     else:
         axes = tuple(range(a.ndim))[::-1]
-    axes = tuple(d + a.ndim if d < 0 else d for d in axes)
     return blockwise(
         np.transpose, axes, a, tuple(range(a.ndim)), dtype=a.dtype, axes=axes
     )
 
 
-def flip(m, axis):
+def flip(m, axis=None):
     """
     Reverse element order along axis.
 
     Parameters
     ----------
-    axis : int
-        Axis to reverse element order of.
+    m : array_like
+        Input array.
+    axis : None or int or tuple of ints, optional
+        Axis or axes to reverse element order of. None will reverse all axes.
 
     Returns
     -------
-    reversed array : ndarray
+    dask.array.Array
+        The flipped array.
     """
 
     m = asanyarray(m)
 
     sl = m.ndim * [slice(None)]
+    if axis is None:
+        axis = range(m.ndim)
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
     try:
-        sl[axis] = slice(None, None, -1)
+        for ax in axis:
+            sl[ax] = slice(None, None, -1)
     except IndexError as e:
         raise ValueError(
             "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
@@ -201,36 +217,50 @@ def fliplr(m):
     return flip(m, 1)
 
 
-alphabet = "abcdefghijklmnopqrstuvwxyz"
-ALPHABET = alphabet.upper()
+@derived_from(np)
+def rot90(m, k=1, axes=(0, 1)):
+    axes = tuple(axes)
+    if len(axes) != 2:
+        raise ValueError("len(axes) must be 2.")
+
+    m = asanyarray(m)
+
+    if axes[0] == axes[1] or np.absolute(axes[0] - axes[1]) == m.ndim:
+        raise ValueError("Axes must be different.")
+
+    if axes[0] >= m.ndim or axes[0] < -m.ndim or axes[1] >= m.ndim or axes[1] < -m.ndim:
+        raise ValueError(
+            "Axes={} out of range for array of ndim={}.".format(axes, m.ndim)
+        )
+
+    k %= 4
+
+    if k == 0:
+        return m[:]
+    if k == 2:
+        return flip(flip(m, axes[0]), axes[1])
+
+    axes_list = list(range(0, m.ndim))
+    (axes_list[axes[0]], axes_list[axes[1]]) = (axes_list[axes[1]], axes_list[axes[0]])
+
+    if k == 1:
+        return transpose(flip(m, axes[1]), axes_list)
+    else:
+        # k == 3
+        return flip(transpose(m, axes_list), axes[1])
 
 
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
+    x = tensordot(a, b, axes=axes)
 
-    # workaround may be removed when numpy version (currently 1.13.0) is bumped
-    a_dims = np.array([a.shape[i] for i in axes[0]])
-    b_dims = np.array([b.shape[i] for i in axes[1]])
-    if (
-        len(a_dims) > 0
-        and (a_dims == b_dims).all()
-        and a_dims.min() == 0
-        and LooseVersion(np.__version__) < LooseVersion("1.14")
-    ):
-        x = np.zeros(
-            tuple(
-                [s for i, s in enumerate(a.shape) if i not in axes[0]]
-                + [s for i, s in enumerate(b.shape) if i not in axes[1]]
-            )
-        )
-    else:
-        x = tensordot(a, b, axes=axes)
+    if len(axes[0]) != 1:
+        ind = [slice(None, None)] * x.ndim
+        for a in sorted(axes[0]):
+            ind.insert(a, None)
+        x = x[tuple(ind)]
 
-    ind = [slice(None, None)] * x.ndim
-    for a in sorted(axes[0]):
-        ind.insert(a, None)
-    x = x[tuple(ind)]
     return x
 
 
@@ -250,6 +280,10 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
+    if len(left_axes) == 1:
+        concatenate = True
+    else:
+        concatenate = False
 
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
@@ -260,6 +294,8 @@ def tensordot(lhs, rhs, axes=2):
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
+        if concatenate:
+            out_index.remove(left_index[l])
 
     intermediate = blockwise(
         _tensordot,
@@ -269,11 +305,14 @@ def tensordot(lhs, rhs, axes=2):
         rhs,
         right_index,
         dtype=dt,
+        concatenate=concatenate,
         axes=(left_axes, right_axes),
     )
 
-    result = intermediate.sum(axis=left_axes)
-    return result
+    if concatenate:
+        return intermediate
+    else:
+        return intermediate.sum(axis=left_axes)
 
 
 @derived_from(np)
@@ -284,6 +323,21 @@ def dot(a, b):
 @derived_from(np)
 def vdot(a, b):
     return dot(a.conj().ravel(), b.ravel())
+
+
+def _matmul(a, b):
+    xp = np
+
+    if is_cupy_type(a):
+        import cupy
+
+        xp = cupy
+
+    chunk = xp.matmul(a, b)
+    # Since we have performed the contraction via matmul
+    # but blockwise expects all dimensions back, we need
+    # to add one dummy dimension back
+    return chunk[..., xp.newaxis]
 
 
 @derived_from(np)
@@ -309,16 +363,54 @@ def matmul(a, b):
     elif a.ndim > b.ndim:
         b = b[(a.ndim - b.ndim) * (np.newaxis,)]
 
+    # out_ind includes all dimensions to prevent contraction
+    # in the blockwise below
+    out_ind = tuple(range(a.ndim + 1))
+    # lhs_ind includes `a`/LHS dimensions
+    lhs_ind = tuple(range(a.ndim))
+    # on `b`/RHS everything above 2nd dimension, is the same
+    # as `a`, -2 dimension is "contracted" with the last dimension
+    # of `a`, last dimension of `b` is `b` specific
+    rhs_ind = tuple(range(a.ndim - 2)) + (lhs_ind[-1], a.ndim)
+
     out = blockwise(
-        np.matmul,
-        tuple(range(1, a.ndim + 1)),
+        _matmul,
+        out_ind,
         a,
-        tuple(range(1, a.ndim - 1)) + (a.ndim - 1, 0),
+        lhs_ind,
         b,
-        tuple(range(1, a.ndim - 1)) + (0, a.ndim),
+        rhs_ind,
+        adjust_chunks={lhs_ind[-1]: 1},
         dtype=result_type(a, b),
-        concatenate=True,
+        concatenate=False,
     )
+
+    # Because contraction + concatenate in blockwise leads to high
+    # memory footprints, we want to avoid them. Instead we will perform
+    # blockwise (without contraction) followed by reduction. More about
+    # this issue: https://github.com/dask/dask/issues/6874
+
+    # When we perform reduction, we need to worry about the last 2 dimensions
+    # which hold the matrices, some care is required to handle chunking in
+    # that space.
+    contraction_dimension_is_chunked = (
+        max(min(a.chunks[-1], b.chunks[-2])) < a.shape[-1]
+    )
+    b_last_dim_max_chunk = max(b.chunks[-1])
+    if contraction_dimension_is_chunked or b_last_dim_max_chunk < b.shape[-1]:
+        if b_last_dim_max_chunk > 1:
+            # This is the case when both contraction and last dimension axes
+            # are chunked
+            out = out.reshape(out.shape[:-1] + (1, -1))
+            out = out.sum(axis=-3)
+            out = out.reshape(out.shape[:-2] + (b.shape[-1],))
+        else:
+            # Contraction axis is chunked
+            out = out.sum(axis=-2)
+    else:
+        # Neither contraction nor last dimension axes are chunked, we
+        # remove the dummy dimension without reduction
+        out = out.reshape(out.shape[:-2] + (b.shape[-1],))
 
     if a_is_1d:
         out = out[..., 0, :]
@@ -345,26 +437,8 @@ def _inner_apply_along_axis(arr, func1d, func1d_axis, func1d_args, func1d_kwargs
 @derived_from(np)
 def apply_along_axis(func1d, axis, arr, *args, dtype=None, shape=None, **kwargs):
     """
-    Apply a function to 1-D slices along the given axis. This is
-    a blocked variant of :func:`numpy.apply_along_axis` implemented via
+    This is a blocked variant of :func:`numpy.apply_along_axis` implemented via
     :func:`dask.array.map_blocks`
-
-    Parameters
-    ----------
-    func1d : callable
-        Function to apply to 1-D slices of the array along the given axis
-    axis : int
-        Axis along which func1d will be applied
-    arr : dask array
-        Dask array to which ``func1d`` will be applied
-    args : any
-        Additional arguments to ``func1d``.
-    dtype : str or dtype, optional
-        The dtype of the output of ``func1d``.
-    shape : tuple, optional
-        The shape of the output of ``func1d``.
-    kwargs : any
-        Additional keyword arguments for ``func1d``.
 
     Notes
     -----
@@ -580,7 +654,10 @@ def gradient(f, *varargs, **kwargs):
     return results
 
 
-def _bincount_sum(bincounts, dtype=int):
+def _bincount_agg(bincounts, dtype, **kwargs):
+    if not isinstance(bincounts, list):
+        return bincounts
+
     n = max(map(len, bincounts))
     out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
@@ -589,7 +666,7 @@ def _bincount_sum(bincounts, dtype=int):
 
 
 @derived_from(np)
-def bincount(x, weights=None, minlength=0):
+def bincount(x, weights=None, minlength=0, split_every=None):
     if x.ndim != 1:
         raise ValueError("Input array must be one dimensional. Try using x.ravel()")
     if weights is not None:
@@ -597,42 +674,97 @@ def bincount(x, weights=None, minlength=0):
             raise ValueError("Chunks of input array x and weights must match.")
 
     token = tokenize(x, weights, minlength)
-    name = "bincount-" + token
-    final_name = "bincount-sum" + token
-    # Call np.bincount on each block, possibly with weights
+    args = [x, "i"]
     if weights is not None:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), (weights.name, i), minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([1], weights=[1]).dtype
+        meta = array_safe(np.bincount([1], weights=[1]), like=meta_from_array(x))
+        args.extend([weights, "i"])
     else:
-        dsk = {
-            (name, i): (np.bincount, (x.name, i), None, minlength)
-            for i, _ in enumerate(x.__dask_keys__())
-        }
-        dtype = np.bincount([]).dtype
-
-    dsk[(final_name, 0)] = (_bincount_sum, list(dsk), dtype)
-    graph = HighLevelGraph.from_collections(
-        final_name, dsk, dependencies=[x] if weights is None else [x, weights]
-    )
+        meta = array_safe(np.bincount([]), like=meta_from_array(x))
 
     if minlength == 0:
-        chunks = ((np.nan,),)
+        output_size = (np.nan,)
     else:
-        chunks = ((minlength,),)
+        output_size = (minlength,)
 
-    meta = meta_from_array(x, 1, dtype=dtype)
+    chunked_counts = blockwise(
+        partial(np.bincount, minlength=minlength), "i", *args, token=token, meta=meta
+    )
+    chunked_counts._chunks = (
+        output_size * len(chunked_counts.chunks[0]),
+        *chunked_counts.chunks[1:],
+    )
 
-    return Array(graph, final_name, chunks, meta=meta)
+    from .reductions import _tree_reduce
+
+    output = _tree_reduce(
+        chunked_counts,
+        aggregate=partial(_bincount_agg, dtype=meta.dtype),
+        axis=(0,),
+        keepdims=True,
+        dtype=meta.dtype,
+        split_every=split_every,
+        concatenate=False,
+    )
+    output._chunks = (output_size, *chunked_counts.chunks[1:])
+    output._meta = meta
+    return output
 
 
 @derived_from(np)
 def digitize(a, bins, right=False):
-    bins = np.asarray(bins)
-    dtype = np.digitize([0], bins, right=False).dtype
+    bins = asarray_safe(bins, like=meta_from_array(a))
+    dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
+
+
+def _searchsorted_block(x, y, side):
+    res = np.searchsorted(x, y, side=side)
+    # 0 is only correct for the first block of a, but blockwise doesn't have a way
+    # of telling which block is being operated on (unlike map_blocks),
+    # so set all 0 values to a special value and set back at the end of searchsorted
+    res[res == 0] = -1
+    return res[np.newaxis, :]
+
+
+@derived_from(np)
+def searchsorted(a, v, side="left", sorter=None):
+    if a.ndim != 1:
+        raise ValueError("Input array a must be one dimensional")
+
+    if sorter is not None:
+        raise NotImplementedError(
+            "da.searchsorted with a sorter argument is not supported"
+        )
+
+    # call np.searchsorted for each pair of blocks in a and v
+    meta = np.searchsorted(a._meta, v._meta)
+    out = blockwise(
+        _searchsorted_block,
+        list(range(v.ndim + 1)),
+        a,
+        [0],
+        v,
+        list(range(1, v.ndim + 1)),
+        side,
+        None,
+        meta=meta,
+        adjust_chunks={0: 1},  # one row for each block in a
+    )
+
+    # add offsets to take account of the position of each block within the array a
+    a_chunk_sizes = array_safe((0, *a.chunks[0]), like=meta_from_array(a))
+    a_chunk_offsets = np.cumsum(a_chunk_sizes)[:-1]
+    a_chunk_offsets = a_chunk_offsets[(Ellipsis,) + v.ndim * (np.newaxis,)]
+    a_offsets = asarray(a_chunk_offsets, chunks=1)
+    out = where(out < 0, out, out + a_offsets)
+
+    # combine the results from each block (of a)
+    out = out.max(axis=0)
+
+    # fix up any -1 values
+    out[out == -1] = 0
+
+    return out
 
 
 # TODO: dask linspace doesn't support delayed values
@@ -661,8 +793,13 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
 
     Parameters
     ----------
-    a : array_like
-        Input data. The histogram is computed over the flattened array.
+    a : dask.array.Array
+        Input data; the histogram is computed over the flattened
+        array. If the ``weights`` argument is used, the chunks of
+        ``a`` are accessed to check chunking compatibility between
+        ``a`` and ``weights``. If ``weights`` is ``None``, a
+        :py:class:`dask.dataframe.Series` object can be passed as
+        input data.
     bins : int or sequence of scalars, optional
         Either an iterable specifying the ``bins`` or the number of ``bins``
         and a ``range`` argument is required as computing ``min`` and ``max``
@@ -683,7 +820,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
     normed : bool, optional
         This is equivalent to the ``density`` argument, but produces incorrect
         results for unequal bin widths. It should not be used.
-    weights : array_like, optional
+    weights : dask.array.Array, optional
         A dask.array.Array of weights, of the same block structure as ``a``.  Each value in
         ``a`` only contributes its associated weight towards the bin count
         (instead of 1). If ``density`` is True, the weights are
@@ -700,6 +837,7 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         If ``density`` is True, ``bins`` cannot be a single-number delayed
         value. It must be a concrete number, or a (possibly-delayed)
         array/sequence of the bin edges.
+
     Returns
     -------
     hist : dask Array
@@ -707,7 +845,6 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         description of the possible semantics.
     bin_edges : dask Array of dtype float
         Return the bin edges ``(length(hist)+1)``.
-
 
     Examples
     --------
@@ -840,6 +977,295 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
             return n, bins
     else:
         return n, bins
+
+
+def _block_histogramdd(sample, bins, range=None, weights=None):
+    """Call numpy.histogramdd for a blocked/chunked calculation.
+
+    Slurps the result into an additional outer axis via [np.newaxis].
+    This new axis will be used to stack chunked calls of the numpy
+    function and add them together later.
+
+    Returns
+    -------
+    :py:object:`np.ndarray`
+        NumPy array with an additional outer dimension.
+
+    """
+    return np.histogramdd(sample, bins, range=range, weights=weights)[0:1]
+
+
+def histogramdd(sample, bins, range=None, normed=None, weights=None, density=None):
+    """Blocked variant of :func:`numpy.histogramdd`.
+
+    Chunking of the input data (``sample``) is only allowed along the
+    0th (row) axis (the axis corresponding to the total number of
+    samples). Data chunked along the 1st axis (column) axis is not
+    compatible with this function. If weights are used, they must be
+    chunked along the 0th axis identically to the input sample.
+
+    A proper example setup for a three dimensional histogram, where
+    the sample shape is ``(8, 3)`` and weights are shape ``(8,)``,
+    sample chunks would be ``((4, 4), (3,))`` and the weights chunks
+    would be ``((4, 4),)`` a table of the structure:
+
+    +-------+-----------------------+-----------+
+    |       |      sample (8 x 3)   |  weights  |
+    +=======+=====+=====+=====+=====+=====+=====+
+    | chunk | row | `x` | `y` | `z` | row | `w` |
+    +-------+-----+-----+-----+-----+-----+-----+
+    |       |   0 |   5 |   6 |   6 |   0 | 0.5 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   1 |   8 |   9 |   2 |   1 | 0.8 |
+    |   0   +-----+-----+-----+-----+-----+-----+
+    |       |   2 |   3 |   3 |   1 |   2 | 0.3 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   3 |   2 |   5 |   6 |   3 | 0.7 |
+    +-------+-----+-----+-----+-----+-----+-----+
+    |       |   4 |   3 |   1 |   1 |   4 | 0.3 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   5 |   3 |   2 |   9 |   5 | 1.3 |
+    |   1   +-----+-----+-----+-----+-----+-----+
+    |       |   6 |   8 |   1 |   5 |   6 | 0.8 |
+    |       +-----+-----+-----+-----+-----+-----+
+    |       |   7 |   3 |   5 |   3 |   7 | 0.7 |
+    +-------+-----+-----+-----+-----+-----+-----+
+
+    If the sample 0th dimension and weight 0th (row) dimension are
+    chunked differently, a ``ValueError`` will be raised. If
+    coordinate groupings ((x, y, z) trios) are separated by a chunk
+    boundry, then a ``ValueError`` will be raised. We suggest that you
+    rechunk your data if it is of that form.
+
+    The chunks property of the data (and optional weights) are used to
+    check for compatibility with the blocked algorithm (as described
+    above); therefore, you must call `to_dask_array` on a collection
+    from ``dask.dataframe``, i.e. :class:`dask.dataframe.Series` or
+    :class:`dask.dataframe.DataFrame`.
+
+    Parameters
+    ----------
+    sample : dask.array.Array (N, D) or sequence of dask.array.Array
+        Multidimensional data to be histogrammed.
+
+        Note the unusual interpretation of a sample when it is a
+        sequence of dask Arrays:
+
+        * When a (N, D) dask Array, each row is an entry in the sample
+          (coordinate in D dimensional space).
+        * When a sequence of dask Arrays, each element in the sequence
+          is the array of values for a single coordinate. This type of
+          input will be automatically rechunked along the column axis
+          if necessary. This may induce a runtime increase.
+    bins : sequence of arrays describing bin edges, int, or sequence of ints
+        The bin specification.
+
+        The possible binning configurations are:
+
+        * A sequence of arrays describing the monotonically increasing
+          bin edges along each dimension.
+        * A single int describing the total number of bins that will
+          be used in each dimension (this requires the ``range``
+          argument to be defined).
+        * A sequence of ints describing the total number of bins to be
+          used in each dimension (this requires the ``range`` argument
+          to be defined).
+
+        When bins are described by arrays, the rightmost edge is
+        included. Bins described by arrays also allows for non-uniform
+        bin widths.
+    range : sequence of pairs, optional
+        A sequence of length D, each a (min, max) tuple giving the
+        outer bin edges to be used if the edges are not given
+        explicitly in ``bins``. If defined, this argument is required
+        to have an entry for each dimension. Unlike
+        :func:`numpy.histogramdd`, if `bins` does not define bin
+        edges, this argument is required (this function will not
+        automatically use the min and max of of the value in a given
+        dimension because the input data may be lazy in dask).
+    normed : bool, optional
+        An alias for the density argument that behaves identically. To
+        avoid confusion with the broken argument to `histogram`,
+        `density` should be preferred.
+    weights : dask.array.Array, optional
+        An array of values weighing each sample in the input data. The
+        chunks of the weights must be identical to the chunking along
+        the 0th (row) axis of the data sample.
+    density : bool, optional
+        If ``False`` (default), the returned array represents the
+        number of samples in each bin. If ``True``, the returned array
+        represents the probability density function at each bin.
+
+    See Also
+    --------
+    histogram
+
+    Examples
+    --------
+    Computing the histogram in 5 blocks using different bin edges
+    along each dimension:
+
+    >>> import dask.array as da
+    >>> x = da.random.uniform(0, 1, size=(1000, 3), chunks=(200, 3))
+    >>> edges = [
+    ...     np.linspace(0, 1, 5), # 4 bins in 1st dim
+    ...     np.linspace(0, 1, 6), # 5 in the 2nd
+    ...     np.linspace(0, 1, 4), # 3 in the 3rd
+    ... ]
+    >>> h, edges = da.histogramdd(x, bins=edges)
+    >>> result = h.compute()
+    >>> result.shape
+    (4, 5, 3)
+
+    Defining the bins by total number and their ranges, along with
+    using weights:
+
+    >>> bins = (4, 5, 3)
+    >>> ranges = ((0, 1),) * 3  # expands to ((0, 1), (0, 1), (0, 1))
+    >>> w = da.random.uniform(0, 1, size=(1000,), chunks=x.chunksize[0])
+    >>> h, edges = da.histogramdd(x, bins=bins, range=ranges, weights=w)
+    >>> np.isclose(h.sum().compute(), w.sum().compute())
+    True
+
+    """
+
+    # logic used in numpy.histogramdd to handle normed/density.
+    if normed is None:
+        if density is None:
+            density = False
+    elif density is None:
+        # an explicit normed argument was passed, alias it to the new name
+        density = normed
+    else:
+        raise TypeError("Cannot specify both 'normed' and 'density'")
+
+    # check if any dask collections (dc) were passed to bins= or
+    # range= these are unsupported.
+    dc_bins = is_dask_collection(bins)
+    if isinstance(bins, (list, tuple)):
+        dc_bins = dc_bins or any([is_dask_collection(b) for b in bins])
+    dc_range = (
+        any([is_dask_collection(r) for r in range]) if range is not None else False
+    )
+    if dc_bins or dc_range:
+        raise NotImplementedError(
+            "Passing dask collections to bins=... or range=... is not supported."
+        )
+
+    # generate token and name for task
+    token = tokenize(sample, bins, range, weights, density)
+    name = f"histogramdd-sum-{token}"
+
+    # N == total number of samples
+    # D == total number of dimensions
+    try:
+        # Recommended input ND-array
+        N, D = sample.shape
+    except (AttributeError, ValueError):
+        # If we have a sequence of 1D arrays
+        sample = atleast_2d(sample).T
+        N, D = sample.shape
+        # rechunk if necessary
+        if sample.chunksize[1] != D:
+            sample = sample.rechunk((sample.chunksize[0], D))
+
+    # Require only Array or Delayed objects for bins, range, and weights.
+    for argname, val in [("bins", bins), ("range", range), ("weights", weights)]:
+        if not isinstance(bins, (Array, Delayed)) and is_dask_collection(bins):
+            raise TypeError(
+                "Dask types besides Array and Delayed are not supported "
+                "for `histogramdd`. For argument `{}`, got: {!r}".format(argname, val)
+            )
+
+    # Require data to be chunked along the first axis only.
+    if sample.shape[1:] != sample.chunksize[1:]:
+        raise ValueError("Input array can only be chunked along the 0th axis")
+
+    # Require that the chunking of the sample and weights are compatible.
+    if weights is not None and weights.chunks[0] != sample.chunks[0]:
+        raise ValueError(
+            "Input array and weights must have the same shape "
+            "and chunk structure along the first dimension."
+        )
+
+    # if bins is a list, tuple, then make sure the length is the same
+    # as the number dimensions.
+    if isinstance(bins, (list, tuple)):
+        if len(bins) != D:
+            raise ValueError(
+                "The dimension of bins must be equal to the dimension of the sample."
+            )
+
+    # if range is defined, check that it's the right length and also a
+    # sequence of pairs.
+    if range is not None:
+        if len(range) != D:
+            raise ValueError(
+                "range argument requires one entry, a min max pair, per dimension."
+            )
+        if not all(len(r) == 2 for r in range):
+            raise ValueError("range argument should be a sequence of pairs")
+
+    # we will return the edges to mimic the NumPy API (we also use the
+    # edges later as a way to calculate the total number of bins).
+    if isinstance(bins, int):
+        bins = (bins,) * D
+    if all(isinstance(b, int) for b in bins) and all(len(r) == 2 for r in range):
+        edges = [np.linspace(r[0], r[1], b + 1) for b, r in zip(bins, range)]
+    else:
+        edges = [np.asarray(b) for b in bins]
+
+    # With dsk below, we will construct a (D + 1) dimensional array
+    # stacked for each chunk. For example, if the histogram is going
+    # to be 3 dimensions, this creates a stack of cubes (1 cube for
+    # each sample chunk) that will be collapsed into a final cube (the
+    # result).
+
+    # This tuple of zeros represents the chunk index along the columns
+    # (we only allow chunking along the rows).
+    column_zeros = tuple(0 for _ in _range(D))
+
+    if weights is None:
+        dsk = {
+            (name, i, *column_zeros): (_block_histogramdd, k, bins, range)
+            for i, k in enumerate(flatten(sample.__dask_keys__()))
+        }
+        dtype = np.histogramdd([])[0].dtype
+    else:
+        a_keys = flatten(sample.__dask_keys__())
+        w_keys = flatten(weights.__dask_keys__())
+        dsk = {
+            (name, i, *column_zeros): (_block_histogramdd, k, bins, range, w)
+            for i, (k, w) in enumerate(zip(a_keys, w_keys))
+        }
+        dtype = weights.dtype
+
+    deps = (sample,)
+    if weights is not None:
+        deps += (weights,)
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
+
+    nchunks = len(list(flatten(sample.__dask_keys__())))
+    all_nbins = tuple((b.size - 1,) for b in edges)
+    stacked_chunks = ((1,) * nchunks, *all_nbins)
+    mapped = Array(graph, name, stacked_chunks, dtype=dtype)
+
+    # Finally, sum over chunks providing to get the final D
+    # dimensional result array.
+    n = mapped.sum(axis=0)
+
+    if density:
+        # compute array of values to divide by the bin width along
+        # each dimension.
+        width_divider = np.ones(n.shape)
+        for i in _range(D):
+            shape = np.ones(D, int)
+            shape[i] = width_divider.shape[i]
+            width_divider *= np.diff(edges[i]).reshape(shape)
+        width_divider = asarray(width_divider, chunks=n.chunks)
+        return n / width_divider / n.sum(), edges
+
+    return n, [asarray(entry) for entry in edges]
 
 
 @derived_from(np)
@@ -1154,8 +1580,8 @@ def union1d(ar1, ar2):
 
 
 @derived_from(np)
-def ravel(array):
-    return array.reshape((-1,))
+def ravel(array_like):
+    return asanyarray(array_like).reshape((-1,))
 
 
 @derived_from(np)
@@ -1247,7 +1673,7 @@ def _asarray_isnull(values):
 
 
 def isnull(values):
-    """ pandas.isnull for dask arrays """
+    """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
     import pandas as pd  # noqa
 
@@ -1255,7 +1681,7 @@ def isnull(values):
 
 
 def notnull(values):
-    """ pandas.notnull for dask arrays """
+    """pandas.notnull for dask arrays"""
     return ~isnull(values)
 
 
@@ -1361,12 +1787,6 @@ def nonzero(a):
         return (ind,)
 
 
-def _int_piecewise(x, *condlist, **kwargs):
-    return np.piecewise(
-        x, list(condlist), kwargs["funclist"], *kwargs["func_args"], **kwargs["func_kw"]
-    )
-
-
 def _unravel_index_kernel(indices, func_kwargs):
     return np.stack(np.unravel_index(indices, **func_kwargs))
 
@@ -1380,13 +1800,51 @@ def unravel_index(indices, shape, order="C"):
                 dtype=np.intp,
                 chunks=(((len(shape),),) + indices.chunks),
                 new_axis=0,
-                func_kwargs={_unravel_index_keyword: shape, "order": order},
+                func_kwargs={"shape": shape, "order": order},
             )
         )
     else:
         unraveled_indices = tuple(empty((0,), dtype=np.intp, chunks=1) for i in shape)
 
     return unraveled_indices
+
+
+@wraps(np.ravel_multi_index)
+def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
+    if np.isscalar(dims):
+        dims = (dims,)
+    if is_dask_collection(dims) or any(is_dask_collection(d) for d in dims):
+        raise NotImplementedError(
+            f"Dask types are not supported in the `dims` argument: {dims!r}"
+        )
+
+    if is_arraylike(multi_index):
+        index_stack = asarray(multi_index)
+    else:
+        multi_index_arrs = broadcast_arrays(*multi_index)
+        index_stack = stack(multi_index_arrs)
+
+    if not np.isnan(index_stack.shape).any() and len(index_stack) != len(dims):
+        raise ValueError(
+            f"parameter multi_index must be a sequence of length {len(dims)}"
+        )
+    if not np.issubdtype(index_stack.dtype, np.signedinteger):
+        raise TypeError("only int indices permitted")
+    return index_stack.map_blocks(
+        np.ravel_multi_index,
+        dtype=np.intp,
+        chunks=index_stack.chunks[1:],
+        drop_axis=0,
+        dims=dims,
+        mode=mode,
+        order=order,
+    )
+
+
+def _int_piecewise(x, *condlist, **kwargs):
+    return np.piecewise(
+        x, list(condlist), kwargs["funclist"], *kwargs["func_args"], **kwargs["func_kw"]
+    )
 
 
 @derived_from(np)
@@ -1403,16 +1861,119 @@ def piecewise(x, condlist, funclist, *args, **kw):
     )
 
 
+def _select(*args, **kwargs):
+    """
+    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    splits them in half to create ``condlist`` and ``choicelist`` params.
+    """
+    split_at = len(args) // 2
+    condlist = args[:split_at]
+    choicelist = args[split_at:]
+    return np.select(condlist, choicelist, **kwargs)
+
+
+@derived_from(np)
+def select(condlist, choicelist, default=0):
+    # Making the same checks that np.select
+    # Check the size of condlist and choicelist are the same, or abort.
+    if len(condlist) != len(choicelist):
+        raise ValueError("list of cases must be same length as list of conditions")
+
+    if len(condlist) == 0:
+        raise ValueError("select with an empty condition list is not possible")
+
+    choicelist = [asarray(choice) for choice in choicelist]
+
+    try:
+        intermediate_dtype = result_type(*choicelist)
+    except TypeError as e:
+        msg = "Choicelist elements do not have a common dtype."
+        raise TypeError(msg) from e
+
+    blockwise_shape = tuple(range(choicelist[0].ndim))
+
+    condargs = [arg for elem in condlist for arg in (elem, blockwise_shape)]
+    choiceargs = [arg for elem in choicelist for arg in (elem, blockwise_shape)]
+
+    return blockwise(
+        _select,
+        blockwise_shape,
+        *condargs,
+        *choiceargs,
+        dtype=intermediate_dtype,
+        name="select",
+        default=default,
+    )
+
+
+def _partition(total: int, divisor: int) -> Tuple[Tuple[int, ...], Tuple[int, ...]]:
+    """
+    Given a total and a divisor, return two tuples: A tuple containing `divisor` repeated
+    the number of times it divides `total`, and length-1 or empty tuple containing the remainder when
+    `total` is divided by `divisor`. If `divisor` factors `total`, i.e. if the remainder is 0, then
+    `remainder` is empty.
+    """
+    multiples = (divisor,) * (total // divisor)
+    remainder = ()
+    if (total % divisor) > 0:
+        remainder = (total % divisor,)
+    return (multiples, remainder)
+
+
+def aligned_coarsen_chunks(chunks: List[int], multiple: int) -> Tuple[int]:
+    """
+    Returns a new chunking aligned with the coarsening multiple.
+    Any excess is at the end of the array.
+
+    Examples
+    --------
+    >>> aligned_coarsen_chunks(chunks=(1, 2, 3), multiple=4)
+    (4, 2)
+    >>> aligned_coarsen_chunks(chunks=(1, 20, 3, 4), multiple=4)
+    (4, 20, 4)
+    >>> aligned_coarsen_chunks(chunks=(20, 10, 15, 23, 24), multiple=10)
+    (20, 10, 20, 20, 20, 2)
+    """
+    overflow = np.array(chunks) % multiple
+    excess = overflow.sum()
+    new_chunks = np.array(chunks) - overflow
+    # valid chunks are those that are already factorizable by `multiple`
+    chunk_validity = new_chunks == chunks
+    valid_inds, invalid_inds = np.where(chunk_validity)[0], np.where(~chunk_validity)[0]
+    # sort the invalid chunks by size (ascending), then concatenate the results of
+    # sorting the valid chunks by size (ascending)
+    chunk_modification_order = [
+        *invalid_inds[np.argsort(new_chunks[invalid_inds])],
+        *valid_inds[np.argsort(new_chunks[valid_inds])],
+    ]
+    partitioned_excess, remainder = _partition(excess, multiple)
+    # add elements the partitioned excess to the smallest invalid chunks,
+    # then smallest valid chunks if needed.
+    for idx, extra in enumerate(partitioned_excess):
+        new_chunks[chunk_modification_order[idx]] += extra
+    # create excess chunk with remainder, if any remainder exists
+    new_chunks = np.array([*new_chunks, *remainder])
+    # remove 0-sized chunks
+    new_chunks = new_chunks[new_chunks > 0]
+    return tuple(new_chunks)
+
+
 @wraps(chunk.coarsen)
 def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
-    if not trim_excess and not all(
-        bd % div == 0 for i, div in axes.items() for bd in x.chunks[i]
-    ):
-        msg = "Coarsening factor does not align with block dimensions"
+    if not trim_excess and not all(x.shape[i] % div == 0 for i, div in axes.items()):
+        msg = f"Coarsening factors {axes} do not align with array shape {x.shape}."
         raise ValueError(msg)
 
     if "dask" in inspect.getfile(reduction):
         reduction = getattr(np, reduction.__name__)
+
+    new_chunks = {}
+    for i, div in axes.items():
+        aligned = aligned_coarsen_chunks(x.chunks[i], div)
+        if aligned != x.chunks[i]:
+            new_chunks[i] = aligned
+    if new_chunks:
+        x = x.rechunk(new_chunks)
 
     name = "coarsen-" + tokenize(reduction, x, axes, trim_excess)
     dsk = {
@@ -1430,7 +1991,7 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
 
 
 def split_at_breaks(array, breaks, axis=0):
-    """ Split an array into a list of arrays (using slices) at the given breaks
+    """Split an array into a list of arrays (using slices) at the given breaks
 
     >>> split_at_breaks(np.arange(6), [3, 5])
     [array([0, 1, 2]), array([3, 4]), array([5])]
@@ -1491,6 +2052,49 @@ def insert(arr, obj, values, axis):
     return concatenate(interleaved, axis=axis)
 
 
+@derived_from(np)
+def delete(arr, obj, axis):
+    """
+    NOTE: If ``obj`` is a dask array it is implicitly computed when this function
+    is called.
+    """
+    # axis is a required argument here to avoid needing to deal with the numpy
+    # default case (which reshapes the array to make it flat)
+    axis = validate_axis(axis, arr.ndim)
+
+    if isinstance(obj, slice):
+        tmp = np.arange(*obj.indices(arr.shape[axis]))
+        obj = tmp[::-1] if obj.step and obj.step < 0 else tmp
+    else:
+        obj = np.asarray(obj)
+        obj = np.where(obj < 0, obj + arr.shape[axis], obj)
+        obj = np.unique(obj)
+
+    target_arr = split_at_breaks(arr, obj, axis)
+
+    target_arr = [
+        arr[
+            tuple(slice(1, None) if axis == n else slice(None) for n in range(arr.ndim))
+        ]
+        if i != 0
+        else arr
+        for i, arr in enumerate(target_arr)
+    ]
+    return concatenate(target_arr, axis=axis)
+
+
+@derived_from(np)
+def append(arr, values, axis=None):
+    # based on numpy.append
+    arr = asanyarray(arr)
+    if axis is None:
+        if arr.ndim != 1:
+            arr = arr.ravel()
+        values = ravel(asanyarray(values))
+        axis = arr.ndim - 1
+    return concatenate((arr, values), axis=axis)
+
+
 def _average(a, axis=None, weights=None, returned=False, is_masked=False):
     # This was minimally modified from numpy.average
     # See numpy license at https://github.com/numpy/numpy/blob/master/LICENSE.txt
@@ -1545,3 +2149,51 @@ def _average(a, axis=None, weights=None, returned=False, is_masked=False):
 @derived_from(np)
 def average(a, axis=None, weights=None, returned=False):
     return _average(a, axis, weights, returned, is_masked=False)
+
+
+@derived_from(np)
+def tril(m, k=0):
+    m = asarray_safe(m, like=m)
+    mask = tri(
+        *m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m)
+    )
+
+    return where(mask, m, zeros_like_safe(m, shape=(1,)))
+
+
+@derived_from(np)
+def triu(m, k=0):
+    m = asarray_safe(m, like=m)
+    mask = tri(
+        *m.shape[-2:],
+        k=k - 1,
+        dtype=bool,
+        chunks=m.chunks[-2:],
+        like=meta_from_array(m),
+    )
+
+    return where(mask, zeros_like_safe(m, shape=(1,)), m)
+
+
+@derived_from(np)
+def tril_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(tri(n, m, k=k, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def tril_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return tril_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)
+
+
+@derived_from(np)
+def triu_indices(n, k=0, m=None, chunks="auto"):
+    return nonzero(~tri(n, m, k=k - 1, dtype=bool, chunks=chunks))
+
+
+@derived_from(np)
+def triu_indices_from(arr, k=0):
+    if arr.ndim != 2:
+        raise ValueError("input array must be 2-d")
+    return triu_indices(arr.shape[-2], k=k, m=arr.shape[-1], chunks=arr.chunks)

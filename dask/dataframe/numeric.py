@@ -1,11 +1,10 @@
 import pandas as pd
 from pandas.api.types import is_scalar as pd_is_scalar
 
-from ..utils import derived_from
-from ..delayed import delayed
 from ..array import Array
+from ..delayed import delayed
+from ..utils import derived_from
 from .core import Series
-
 
 __all__ = ("to_numeric",)
 
@@ -45,7 +44,10 @@ def to_numeric(arg, errors="raise", meta=None):
         )
     if is_array:
         return arg.map_blocks(
-            pd.to_numeric, name=arg._name + "-to_numeric", meta=meta, errors=errors,
+            pd.to_numeric,
+            name=arg._name + "-to_numeric",
+            meta=meta,
+            errors=errors,
         )
     if is_scalar:
         return delayed(pd.to_numeric, pure=True)(arg, errors=errors)

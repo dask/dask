@@ -1,10 +1,10 @@
-import pandas as pd
 from textwrap import dedent
 
-import dask.dataframe as dd
-import dask.array as da
 import numpy as np
+import pandas as pd
 
+import dask.array as da
+import dask.dataframe as dd
 
 style = """<style scoped>
     .dataframe tbody tr th:only-of-type {
@@ -405,7 +405,7 @@ def test_dataframe_format_long():
     assert ddf.to_html() == exp
 
     # table is boxed with div
-    exp = u"""<div><strong>Dask DataFrame Structure:</strong></div>
+    exp = """<div><strong>Dask DataFrame Structure:</strong></div>
 <div>
 {style}{exp_table}
 </div>

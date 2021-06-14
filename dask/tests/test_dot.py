@@ -1,15 +1,15 @@
-import os
-from functools import partial
-import re
-from operator import add, neg
-import sys
 import copy
-import pytest
+import os
+import re
+import sys
+from functools import partial
+from operator import add, neg
 
+import pytest
 
 if sys.flags.optimize != 2:
     pytest.importorskip("graphviz")
-    from dask.dot import dot_graph, task_label, label, to_graphviz
+    from dask.dot import dot_graph, label, task_label, to_graphviz
 else:
     pytestmark = pytest.mark.skipif(
         True, reason="graphviz exception with Python -OO flag"
@@ -19,7 +19,7 @@ from dask import delayed
 from dask.utils import ensure_not_exists
 
 try:
-    from IPython.display import Image, SVG
+    from IPython.display import SVG, Image
 except ImportError:
     ipython_not_installed = True
     Image = None
@@ -285,7 +285,9 @@ def test_immutable_attributes():
     attrs_data_test = copy.deepcopy(attrs_data)
 
     to_graphviz(
-        dsk, function_attributes=attrs_func, data_attributes=attrs_data,
+        dsk,
+        function_attributes=attrs_func,
+        data_attributes=attrs_data,
     )
 
     assert attrs_func_test == attrs_func

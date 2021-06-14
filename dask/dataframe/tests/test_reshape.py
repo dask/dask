@@ -3,9 +3,8 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-
 from dask.dataframe._compat import tm
-from dask.dataframe.utils import assert_eq, make_meta, PANDAS_GT_0240
+from dask.dataframe.utils import assert_eq, make_meta
 
 
 @pytest.mark.parametrize(
@@ -95,11 +94,7 @@ def test_get_dummies_sparse():
     res = dd.get_dummies(ds, sparse=True)
     assert_eq(exp, res)
 
-    if PANDAS_GT_0240:
-        exp_dtype = "Sparse[uint8, 0]"
-    else:
-        exp_dtype = "uint8"
-    assert res.compute().a.dtype == exp_dtype
+    assert res.compute().a.dtype == "Sparse[uint8, 0]"
     assert pd.api.types.is_sparse(res.a.compute())
 
     exp = pd.get_dummies(s.to_frame(name="a"), sparse=True)
@@ -121,11 +116,7 @@ def test_get_dummies_sparse_mix():
     res = dd.get_dummies(ddf, sparse=True)
     assert_eq(exp, res)
 
-    if PANDAS_GT_0240:
-        exp_dtype = "Sparse[uint8, 0]"
-    else:
-        exp_dtype = "uint8"
-    assert res.compute().A_a.dtype == exp_dtype
+    assert res.compute().A_a.dtype == "Sparse[uint8, 0]"
     assert pd.api.types.is_sparse(res.A_a.compute())
 
 
@@ -158,7 +149,9 @@ def test_get_dummies_errors():
     # unknown categories
     df = pd.DataFrame({"x": list("abcbc"), "y": list("bcbcb")})
     ddf = dd.from_pandas(df, npartitions=2)
-    ddf._meta = make_meta({"x": "category", "y": "category"})
+    ddf._meta = make_meta(
+        {"x": "category", "y": "category"}, parent_meta=pd.DataFrame()
+    )
 
     with pytest.raises(NotImplementedError):
         dd.get_dummies(ddf)
@@ -181,7 +174,7 @@ def test_pivot_table(values, aggfunc):
             "D": np.random.randn(100),
         }
     )
-    ddf = dd.from_pandas(df, 5)
+    ddf = dd.from_pandas(df, 5).repartition((0, 20, 40, 60, 80, 98, 99))
 
     res = dd.pivot_table(ddf, index="A", columns="C", values=values, aggfunc=aggfunc)
     exp = pd.pivot_table(df, index="A", columns="C", values=values, aggfunc=aggfunc)
@@ -266,7 +259,9 @@ def test_pivot_table_errors():
     assert msg in str(err.value)
 
     # unknown categories
-    ddf._meta = make_meta({"A": object, "B": float, "C": "category"})
+    ddf._meta = make_meta(
+        {"A": object, "B": float, "C": "category"}, parent_meta=pd.DataFrame()
+    )
     msg = "'columns' must have known categories"
     with pytest.raises(ValueError) as err:
         dd.pivot_table(ddf, index="A", columns="C", values=["B"])

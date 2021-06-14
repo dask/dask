@@ -1,6 +1,7 @@
-import pandas as pd
 import json
 from uuid import uuid4
+
+import pandas as pd
 
 
 def _get_pyarrow_dtypes(schema, categories):
@@ -19,7 +20,7 @@ def _get_pyarrow_dtypes(schema, categories):
                 "timezone", None
             )
             for c in pandas_metadata.get("columns", [])
-            if c["metadata"]
+            if c["pandas_type"] in ("datetime", "datetimetz") and c["metadata"]
         }
     else:
         pandas_metadata_dtypes = {}
@@ -96,6 +97,5 @@ def _meta_from_dtypes(to_read_columns, file_dtypes, index_cols, column_index_nam
 
 
 def _guid():
-    """ Simple utility function to get random hex string
-    """
+    """Simple utility function to get random hex string"""
     return uuid4().hex

@@ -6,29 +6,30 @@ import warnings
 import numpy as np
 import pandas as pd
 
+from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..utils import M, derived_from, funcname, itemgetter
 from .core import (
     DataFrame,
     Series,
+    _extract_meta,
     aca,
     map_partitions,
     new_dd_object,
     no_default,
     split_out_on_index,
-    _extract_meta,
 )
-from .methods import drop_columns, concat
+from .methods import concat, drop_columns
 from .shuffle import shuffle
 from .utils import (
-    make_meta,
+    PANDAS_GT_100,
+    PANDAS_GT_110,
     insert_meta_param_description,
-    raise_on_meta_error,
-    is_series_like,
     is_dataframe_like,
+    is_series_like,
+    make_meta,
+    raise_on_meta_error,
 )
-from ..base import tokenize
-from ..utils import derived_from, M, funcname, itemgetter
-from ..highlevelgraph import HighLevelGraph
-
 
 # #############################################
 #
@@ -64,8 +65,7 @@ from ..highlevelgraph import HighLevelGraph
 
 
 def _determine_levels(index):
-    """Determine the correct levels argument to groupby.
-    """
+    """Determine the correct levels argument to groupby."""
     if isinstance(index, (tuple, list)) and len(index) > 1:
         return list(range(len(index)))
     else:
@@ -73,8 +73,7 @@ def _determine_levels(index):
 
 
 def _normalize_index(df, index):
-    """Replace series with column names in an index wherever possible.
-    """
+    """Replace series with column names in an index wherever possible."""
     if not isinstance(df, DataFrame):
         return index
 
@@ -163,24 +162,26 @@ def _groupby_raise_unaligned(df, **kwargs):
 
 
 def _groupby_slice_apply(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+    df, grouper, key, func, *args, group_keys=True, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
-    g = df.groupby(grouper, group_keys=group_keys, **dropna)
+    observed = {"observed": observed} if observed is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
     return g.apply(func, *args, **kwargs)
 
 
 def _groupby_slice_transform(
-    df, grouper, key, func, *args, group_keys=True, dropna=None, **kwargs
+    df, grouper, key, func, *args, group_keys=True, dropna=None, observed=None, **kwargs
 ):
     # No need to use raise if unaligned here - this is only called after
     # shuffling, which makes everything aligned already
     dropna = {"dropna": dropna} if dropna is not None else {}
-    g = df.groupby(grouper, group_keys=group_keys, **dropna)
+    observed = {"observed": observed} if observed is not None else {}
+    g = df.groupby(grouper, group_keys=group_keys, **observed, **dropna)
     if key:
         g = g[key]
 
@@ -214,7 +215,7 @@ def _groupby_get_group(df, by_key, get_key, columns):
 ###############################################################
 
 
-class Aggregation(object):
+class Aggregation:
     """User defined groupby-aggregation.
 
     This class allows users to define their own custom aggregation in terms of
@@ -275,18 +276,24 @@ class Aggregation(object):
 
 
 def _groupby_aggregate(
-    df, aggfunc=None, levels=None, dropna=None, sort=False, **kwargs
+    df, aggfunc=None, levels=None, dropna=None, sort=False, observed=None, **kwargs
 ):
     dropna = {"dropna": dropna} if dropna is not None else {}
-    return aggfunc(df.groupby(level=levels, sort=sort, **dropna), **kwargs)
+    if not PANDAS_GT_100 and observed:
+        raise NotImplementedError("``observed`` is only supported for pandas >= 1.0.0")
+    observed = {"observed": observed} if observed is not None else {}
+
+    grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
+    return aggfunc(grouped, **kwargs)
 
 
-def _apply_chunk(df, *index, dropna=None, **kwargs):
+def _apply_chunk(df, *index, dropna=None, observed=None, **kwargs):
     func = kwargs.pop("chunk")
     columns = kwargs.pop("columns")
     dropna = {"dropna": dropna} if dropna is not None else {}
-    g = _groupby_raise_unaligned(df, by=index, **dropna)
+    observed = {"observed": observed} if observed is not None else {}
 
+    g = _groupby_raise_unaligned(df, by=index, **observed, **dropna)
     if is_series_like(df) or columns is None:
         return func(g, **kwargs)
     else:
@@ -402,7 +409,7 @@ def _cov_chunk(df, *index):
     Returns
     -------
     tuple
-        Processed X, Multipled Cols,
+        Processed X, Multiplied Cols,
     """
     if is_series_like(df):
         df = df.to_frame()
@@ -462,7 +469,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
     # when index is None we probably have selected a particular column
     # df.groupby('a')[['b']].cov()
     if len(idx_vals) == 1 and all(n is None for n in idx_vals):
-        idx_vals = list(set(inv_col_mapping.keys()) - set(total_sums.columns))
+        idx_vals = list(inv_col_mapping.keys() - set(total_sums.columns))
 
     for idx, val in enumerate(idx_vals):
         idx_name = inv_col_mapping.get(val, val)
@@ -478,7 +485,7 @@ def _cov_agg(_t, levels, ddof, std=False, sort=False):
 
     keys = list(col_mapping.keys())
     for level in range(len(result.columns.levels)):
-        result.columns.set_levels(keys, level=level, inplace=True)
+        result.columns = result.columns.set_levels(keys, level=level)
 
     result.index.set_names(idx_mapping, inplace=True)
 
@@ -661,7 +668,7 @@ def _build_agg_args(spec):
     Parameters
     ----------
     spec: a list of (result-column, aggregation-function, input-column) triples.
-        To work with all arugment forms understood by pandas use
+        To work with all argument forms understood by pandas use
         ``_normalize_spec`` to normalize the argment before passing it on to
         ``_build_agg_args``.
 
@@ -670,7 +677,7 @@ def _build_agg_args(spec):
     chunk_funcs: a list of (intermediate-column, function, keyword) triples
         that are applied on grouped chunks of the initial dataframe.
 
-    agg_funcs: a list of (intermediate-column, functions, keword) triples that
+    agg_funcs: a list of (intermediate-column, functions, keyword) triples that
         are applied on the grouped concatination of the preprocessed chunks.
 
     finalizers: a list of (result-column, function, keyword) triples that are
@@ -738,6 +745,9 @@ def _build_agg_args_single(result_column, func, input_column):
 
     elif func == "mean":
         return _build_agg_args_mean(result_column, func, input_column)
+
+    elif func == "list":
+        return _build_agg_args_list(result_column, func, input_column)
 
     elif isinstance(func, Aggregation):
         return _build_agg_args_custom(result_column, func, input_column)
@@ -819,6 +829,33 @@ def _build_agg_args_mean(result_column, func, input_column):
             _finalize_mean,
             dict(sum_column=int_sum, count_column=int_count),
         ),
+    )
+
+
+def _build_agg_args_list(result_column, func, input_column):
+    intermediate = _make_agg_id("list", input_column)
+
+    return dict(
+        chunk_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(column=input_column, func=lambda s: s.apply(list)),
+            )
+        ],
+        aggregate_funcs=[
+            (
+                intermediate,
+                _apply_func_to_column,
+                dict(
+                    column=intermediate,
+                    func=lambda s0: s0.apply(
+                        lambda chunks: list(it.chain.from_iterable(chunks))
+                    ),
+                ),
+            )
+        ],
+        finalizer=(result_column, itemgetter(intermediate), dict()),
     )
 
 
@@ -908,14 +945,16 @@ def _compute_sum_of_squares(grouped, column):
     return df.groupby(keys).sum()
 
 
-def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False):
+def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwargs):
     # finish the final aggregation level
-    df = _groupby_apply_funcs(df, funcs=aggregate_funcs, level=level, sort=sort)
+    df = _groupby_apply_funcs(
+        df, funcs=aggregate_funcs, level=level, sort=sort, **kwargs
+    )
 
     # and finalize the result
     result = collections.OrderedDict()
-    for result_column, func, kwargs in finalize_funcs:
-        result[result_column] = func(df, **kwargs)
+    for result_column, func, finalize_kwargs in finalize_funcs:
+        result[result_column] = func(df, **finalize_kwargs)
 
     return type(df)(result)
 
@@ -982,8 +1021,8 @@ def _cumcount_aggregate(a, b, fill_value=None):
     return a.add(b, fill_value=fill_value) + 1
 
 
-class _GroupBy(object):
-    """ Superclass for DataFrameGroupBy and SeriesGroupBy
+class _GroupBy:
+    """Superclass for DataFrameGroupBy and SeriesGroupBy
 
     Parameters
     ----------
@@ -1001,10 +1040,21 @@ class _GroupBy(object):
     sort: bool, defult None
         Passed along to aggregation methods. If allowed,
         the output aggregation will have sorted keys.
+    observed: bool, default False
+        This only applies if any of the groupers are Categoricals.
+        If True: only show observed values for categorical groupers.
+        If False: show all values for categorical groupers.
     """
 
     def __init__(
-        self, df, by=None, slice=None, group_keys=True, dropna=None, sort=None
+        self,
+        df,
+        by=None,
+        slice=None,
+        group_keys=True,
+        dropna=None,
+        sort=None,
+        observed=None,
     ):
 
         assert isinstance(df, (DataFrame, Series))
@@ -1048,8 +1098,13 @@ class _GroupBy(object):
         if dropna is not None:
             self.dropna["dropna"] = dropna
 
+        # Hold off on setting observed by default: https://github.com/dask/dask/issues/6951
+        self.observed = {}
+        if observed is not None:
+            self.observed["observed"] = observed
+
         self._meta = self.obj._meta.groupby(
-            index_meta, group_keys=group_keys, **self.dropna
+            index_meta, group_keys=group_keys, **self.observed, **self.dropna
         )
 
     @property
@@ -1071,7 +1126,12 @@ class _GroupBy(object):
         else:
             index_meta = self.index
 
-        grouped = sample.groupby(index_meta, group_keys=self.group_keys, **self.dropna)
+        grouped = sample.groupby(
+            index_meta,
+            group_keys=self.group_keys,
+            **self.observed,
+            **self.dropna,
+        )
         return _maybe_slice(grouped, self._slice)
 
     def _aca_agg(
@@ -1099,14 +1159,22 @@ class _GroupBy(object):
             else [self.obj] + self.index,
             chunk=_apply_chunk,
             chunk_kwargs=dict(
-                chunk=func, columns=columns, **chunk_kwargs, **self.dropna
+                chunk=func,
+                columns=columns,
+                **self.observed,
+                **chunk_kwargs,
+                **self.dropna,
             ),
             aggregate=_groupby_aggregate,
             meta=meta,
             token=token,
             split_every=split_every,
             aggregate_kwargs=dict(
-                aggfunc=aggfunc, levels=levels, **aggregate_kwargs, **self.dropna
+                aggfunc=aggfunc,
+                levels=levels,
+                **self.observed,
+                **aggregate_kwargs,
+                **self.dropna,
             ),
             split_out=split_out,
             split_out_setup=split_out_on_index,
@@ -1114,7 +1182,7 @@ class _GroupBy(object):
         )
 
     def _cum_agg(self, token, chunk, aggregate, initial):
-        """ Wrapper for cumulative groupby operation """
+        """Wrapper for cumulative groupby operation"""
         meta = chunk(self._meta)
         columns = meta.name if is_series_like(meta) else meta.columns
         index = self.index if isinstance(self.index, list) else [self.index]
@@ -1133,7 +1201,7 @@ class _GroupBy(object):
             columns=columns,
             token=name_part,
             meta=meta,
-            **self.dropna
+            **self.dropna,
         )
 
         cumpart_raw_frame = (
@@ -1162,7 +1230,7 @@ class _GroupBy(object):
             chunk=M.last,
             meta=meta,
             token=name_last,
-            **self.dropna
+            **self.dropna,
         )
 
         # aggregate cumulated partitions and its previous last element
@@ -1526,15 +1594,27 @@ class _GroupBy(object):
         else:
             chunk_args = [self.obj] + self.index
 
+        if not PANDAS_GT_110 and self.dropna:
+            raise NotImplementedError(
+                "dropna is not a valid argument for dask.groupby.agg"
+                f"if pandas < 1.1.0. Pandas version is {pd.__version__}"
+            )
+
         return aca(
             chunk_args,
             chunk=_groupby_apply_funcs,
-            chunk_kwargs=dict(funcs=chunk_funcs),
+            chunk_kwargs=dict(funcs=chunk_funcs, **self.observed, **self.dropna),
             combine=_groupby_apply_funcs,
-            combine_kwargs=dict(funcs=aggregate_funcs, level=levels),
+            combine_kwargs=dict(
+                funcs=aggregate_funcs, level=levels, **self.observed, **self.dropna
+            ),
             aggregate=_agg_finalize,
             aggregate_kwargs=dict(
-                aggregate_funcs=aggregate_funcs, finalize_funcs=finalizers, level=levels
+                aggregate_funcs=aggregate_funcs,
+                finalize_funcs=finalizers,
+                level=levels,
+                **self.observed,
+                **self.dropna,
             ),
             token="aggregate",
             split_every=split_every,
@@ -1545,7 +1625,7 @@ class _GroupBy(object):
 
     @insert_meta_param_description(pad=12)
     def apply(self, func, *args, **kwargs):
-        """ Parallel version of pandas GroupBy.apply
+        """Parallel version of pandas GroupBy.apply
 
         This mimics the pandas version except for the following:
 
@@ -1593,7 +1673,7 @@ class _GroupBy(object):
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta(meta)
+        meta = make_meta(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(
@@ -1625,15 +1705,16 @@ class _GroupBy(object):
             token=funcname(func),
             *args,
             group_keys=self.group_keys,
+            **self.observed,
             **self.dropna,
-            **kwargs
+            **kwargs,
         )
 
         return df3
 
     @insert_meta_param_description(pad=12)
     def transform(self, func, *args, **kwargs):
-        """ Parallel version of pandas GroupBy.transform
+        """Parallel version of pandas GroupBy.transform
 
         This mimics the pandas version except for the following:
 
@@ -1681,7 +1762,7 @@ class _GroupBy(object):
             )
             warnings.warn(msg, stacklevel=2)
 
-        meta = make_meta(meta)
+        meta = make_meta(meta, parent_meta=self._meta.obj)
 
         # Validate self.index
         if isinstance(self.index, list) and any(
@@ -1713,8 +1794,9 @@ class _GroupBy(object):
             token=funcname(func),
             *args,
             group_keys=self.group_keys,
+            **self.observed,
             **self.dropna,
-            **kwargs
+            **kwargs,
         )
 
         return df3
@@ -1758,9 +1840,7 @@ class DataFrameGroupBy(_GroupBy):
         if arg == "size":
             return self.size()
 
-        return super(DataFrameGroupBy, self).aggregate(
-            arg, split_every=split_every, split_out=split_out
-        )
+        return super().aggregate(arg, split_every=split_every, split_out=split_out)
 
     @derived_from(pd.core.groupby.DataFrameGroupBy)
     def agg(self, arg, split_every=None, split_out=1):
@@ -1771,8 +1851,10 @@ class SeriesGroupBy(_GroupBy):
 
     _token_prefix = "series-groupby-"
 
-    def __init__(self, df, by=None, slice=None, **kwargs):
+    def __init__(self, df, by=None, slice=None, observed=None, **kwargs):
         # for any non series object, raise pandas-compat error message
+        # Hold off on setting observed by default: https://github.com/dask/dask/issues/6951
+        observed = {"observed": observed} if observed is not None else {}
 
         if isinstance(df, Series):
             if isinstance(by, Series):
@@ -1783,12 +1865,13 @@ class SeriesGroupBy(_GroupBy):
 
                 non_series_items = [item for item in by if not isinstance(item, Series)]
                 # raise error from pandas, if applicable
-                df._meta.groupby(non_series_items)
+
+                df._meta.groupby(non_series_items, **observed)
             else:
                 # raise error from pandas, if applicable
-                df._meta.groupby(by)
+                df._meta.groupby(by, **observed)
 
-        super(SeriesGroupBy, self).__init__(df, by=by, slice=slice, **kwargs)
+        super().__init__(df, by=by, slice=slice, **observed, **kwargs)
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def nunique(self, split_every=None, split_out=1):
@@ -1830,9 +1913,7 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def aggregate(self, arg, split_every=None, split_out=1):
-        result = super(SeriesGroupBy, self).aggregate(
-            arg, split_every=split_every, split_out=split_out
-        )
+        result = super().aggregate(arg, split_every=split_every, split_out=split_out)
         if self._slice:
             result = result[self._slice]
 
@@ -1849,7 +1930,7 @@ class SeriesGroupBy(_GroupBy):
     def value_counts(self, split_every=None, split_out=1):
         return self._aca_agg(
             token="value_counts",
-            func=M.value_counts,
+            func=_value_counts,
             aggfunc=_value_counts_aggregate,
             split_every=split_every,
             split_out=split_out,
@@ -1874,7 +1955,14 @@ def _unique_aggregate(series_gb, name=None):
     return ret
 
 
+def _value_counts(x, **kwargs):
+    if len(x):
+        return M.value_counts(x, **kwargs)
+    else:
+        return pd.Series(dtype=int)
+
+
 def _value_counts_aggregate(series_gb):
-    to_concat = {k: v.sum(level=1) for k, v in series_gb}
+    to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
     names = list(series_gb.obj.index.names)
     return pd.Series(pd.concat(to_concat, names=names))

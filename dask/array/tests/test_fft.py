@@ -1,16 +1,13 @@
 from itertools import combinations_with_replacement
 
 import numpy as np
-
 import pytest
 
 import dask.array as da
 import dask.array.fft
+from dask.array.core import normalize_chunks
 from dask.array.fft import fft_wrap
 from dask.array.utils import assert_eq, same_keys
-
-from dask.array.core import normalize_chunks
-
 
 all_1d_funcnames = ["fft", "ifft", "rfft", "irfft", "hfft", "ihfft"]
 

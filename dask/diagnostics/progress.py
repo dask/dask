@@ -55,7 +55,7 @@ class ProgressBar(Callback):
 
     The duration of the last computation is available as an attribute
 
-    >>> pbar = ProgressBar()
+    >>> pbar = ProgressBar()                # doctest: +SKIP
     >>> with pbar:                          # doctest: +SKIP
     ...     out = some_computation.compute()
     [########################################] | 100% Completed | 10.4 s
@@ -73,6 +73,9 @@ class ProgressBar(Callback):
 
     def __init__(self, minimum=0, width=40, dt=0.1, out=None):
         if out is None:
+            # Warning, on windows, stdout can still be None if
+            # an application is started as GUI Application
+            # https://docs.python.org/3/library/sys.html#sys.__stderr__
             out = sys.stdout
         self._minimum = minimum
         self._width = width
@@ -91,7 +94,8 @@ class ProgressBar(Callback):
 
     def _pretask(self, key, dsk, state):
         self._state = state
-        self._file.flush()
+        if self._file is not None:
+            self._file.flush()
 
     def _finish(self, dsk, state, errored):
         self._running = False
@@ -104,8 +108,9 @@ class ProgressBar(Callback):
             self._draw_bar(1, elapsed)
         else:
             self._update_bar(elapsed)
-        self._file.write("\n")
-        self._file.flush()
+        if self._file is not None:
+            self._file.write("\n")
+            self._file.flush()
 
     def _timer_func(self):
         """Background thread for updating the progress bar"""
@@ -133,5 +138,6 @@ class ProgressBar(Callback):
             bar, self._width, percent, elapsed
         )
         with ignoring(ValueError):
-            self._file.write(msg)
-            self._file.flush()
+            if self._file is not None:
+                self._file.write(msg)
+                self._file.flush()

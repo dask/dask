@@ -1,11 +1,11 @@
-from contextlib import contextmanager
 import io
+from contextlib import contextmanager
 
 import pytest
 
 # import dask
 from dask.dataframe.io.sql import read_sql_table
-from dask.dataframe.utils import assert_eq, PANDAS_GT_0240
+from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile
 
 pd = pytest.importorskip("pandas")
@@ -29,7 +29,7 @@ Garreth,6,20,0
 df = pd.read_csv(io.StringIO(data), index_col="number")
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def db():
     with tmpfile() as f:
         uri = "sqlite:///%s" % f
@@ -38,7 +38,7 @@ def db():
 
 
 def test_empty(db):
-    from sqlalchemy import create_engine, MetaData, Table, Column, Integer
+    from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 
     with tmpfile() as f:
         uri = "sqlite:///%s" % f
@@ -59,11 +59,62 @@ def test_empty(db):
         assert pd_dataframe.empty is True
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The default dtype for empty Series " "will be 'object' instead of 'float64'"
+)
+@pytest.mark.parametrize("use_head", [True, False])
+def test_single_column(db, use_head):
+    from sqlalchemy import Column, Integer, MetaData, Table, create_engine
+
+    with tmpfile() as f:
+        uri = "sqlite:///%s" % f
+        metadata = MetaData()
+        engine = create_engine(uri)
+        table = Table(
+            "single_column",
+            metadata,
+            Column("id", Integer, primary_key=True),
+        )
+        metadata.create_all(engine)
+        test_data = pd.DataFrame({"id": list(range(50))}).set_index("id")
+        test_data.to_sql(table.name, uri, index=True, if_exists="replace")
+
+        if use_head:
+            dask_df = read_sql_table(table.name, uri, index_col="id", npartitions=2)
+        else:
+            dask_df = read_sql_table(
+                table.name,
+                uri,
+                head_rows=0,
+                npartitions=2,
+                meta=test_data.iloc[:0],
+                index_col="id",
+            )
+        assert dask_df.index.name == "id"
+        assert dask_df.npartitions == 2
+        pd_dataframe = dask_df.compute()
+        assert_eq(test_data, pd_dataframe)
+
+
+def test_passing_engine_as_uri_raises_helpful_error(db):
+    # https://github.com/dask/dask/issues/6473
+    from sqlalchemy import create_engine
+
+    df = pd.DataFrame([{"i": i, "s": str(i) * 2} for i in range(4)])
+    ddf = dd.from_pandas(df, npartitions=2)
+
+    with tmpfile() as f:
+        db = "sqlite:///%s" % f
+        engine = create_engine(db)
+        with pytest.raises(ValueError, match="Expected URI to be a string"):
+            ddf.to_sql("test", engine, if_exists="replace")
+
+
 @pytest.mark.skip(
     reason="Requires a postgres server. Sqlite does not support multiple schemas."
 )
 def test_empty_other_schema():
-    from sqlalchemy import create_engine, MetaData, Table, Column, Integer, event, DDL
+    from sqlalchemy import DDL, Column, Integer, MetaData, Table, create_engine, event
 
     # Database configurations.
     pg_host = "localhost"
@@ -232,6 +283,50 @@ def test_division_or_partition(db):
     assert_eq(out, df)
 
 
+def test_meta(db):
+    data = read_sql_table(
+        "test", db, index_col="number", meta=dd.from_pandas(df, npartitions=1)
+    ).compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_meta_no_head_rows(db):
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        npartitions=2,
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+    data = read_sql_table(
+        "test",
+        db,
+        index_col="number",
+        meta=dd.from_pandas(df, npartitions=1),
+        divisions=[0, 3, 6],
+        head_rows=0,
+    )
+    assert len(data.divisions) == 3
+    data = data.compute()
+    assert (data.name == df.name).all()
+    assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_no_meta_no_head_rows(db):
+    with pytest.raises(ValueError):
+        read_sql_table("test", db, index_col="number", head_rows=0, npartitions=1)
+
+
 def test_range(db):
     data = read_sql_table("test", db, npartitions=2, index_col="number", limits=[1, 4])
     assert data.index.min().compute() == 1
@@ -347,7 +442,12 @@ def tmp_db_uri():
 @pytest.mark.parametrize("parallel", (False, True))
 def test_to_sql(npartitions, parallel):
     df_by_age = df.set_index("age")
-    df_appended = pd.concat([df, df,])
+    df_appended = pd.concat(
+        [
+            df,
+            df,
+        ]
+    )
 
     ddf = dd.from_pandas(df, npartitions)
     ddf_by_age = ddf.set_index("age")
@@ -414,17 +514,7 @@ def test_to_sql(npartitions, parallel):
 def test_to_sql_kwargs():
     ddf = dd.from_pandas(df, 2)
     with tmp_db_uri() as uri:
-        # "method" keyword is allowed iff pandas>=0.24.0
-        if PANDAS_GT_0240:
-            ddf.to_sql("test", uri, method="multi")
-        else:
-            with pytest.raises(
-                NotImplementedError,
-                match=r"'method' requires pandas>=0.24.0. You have version 0.23.\d",
-            ):
-                ddf.to_sql("test", uri, method="multi")
-
-        # Other, unknown keywords always disallowed
+        ddf.to_sql("test", uri, method="multi")
         with pytest.raises(
             TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"
         ):

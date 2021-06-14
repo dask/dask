@@ -1,7 +1,7 @@
 .. note::
 
     Help inform future development and improve the Dask community experience -
-    take the `2020 Dask User Survey <https://forms.gle/7k9fWx3rwRWL2sPG8>`_
+    take the `2021 Dask User Survey <https://forms.gle/F7QSGpSHwBWu8NCg8>`_
 
 ====
 Dask
@@ -175,6 +175,7 @@ messy situations in everyday problems.
    diagnostics-local.rst
    diagnostics-distributed.rst
    debugging.rst
+   order.rst
 
 .. toctree::
    :maxdepth: 1
@@ -199,7 +200,7 @@ messy situations in everyday problems.
    logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
-.. _`3-clause BSD license`: https://github.com/dask/dask/blob/master/LICENSE.txt
+.. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt
 
 .. _`#dask tag`: https://stackoverflow.com/questions/tagged/dask
 .. _`GitHub issue tracker`: https://github.com/dask/dask/issues

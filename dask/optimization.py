@@ -1,33 +1,35 @@
 import math
 import numbers
+import uuid
 from enum import Enum
 
 from . import config, core, utils
 from .core import (
-    istask,
+    flatten,
     get_dependencies,
+    ishashable,
+    istask,
+    reverse_dict,
     subs,
     toposort,
-    flatten,
-    reverse_dict,
-    ishashable,
 )
 from .utils_test import add, inc  # noqa: F401
 
 
 def cull(dsk, keys):
-    """ Return new dask with only the tasks required to calculate keys.
+    """Return new dask with only the tasks required to calculate keys.
 
     In other words, remove unnecessary tasks from dask.
     ``keys`` may be a single key or list of keys.
 
     Examples
     --------
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
-    >>> dsk, dependencies = cull(d, 'out')  # doctest: +SKIP
-    >>> dsk  # doctest: +SKIP
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}    # doctest: +SKIP
+    >>> dsk, dependencies = cull(d, 'out')                      # doctest: +SKIP
+    >>> dsk                                                     # doctest: +SKIP
     {'x': 1, 'out': (add, 'x', 10)}
-    >>> dependencies  # doctest: +SKIP
+    >>> dependencies                                            # doctest: +SKIP
     {'x': set(), 'out': set(['x'])}
 
     Returns
@@ -76,7 +78,7 @@ def default_fused_linear_keys_renamer(keys):
 
 
 def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
-    """ Return new dask graph with linear sequence of tasks fused together.
+    """Return new dask graph with linear sequence of tasks fused together.
 
     If specified, the keys in ``keys`` keyword argument are *not* fused.
     Supply ``dependencies`` from output of ``cull`` if available to avoid
@@ -225,7 +227,7 @@ def _flat_set(x):
 
 
 def inline(dsk, keys=None, inline_constants=True, dependencies=None):
-    """ Return new dask with the given keys inlined with their values.
+    """Return new dask with the given keys inlined with their values.
 
     Inlines all constants if ``inline_constants`` keyword is True. Note that
     the constant keys will remain in the graph, to remove them follow
@@ -233,14 +235,15 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 
     Examples
     --------
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
-    >>> inline(d)  # doctest: +SKIP
+
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')} # doctest: +SKIP
+    >>> inline(d)       # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
 
-    >>> inline(d, keys='y')  # doctest: +SKIP
+    >>> inline(d, keys='y') # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, (inc, 1))}
 
-    >>> inline(d, keys='y', inline_constants=False)  # doctest: +SKIP
+    >>> inline(d, keys='y', inline_constants=False) # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 'x', (inc, 'x'))}
     """
     if dependencies and isinstance(next(iter(dependencies.values())), list):
@@ -287,7 +290,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
 def inline_functions(
     dsk, output, fast_functions=None, inline_constants=False, dependencies=None
 ):
-    """ Inline cheap functions into larger operations
+    """Inline cheap functions into larger operations
 
     Examples
     --------
@@ -347,7 +350,7 @@ def unwrap_partial(func):
 
 
 def functions_of(task):
-    """ Set of functions contained within nested task
+    """Set of functions contained within nested task
 
     Examples
     --------
@@ -434,7 +437,7 @@ def fuse(
     rename_keys=_default,
     fuse_subgraphs=_default,
 ):
-    """ Fuse tasks that form reductions; more advanced than ``fuse_linear``
+    """Fuse tasks that form reductions; more advanced than ``fuse_linear``
 
     This trades parallelism opportunities for faster scheduling by making tasks
     less granular.  It can replace ``fuse_linear`` in optimization passes.
@@ -492,7 +495,10 @@ def fuse(
         dict mapping dependencies after fusion.  Useful side effect to accelerate other
         downstream optimizations.
     """
-    if not config.get("optimization.fuse.active"):
+
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
         return dsk, dependencies
 
     if keys is not None and not isinstance(keys, set):
@@ -918,7 +924,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
             fused_trees[outkey] = chain2
 
 
-class SubgraphCallable(object):
+class SubgraphCallable:
     """Create a callable object from a dask graph.
 
     Parameters
@@ -935,10 +941,12 @@ class SubgraphCallable(object):
 
     __slots__ = ("dsk", "outkey", "inkeys", "name")
 
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
+    def __init__(self, dsk, outkey, inkeys, name=None):
         self.dsk = dsk
         self.outkey = outkey
         self.inkeys = inkeys
+        if name is None:
+            name = f"subgraph_callable-{uuid.uuid4()}"
         self.name = name
 
     def __repr__(self):
@@ -947,10 +955,9 @@ class SubgraphCallable(object):
     def __eq__(self, other):
         return (
             type(self) is type(other)
-            and self.dsk == other.dsk
+            and self.name == other.name
             and self.outkey == other.outkey
             and set(self.inkeys) == set(other.inkeys)
-            and self.name == other.name
         )
 
     def __ne__(self, other):
@@ -963,3 +970,6 @@ class SubgraphCallable(object):
 
     def __reduce__(self):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
+
+    def __hash__(self):
+        return hash(tuple((self.outkey, frozenset(self.inkeys), self.name)))

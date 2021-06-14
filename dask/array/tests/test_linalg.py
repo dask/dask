@@ -7,8 +7,8 @@ import numpy as np
 import scipy.linalg
 
 import dask.array as da
-from dask.array.linalg import tsqr, sfqr, svd_compressed, qr, svd
-from dask.array.utils import assert_eq, same_keys
+from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
+from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
 @pytest.mark.parametrize(
@@ -449,35 +449,64 @@ def test_dask_svd_self_consistent(m, n):
         assert d_e.dtype == e.dtype
 
 
-@pytest.mark.slow
-def test_svd_compressed():
-    m, n = 2000, 250
-    r = 10
-    np.random.seed(4321)
-    mat1 = np.random.randn(m, r)
-    mat2 = np.random.randn(r, n)
-    mat = mat1.dot(mat2)
-    data = da.from_array(mat, chunks=(500, 50))
+@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
+def test_svd_compressed_compute(iterator):
+    x = da.ones((100, 100), chunks=(10, 10))
+    u, s, v = da.linalg.svd_compressed(
+        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], compute=True, seed=123
+    )
+    uu, ss, vv = da.linalg.svd_compressed(
+        x, k=2, iterator=iterator[0], n_power_iter=iterator[1], seed=123
+    )
 
-    u, s, vt = svd_compressed(data, r, seed=4321, n_power_iter=2)
+    assert len(v.dask) < len(vv.dask)
+    assert_eq(v, vv)
 
-    usvt = da.dot(u, da.dot(da.diag(s), vt))
 
-    tol = 0.2
-    assert_eq(
-        da.linalg.norm(usvt), np.linalg.norm(mat), rtol=tol, atol=tol
-    )  # average accuracy check
+@pytest.mark.parametrize("iterator", [("power", 2), ("QR", 2)])
+def test_svd_compressed(iterator):
+    m, n = 100, 50
+    r = 5
+    a = da.random.random((m, n), chunks=(m, n))
 
-    u = u[:, :r]
-    s = s[:r]
-    vt = vt[:r, :]
+    # calculate approximation and true singular values
+    u, s, vt = svd_compressed(
+        a, 2 * r, iterator=iterator[0], n_power_iter=iterator[1], seed=4321
+    )  # worst case
+    s_true = scipy.linalg.svd(a.compute(), compute_uv=False)
 
-    s_exact = np.linalg.svd(mat)[1]
-    s_exact = s_exact[:r]
+    # compute the difference with original matrix
+    norm = scipy.linalg.norm((a - (u[:, :r] * s[:r]) @ vt[:r, :]).compute(), 2)
 
-    assert_eq(np.eye(r, r), da.dot(u.T, u))  # u must be orthonormal
-    assert_eq(np.eye(r, r), da.dot(vt, vt.T))  # v must be orthonormal
-    assert_eq(s, s_exact)  # s must contain the singular values
+    # ||a-a_hat||_2 <= (1+tol)s_{k+1}: based on eq. 1.10/1.11:
+    # Halko, Nathan, Per-Gunnar Martinsson, and Joel A. Tropp.
+    # "Finding structure with randomness: Probabilistic algorithms for constructing
+    # approximate matrix decompositions." SIAM review 53.2 (2011): 217-288.
+    frac = norm / s_true[r + 1] - 1
+    # Tolerance determined via simulation to be slightly above max norm of difference matrix in 10k samples.
+    # See https://github.com/dask/dask/pull/6799#issuecomment-726631175 for more details.
+    tol = 0.4
+    assert frac < tol
+
+    assert_eq(np.eye(r, r), da.dot(u[:, :r].T, u[:, :r]))  # u must be orthonormal
+    assert_eq(np.eye(r, r), da.dot(vt[:r, :], vt[:r, :].T))  # v must be orthonormal
+
+
+@pytest.mark.parametrize(
+    "input_dtype, output_dtype", [(np.float32, np.float32), (np.float64, np.float64)]
+)
+def test_svd_compressed_dtype_preservation(input_dtype, output_dtype):
+    x = da.random.random((50, 50), chunks=(50, 50)).astype(input_dtype)
+    u, s, vt = svd_compressed(x, 1, seed=4321)
+    assert u.dtype == s.dtype == vt.dtype == output_dtype
+
+
+@pytest.mark.parametrize("chunks", [(10, 50), (50, 10), (-1, -1)])
+@pytest.mark.parametrize("dtype", [np.float32, np.float64])
+def test_svd_dtype_preservation(chunks, dtype):
+    x = da.random.random((50, 50), chunks=chunks).astype(dtype)
+    u, s, v = svd(x)
+    assert u.dtype == s.dtype == v.dtype == dtype
 
 
 def test_svd_compressed_deterministic():
@@ -487,6 +516,34 @@ def test_svd_compressed_deterministic():
     u2, s2, vt2 = svd_compressed(x, 3, seed=1234)
 
     assert all(da.compute((u == u2).all(), (s == s2).all(), (vt == vt2).all()))
+
+
+@pytest.mark.parametrize("m", [5, 10, 15, 20])
+@pytest.mark.parametrize("n", [5, 10, 15, 20])
+@pytest.mark.parametrize("k", [5])
+@pytest.mark.parametrize("chunks", [(5, 10), (10, 5)])
+def test_svd_compressed_shapes(m, n, k, chunks):
+    x = da.random.random(size=(m, n), chunks=chunks)
+    u, s, v = svd_compressed(x, k, n_power_iter=1, compute=True, seed=1)
+    u, s, v = da.compute(u, s, v)
+    r = min(m, n, k)
+    assert u.shape == (m, r)
+    assert s.shape == (r,)
+    assert v.shape == (r, n)
+
+
+@pytest.mark.parametrize("iterator", [("power", 1), ("QR", 1)])
+def test_svd_compressed_compute(iterator):
+    x = da.ones((100, 100), chunks=(10, 10))
+    u, s, v = da.linalg.svd_compressed(
+        x, 2, iterator=iterator[0], n_power_iter=iterator[1], compute=True, seed=123
+    )
+    uu, ss, vv = da.linalg.svd_compressed(
+        x, 2, iterator=iterator[0], n_power_iter=iterator[1], seed=123
+    )
+
+    assert len(v.dask) < len(vv.dask)
+    assert_eq(v, vv)
 
 
 def _check_lu_result(p, l, u, A):
@@ -750,19 +807,29 @@ def test_cholesky(shape, chunk):
 
     A = _get_symmat(shape)
     dA = da.from_array(A, (chunk, chunk))
-    assert_eq(da.linalg.cholesky(dA), scipy.linalg.cholesky(A), check_graph=False)
+    assert_eq(
+        da.linalg.cholesky(dA).compute(),
+        scipy.linalg.cholesky(A),
+        check_graph=False,
+        check_chunks=False,
+    )
     assert_eq(
         da.linalg.cholesky(dA, lower=True),
         scipy.linalg.cholesky(A, lower=True),
         check_graph=False,
+        check_chunks=False,
     )
 
 
+@pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
-def test_lstsq(nrow, ncol, chunk):
+def test_lstsq(nrow, ncol, chunk, iscomplex):
     np.random.seed(1)
     A = np.random.randint(1, 20, (nrow, ncol))
     b = np.random.randint(1, 20, nrow)
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b = b + 1.0j * np.random.randint(1, 20, b.shape)
 
     dA = da.from_array(A, (chunk, ncol))
     db = da.from_array(b, chunk)
@@ -786,10 +853,26 @@ def test_lstsq(nrow, ncol, chunk):
     dx, dr, drank, ds = da.linalg.lstsq(dA, db)
     assert drank.compute() == rank
 
+    # 2D case
+    A = np.random.randint(1, 20, (nrow, ncol))
+    b2D = np.random.randint(1, 20, (nrow, ncol // 2))
+    if iscomplex:
+        A = A + 1.0j * np.random.randint(1, 20, A.shape)
+        b2D = b2D + 1.0j * np.random.randint(1, 20, b2D.shape)
+    dA = da.from_array(A, (chunk, ncol))
+    db2D = da.from_array(b2D, (chunk, ncol // 2))
+    x, r, rank, s = np.linalg.lstsq(A, b2D, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db2D)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
+
 
 def test_no_chunks_svd():
     x = np.random.random((100, 10))
-    u, s, v = np.linalg.svd(x, full_matrices=0)
+    u, s, v = np.linalg.svd(x, full_matrices=False)
 
     for chunks in [((np.nan,) * 10, (10,)), ((np.nan,) * 10, (np.nan,))]:
         dx = da.from_array(x, chunks=(10, 10))
@@ -806,6 +889,91 @@ def test_no_chunks_svd():
         dx._chunks = ((np.nan,) * 10, (np.nan,))
         assert_eq(abs(v), abs(dv))
         assert_eq(abs(u), abs(du))
+
+
+@pytest.mark.parametrize("shape", [(10, 20), (10, 10), (20, 10)])
+@pytest.mark.parametrize("chunks", [(-1, -1), (10, -1), (-1, 10)])
+@pytest.mark.parametrize("dtype", ["f4", "f8"])
+def test_svd_flip_correction(shape, chunks, dtype):
+    # Verify that sign-corrected SVD results can still
+    # be used to reconstruct inputs
+    x = da.random.random(size=shape, chunks=chunks).astype(dtype)
+    u, s, v = da.linalg.svd(x)
+
+    # Choose precision in evaluation based on float precision
+    decimal = 9 if np.dtype(dtype).itemsize > 4 else 6
+
+    # Validate w/ dask inputs
+    uf, vf = svd_flip(u, v)
+    assert uf.dtype == u.dtype
+    assert vf.dtype == v.dtype
+    np.testing.assert_almost_equal(np.asarray(np.dot(uf * s, vf)), x, decimal=decimal)
+
+    # Validate w/ numpy inputs
+    uc, vc = svd_flip(*da.compute(u, v))
+    assert uc.dtype == u.dtype
+    assert vc.dtype == v.dtype
+    np.testing.assert_almost_equal(np.asarray(np.dot(uc * s, vc)), x, decimal=decimal)
+
+
+@pytest.mark.parametrize("dtype", ["f2", "f4", "f8", "f16", "c8", "c16", "c32"])
+@pytest.mark.parametrize("u_based", [True, False])
+def test_svd_flip_sign(dtype, u_based):
+    try:
+        x = np.array(
+            [[1, -1, 1, -1], [1, -1, 1, -1], [-1, 1, 1, -1], [-1, 1, 1, -1]],
+            dtype=dtype,
+        )
+    except TypeError:
+        pytest.skip("128-bit floats not supported by NumPy")
+    u, v = svd_flip(x, x.T, u_based_decision=u_based)
+    assert u.dtype == x.dtype
+    assert v.dtype == x.dtype
+    # Verify that all singular vectors have same
+    # sign except for the last one (i.e. last column)
+    y = x.copy()
+    y[:, -1] *= y.dtype.type(-1)
+    assert_eq(u, y)
+    assert_eq(v, y.T)
+
+
+@pytest.mark.parametrize("chunks", [(10, -1), (-1, 10), (9, -1), (-1, 9)])
+@pytest.mark.parametrize("shape", [(10, 100), (100, 10), (10, 10)])
+def test_svd_supported_array_shapes(chunks, shape):
+    # Test the following cases for tall-skinny, short-fat and square arrays:
+    # - no chunking
+    # - chunking that contradicts shape (e.g. a 10x100 array with 9x100 chunks)
+    # - chunking that aligns with shape (e.g. a 10x100 array with 10x9 chunks)
+    x = np.random.random(shape)
+    dx = da.from_array(x, chunks=chunks)
+
+    du, ds, dv = da.linalg.svd(dx)
+    du, dv = da.compute(du, dv)
+
+    nu, ns, nv = np.linalg.svd(x, full_matrices=False)
+
+    # Correct signs before comparison
+    du, dv = svd_flip(du, dv)
+    nu, nv = svd_flip(nu, nv)
+
+    assert_eq(du, nu)
+    assert_eq(ds, ns)
+    assert_eq(dv, nv)
+
+
+def test_svd_incompatible_chunking():
+    with pytest.raises(
+        NotImplementedError, match="Array must be chunked in one dimension only"
+    ):
+        x = da.random.random((10, 10), chunks=(5, 5))
+        da.linalg.svd(x)
+
+
+@pytest.mark.parametrize("ndim", [0, 1, 3])
+def test_svd_incompatible_dimensions(ndim):
+    with pytest.raises(ValueError, match="Array must be 2D"):
+        x = da.random.random((10,) * ndim, chunks=(-1,) * ndim)
+        da.linalg.svd(x)
 
 
 @pytest.mark.parametrize(
@@ -898,13 +1066,3 @@ def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
     if len(shape) > 2 and len(axis) == 2:
         with pytest.raises(NotImplementedError):
             da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
-
-
-def test_svd_compressed_compute():
-    x = da.ones((100, 100), chunks=(10, 10))
-    u, s, v = da.linalg.svd_compressed(x, k=2, n_power_iter=0, compute=True, seed=123)
-    uu, ss, vv = da.linalg.svd_compressed(x, k=2, n_power_iter=0, seed=123)
-
-    assert len(v.dask) < len(vv.dask)
-
-    assert_eq(v, vv)

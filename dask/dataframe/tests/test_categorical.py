@@ -6,16 +6,15 @@ import pytest
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.dataframe import _compat
+from dask.dataframe._compat import tm
 from dask.dataframe.core import _concat
 from dask.dataframe.utils import (
-    make_meta,
     assert_eq,
-    is_categorical_dtype,
     clear_known_categories,
+    is_categorical_dtype,
+    make_meta,
 )
-
 
 # Generate a list of categorical series and indices
 cat_series = []
@@ -122,7 +121,8 @@ def test_unknown_categoricals():
         {("unknown", i): df for (i, df) in enumerate(frames)},
         "unknown",
         make_meta(
-            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"}
+            {"v": "object", "w": "category", "x": "i8", "y": "category", "z": "f8"},
+            parent_meta=frames[0],
         ),
         [None] * 4,
     )

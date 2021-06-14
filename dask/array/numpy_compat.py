@@ -1,15 +1,14 @@
+import warnings
 from distutils.version import LooseVersion
 
 import numpy as np
-import warnings
 
 from ..utils import derived_from
 
-_numpy_115 = LooseVersion(np.__version__) >= "1.15.0"
-_numpy_116 = LooseVersion(np.__version__) >= "1.16.0"
 _numpy_117 = LooseVersion(np.__version__) >= "1.17.0"
 _numpy_118 = LooseVersion(np.__version__) >= "1.18.0"
 _numpy_120 = LooseVersion(np.__version__) >= "1.20.0"
+_numpy_121 = LooseVersion(np.__version__) >= "1.21.0"
 
 
 # Taken from scikit-learn:
@@ -48,165 +47,7 @@ except TypeError:
     )
 
 
-if LooseVersion(np.__version__) < "1.15.0":
-    # These functions were added in numpy 1.15.0. For previous versions they
-    # are duplicated here
-
-    def _make_along_axis_idx(arr_shape, indices, axis):
-        # compute dimensions to iterate over
-        if not np.issubdtype(indices.dtype, np.integer):
-            raise IndexError("`indices` must be an integer array")
-        if len(arr_shape) != indices.ndim:
-            raise ValueError(
-                "`indices` and `arr` must have the same number of dimensions"
-            )
-        shape_ones = (1,) * indices.ndim
-        dest_dims = list(range(axis)) + [None] + list(range(axis + 1, indices.ndim))
-
-        # build a fancy index, consisting of orthogonal aranges, with the
-        # requested index inserted at the right location
-        fancy_index = []
-        for dim, n in zip(dest_dims, arr_shape):
-            if dim is None:
-                fancy_index.append(indices)
-            else:
-                ind_shape = shape_ones[:dim] + (-1,) + shape_ones[dim + 1 :]
-                fancy_index.append(np.arange(n).reshape(ind_shape))
-
-        return tuple(fancy_index)
-
-    def take_along_axis(arr, indices, axis):
-        """
-        Take values from the input array by matching 1d index and data slices.
-        This iterates over matching 1d slices oriented along the specified axis in
-        the index and data arrays, and uses the former to look up values in the
-        latter. These slices can be different lengths.
-        Functions returning an index along an axis, like `argsort` and
-        `argpartition`, produce suitable indices for this function.
-        .. versionadded:: 1.15.0
-        Parameters
-        ----------
-        arr: ndarray (Ni..., M, Nk...)
-            Source array
-        indices: ndarray (Ni..., J, Nk...)
-            Indices to take along each 1d slice of `arr`. This must match the
-            dimension of arr, but dimensions Ni and Nj only need to broadcast
-            against `arr`.
-        axis: int
-            The axis to take 1d slices along. If axis is None, the input array is
-            treated as if it had first been flattened to 1d, for consistency with
-            `sort` and `argsort`.
-        Returns
-        -------
-        out: ndarray (Ni..., J, Nk...)
-            The indexed result.
-        Notes
-        -----
-        This is equivalent to (but faster than) the following use of `ndindex` and
-        `s_`, which sets each of ``ii`` and ``kk`` to a tuple of indices::
-            Ni, M, Nk = a.shape[:axis], a.shape[axis], a.shape[axis+1:]
-            J = indices.shape[axis]  # Need not equal M
-            out = np.empty(Nk + (J,) + Nk)
-            for ii in ndindex(Ni):
-                for kk in ndindex(Nk):
-                    a_1d       = a      [ii + s_[:,] + kk]
-                    indices_1d = indices[ii + s_[:,] + kk]
-                    out_1d     = out    [ii + s_[:,] + kk]
-                    for j in range(J):
-                        out_1d[j] = a_1d[indices_1d[j]]
-        Equivalently, eliminating the inner loop, the last two lines would be::
-                    out_1d[:] = a_1d[indices_1d]
-        See Also
-        --------
-        take : Take along an axis, using the same indices for every 1d slice
-        put_along_axis :
-            Put values into the destination array by matching 1d index and data slices
-        Examples
-        --------
-        For this sample array
-        >>> a = np.array([[10, 30, 20], [60, 40, 50]])
-
-        We can sort either by using sort directly, or argsort and this function
-        >>> np.sort(a, axis=1)
-        array([[10, 20, 30],
-               [40, 50, 60]])
-        >>> ai = np.argsort(a, axis=1); ai
-        array([[0, 2, 1],
-               [1, 2, 0]])
-        >>> take_along_axis(a, ai, axis=1)
-        array([[10, 20, 30],
-               [40, 50, 60]])
-
-        The same works for max and min, if you expand the dimensions:
-        >>> np.expand_dims(np.max(a, axis=1), axis=1)
-        array([[30],
-               [60]])
-        >>> ai = np.expand_dims(np.argmax(a, axis=1), axis=1)
-        >>> ai
-        array([[1],
-               [0]])
-        >>> take_along_axis(a, ai, axis=1)
-        array([[30],
-               [60]])
-
-        If we want to get the max and min at the same time,
-        we can stack the indices first:
-        >>> ai_min = np.expand_dims(np.argmin(a, axis=1), axis=1)
-        >>> ai_max = np.expand_dims(np.argmax(a, axis=1), axis=1)
-        >>> ai = np.concatenate([ai_min, ai_max], axis=1)
-        >>> ai
-        array([[0, 1],
-               [1, 0]])
-        >>> take_along_axis(a, ai, axis=1)
-        array([[10, 30],
-               [40, 60]])
-        """
-        # normalize inputs
-        if axis is None:
-            arr = arr.flat
-            arr_shape = (len(arr),)  # flatiter has no .shape
-            axis = 0
-        else:
-            if axis < 0:
-                axis = arr.ndim + axis
-            arr_shape = arr.shape
-
-        # use the fancy index
-        return arr[_make_along_axis_idx(arr_shape, indices, axis)]
-
-
-def _make_sliced_dtype_np_ge_16(dtype, index):
-    # This was briefly added in 1.14.0
-    # https://github.com/numpy/numpy/pull/6053, NumPy >= 1.14
-    # which was then reverted in 1.14.1 with
-    # https://github.com/numpy/numpy/pull/10411
-    # And then was finally released with
-    # https://github.com/numpy/numpy/pull/12447
-    # in version 1.16.0
-    new = {
-        "names": index,
-        "formats": [dtype.fields[name][0] for name in index],
-        "offsets": [dtype.fields[name][1] for name in index],
-        "itemsize": dtype.itemsize,
-    }
-    return np.dtype(new)
-
-
-def _make_sliced_dtype_np_lt_14(dtype, index):
-    # For numpy < 1.14
-    dt = np.dtype([(name, dtype[name]) for name in index])
-    return dt
-
-
-if LooseVersion(np.__version__) >= LooseVersion("1.16.0") or LooseVersion(
-    np.__version__
-) == LooseVersion("1.14.0"):
-    _make_sliced_dtype = _make_sliced_dtype_np_ge_16
-else:
-    _make_sliced_dtype = _make_sliced_dtype_np_lt_14
-
-
-class _Recurser(object):
+class _Recurser:
     """
     Utility class for recursing over nested iterables
     """
@@ -224,7 +65,7 @@ class _Recurser(object):
         f_map=lambda x, **kwargs: x,
         f_reduce=lambda x, **kwargs: x,
         f_kwargs=lambda **kwargs: kwargs,
-        **kwargs
+        **kwargs,
     ):
         """
         Iterate over the nested list, applying:
@@ -288,12 +129,6 @@ class _Recurser(object):
                 yield v
 
 
-if _numpy_116:
-    _unravel_index_keyword = "shape"
-else:
-    _unravel_index_keyword = "dims"
-
-
 # Implementation taken directly from numpy:
 # https://github.com/numpy/numpy/blob/d9b1e32cb8ef90d6b4a47853241db2a28146a57d/numpy/core/numeric.py#L1336-L1405
 @derived_from(np)
@@ -336,3 +171,96 @@ def rollaxis(a, axis, start=0):
     axes.remove(axis)
     axes.insert(start, axis)
     return a.transpose(axes)
+
+
+if _numpy_120:
+    sliding_window_view = np.lib.stride_tricks.sliding_window_view
+else:
+    # copied from numpy.lib.stride_tricks
+    # https://github.com/numpy/numpy/blob/0721406ede8b983b8689d8b70556499fc2aea28a/numpy/lib/stride_tricks.py#L122-L336
+    def sliding_window_view(
+        x, window_shape, axis=None, *, subok=False, writeable=False
+    ):
+        """
+        Create a sliding window view into the array with the given window shape.
+        Also known as rolling or moving window, the window slides across all
+        dimensions of the array and extracts subsets of the array at all window
+        positions.
+
+        .. versionadded:: 1.20.0
+        Parameters
+        ----------
+        x : array_like
+            Array to create the sliding window view from.
+        window_shape : int or tuple of int
+            Size of window over each axis that takes part in the sliding window.
+            If `axis` is not present, must have same length as the number of input
+            array dimensions. Single integers `i` are treated as if they were the
+            tuple `(i,)`.
+        axis : int or tuple of int, optional
+            Axis or axes along which the sliding window is applied.
+            By default, the sliding window is applied to all axes and
+            `window_shape[i]` will refer to axis `i` of `x`.
+            If `axis` is given as a `tuple of int`, `window_shape[i]` will refer to
+            the axis `axis[i]` of `x`.
+            Single integers `i` are treated as if they were the tuple `(i,)`.
+        subok : bool, optional
+            If True, sub-classes will be passed-through, otherwise the returned
+            array will be forced to be a base-class array (default).
+        writeable : bool, optional
+            When true, allow writing to the returned view. The default is false,
+            as this should be used with caution: the returned view contains the
+            same memory location multiple times, so writing to one location will
+            cause others to change.
+        Returns
+        -------
+        view : ndarray
+            Sliding window view of the array. The sliding window dimensions are
+            inserted at the end, and the original dimensions are trimmed as
+            required by the size of the sliding window.
+            That is, ``view.shape = x_shape_trimmed + window_shape``, where
+            ``x_shape_trimmed`` is ``x.shape`` with every entry reduced by one less
+            than the corresponding window size.
+        """
+        from numpy.core.numeric import normalize_axis_tuple
+
+        window_shape = (
+            tuple(window_shape) if np.iterable(window_shape) else (window_shape,)
+        )
+        # first convert input to array, possibly keeping subclass
+        x = np.array(x, copy=False, subok=subok)
+
+        window_shape_array = np.array(window_shape)
+        if np.any(window_shape_array < 0):
+            raise ValueError("`window_shape` cannot contain negative values")
+
+        if axis is None:
+            axis = tuple(range(x.ndim))
+            if len(window_shape) != len(axis):
+                raise ValueError(
+                    f"Since axis is `None`, must provide "
+                    f"window_shape for all dimensions of `x`; "
+                    f"got {len(window_shape)} window_shape elements "
+                    f"and `x.ndim` is {x.ndim}."
+                )
+        else:
+            axis = normalize_axis_tuple(axis, x.ndim, allow_duplicate=True)
+            if len(window_shape) != len(axis):
+                raise ValueError(
+                    f"Must provide matching length window_shape and "
+                    f"axis; got {len(window_shape)} window_shape "
+                    f"elements and {len(axis)} axes elements."
+                )
+
+        out_strides = x.strides + tuple(x.strides[ax] for ax in axis)
+
+        # note: same axis can be windowed repeatedly
+        x_shape_trimmed = list(x.shape)
+        for ax, dim in zip(axis, window_shape):
+            if x_shape_trimmed[ax] < dim:
+                raise ValueError("window shape cannot be larger than input array shape")
+            x_shape_trimmed[ax] -= dim - 1
+        out_shape = tuple(x_shape_trimmed) + window_shape
+        return np.lib.stride_tricks.as_strided(
+            x, strides=out_strides, shape=out_shape, subok=subok, writeable=writeable
+        )

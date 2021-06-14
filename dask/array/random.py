@@ -1,27 +1,27 @@
 import numbers
 import warnings
-from itertools import product
+from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
+from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..utils import derived_from, ignoring, random_state_data, skip_doctest
 from .core import (
-    normalize_chunks,
     Array,
-    slices_from_chunks,
     asarray,
     broadcast_shapes,
     broadcast_to,
+    normalize_chunks,
+    slices_from_chunks,
 )
 from .creation import arange
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, derived_from, skip_doctest
 
 
 def doc_wraps(func):
-    """ Copy docstring from one function to another """
+    """Copy docstring from one function to another"""
     warnings.warn(
         "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
         FutureWarning,
@@ -35,7 +35,7 @@ def doc_wraps(func):
     return _
 
 
-class RandomState(object):
+class RandomState:
     """
     Mersenne Twister pseudo-random number generator
 
@@ -78,21 +78,22 @@ class RandomState(object):
     def _wrap(
         self, funcname, *args, size=None, chunks="auto", extra_chunks=(), **kwargs
     ):
-        """ Wrap numpy random function to produce dask.array random function
+        """Wrap numpy random function to produce dask.array random function
 
         extra_chunks should be a chunks tuple to append to the end of chunks
         """
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        args_shapes = {ar.shape for ar in args if isinstance(ar, (Array, np.ndarray))}
-        args_shapes.union(
-            {ar.shape for ar in kwargs.values() if isinstance(ar, (Array, np.ndarray))}
+        shapes = list(
+            {
+                ar.shape
+                for ar in chain(args, kwargs.values())
+                if isinstance(ar, (Array, np.ndarray))
+            }
         )
-
-        shapes = list(args_shapes)
         if size is not None:
-            shapes.extend([size])
+            shapes.append(size)
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
         chunks = normalize_chunks(
@@ -111,7 +112,6 @@ class RandomState(object):
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph
         dsk = {}
-        dsks = []
         lookup = {}
         small_args = []
         dependencies = []
@@ -120,7 +120,6 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -136,7 +135,6 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -164,7 +162,6 @@ class RandomState(object):
                     arg.append(ar)
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         arg.append((lookup[i],) + block)
                     else:  # np.ndarray
                         arg.append((getitem, lookup[i], slc))
@@ -174,7 +171,6 @@ class RandomState(object):
                     kwrg[k] = ar
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         kwrg[k] = (lookup[k],) + block
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)

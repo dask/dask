@@ -25,7 +25,7 @@ def args(task):
         return ()
 
 
-class Traverser(object):
+class Traverser:
     """Traverser interface for tasks.
 
     Class for storing the state while performing a preorder-traversal of a
@@ -85,7 +85,7 @@ class Traverser(object):
         self.term = self._stack.pop()
 
 
-class Token(object):
+class Token:
     """A token object.
 
     Used to express certain objects in the traversal of a task or pattern."""
@@ -125,7 +125,7 @@ class Node(tuple):
         return self[1]
 
 
-class RewriteRule(object):
+class RewriteRule:
     """A rewrite rule.
 
     Expresses `lhs` -> `rhs`, for variables `vars`.
@@ -150,10 +150,11 @@ class RewriteRule(object):
     `(list, (list, 'x'))` is replaced with `(list, 'x')`, where `'x'` is a
     variable.
 
+    >>> import dask.rewrite as dr
     >>> lhs = (list, (list, 'x'))
     >>> rhs = (list, 'x')
     >>> variables = ('x',)
-    >>> rule = RewriteRule(lhs, rhs, variables)
+    >>> rule = dr.RewriteRule(lhs, rhs, variables)
 
     Here's a more complicated rule that uses a callable right-hand-side. A
     callable `rhs` takes in a dictionary mapping variables to their matching
@@ -167,7 +168,7 @@ class RewriteRule(object):
     ...         return x
     ...     else:
     ...         return (list, x)
-    >>> rule = RewriteRule(lhs, repl_list, variables)
+    >>> rule = dr.RewriteRule(lhs, repl_list, variables)
     """
 
     def __init__(self, lhs, rhs, vars=()):
@@ -196,7 +197,7 @@ class RewriteRule(object):
         return str(self)
 
 
-class RuleSet(object):
+class RuleSet:
     """A set of rewrite rules.
 
     Forms a structure for fast rewriting over a set of rewrite rules. This
@@ -206,28 +207,29 @@ class RuleSet(object):
     Examples
     --------
 
+    >>> import dask.rewrite as dr
     >>> def f(*args): pass
     >>> def g(*args): pass
     >>> def h(*args): pass
     >>> from operator import add
 
-    >>> rs = RuleSet(                 # Make RuleSet with two Rules
-    ...         RewriteRule((add, 'x', 0), 'x', ('x',)),
-    ...         RewriteRule((f, (g, 'x'), 'y'),
-    ...                     (h, 'x', 'y'),
-    ...                     ('x', 'y')))
+    >>> rs = dr.RuleSet(                # doctest: +SKIP
+    ...         dr.RewriteRule((add, 'x', 0), 'x', ('x',)),
+    ...         dr.RewriteRule((f, (g, 'x'), 'y'),
+    ...                        (h, 'x', 'y'),
+    ...                        ('x', 'y')))
 
-    >>> rs.rewrite((add, 2, 0))       # Apply ruleset to single task
+    >>> rs.rewrite((add, 2, 0))         # doctest: +SKIP
     2
 
-    >>> rs.rewrite((f, (g, 'a', 3)))  # doctest: +SKIP
+    >>> rs.rewrite((f, (g, 'a', 3)))    # doctest: +SKIP
     (h, 'a', 3)
 
-    >>> dsk = {'a': (add, 2, 0),      # Apply ruleset to full dask graph
+    >>> dsk = {'a': (add, 2, 0),        # doctest: +SKIP
     ...        'b': (f, (g, 'a', 3))}
 
-    >>> from toolz import valmap
-    >>> valmap(rs.rewrite, dsk)  # doctest: +SKIP
+    >>> from toolz import valmap        # doctest: +SKIP
+    >>> valmap(rs.rewrite, dsk)         # doctest: +SKIP
     {'a': 2,
      'b': (h, 'a', 3)}
 

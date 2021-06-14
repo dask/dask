@@ -8,15 +8,14 @@ from .utils import apply  # noqa
 unicode = str  # noqa
 
 try:
-    from dataclasses import is_dataclass, fields as dataclass_fields
-
+    from math import prod
 except ImportError:
-
-    def is_dataclass(x):
-        return False
-
-    def dataclass_fields(x):
-        return []
+    # Python < 3.8
+    def prod(iterable, *, start=1):
+        acc = start
+        for el in iterable:
+            acc *= el
+        return acc
 
 
 PY_VERSION = LooseVersion(".".join(map(str, sys.version_info[:3])))

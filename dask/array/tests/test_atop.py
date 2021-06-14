@@ -1,23 +1,21 @@
 import collections
-import warnings
 from operator import add
 
-import pytest
 import numpy as np
+import pytest
 
 import dask
 import dask.array as da
-from dask.highlevelgraph import HighLevelGraph
+from dask.array.utils import assert_eq
 from dask.blockwise import (
     Blockwise,
-    rewrite_blockwise,
-    optimize_blockwise,
-    index_subs,
     blockwise_default_prefix,
+    index_subs,
+    optimize_blockwise,
+    rewrite_blockwise,
 )
-from dask.array.utils import assert_eq
-from dask.array.numpy_compat import _numpy_116
-from dask.utils_test import inc, dec
+from dask.highlevelgraph import HighLevelGraph
+from dask.utils_test import dec, inc
 
 a, b, c, d, e, f, g = "abcdefg"
 _0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = [
@@ -205,9 +203,40 @@ def test_optimize_blockwise():
     assert isinstance(dsk, HighLevelGraph)
 
     assert (
-        len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)])
+        len([layer for layer in dsk.layers.values() if isinstance(layer, Blockwise)])
         == 1
     )
+
+
+def test_optimize_blockwise_annotations():
+    a = da.ones(10, chunks=(5,))
+    b = a + 1
+
+    with dask.annotate(qux="foo"):
+        c = b + 2
+        d = c + 3
+
+    with dask.annotate(qux="baz"):
+        e = d + 4
+        f = e + 5
+
+    g = f + 6
+
+    dsk = da.optimization.optimize_blockwise(g.dask)
+
+    annotations = (
+        layer.annotations
+        for layer in dsk.layers.values()
+        if isinstance(layer, Blockwise)
+    )
+    annotations = collections.Counter(
+        tuple(a.items()) if type(a) is dict else a for a in annotations
+    )
+
+    assert len(annotations) == 3
+    assert annotations[None] == 2
+    assert annotations[(("qux", "baz"),)] == 1
+    assert annotations[(("qux", "foo"),)] == 1
 
 
 def test_blockwise_diamond_fusion():
@@ -222,7 +251,7 @@ def test_blockwise_diamond_fusion():
     assert isinstance(dsk, HighLevelGraph)
 
     assert (
-        len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)])
+        len([layer for layer in dsk.layers.values() if isinstance(layer, Blockwise)])
         == 1
     )
 
@@ -233,15 +262,15 @@ def test_blockwise_non_blockwise_output():
     w = y.sum()
     z = ((y * 2) * 3) * 4
 
-    z_top_before = tuple(z.dask.dicts[z.name].indices)
+    z_top_before = tuple(z.dask.layers[z.name].indices)
     (zz,) = dask.optimize(z)
-    z_top_after = tuple(z.dask.dicts[z.name].indices)
+    z_top_after = tuple(z.dask.layers[z.name].indices)
     assert z_top_before == z_top_after, "z_top mutated"
 
     dsk = optimize_blockwise(z.dask, keys=list(dask.core.flatten(z.__dask_keys__())))
     assert isinstance(dsk, HighLevelGraph)
     assert (
-        len([layer for layer in dsk.dicts.values() if isinstance(layer, Blockwise)])
+        len([layer for layer in dsk.layers.values() if isinstance(layer, Blockwise)])
         == 1
     )
 
@@ -251,7 +280,7 @@ def test_blockwise_non_blockwise_output():
     )
     assert isinstance(dsk, HighLevelGraph)
     assert (
-        len([layer for layer in z.dask.dicts.values() if isinstance(layer, Blockwise)])
+        len([layer for layer in z.dask.layers.values() if isinstance(layer, Blockwise)])
         >= 1
     )
 
@@ -260,7 +289,7 @@ def test_top_len():
     x = da.ones(10, chunks=(5,))
     y = x[:, None] * x[None, :]
 
-    d = y.dask.dicts[y.name]
+    d = y.dask.layers[y.name]
     assert len(d) == 4
 
 
@@ -496,23 +525,16 @@ def test_blockwise_chunks():
 
 
 def test_blockwise_numpy_arg():
-    with warnings.catch_warnings():
-        if not _numpy_116:
-            # Not sure why, but this DeprecationWarning is no longer
-            # showing up for NumPy >=1.16. So we only filter here
-            # for 1.15 and earlier
-            warnings.simplefilter("ignore", DeprecationWarning)
+    x = da.arange(10, chunks=(5,))
+    y = np.arange(1000)
 
-        x = da.arange(10, chunks=(5,))
-        y = np.arange(1000)
-
-        x = x.map_blocks(lambda x, y: x, 1.0)
-        x = x.map_blocks(lambda x, y: x, "abc")
-        x = x.map_blocks(lambda x, y: x, y)
-        x = x.map_blocks(lambda x, y: x, "abc")
-        x = x.map_blocks(lambda x, y: x, 1.0)
-        x = x.map_blocks(lambda x, y, z: x, "abc", np.array(["a", "b"], dtype=object))
-        assert_eq(x, np.arange(10))
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y: x, "abc")
+    x = x.map_blocks(lambda x, y: x, y)
+    x = x.map_blocks(lambda x, y: x, "abc")
+    x = x.map_blocks(lambda x, y: x, 1.0)
+    x = x.map_blocks(lambda x, y, z: x, "abc", np.array(["a", "b"], dtype=object))
+    assert_eq(x, np.arange(10))
 
 
 def test_bag_array_conversion():
@@ -583,7 +605,7 @@ def test_dont_merge_before_reductions():
 
     dsk = optimize_blockwise(w.dask)
 
-    assert len([d for d in dsk.dicts.values() if isinstance(d, Blockwise)]) == 2
+    assert len([d for d in dsk.layers.values() if isinstance(d, Blockwise)]) == 2
 
     z.compute()
 
