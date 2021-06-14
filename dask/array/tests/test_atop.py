@@ -8,8 +8,8 @@ import dask
 import dask.array as da
 from dask.array.utils import assert_eq
 from dask.blockwise import (
+    _BLOCKWISE_DEFAULT_PREFIX,
     Blockwise,
-    blockwise_default_prefix,
     index_subs,
     optimize_blockwise,
     rewrite_blockwise,
@@ -19,7 +19,7 @@ from dask.utils_test import dec, inc
 
 a, b, c, d, e, f, g = "abcdefg"
 _0, _1, _2, _3, _4, _5, _6, _7, _8, _9 = [
-    blockwise_default_prefix + "%d" % i for i in range(10)
+    _BLOCKWISE_DEFAULT_PREFIX + "%d" % i for i in range(10)
 ]
 i, j, k = "ijk"
 
