@@ -6,8 +6,12 @@ test_import () {
     echo "Create environment: python=$PYTHON_VERSION $1"
     # Create an empty environment
     mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml fsspec toolz partd cloudpickle $1
+    if [[ $1 =~ "distributed" ]]; then
+        # dask[distributed] depends on the latest version of distributed
+        python -m pip install git+https://github.com/dask/distributed
+    fi
     conda activate test-imports
-    pip install -e .
+    python -m pip install -e .
     echo "python -c '$2'"
     python -c "$2"
     conda deactivate
