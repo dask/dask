@@ -211,7 +211,7 @@ def index_subs(ind, substitution):
         return tuple([substitution.get(c, c) for c in ind])
 
 
-blockwise_default_prefix = "__default__"
+blockwise_default_prefix = "__dask_blockwise__"
 
 
 def blockwise_token(i, prefix=blockwise_default_prefix):
