@@ -1,4 +1,5 @@
 import builtins
+import contextlib
 import operator
 from collections.abc import Iterable
 from functools import partial
@@ -13,14 +14,7 @@ from .. import config
 from ..base import tokenize
 from ..blockwise import lol_tuples
 from ..highlevelgraph import HighLevelGraph
-from ..utils import (
-    deepmap,
-    derived_from,
-    funcname,
-    getargspec,
-    ignoring,
-    is_series_like,
-)
+from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
 from . import chunk
 from .blockwise import blockwise
 from .core import Array, _concatenate2, handle_out, implements
@@ -327,7 +321,7 @@ def partial_reduce(
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
-        with ignoring(AttributeError):
+        with contextlib.suppress(AttributeError):
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
 
