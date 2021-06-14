@@ -1,4 +1,5 @@
 import os
+import xml.etree.ElementTree
 from collections.abc import Set
 
 import pytest
@@ -125,6 +126,16 @@ def test_cull_layers():
     for k in culled.layers:
         assert culled.layers[k] is hg.layers[k]
         assert culled.dependencies[k] is hg.dependencies[k]
+
+
+def test_repr_html_hlg_layers():
+    hg = HighLevelGraph(
+        {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}},
+        {"a": set(), "b": set()},
+    )
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 def annot_map_fn(key):
