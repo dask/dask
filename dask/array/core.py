@@ -1153,18 +1153,20 @@ class Array(DaskMethodsMixin):
         else:
             if layer.collection_annotations is None:
                 layer.collection_annotations = {
+                    "shape": self.shape,
+                    "dtype": self.dtype,
+                    "chunksize": self.chunksize,
                     "type": type(self),
                     "chunk_type": type(self._meta),
-                    "chunks": self.chunks,
-                    "dtype": dtype,
                 }
             else:
                 layer.collection_annotations.update(
                     {
+                        "shape": self.shape,
+                        "dtype": self.dtype,
+                        "chunksize": self.chunksize,
                         "type": type(self),
                         "chunk_type": type(self._meta),
-                        "chunks": self.chunks,
-                        "dtype": dtype,
                     }
                 )
 
@@ -1299,7 +1301,11 @@ class Array(DaskMethodsMixin):
 
     @property
     def dtype(self):
-        return self._meta.dtype
+        if isinstance(self._meta, tuple):
+            dtype = self._meta[0].dtype
+        else:
+            dtype = self._meta.dtype
+        return dtype
 
     @property
     def _chunks(self):

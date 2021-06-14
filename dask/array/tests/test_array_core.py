@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import xml.etree.ElementTree
 from unittest import mock
 
 import pytest
@@ -1569,6 +1570,14 @@ def test_repr_meta():
     sparse = pytest.importorskip("sparse")
     s = d.map_blocks(sparse.COO)
     assert "chunktype=sparse.COO" in repr(s)
+
+
+def test_repr_html_array_highlevelgraph():
+    x = da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4]
+    hg = x.dask
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 def test_slicing_with_ellipsis():
