@@ -240,6 +240,28 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
+@pytest.mark.skipif(dd._compat.PANDAS_GT_130, reason="Freq no longer included in ts")
+@pytest.mark.parametrize(
+    "npartitions",
+    [
+        1,
+        pytest.param(
+            2,
+            marks=pytest.mark.xfail(
+                not dd._compat.PANDAS_GT_110, reason="Fixed upstream."
+            ),
+        ),
+    ],
+)
+def test_timezone_freq(npartitions):
+    s_naive = pd.Series(pd.date_range("20130101", periods=10))
+    s_aware = pd.Series(pd.date_range("20130101", periods=10, tz="US/Eastern"))
+    pdf = pd.DataFrame({"tz": s_aware, "notz": s_naive})
+    ddf = dd.from_pandas(pdf, npartitions=npartitions)
+
+    assert pdf.tz[0].freq == ddf.compute().tz[0].freq == ddf.tz.compute()[0].freq
+
+
 def test_rename_columns():
     # GH 819
     df = pd.DataFrame({"a": [1, 2, 3, 4, 5, 6, 7], "b": [7, 6, 5, 4, 3, 2, 1]})
