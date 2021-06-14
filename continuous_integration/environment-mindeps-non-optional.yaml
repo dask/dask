@@ -11,5 +11,6 @@ dependencies:
   - toolz=0.8.2
   # test dependencies
   - pytest
+  - pytest-cov
   - pytest-rerunfailures
   - pytest-xdist
