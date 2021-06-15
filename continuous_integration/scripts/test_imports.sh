@@ -9,9 +9,6 @@ test_import () {
     conda activate test-imports
     if [[ $1 =~ "distributed" ]]; then
         # dask[distributed] depends on the latest version of distributed
-        # mamba uninstall doesn't have --force yet https://github.com/mamba-org/mamba/issues/412
-        # mamba uninstall -y --force distributed
-        conda uninstall -y --force distributed
         python -m pip install git+https://github.com/dask/distributed
     fi
     python -m pip install -e .
