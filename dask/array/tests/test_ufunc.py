@@ -478,14 +478,14 @@ def test_divmod():
 
 @pytest.mark.parametrize("dt", ["float64", "float32", "int32", "int64"])
 def test_dtype_kwarg(dt):
-    x1, y1 = da.asarray([1, 2, 3]), da.asarray([4, 5, 6])
-    assert x1.dtype == np.dtype("int64")
-    assert y1.dtype == np.dtype("int64")
+    x1 = da.asarray([1, 2, 3], dtype=np.int64)
+    y1 = da.asarray([4, 5, 6], dtype=np.int64)
     z1 = np.add(x1, y1, dtype=np.dtype(dt))
     assert z1.dtype == np.dtype(dt)
     assert z1.compute().dtype == z1.dtype
 
-    x2, y2 = da.asarray([1, 2, 3]), da.asarray([4, 5, 6])
+    x2 = da.asarray([1, 2, 3], dtype=np.int64)
+    y2 = da.asarray([4, 5, 6], dtype=np.int64)
     z2 = da.add(x2, y2, dtype=np.dtype(dt))
     assert z2.dtype == np.dtype(dt)
     assert z2.compute().dtype == z2.dtype
