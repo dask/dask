@@ -21,7 +21,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, key_split, stringify
+from .utils import _deprecated, ensure_dict, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -776,13 +776,9 @@ class HighLevelGraph(Mapping):
         """
         return self.to_dict().keys()
 
+    @_deprecated(use_instead="HighLevelGraph.keys")
     def keyset(self) -> AbstractSet:
         # Backwards compatibility for now
-        warnings.warn(
-            "'keyset' method of HighLevelGraph is deprecated now and will be removed "
-            "in a future version. To silence this warning, use '.keys' instead.",
-            FutureWarning,
-        )
         return self.keys()
 
     def get_all_external_keys(self) -> set:
