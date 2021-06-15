@@ -16,7 +16,7 @@ from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
-from typing import Dict, Iterable, Mapping, Optional, TypeVar
+from typing import Dict, Iterable, Mapping, Optional, Type, TypeVar
 from weakref import WeakValueDictionary
 
 from .core import get_deps
@@ -42,7 +42,7 @@ def _deprecated(
     version: str = None,
     msg: str = None,
     use_instead: str = None,
-    category: type[Warning] = FutureWarning,
+    category: Type[Warning] = FutureWarning,
 ):
     """Decorator to mark a function as deprecated
 
