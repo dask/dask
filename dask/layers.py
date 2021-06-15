@@ -198,7 +198,7 @@ class SlicingLayer(Layer):
         deps = defaultdict(set)
         parts_out = parts_out or self._keys_to_parts(keys)
         for part in parts_out:
-            deps[(self.out_name, part)] |= {(self.in_name, part)}
+            deps[(self.out_name, *part)] |= {(self.in_name, *part)}
         return deps
 
     def _construct_graph(self, deserializing=False):
