@@ -483,11 +483,11 @@ def test_dtype_kwarg(dt):
     assert y1.dtype == np.dtype("int64")
     z1 = np.add(x1, y1, dtype=np.dtype(dt))
     assert z1.dtype == np.dtype(dt)
-    assert z1.compute().dtype == np.dtype(dt)
+    assert z1.compute().dtype == z1.dtype
 
     x2, y2 = da.asarray([1, 2, 3]), da.asarray([4, 5, 6])
     z2 = da.add(x2, y2, dtype=np.dtype(dt))
     assert z2.dtype == np.dtype(dt)
-    assert z2.compute().dtype == np.dtype(dt)
+    assert z2.compute().dtype == z2.dtype
 
     assert_eq(z1, z2)
