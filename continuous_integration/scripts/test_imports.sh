@@ -6,6 +6,7 @@ test_import () {
     echo "Create environment: python=$PYTHON_VERSION $1"
     # Create an empty environment
     mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml fsspec toolz partd cloudpickle $1
+    conda activate test-imports
     if [[ $1 =~ "distributed" ]]; then
         # dask[distributed] depends on the latest version of distributed
         # mamba uninstall doesn't have --force yet https://github.com/mamba-org/mamba/issues/412
@@ -13,7 +14,6 @@ test_import () {
         conda uninstall -y --force distributed
         python -m pip install git+https://github.com/dask/distributed
     fi
-    conda activate test-imports
     python -m pip install -e .
     mamba list
     echo "python -c '$2'"
