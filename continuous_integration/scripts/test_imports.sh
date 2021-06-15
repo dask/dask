@@ -8,6 +8,7 @@ test_import () {
     mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml fsspec toolz partd cloudpickle $1
     if [[ $1 =~ "distributed" ]]; then
         # dask[distributed] depends on the latest version of distributed
+        mamba uninstall --force -y distributed
         python -m pip install git+https://github.com/dask/distributed
     fi
     conda activate test-imports
