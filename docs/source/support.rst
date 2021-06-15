@@ -20,7 +20,7 @@ Conversation happens in the following places:
     <https://gitter.im/dask/dev>`_ for developer conversation.  Note that
     because gitter chat is not searchable by future users we discourage usage
     questions and bug reports on gitter and instead ask people to use Stack
-    Overflow or GitHub. You can also find the community chatting in 
+    Overflow or GitHub. You can also find the community chatting in
     `https://dask.slack.com/ <https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g>`_.
 4.  **Monthly developer meeting** happens the first Thursday of the month at
     10:00 US Central Time in `this video meeting <https://zoom.us/j/802251830>`_.
@@ -74,7 +74,9 @@ likelihood of quickly getting a good answer.
 
 Paid support
 ------------
-In addition to the previous options, paid support is available from
+In addition to the previous options, paid support is available from the
+following organizations (listed in alphabetical order):
 
 -   Anaconda: `<https://www.anaconda.com/help>`_
+-   Coiled: `<https://coiled.io>`_
 -   Quansight: `<https://www.quansight.com/open-source-support>`_
