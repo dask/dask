@@ -1,13 +1,15 @@
+import contextlib
 import itertools
 from numbers import Number
 
 import pytest
 
+from dask.delayed import delayed
+
 np = pytest.importorskip("numpy")
 
 import dask.array as da
 from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
-from dask.utils import ignoring
 
 
 def test_array():
@@ -188,10 +190,12 @@ def test_moveaxis_rollaxis_numpy_api():
     [
         ("flipud", {}),
         ("fliplr", {}),
+        ("flip", {}),
         ("flip", {"axis": 0}),
         ("flip", {"axis": 1}),
         ("flip", {"axis": 2}),
         ("flip", {"axis": -1}),
+        ("flip", {"axis": (0, 2)}),
     ],
 )
 @pytest.mark.parametrize("shape", [tuple(), (4,), (4, 6), (4, 6, 8), (4, 6, 8, 10)])
@@ -199,9 +203,13 @@ def test_flip(funcname, kwargs, shape):
     axis = kwargs.get("axis")
     if axis is None:
         if funcname == "flipud":
-            axis = 0
+            axis = (0,)
         elif funcname == "fliplr":
-            axis = 1
+            axis = (1,)
+        elif funcname == "flip":
+            axis = range(len(shape))
+    elif not isinstance(axis, tuple):
+        axis = (axis,)
 
     np_a = np.random.random(shape)
     da_a = da.from_array(np_a, chunks=1)
@@ -210,7 +218,8 @@ def test_flip(funcname, kwargs, shape):
     da_func = getattr(da, funcname)
 
     try:
-        range(np_a.ndim)[axis]
+        for ax in axis:
+            range(np_a.ndim)[ax]
     except IndexError:
         with pytest.raises(ValueError):
             da_func(da_a, **kwargs)
@@ -615,6 +624,37 @@ def test_digitize():
             assert_eq(
                 da.digitize(d, bins, right=right), np.digitize(x, bins, right=right)
             )
+
+
+@pytest.mark.parametrize(
+    "a, a_chunks, v, v_chunks",
+    [
+        [[], 1, [], 1],
+        [[0], 1, [0], 1],
+        [[-10, 0, 10, 20, 30], 3, [11, 30], 2],
+        [[-10, 0, 10, 20, 30], 3, [11, 30, -20, 1, -10, 10, 37, 11], 5],
+        [[-10, 0, 10, 20, 30], 3, [[11, 30, -20, 1, -10, 10, 37, 11]], 5],
+        [[-10, 0, 10, 20, 30], 3, [[7, 0], [-10, 10], [11, -1], [15, 15]], (2, 2)],
+    ],
+)
+@pytest.mark.parametrize("side", ["left", "right"])
+def test_searchsorted(a, a_chunks, v, v_chunks, side):
+    a = np.array(a)
+    v = np.array(v)
+
+    ad = da.asarray(a, chunks=a_chunks)
+    vd = da.asarray(v, chunks=v_chunks)
+
+    out = da.searchsorted(ad, vd, side)
+
+    assert out.shape == vd.shape
+    assert out.chunks == vd.chunks
+    assert_eq(out, np.searchsorted(a, v, side))
+
+
+def test_searchsorted_sorter_not_implemented():
+    with pytest.raises(NotImplementedError):
+        da.searchsorted(da.asarray([1, 0]), da.asarray([1]), sorter=da.asarray([1, 0]))
 
 
 def test_histogram():
@@ -1368,7 +1408,7 @@ def test_extract():
 def test_isnull():
     x = np.array([1, np.nan])
     a = da.from_array(x, chunks=(2,))
-    with ignoring(ImportError):
+    with contextlib.suppress(ImportError):
         assert_eq(da.isnull(a), np.isnan(x))
         assert_eq(da.notnull(a), ~(np.isnan(x)))
 
@@ -1376,7 +1416,7 @@ def test_isnull():
 def test_isnull_result_is_an_array():
     # regression test for https://github.com/dask/dask/issues/3822
     arr = da.from_array(np.arange(3, dtype=np.int64), chunks=-1)
-    with ignoring(ImportError):
+    with contextlib.suppress(ImportError):
         result = da.isnull(arr[0]).compute()
         assert type(result) is np.ndarray
 
@@ -1451,6 +1491,50 @@ def test_piecewise_otherwise():
             k=2,
         ),
     )
+
+
+def test_select():
+    conditions = [
+        np.array([False, False, False, False]),
+        np.array([False, True, False, True]),
+        np.array([False, False, True, True]),
+    ]
+    choices = [
+        np.array([1, 2, 3, 4]),
+        np.array([5, 6, 7, 8]),
+        np.array([9, 10, 11, 12]),
+    ]
+    d_conditions = da.from_array(conditions, chunks=(3, 2))
+    d_choices = da.from_array(choices)
+    assert_eq(np.select(conditions, choices), da.select(d_conditions, d_choices))
+
+
+def test_select_multidimension():
+    x = np.random.random((100, 50, 2))
+    y = da.from_array(x, chunks=(50, 50, 1))
+    res_x = np.select([x < 0, x > 2, x > 1], [x, x * 2, x * 3], default=1)
+    res_y = da.select([y < 0, y > 2, y > 1], [y, y * 2, y * 3], default=1)
+    assert isinstance(res_y, da.Array)
+    assert_eq(res_y, res_x)
+
+
+def test_select_return_dtype():
+    d = np.array([1, 2, 3, np.nan, 5, 7])
+    m = np.isnan(d)
+    d_d = da.from_array(d)
+    d_m = da.isnan(d_d)
+    assert_eq(np.select([m], [d]), da.select([d_m], [d_d]), equal_nan=True)
+
+
+@pytest.mark.xfail(reason="broadcasting in da.select() not implemented yet")
+def test_select_broadcasting():
+    conditions = [np.array(True), np.array([False, True, False])]
+    choices = [1, np.arange(12).reshape(4, 3)]
+    d_conditions = da.from_array(conditions)
+    d_choices = da.from_array(choices)
+    assert_eq(np.select(conditions, choices), da.select(d_conditions, d_choices))
+    # default can broadcast too:
+    assert_eq(np.select([True], [0], default=[0]), da.select([True], [0], default=[0]))
 
 
 def test_argwhere():
@@ -1724,6 +1808,16 @@ def test_unravel_index():
 
 
 @pytest.mark.parametrize(
+    "asarray",
+    [
+        lambda x: x,
+        lambda x: [np.asarray(a) for a in x],
+        lambda x: [da.asarray(a) for a in x],
+        np.asarray,
+        da.from_array,
+    ],
+)
+@pytest.mark.parametrize(
     "arr, chunks, kwargs",
     [
         # Numpy doctests:
@@ -1734,15 +1828,76 @@ def test_unravel_index():
         # Shape tests:
         ([[3, 6, 6]], (1, 1), dict(dims=(7), order="C")),
         ([[3, 6, 6], [4, 5, 1], [8, 6, 2]], (3, 1), dict(dims=(7, 6, 9), order="C")),
+        # Multi-dimensional index arrays
+        (
+            np.arange(6).reshape(3, 2, 1).tolist(),
+            (1, 2, 1),
+            dict(dims=(7, 6, 9), order="C"),
+        ),
+        # Broadcasting index arrays
+        ([1, [2, 3]], None, dict(dims=(8, 9))),
+        ([1, [2, 3], [[1, 2], [3, 4], [5, 6], [7, 8]]], None, dict(dims=(8, 9, 10))),
     ],
 )
-def test_ravel_multi_index(arr, chunks, kwargs):
-    arr = np.asarray(arr)
-    darr = da.from_array(arr, chunks=chunks)
+def test_ravel_multi_index(asarray, arr, chunks, kwargs):
+    if any(np.isscalar(x) for x in arr) and asarray in (np.asarray, da.from_array):
+        pytest.skip()
+
+    if asarray is da.from_array:
+        arr = np.asarray(arr)
+        input = da.from_array(arr, chunks=chunks)
+    else:
+        arr = input = asarray(arr)
+
     assert_eq(
-        da.ravel_multi_index(darr, **kwargs).compute(),
         np.ravel_multi_index(arr, **kwargs),
+        da.ravel_multi_index(input, **kwargs),
     )
+
+
+def test_ravel_multi_index_unknown_shape():
+    multi_index = da.from_array([[3, 6, 6], [4, 5, 1], [-1, -1, -1]])
+    multi_index = multi_index[(multi_index > 0).all(axis=1)]
+
+    multi_index_np = multi_index.compute()
+
+    assert np.isnan(multi_index.shape).any()
+    assert_eq(
+        np.ravel_multi_index(multi_index_np, dims=(7, 6)),
+        da.ravel_multi_index(multi_index, dims=(7, 6)),
+    )
+
+
+def test_ravel_multi_index_unknown_shape_fails():
+    multi_index1 = da.from_array([2, -1, 3, -1], chunks=2)
+    multi_index1 = multi_index1[multi_index1 > 0]
+
+    multi_index2 = da.from_array(
+        [[1, 2], [-1, -1], [3, 4], [5, 6], [7, 8], [-1, -1]], chunks=(2, 1)
+    )
+    multi_index2 = multi_index2[(multi_index2 > 0).all(axis=1)]
+
+    multi_index = [1, multi_index1, multi_index2]
+
+    assert np.isnan(multi_index1.shape).any()
+    assert np.isnan(multi_index2.shape).any()
+    with pytest.raises(ValueError, match="Arrays' chunk sizes"):
+        da.ravel_multi_index(multi_index, dims=(8, 9, 10))
+
+
+@pytest.mark.parametrize("dims", [da.from_array([5, 10]), delayed([5, 10], nout=2)])
+@pytest.mark.parametrize("wrap_in_list", [False, True])
+def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
+    with pytest.raises(NotImplementedError, match="Dask types are not supported"):
+        da.ravel_multi_index((2, 1), list(dims) if wrap_in_list else dims)
+
+
+def test_ravel_multi_index_non_int_dtype():
+    with pytest.raises(TypeError, match="only int indices permitted"):
+        da.ravel_multi_index(
+            (1.0, 2),
+            (5, 10),
+        )
 
 
 def test_coarsen():

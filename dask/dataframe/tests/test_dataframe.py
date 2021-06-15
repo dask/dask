@@ -1,4 +1,5 @@
 import warnings
+import xml.etree.ElementTree
 from itertools import product
 from operator import add
 
@@ -26,6 +27,7 @@ from dask.dataframe.core import (
     total_mem_usage,
 )
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.datasets import timeseries
 from dask.utils import M, put_lines
 
 dsk = {
@@ -33,7 +35,9 @@ dsk = {
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}, index=[5, 6, 8]),
     ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}, index=[9, 9, 9]),
 }
-meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
+meta = make_meta(
+    {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
+)
 d = dd.DataFrame(dsk, "x", meta, [0, 5, 9, 9])
 full = d.compute()
 CHECK_FREQ = {}
@@ -214,6 +218,20 @@ def test_column_names():
     assert (d["a"] + d["b"]).name is None
 
 
+def test_columns_named_divisions_and_meta():
+    # https://github.com/dask/dask/issues/7599
+    df = pd.DataFrame(
+        {"_meta": [1, 2, 3, 4], "divisions": ["a", "b", "c", "d"]},
+        index=[0, 1, 3, 5],
+    )
+    ddf = dd.from_pandas(df, 2)
+
+    assert ddf.divisions == (0, 3, 5)
+    assert_eq(ddf["divisions"], df.divisions)
+    assert all(ddf._meta.columns == ["_meta", "divisions"])
+    assert_eq(ddf["_meta"], df._meta)
+
+
 def test_index_names():
     assert d.index.name is None
 
@@ -224,6 +242,7 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
+@pytest.mark.skipif(dd._compat.PANDAS_GT_130, reason="Freq no longer included in ts")
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -667,6 +686,11 @@ def test_dropna():
 
     assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
+
+    # Regression test for https://github.com/dask/dask/issues/6540
+    df = pd.DataFrame({"_0": [0, 0, np.nan], "_1": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.dropna(subset=["_0"]), df.dropna(subset=["_0"]))
 
 
 @pytest.mark.parametrize("lower, upper", [(2, 5), (2.5, 3.5)])
@@ -1367,7 +1391,7 @@ def test_quantile_for_possibly_unsorted_q():
 
 
 def test_quantile_tiny_partitions():
-    """ See https://github.com/dask/dask/issues/6551 """
+    """See https://github.com/dask/dask/issues/6551"""
     df = pd.DataFrame({"a": [1, 2, 3]})
     ddf = dd.from_pandas(df, npartitions=3)
     r = ddf["a"].quantile(0.5).compute()
@@ -1504,7 +1528,7 @@ def test_unknown_divisions():
         ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [3, 2, 1]}),
         ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [0, 0, 0]}),
     }
-    meta = make_meta({"a": "i8", "b": "i8"})
+    meta = make_meta({"a": "i8", "b": "i8"}, parent_meta=pd.DataFrame())
     d = dd.DataFrame(dsk, "x", meta, [None, None, None, None])
     full = d.compute(scheduler="sync")
 
@@ -1618,7 +1642,7 @@ def test_combine():
     df1 = pd.DataFrame(
         {
             "A": np.random.choice([1, 2, np.nan], 100),
-            "B": np.random.choice(["a", "b", np.nan], 100),
+            "B": np.random.choice(["a", "b", "nan"], 100),
         }
     )
 
@@ -1663,7 +1687,7 @@ def test_combine_first():
     df1 = pd.DataFrame(
         {
             "A": np.random.choice([1, 2, np.nan], 100),
-            "B": np.random.choice(["a", "b", np.nan], 100),
+            "B": np.random.choice(["a", "b", "nan"], 100),
         }
     )
 
@@ -1688,6 +1712,9 @@ def test_combine_first():
     assert_eq(ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B))
 
 
+@pytest.mark.filterwarnings(
+    "ignore:The 'freq' argument in Timestamp is deprecated:FutureWarning"
+)  #  PANDAS_GT_130 https://github.com/pandas-dev/pandas/issues/41949
 def test_dataframe_picklable():
     from pickle import dumps, loads
 
@@ -2043,12 +2070,12 @@ def test_repartition_freq_month():
     assert_eq(df, ddf)
 
     assert ddf.divisions == (
-        pd.Timestamp("2015-1-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-2-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-3-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-4-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 23:50:00", freq="10T"),
+        pd.Timestamp("2015-1-1 00:00:00"),
+        pd.Timestamp("2015-2-1 00:00:00"),
+        pd.Timestamp("2015-3-1 00:00:00"),
+        pd.Timestamp("2015-4-1 00:00:00"),
+        pd.Timestamp("2015-5-1 00:00:00"),
+        pd.Timestamp("2015-5-1 23:50:00"),
     )
 
     assert ddf.npartitions == 5
@@ -2066,8 +2093,8 @@ def test_repartition_freq_day():
     assert_eq(ddf, pdf)
     assert ddf.npartitions == 2
     assert ddf.divisions == (
-        pd.Timestamp("2020-1-1", freq="D"),
-        pd.Timestamp("2020-1-2", freq="D"),
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-2"),
         pd.Timestamp("2020-1-2"),
     )
 
@@ -2173,6 +2200,26 @@ def test_fillna():
     assert_eq(df.fillna(method="pad", limit=3), ddf.fillna(method="pad", limit=3))
 
 
+def test_from_delayed_lazy_if_meta_provided():
+    """Ensure that the graph is 100% lazily evaluted if meta is provided"""
+
+    @dask.delayed
+    def raise_exception():
+        raise RuntimeError()
+
+    tasks = [raise_exception()]
+    ddf = dd.from_delayed(tasks, meta=dict(a=float))
+
+    with pytest.raises(RuntimeError):
+        ddf.compute()
+
+
+def test_from_delayed_empty_meta_provided():
+    ddf = dd.from_delayed([], meta=dict(a=float))
+    expected = pd.DataFrame({"a": [0.1]}).iloc[:0]
+    assert_eq(ddf, expected)
+
+
 def test_fillna_duplicate_index():
     @dask.delayed
     def f():
@@ -2261,7 +2308,7 @@ def test_sample_raises():
 
 
 def test_empty_max():
-    meta = make_meta({"x": "i8"})
+    meta = make_meta({"x": "i8"}, parent_meta=pd.DataFrame())
     a = dd.DataFrame(
         {("x", 0): pd.DataFrame({"x": [1]}), ("x", 1): pd.DataFrame({"x": []})},
         "x",
@@ -2672,13 +2719,13 @@ def test_to_timestamp():
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
 
@@ -2824,6 +2871,20 @@ def test_applymap():
     assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
 
     assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+
+
+def test_add_prefix():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"))
+    assert_eq(ddf.x.add_prefix("abc"), df.x.add_prefix("abc"))
+
+
+def test_add_suffix():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"))
+    assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"))
 
 
 def test_abs():
@@ -4594,6 +4655,14 @@ def test_dask_layers():
         ddi.key[0]: {dds._name},
     }
     assert ddi.__dask_layers__() == (ddi.key[0],)
+
+
+def test_repr_html_dataframe_highlevelgraph():
+    x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
+    hg = x.dask
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 @pytest.mark.skipif(

@@ -10,17 +10,17 @@ import numpy as np
 from tlz import concat, interleave, sliding_window
 
 from ..base import is_dask_collection, tokenize
-from ..compatibility import apply
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
+from ..utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
 from .core import (
     Array,
     asanyarray,
     asarray,
     blockwise,
+    broadcast_arrays,
     broadcast_shapes,
     broadcast_to,
     concatenate,
@@ -170,25 +170,33 @@ def transpose(a, axes=None):
     )
 
 
-def flip(m, axis):
+def flip(m, axis=None):
     """
     Reverse element order along axis.
 
     Parameters
     ----------
-    axis : int
-        Axis to reverse element order of.
+    m : array_like
+        Input array.
+    axis : None or int or tuple of ints, optional
+        Axis or axes to reverse element order of. None will reverse all axes.
 
     Returns
     -------
-    reversed array : ndarray
+    dask.array.Array
+        The flipped array.
     """
 
     m = asanyarray(m)
 
     sl = m.ndim * [slice(None)]
+    if axis is None:
+        axis = range(m.ndim)
+    if not isinstance(axis, Iterable):
+        axis = (axis,)
     try:
-        sl[axis] = slice(None, None, -1)
+        for ax in axis:
+            sl[ax] = slice(None, None, -1)
     except IndexError as e:
         raise ValueError(
             "`axis` of %s invalid for %s-D array" % (str(axis), str(m.ndim))
@@ -239,10 +247,6 @@ def rot90(m, k=1, axes=(0, 1)):
     else:
         # k == 3
         return flip(transpose(m, axes_list), axes[1])
-
-
-alphabet = "abcdefghijklmnopqrstuvwxyz"
-ALPHABET = alphabet.upper()
 
 
 def _tensordot(a, b, axes):
@@ -710,6 +714,56 @@ def digitize(a, bins, right=False):
     bins = asarray_safe(bins, like=meta_from_array(a))
     dtype = np.digitize(asarray_safe([0], like=bins), bins, right=False).dtype
     return a.map_blocks(np.digitize, dtype=dtype, bins=bins, right=right)
+
+
+def _searchsorted_block(x, y, side):
+    res = np.searchsorted(x, y, side=side)
+    # 0 is only correct for the first block of a, but blockwise doesn't have a way
+    # of telling which block is being operated on (unlike map_blocks),
+    # so set all 0 values to a special value and set back at the end of searchsorted
+    res[res == 0] = -1
+    return res[np.newaxis, :]
+
+
+@derived_from(np)
+def searchsorted(a, v, side="left", sorter=None):
+    if a.ndim != 1:
+        raise ValueError("Input array a must be one dimensional")
+
+    if sorter is not None:
+        raise NotImplementedError(
+            "da.searchsorted with a sorter argument is not supported"
+        )
+
+    # call np.searchsorted for each pair of blocks in a and v
+    meta = np.searchsorted(a._meta, v._meta)
+    out = blockwise(
+        _searchsorted_block,
+        list(range(v.ndim + 1)),
+        a,
+        [0],
+        v,
+        list(range(1, v.ndim + 1)),
+        side,
+        None,
+        meta=meta,
+        adjust_chunks={0: 1},  # one row for each block in a
+    )
+
+    # add offsets to take account of the position of each block within the array a
+    a_chunk_sizes = array_safe((0, *a.chunks[0]), like=meta_from_array(a))
+    a_chunk_offsets = np.cumsum(a_chunk_sizes)[:-1]
+    a_chunk_offsets = a_chunk_offsets[(Ellipsis,) + v.ndim * (np.newaxis,)]
+    a_offsets = asarray(a_chunk_offsets, chunks=1)
+    out = where(out < 0, out, out + a_offsets)
+
+    # combine the results from each block (of a)
+    out = out.max(axis=0)
+
+    # fix up any -1 values
+    out[out == -1] = 0
+
+    return out
 
 
 # TODO: dask linspace doesn't support delayed values
@@ -1618,7 +1672,7 @@ def _asarray_isnull(values):
 
 
 def isnull(values):
-    """ pandas.isnull for dask arrays """
+    """pandas.isnull for dask arrays"""
     # eagerly raise ImportError, if pandas isn't available
     import pandas as pd  # noqa
 
@@ -1626,7 +1680,7 @@ def isnull(values):
 
 
 def notnull(values):
-    """ pandas.notnull for dask arrays """
+    """pandas.notnull for dask arrays"""
     return ~isnull(values)
 
 
@@ -1754,18 +1808,35 @@ def unravel_index(indices, shape, order="C"):
     return unraveled_indices
 
 
-def _ravel_multi_index_kernel(multi_index, func_kwargs):
-    return np.ravel_multi_index(multi_index, **func_kwargs)
-
-
 @wraps(np.ravel_multi_index)
 def ravel_multi_index(multi_index, dims, mode="raise", order="C"):
-    return multi_index.map_blocks(
-        _ravel_multi_index_kernel,
+    if np.isscalar(dims):
+        dims = (dims,)
+    if is_dask_collection(dims) or any(is_dask_collection(d) for d in dims):
+        raise NotImplementedError(
+            f"Dask types are not supported in the `dims` argument: {dims!r}"
+        )
+
+    if is_arraylike(multi_index):
+        index_stack = asarray(multi_index)
+    else:
+        multi_index_arrs = broadcast_arrays(*multi_index)
+        index_stack = stack(multi_index_arrs)
+
+    if not np.isnan(index_stack.shape).any() and len(index_stack) != len(dims):
+        raise ValueError(
+            f"parameter multi_index must be a sequence of length {len(dims)}"
+        )
+    if not np.issubdtype(index_stack.dtype, np.signedinteger):
+        raise TypeError("only int indices permitted")
+    return index_stack.map_blocks(
+        np.ravel_multi_index,
         dtype=np.intp,
-        chunks=(multi_index.shape[-1],),
+        chunks=index_stack.chunks[1:],
         drop_axis=0,
-        func_kwargs=dict(dims=dims, mode=mode, order=order),
+        dims=dims,
+        mode=mode,
+        order=order,
     )
 
 
@@ -1786,6 +1857,51 @@ def piecewise(x, condlist, funclist, *args, **kw):
         funclist=funclist,
         func_args=args,
         func_kw=kw,
+    )
+
+
+def _select(*args, **kwargs):
+    """
+    This is a version of :func:`numpy.select` that acceptes an arbitrary number of arguments and
+    splits them in half to create ``condlist`` and ``choicelist`` params.
+    """
+    split_at = len(args) // 2
+    condlist = args[:split_at]
+    choicelist = args[split_at:]
+    return np.select(condlist, choicelist, **kwargs)
+
+
+@derived_from(np)
+def select(condlist, choicelist, default=0):
+    # Making the same checks that np.select
+    # Check the size of condlist and choicelist are the same, or abort.
+    if len(condlist) != len(choicelist):
+        raise ValueError("list of cases must be same length as list of conditions")
+
+    if len(condlist) == 0:
+        raise ValueError("select with an empty condition list is not possible")
+
+    choicelist = [asarray(choice) for choice in choicelist]
+
+    try:
+        intermediate_dtype = result_type(*choicelist)
+    except TypeError as e:
+        msg = "Choicelist elements do not have a common dtype."
+        raise TypeError(msg) from e
+
+    blockwise_shape = tuple(range(choicelist[0].ndim))
+
+    condargs = [arg for elem in condlist for arg in (elem, blockwise_shape)]
+    choiceargs = [arg for elem in choicelist for arg in (elem, blockwise_shape)]
+
+    return blockwise(
+        _select,
+        blockwise_shape,
+        *condargs,
+        *choiceargs,
+        dtype=intermediate_dtype,
+        name="select",
+        default=default,
     )
 
 

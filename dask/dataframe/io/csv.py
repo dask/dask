@@ -1,4 +1,3 @@
-import copy
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
@@ -44,6 +43,7 @@ class CSVFunctionWrapper:
 
     def __init__(
         self,
+        full_columns,
         columns,
         colname,
         head,
@@ -53,7 +53,8 @@ class CSVFunctionWrapper:
         enforce,
         kwargs,
     ):
-        self.full_columns = columns
+        self.full_columns = full_columns
+        self.columns = columns
         self.colname = colname
         self.head = head
         self.header = header
@@ -61,17 +62,26 @@ class CSVFunctionWrapper:
         self.dtypes = dtypes
         self.enforce = enforce
         self.kwargs = kwargs
-        self.columns = None  # Used to pass `usecols`
 
     def project_columns(self, columns):
         """Return a new CSVFunctionWrapper object with
         a sub-column projection.
         """
+        # Make sure columns is ordered correctly
+        columns = [c for c in self.head.columns if c in columns]
         if columns == self.columns:
             return self
-        func = copy.deepcopy(self)
-        func.columns = columns
-        return func
+        return CSVFunctionWrapper(
+            self.full_columns,
+            columns,
+            self.colname,
+            self.head[columns],
+            self.header,
+            self.reader,
+            {c: self.dtypes[c] for c in columns},
+            self.enforce,
+            self.kwargs,
+        )
 
     def __call__(self, part):
 
@@ -92,25 +102,38 @@ class CSVFunctionWrapper:
         # for the first block of each file
         write_header = False
         rest_kwargs = self.kwargs.copy()
-        if self.columns is not None:
-            if rest_kwargs.get("usecols", None) is None:
-                rest_kwargs["usecols"] = self.columns
         if not is_first:
             write_header = True
             rest_kwargs.pop("skiprows", None)
 
+        # Deal with column projection
+        columns = self.full_columns
+        project_after_read = False
+        if self.columns is not None:
+            if self.kwargs:
+                # To be safe, if any kwargs are defined, avoid
+                # changing `usecols` here. Instead, we can just
+                # select columns after the read
+                project_after_read = True
+            else:
+                columns = self.columns
+                rest_kwargs["usecols"] = columns
+
         # Call `pandas_read_text`
-        return pandas_read_text(
+        df = pandas_read_text(
             self.reader,
             block,
             self.header,
             rest_kwargs,
             self.dtypes,
-            self.full_columns,
+            columns,
             write_header,
             self.enforce,
             path_info,
         )
+        if project_after_read:
+            return df[self.columns]
+        return df
 
 
 def pandas_read_text(
@@ -363,6 +386,7 @@ def text_blocks_to_pandas(
         parts,
         CSVFunctionWrapper(
             columns,
+            None,
             colname,
             head,
             header,

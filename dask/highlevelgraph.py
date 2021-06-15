@@ -1,6 +1,8 @@
 import abc
 import collections.abc
+import contextlib
 import copy
+import html
 import warnings
 from typing import (
     AbstractSet,
@@ -19,7 +21,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, ignoring, stringify
+from .utils import ensure_dict, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -96,6 +98,7 @@ class Layer(collections.abc.Mapping):
         """Return whether the layer is materialized or not"""
         return True
 
+    @abc.abstractmethod
     def get_output_keys(self) -> AbstractSet:
         """Return a set of all output keys
 
@@ -110,15 +113,15 @@ class Layer(collections.abc.Mapping):
         keys: AbstractSet
             All output keys
         """
-        return self.keys()
+        return self.keys()  # this implementation will materialize the graph
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
     ) -> Tuple["Layer", Mapping[Hashable, set]]:
-        """Return a new Layer with only the tasks required to calculate `keys` and
-        a map of external key dependencies.
+        """Remove unnecessary tasks from the layer
 
-        In other words, remove unnecessary tasks from the layer.
+        In other words, return a new Layer with only the tasks required to
+        calculate `keys` and a map of external key dependencies.
 
         Examples
         --------
@@ -174,29 +177,32 @@ class Layer(collections.abc.Mapping):
         """
         return keys_in_tasks(all_hlg_keys, [self[key]])
 
-    def __dask_distributed_annotations_pack__(self) -> Optional[Mapping[str, Any]]:
+    def __dask_distributed_annotations_pack__(
+        self, annotations: Mapping[str, Any] = None
+    ) -> Optional[Mapping[str, Any]]:
         """Packs Layer annotations for transmission to scheduler
 
         Callables annotations are fully expanded over Layer keys, while
         other values are simply transmitted as is
+
+        Parameters
+        ----------
+        annotations : Mapping[str, Any], optional
+            A top-level annotations.
 
         Returns
         -------
         packed_annotations : dict
             Packed annotations.
         """
-        if self.annotations is None:
-            return None
-
+        annotations = toolz.merge(self.annotations or {}, annotations or {})
         packed = {}
-
-        for a, v in self.annotations.items():
+        for a, v in annotations.items():
             if callable(v):
                 packed[a] = {stringify(k): v(k) for k in self}
                 packed[a]["__expanded_annotations__"] = True
             else:
                 packed[a] = v
-
         return packed
 
     @staticmethod
@@ -431,7 +437,7 @@ class Layer(collections.abc.Mapping):
 
         This method is called by the scheduler in Distributed in order to unpack
         the state of a layer and merge it into its global task graph. The method
-        should update `dsk` and `dependencies`, which are the already materialized
+        can use `dsk` and `dependencies`, which are the already materialized
         state of the preceding layers in the high level graph. The layers of the
         high level graph are unpacked in topological order.
 
@@ -466,6 +472,62 @@ class Layer(collections.abc.Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+        unmaterialized_layer_icon = """
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none"
+                xmlns="http://www.w3.org/2000/svg" style="position: absolute;">
+                <circle cx="16" cy="16" r="14" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
+            </svg>
+        """
+        materialized_layer_icon = """
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none"
+                xmlns="http://www.w3.org/2000/svg" style="position: absolute;">
+                <circle cx="16" cy="16" r="14" fill="#8F8F8F" stroke="#1D1D1D" stroke-width="2"/>
+            </svg>
+        """
+        if self.is_materialized():
+            layer_icon = materialized_layer_icon
+        else:
+            layer_icon = unmaterialized_layer_icon
+
+        if highlevelgraph_key != "":
+            shortname = key_split(highlevelgraph_key)
+        elif hasattr(self, "name"):
+            shortname = key_split(self.name)
+        else:
+            shortname = self.__class__.__name__
+
+        info = self.layer_info_dict()
+        layer_info_table = html_from_dict(info)
+        html = f"""
+            <div style="">
+                {layer_icon}
+                <details style="margin-left: 32px;">
+                    <summary style="margin-bottom: 10px; margin-top: 10px;">
+                        <h3 style="display: inline;">Layer{layer_index}: {shortname}</h3>
+                    </summary>
+                    <p style="color: #5D5851; margin-top: -0.25em; margin-bottom: 0px; margin-left: 0px;">
+                        {highlevelgraph_key}
+                    </p>
+                    {layer_info_table}
+                </details>
+            </div>
+            """
+        return html
+
+    def layer_info_dict(self):
+        info = {
+            "layer_type": type(self).__name__,
+            "is_materialized": self.is_materialized(),
+        }
+        if self.annotations is not None:
+            for key, val in self.annotations.items():
+                info[key] = html.escape(str(val))
+        if self.collection_annotations is not None:
+            for key, val in self.collection_annotations.items():
+                info[key] = html.escape(str(val))
+        return info
+
 
 class MaterializedLayer(Layer):
     """Fully materialized layer of `Layer`
@@ -494,6 +556,9 @@ class MaterializedLayer(Layer):
 
     def is_materialized(self):
         return True
+
+    def get_output_keys(self):
+        return self.keys()
 
 
 class HighLevelGraph(Mapping):
@@ -584,14 +649,14 @@ class HighLevelGraph(Mapping):
 
     @classmethod
     def _from_collection(cls, name, layer, collection):
-        """ `from_collections` optimized for a single collection """
+        """`from_collections` optimized for a single collection"""
         if is_dask_collection(collection):
             graph = collection.__dask_graph__()
             if isinstance(graph, HighLevelGraph):
                 layers = ensure_dict(graph.layers, copy=True)
                 layers.update({name: layer})
                 deps = ensure_dict(graph.dependencies, copy=True)
-                with ignoring(AttributeError):
+                with contextlib.suppress(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
                 key = _get_some_layer_name(collection)
@@ -647,7 +712,7 @@ class HighLevelGraph(Mapping):
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    with ignoring(AttributeError):
+                    with contextlib.suppress(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)
@@ -806,7 +871,8 @@ class HighLevelGraph(Mapping):
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
-        return graphviz_to_file(g, filename, format)
+        graphviz_to_file(g, filename, format)
+        return g
 
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
@@ -952,21 +1018,25 @@ class HighLevelGraph(Mapping):
                 )
 
     def __dask_distributed_pack__(
-        self, client, client_keys: Iterable[Hashable]
+        self,
+        client,
+        client_keys: Iterable[Hashable],
+        annotations: Mapping[str, Any] = None,
     ) -> dict:
         """Pack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the packaging to each layer in the high level graph
         by calling .__dask_distributed_pack__() and .__dask_distributed_annotations_pack__()
-        on each layer. If the layer doesn't implement packaging, we materialize the
-        layer and pack it.
+        on each layer.
 
         Parameters
         ----------
         client : distributed.Client
             The client calling this function.
-        client_keys : Iterable
+        client_keys : Iterable[Hashable]
             List of keys requested by the client.
+        annotations : Mapping[str, Any], optional
+            A top-level annotations.
 
         Returns
         -------
@@ -986,13 +1056,15 @@ class HighLevelGraph(Mapping):
                         client,
                         client_keys,
                     ),
-                    "annotations": layer.__dask_distributed_annotations_pack__(),
+                    "annotations": layer.__dask_distributed_annotations_pack__(
+                        annotations
+                    ),
                 }
             )
         return {"layers": layers}
 
     @staticmethod
-    def __dask_distributed_unpack__(hlg: dict, annotations: Mapping[str, Any]) -> Dict:
+    def __dask_distributed_unpack__(hlg: dict) -> dict:
         """Unpack the high level graph for Scheduler -> Worker communication
 
         The approach is to delegate the unpackaging to each layer in the high level graph
@@ -1003,10 +1075,6 @@ class HighLevelGraph(Mapping):
         ----------
         hlg: dict
             Packed high level graph layers
-        annotations : dict
-            A top-level annotations object which may be partially populated,
-            and which may be further filled by annotations from the layers
-            of the packed_hlg.
 
         Returns
         -------
@@ -1043,13 +1111,79 @@ class HighLevelGraph(Mapping):
                 deps[k] = deps.get(k, set()) | v
 
             # Unpack the annotations
-            if annotations and layer["annotations"]:
-                layer_annotations = {**layer["annotations"], **annotations}
-            else:
-                layer_annotations = annotations or layer["annotations"] or None
-            unpack_anno(anno, layer_annotations, unpacked_layer["dsk"].keys())
+            unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
 
         return {"dsk": dsk, "deps": deps, "annotations": anno}
+
+    def __repr__(self) -> str:
+        representation = f"{type(self).__name__} with {len(self.layers)} layers.\n"
+        representation += f"<{self.__class__.__module__}.{self.__class__.__name__} object at {hex(id(self))}>\n"
+        for i, layerkey in enumerate(self._toposort_layers()):
+            representation += f" {i}. {layerkey}\n"
+        return representation
+
+    def _repr_html_(self):
+        highlevelgraph_info = f"{type(self).__name__} with {len(self.layers)} layers."
+        highlevelgraph_icon = """
+            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="61.5" cy="36.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
+                <circle cx="14.5" cy="14.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
+                <circle cx="14.5" cy="56.5" r="13.5" fill="#F2F2F2" stroke="#1D1D1D" stroke-width="2"/>
+                <path d="M28 16L30.5 16C33.2614 16 35.5 18.2386 35.5 21L35.5 32.0001C35.5 34.7615 37.7386
+                    37.0001 40.5 37.0001L43 37.0001" stroke="black" stroke-width="1.5"/>
+                <path d="M40.5 37L40.5 37.75L40.5 37.75L40.5 37ZM35.5 42L36.25 42L35.5 42ZM35.5 52L34.75
+                    52L35.5 52ZM30.5 57L30.5 57.75L30.5 57ZM41.5001 36.25L40.5 36.25L40.5 37.75L41.5001
+                    37.75L41.5001 36.25ZM34.75 42L34.75 52L36.25 52L36.25 42L34.75 42ZM30.5 56.25L28.0001
+                    56.25L28.0001 57.75L30.5 57.75L30.5 56.25ZM34.75 52C34.75 54.3472 32.8472 56.25 30.5
+                    56.25L30.5 57.75C33.6756 57.75 36.25 55.1756 36.25 52L34.75 52ZM40.5 36.25C37.3244 36.25
+                    34.75 38.8243 34.75 42L36.25 42C36.25 39.6528 38.1528 37.75 40.5 37.75L40.5 36.25Z"
+                    fill="black"/>
+                <circle cx="28" cy="16" r="2.25" fill="#E5E5E5" stroke="black" stroke-width="1.5"/>
+                <circle cx="28" cy="57" r="2.25" fill="#E5E5E5" stroke="black" stroke-width="1.5"/>
+                <path d="M45.25 36.567C45.5833 36.7594 45.5833 37.2406 45.25 37.433L42.25 39.1651C41.9167
+                    39.3575 41.5 39.117 41.5 38.7321V35.2679C41.5 34.883 41.9167 34.6425 42.25 34.8349L45.25
+                    36.567Z" fill="#1D1D1D"/>
+            </svg>
+        """
+        layers_html = ""
+        for i, key in enumerate(self._toposort_layers()):
+            layer = self.layers[key]
+            layers_html += layer._repr_html_(
+                layer_index=f" {i}", highlevelgraph_key=key
+            )
+
+        html = f"""
+            <div>
+                <div>
+                    <div style="width: 52px; height: 52px; position: absolute;">
+                        {highlevelgraph_icon}
+                    </div>
+                    <div style="margin-left: 64px;">
+                        <h3 style="margin-bottom: 0px;">HighLevelGraph</h3>
+                        <p style="color: #5D5851; margin-bottom:0px;">
+                            {highlevelgraph_info}
+                        </p>
+                        {layers_html}
+                    </div>
+                </div>
+            </div>
+        """
+        return html
+
+
+def html_from_dict(info):
+    html = """<table style="width: 100%;">"""
+    suffix = """</table>"""
+    for key, val in info.items():
+        table_row = f"""
+          <tr>
+            <th style="text-align: left; width: 150px;">{key}</th>
+            <td style="text-align: left;">{val}</td>
+          </tr>
+        """
+        html += table_row
+    html += suffix
+    return html
 
 
 def to_graphviz(

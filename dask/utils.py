@@ -6,9 +6,10 @@ import shutil
 import sys
 import tempfile
 import uuid
+import warnings
 from _thread import RLock
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import lru_cache
@@ -86,10 +87,13 @@ def ndeepmap(n, func, seq):
 
 @contextmanager
 def ignoring(*exceptions):
-    try:
+    msg = (
+        "dask.utils.ignoring has been deprecated and will be removed in a future release. "
+        "Use contextlib.supress from the standard library instead."
+    )
+    warnings.warn(msg, category=FutureWarning)
+    with suppress(*exceptions):
         yield
-    except exceptions:
-        pass
 
 
 def import_required(mod_name, error_msg):
@@ -117,7 +121,7 @@ def tmpfile(extension="", dir=None):
             if os.path.isdir(filename):
                 shutil.rmtree(filename)
             else:
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(filename)
 
 
@@ -130,10 +134,10 @@ def tmpdir(dir=None):
     finally:
         if os.path.exists(dirname):
             if os.path.isdir(dirname):
-                with ignoring(OSError):
+                with suppress(OSError):
                     shutil.rmtree(dirname)
             else:
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(dirname)
 
 
@@ -171,7 +175,13 @@ def tmp_cwd(dir=None):
 
 @contextmanager
 def noop_context():
-    yield
+    msg = (
+        "dask.utils.noop_context has been deprecated and will be removed in a future release. "
+        "Use contextlib.nullcontext from the standard library instead."
+    )
+    warnings.warn(msg, category=FutureWarning)
+    with nullcontext():
+        yield
 
 
 class IndexCallable:
@@ -207,7 +217,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else noop_context()):
+    with (tmp_cwd() if use_tmpdir else nullcontext()):
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
@@ -226,7 +236,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
 
         for filename in d:
             if os.path.exists(filename):
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(filename)
 
 
@@ -609,7 +619,7 @@ def ignore_warning(doc, cls, name, extra="", skipblocks=0):
 
 
 def unsupported_arguments(doc, args):
-    """ Mark unsupported arguments with a disclaimer """
+    """Mark unsupported arguments with a disclaimer"""
     lines = doc.split("\n")
     for arg in args:
         subset = [
@@ -624,7 +634,7 @@ def unsupported_arguments(doc, args):
 
 
 def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
-    """ Helper function for derived_from to ease testing """
+    """Helper function for derived_from to ease testing"""
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
@@ -1059,7 +1069,7 @@ class OperatorMethodMixin:
 
     @classmethod
     def _bind_operator(cls, op):
-        """ bind operator to this class """
+        """bind operator to this class"""
         name = op.__name__
 
         if name.endswith("_"):
@@ -1083,12 +1093,12 @@ class OperatorMethodMixin:
 
     @classmethod
     def _get_unary_operator(cls, op):
-        """ Must return a method used by unary operator """
+        """Must return a method used by unary operator"""
         raise NotImplementedError
 
     @classmethod
     def _get_binary_operator(cls, op, inv=False):
-        """ Must return a method used by binary operator """
+        """Must return a method used by binary operator"""
         raise NotImplementedError
 
 
@@ -1151,7 +1161,7 @@ def is_arraylike(x):
 
 
 def is_dataframe_like(df):
-    """ Looks like a Pandas DataFrame """
+    """Looks like a Pandas DataFrame"""
     typ = df.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "merge", "mean"))
@@ -1161,7 +1171,7 @@ def is_dataframe_like(df):
 
 
 def is_series_like(s):
-    """ Looks like a Pandas Series """
+    """Looks like a Pandas Series"""
     typ = s.__class__
     return (
         all(hasattr(typ, name) for name in ("groupby", "head", "mean"))
@@ -1171,7 +1181,7 @@ def is_series_like(s):
 
 
 def is_index_like(s):
-    """ Looks like a Pandas Index """
+    """Looks like a Pandas Index"""
     typ = s.__class__
     return (
         all(hasattr(s, name) for name in ("name", "dtype"))
