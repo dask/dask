@@ -10,11 +10,10 @@ import numpy as np
 from tlz import concat, interleave, sliding_window
 
 from ..base import is_dask_collection, tokenize
-from ..compatibility import apply
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import derived_from, funcname, is_arraylike, is_cupy_type
+from ..utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
 from . import chunk
 from .core import (
     Array,
