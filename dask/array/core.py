@@ -4313,15 +4313,6 @@ def elemwise(op, *args, **kwargs):
     if "dtype" in kwargs:
         need_enforce_dtype = True
         dt = kwargs["dtype"]
-    elif out is not None:
-        need_enforce_dtype = True
-        if isinstance(out, Array):
-            dt = out.dtype
-        else:
-            # if `out` is not an Array we assume it's a tuple due to
-            # __array_ufunc__, in that case we get the dtype from the
-            # first element of the tuple.
-            dt = out[0].dtype
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
         # scalars and 0d ndarrays (which it considers equivalent) by using
