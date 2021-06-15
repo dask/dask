@@ -476,9 +476,7 @@ def test_divmod():
     assert_eq(result[1], expected[1])
 
 
-@pytest.mark.parametrize(
-    "dt", ["float64", "float32", "int32", "int64"]
-)
+@pytest.mark.parametrize("dt", ["float64", "float32", "int32", "int64"])
 def test_dtype_kwarg(dt):
     x1, y1 = da.asarray([1, 2, 3]), da.asarray([4, 5, 6])
     assert x1.dtype == np.dtype("int64")
