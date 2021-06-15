@@ -3,7 +3,6 @@ import collections.abc
 import contextlib
 import copy
 import html
-import warnings
 from typing import (
     AbstractSet,
     Any,
@@ -834,14 +833,9 @@ class HighLevelGraph(Mapping):
         return reverse_dict(self.dependencies)
 
     @property
+    @_deprecated(use_instead="HighLevelGraph.layers")
     def dicts(self):
         # Backwards compatibility for now
-        warnings.warn(
-            "'dicts' property of HighLevelGraph is deprecated now and will be "
-            "removed in a future version. To silence this warning, "
-            "use '.layers' instead.",
-            FutureWarning,
-        )
         return self.layers
 
     def copy(self):
