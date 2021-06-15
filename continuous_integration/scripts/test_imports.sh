@@ -7,7 +7,12 @@ test_import () {
     # Create an empty environment
     mamba create -q -y -n test-imports -c conda-forge python=$PYTHON_VERSION pyyaml fsspec toolz partd cloudpickle $1
     conda activate test-imports
-    pip install -e .
+    if [[ $1 =~ "distributed" ]]; then
+        # dask[distributed] depends on the latest version of distributed
+        python -m pip install git+https://github.com/dask/distributed
+    fi
+    python -m pip install -e .
+    mamba list
     echo "python -c '$2'"
     python -c "$2"
     conda deactivate
