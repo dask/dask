@@ -325,6 +325,7 @@ def test_check_meta():
             "d": [1, 2, 3],
             "e": pd.Categorical(["x", "y", "z"]),
             "f": pd.Series([1, 2, 3], dtype=np.uint64),
+            "g": pd.Series(["a", "b", "c"], dtype="string"),
         }
     )
     meta = df.iloc[:0]
@@ -375,6 +376,21 @@ def test_check_meta():
         "+--------+----------+----------+"
     )
     assert str(err.value) == exp
+
+    # pandas dtype metadata error
+    with pytest.raises(ValueError) as err:
+        check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
+    assert str(err.value) == (
+        "Metadata mismatch found.\n"
+        "\n"
+        "Partition type: `pandas.core.series.Series`\n"
+        "+----------+--------+\n"
+        "|          | dtype  |\n"
+        "+----------+--------+\n"
+        "| Found    | object |\n"
+        "| Expected | string |\n"
+        "+----------+--------+"
+    )
 
 
 def test_check_matching_columns_raises_appropriate_errors():
