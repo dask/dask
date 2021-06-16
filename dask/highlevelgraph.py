@@ -507,7 +507,7 @@ class Layer(collections.abc.Mapping):
                 {layer_icon}
                 <details style="margin-left: 32px;">
                     <summary style="margin-bottom: 10px; margin-top: 10px;">
-                        <h3 style="display: inline;">Layer{layer_index}: {shortname}</h3>
+                        <h4 style="display: inline;">Layer{layer_index}: {shortname}</h4>
                     </summary>
                     <p style="color: var(--jp-ui-font-color2, #5D5851); margin: -0.25em 0px 0px 0px;">
                         {highlevelgraph_key}

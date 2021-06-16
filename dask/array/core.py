@@ -1156,8 +1156,8 @@ class Array(DaskMethodsMixin):
                     "shape": self.shape,
                     "dtype": self.dtype,
                     "chunksize": self.chunksize,
-                    "type": type(self),
-                    "chunk_type": type(self._meta),
+                    "type": typename(type(self)),
+                    "chunk_type": typename(type(self._meta)),
                 }
             else:
                 layer.collection_annotations.update(
@@ -1165,8 +1165,8 @@ class Array(DaskMethodsMixin):
                         "shape": self.shape,
                         "dtype": self.dtype,
                         "chunksize": self.chunksize,
-                        "type": type(self),
-                        "chunk_type": type(self._meta),
+                        "type": typename(type(self)),
+                        "chunk_type": typename(type(self._meta)),
                     }
                 )
 
