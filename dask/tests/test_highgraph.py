@@ -52,14 +52,14 @@ def test_keys_values_items_to_dict_methods():
 def test_keyset_deprecated():
     a = {"x": 1, "y": (inc, "x")}
     hg = HighLevelGraph({"a": a}, {"a": set()})
-    with pytest.raises(FutureWarning, match="HighLevelGraph.keys"):
+    with pytest.warns(FutureWarning, match="HighLevelGraph.keys"):
         assert hg.keyset() == hg.keys()
 
 
 def test_dicts_deprecated():
     a = {"x": 1, "y": (inc, "x")}
     hg = HighLevelGraph({"a": a}, {"a": set()})
-    with pytest.raises(FutureWarning, match="HighLevelGraph.layers"):
+    with pytest.warns(FutureWarning, match="HighLevelGraph.layers"):
         assert hg.dicts == hg.layers
 
 
