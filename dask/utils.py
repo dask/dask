@@ -40,7 +40,7 @@ def apply(func, args, kwargs=None):
 def _deprecated(
     *,
     version: str = None,
-    msg: str = None,
+    message: str = None,
     use_instead: str = None,
     category: Type[Warning] = FutureWarning,
 ):
@@ -52,7 +52,7 @@ def _deprecated(
         Version of Dask in which the function was deprecated.
         If specified, the version will be included in the default
         warning message.
-    msg : str, optional
+    message : str, optional
         Custom warning message to raise.
     use_instead : str, optional
         Name of function to use in place of the deprecated function.
@@ -71,19 +71,21 @@ def _deprecated(
     """
 
     def decorator(func):
+        if message is None:
+            msg = f"{func.__name__} "
+            if version is not None:
+                msg += f"was deprecated in version {version} "
+            else:
+                msg += "is deprecated "
+            msg += "and will be removed in a future release."
+
+            if use_instead is not None:
+                msg += f" Please use {use_instead} instead."
+        else:
+            msg = message
+
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
-            nonlocal version, msg
-            if msg is None:
-                msg = f"{funcname(func)} "
-                if version is not None:
-                    msg += f"was deprecated in version {version} "
-                else:
-                    msg += "is deprecated "
-                msg += "and will be removed in a future release."
-
-                if use_instead is not None:
-                    msg += f" Please use {use_instead} instead."
             warnings.warn(msg, category=category, stacklevel=2)
             return func(*args, **kwargs)
 
