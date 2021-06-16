@@ -230,7 +230,7 @@ def _register_entry_point_plugins():
             registrar(sizeof)
         except Exception:
             logger.exception(
-                "Failed to register sizeof entrypoing {}".format(entry_point.name)
+                "Failed to register sizeof entry point {}".format(entry_point.name)
             )
 
 
