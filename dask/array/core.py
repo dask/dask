@@ -4311,6 +4311,7 @@ def elemwise(op, *args, **kwargs):
 
     need_enforce_dtype = False
     if "dtype" in kwargs:
+        need_enforce_dtype = True
         dt = kwargs["dtype"]
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
