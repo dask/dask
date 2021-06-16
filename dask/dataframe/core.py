@@ -3808,8 +3808,8 @@ class DataFrame(_Frame):
             self.dask.layers[name].collection_annotations = {
                 "npartitions": self.npartitions,
                 "columns": [col for col in self.columns],
-                "type": type(self),
-                "dataframe_type": type(self._meta),
+                "type": typename(type(self)),
+                "dataframe_type": typename(type(self._meta)),
                 "series_dtypes": {
                     col: self._meta[col].dtype
                     if hasattr(self._meta[col], "dtype")
@@ -3822,8 +3822,8 @@ class DataFrame(_Frame):
                 {
                     "npartitions": self.npartitions,
                     "columns": [col for col in self.columns],
-                    "type": type(self),
-                    "dataframe_type": type(self._meta),
+                    "type": typename(type(self)),
+                    "dataframe_type": typename(type(self._meta)),
                     "series_dtypes": {
                         col: self._meta[col].dtype
                         if hasattr(self._meta[col], "dtype")
