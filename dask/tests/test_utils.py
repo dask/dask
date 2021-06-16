@@ -696,6 +696,18 @@ def test_deprecated_category():
         assert foo() == "bar"
 
 
+def test_deprecated_message():
+    @_deprecated(message="woohoo")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning) as record:
+        assert foo() == "bar"
+
+    assert len(record) == 1
+    assert str(record[0].message) == "woohoo"
+
+
 def test_ignoring_deprecated():
     with pytest.raises(FutureWarning, match="contextlib.supress"):
         with ignoring(ValueError):
