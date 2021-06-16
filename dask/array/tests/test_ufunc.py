@@ -478,16 +478,15 @@ def test_divmod():
 
 @pytest.mark.parametrize("dt", ["float64", "float32", "int32", "int64"])
 def test_dtype_kwarg(dt):
-    x1 = da.asarray([1, 2, 3])
-    y1 = da.asarray([4, 5, 6])
-    z1 = np.add(x1, y1, dtype=np.dtype(dt))
-    assert z1.dtype == np.dtype(dt)
-    assert z1.compute().dtype == z1.dtype
+    arr1 = np.array([1, 2, 3])
+    arr2 = np.array([4, 5, 6])
 
-    x2 = da.asarray([1, 2, 3])
-    y2 = da.asarray([4, 5, 6])
-    z2 = da.add(x2, y2, dtype=np.dtype(dt))
-    assert z2.dtype == np.dtype(dt)
-    assert z2.compute().dtype == z2.dtype
+    darr1 = da.from_array(arr1)
+    darr2 = da.from_array(arr2)
 
-    assert_eq(z1, z2)
+    expected = np.add(arr1, arr2, dtype=dt)
+    result = np.add(darr1, darr2, dtype=dt)
+    assert_eq(expected, result)
+
+    result = da.add(darr1, darr2, dtype=dt)
+    assert_eq(expected, result)
