@@ -143,7 +143,7 @@ def ndeepmap(n, func, seq):
 
 
 @_deprecated(
-    version="2021.06.1", use_instead="contextlib.supress from the standard library"
+    version="2021.06.1", use_instead="contextlib.suppress from the standard library"
 )
 @contextmanager
 def ignoring(*exceptions):

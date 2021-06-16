@@ -709,12 +709,12 @@ def test_deprecated_message():
 
 
 def test_ignoring_deprecated():
-    with pytest.raises(FutureWarning, match="contextlib.supress"):
+    with pytest.warns(FutureWarning, match="contextlib.suppress"):
         with ignoring(ValueError):
             pass
 
 
 def test_noop_context_deprecated():
-    with pytest.raises(FutureWarning, match="contextlib.nullcontext"):
+    with pytest.warns(FutureWarning, match="contextlib.nullcontext"):
         with noop_context():
             pass
