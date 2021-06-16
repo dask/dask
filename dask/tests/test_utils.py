@@ -13,6 +13,7 @@ from dask.utils import (
     Dispatch,
     M,
     SerializableLock,
+    _deprecated,
     asciitable,
     derived_from,
     ensure_dict,
@@ -21,12 +22,14 @@ from dask.utils import (
     funcname,
     getargspec,
     has_keyword,
+    ignoring,
     is_arraylike,
     itemgetter,
     iter_chunks,
     memory_repr,
     methodcaller,
     ndeepmap,
+    noop_context,
     parse_bytes,
     parse_timedelta,
     partial_by_order,
@@ -659,3 +662,59 @@ def test_stringify_collection_keys():
 )
 def test_format_bytes(n, expect):
     assert format_bytes(int(n)) == expect
+
+
+def test_deprecated():
+    @_deprecated()
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning) as record:
+        assert foo() == "bar"
+
+    assert len(record) == 1
+    msg = str(record[0].message)
+    assert "foo is deprecated" in msg
+    assert "removed in a future release" in msg
+
+
+def test_deprecated_version():
+    @_deprecated(version="1.2.3")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning, match="deprecated in version 1.2.3"):
+        assert foo() == "bar"
+
+
+def test_deprecated_category():
+    @_deprecated(category=DeprecationWarning)
+    def foo():
+        return "bar"
+
+    with pytest.warns(DeprecationWarning):
+        assert foo() == "bar"
+
+
+def test_deprecated_message():
+    @_deprecated(message="woohoo")
+    def foo():
+        return "bar"
+
+    with pytest.warns(FutureWarning) as record:
+        assert foo() == "bar"
+
+    assert len(record) == 1
+    assert str(record[0].message) == "woohoo"
+
+
+def test_ignoring_deprecated():
+    with pytest.warns(FutureWarning, match="contextlib.suppress"):
+        with ignoring(ValueError):
+            pass
+
+
+def test_noop_context_deprecated():
+    with pytest.warns(FutureWarning, match="contextlib.nullcontext"):
+        with noop_context():
+            pass
