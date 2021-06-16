@@ -7,7 +7,7 @@ from ..utils import _deprecated
 from .core import read_bytes
 
 
-@_deprecated(use_instead="fsspec.core.open_file")
+@_deprecated(use_instead="fsspec.core.open")
 def open_file(*arg, **kwargs):
     return fs_open_file(*arg, **kwargs)
 

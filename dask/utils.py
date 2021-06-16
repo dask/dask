@@ -140,7 +140,9 @@ def ndeepmap(n, func, seq):
         return func(seq)
 
 
-@_deprecated(version="2021.06.1", use_instead="contextlib.supress")
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.supress from the standard library"
+)
 @contextmanager
 def ignoring(*exceptions):
     with suppress(*exceptions):
@@ -224,7 +226,9 @@ def tmp_cwd(dir=None):
             yield dirname
 
 
-@_deprecated(version="2021.06.1", use_instead="contextlib.nullcontext")
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.nullcontext from the standard library"
+)
 @contextmanager
 def noop_context():
     with nullcontext():
