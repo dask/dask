@@ -227,7 +227,7 @@ def _register_entry_point_plugins():
     except KeyError:
         return
 
-    for entry_point in sizeof_entry_points:            
+    for entry_point in sizeof_entry_points:
         registrar = entry_point.load()
         try:
             registrar(sizeof)
