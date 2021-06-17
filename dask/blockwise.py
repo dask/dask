@@ -136,7 +136,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     }
     ... )  # doctest: +SKIP
 
-    Construct a Blockwise Layer with ``dep`` speficied
+    Construct a Blockwise Layer with ``dep`` specified
     in the ``indices`` list:
 
     >>> layer = Blockwise(
@@ -171,13 +171,15 @@ class BlockwiseDepDict(BlockwiseDep):
     def __dask_distributed_pack__(
         self, required_indices: Optional[List[Tuple[int, ...]]] = None
     ):
-        from distributed.protocol import to_serialize
+        from distributed.protocol.serialize import PickledObject
 
         if required_indices is None:
             required_indices = self.mapping.keys()
 
         return {
-            "mapping": {k: to_serialize(self.mapping[k]) for k in required_indices},
+            "mapping": {
+                k: PickledObject.serialize(self.mapping[k]) for k in required_indices
+            },
             "numblocks": self.numblocks,
             "produces_tasks": self.produces_tasks,
         }
@@ -487,10 +489,9 @@ class Blockwise(Layer):
     def __dask_distributed_pack__(
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
-        from distributed.protocol import to_serialize
+        from distributed.protocol.serialize import PickledCallable
         from distributed.utils import CancelledError
         from distributed.utils_comm import unpack_remotedata
-        from distributed.worker import dumps_function
 
         keys = tuple(map(blockwise_token, range(len(self.indices))))
         dsk, _ = fuse(self.dsk, [self.output])
@@ -531,28 +532,7 @@ class Blockwise(Layer):
             }
             inline_tasks = inline_tasks or blockwise_dep.produces_tasks
 
-        # Dump (pickle + cache) the function here if we know `make_blockwise_graph`
-        # will NOT be producing "nested" tasks (via `__dask_distributed_unpack__`).
-        #
-        # If `make_blockwise_graph` DOES need to produce nested tasks later on, it
-        # will need to call `to_serialize` on the entire task.  That will be a
-        # problem if the function was already pickled here. Therefore, we want to
-        # call `to_serialize` on the function if we know there will be nested tasks.
-        #
-        # We know there will be nested tasks if either:
-        #   (1) `concatenate=True`   # Check `self.concatenate`
-        #   (2) `inline_tasks=True`  # Check `BlockwiseDep.produces_tasks`
-        #
-        # We do not call `to_serialize` in ALL cases, because that code path does
-        # not cache the function on the scheduler or worker (or warn if there are
-        # large objects being passed into the graph).  However, in the future,
-        # single-pass serialization improvements should allow us to remove this
-        # special logic altogether.
-        func = (
-            to_serialize(dsk[0])
-            if (self.concatenate or inline_tasks)
-            else dumps_function(dsk[0])
-        )
+        func = PickledCallable.serialize(dsk[0])
         func_future_args = dsk[1:]
 
         indices = list(toolz.concat(indices2))
@@ -588,6 +568,7 @@ class Blockwise(Layer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
+        from distributed.protocol.computation import typeset_dask_graph
         from distributed.protocol.serialize import import_allowed_module
 
         # Make sure we convert list items back from tuples in `indices`.
@@ -633,7 +614,8 @@ class Blockwise(Layer):
             stringify(k): {stringify(d) for d in v} | g_deps
             for k, v in layer_deps.items()
         }
-        return {"dsk": layer_dsk, "deps": deps}
+
+        return {"dsk": typeset_dask_graph(layer_dsk), "deps": deps}
 
     def _cull_dependencies(self, all_hlg_keys, output_blocks):
         """Determine the necessary dependencies to produce `output_blocks`.
@@ -1000,9 +982,6 @@ def make_blockwise_graph(
     if return_key_deps:
         key_deps = {}
 
-    if deserializing:
-        from distributed.protocol.serialize import to_serialize
-
     if concatenate is True:
         from dask.array.core import concatenate_axes as concatenate
 
@@ -1076,28 +1055,11 @@ def make_blockwise_graph(
             deps.update(func_future_args)
             args += list(func_future_args)
 
-        if deserializing and isinstance(func, bytes):
-            # Construct a function/args/kwargs dict if we
-            # do not have a nested task (i.e. concatenate=False).
-            # TODO: Avoid using the iterate_collection-version
-            # of to_serialize if we know that are no embeded
-            # Serialized/Serialize objects in args and/or kwargs.
-            if kwargs:
-                dsk[out_key] = {
-                    "function": func,
-                    "args": to_serialize(args),
-                    "kwargs": to_serialize(kwargs2),
-                }
-            else:
-                dsk[out_key] = {"function": func, "args": to_serialize(args)}
+        if kwargs:
+            val = (apply, func, args, kwargs2)
         else:
-            if kwargs:
-                val = (apply, func, args, kwargs2)
-            else:
-                args.insert(0, func)
-                val = tuple(args)
-            # May still need to serialize (if concatenate=True)
-            dsk[out_key] = to_serialize(val) if deserializing else val
+            val = (func,) + tuple(args)
+        dsk[out_key] = val
 
         if return_key_deps:
             key_deps[out_key] = deps

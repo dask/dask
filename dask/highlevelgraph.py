@@ -346,7 +346,7 @@ class Layer(collections.abc.Mapping):
           - Serializable by msgpack (notice, msgpack converts lists to tuples)
           - All remote data must be unpacked (see unpack_remotedata())
           - All keys must be converted to strings now or when unpacking
-          - All tasks must be serialized (see dumps_task())
+          - All tasks must be typesetted (see typeset_dask_graph())
 
         The default implementation materialize the layer thus layers such as Blockwise
         and ShuffleLayer should implement a specialized pack and unpack function in
@@ -369,9 +369,9 @@ class Layer(collections.abc.Mapping):
             Scheduler compatible state of the layer
         """
         from distributed.client import Future
+        from distributed.protocol.computation import typeset_dask_graph
         from distributed.utils import CancelledError
         from distributed.utils_comm import subs_multiple, unpack_remotedata
-        from distributed.worker import dumps_task
 
         dsk = dict(self)
 
@@ -422,7 +422,7 @@ class Layer(collections.abc.Mapping):
             stringify(k): stringify(v, exclusive=merged_hlg_keys)
             for k, v in dsk.items()
         }
-        dsk = toolz.valmap(dumps_task, dsk)
+        dsk = typeset_dask_graph(dsk)
         return {"dsk": dsk, "dependencies": dependencies}
 
     @classmethod

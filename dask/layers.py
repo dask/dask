@@ -530,7 +530,7 @@ class SimpleShuffleLayer(DataFrameLayer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
+        from distributed.protocol.computation import typeset_dask_graph
 
         # msgpack will convert lists into tuples, here
         # we convert them back to lists
@@ -551,7 +551,7 @@ class SimpleShuffleLayer(DataFrameLayer):
         # TODO: use shuffle-knowledge to calculate dependencies more efficiently
         deps = {k: keys_in_tasks(keys, [v]) for k, v in layer_dsk.items()}
 
-        return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
+        return {"dsk": typeset_dask_graph(layer_dsk), "deps": deps}
 
     def _construct_graph(self, deserializing=False):
         """Construct graph for a simple shuffle operation."""
@@ -920,7 +920,7 @@ class BroadcastJoinLayer(DataFrameLayer):
 
     @classmethod
     def __dask_distributed_unpack__(cls, state, dsk, dependencies):
-        from distributed.worker import dumps_task
+        from distributed.protocol.computation import typeset_dask_graph
 
         # Expand merge_kwargs
         merge_kwargs = state.pop("merge_kwargs", {})
@@ -934,7 +934,7 @@ class BroadcastJoinLayer(DataFrameLayer):
         keys = raw.keys() | dsk.keys()
         deps = {k: keys_in_tasks(keys, [v]) for k, v in raw.items()}
 
-        return {"dsk": toolz.valmap(dumps_task, raw), "deps": deps}
+        return {"dsk": typeset_dask_graph(raw), "deps": deps}
 
     def _keys_to_parts(self, keys):
         """Simple utility to convert keys to partition indices."""
