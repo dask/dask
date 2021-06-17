@@ -13,7 +13,7 @@ dependencies:
   - pip
   - pip:
     # TODO: Replace this with distributed=2021.05.0 once it is out
-    - git+https://github.com/dask/distributed
+    - git+https://github.com/madsbk/distributed.git@formalization_of_computation
   # test dependencies
   - pytest
   - pytest-cov
