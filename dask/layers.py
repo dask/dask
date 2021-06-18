@@ -155,6 +155,15 @@ class SlicingLayer(Layer):
     def get_output_keys(self):
         return self.keys()  # FIXME! this implementation materializes the graph
 
+    def _get_block_slices(self, shape=None, blockdims=None, index=None):
+        """Get a list (for each dimension) of dicts{blocknum: slice()}"""
+        try:
+            block_slices = self._block_slices
+        except AttributeError:
+            block_slices = list(map(_slice_1d, shape, blockdims, index))
+            self._block_slices = block_slices
+        return block_slices
+
     def _keys_to_output_parts(self, keys):
         """Simple utility to convert keys to array chunk indices."""
         parts = set()
@@ -170,14 +179,11 @@ class SlicingLayer(Layer):
 
     def _input_parts(self):
         """Simple utility to get input chunk indices."""
-        ndims = len(self.blockdims)
         parts_in = set()
+        block_slices = self._get_block_slices(self.shape, self.blockdims, self.index)
         _part = []
-        for d in range(ndims):
-            dim_shape = self.shape[d]
-            lengths = self.blockdims[d]
-            index = self.index[d]
-            _part += list(_slice_1d(dim_shape, lengths, index).keys())
+        for i in block_slices:
+            _part += sorted(i.keys())
         parts_in.add(tuple(_part))
         return parts_in
 
@@ -228,7 +234,7 @@ class SlicingLayer(Layer):
         shape = self.shape
 
         # Get a list (for each dimension) of dicts{blocknum: slice()}
-        block_slices = list(map(_slice_1d, shape, blockdims, index))
+        block_slices = self._get_block_slices(shape, blockdims, index)
         sorted_block_slices = [sorted(i.items()) for i in block_slices]
 
         # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
