@@ -155,7 +155,7 @@ class SlicingLayer(Layer):
     def get_output_keys(self):
         return self.keys()  # FIXME! this implementation materializes the graph
 
-    def _keys_to_parts(self, keys):
+    def _keys_to_output_parts(self, keys):
         """Simple utility to convert keys to array chunk indices."""
         parts = set()
         for key in keys:
@@ -168,10 +168,26 @@ class SlicingLayer(Layer):
             parts.add(tuple(_part))
         return parts
 
+    def _input_parts(self):
+        """Simple utility to get input chunk indices."""
+        ndims = len(self.blockdims)
+        parts_in = set()
+        _part = []
+        for d in range(ndims):
+            dim_shape = self.shape[d]
+            lengths = self.blockdims[d]
+            index = self.index[d]
+            _part += list(_slice_1d(dim_shape, lengths, index).keys())
+        parts_in.add(tuple(_part))
+        return parts_in
+
     def cull(self, keys, all_keys):
         """Cull a SlicingLayer HighLevelGraph layer."""
-        parts_out = self._keys_to_parts(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
+        parts_out = self._keys_to_output_parts(keys)
+        parts_in = self._input_parts()
+        culled_deps = self._cull_dependencies(
+            keys, parts_out=parts_out, parts_in=parts_in
+        )
         if parts_out != self.parts_out:
             culled_layer = self._cull(parts_out)
             return culled_layer, culled_deps
@@ -189,7 +205,7 @@ class SlicingLayer(Layer):
             parts_out=parts_out,
         )
 
-    def _cull_dependencies(self, keys, parts_out=None):
+    def _cull_dependencies(self, keys, parts_out=None, parts_in=None):
         """Determine the necessary dependencies to produce `keys`.
 
         For simple slicing, output chunks depend on which areas are sliced.
@@ -197,8 +213,10 @@ class SlicingLayer(Layer):
         """
         deps = defaultdict(set)
         parts_out = parts_out or self._keys_to_parts(keys)
-        for part in parts_out:
-            deps[(self.out_name, *part)] |= {(self.in_name, *part)}
+        parts_in = parts_in or self._input_parts()
+
+        for part_in, part_out in zip(parts_out, parts_in):
+            deps[(self.out_name, *part_in)] |= {(self.in_name, *part_out)}
         return deps
 
     def _construct_graph(self, deserializing=False):
@@ -236,6 +254,7 @@ class SlicingLayer(Layer):
             out_name: (operator.getitem, in_name, slices)
             for out_name, in_name, slices in zip(out_names, in_names, all_slices)
         }
+
         return dsk
 
 
