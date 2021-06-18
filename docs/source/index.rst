@@ -186,7 +186,6 @@ messy situations in everyday problems.
    changelog.rst
    configuration.rst
    configuration-reference.rst
-   educational-resources.rst
    presentations.rst
    cheatsheet.rst
    spark.rst
