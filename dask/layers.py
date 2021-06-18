@@ -515,7 +515,7 @@ class SimpleShuffleLayer(DataFrameLayer):
     def __dask_distributed_pack__(
         self, all_hlg_keys, known_key_dependencies, client, client_keys
     ):
-        from distributed.protocol.serialize import to_serialize
+        from distributed.protocol.computation import PickledObject
 
         return {
             "name": self.name,
@@ -524,7 +524,7 @@ class SimpleShuffleLayer(DataFrameLayer):
             "npartitions_input": self.npartitions_input,
             "ignore_index": self.ignore_index,
             "name_input": self.name_input,
-            "meta_input": to_serialize(self.meta_input),
+            "meta_input": PickledObject.serialize(self.meta_input),
             "parts_out": list(self.parts_out),
         }
 
@@ -787,8 +787,8 @@ class ShuffleLayer(SimpleShuffleLayer):
                         if _part < self.npartitions_input:
                             input_key = (self.name_input, _part)
                         else:
-                            # In order to make sure that to_serialize() serialize the
-                            # empty dataframe input, we add it as a key.
+                            # In order to make sure that `meta_input` is
+                            # de-serialize, we add it as a key.
                             input_key = (shuffle_group_name, _inp, "empty")
                             dsk[input_key] = self.meta_input
                     else:
