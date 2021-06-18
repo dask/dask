@@ -196,7 +196,6 @@ messy situations in everyday problems.
    remote-data-services.rst
    gpu.rst
    cite.rst
-   funding.rst
    logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
