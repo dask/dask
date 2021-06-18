@@ -332,6 +332,7 @@ redirect_files = [
     ("dataframe-overview.html", "dataframe.html"),
     ("dataframe-performance.html", "dataframe-best-practices.html"),
     ("delayed-overview.html", "delayed.html"),
+    ("educational-resources.rst", "presentations.html"),
     ("scheduler-choice.html", "setup.html"),
     ("diagnostics.html", "diagnostics-local.html"),
     ("inspect.html", "graphviz.html"),
