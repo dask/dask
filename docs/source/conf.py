@@ -336,6 +336,7 @@ redirect_files = [
     ("diagnostics.html", "diagnostics-local.html"),
     ("inspect.html", "graphviz.html"),
     ("faq.html", "https://stackoverflow.com/questions/tagged/dask?sort=frequent"),
+    ("funding.html", "https://dask.org/#supported-by"),
     ("examples-tutorials.html", "https://examples.dask.org"),
     ("examples/array-extend.html", "https://examples.dask.org"),
     ("examples/array-hdf5.html", "https://examples.dask.org"),
