@@ -6,16 +6,17 @@ import shutil
 import sys
 import tempfile
 import uuid
+import warnings
 from _thread import RLock
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, nullcontext, suppress
 from datetime import datetime, timedelta
 from errno import ENOENT
 from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
-from typing import Dict, Iterable, Mapping, Optional, TypeVar
+from typing import Dict, Iterable, Mapping, Optional, Type, TypeVar
 from weakref import WeakValueDictionary
 
 from .core import get_deps
@@ -34,6 +35,63 @@ def apply(func, args, kwargs=None):
         return func(*args, **kwargs)
     else:
         return func(*args)
+
+
+def _deprecated(
+    *,
+    version: str = None,
+    message: str = None,
+    use_instead: str = None,
+    category: Type[Warning] = FutureWarning,
+):
+    """Decorator to mark a function as deprecated
+
+    Parameters
+    ----------
+    version : str, optional
+        Version of Dask in which the function was deprecated.
+        If specified, the version will be included in the default
+        warning message.
+    message : str, optional
+        Custom warning message to raise.
+    use_instead : str, optional
+        Name of function to use in place of the deprecated function.
+        If specified, this will be included in the default warning
+        message.
+    category : type[Warning], optional
+        Type of warning to raise. Defaults to ``FutureWarning``.
+
+    Examples
+    --------
+
+    >>> from dask.utils import _deprecated
+    >>> @_deprecated(version="X.Y.Z", use_instead="bar")
+    ... def foo():
+    ...     return "baz"
+    """
+
+    def decorator(func):
+        if message is None:
+            msg = f"{func.__name__} "
+            if version is not None:
+                msg += f"was deprecated in version {version} "
+            else:
+                msg += "is deprecated "
+            msg += "and will be removed in a future release."
+
+            if use_instead is not None:
+                msg += f" Please use {use_instead} instead."
+        else:
+            msg = message
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(msg, category=category, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def deepmap(func, *seqs):
@@ -84,12 +142,13 @@ def ndeepmap(n, func, seq):
         return func(seq)
 
 
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.suppress from the standard library"
+)
 @contextmanager
 def ignoring(*exceptions):
-    try:
+    with suppress(*exceptions):
         yield
-    except exceptions:
-        pass
 
 
 def import_required(mod_name, error_msg):
@@ -117,7 +176,7 @@ def tmpfile(extension="", dir=None):
             if os.path.isdir(filename):
                 shutil.rmtree(filename)
             else:
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(filename)
 
 
@@ -130,10 +189,10 @@ def tmpdir(dir=None):
     finally:
         if os.path.exists(dirname):
             if os.path.isdir(dirname):
-                with ignoring(OSError):
+                with suppress(OSError):
                     shutil.rmtree(dirname)
             else:
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(dirname)
 
 
@@ -169,9 +228,13 @@ def tmp_cwd(dir=None):
             yield dirname
 
 
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.nullcontext from the standard library"
+)
 @contextmanager
 def noop_context():
-    yield
+    with nullcontext():
+        yield
 
 
 class IndexCallable:
@@ -207,7 +270,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
     automatically switch to a temporary current directory, to avoid
     race conditions when running tests in parallel.
     """
-    with (tmp_cwd() if use_tmpdir else noop_context()):
+    with (tmp_cwd() if use_tmpdir else nullcontext()):
         for filename, text in d.items():
             try:
                 os.makedirs(os.path.dirname(filename))
@@ -226,7 +289,7 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
 
         for filename in d:
             if os.path.exists(filename):
-                with ignoring(OSError):
+                with suppress(OSError):
                     os.remove(filename)
 
 

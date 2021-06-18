@@ -89,7 +89,7 @@ from .utils import (
     asciitable,
     is_dataframe_like,
     is_series_like,
-    make_meta_util,
+    make_meta,
     strip_unknown_categories,
 )
 
@@ -803,28 +803,6 @@ def get_unsorted_columns(frames):
     return order
 
 
-def _concat_compat(frames, left, right):
-    if PANDAS_GT_100:
-        # join_axes removed
-        return (pd.concat, frames, 0, "outer", False, None, None, None, False, False)
-    else:
-        # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
-        # we only care about sort, to silence warnings.
-        return (
-            pd.concat,
-            frames,
-            0,
-            "outer",
-            None,
-            False,
-            None,
-            None,
-            None,
-            False,
-            False,
-        )
-
-
 def merge_asof_indexed(left, right, **kwargs):
     dsk = dict()
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
@@ -853,8 +831,7 @@ def merge_asof_indexed(left, right, **kwargs):
                     kwargs,
                 )
             )
-        args = _concat_compat(frames, left, right)
-        dsk[(name, i)] = args
+        dsk[(name, i)] = (methods.concat, frames)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     result = new_dd_object(graph, name, meta, left.divisions)
@@ -1022,7 +999,7 @@ def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs)
 
     kwargs.update({"ignore_order": ignore_order})
 
-    meta = make_meta_util(
+    meta = make_meta(
         methods.concat(
             [df._meta_nonempty for df in dfs],
             join=join,
@@ -1505,3 +1482,55 @@ def broadcast_join(
     )
 
     return new_dd_object(graph, name, meta, divisions)
+
+
+def _recursive_pairwise_outer_join(
+    dataframes_to_merge, on, lsuffix, rsuffix, npartitions, shuffle
+):
+    """
+    Schedule the merging of a list of dataframes in a pairwise method. This is a recursive function that results
+    in a much more efficient scheduling of merges than a simple loop
+    from:
+    [A] [B] [C] [D] -> [AB] [C] [D] -> [ABC] [D] -> [ABCD]
+    to:
+    [A] [B] [C] [D] -> [AB] [CD] -> [ABCD]
+    Note that either way, n-1 merges are still required, but using a pairwise reduction it can be completed in parallel.
+    :param dataframes_to_merge: A list of Dask dataframes to be merged together on their index
+    :return: A single Dask Dataframe, comprised of the pairwise-merges of all provided dataframes
+    """
+    number_of_dataframes_to_merge = len(dataframes_to_merge)
+
+    merge_options = {
+        "on": on,
+        "lsuffix": lsuffix,
+        "rsuffix": rsuffix,
+        "npartitions": npartitions,
+        "shuffle": shuffle,
+    }
+
+    # Base case 1: just return the provided dataframe and merge with `left`
+    if number_of_dataframes_to_merge == 1:
+        return dataframes_to_merge[0]
+
+    # Base case 2: merge the two provided dataframe to be merged with `left`
+    if number_of_dataframes_to_merge == 2:
+        merged_ddf = dataframes_to_merge[0].join(
+            dataframes_to_merge[1], how="outer", **merge_options
+        )
+        return merged_ddf
+
+    # Recursive case: split the list of dfs into two ~even sizes and continue down
+    else:
+        middle_index = number_of_dataframes_to_merge // 2
+        merged_ddf = _recursive_pairwise_outer_join(
+            [
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[:middle_index], **merge_options
+                ),
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[middle_index:], **merge_options
+                ),
+            ],
+            **merge_options,
+        )
+        return merged_ddf

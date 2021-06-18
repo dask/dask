@@ -1,7 +1,8 @@
 import abc
 import collections.abc
+import contextlib
 import copy
-import warnings
+import html
 from typing import (
     AbstractSet,
     Any,
@@ -19,7 +20,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, ignoring, stringify
+from .utils import _deprecated, ensure_dict, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -96,6 +97,7 @@ class Layer(collections.abc.Mapping):
         """Return whether the layer is materialized or not"""
         return True
 
+    @abc.abstractmethod
     def get_output_keys(self) -> AbstractSet:
         """Return a set of all output keys
 
@@ -110,7 +112,7 @@ class Layer(collections.abc.Mapping):
         keys: AbstractSet
             All output keys
         """
-        return self.keys()
+        return self.keys()  # this implementation will materialize the graph
 
     def cull(
         self, keys: set, all_hlg_keys: Iterable
@@ -469,6 +471,65 @@ class Layer(collections.abc.Mapping):
         obj.__dict__.update(self.__dict__)
         return obj
 
+    def _repr_html_(self, layer_index="", highlevelgraph_key=""):
+        unmaterialized_layer_icon = """
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none"
+                xmlns="http://www.w3.org/2000/svg" style="position: absolute;">
+                <circle cx="16" cy="16" r="14"
+                    style="stroke: var(--jp-ui-font-color2, #1D1D1D); fill: var(--jp-layout-color1, #F2F2F2);"
+                    stroke-width="2" />
+            </svg>
+        """
+        materialized_layer_icon = """
+            <svg width="24" height="24" viewBox="0 0 32 32" fill="none"
+                xmlns="http://www.w3.org/2000/svg" style="position: absolute;">
+                <circle cx="16" cy="16" r="14" fill="#8F8F8F"
+                    style="stroke: var(--jp-ui-font-color2, #1D1D1D);" stroke-width="2"/>
+            </svg>
+        """
+        if self.is_materialized():
+            layer_icon = materialized_layer_icon
+        else:
+            layer_icon = unmaterialized_layer_icon
+
+        if highlevelgraph_key != "":
+            shortname = key_split(highlevelgraph_key)
+        elif hasattr(self, "name"):
+            shortname = key_split(self.name)
+        else:
+            shortname = self.__class__.__name__
+
+        info = self.layer_info_dict()
+        layer_info_table = html_from_dict(info)
+        html = f"""
+            <div style="">
+                {layer_icon}
+                <details style="margin-left: 32px;">
+                    <summary style="margin-bottom: 10px; margin-top: 10px;">
+                        <h4 style="display: inline;">Layer{layer_index}: {shortname}</h4>
+                    </summary>
+                    <p style="color: var(--jp-ui-font-color2, #5D5851); margin: -0.25em 0px 0px 0px;">
+                        {highlevelgraph_key}
+                    </p>
+                    {layer_info_table}
+                </details>
+            </div>
+            """
+        return html
+
+    def layer_info_dict(self):
+        info = {
+            "layer_type": type(self).__name__,
+            "is_materialized": self.is_materialized(),
+        }
+        if self.annotations is not None:
+            for key, val in self.annotations.items():
+                info[key] = html.escape(str(val))
+        if self.collection_annotations is not None:
+            for key, val in self.collection_annotations.items():
+                info[key] = html.escape(str(val))
+        return info
+
 
 class MaterializedLayer(Layer):
     """Fully materialized layer of `Layer`
@@ -497,6 +558,9 @@ class MaterializedLayer(Layer):
 
     def is_materialized(self):
         return True
+
+    def get_output_keys(self):
+        return self.keys()
 
 
 class HighLevelGraph(Mapping):
@@ -594,7 +658,7 @@ class HighLevelGraph(Mapping):
                 layers = ensure_dict(graph.layers, copy=True)
                 layers.update({name: layer})
                 deps = ensure_dict(graph.dependencies, copy=True)
-                with ignoring(AttributeError):
+                with contextlib.suppress(AttributeError):
                     deps.update({name: set(collection.__dask_layers__())})
             else:
                 key = _get_some_layer_name(collection)
@@ -650,7 +714,7 @@ class HighLevelGraph(Mapping):
                 if isinstance(graph, HighLevelGraph):
                     layers.update(graph.layers)
                     deps.update(graph.dependencies)
-                    with ignoring(AttributeError):
+                    with contextlib.suppress(AttributeError):
                         deps[name] |= set(collection.__dask_layers__())
                 else:
                     key = _get_some_layer_name(collection)
@@ -711,13 +775,9 @@ class HighLevelGraph(Mapping):
         """
         return self.to_dict().keys()
 
+    @_deprecated(use_instead="HighLevelGraph.keys")
     def keyset(self) -> AbstractSet:
         # Backwards compatibility for now
-        warnings.warn(
-            "'keyset' method of HighLevelGraph is deprecated now and will be removed "
-            "in a future version. To silence this warning, use '.keys' instead.",
-            FutureWarning,
-        )
         return self.keys()
 
     def get_all_external_keys(self) -> set:
@@ -773,14 +833,9 @@ class HighLevelGraph(Mapping):
         return reverse_dict(self.dependencies)
 
     @property
+    @_deprecated(use_instead="HighLevelGraph.layers")
     def dicts(self):
         # Backwards compatibility for now
-        warnings.warn(
-            "'dicts' property of HighLevelGraph is deprecated now and will be "
-            "removed in a future version. To silence this warning, "
-            "use '.layers' instead.",
-            FutureWarning,
-        )
         return self.layers
 
     def copy(self):
@@ -809,7 +864,8 @@ class HighLevelGraph(Mapping):
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
-        return graphviz_to_file(g, filename, format)
+        graphviz_to_file(g, filename, format)
+        return g
 
     def _toposort_layers(self):
         """Sort the layers in a high level graph topologically
@@ -1051,6 +1107,85 @@ class HighLevelGraph(Mapping):
             unpack_anno(anno, layer["annotations"], unpacked_layer["dsk"].keys())
 
         return {"dsk": dsk, "deps": deps, "annotations": anno}
+
+    def __repr__(self) -> str:
+        representation = f"{type(self).__name__} with {len(self.layers)} layers.\n"
+        representation += f"<{self.__class__.__module__}.{self.__class__.__name__} object at {hex(id(self))}>\n"
+        for i, layerkey in enumerate(self._toposort_layers()):
+            representation += f" {i}. {layerkey}\n"
+        return representation
+
+    def _repr_html_(self):
+        highlevelgraph_info = f"{type(self).__name__} with {len(self.layers)} layers."
+        highlevelgraph_icon = """
+            <svg width="76" height="71" viewBox="0 0 76 71" fill="none" xmlns="http://www.w3.org/2000/svg">
+                <circle cx="61.5" cy="36.5" r="13.5"
+                    style="stroke: var(--jp-ui-font-color2, #1D1D1D); fill: var(--jp-layout-color1, #F2F2F2);"
+                    stroke-width="2"/>
+                <circle cx="14.5" cy="14.5" r="13.5"
+                    style="stroke: var(--jp-ui-font-color2, #1D1D1D); fill: var(--jp-layout-color1, #F2F2F2);"
+                    stroke-width="2"/>
+                <circle cx="14.5" cy="56.5" r="13.5"
+                    style="stroke: var(--jp-ui-font-color2, #1D1D1D); fill: var(--jp-layout-color1, #F2F2F2);"
+                    stroke-width="2"/>
+                <path d="M28 16L30.5 16C33.2614 16 35.5 18.2386 35.5 21L35.5 32.0001C35.5 34.7615 37.7386
+                    37.0001 40.5 37.0001L43 37.0001" style="stroke: var(--jp-ui-font-color2, #1D1D1D);"
+                    stroke-width="1.5"/>
+                <path d="M40.5 37L40.5 37.75L40.5 37.75L40.5 37ZM35.5 42L36.25 42L35.5 42ZM35.5 52L34.75
+                    52L35.5 52ZM30.5 57L30.5 57.75L30.5 57ZM41.5001 36.25L40.5 36.25L40.5 37.75L41.5001
+                    37.75L41.5001 36.25ZM34.75 42L34.75 52L36.25 52L36.25 42L34.75 42ZM30.5 56.25L28.0001
+                    56.25L28.0001 57.75L30.5 57.75L30.5 56.25ZM34.75 52C34.75 54.3472 32.8472 56.25 30.5
+                    56.25L30.5 57.75C33.6756 57.75 36.25 55.1756 36.25 52L34.75 52ZM40.5 36.25C37.3244 36.25
+                    34.75 38.8243 34.75 42L36.25 42C36.25 39.6528 38.1528 37.75 40.5 37.75L40.5 36.25Z"
+                    style="fill: var(--jp-ui-font-color2, #1D1D1D);"/>
+                <circle cx="28" cy="16" r="2.25" fill="#E5E5E5"
+                    style="stroke: var(--jp-ui-font-color2, #1D1D1D);" stroke-width="1.5"/>
+                <circle cx="28" cy="57" r="2.25" fill="#E5E5E5"
+                    style="stroke: var(--jp-ui-font-color2, #1D1D1D);" stroke-width="1.5"/>
+                <path d="M45.25 36.567C45.5833 36.7594 45.5833 37.2406 45.25 37.433L42.25 39.1651C41.9167
+                    39.3575 41.5 39.117 41.5 38.7321V35.2679C41.5 34.883 41.9167 34.6425 42.25 34.8349L45.25
+                    36.567Z" style="fill: var(--jp-ui-font-color2, #1D1D1D);"/>
+            </svg>
+        """
+        layers_html = ""
+        for i, key in enumerate(self._toposort_layers()):
+            layer = self.layers[key]
+            layers_html += layer._repr_html_(
+                layer_index=f" {i}", highlevelgraph_key=key
+            )
+
+        html = f"""
+            <div>
+                <div>
+                    <div style="width: 52px; height: 52px; position: absolute;">
+                        {highlevelgraph_icon}
+                    </div>
+                    <div style="margin-left: 64px;">
+                        <h3 style="margin-bottom: 0px;">HighLevelGraph</h3>
+                        <p style="color: var(--jp-ui-font-color2, #5D5851); margin-bottom:0px;">
+                            {highlevelgraph_info}
+                        </p>
+                        {layers_html}
+                    </div>
+                </div>
+            </div>
+        """
+        return html
+
+
+def html_from_dict(info):
+    html = """<table style="width: 100%;">"""
+    suffix = """</table>"""
+    for key, val in info.items():
+        table_row = f"""
+          <tr>
+            <th style="text-align: left; width: 150px;">{key}</th>
+            <td style="text-align: left;">{val}</td>
+          </tr>
+        """
+        html += table_row
+    html += suffix
+    return html
 
 
 def to_graphviz(
