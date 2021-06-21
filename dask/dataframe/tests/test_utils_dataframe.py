@@ -376,6 +376,22 @@ def test_check_meta():
     )
     assert str(err.value) == exp
 
+    if PANDAS_GT_100:
+        # pandas dtype metadata error
+        with pytest.raises(ValueError) as err:
+            check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
+        assert str(err.value) == (
+            "Metadata mismatch found.\n"
+            "\n"
+            "Partition type: `pandas.core.series.Series`\n"
+            "+----------+--------+\n"
+            "|          | dtype  |\n"
+            "+----------+--------+\n"
+            "| Found    | object |\n"
+            "| Expected | string |\n"
+            "+----------+--------+"
+        )
+
 
 def test_check_matching_columns_raises_appropriate_errors():
     df = pd.DataFrame(columns=["a", "b", "c"])
