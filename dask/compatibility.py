@@ -21,7 +21,7 @@ def __getattr__(name):
 
         warnings.warn(
             "dask.compatibility.PY_VERSION is deprecated and will be removed "
-            "in a future release. Use dask.compatibility._PY_VERSION instead.",
+            "in a future release.",
             category=FutureWarning,
         )
         return _PY_VERSION
