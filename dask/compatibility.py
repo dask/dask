@@ -25,3 +25,5 @@ def __getattr__(name):
             category=FutureWarning,
         )
         return _PY_VERSION
+    else:
+        raise AttributeError(f"module {__name__} has no attribute {name}")
