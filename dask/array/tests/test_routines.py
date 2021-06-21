@@ -1006,6 +1006,23 @@ def test_histogramdd_raise_normed_and_density():
         da.histogramdd(data, bins=bins, range=ranges, normed=True, density=True)
 
 
+def test_histogramdd_raise_incompat_shape():
+    # 1D
+    data = da.random.random(size=(10,), chunks=(2,))
+    with pytest.raises(
+        ValueError, match="Single array input to histogramdd should be columnar"
+    ):
+        da.histogramdd(data, bins=4, range=((-3, 3),))
+    # 3D (not columnar)
+    data = da.random.random(size=(4, 4, 4), chunks=(2, 2, 2))
+    with pytest.raises(
+        ValueError, match="Single array input to histogramdd should be columnar"
+    ):
+        da.histogramdd(data, bins=4, range=((-3, 3),))
+
+
+
+
 def test_histogramdd_edges():
     data = da.random.random(size=(10, 3), chunks=(5, 3))
     edges = [

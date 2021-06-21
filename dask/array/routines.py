@@ -1205,7 +1205,12 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # N == total number of samples
     # D == total number of dimensions
     if hasattr(sample, "shape"):
-        N, D = sample.shape
+        if len(sample.shape) != 2:
+            raise ValueError(
+                "Single array input to histogramdd should be columnar"
+            )
+        else:
+            _, D = sample.shape
         n_chunks = sample.numblocks[0]
         rectangular_sample = True
         # Require data to be chunked along the first axis only.
