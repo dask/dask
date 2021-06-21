@@ -416,10 +416,8 @@ def ones_like_safe(a, shape, **kwargs):
     is supported (requires NumPy >= 1.17), otherwise falls back to
     using the old behavior, returning ``np.ones(shape, **kwargs)``.
     """
-    from .creation import ones_like
-
     try:
-        return _array_like_safe(np.ones_like, ones_like, a, shape=shape, **kwargs)
+        return np.ones_like(a, shape=shape, **kwargs)
     except TypeError:
         kwargs.setdefault("dtype", _dtype_of(a))
         return np.ones(shape, **kwargs)
