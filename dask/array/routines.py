@@ -1206,9 +1206,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     # D == total number of dimensions
     if hasattr(sample, "shape"):
         if len(sample.shape) != 2:
-            raise ValueError(
-                "Single array input to histogramdd should be columnar"
-            )
+            raise ValueError("Single array input to histogramdd should be columnar")
         else:
             _, D = sample.shape
         n_chunks = sample.numblocks[0]

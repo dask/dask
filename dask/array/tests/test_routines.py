@@ -1021,8 +1021,6 @@ def test_histogramdd_raise_incompat_shape():
         da.histogramdd(data, bins=4, range=((-3, 3),))
 
 
-
-
 def test_histogramdd_edges():
     data = da.random.random(size=(10, 3), chunks=(5, 3))
     edges = [
