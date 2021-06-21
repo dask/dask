@@ -1262,7 +1262,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         if not all(len(r) == 2 for r in range):
             raise ValueError("range argument should be a sequence of pairs")
 
-    # If bins is a single int, clone it D times.
+    # If bins is a single int, create a tuple of len `D` containing `bins`.
     if isinstance(bins, int):
         bins = (bins,) * D
 
