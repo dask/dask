@@ -1221,7 +1221,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
         D = len(sample)
         n_chunks = sample[0].numblocks[0]
         for i in _range(1, D):
-            if sample[i].chunksize != sample[0].chunksize:
+            if sample[i].chunks != sample[0].chunks:
                 raise ValueError("All coordinate arrays must be chunked identically.")
     else:
         raise ValueError(
