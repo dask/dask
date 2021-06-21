@@ -10,7 +10,7 @@ from contextlib import contextmanager
 import numpy as np
 import pandas as pd
 from pandas.api.types import is_scalar  # noqa: F401
-from pandas.api.types import is_categorical_dtype
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
 
 from ..base import is_dask_collection
 from ..core import get_deps
@@ -363,7 +363,7 @@ def check_meta(x, meta, funcname=None, numeric_equal=True):
             if UNKNOWN_CATEGORIES in a.categories or UNKNOWN_CATEGORIES in b.categories:
                 return True
             return a == b
-        return (a.kind in eq_types and b.kind in eq_types) or (a == b)
+        return (a.kind in eq_types and b.kind in eq_types) or is_dtype_equal(a, b)
 
     if not (
         is_dataframe_like(meta) or is_series_like(meta) or is_index_like(meta)
