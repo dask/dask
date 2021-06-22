@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from io import BytesIO
+from io import BytesIO, IOBase
 from warnings import catch_warnings, simplefilter, warn
 
 from ...highlevelgraph import HighLevelGraph
@@ -14,7 +14,7 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.compression import compr
-from fsspec.core import get_fs_token_paths
+from fsspec.core import OpenFile, get_fs_token_paths
 from fsspec.core import open as open_file
 from fsspec.core import open_files
 from fsspec.utils import infer_compression
@@ -168,11 +168,18 @@ def pandas_read_text(
     --------
     dask.dataframe.csv.read_pandas_from_bytes
     """
-    bio = BytesIO()
-    if write_header and not b.startswith(header.rstrip()):
-        bio.write(header)
-    bio.write(b)
-    bio.seek(0)
+    if isinstance(b, OpenFile):
+        # make file from fsspec input
+        bio = b.open()
+    elif not isinstance(b, IOBase):
+        bio = BytesIO()
+        if write_header and not b.startswith(header.rstrip()):
+            bio.write(header)
+        bio.write(b)
+        bio.seek(0)
+    else:
+        # assume it already is a file-like
+        bio = b
     df = reader(bio, **kwargs)
     if dtypes:
         coerce_dtypes(df, dtypes)
@@ -448,6 +455,7 @@ def read_pandas(
     lineterminator=None,
     compression="infer",
     sample=256000,
+    sample_rows=10,
     enforce=False,
     assume_missing=False,
     storage_options=None,
@@ -576,7 +584,19 @@ def read_pandas(
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
-    head = reader(BytesIO(b_sample), **kwargs)
+    head_kwargs = kwargs.copy()
+    if sample_rows is not None:
+        head_kwargs["nrows"] = sample_rows
+    try:
+        head = reader(BytesIO(b_sample), **head_kwargs)
+    except pd.errors.ParserError as e:
+        if "EOF" in str(e):
+            raise ValueError(
+                "EOF encountered while reading header. \n"
+                "Pass argument `sample_rows=` and make sure the value of `sample` "
+                "is large enough to accommodate that may rows of data"
+            ) from e
+        raise
     if include_path_column and (include_path_column in head.columns):
         raise ValueError(
             "Files already contain the column name: %s, so the "
@@ -691,6 +711,7 @@ def make_reader(reader, reader_name, file_type):
         lineterminator=None,
         compression="infer",
         sample=256000,
+        sample_rows=10,
         enforce=False,
         assume_missing=False,
         storage_options=None,
@@ -704,6 +725,7 @@ def make_reader(reader, reader_name, file_type):
             lineterminator=lineterminator,
             compression=compression,
             sample=sample,
+            sample_rows=sample_rows,
             enforce=enforce,
             assume_missing=assume_missing,
             storage_options=storage_options,

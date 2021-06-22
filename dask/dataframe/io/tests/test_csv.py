@@ -1668,3 +1668,15 @@ def test_csv_getitem_column_order(tmpdir):
     columns = list("hczzkylaape")
     df2 = dd.read_csv(path)[columns].head(1)
     assert_eq(df1[columns], df2)
+
+
+def test_csv_parse_fail(tmpdir):
+    path = os.path.join(str(tmpdir), "test.csv")
+    data = b'a,b\n1,"hi\n"\n2,"oi\n"\n'
+    expected = pd.read_csv(BytesIO(data))
+    with open(path, "wb") as f:
+        f.write(data)
+    with pytest.raises(ValueError):
+        dd.read_csv(path, sample=13)
+    df = dd.read_csv(path, sample=13, sample_rows=1)
+    assert_eq(df, expected)
