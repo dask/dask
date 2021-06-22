@@ -156,10 +156,10 @@ class SlicingLayer(Layer):
         return self._dict[key]
 
     def __iter__(self):
-        return iter(self._dict)
+        return iter(self.keys())
 
     def __len__(self):
-        return len(self._dict)
+        return len(self.keys())
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
