@@ -1,5 +1,5 @@
 from collections.abc import Mapping
-from io import BytesIO, IOBase
+from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
 
 from ...highlevelgraph import HighLevelGraph
@@ -14,7 +14,7 @@ import fsspec.implementations.local
 import numpy as np
 import pandas as pd
 from fsspec.compression import compr
-from fsspec.core import OpenFile, get_fs_token_paths
+from fsspec.core import get_fs_token_paths
 from fsspec.core import open as open_file
 from fsspec.core import open_files
 from fsspec.utils import infer_compression
@@ -168,18 +168,11 @@ def pandas_read_text(
     --------
     dask.dataframe.csv.read_pandas_from_bytes
     """
-    if isinstance(b, OpenFile):
-        # make file from fsspec input
-        bio = b.open()
-    elif not isinstance(b, IOBase):
-        bio = BytesIO()
-        if write_header and not b.startswith(header.rstrip()):
-            bio.write(header)
-        bio.write(b)
-        bio.seek(0)
-    else:
-        # assume it already is a file-like
-        bio = b
+    bio = BytesIO()
+    if write_header and not b.startswith(header.rstrip()):
+        bio.write(header)
+    bio.write(b)
+    bio.seek(0)
     df = reader(bio, **kwargs)
     if dtypes:
         coerce_dtypes(df, dtypes)
