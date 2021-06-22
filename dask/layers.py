@@ -179,12 +179,8 @@ class SlicingLayer(Layer):
 
     def _input_parts(self):
         """Simple utility to get input chunk indices."""
-        parts_in = set()
         block_slices = self._get_block_slices(self.shape, self.blockdims, self.index)
-        _part = []
-        for i in block_slices:
-            _part += sorted(i.keys())
-        parts_in.add(tuple(_part))
+        parts_in = set(product(*[sorted(i.keys()) for i in block_slices]))
         return parts_in
 
     def cull(self, keys, all_keys):
