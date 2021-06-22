@@ -492,7 +492,7 @@ class SimpleShuffleLayer(DataFrameLayer):
         """
         parts_out = self._keys_to_parts(keys)
         culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != self.parts_out:
+        if parts_out != set(self.parts_out):
             culled_layer = self._cull(parts_out)
             return culled_layer, culled_deps
         else:
