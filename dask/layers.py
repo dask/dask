@@ -2,7 +2,16 @@ import operator
 from collections import defaultdict
 from functools import partial
 from itertools import product
-from typing import List, Optional, Tuple
+from typing import (
+    Any,
+    Hashable,
+    Iterable,
+    List,
+    Mapping,
+    MutableMapping,
+    Optional,
+    Tuple,
+)
 
 import tlz as toolz
 from tlz.curried import map
@@ -552,6 +561,40 @@ class SimpleShuffleLayer(DataFrameLayer):
         deps = {k: keys_in_tasks(keys, [v]) for k, v in layer_dsk.items()}
 
         return {"dsk": toolz.valmap(dumps_task, layer_dsk), "deps": deps}
+
+    @staticmethod
+    def __dask_distributed_annotations_unpack__(
+        annotations: MutableMapping[str, Any],
+        new_annotations: Optional[Mapping[str, Any]],
+        keys: Iterable[Hashable],
+    ) -> None:
+        """Implement custom task prioritization of `getitem()` tasks.
+
+        The scheduling policies of Dask is depth-first generally speaking, which works
+        great in most cases. However, in case of shuffle, it increases the memory usage
+        significantly. This is because depth-first delays the freeing of the result of
+        `shuffle_group()` until the end of the shuffling.
+
+        We address this by forcing a breadth-first scheduling of the `getitem()` tasks
+        that follows the `shuffle_group()` task. This way all the `getitem()` tasks
+        finish immediately and the output of shuffle_group()` can be freed before
+        continuing to the next phase of the operation.
+
+        See https://github.com/dask/dask/pull/6051 for a detailed discussion
+        """
+
+        Layer.__dask_distributed_annotations_unpack__(
+            annotations, new_annotations, keys
+        )
+        if "priority" not in annotations:
+            annotations["priority"] = {}
+
+        priority = {}
+        for key in keys:
+            # The name of the `getitem()` tasks starts with "split-"
+            if "split-" in key:
+                priority[key] = 1
+        annotations["priority"].update(priority)
 
     def _construct_graph(self, deserializing=False):
         """Construct graph for a simple shuffle operation."""
