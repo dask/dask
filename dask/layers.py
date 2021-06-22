@@ -128,7 +128,19 @@ class SlicingLayer(Layer):
         self.parts_out = parts_out
 
     def __repr__(self):
-        return "SlicingLayer<name='{}'".format(self.out_name)
+        slice_text_repr = "["
+        for i in self.index:
+            start = i.start or ""
+            stop = i.stop or ""
+            slice_text_repr += f"{start}:{stop}"
+            if i.step is not None:
+                slice_text_repr += f":{i.step}"
+            slice_text_repr += ","
+        slice_text_repr = (
+            slice_text_repr[:-1] + "]"
+        )  # strip out last comma, close bracket
+
+        return f"SlicingLayer<slice={slice_text_repr} name='{self.out_name}'"
 
     @property
     def _dict(self):
