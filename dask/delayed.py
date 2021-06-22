@@ -1,10 +1,12 @@
+from __future__ import annotations
+
 import operator
 import types
 import uuid
 import warnings
-from collections.abc import Iterator
+from collections.abc import Hashable, Iterator
 from dataclasses import fields, is_dataclass
-from typing import Any, Hashable, Optional
+from typing import Generic, TypeVar
 
 from tlz import concat, curry, merge, unique
 
@@ -23,6 +25,8 @@ from .optimization import cull
 from .utils import OperatorMethodMixin, apply, ensure_dict, funcname, methodcaller
 
 __all__ = ["Delayed", "delayed"]
+
+T = TypeVar("T")
 
 
 def unzip(ls, nout):
@@ -232,13 +236,12 @@ def tokenize(*args, **kwargs):
 
 @curry
 def delayed(
-    obj: Any,
+    obj: Generic[T],
     name: Hashable = None,
-    pure: Optional[bool] = None,
-    nout: Optional[int] = None,
-    traverse: bool = True
-) -> "Delayed":
-
+    pure: bool = None,
+    nout: int = None,
+    traverse: bool = True,
+) -> Delayed:
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
