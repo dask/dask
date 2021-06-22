@@ -1,6 +1,16 @@
 Changelog
 =========
 
+2021.06.2
+---------
+
+Released on June 22, 2021
+
+- ``layers.py`` compare ``parts_out`` with ``set(self.parts_out)`` (:pr:`7787`) `Genevieve Buckley`_
+- Make ``check_meta`` understand pandas dtypes better (:pr:`7813`) `Julia Signell`_
+- Remove "Educational Resources" doc page (:pr:`7818`) `James Bourbeau`_
+
+
 2021.06.1
 ---------
 
