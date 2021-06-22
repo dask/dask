@@ -217,12 +217,12 @@ class SlicingLayer(Layer):
         For simple slicing, output chunks depend on which areas are sliced.
         This method does not require graph materialization.
         """
-        deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_parts(keys)
         parts_in = parts_in or self._input_parts()
+        parts_out = parts_out or self._keys_to_parts(keys)
 
-        for part_in, part_out in zip(parts_out, parts_in):
-            deps[(self.out_name, *part_in)] |= {(self.in_name, *part_out)}
+        deps = defaultdict(set)
+        for part_in, part_out in zip(parts_in, parts_out):
+            deps[(self.out_name, *part_out)] |= {(self.in_name, *part_in)}
         return deps
 
     def _construct_graph(self, deserializing=False):
