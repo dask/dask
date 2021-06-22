@@ -136,9 +136,7 @@ class SlicingLayer(Layer):
             if i.step is not None:
                 slice_text_repr += f":{i.step}"
             slice_text_repr += ","
-        slice_text_repr = (
-            slice_text_repr[:-1] + "]"
-        )  # strip out last comma, close bracket
+        slice_text_repr = slice_text_repr[:-1] + "]"  # strip last comma, close bracket
 
         return f"SlicingLayer<slice={slice_text_repr} name='{self.out_name}'"
 
