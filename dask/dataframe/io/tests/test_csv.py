@@ -1664,12 +1664,13 @@ def test_csv_getitem_column_order(tmpdir):
 
 
 def test_csv_parse_fail(tmpdir):
+    # See GH #7680
     path = os.path.join(str(tmpdir), "test.csv")
     data = b'a,b\n1,"hi\n"\n2,"oi\n"\n'
     expected = pd.read_csv(BytesIO(data))
     with open(path, "wb") as f:
         f.write(data)
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="EOF encountered"):
         dd.read_csv(path, sample=13)
     df = dd.read_csv(path, sample=13, sample_rows=1)
     assert_eq(df, expected)
