@@ -1322,7 +1322,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
                 "Input array and weights must have the same shape "
                 "and chunk structure along the first dimension."
             )
-        elif not rectangular_sample and weights.numblocks != n_chunks:
+        elif not rectangular_sample and weights.numblocks[0] != n_chunks:
             raise ValueError(
                 "Input arrays and weights must have the same shape "
                 "and chunk structure."
