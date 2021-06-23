@@ -191,10 +191,22 @@ class SlicingLayer(Layer):
         parts_in = set(product(*[sorted(i.keys()) for i in block_slices]))
         return parts_in
 
+    def _output_parts(self):
+        """Simple utility to get output chunk indices."""
+        if self.parts_out is not None:
+            return self.parts_out
+        else:
+            block_slices = self._get_block_slices(
+                self.shape, self.blockdims, self.index
+            )
+            parts_out = set(product(*[list(range(len(i))) for i in block_slices]))
+            self.parts_out = parts_out
+        return parts_out
+
     def cull(self, keys, all_keys):
         """Cull a SlicingLayer HighLevelGraph layer."""
-        parts_out = self._keys_to_output_parts(keys)
         parts_in = self._input_parts()
+        parts_out = self._output_parts()
         culled_deps = self._cull_dependencies(
             keys, parts_out=parts_out, parts_in=parts_in
         )
