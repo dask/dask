@@ -52,7 +52,7 @@ Having parallel tasks use GPUs
 ------------------------------
 
 Tasks like running experiments of different parameters of a machine learning model on a GPU
-can be extremely parallelized. Dask can be used to run each experiment trial concurrently,
+are embarrassingly parallelizable. Dask can be used to run each experiment trial concurrently,
 dramatically speeding up the process. Parallelizing experiment runs can be useful with or without
 GPUs, however because models that are trained on GPUs often take an especially long time to train
 there is a lot of benefit in this situation especially. If you have n different trials that you were
