@@ -32,11 +32,8 @@ library that allows machines to concurrently train the same model and share resu
 batch. With Dask, each worker can be passed the Python code to train a machine learning model, then
 the DDP library will share the results so the model trains faster.
 
-Dask does not need to know that any of the code it's running uses GPUs. So long as the Dask client
-can pass the code to a scheduler and then then worker machine can run it Dask will work.
-Thus, there is little special setup required on the Dask cluster itself to have the GPUs work.
-Instead the setup happens within the Python code that will be run, ensuring the particular library
-like PyTorch has the appropriate dependencies met.
+Dask does not need to know that any of its tasks use GPUs. As long as the worker has access to GPUs
+and the environment has been configured with the necessary packages, Dask will work.
 
 Here is a talk from the GTC Silicon Valley 2019 conference
 by Danielle Dean and Mathew Salvaris of Microsoft that discusses using Dask and V100 GPUs for 
@@ -58,13 +55,14 @@ Tasks like running experiments of different parameters of a machine learning mod
 can be extremely parallelized. Dask can be used to run each experiment trial concurrently,
 dramatically speeding up the process. Parallelizing experiment runs can be useful with or without
 GPUs, however because models that are trained on GPUs often take an especially long time to train
-there is a lot of benefit in this situation especially.
+there is a lot of benefit in this situation especially. If you have n different trials that you were
+previously running sequentially then parallelizing them is useful, regardless of if it's on a CPU or GPU.
 
 .. image:: images/gpu-2-experiments.png
    :alt: Running GPU experiments across multiple workers
    :width: 80%
 
-High level data collections
+Data collections
 ---------------------------
 
 Collections of data like Dask Array and Dask DataFrame can be improved with by using GPUs as well
