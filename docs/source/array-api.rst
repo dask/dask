@@ -496,6 +496,7 @@ Other functions
 .. autofunction:: greater
 .. autofunction:: greater_equal
 .. autofunction:: histogram
+.. autofunction:: histogram2d
 .. autofunction:: histogramdd
 .. autofunction:: hstack
 .. autofunction:: hypot

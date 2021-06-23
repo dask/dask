@@ -1048,7 +1048,7 @@ def histogram2d(x, y, bins=10, range=None, normed=None, weights=None, density=No
         weights=weights,
         density=density,
     )
-    return counts, *edges
+    return counts, edges[0], edges[1]
 
 
 def _block_histogramdd_rect(sample, bins, range, weights):
