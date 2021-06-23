@@ -152,16 +152,23 @@ class SlicingLayer(Layer):
         return self._dict[key]
 
     def __iter__(self):
-        return iter(self._dict)
+        return iter(self.get_output_keys())
 
     def __len__(self):
-        return len(self._dict)
+        return len(self.get_output_keys())
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
     def get_output_keys(self):
-        return self.keys()  # FIXME! this implementation materializes the graph
+        if hasattr(self, "_keys"):
+            return self._keys
+        else:
+            if self.parts_out is None:
+                self._output_parts()
+            keys = set(tuple([self.out_name] + list(part)) for part in self.parts_out)
+            self._keys = keys
+            return keys
 
     def _get_block_slices(self, shape=None, blockdims=None, index=None):
         """Get a list (for each dimension) of dicts{blocknum: slice()}"""
@@ -171,19 +178,6 @@ class SlicingLayer(Layer):
             block_slices = list(map(_slice_1d, shape, blockdims, index))
             self._block_slices = block_slices
         return block_slices
-
-    def _keys_to_output_parts(self, keys):
-        """Simple utility to convert keys to array chunk indices."""
-        parts = set()
-        for key in keys:
-            try:
-                _name, *_part = key
-            except ValueError:
-                continue
-            if _name != self.out_name:
-                continue
-            parts.add(tuple(_part))
-        return parts
 
     def _input_parts(self):
         """Simple utility to get input chunk indices."""
