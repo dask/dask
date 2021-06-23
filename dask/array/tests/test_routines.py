@@ -838,6 +838,58 @@ def test_histogram_delayed_n_bins_raises_with_density():
         da.histogram(data, bins=da.array(10), range=[0, 1], density=True)
 
 
+def test_histogram2d():
+    n = 800
+    bins = (5, 6)
+    range = ((0, 1), (0, 1))
+    x = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    y = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    a1, b1x, b1y = da.histogram2d(x, y, bins=bins, range=range)
+    a2, b2x, b2y = np.histogram2d(x, y, bins=bins, range=range)
+    a3, b3x, b3y = np.histogram2d(x.compute(), y.compute(), bins=bins, range=range)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+    assert a1.sum() == n
+    assert a2.sum() == n
+    assert same_keys(da.histogram2d(x, y, bins=bins, range=range)[0], a1)
+    assert a1.compute().shape == a3.shape
+
+
+def test_histogram2d_single_bins():
+    n = 800
+    bins = 5
+    range = ((0, 1), (0, 1))
+    x = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    y = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    a1, b1x, b1y = da.histogram2d(x, y, bins=bins, range=range)
+    a2, b2x, b2y = np.histogram2d(x, y, bins=bins, range=range)
+    a3, b3x, b3y = np.histogram2d(x.compute(), y.compute(), bins=bins, range=range)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+    assert a1.sum() == n
+    assert a2.sum() == n
+    assert same_keys(da.histogram2d(x, y, bins=bins, range=range)[0], a1)
+    assert a1.compute().shape == a3.shape
+
+
+def test_histogram2d_array_bins():
+    n = 800
+    x = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    y = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    xbins = [0.0, 0.2, 0.6, 0.9, 1.0]
+    ybins = [0.0, 0.1, 0.4, 0.5, 1.0]
+    bins = [xbins, ybins]
+    a1, b1x, b1y = da.histogram2d(x, y, bins=bins)
+    a2, b2x, b2y = np.histogram2d(x, y, bins=bins)
+    a3, b3x, b3y = np.histogram2d(x.compute(), y.compute(), bins=bins)
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+    assert a1.sum() == n
+    assert a2.sum() == n
+    assert same_keys(da.histogram2d(x, y, bins=bins)[0], a1)
+    assert a1.compute().shape == a3.shape
+
+
 def test_histogramdd():
     n1, n2 = 800, 3
     x = da.random.uniform(0, 1, size=(n1, n2), chunks=(200, 3))
