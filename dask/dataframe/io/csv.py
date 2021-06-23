@@ -586,8 +586,8 @@ def read_pandas(
         if "EOF" in str(e):
             raise ValueError(
                 "EOF encountered while reading header. \n"
-                "Pass argument `sample_rows=` and make sure the value of `sample` "
-                "is large enough to accommodate that may rows of data"
+                "Pass argument `sample_rows` and make sure the value of `sample` "
+                "is large enough to accommodate that many rows of data"
             ) from e
         raise
     if include_path_column and (include_path_column in head.columns):
