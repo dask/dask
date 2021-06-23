@@ -577,11 +577,8 @@ def read_pandas(
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
-    head_kwargs = kwargs.copy()
-    if sample_rows is not None:
-        head_kwargs["nrows"] = sample_rows
     try:
-        head = reader(BytesIO(b_sample), **head_kwargs)
+        head = reader(BytesIO(b_sample), nrows=sample_rows, **kwargs)
     except pd.errors.ParserError as e:
         if "EOF" in str(e):
             raise ValueError(
