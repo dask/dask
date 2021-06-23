@@ -309,7 +309,7 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
         if not isinstance(i, Integral)
     ]
 
-    dsk_out = SlicingLayer(out_name, in_name, blockdims, new_blockdims, index, shape)
+    dsk_out = SlicingLayer(out_name, in_name, blockdims, index, shape)
 
     return dsk_out, new_blockdims
 
