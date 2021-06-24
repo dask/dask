@@ -1,7 +1,6 @@
 import gzip
 import os
 from io import BytesIO
-from time import sleep
 from unittest import mock
 
 import pytest
@@ -510,8 +509,11 @@ def test_read_csv_skiprows_range():
 def test_usecols():
     with filetext(timeseries) as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=["High", "Low"])
+        df_select = df[["High"]]
         expected = pd.read_csv(fn, usecols=["High", "Low"])
+        expected_select = expected[["High"]]
         assert (df.compute().values == expected.values).all()
+        assert (df_select.compute().values == expected_select.values).all()
 
 
 def test_string_blocksize():
@@ -880,20 +882,6 @@ def test_csv_with_integer_names():
     with filetext("alice,1\nbob,2") as fn:
         df = dd.read_csv(fn, header=None)
         assert list(df.columns) == [0, 1]
-
-
-@pytest.mark.slow
-def test_read_csv_of_modified_file_has_different_name():
-    with filetext(csv_text) as fn:
-        sleep(1)
-        a = dd.read_csv(fn)
-        sleep(1)
-        with open(fn, "a") as f:
-            f.write("\nGeorge,700")
-            os.fsync(f)
-        b = dd.read_csv(fn)
-
-        assert sorted(a.dask, key=str) != sorted(b.dask, key=str)
 
 
 def test_late_dtypes():
@@ -1649,3 +1637,32 @@ def test_read_csv_groupby_get_group(tmpdir):
     ddfs = ddf1.groupby("foo")
 
     assert_eq(df1, ddfs.get_group(10).compute())
+
+
+def test_csv_getitem_column_order(tmpdir):
+    # See: https://github.com/dask/dask/issues/7759
+
+    path = os.path.join(str(tmpdir), "test.csv")
+    columns = list("abcdefghijklmnopqrstuvwxyz")
+    values = list(range(len(columns)))
+
+    df1 = pd.DataFrame([{c: v for c, v in zip(columns, values)}])
+    df1.to_csv(path)
+
+    # Use disordered and duplicated column selection
+    columns = list("hczzkylaape")
+    df2 = dd.read_csv(path)[columns].head(1)
+    assert_eq(df1[columns], df2)
+
+
+def test_csv_parse_fail(tmpdir):
+    # See GH #7680
+    path = os.path.join(str(tmpdir), "test.csv")
+    data = b'a,b\n1,"hi\n"\n2,"oi\n"\n'
+    expected = pd.read_csv(BytesIO(data))
+    with open(path, "wb") as f:
+        f.write(data)
+    with pytest.raises(ValueError, match="EOF encountered"):
+        dd.read_csv(path, sample=13)
+    df = dd.read_csv(path, sample=13, sample_rows=1)
+    assert_eq(df, expected)

@@ -35,7 +35,9 @@ dsk = {
     ("x", 1): pd.DataFrame({"a": [4, 5, 6], "b": [2, 5, 8]}, index=[5, 6, 8]),
     ("x", 2): pd.DataFrame({"a": [7, 8, 9], "b": [3, 6, 9]}, index=[9, 9, 9]),
 }
-meta = make_meta({"a": "i8", "b": "i8"}, index=pd.Index([], "i8"))
+meta = make_meta(
+    {"a": "i8", "b": "i8"}, index=pd.Index([], "i8"), parent_meta=pd.DataFrame()
+)
 d = dd.DataFrame(dsk, "x", meta, [0, 4, 9, 9])
 full = d.compute()
 CHECK_FREQ = {}
@@ -69,8 +71,21 @@ def test_shuffle_npartitions_task():
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=10)
     s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=17, max_branch=4)
-    sc = s.compute(scheduler="sync")
+    sc = s.compute()
     assert s.npartitions == 17
+    assert set(s.dask).issuperset(set(ddf.dask))
+
+    assert len(sc) == len(df)
+    assert list(s.columns) == list(df.columns)
+    assert set(map(tuple, sc.values.tolist())) == set(map(tuple, df.values.tolist()))
+
+
+def test_shuffle_npartitions_lt_input_partitions_task():
+    df = pd.DataFrame({"x": np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=20)
+    s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=5, max_branch=2)
+    sc = s.compute()
+    assert s.npartitions == 5
     assert set(s.dask).issuperset(set(ddf.dask))
 
     assert len(sc) == len(df)
@@ -998,8 +1013,8 @@ def test_set_index_timestamp():
     df = pd.DataFrame({"A": pd.date_range("2000", periods=12, tz="US/Central"), "B": 1})
     ddf = dd.from_pandas(df, 2)
     divisions = (
-        pd.Timestamp("2000-01-01 00:00:00-0600", tz="US/Central", freq="D"),
-        pd.Timestamp("2000-01-12 00:00:00-0600", tz="US/Central", freq="D"),
+        pd.Timestamp("2000-01-01 00:00:00-0600", tz="US/Central"),
+        pd.Timestamp("2000-01-12 00:00:00-0600", tz="US/Central"),
     )
 
     # Note: `freq` is lost during round trip
