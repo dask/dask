@@ -86,6 +86,20 @@ no_default = "__no_default__"
 pd.set_option("compute.use_numexpr", False)
 
 
+def _numeric_only(func):
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        if kwargs.get("numeric_only") is False:
+            raise NotImplementedError(
+                "'numeric_only=False' is not implemented in Dask."
+            )
+        elif kwargs.get("numeric_only"):
+            self = self._get_numeric_data()
+        return func(self, *args, **kwargs)
+
+    return wrapper
+
+
 def _concat(args, ignore_index=False):
     if not args:
         return args
@@ -1711,6 +1725,7 @@ Dask Name: {name}, {task} tasks"""
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -1720,6 +1735,7 @@ Dask Name: {name}, {task} tasks"""
         dtype=None,
         out=None,
         min_count=None,
+        numeric_only=None,
     ):
         result = self._reduction_agg(
             "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
@@ -1735,6 +1751,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             return result
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def prod(
         self,
@@ -1744,6 +1761,7 @@ Dask Name: {name}, {task} tasks"""
         dtype=None,
         out=None,
         min_count=None,
+        numeric_only=None,
     ):
         result = self._reduction_agg(
             "prod", axis=axis, skipna=skipna, split_every=split_every, out=out
@@ -1761,14 +1779,20 @@ Dask Name: {name}, {task} tasks"""
 
     product = prod  # aliased dd.product
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def max(self, axis=None, skipna=True, split_every=False, out=None):
+    def max(
+        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
+    ):
         return self._reduction_agg(
             "max", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def min(self, axis=None, skipna=True, split_every=False, out=None):
+    def min(
+        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
+    ):
         return self._reduction_agg(
             "min", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
@@ -1839,8 +1863,9 @@ Dask Name: {name}, {task} tasks"""
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def count(self, axis=None, split_every=False):
+    def count(self, axis=None, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         token = self._token_prefix + "count"
         if axis == 1:
@@ -1875,8 +1900,17 @@ Dask Name: {name}, {task} tasks"""
         )
         return mode_series
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def mean(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
+    def mean(
+        self,
+        axis=None,
+        skipna=True,
+        split_every=False,
+        dtype=None,
+        out=None,
+        numeric_only=None,
+    ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "mean")
         meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
@@ -1909,9 +1943,17 @@ Dask Name: {name}, {task} tasks"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def var(
-        self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None
+        self,
+        axis=None,
+        skipna=True,
+        ddof=1,
+        split_every=False,
+        dtype=None,
+        out=None,
+        numeric_only=None,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
@@ -2056,9 +2098,17 @@ Dask Name: {name}, {task} tasks"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def std(
-        self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None
+        self,
+        axis=None,
+        skipna=True,
+        ddof=1,
+        split_every=False,
+        dtype=None,
+        out=None,
+        numeric_only=None,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
@@ -2089,8 +2139,11 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def skew(self, axis=None, bias=True, nan_policy="propagate", out=None):
+    def skew(
+        self, axis=None, bias=True, nan_policy="propagate", out=None, numeric_only=None
+    ):
         """
         .. note::
 
@@ -2189,9 +2242,16 @@ Dask Name: {name}, {task} tasks"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def kurtosis(
-        self, axis=None, fisher=True, bias=True, nan_policy="propagate", out=None
+        self,
+        axis=None,
+        fisher=True,
+        bias=True,
+        nan_policy="propagate",
+        out=None,
+        numeric_only=None,
     ):
         """
         .. note::
@@ -2302,8 +2362,9 @@ Dask Name: {name}, {task} tasks"""
             graph, name, num._meta_nonempty.kurtosis(), divisions=[None, None]
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
+    def sem(self, axis=None, skipna=None, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
         meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
