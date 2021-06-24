@@ -884,14 +884,6 @@ def test_csv_with_integer_names():
         assert list(df.columns) == [0, 1]
 
 
-def test_read_csv_of_modified_file_has_different_name():
-    with filetext(csv_text) as fn:
-        a = dd.read_csv(fn, sample_rows=5)
-        b = dd.read_csv(fn, sample_rows=6)
-
-        assert sorted(a.dask, key=str) != sorted(b.dask, key=str)
-
-
 def test_late_dtypes():
     text = "numbers,names,more_numbers,integers,dates\n"
     for i in range(1000):
