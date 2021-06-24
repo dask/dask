@@ -226,10 +226,11 @@ def _register_entry_point_plugins():
     """Register sizeof implementations exposed by the entry_point mechanism."""
     entry_points = importlib.metadata.entry_points()
 
-    try:
-        sizeof_entry_points = entry_points["dask.sizeof"]
-    except KeyError:
-        return
+    # Python 3.10+ / importlib_metadata >= 3.9.0
+    if hasattr(entry_points, "select"):
+        sizeof_entry_points = entry_points.select(group="dask.sizeof")
+    else:
+        sizeof_entry_points = entry_points.get("dask.sizeof", [])
 
     for entry_point in sizeof_entry_points:
         registrar = entry_point.load()
