@@ -448,6 +448,7 @@ def read_pandas(
     lineterminator=None,
     compression="infer",
     sample=256000,
+    sample_rows=10,
     enforce=False,
     assume_missing=False,
     storage_options=None,
@@ -576,7 +577,16 @@ def read_pandas(
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
-    head = reader(BytesIO(b_sample), **kwargs)
+    try:
+        head = reader(BytesIO(b_sample), nrows=sample_rows, **kwargs)
+    except pd.errors.ParserError as e:
+        if "EOF" in str(e):
+            raise ValueError(
+                "EOF encountered while reading header. \n"
+                "Pass argument `sample_rows` and make sure the value of `sample` "
+                "is large enough to accommodate that many rows of data"
+            ) from e
+        raise
     if include_path_column and (include_path_column in head.columns):
         raise ValueError(
             "Files already contain the column name: %s, so the "
@@ -691,6 +701,7 @@ def make_reader(reader, reader_name, file_type):
         lineterminator=None,
         compression="infer",
         sample=256000,
+        sample_rows=10,
         enforce=False,
         assume_missing=False,
         storage_options=None,
@@ -704,6 +715,7 @@ def make_reader(reader, reader_name, file_type):
             lineterminator=lineterminator,
             compression=compression,
             sample=sample,
+            sample_rows=sample_rows,
             enforce=enforce,
             assume_missing=assume_missing,
             storage_options=storage_options,
