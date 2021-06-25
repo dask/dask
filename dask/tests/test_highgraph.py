@@ -49,6 +49,20 @@ def test_keys_values_items_to_dict_methods():
     assert hg.to_dict() == dict(hg)
 
 
+def test_keyset_deprecated():
+    a = {"x": 1, "y": (inc, "x")}
+    hg = HighLevelGraph({"a": a}, {"a": set()})
+    with pytest.warns(FutureWarning, match="HighLevelGraph.keys"):
+        assert hg.keyset() == hg.keys()
+
+
+def test_dicts_deprecated():
+    a = {"x": 1, "y": (inc, "x")}
+    hg = HighLevelGraph({"a": a}, {"a": set()})
+    with pytest.warns(FutureWarning, match="HighLevelGraph.layers"):
+        assert hg.dicts == hg.layers
+
+
 def test_getitem():
     hg = HighLevelGraph(
         {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}}, {"a": set(), "b": set()}

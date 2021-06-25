@@ -1,5 +1,5 @@
 import operator
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from functools import partial
 from itertools import product
 from numbers import Integral
@@ -110,11 +110,11 @@ class SlicingLayer(Layer):
 
     def __init__(
         self,
-        out_name,
-        in_name,
-        blockdims,
-        index,
-        shape,
+        out_name=None,
+        in_name=None,
+        blockdims=None,
+        index=None,
+        shape=None,
         parts_out=None,
     ):
         super().__init__()
@@ -134,8 +134,9 @@ class SlicingLayer(Layer):
             if i.step is not None:
                 slice_text_repr += f":{i.step}"
             slice_text_repr += ","
-        slice_text_repr = slice_text_repr[:-1] + "]"  # strip last comma, close bracket
-
+        slice_text_repr = (
+            slice_text_repr[:-1] + "]"
+        )  # strip out last comma, close bracket
         return f"SlicingLayer<slice={slice_text_repr} name='{self.out_name}'"
 
     @property
@@ -152,57 +153,60 @@ class SlicingLayer(Layer):
         return self._dict[key]
 
     def __iter__(self):
-        return iter(self.get_output_keys())
+        return iter(self._dict)
 
     def __len__(self):
-        return len(self.get_output_keys())
+        return len(self._dict)
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
     def get_output_keys(self):
-        if hasattr(self, "_keys"):
-            return self._keys
-        else:
-            if self.parts_out is None:
-                self._output_parts()
-            keys = set(tuple([self.out_name] + list(part)) for part in self.parts_out)
-            self._keys = keys
-            return keys
-
-    def _get_block_slices(self, shape=None, blockdims=None, index=None):
-        """Get a list (for each dimension) of dicts{blocknum: slice()}"""
-        try:
-            block_slices = self._block_slices
-        except AttributeError:
-            block_slices = list(map(_slice_1d, shape, blockdims, index))
-            self._block_slices = block_slices
-        return block_slices
-
-    def _input_parts(self):
-        """Simple utility to get input chunk indices."""
-        block_slices = self._get_block_slices(self.shape, self.blockdims, self.index)
-        parts_in = set(product(*[sorted(i.keys()) for i in block_slices]))
-        return parts_in
+        return self.keys()  # FIXME! this implementation materializes the graph
 
     def _output_parts(self):
-        """Simple utility to get output chunk indices."""
-        if self.parts_out is not None:
-            return self.parts_out
-        else:
-            block_slices = self._get_block_slices(
-                self.shape, self.blockdims, self.index
+        out_name = self.out_name
+        shape = self.shape
+        blockdims = self.blockdims
+        index = self.index
+        block_slices = list(map(_slice_1d, shape, blockdims, index))
+        # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
+        out_name = "out-name"
+        out_names = list(
+            product(
+                [out_name],
+                *[
+                    range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+                    for d, i in zip(block_slices, index)
+                    if not isinstance(i, Integral)
+                ],
             )
-            parts_out = set(product(*[list(range(len(i))) for i in block_slices]))
-            self.parts_out = parts_out
+        )
+        parts_out = OrderedDict.fromkeys(tuple(parts) for _, *parts in out_names)
         return parts_out
+
+    def _input_parts(self):
+        in_name = self.in_name
+        blockdims = self.blockdims
+        index = self.index
+        shape = self.shape
+
+        block_slices = list(map(_slice_1d, shape, blockdims, index))
+        sorted_block_slices = [sorted(i.items()) for i in block_slices]
+
+        # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
+        in_names = list(
+            product([in_name], *[toolz.pluck(0, s) for s in sorted_block_slices])
+        )
+        parts_in = OrderedDict.fromkeys(tuple(parts) for _, *parts in in_names)
+        return parts_in
 
     def cull(self, keys, all_keys):
         """Cull a SlicingLayer HighLevelGraph layer."""
-        parts_in = self._input_parts()
         parts_out = self._output_parts()
+        parts_in = self._input_parts()
         culled_deps = self._cull_dependencies(
-            keys, parts_out=parts_out, parts_in=parts_in
+            keys, parts_in=parts_in, parts_out=parts_out
         )
         if parts_out != self.parts_out:
             culled_layer = self._cull(parts_out)
@@ -220,14 +224,14 @@ class SlicingLayer(Layer):
             parts_out=parts_out,
         )
 
-    def _cull_dependencies(self, keys, parts_out=None, parts_in=None):
+    def _cull_dependencies(self, keys, parts_in=None, parts_out=None):
         """Determine the necessary dependencies to produce `keys`.
 
         For simple slicing, output chunks depend on which areas are sliced.
         This method does not require graph materialization.
         """
         parts_in = parts_in or self._input_parts()
-        parts_out = parts_out or self._keys_to_parts(keys)
+        parts_out = parts_out or self._output_parts()
 
         deps = defaultdict(set)
         for part_in, part_out in zip(parts_in, parts_out):
@@ -242,8 +246,7 @@ class SlicingLayer(Layer):
         index = self.index
         shape = self.shape
 
-        # Get a list (for each dimension) of dicts{blocknum: slice()}
-        block_slices = self._get_block_slices(shape, blockdims, index)
+        block_slices = list(map(_slice_1d, shape, blockdims, index))
         sorted_block_slices = [sorted(i.items()) for i in block_slices]
 
         # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
@@ -662,7 +665,7 @@ class SimpleShuffleLayer(DataFrameLayer):
         """
         parts_out = self._keys_to_parts(keys)
         culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != self.parts_out:
+        if parts_out != set(self.parts_out):
             culled_layer = self._cull(parts_out)
             return culled_layer, culled_deps
         else:

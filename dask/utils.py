@@ -16,7 +16,7 @@ from functools import lru_cache
 from importlib import import_module
 from numbers import Integral, Number
 from threading import Lock
-from typing import Dict, Iterable, Mapping, Optional, TypeVar
+from typing import Dict, Iterable, Mapping, Optional, Type, TypeVar
 from weakref import WeakValueDictionary
 
 from .core import get_deps
@@ -35,6 +35,63 @@ def apply(func, args, kwargs=None):
         return func(*args, **kwargs)
     else:
         return func(*args)
+
+
+def _deprecated(
+    *,
+    version: str = None,
+    message: str = None,
+    use_instead: str = None,
+    category: Type[Warning] = FutureWarning,
+):
+    """Decorator to mark a function as deprecated
+
+    Parameters
+    ----------
+    version : str, optional
+        Version of Dask in which the function was deprecated.
+        If specified, the version will be included in the default
+        warning message.
+    message : str, optional
+        Custom warning message to raise.
+    use_instead : str, optional
+        Name of function to use in place of the deprecated function.
+        If specified, this will be included in the default warning
+        message.
+    category : type[Warning], optional
+        Type of warning to raise. Defaults to ``FutureWarning``.
+
+    Examples
+    --------
+
+    >>> from dask.utils import _deprecated
+    >>> @_deprecated(version="X.Y.Z", use_instead="bar")
+    ... def foo():
+    ...     return "baz"
+    """
+
+    def decorator(func):
+        if message is None:
+            msg = f"{func.__name__} "
+            if version is not None:
+                msg += f"was deprecated in version {version} "
+            else:
+                msg += "is deprecated "
+            msg += "and will be removed in a future release."
+
+            if use_instead is not None:
+                msg += f" Please use {use_instead} instead."
+        else:
+            msg = message
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            warnings.warn(msg, category=category, stacklevel=2)
+            return func(*args, **kwargs)
+
+        return wrapper
+
+    return decorator
 
 
 def deepmap(func, *seqs):
@@ -85,13 +142,11 @@ def ndeepmap(n, func, seq):
         return func(seq)
 
 
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.suppress from the standard library"
+)
 @contextmanager
 def ignoring(*exceptions):
-    msg = (
-        "dask.utils.ignoring has been deprecated and will be removed in a future release. "
-        "Use contextlib.supress from the standard library instead."
-    )
-    warnings.warn(msg, category=FutureWarning)
     with suppress(*exceptions):
         yield
 
@@ -173,13 +228,11 @@ def tmp_cwd(dir=None):
             yield dirname
 
 
+@_deprecated(
+    version="2021.06.1", use_instead="contextlib.nullcontext from the standard library"
+)
 @contextmanager
 def noop_context():
-    msg = (
-        "dask.utils.noop_context has been deprecated and will be removed in a future release. "
-        "Use contextlib.nullcontext from the standard library instead."
-    )
-    warnings.warn(msg, category=FutureWarning)
     with nullcontext():
         yield
 

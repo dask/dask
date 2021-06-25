@@ -3,7 +3,6 @@ import collections.abc
 import contextlib
 import copy
 import html
-import warnings
 from typing import (
     AbstractSet,
     Any,
@@ -21,7 +20,7 @@ import tlz as toolz
 from . import config
 from .base import clone_key, flatten, is_dask_collection
 from .core import keys_in_tasks, reverse_dict
-from .utils import ensure_dict, key_split, stringify
+from .utils import _deprecated, ensure_dict, key_split, stringify
 from .utils_test import add, inc  # noqa: F401
 
 
@@ -507,7 +506,7 @@ class Layer(collections.abc.Mapping):
                 {layer_icon}
                 <details style="margin-left: 32px;">
                     <summary style="margin-bottom: 10px; margin-top: 10px;">
-                        <h3 style="display: inline;">Layer{layer_index}: {shortname}</h3>
+                        <h4 style="display: inline;">Layer{layer_index}: {shortname}</h4>
                     </summary>
                     <p style="color: var(--jp-ui-font-color2, #5D5851); margin: -0.25em 0px 0px 0px;">
                         {highlevelgraph_key}
@@ -776,13 +775,9 @@ class HighLevelGraph(Mapping):
         """
         return self.to_dict().keys()
 
+    @_deprecated(use_instead="HighLevelGraph.keys")
     def keyset(self) -> AbstractSet:
         # Backwards compatibility for now
-        warnings.warn(
-            "'keyset' method of HighLevelGraph is deprecated now and will be removed "
-            "in a future version. To silence this warning, use '.keys' instead.",
-            FutureWarning,
-        )
         return self.keys()
 
     def get_all_external_keys(self) -> set:
@@ -838,14 +833,9 @@ class HighLevelGraph(Mapping):
         return reverse_dict(self.dependencies)
 
     @property
+    @_deprecated(use_instead="HighLevelGraph.layers")
     def dicts(self):
         # Backwards compatibility for now
-        warnings.warn(
-            "'dicts' property of HighLevelGraph is deprecated now and will be "
-            "removed in a future version. To silence this warning, "
-            "use '.layers' instead.",
-            FutureWarning,
-        )
         return self.layers
 
     def copy(self):

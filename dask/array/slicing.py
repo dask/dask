@@ -8,11 +8,10 @@ from operator import getitem, itemgetter
 import numpy as np
 from tlz import concat, memoize, merge
 
-from dask.layers import SlicingLayer
-
 from .. import config, core, utils
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
+from ..layers import SlicingLayer
 from ..layers_utils import _slice_1d, cached_cumsum
 from ..utils import is_arraylike
 
@@ -309,7 +308,13 @@ def slice_slices_and_integers(out_name, in_name, blockdims, index):
         if not isinstance(i, Integral)
     ]
 
-    dsk_out = SlicingLayer(out_name, in_name, blockdims, index, shape)
+    dsk_out = SlicingLayer(
+        out_name=out_name,
+        in_name=in_name,
+        blockdims=blockdims,
+        index=index,
+        shape=shape,
+    )
 
     return dsk_out, new_blockdims
 

@@ -36,6 +36,7 @@ from ..core import quote
 from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
 from ..layers import reshapelist
+from ..layers_utils import cached_cumsum
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
@@ -64,7 +65,7 @@ from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
 from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
 from .numpy_compat import _Recurser
-from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
+from .slicing import replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
 
@@ -1156,8 +1157,8 @@ class Array(DaskMethodsMixin):
                     "shape": self.shape,
                     "dtype": self.dtype,
                     "chunksize": self.chunksize,
-                    "type": type(self),
-                    "chunk_type": type(self._meta),
+                    "type": typename(type(self)),
+                    "chunk_type": typename(type(self._meta)),
                 }
             else:
                 layer.collection_annotations.update(
@@ -1165,8 +1166,8 @@ class Array(DaskMethodsMixin):
                         "shape": self.shape,
                         "dtype": self.dtype,
                         "chunksize": self.chunksize,
-                        "type": type(self),
-                        "chunk_type": type(self._meta),
+                        "type": typename(type(self)),
+                        "chunk_type": typename(type(self._meta)),
                     }
                 )
 
@@ -4311,6 +4312,7 @@ def elemwise(op, *args, **kwargs):
 
     need_enforce_dtype = False
     if "dtype" in kwargs:
+        need_enforce_dtype = True
         dt = kwargs["dtype"]
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
