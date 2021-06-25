@@ -10,7 +10,7 @@ from operator import getitem
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
-from dask.layers import fractional_slice
+from dask.layers import CreateArrayDeps, fractional_slice
 
 
 class SchedulerImportCheck(SchedulerPlugin):
@@ -28,6 +28,29 @@ class SchedulerImportCheck(SchedulerPlugin):
             else:
                 # Maually remove the target library
                 sys.modules.pop(mod)
+
+
+def test_create_array_deps():
+    dac = pytest.importorskip("dask.array.core")
+    d = 2  # number of chunks in x,y
+    chunk = (2, 3)  # chunk shape
+    shape = tuple(d * n for n in chunk)  # array shape
+    chunks = dac.normalize_chunks(chunk, shape)
+    array_deps = CreateArrayDeps(chunks)
+
+    def check_block_info(i, j):
+        block_info = array_deps[(i, j)]
+        assert block_info["shape"] == shape
+        assert block_info["chunk-shape"] == chunk
+        assert block_info["array-location"] == (
+            (chunk[0] * i, chunk[0] * (i + 1)),
+            (chunk[1] * j, chunk[1] * (j + 1)),
+        )
+        assert block_info["num-chunks"] == (d, d)
+
+    for i in range(d):
+        for j in range(d):
+            check_block_info(i, j)
 
 
 def get_start_modules(dask_scheduler):

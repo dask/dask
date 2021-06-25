@@ -46,47 +46,34 @@ from dask.array.core import (
 from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
-from dask.blockwise import Blockwise, broadcast_dimensions
+from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
+from dask.layers import BlockwiseCreateArray
 from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
 
 
-def test_graph_from_arraylike():
+@pytest.mark.parametrize("inline_array", [True, False])
+def test_graph_from_arraylike(inline_array):
     d = 2
     chunk = (2, 3)
     shape = tuple(d * n for n in chunk)
     arr = np.ones(shape)
 
-    def check_task(dsk, i, j):
-        key = ("X", i, j)
-        assert key in dsk
+    dsk = graph_from_arraylike(
+        arr, chunk, out_name="X", shape=shape, inline_array=inline_array
+    )
 
-        # Check the array is bound
-        func = dsk[key][0].dsk["X"][0]
-        assert arr in func.args[0].args
-
-        # Check the block dimensions
-        block_info = dsk[key][1]
-        assert block_info["shape"] == shape
-        assert block_info["chunk-shape"] == chunk
-        assert block_info["array-location"] == (
-            (chunk[0] * i, chunk[0] * (i + 1)),
-            (chunk[1] * j, chunk[1] * (j + 1)),
-        )
-        assert block_info["num-chunks"] == (d, d)
-
-    dsk = graph_from_arraylike(arr, chunk, out_name="X", shape=shape)
-    assert isinstance(dsk, Blockwise)
+    if inline_array:
+        assert isinstance(dsk, BlockwiseCreateArray)
     dsk = dict(dsk)
-    check_task(dsk, 0, 0)
-    check_task(dsk, 1, 0)
-    check_task(dsk, 0, 1)
-    check_task(dsk, 1, 1)
+
+    # Somewhat odd membership check to avoid numpy elemwise __in__ overload
+    assert any(arr is v for v in dsk.values()) is not inline_array
 
 
 def test_top():
