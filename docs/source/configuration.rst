@@ -114,7 +114,7 @@ for what configuration is being used by your current system.
 
 Note that the ``get`` function treats underscores and hyphens identically.
 For example, ``dask.config.get("temporary-directory")`` is equivalent to
-``(dask.config.get("temporary_directory")``.
+``dask.config.get("temporary_directory")``.
 
 Values like ``"128 MiB"`` and ``"10s"`` are parsed using the functions in
 :ref:`api.utilities`.
