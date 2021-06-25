@@ -1416,7 +1416,7 @@ def test_to_csv_nodir(tmp_path):
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
     )
     df = dd.from_pandas(df0, npartitions=2)
-    dir0 = os.path.join(str(tmp_path), "createme")
+    dir0 = os.path.join(tmp_path, "createme")
     df.to_csv(dir0)
     assert "createme" in os.listdir(tmp_path)
     assert os.listdir(dir0)
@@ -1429,20 +1429,21 @@ def test_to_csv_simple(tmp_path):
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
     )
     df = dd.from_pandas(df0, npartitions=2)
-    dir = str(tmp_path)
-    df.to_csv(dir)
-    assert os.listdir(dir)
-    result = dd.read_csv(os.path.join(dir, "*")).compute()
+
+    df.to_csv(tmp_path)
+    assert os.listdir(tmp_path)
+    result = dd.read_csv(os.path.join(tmp_path, "*")).compute()
     assert (result.x.values == df0.x.values).all()
 
 
 def test_to_csv_series(tmp_path):
     df0 = pd.Series(["a", "b", "c", "d"], index=[1.0, 2.0, 3.0, 4.0])
     df = dd.from_pandas(df0, npartitions=2)
-    dir = str(tmp_path)
-    df.to_csv(dir, header=False)
-    assert os.listdir(dir)
-    result = dd.read_csv(os.path.join(dir, "*"), header=None, names=["x"]).compute()
+    df.to_csv(tmp_path, header=False)
+    assert os.listdir(tmp_path)
+    result = dd.read_csv(
+        os.path.join(tmp_path, "*"), header=None, names=["x"]
+    ).compute()
     assert (result.x == df0).all()
 
 
@@ -1635,7 +1636,7 @@ def test_reading_empty_csv_files_with_path(tmp_path):
 def test_read_csv_groupby_get_group(tmp_path):
     # https://github.com/dask/dask/issues/7005
 
-    path = os.path.join(str(tmp_path), "test.csv")
+    path = os.path.join(tmp_path, "test.csv")
     df1 = pd.DataFrame([{"foo": 10, "bar": 4}])
     df1.to_csv(path, index=False)
 
@@ -1648,7 +1649,7 @@ def test_read_csv_groupby_get_group(tmp_path):
 def test_csv_getitem_column_order(tmp_path):
     # See: https://github.com/dask/dask/issues/7759
 
-    path = os.path.join(str(tmp_path), "test.csv")
+    path = os.path.join(tmp_path, "test.csv")
     columns = list("abcdefghijklmnopqrstuvwxyz")
     values = list(range(len(columns)))
 

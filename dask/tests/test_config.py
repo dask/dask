@@ -85,13 +85,12 @@ def test_collect_yaml_dir(tmp_path):
 
     expected = {"x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    dirname = str(tmp_path)
-    with open(os.path.join(dirname, "a.yaml"), mode="w") as f:
+    with open(os.path.join(tmp_path, "a.yaml"), mode="w") as f:
         yaml.dump(a, f)
-    with open(os.path.join(dirname, "b.yaml"), mode="w") as f:
+    with open(os.path.join(tmp_path, "b.yaml"), mode="w") as f:
         yaml.dump(b, f)
 
-    config = merge(*collect_yaml(paths=[dirname]))
+    config = merge(*collect_yaml(paths=[tmp_path]))
     assert config == expected
 
 

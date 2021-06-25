@@ -935,24 +935,23 @@ def test_compute_nested():
 )
 def test_visualize(tmp_path):
     pytest.importorskip("graphviz")
-    d = str(tmp_path)
     x = da.arange(5, chunks=2)
-    x.visualize(filename=os.path.join(d, "mydask"))
-    assert os.path.exists(os.path.join(d, "mydask.png"))
+    x.visualize(filename=os.path.join(tmp_path, "mydask"))
+    assert os.path.exists(os.path.join(tmp_path, "mydask.png"))
 
-    x.visualize(filename=os.path.join(d, "mydask.pdf"))
-    assert os.path.exists(os.path.join(d, "mydask.pdf"))
+    x.visualize(filename=os.path.join(tmp_path, "mydask.pdf"))
+    assert os.path.exists(os.path.join(tmp_path, "mydask.pdf"))
 
-    visualize(x, 1, 2, filename=os.path.join(d, "mydask.png"))
-    assert os.path.exists(os.path.join(d, "mydask.png"))
+    visualize(x, 1, 2, filename=os.path.join(tmp_path, "mydask.png"))
+    assert os.path.exists(os.path.join(tmp_path, "mydask.png"))
 
     dsk = {"a": 1, "b": (add, "a", 2), "c": (mul, "a", 1)}
-    visualize(x, dsk, filename=os.path.join(d, "mydask.png"))
-    assert os.path.exists(os.path.join(d, "mydask.png"))
+    visualize(x, dsk, filename=os.path.join(tmp_path, "mydask.png"))
+    assert os.path.exists(os.path.join(tmp_path, "mydask.png"))
 
     x = Tuple(dsk, ["a", "b", "c"])
-    visualize(x, filename=os.path.join(d, "mydask.png"))
-    assert os.path.exists(os.path.join(d, "mydask.png"))
+    visualize(x, filename=os.path.join(tmp_path, "mydask.png"))
+    assert os.path.exists(os.path.join(tmp_path, "mydask.png"))
 
     # To see if visualize() works when the filename parameter is set to None
     # If the function raises an error, the test will fail
@@ -965,9 +964,8 @@ def test_visualize(tmp_path):
 )
 def test_visualize_highlevelgraph(tmp_path):
     graphviz = pytest.importorskip("graphviz")
-    d = str(tmp_path)
     x = da.arange(5, chunks=2)
-    viz = x.dask.visualize(filename=os.path.join(d, "mydask.png"))
+    viz = x.dask.visualize(filename=os.path.join(tmp_path, "mydask.png"))
     # check visualization will automatically render in the jupyter notebook
     assert isinstance(viz, graphviz.dot.Digraph)
 
