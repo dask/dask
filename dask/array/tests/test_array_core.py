@@ -50,7 +50,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split
+from dask.utils import apply, key_split, make_tmpdir
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -2002,12 +2002,12 @@ def test_store_multiprocessing_lock():
     assert st is None
 
 
-def test_to_hdf5(tmp_path_factory):
+def test_to_hdf5(tmp_path):
     h5py = pytest.importorskip("h5py")
     x = da.ones((4, 4), chunks=(2, 2))
     y = da.ones(4, chunks=2, dtype="i4")
 
-    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    fn = os.path.join(tmp_path, "fn1")
     x.to_hdf5(fn, "/x")
     with h5py.File(fn, mode="r+") as f:
         d = f["/x"]
@@ -2015,7 +2015,7 @@ def test_to_hdf5(tmp_path_factory):
         assert_eq(d[:], x)
         assert d.chunks == (2, 2)
 
-    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    fn = os.path.join(tmp_path, "fn2")
     x.to_hdf5(fn, "/x", chunks=None)
     with h5py.File(fn, mode="r+") as f:
         d = f["/x"]
@@ -2023,7 +2023,7 @@ def test_to_hdf5(tmp_path_factory):
         assert_eq(d[:], x)
         assert d.chunks is None
 
-    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    fn = os.path.join(tmp_path, "fn3")
     x.to_hdf5(fn, "/x", chunks=(1, 1))
     with h5py.File(fn, mode="r+") as f:
         d = f["/x"]
@@ -2031,7 +2031,7 @@ def test_to_hdf5(tmp_path_factory):
         assert_eq(d[:], x)
         assert d.chunks == (1, 1)
 
-    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+    fn = os.path.join(tmp_path, "fn4")
     da.to_hdf5(fn, {"/x": x, "/y": y})
 
     with h5py.File(fn, mode="r+") as f:
@@ -2985,9 +2985,9 @@ def test_empty_array():
     assert_eq(np.arange(0), da.arange(0, chunks=5))
 
 
-def test_memmap(tmp_path_factory):
-    fn_1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
-    fn_2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+def test_memmap(tmp_path):
+    fn_1 = os.path.join(tmp_path, "fn1.npy")
+    fn_2 = os.path.join(tmp_path, "fn2.npy")
     try:
         x = da.arange(100, chunks=15)
         target = np.memmap(fn_1, shape=x.shape, mode="w+", dtype=x.dtype)
@@ -3045,10 +3045,11 @@ def test_view_fortran():
     assert_eq(x.T.view("i2").T, d.view("i2", order="F"))
 
 
-def test_h5py_tokenize(tmp_path_factory):
+def test_h5py_tokenize(tmp_path):
     h5py = pytest.importorskip("h5py")
-    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
-    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn")
+
+    fn1 = os.path.join(tmp_path, "fn1")
+    fn2 = os.path.join(tmp_path, "fn2")
 
     f = h5py.File(fn1, mode="a")
     g = h5py.File(fn2, mode="a")
@@ -4345,14 +4346,14 @@ def test_zarr_nocompute(tmp_path):
     assert a2.chunks == a.chunks
 
 
-def test_tiledb_roundtrip(tmp_path_factory):
+def test_tiledb_roundtrip(tmp_path):
     tiledb = pytest.importorskip("tiledb")
     # 1) load with default chunking
     # 2) load from existing tiledb.DenseArray
     # 3) write to existing tiledb.DenseArray
     a = da.random.random((3, 3))
 
-    uri = str(tmp_path_factory.mktemp("uri"))
+    uri = make_tmpdir(tmp_path, "uri1")
     da.to_tiledb(a, uri)
     tdb = da.from_tiledb(uri)
 
@@ -4364,13 +4365,13 @@ def test_tiledb_roundtrip(tmp_path_factory):
         tdb2 = da.from_tiledb(t)
         assert_eq(a, tdb2)
 
-    uri2 = str(tmp_path_factory.mktemp("uri"))
+    uri2 = make_tmpdir(tmp_path, "uri2")
     with tiledb.empty_like(uri2, a) as t:
         a.to_tiledb(t)
         assert_eq(da.from_tiledb(uri2), a)
 
     # specific chunking
-    uri = str(tmp_path_factory.mktemp("uri"))
+    uri = make_tmpdir(tmp_path, "uri3")
     a = da.random.random((3, 3), chunks=(1, 1))
     a.to_tiledb(uri)
     tdb = da.from_tiledb(uri)

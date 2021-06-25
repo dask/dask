@@ -30,7 +30,7 @@ from dask.bag.core import (
 )
 from dask.bag.utils import assert_eq
 from dask.delayed import Delayed
-from dask.utils import filetexts
+from dask.utils import filetexts, make_tmpdir
 from dask.utils_test import add, inc
 
 dsk = {("x", 0): (range, 5), ("x", 1): (range, 5), ("x", 2): (range, 5)}
@@ -973,16 +973,16 @@ def test_to_textfiles_encoding(tmp_path):
         f.close()
 
 
-def test_to_textfiles_inputs(tmp_path_factory):
+def test_to_textfiles_inputs(tmp_path):
     B = db.from_sequence(["abc", "123", "xyz"], npartitions=2)
-    a = os.path.join(tmp_path_factory.mktemp("dn"), "a")
-    b = os.path.join(tmp_path_factory.mktemp("dn"), "b")
+    a = os.path.join(tmp_path, "a")
+    b = os.path.join(tmp_path, "b")
 
     B.to_textfiles([a, b])
     assert os.path.exists(a)
     assert os.path.exists(b)
 
-    dirname = tmp_path_factory.mktemp("dn")
+    dirname = make_tmpdir(tmp_path, "dn")
     B.to_textfiles(dirname)
     assert os.path.exists(dirname)
     assert os.path.exists(os.path.join(dirname, "0.part"))

@@ -27,7 +27,7 @@ from dask.dataframe.io.csv import (
     text_blocks_to_pandas,
 )
 from dask.dataframe.utils import assert_eq, has_known_categories
-from dask.utils import filetext, filetexts
+from dask.utils import filetext, filetexts, make_tmpdir
 
 # List of available compression format for test_read_csv_compression
 compression_fmts = [fmt for fmt in compr] + [None]
@@ -1262,33 +1262,33 @@ def test_read_csv_names_not_none():
 ############
 
 
-def test_to_csv(tmp_path_factory):
+def test_to_csv(tmp_path):
     df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
-        dn = tmp_path_factory.mktemp("dn")
+        dn = make_tmpdir(tmp_path, str(npartitions), "dn1")
         a.to_csv(dn, index=False)
         result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
         assert_eq(result, df)
 
-        tmp_path_factory.mktemp("dn")
+        dn = make_tmpdir(tmp_path, str(npartitions), "dn2")
         r = a.to_csv(dn, index=False, compute=False)
         dask.compute(*r, scheduler="sync")
         result = dd.read_csv(os.path.join(dn, "*")).compute().reset_index(drop=True)
         assert_eq(result, df)
 
-        tmp_path_factory.mktemp("dn")
+        dn = make_tmpdir(tmp_path, str(npartitions), "dn3")
         fn = os.path.join(dn, "data_*.csv")
         a.to_csv(fn, index=False)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
         assert_eq(result, df)
 
 
-def test_to_csv_multiple_files_cornercases(tmp_path_factory):
+def test_to_csv_multiple_files_cornercases(tmp_path):
     df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
     a = dd.from_pandas(df, 2)
-    dn = tmp_path_factory.mktemp("dn")
+    dn = make_tmpdir(tmp_path, "dn1")
     with pytest.raises(ValueError):
         fn = os.path.join(dn, "data_*_*.csv")
         a.to_csv(fn)
@@ -1317,7 +1317,7 @@ def test_to_csv_multiple_files_cornercases(tmp_path_factory):
         }
     )
     a = dd.from_pandas(df16, 16)
-    dn = tmp_path_factory.mktemp("dn")
+    dn = make_tmpdir(tmp_path, "dn2")
     fn = os.path.join(dn, "data_*.csv")
     a.to_csv(fn, index=False)
     result = dd.read_csv(fn).compute().reset_index(drop=True)
@@ -1325,7 +1325,7 @@ def test_to_csv_multiple_files_cornercases(tmp_path_factory):
 
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df, 2)
-    dn = tmp_path_factory.mktemp("dn")
+    dn = make_tmpdir(tmp_path, "dn3")
     a.to_csv(dn, index=False)
     fn = os.path.join(dn, "data_*.csv")
     a.to_csv(fn, mode="w", index=False)
@@ -1334,7 +1334,7 @@ def test_to_csv_multiple_files_cornercases(tmp_path_factory):
 
     # test handling existing files when links are optimized out
     a = dd.from_pandas(df16, 16)
-    dn = tmp_path_factory.mktemp("dn")
+    dn = make_tmpdir(tmp_path, "dn4")
     a.to_csv(dn, index=False)
     fn = os.path.join(dn, "data_*.csv")
     a.to_csv(fn, mode="w", index=False)
@@ -1342,18 +1342,18 @@ def test_to_csv_multiple_files_cornercases(tmp_path_factory):
     assert_eq(result, df16)
 
 
-def test_to_single_csv(tmp_path_factory):
+def test_to_single_csv(tmp_path):
     df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
-        dn = tmp_path_factory.mktemp("dn")
+        dn = make_tmpdir(tmp_path, str(npartitions), "dn1")
         fn = os.path.join(dn, "test.csv")
         a.to_csv(fn, index=False, single_file=True)
         result = dd.read_csv(fn).compute().reset_index(drop=True)
         assert_eq(result, df)
 
-        dn = tmp_path_factory.mktemp("dn")
+        dn = make_tmpdir(tmp_path, str(npartitions), "dn2")
         fn = os.path.join(dn, "test.csv")
         r = a.to_csv(fn, index=False, compute=False, single_file=True)
         dask.compute(r, scheduler="sync")
@@ -1383,12 +1383,12 @@ def test_to_single_csv_with_header_first_partition_only(tmp_path):
         a.to_csv(fn, index=False, header_first_partition_only=False, single_file=True)
 
 
-def test_to_single_csv_gzip(tmp_path_factory):
+def test_to_single_csv_gzip(tmp_path):
     df = pd.DataFrame({"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]})
 
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
-        dn = tmp_path_factory.mktemp("dn")
+        dn = make_tmpdir(tmp_path, str(npartitions), "dn")
         fn = os.path.join(dn, "test.csv.gz")
         a.to_csv(fn, index=False, compression="gzip", single_file=True)
         result = pd.read_csv(fn, compression="gzip").reset_index(drop=True)
@@ -1396,14 +1396,14 @@ def test_to_single_csv_gzip(tmp_path_factory):
 
 
 @pytest.mark.xfail(reason="to_csv does not support compression")
-def test_to_csv_gzip(tmp_path_factory):
+def test_to_csv_gzip(tmp_path):
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
     )
 
     for npartitions in [1, 2]:
         a = dd.from_pandas(df, npartitions)
-        dn = tmp_path_factory.mktemp("dn")
+        dn = make_tmpdir(tmp_path, "dn")
         fn = os.path.join(dn, "fn.csv")
         a.to_csv(fn, compression="gzip")
         result = pd.read_csv(fn, index_col=0, compression="gzip")

@@ -7,6 +7,7 @@ import pytest
 # import dask
 from dask.dataframe.io.sql import read_sql_table
 from dask.dataframe.utils import assert_eq
+from dask.utils import make_tmpdir
 
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
@@ -29,8 +30,8 @@ df = pd.read_csv(io.StringIO(data), index_col="number")
 
 
 @pytest.fixture
-def db(tmp_path_factory):
-    f = os.path.join(tmp_path_factory.mktemp("db"), "f")
+def db(tmp_path):
+    f = os.path.join(tmp_path, "f")
     uri = "sqlite:///%s" % f
     df.to_sql("test", uri, index=True, if_exists="replace")
     yield uri
@@ -437,7 +438,7 @@ def tmp_db_uri(path):
 
 @pytest.mark.parametrize("npartitions", (1, 2))
 @pytest.mark.parametrize("parallel", (False, True))
-def test_to_sql(npartitions, parallel, tmp_path_factory):
+def test_to_sql(npartitions, parallel, tmp_path):
     df_by_age = df.set_index("age")
     df_appended = pd.concat(
         [
@@ -450,14 +451,15 @@ def test_to_sql(npartitions, parallel, tmp_path_factory):
     ddf_by_age = ddf.set_index("age")
 
     # Simple round trip test: use existing "number" index_col
-    with tmp_db_uri(tmp_path_factory.mktemp("db")) as uri:
+
+    with tmp_db_uri(make_tmpdir(tmp_path, "db1")) as uri:
         ddf.to_sql("test", uri, parallel=parallel)
         result = read_sql_table("test", uri, "number")
         assert_eq(df, result)
 
     # Test writing no index, and reading back in with one of the other columns as index (`read_sql_table` requires
     # an index_col)
-    with tmp_db_uri(tmp_path_factory.mktemp("db")) as uri:
+    with tmp_db_uri(make_tmpdir(tmp_path, "db2")) as uri:
         ddf.to_sql("test", uri, parallel=parallel, index=False)
 
         result = read_sql_table("test", uri, "negish")
@@ -467,13 +469,13 @@ def test_to_sql(npartitions, parallel, tmp_path_factory):
         assert_eq(df_by_age, result)
 
     # Index by "age" instead
-    with tmp_db_uri(tmp_path_factory.mktemp("db")) as uri:
+    with tmp_db_uri(make_tmpdir(tmp_path, "db3")) as uri:
         ddf_by_age.to_sql("test", uri, parallel=parallel)
         result = read_sql_table("test", uri, "age")
         assert_eq(df_by_age, result)
 
     # Index column can't have "object" dtype if no partitions are provided
-    with tmp_db_uri(tmp_path_factory.mktemp("db")) as uri:
+    with tmp_db_uri(make_tmpdir(tmp_path, "db4")) as uri:
         ddf.set_index("name").to_sql("test", uri)
         with pytest.raises(
             TypeError,
@@ -482,7 +484,7 @@ def test_to_sql(npartitions, parallel, tmp_path_factory):
             read_sql_table("test", uri, "name")
 
     # Test various "if_exists" values
-    with tmp_db_uri(tmp_path_factory.mktemp("db")) as uri:
+    with tmp_db_uri(make_tmpdir(tmp_path, "db5")) as uri:
         ddf.to_sql("test", uri)
 
         # Writing a table that already exists fails
@@ -499,7 +501,7 @@ def test_to_sql(npartitions, parallel, tmp_path_factory):
         assert_eq(df_by_age, result)
 
     # Verify number of partitions returned, when compute=False
-    with tmp_db_uri(tmp_path_factory.mktemp("db")) as uri:
+    with tmp_db_uri(make_tmpdir(tmp_path, "db6")) as uri:
         result = ddf.to_sql("test", uri, parallel=parallel, compute=False)
 
         # the first result is from the "meta" insert

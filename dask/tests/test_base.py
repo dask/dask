@@ -155,20 +155,20 @@ def test_tokenize_numpy_memmap_offset(tmpdir):
 
 
 @pytest.mark.skipif("not np")
-def test_tokenize_numpy_memmap(tmp_path_factory):
-    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+def test_tokenize_numpy_memmap(tmp_path):
+    fn = os.path.join(tmp_path, "fn1.npy")
     x = np.arange(5)
     np.save(fn, x)
     y = tokenize(np.load(fn, mmap_mode="r"))
 
-    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    fn = os.path.join(tmp_path, "fn2.npy")
     x = np.arange(5)
     np.save(fn, x)
     z = tokenize(np.load(fn, mmap_mode="r"))
 
     assert y != z
 
-    fn = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    fn = os.path.join(tmp_path, "fn3.npy")
     x = np.random.normal(size=(10, 10))
     np.save(fn, x)
     mm = np.load(fn, mmap_mode="r")
@@ -183,10 +183,10 @@ def test_tokenize_numpy_memmap(tmp_path_factory):
 
 
 @pytest.mark.skipif("not np")
-def test_tokenize_numpy_memmap_no_filename(tmp_path_factory):
+def test_tokenize_numpy_memmap_no_filename(tmp_path):
     # GH 1562:
-    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
-    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.npy")
+    fn1 = os.path.join(tmp_path, "fn1.npy")
+    fn2 = os.path.join(tmp_path, "fn2.npy")
     x = np.arange(5)
     np.save(fn1, x)
     np.save(fn2, x)

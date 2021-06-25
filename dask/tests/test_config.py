@@ -61,14 +61,14 @@ def test_merge():
     assert c == expected
 
 
-def test_collect_yaml_paths(tmp_path_factory):
+def test_collect_yaml_paths(tmp_path):
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
 
     expected = {"x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
-    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
+    fn1 = os.path.join(tmp_path, "fn1.yaml")
+    fn2 = os.path.join(tmp_path, "fn2.yaml")
 
     with open(fn1, "w") as f:
         yaml.dump(a, f)
@@ -160,15 +160,15 @@ def test_env():
     assert res == expected
 
 
-def test_collect(tmp_path_factory):
+def test_collect(tmp_path):
     a = {"x": 1, "y": {"a": 1}}
     b = {"x": 2, "z": 3, "y": {"b": 2}}
     env = {"DASK_W": 4}
 
     expected = {"w": 4, "x": 2, "y": {"a": 1, "b": 2}, "z": 3}
 
-    fn1 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
-    fn2 = os.path.join(tmp_path_factory.mktemp("dn"), "fn.yaml")
+    fn1 = os.path.join(tmp_path, "fn1.yaml")
+    fn2 = os.path.join(tmp_path, "fn2.yaml")
 
     with open(fn1, "w") as f:
         yaml.dump(a, f)
