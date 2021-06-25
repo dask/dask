@@ -24,7 +24,6 @@ from .core import get_deps
 K = TypeVar("K")
 V = TypeVar("V")
 
-
 system_encoding = sys.getdefaultencoding()
 if system_encoding == "ascii":
     system_encoding = "utf-8"
@@ -162,7 +161,9 @@ def import_required(mod_name, error_msg):
         raise RuntimeError(error_msg) from e
 
 
-@_deprecated(use_instead="tmp_path or tmp_path_factory from pytest fixtures")
+@_deprecated(
+    use_instead="the tempfile module from the standard library or pytest fixtures for temporary files"
+)
 @contextmanager
 def tmpfile(extension="", dir=None):
     extension = "." + extension.lstrip(".")
@@ -181,7 +182,9 @@ def tmpfile(extension="", dir=None):
                     os.remove(filename)
 
 
-@_deprecated(use_instead="tmp_path or tmp_path_factory from pytest fixtures")
+@_deprecated(
+    use_instead="the tempfile module from the standard library or pytest fixtures for temporary files"
+)
 @contextmanager
 def tmpdir(dir=None):
     dirname = tempfile.mkdtemp(dir=dir)
@@ -199,20 +202,25 @@ def tmpdir(dir=None):
 
 
 @contextmanager
-def filetext(text, extension="", open=open, mode="w"):
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        with tmpfile(extension=extension) as filename:
-            f = open(filename, mode=mode)
-            try:
-                f.write(text)
-            finally:
-                try:
-                    f.close()
-                except AttributeError:
-                    pass
-
-            yield filename
+def filetext(text, extension="", mode="w"):
+    extension = "." + extension.lstrip(".")
+    f = tempfile.NamedTemporaryFile(suffix=extension, mode=mode, delete=False)
+    try:
+        f.write(text)
+    finally:
+        try:
+            f.close()
+        except AttributeError:
+            pass
+    try:
+        yield f.name
+    finally:
+        if os.path.exists(f.name):
+            if os.path.isdir(f.name):
+                shutil.rmtree(f.name)
+            else:
+                with suppress(OSError):
+                    os.remove(f.name)
 
 
 @contextmanager
@@ -227,11 +235,19 @@ def changed_cwd(new_cwd):
 
 @contextmanager
 def tmp_cwd(dir=None):
-    with warnings.catch_warnings():
-        warnings.filterwarnings("ignore", category=FutureWarning)
-        with tmpdir(dir) as dirname:
-            with changed_cwd(dirname):
-                yield dirname
+    tmpdir = tempfile.TemporaryDirectory(dir=dir)
+    dirname = tmpdir.name
+    try:
+        with changed_cwd(dirname):
+            yield dirname
+    finally:
+        if os.path.exists(dirname):
+            if os.path.isdir(dirname):
+                with suppress(OSError):
+                    shutil.rmtree(dirname)
+            else:
+                with suppress(OSError):
+                    os.remove(dirname)
 
 
 @_deprecated(
