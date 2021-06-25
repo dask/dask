@@ -11,8 +11,6 @@ import dask.array as da
 from dask import config
 from dask.array.slicing import (
     _sanitize_index_element,
-    _slice_1d,
-    cached_cumsum,
     make_block_sorted_slices,
     new_blockdim,
     normalize_index,
@@ -23,6 +21,7 @@ from dask.array.slicing import (
     take,
 )
 from dask.array.utils import assert_eq, same_keys
+from dask.layers_utils import _slice_1d, cached_cumsum
 
 
 def test_slice_1d():

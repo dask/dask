@@ -10,6 +10,7 @@ from tlz import sliding_window
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
+from ..layers_utils import cached_cumsum
 from ..utils import derived_from
 from . import chunk
 from .core import (
@@ -19,7 +20,6 @@ from .core import (
     blockwise,
     broadcast_arrays,
     broadcast_to,
-    cached_cumsum,
     concatenate,
     normalize_chunks,
     stack,

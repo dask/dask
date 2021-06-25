@@ -1,7 +1,8 @@
 import operator
-from collections import defaultdict
+from collections import OrderedDict, defaultdict
 from functools import partial
 from itertools import product
+from numbers import Integral
 from typing import List, Optional, Tuple
 
 import tlz as toolz
@@ -11,6 +12,7 @@ from .base import tokenize
 from .blockwise import Blockwise, BlockwiseDep, BlockwiseDepDict, blockwise_token
 from .core import flatten, keys_in_tasks
 from .highlevelgraph import Layer
+from .layers_utils import _slice_1d
 from .utils import apply, concrete, insert, stringify, stringify_collection_keys
 
 #
@@ -101,6 +103,174 @@ class BlockwiseCreateArray(Blockwise):
             indices=[(CreateArrayDeps(chunks), out_ind)],
             numblocks={},
         )
+
+
+class SlicingLayer(Layer):
+    """Simple HighLevelGraph array slicing layer."""
+
+    def __init__(
+        self,
+        out_name=None,
+        in_name=None,
+        blockdims=None,
+        index=None,
+        shape=None,
+        parts_out=None,
+    ):
+        super().__init__()
+        self.out_name = out_name
+        self.in_name = in_name
+        self.blockdims = blockdims
+        self.index = index
+        self.shape = shape
+        self.parts_out = parts_out
+
+    def __repr__(self):
+        slice_text_repr = "["
+        for i in self.index:
+            start = i.start or ""
+            stop = i.stop or ""
+            slice_text_repr += f"{start}:{stop}"
+            if i.step is not None:
+                slice_text_repr += f":{i.step}"
+            slice_text_repr += ","
+        slice_text_repr = (
+            slice_text_repr[:-1] + "]"
+        )  # strip out last comma, close bracket
+        return f"SlicingLayer<slice={slice_text_repr} name='{self.out_name}'"
+
+    @property
+    def _dict(self):
+        """Materialize full dict representation"""
+        if hasattr(self, "_cached_dict"):
+            return self._cached_dict
+        else:
+            dsk = self._construct_graph()
+            self._cached_dict = dsk
+        return self._cached_dict
+
+    def __getitem__(self, key):
+        return self._dict[key]
+
+    def __iter__(self):
+        return iter(self._dict)
+
+    def __len__(self):
+        return len(self._dict)
+
+    def is_materialized(self):
+        return hasattr(self, "_cached_dict")
+
+    def get_output_keys(self):
+        return self.keys()  # FIXME! this implementation materializes the graph
+
+    def _output_parts(self):
+        out_name = self.out_name
+        shape = self.shape
+        blockdims = self.blockdims
+        index = self.index
+        block_slices = list(map(_slice_1d, shape, blockdims, index))
+        # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
+        out_name = "out-name"
+        out_names = list(
+            product(
+                [out_name],
+                *[
+                    range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+                    for d, i in zip(block_slices, index)
+                    if not isinstance(i, Integral)
+                ],
+            )
+        )
+        parts_out = OrderedDict.fromkeys(tuple(parts) for _, *parts in out_names)
+        return parts_out
+
+    def _input_parts(self):
+        in_name = self.in_name
+        blockdims = self.blockdims
+        index = self.index
+        shape = self.shape
+
+        block_slices = list(map(_slice_1d, shape, blockdims, index))
+        sorted_block_slices = [sorted(i.items()) for i in block_slices]
+
+        # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
+        in_names = list(
+            product([in_name], *[toolz.pluck(0, s) for s in sorted_block_slices])
+        )
+        parts_in = OrderedDict.fromkeys(tuple(parts) for _, *parts in in_names)
+        return parts_in
+
+    def cull(self, keys, all_keys):
+        """Cull a SlicingLayer HighLevelGraph layer."""
+        parts_out = self._output_parts()
+        parts_in = self._input_parts()
+        culled_deps = self._cull_dependencies(
+            keys, parts_in=parts_in, parts_out=parts_out
+        )
+        if parts_out != self.parts_out:
+            culled_layer = self._cull(parts_out)
+            return culled_layer, culled_deps
+        else:
+            return self, culled_deps
+
+    def _cull(self, parts_out):
+        return SlicingLayer(
+            out_name=self.out_name,
+            in_name=self.in_name,
+            blockdims=self.blockdims,
+            index=self.index,
+            shape=self.shape,
+            parts_out=parts_out,
+        )
+
+    def _cull_dependencies(self, keys, parts_in=None, parts_out=None):
+        """Determine the necessary dependencies to produce `keys`.
+
+        For simple slicing, output chunks depend on which areas are sliced.
+        This method does not require graph materialization.
+        """
+        deps = defaultdict(set)
+        for part_in, part_out in zip(parts_in, parts_out):
+            deps[(self.out_name, *part_out)] |= {(self.in_name, *part_in)}
+        return deps
+
+    def _construct_graph(self, deserializing=False):
+        """Construct graph for a simple slicing operation."""
+        out_name = self.out_name
+        in_name = self.in_name
+        blockdims = self.blockdims
+        index = self.index
+        shape = self.shape
+
+        block_slices = list(map(_slice_1d, shape, blockdims, index))
+        sorted_block_slices = [sorted(i.items()) for i in block_slices]
+
+        # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
+        in_names = list(
+            product([in_name], *[toolz.pluck(0, s) for s in sorted_block_slices])
+        )
+
+        # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
+        out_names = list(
+            product(
+                [out_name],
+                *[
+                    range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+                    for d, i in zip(block_slices, index)
+                    if not isinstance(i, Integral)
+                ],
+            )
+        )
+
+        all_slices = list(product(*[toolz.pluck(1, s) for s in sorted_block_slices]))
+
+        dsk = {
+            out_name: (operator.getitem, in_name, slices)
+            for out_name, in_name, slices in zip(out_names, in_names, all_slices)
+        }
+
+        return dsk
 
 
 class ArrayOverlapLayer(Layer):
