@@ -51,7 +51,7 @@ from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
 from dask.layers import BlockwiseCreateArray
-from dask.utils import apply, key_split, tmpdir, tmpfile
+from dask.utils import SerializableLock, apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -2365,30 +2365,30 @@ def test_Array_normalizes_dtype():
 @pytest.mark.parametrize("inline_array", [True, False])
 def test_from_array_with_lock(inline_array):
     x = np.arange(10)
-    d = da.from_array(x, chunks=5, lock=True, inline_array=inline_array)
 
-    tasks = [v for k, v in d.dask.items() if k[0] == d.name]
+    class FussyLock(SerializableLock):
+        def acquire(self, blocking=True, timeout=-1):
+            if self.locked():
+                raise RuntimeError("I am locked")
+            return super().acquire(blocking, timeout)
 
-    if inline_array:
-        # Pull io_subgraph and getter functions from deep in the graph
-        io_subgraphs = [t[0] for t in tasks]
-        getters = [next(iter(i.dsk.values()))[0].args[0] for i in io_subgraphs]
+    lock = FussyLock()
+    d = da.from_array(x, chunks=5, lock=lock, inline_array=inline_array)
 
-        # Check that a lock is set.
-        assert hasattr(getters[0].keywords.get("lock"), "acquire")
-        # Check that the same lock is shared between tasks.
-        assert len(set(getter.keywords["lock"] for getter in getters)) == 1
-    else:
-        assert hasattr(tasks[0][4], "acquire")
-        assert len(set(task[4] for task in tasks)) == 1
+    with pytest.raises(RuntimeError):
+        lock.acquire()
+        d.compute()
 
+    lock.release()
     assert_eq(d, x)
 
-    lock = Lock()
+    lock = CounterLock()
     e = da.from_array(x, chunks=5, lock=lock)
     f = da.from_array(x, chunks=5, lock=lock)
 
     assert_eq(e + f, x + x)
+    assert lock.release_count == 2
+    assert lock.acquire_count == 2
 
 
 class MyArray:
