@@ -90,7 +90,7 @@ the ``config`` dictionary or the ``get`` function:
                               'validate': False}},
   ...}
 
-You can use `.` for nested access, for example:
+You can use ``.`` for nested access, for example:
 
    >>> dask.config.get("distributed.client")
    {'heartbeat': '5s', 'scheduler-info-interval': '2s'} # use `.` for nested access
