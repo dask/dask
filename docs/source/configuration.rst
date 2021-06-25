@@ -31,40 +31,90 @@ the ``config`` dictionary or the ``get`` function:
 .. code-block:: python
 
    >>> import dask
+   >>> dask.config.config
+   {'array': {'slicing': {'split-large-chunks': None}, 'svg': {'size': 120}},
+   'dataframe': {'shuffle-compression': None},
+   'optimization': {'fuse': {'active': None,
+                             'ave-width': 1,
+                             'max-depth-new-edges': None,
+                             'max-height': inf,
+                             'max-width': None,
+                             'rename-keys': True,
+                             'subgraphs': None}},
+   'temporary-directory': None}
+   
+
    >>> import dask.distributed  # populate config with distributed defaults
    >>> dask.config.config
-   {
-       "array": {
-           "chunk-size": "128 MiB",
-       }
-       "distributed": {
-           "logging": {
-               "distributed": "info",
-               "bokeh": "critical",
-               "tornado": "critical"
-            },
-            "admin": {
-                "log-format": "%(name)s - %(levelname)s - %(message)s"
-            }
-       }
-   }
+   {'array': {'slicing': {'split-large-chunks': None}, 'svg': {'size': 120}},
+   'dataframe': {'shuffle-compression': None},
+   'distributed': {'adaptive': {'interval': '1s',
+                                'maximum': inf,
+                                'minimum': 0,
+                                'target-duration': '5s',
+                                'wait-count': 3},
+                  ...,
+                   'dashboard': {'export-tool': False,
+                                 'graph-max-items': 5000,
+                                 'link': '{scheme}://{host}:{port}/status',
+                                 'prometheus': {'namespace': 'dask'}},
+                   'deploy': {'cluster-repr-interval': '500ms',
+                              'lost-worker-timeout': '15s'},
+                  ...,
+                   'worker': {'blocked-handlers': [],
+                              'connections': {'incoming': 10, 'outgoing': 50},
+                              'daemon': True,
+                              'http': {'routes': ['distributed.http.worker.prometheus',
+                                                  'distributed.http.health',
+                                                  'distributed.http.statics']},
+                              'lifetime': {'duration': None,
+                                           'restart': False,
+                                           'stagger': '0 seconds'},
+                              'memory': {'pause': 0.8,
+                                         'rebalance': {'measure': 'optimistic',
+                                                       'recipient-max': 0.6,
+                                                       'sender-min': 0.3,
+                                                       'sender-recipient-gap': 0.1},
+                                         'recent-to-old-time': '30s',
+                                         'spill': 0.7,
+                                         'target': 0.6,
+                                         'terminate': 0.95},
+                              'multiprocessing-method': 'spawn',
+                              'preload': [],
+                              'preload-argv': [],
+                              'profile': {'cycle': '1000ms',
+                                          'interval': '10ms',
+                                          'low-level': False},
+                              'resources': {},
+                              'use-file-locking': True,
+                              'validate': False}},
+  ...}
 
-   >>> dask.config.get("distributed.logging")
-   {
-       'distributed': 'info',
-       'bokeh': 'critical',
-       'tornado': 'critical'
-   }
+You can use `.` for nested access, for example:
 
-   >>> dask.config.get('distributed.logging.bokeh')  # use `.` for nested access
-   'critical'
+   >>> dask.config.get("distributed.client")
+   {'heartbeat': '5s', 'scheduler-info-interval': '2s'} # use `.` for nested access
+
+   >>> dask.config.get("distributed.scheduler.unknown-task-duration")
+   '500ms'
+
+   >>> dask.config.get("distributed.worker.memory")
+   {'pause': 0.8,
+    'rebalance': {'measure': 'optimistic',
+                  'recipient-max': 0.6,
+                  'sender-min': 0.3,
+                  'sender-recipient-gap': 0.1},
+    'recent-to-old-time': '30s',
+    'spill': 0.7,
+    'target': 0.6,
+    'terminate': 0.95}
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
 
 Note that the ``get`` function treats underscores and hyphens identically.
-For example, ``dask.config.get('num_workers')`` is equivalent to
-``dask.config.get('num-workers')``.
+For example, ``dask.config.get("temporary-directory")`` is equivalent to
+``(dask.config.get("temporary_directory")``.
 
 Values like ``"128 MiB"`` and ``"10s"`` are parsed using the functions in
 :ref:`api.utilities`.
@@ -75,25 +125,14 @@ Specify Configuration
 YAML files
 ~~~~~~~~~~
 
-You can specify configuration values in YAML files like the following:
+You can specify configuration values in YAML files. The default YAML files for ``dask`` 
+and ``distributed`` can be found in:
 
-.. code-block:: yaml
+``dask``: `dask.yaml
+<https://github.com/dask/dask/blob/main/dask/dask.yaml>`_,
 
-   array:
-      chunk-size: 128 MiB
-
-   distributed:
-     logging:
-       distributed: info
-       bokeh: critical
-       tornado: critical
-
-     scheduler:
-       work-stealing: True
-       allowed-failures: 5
-
-       admin:
-         log-format: '%(name)s - %(levelname)s - %(message)s'
+``distributed``: `distributed.yaml
+<https://github.com/dask/distributed/blob/main/distributed/distributed.yaml>`_,
 
 These files can live in any of the following locations:
 
