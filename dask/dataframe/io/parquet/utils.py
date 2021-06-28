@@ -658,13 +658,7 @@ def _get_aggregation_depth(aggregate_files, partition_names):
     # <int> : Allow aggregation within this partition-hierarchy depth
 
     aggregation_depth = aggregate_files
-    if aggregate_files is None and partition_names:
-        # aggregate_files is None, and we are reading a hive-partitioned
-        # dataset.  Set the aggregation range to be the final partition
-        # level (partition "depth" of 1)
-        aggregation_depth = 1
-
-    elif isinstance(aggregate_files, str):
+    if isinstance(aggregate_files, str):
         if aggregate_files in partition_names:
             # aggregate_files corresponds to a partition column. Reset the
             # value of this variable to reflect the partition "depth" (in the

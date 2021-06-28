@@ -231,10 +231,7 @@ def read_parquet(
                 │   ├── 03.parquet
                 └── └── 04.parquet
 
-        Note that the default behavior of ``aggregate_files`` is False, unless
-        the dataset is hive-partitioned.  For hive-partitioned data, the default
-        setting is the least-signficant partition name (which is equivalent to
-        ``"section"`` in the example above).
+        Note that the default behavior of ``aggregate_files`` is False.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
