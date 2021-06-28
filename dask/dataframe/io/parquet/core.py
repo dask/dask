@@ -312,6 +312,10 @@ def read_parquet(
     ):
         # Require `gather_statistics=True` if `chunksize` is used,
         # or if `split_row_groups>1` and we are aggregating files.
+        if gather_statistics is False:
+            raise ValueError(
+                "read_parquet options require gather_statistics=True"
+            )
         gather_statistics = True
 
     read_metadata_result = engine.read_metadata(
