@@ -369,12 +369,12 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
-    from .utils import ones_like_safe
+    from .utils import meta_from_array, ones_like_safe
 
     # make sure that every arg is an evaluated array
     args = [
         ones_like_safe(
-            x._meta if isinstance(x, Array) else x, shape=((1,) * x.ndim), dtype=x.dtype
+            meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype
         )
         if is_arraylike(x)
         else x
