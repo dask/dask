@@ -702,6 +702,22 @@ def test_median(axis, keepdims, func):
     )
 
 
+@pytest.mark.parametrize("func", ["median", "nanmedian"])
+@pytest.mark.parametrize("axis", [0, [0, 2], 1])
+def test_median_does_not_rechunk_if_whole_axis_in_one_chunk(axis, func):
+    x = np.arange(100).reshape((2, 5, 10))
+    d = da.from_array(x, chunks=(2, 1, 10))
+
+    actual = getattr(da, func)(d, axis=axis)
+    expected = getattr(np, func)(x, axis=axis)
+    assert_eq(actual, expected)
+    does_rechunk = "rechunk" in str(dict(actual.__dask_graph__()))
+    if axis == 1:
+        assert does_rechunk
+    else:
+        assert not does_rechunk
+
+
 @pytest.mark.parametrize("method", ["sum", "mean", "prod"])
 def test_object_reduction(method):
     arr = da.ones(1).astype(object)

@@ -1,4 +1,5 @@
 import warnings
+import xml.etree.ElementTree
 from itertools import product
 from operator import add
 
@@ -26,6 +27,7 @@ from dask.dataframe.core import (
     total_mem_usage,
 )
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.datasets import timeseries
 from dask.utils import M, put_lines
 
 dsk = {
@@ -240,6 +242,7 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
+@pytest.mark.skipif(dd._compat.PANDAS_GT_130, reason="Freq no longer included in ts")
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -683,6 +686,11 @@ def test_dropna():
 
     assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
+
+    # Regression test for https://github.com/dask/dask/issues/6540
+    df = pd.DataFrame({"_0": [0, 0, np.nan], "_1": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.dropna(subset=["_0"]), df.dropna(subset=["_0"]))
 
 
 @pytest.mark.parametrize("lower, upper", [(2, 5), (2.5, 3.5)])
@@ -2059,12 +2067,12 @@ def test_repartition_freq_month():
     assert_eq(df, ddf)
 
     assert ddf.divisions == (
-        pd.Timestamp("2015-1-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-2-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-3-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-4-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 00:00:00", freq="MS"),
-        pd.Timestamp("2015-5-1 23:50:00", freq="10T"),
+        pd.Timestamp("2015-1-1 00:00:00"),
+        pd.Timestamp("2015-2-1 00:00:00"),
+        pd.Timestamp("2015-3-1 00:00:00"),
+        pd.Timestamp("2015-4-1 00:00:00"),
+        pd.Timestamp("2015-5-1 00:00:00"),
+        pd.Timestamp("2015-5-1 23:50:00"),
     )
 
     assert ddf.npartitions == 5
@@ -2082,8 +2090,8 @@ def test_repartition_freq_day():
     assert_eq(ddf, pdf)
     assert ddf.npartitions == 2
     assert ddf.divisions == (
-        pd.Timestamp("2020-1-1", freq="D"),
-        pd.Timestamp("2020-1-2", freq="D"),
+        pd.Timestamp("2020-1-1"),
+        pd.Timestamp("2020-1-2"),
         pd.Timestamp("2020-1-2"),
     )
 
@@ -2708,13 +2716,13 @@ def test_to_timestamp():
     assert_eq(
         ddf.to_timestamp(freq="M", how="s").compute(),
         df.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
     assert_eq(ddf.x.to_timestamp(), df.x.to_timestamp())
     assert_eq(
         ddf.x.to_timestamp(freq="M", how="s").compute(),
         df.x.to_timestamp(freq="M", how="s"),
-        **CHECK_FREQ
+        **CHECK_FREQ,
     )
 
 
@@ -2860,6 +2868,20 @@ def test_applymap():
     assert_eq(ddf.applymap(lambda x: x + 1), df.applymap(lambda x: x + 1))
 
     assert_eq(ddf.applymap(lambda x: (x, x)), df.applymap(lambda x: (x, x)))
+
+
+def test_add_prefix():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_prefix("abc"), df.add_prefix("abc"))
+    assert_eq(ddf.x.add_prefix("abc"), df.x.add_prefix("abc"))
+
+
+def test_add_suffix():
+    df = pd.DataFrame({"x": [1, 2, 3, 4, 5], "y": [4, 5, 6, 7, 8]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.add_suffix("abc"), df.add_suffix("abc"))
+    assert_eq(ddf.x.add_suffix("abc"), df.x.add_suffix("abc"))
 
 
 def test_abs():
@@ -4630,6 +4652,14 @@ def test_dask_layers():
         ddi.key[0]: {dds._name},
     }
     assert ddi.__dask_layers__() == (ddi.key[0],)
+
+
+def test_repr_html_dataframe_highlevelgraph():
+    x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
+    hg = x.dask
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 @pytest.mark.skipif(

@@ -1,3 +1,4 @@
+import contextlib
 import math
 import operator
 import os
@@ -34,6 +35,7 @@ from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
+from ..layers import reshapelist
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
@@ -46,7 +48,6 @@ from ..utils import (
     format_bytes,
     funcname,
     has_keyword,
-    ignoring,
     is_arraylike,
     is_dataframe_like,
     is_index_like,
@@ -1152,18 +1153,20 @@ class Array(DaskMethodsMixin):
         else:
             if layer.collection_annotations is None:
                 layer.collection_annotations = {
-                    "type": type(self),
-                    "chunk_type": type(self._meta),
-                    "chunks": self.chunks,
-                    "dtype": dtype,
+                    "shape": self.shape,
+                    "dtype": self.dtype,
+                    "chunksize": self.chunksize,
+                    "type": typename(type(self)),
+                    "chunk_type": typename(type(self._meta)),
                 }
             else:
                 layer.collection_annotations.update(
                     {
-                        "type": type(self),
-                        "chunk_type": type(self._meta),
-                        "chunks": self.chunks,
-                        "dtype": dtype,
+                        "shape": self.shape,
+                        "dtype": self.dtype,
+                        "chunksize": self.chunksize,
+                        "type": typename(type(self)),
+                        "chunk_type": typename(type(self._meta)),
                     }
                 )
 
@@ -1298,7 +1301,11 @@ class Array(DaskMethodsMixin):
 
     @property
     def dtype(self):
-        return self._meta.dtype
+        if isinstance(self._meta, tuple):
+            dtype = self._meta[0].dtype
+        else:
+            dtype = self._meta.dtype
+        return dtype
 
     @property
     def _chunks(self):
@@ -4304,6 +4311,7 @@ def elemwise(op, *args, **kwargs):
 
     need_enforce_dtype = False
     if "dtype" in kwargs:
+        need_enforce_dtype = True
         dt = kwargs["dtype"]
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
@@ -4536,7 +4544,7 @@ def offset_func(func, offset, *args):
         args2 = list(map(add, args, offset))
         return func(*args2)
 
-    with ignoring(Exception):
+    with contextlib.suppress(Exception):
         _offset.__name__ = "offset_" + func.__name__
 
     return _offset
@@ -4596,19 +4604,6 @@ def shapelist(a):
         return tuple([len(a)] + list(shapelist(a[0])))
     else:
         return ()
-
-
-def reshapelist(shape, seq):
-    """Reshape iterator to nested shape
-
-    >>> reshapelist((2, 3), range(6))
-    [[0, 1, 2], [3, 4, 5]]
-    """
-    if len(shape) == 1:
-        return list(seq)
-    else:
-        n = int(len(seq) / shape[0])
-        return [reshapelist(shape[1:], part) for part in partition(n, seq)]
 
 
 def transposelist(arrays, axes, extradims=0):
