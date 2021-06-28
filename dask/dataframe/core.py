@@ -87,13 +87,16 @@ pd.set_option("compute.use_numexpr", False)
 
 
 def _numeric_only(func):
+    """Decorator for methods that accept a numeric_only kwarg"""
+
     @wraps(func)
     def wrapper(self, *args, **kwargs):
+        # numeric_only is None by default - in that case self = self.
         if kwargs.get("numeric_only") is False:
             raise NotImplementedError(
                 "'numeric_only=False' is not implemented in Dask."
             )
-        elif kwargs.get("numeric_only"):
+        elif kwargs.get("numeric_only") is True:
             self = self._get_numeric_data()
         return func(self, *args, **kwargs)
 
