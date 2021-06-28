@@ -563,7 +563,7 @@ def _aggregate_stats(
 def _row_groups_to_parts(
     gather_statistics,
     split_row_groups,
-    aggregate_files,
+    aggregation_depth,
     file_row_groups,
     file_row_group_stats,
     file_row_group_column_stats,
@@ -590,7 +590,7 @@ def _row_groups_to_parts(
             for i in _rgs:
 
                 i_end = i + split_row_groups
-                if aggregate_files is True:
+                if aggregation_depth is True:
                     if residual and i == 0:
                         i_end = residual
                         residual = 0
@@ -641,8 +641,8 @@ def _row_groups_to_parts(
     return parts, stats
 
 
-def _check_aggregate_files(file_aggregation, partition_names):
-    # Check the `file_aggregation` setting.
+def _get_aggregation_depth(aggregate_files, partition_names):
+    # Use `aggregate_files` to set `aggregation_depth`
     #
     # Note that `partition_names` must be ordered. `True` means that we allow
     # aggregation of any two files. `False` means that we will never aggregate
@@ -651,23 +651,30 @@ def _check_aggregate_files(file_aggregation, partition_names):
     # aggregation.  Note that we always convert the string into the partition
     # "depth" to simplify the aggregation logic.
 
-    if file_aggregation is None and partition_names:
-        # file_aggregation is None, and we are reading a hive-partitioned
+    # Summary of output `aggregation_depth` settings:
+    #
+    # True  : Free-for-all aggregation (any two files may be aggregated)
+    # False : No file aggregation allowed
+    # <int> : Allow aggregation within this partition-hierarchy depth
+
+    aggregation_depth = aggregate_files
+    if aggregate_files is None and partition_names:
+        # aggregate_files is None, and we are reading a hive-partitioned
         # dataset.  Set the aggregation range to be the final partition
         # level (partition "depth" of 1)
-        file_aggregation = 1
+        aggregation_depth = 1
 
-    elif isinstance(file_aggregation, str):
-        if file_aggregation in partition_names:
-            # file_aggregation corresponds to a partition column. Reset the
+    elif isinstance(aggregate_files, str):
+        if aggregate_files in partition_names:
+            # aggregate_files corresponds to a partition column. Reset the
             # value of this variable to reflect the partition "depth" (in the
             # range of 1 to the total number of partition levels)
-            file_aggregation = len(partition_names) - partition_names.index(
-                file_aggregation
+            aggregation_depth = len(partition_names) - partition_names.index(
+                aggregate_files
             )
         else:
             raise ValueError(
-                f"{file_aggregation} is not a recognized directory partition."
+                f"{aggregate_files} is not a recognized directory partition."
             )
 
-    return file_aggregation
+    return aggregation_depth

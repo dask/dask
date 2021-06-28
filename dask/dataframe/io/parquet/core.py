@@ -313,9 +313,7 @@ def read_parquet(
         # Require `gather_statistics=True` if `chunksize` is used,
         # or if `split_row_groups>1` and we are aggregating files.
         if gather_statistics is False:
-            raise ValueError(
-                "read_parquet options require gather_statistics=True"
-            )
+            raise ValueError("read_parquet options require gather_statistics=True")
         gather_statistics = True
 
     read_metadata_result = engine.read_metadata(
@@ -340,11 +338,12 @@ def read_parquet(
     # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
     common_kwargs = {}
+    aggregation_depth = False
     if len(parts):
-        # For now, `common_kwargs` and `aggregate_files`
+        # For now, `common_kwargs` and `aggregation_depth`
         # may be stored in the first element of `parts`
         common_kwargs = parts[0].pop("common_kwargs", {})
-        aggregate_files = parts[0].pop("aggregate_files", aggregate_files)
+        aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
@@ -355,7 +354,7 @@ def read_parquet(
         chunksize,
         split_row_groups,
         fs,
-        aggregate_files,
+        aggregation_depth,
     )
 
     # Account for index and columns arguments.
@@ -1064,7 +1063,14 @@ def apply_filters(parts, statistics, filters):
 
 
 def process_statistics(
-    parts, statistics, filters, index, chunksize, split_row_groups, fs, aggregate_files
+    parts,
+    statistics,
+    filters,
+    index,
+    chunksize,
+    split_row_groups,
+    fs,
+    aggregation_depth,
 ):
     """Process row-group column statistics in metadata
     Used in read_parquet.
@@ -1087,7 +1093,7 @@ def process_statistics(
         # Aggregate parts/statistics if we are splitting by row-group
         if chunksize or (split_row_groups and int(split_row_groups) > 1):
             parts, statistics = aggregate_row_groups(
-                parts, statistics, chunksize, split_row_groups, fs, aggregate_files
+                parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
             )
 
         out = sorted_columns(statistics)
@@ -1196,7 +1202,7 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
 
 
 def aggregate_row_groups(
-    parts, stats, chunksize, split_row_groups, fs, aggregate_files
+    parts, stats, chunksize, split_row_groups, fs, aggregation_depth
 ):
     if not stats[0].get("file_path_0", None):
         return parts, stats
@@ -1216,7 +1222,7 @@ def aggregate_row_groups(
         same_path = stat["file_path_0"] == next_stat["file_path_0"]
         multi_path_allowed = False
 
-        if aggregate_files:
+        if aggregation_depth:
 
             # Criteria #2 for aggregating parts: The part does not include
             # row-group information, or both parts include the same kind
@@ -1227,20 +1233,20 @@ def aggregate_row_groups(
                 multi_path_allowed = (rgs == {None}) or (None not in rgs)
 
             # Criteria #3 for aggregating parts: The parts share a
-            # directory at the "depth" allowed by `aggregate_files`
+            # directory at the "depth" allowed by `aggregation_depth`
             if not same_path and multi_path_allowed:
-                if aggregate_files is True:
+                if aggregation_depth is True:
                     multi_path_allowed = True
-                elif isinstance(aggregate_files, int):
+                elif isinstance(aggregation_depth, int):
                     # Make sure files share the same directory
-                    root = stat["file_path_0"].split(fs.sep)[:-aggregate_files]
+                    root = stat["file_path_0"].split(fs.sep)[:-aggregation_depth]
                     next_root = next_stat["file_path_0"].split(fs.sep)[
-                        :-aggregate_files
+                        :-aggregation_depth
                     ]
                     multi_path_allowed = root == next_root
                 else:
                     raise ValueError(
-                        f"{aggregate_files} not supported for `aggregate_files`"
+                        f"{aggregation_depth} not supported for `aggregation_depth`"
                     )
 
         def _check_row_group_criteria(stat, next_stat):

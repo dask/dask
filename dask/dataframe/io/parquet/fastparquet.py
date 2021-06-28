@@ -27,8 +27,8 @@ from ..utils import _meta_from_dtypes
 #########################
 from .utils import (
     Engine,
-    _check_aggregate_files,
     _flatten_filters,
+    _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _row_groups_to_parts,
@@ -296,7 +296,7 @@ class FastParquetEngine(Engine):
         index_cols,
         filters,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         # Cannot gather_statistics if our `parts` is already a list
         # of paths, or if we are building a multi-index (for now).
@@ -305,7 +305,7 @@ class FastParquetEngine(Engine):
         if split_row_groups is None:
             split_row_groups = False
         _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregate_files
+            int(split_row_groups) > 1 and aggregation_depth
         )
         if (
             isinstance(parts, list) and len(parts) and isinstance(parts[0], str)
@@ -363,7 +363,7 @@ class FastParquetEngine(Engine):
         base_path,
         paths,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         """Organize row-groups by file."""
 
@@ -374,7 +374,7 @@ class FastParquetEngine(Engine):
         # order for partitioned data. Re-sort by path
         if (
             pqpartitions is not None
-            and aggregate_files
+            and aggregation_depth
             and pf.row_groups
             and pf.row_groups[0].columns[0].file_path
         ):
@@ -477,7 +477,7 @@ class FastParquetEngine(Engine):
                             cmax = pd.Timestamp(cmax, tz=tz)
                         last = cmax_last.get(name, None)
 
-                        if not (filters or chunksize or aggregate_files):
+                        if not (filters or chunksize or aggregation_depth):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -505,7 +505,7 @@ class FastParquetEngine(Engine):
                         cmax_last[name] = cmax
                     else:
                         if (
-                            not (filters or chunksize or aggregate_files)
+                            not (filters or chunksize or aggregation_depth)
                             and column.meta_data.num_values > 0
                         ):
                             # We are collecting statistics for divisions
@@ -608,7 +608,7 @@ class FastParquetEngine(Engine):
         paths,
         fs,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
 
         # Organize row-groups by file
@@ -628,14 +628,14 @@ class FastParquetEngine(Engine):
             base_path,
             paths,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
         # Convert organized row-groups to parts
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
-            aggregate_files,
+            aggregation_depth,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
@@ -666,7 +666,7 @@ class FastParquetEngine(Engine):
         split_row_groups,
         gather_statistics,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
 
         # Check if `parts` is just a list of paths
@@ -689,7 +689,7 @@ class FastParquetEngine(Engine):
             index_cols,
             filters,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
         # Process row-groups and return `(parts, stats)`
@@ -705,7 +705,7 @@ class FastParquetEngine(Engine):
             paths,
             fs,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
     @classmethod
@@ -741,7 +741,7 @@ class FastParquetEngine(Engine):
         ) = cls._generate_dd_meta(pf, index, categories)
 
         # Check the `aggregate_files` setting
-        aggregate_files = _check_aggregate_files(
+        aggregation_depth = _get_aggregation_depth(
             aggregate_files,
             list(pf.cats),
         )
@@ -760,7 +760,7 @@ class FastParquetEngine(Engine):
             split_row_groups,
             gather_statistics,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
         # Cannot allow `None` in columns if the user has specified index=False
@@ -772,7 +772,7 @@ class FastParquetEngine(Engine):
         # should avoid breaking the API for now.
         if len(parts):
             parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
-            parts[0]["aggregate_files"] = aggregate_files
+            parts[0]["aggregation_depth"] = aggregation_depth
 
         if len(parts) and len(parts[0]["piece"]) == 1:
 

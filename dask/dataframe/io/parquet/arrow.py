@@ -20,8 +20,8 @@ from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from .core import create_metadata_file
 from .utils import (
     Engine,
-    _check_aggregate_files,
     _flatten_filters,
+    _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _row_groups_to_parts,
@@ -534,7 +534,7 @@ class ArrowDatasetEngine(Engine):
         )
 
         # Check the `aggregate_files` setting
-        aggregate_files = _check_aggregate_files(
+        aggregation_depth = _get_aggregation_depth(
             aggregate_files,
             partition_info["partition_names"],
         )
@@ -554,15 +554,15 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             read_from_paths,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
-        # Add `common_kwargs` and `aggregate_files` to the first
+        # Add `common_kwargs` and `aggregation_depth` to the first
         # element of `parts`. We can return as a separate element
         # in the future, but should avoid breaking the API for now.
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
-            parts[0]["aggregate_files"] = aggregate_files
+            parts[0]["aggregation_depth"] = aggregation_depth
 
         return (meta, stats, parts, index)
 
@@ -1209,7 +1209,7 @@ class ArrowDatasetEngine(Engine):
         gather_statistics,
         read_from_paths,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         """Construct ``parts`` for ddf construction
 
@@ -1254,7 +1254,7 @@ class ArrowDatasetEngine(Engine):
             filters,
             partition_info,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
         # Convert metadata into `parts` and `stats`
@@ -1271,7 +1271,7 @@ class ArrowDatasetEngine(Engine):
             fs,
             read_from_paths,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
     @classmethod
@@ -1285,7 +1285,7 @@ class ArrowDatasetEngine(Engine):
         filters,
         partition_info,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         """Update read_parquet options given up-to-data metadata.
 
@@ -1305,7 +1305,7 @@ class ArrowDatasetEngine(Engine):
         if split_row_groups is None:
             split_row_groups = False
         _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregate_files
+            int(split_row_groups) > 1 and aggregation_depth
         )
         if (
             isinstance(metadata, list)
@@ -1351,7 +1351,7 @@ class ArrowDatasetEngine(Engine):
         stat_col_indices,
         filters,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         """Organize row-groups by file.
 
@@ -1411,7 +1411,7 @@ class ArrowDatasetEngine(Engine):
                             cmin = statistics[name]["min"]
                             cmax = statistics[name]["max"]
                             last = cmax_last.get(name, None)
-                            if not (filters or chunksize or aggregate_files):
+                            if not (filters or chunksize or aggregation_depth):
                                 # Only think about bailing if we don't need
                                 # stats for filtering
                                 if cmin is None or (last and cmin < last):
@@ -1505,7 +1505,7 @@ class ArrowDatasetEngine(Engine):
         fs,
         read_from_paths,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         """Process row-groups and statistics.
 
@@ -1526,7 +1526,7 @@ class ArrowDatasetEngine(Engine):
             stat_col_indices,
             filters,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
         # Check if we need to pass a fragment for each output partition.
@@ -1543,7 +1543,7 @@ class ArrowDatasetEngine(Engine):
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
-            aggregate_files,
+            aggregation_depth,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
@@ -1896,7 +1896,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         stat_col_indices,
         filters,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         """Organize row-groups by file.
 
@@ -1904,7 +1904,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         """
 
         sorted_row_group_indices = range(metadata.num_row_groups)
-        if aggregate_files:
+        if aggregation_depth:
             sorted_row_group_indices = sorted(
                 range(metadata.num_row_groups),
                 key=lambda x: metadata.row_group(x).column(0).file_path,
@@ -1953,7 +1953,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmin = column.statistics.min
                         cmax = column.statistics.max
                         last = cmax_last.get(name, None)
-                        if not (filters or chunksize or aggregate_files):
+                        if not (filters or chunksize or aggregation_depth):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -1983,7 +1983,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     else:
 
                         if (
-                            not (filters or chunksize or aggregate_files)
+                            not (filters or chunksize or aggregation_depth)
                             and column.num_values > 0
                         ):
                             # We are collecting statistics for divisions
@@ -2024,7 +2024,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         fs,
         read_from_paths,
         chunksize,
-        aggregate_files,
+        aggregation_depth,
     ):
         """Process row-groups and statistics.
 
@@ -2044,14 +2044,14 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             stat_col_indices,
             filters,
             chunksize,
-            aggregate_files,
+            aggregation_depth,
         )
 
         # Convert organized row-groups to parts
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
-            aggregate_files,
+            aggregation_depth,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
