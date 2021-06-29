@@ -26,71 +26,8 @@ Access Configuration
    dask.config.get
 
 Configuration is usually read by using the ``dask.config`` module, either with
-the ``config`` dictionary or the ``get`` function:
-
-.. code-block:: python
-
-   >>> import dask
-   >>> dask.config.config
-   {'array': {'slicing': {'split-large-chunks': None}, 'svg': {'size': 120}},
-   'dataframe': {'shuffle-compression': None},
-   'optimization': {'fuse': {'active': None,
-                             'ave-width': 1,
-                             'max-depth-new-edges': None,
-                             'max-height': inf,
-                             'max-width': None,
-                             'rename-keys': True,
-                             'subgraphs': None}},
-   'temporary-directory': None}
-   
-
-   >>> import dask.distributed  # populate config with distributed defaults
-   >>> dask.config.config
-   {'array': {'slicing': {'split-large-chunks': None}, 'svg': {'size': 120}},
-   'dataframe': {'shuffle-compression': None},
-   'distributed': {'adaptive': {'interval': '1s',
-                                'maximum': inf,
-                                'minimum': 0,
-                                'target-duration': '5s',
-                                'wait-count': 3},
-                  ...,
-                   'dashboard': {'export-tool': False,
-                                 'graph-max-items': 5000,
-                                 'link': '{scheme}://{host}:{port}/status',
-                                 'prometheus': {'namespace': 'dask'}},
-                   'deploy': {'cluster-repr-interval': '500ms',
-                              'lost-worker-timeout': '15s'},
-                  ...,
-                   'worker': {'blocked-handlers': [],
-                              'connections': {'incoming': 10, 'outgoing': 50},
-                              'daemon': True,
-                              'http': {'routes': ['distributed.http.worker.prometheus',
-                                                  'distributed.http.health',
-                                                  'distributed.http.statics']},
-                              'lifetime': {'duration': None,
-                                           'restart': False,
-                                           'stagger': '0 seconds'},
-                              'memory': {'pause': 0.8,
-                                         'rebalance': {'measure': 'optimistic',
-                                                       'recipient-max': 0.6,
-                                                       'sender-min': 0.3,
-                                                       'sender-recipient-gap': 0.1},
-                                         'recent-to-old-time': '30s',
-                                         'spill': 0.7,
-                                         'target': 0.6,
-                                         'terminate': 0.95},
-                              'multiprocessing-method': 'spawn',
-                              'preload': [],
-                              'preload-argv': [],
-                              'profile': {'cycle': '1000ms',
-                                          'interval': '10ms',
-                                          'low-level': False},
-                              'resources': {},
-                              'use-file-locking': True,
-                              'validate': False}},
-  ...}
-
-You can use ``.`` for nested access, for example:
+the ``config`` dictionary or the ``get`` function. You can use ``.`` for nested access, 
+for example:
 
    >>> dask.config.get("distributed.client")
    {'heartbeat': '5s', 'scheduler-info-interval': '2s'} # use `.` for nested access
