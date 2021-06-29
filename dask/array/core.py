@@ -373,9 +373,7 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
 
     # make sure that every arg is an evaluated array
     args = [
-        ones_like_safe(
-            meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype
-        )
+        ones_like_safe(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
         if is_arraylike(x)
         else x
         for x in args
