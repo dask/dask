@@ -125,6 +125,12 @@ class SlicingLayer(Layer):
         self.shape = shape
         self.parts_out = parts_out
 
+        self._keys = None
+        self._block_slices = None
+        self._sorted_block_slices = None
+        self._in_names = None
+        self.parts_in = None
+
     def __repr__(self):
         slice_text_repr = "["
         for i in self.index:
@@ -153,53 +159,75 @@ class SlicingLayer(Layer):
         return self._dict[key]
 
     def __iter__(self):
-        return iter(self._dict)
+        return iter(self.get_output_keys())
 
     def __len__(self):
-        return len(self._dict)
+        return len(self.get_output_keys())
 
     def is_materialized(self):
         return hasattr(self, "_cached_dict")
 
+    def _get_block_slices(self):
+        if self._block_slices is not None:
+            return self._block_slices
+        else:
+            block_slices = list(map(_slice_1d, self.shape, self.blockdims, self.index))
+            self._block_slices = block_slices
+            return block_slices
+
+    def _get_sorted_block_slices(self):
+        if self._sorted_block_slices is not None:
+            return self._sorted_block_slices
+        else:
+            block_slices = self._get_block_slices()
+            sorted_block_slices = [sorted(i.items()) for i in block_slices]
+            self._sorted_block_slices = sorted_block_slices
+            return sorted_block_slices
+
     def get_output_keys(self):
-        return self.keys()  # FIXME! this implementation materializes the graph
+        if self._keys is not None:
+            return self._keys
+        else:
+            block_slices = self._get_block_slices()
+            # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
+            self._keys = OrderedDict.fromkeys(
+                product(
+                    [self.out_name],
+                    *[
+                        range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
+                        for d, i in zip(block_slices, self.index)
+                        if not isinstance(i, Integral)
+                    ],
+                )
+            ).keys()
+            return self._keys
 
     def _output_parts(self):
-        out_name = self.out_name
-        shape = self.shape
-        blockdims = self.blockdims
-        index = self.index
-        block_slices = list(map(_slice_1d, shape, blockdims, index))
-        # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
-        out_name = "out-name"
-        out_names = list(
-            product(
-                [out_name],
-                *[
-                    range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
-                    for d, i in zip(block_slices, index)
-                    if not isinstance(i, Integral)
-                ],
+        if self.parts_out is not None:
+            return self.parts_out
+        else:
+            out_names = self.get_output_keys()
+            self.parts_out = OrderedDict.fromkeys(
+                tuple(parts) for _, *parts in out_names
             )
+            return self.parts_out
+
+    def _get_input_names(self):
+        sorted_block_slices = self._get_sorted_block_slices()
+        # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
+        self._in_names = list(
+            product([self.in_name], *[toolz.pluck(0, s) for s in sorted_block_slices])
         )
-        parts_out = OrderedDict.fromkeys(tuple(parts) for _, *parts in out_names)
-        return parts_out
+        return self._in_names
 
     def _input_parts(self):
-        in_name = self.in_name
-        blockdims = self.blockdims
-        index = self.index
-        shape = self.shape
-
-        block_slices = list(map(_slice_1d, shape, blockdims, index))
-        sorted_block_slices = [sorted(i.items()) for i in block_slices]
-
-        # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
-        in_names = list(
-            product([in_name], *[toolz.pluck(0, s) for s in sorted_block_slices])
-        )
-        parts_in = OrderedDict.fromkeys(tuple(parts) for _, *parts in in_names)
-        return parts_in
+        if self.parts_in is not None:
+            return self.parts_in
+        else:
+            # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
+            in_names = self._get_input_names()
+            self.parts_in = OrderedDict.fromkeys(tuple(parts) for _, *parts in in_names)
+            return self.parts_in
 
     def cull(self, keys, all_keys):
         """Cull a SlicingLayer HighLevelGraph layer."""
@@ -237,31 +265,21 @@ class SlicingLayer(Layer):
 
     def _construct_graph(self, deserializing=False):
         """Construct graph for a simple slicing operation."""
-        out_name = self.out_name
         in_name = self.in_name
         blockdims = self.blockdims
         index = self.index
         shape = self.shape
 
         block_slices = list(map(_slice_1d, shape, blockdims, index))
-        sorted_block_slices = [sorted(i.items()) for i in block_slices]
+        sorted_block_slices = self._get_sorted_block_slices()
+        [sorted(i.items()) for i in block_slices]
 
         # (in_name, 1, 1, 2), (in_name, 1, 1, 4), (in_name, 2, 1, 2), ...
         in_names = list(
             product([in_name], *[toolz.pluck(0, s) for s in sorted_block_slices])
         )
 
-        # (out_name, 0, 0, 0), (out_name, 0, 0, 1), (out_name, 0, 1, 0), ...
-        out_names = list(
-            product(
-                [out_name],
-                *[
-                    range(len(d))[::-1] if i.step and i.step < 0 else range(len(d))
-                    for d, i in zip(block_slices, index)
-                    if not isinstance(i, Integral)
-                ],
-            )
-        )
+        out_names = self.get_output_keys()
 
         all_slices = list(product(*[toolz.pluck(1, s) for s in sorted_block_slices]))
 
