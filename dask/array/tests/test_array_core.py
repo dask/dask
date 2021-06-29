@@ -4440,6 +4440,19 @@ def test_blocks_indexer():
         x.blocks[100, 100]
 
 
+def test_blocks_iteration():
+    x = da.from_array(np.arange(16).reshape(4, 4).astype(int), chunks=(2, 2))
+    expected_output = [
+        [[0, 1], [4, 5]],  # top left array chunk
+        [[2, 3], [6, 7]],  # top right array chunk
+        [[8, 9], [12, 13]],  # bottom left array chunk
+        [[10, 11], [14, 15]],  # bottom right array chunk
+    ]
+    for block, expected in zip(x.blocks, expected_output):
+        assert block.shape == (2, 2)
+        assert np.allclose(block.compute(), expected)
+
+
 def test_partitions_indexer():
     # .partitions is an alias of .blocks for dask arrays
     x = da.arange(10, chunks=2)
