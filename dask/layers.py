@@ -417,6 +417,7 @@ class SimpleShuffleLayer(DataFrameLayer):
         self.annotations = self.annotations or {}
         if "priority" not in self.annotations:
             self.annotations["priority"] = {}
+        self.annotations["priority"]["__expanded_annotations__"] = None
         self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
 
     def get_split_keys(self):
