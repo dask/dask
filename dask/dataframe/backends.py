@@ -12,6 +12,8 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.sizeof import SimpleSizeof, sizeof
+
 from ..utils import is_arraylike, typename
 from ._compat import PANDAS_GT_100
 from .core import DataFrame, Index, Scalar, Series, _Frame
@@ -341,6 +343,23 @@ def hash_object_pandas(
     )
 
 
+class ShuffleGroupResult(SimpleSizeof, dict):
+    def __sizeof__(self) -> int:
+        """
+        The result of the shuffle split are typically small dictionaries
+        (#keys << 100; typically <= 32) The splits are often non-uniformly
+        distributed. Some of the splits may even be empty. Sampling the
+        dictionary for size estimation can cause severe errors.
+
+        See also https://github.com/dask/distributed/issues/4962
+        """
+        total_size = super().__sizeof__()
+        for k, df in self.items():
+            total_size += sizeof(k)
+            total_size += sizeof(df)
+        return total_size
+
+
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
     indexer, locations = pd._libs.algos.groupsort_indexer(
@@ -352,7 +371,7 @@ def group_split_pandas(df, c, k, ignore_index=False):
         df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
         for a, b in zip(locations[:-1], locations[1:])
     ]
-    return dict(zip(range(k), parts))
+    return ShuffleGroupResult(zip(range(k), parts))
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
