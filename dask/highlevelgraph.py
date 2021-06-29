@@ -1221,7 +1221,7 @@ def to_graphviz(
         attrs.setdefault("shape", "box")
         if hg.layers[k].is_materialized() is True:
             attrs.setdefault("style", "filled")
-            attrs.setdefault("fillcolor", "gray84")
+            attrs.setdefault("fillcolor", "gray94")
         g.node(k_name, **attrs)
 
     for k, deps in hg.dependencies.items():
