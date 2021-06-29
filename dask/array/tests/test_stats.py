@@ -75,8 +75,10 @@ def test_one(kind):
     ],
 )
 def test_two(kind, kwargs):
+    # The sums of observed and expected frequencies must match
     a = np.random.random(size=30)
-    b = np.random.random(size=30)
+    b = a[::-1]
+
     a_ = da.from_array(a, 3)
     b_ = da.from_array(b, 3)
 
