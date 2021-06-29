@@ -319,6 +319,17 @@ def test_gufunc_mixed_inputs():
     assert_eq(x, 2 * np.ones((2, 8), dtype=int))
 
 
+def test_gufunc_mixed_inputs_vectorize():
+    def foo(x, y):
+        return (x + y).sum(axis=1)
+
+    a = da.ones((8, 3, 5), chunks=(2, 3, 5), dtype=int)
+    b = np.ones(5, dtype=int)
+    x = apply_gufunc(foo, "(m,n),(n)->(m)", a, b, vectorize=True)
+
+    assert_eq(x, np.full((8, 3), 10, dtype=int))
+
+
 def test_gufunc():
     x = da.random.normal(size=(10, 5), chunks=(2, 5))
 

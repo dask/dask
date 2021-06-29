@@ -369,8 +369,13 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
+    from .utils import meta_from_array, ones_like_safe
+
+    # make sure that every arg is an evaluated array
     args = [
-        np.ones((1,) * x.ndim, dtype=x.dtype) if isinstance(x, Array) else x
+        ones_like_safe(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+        if is_arraylike(x)
+        else x
         for x in args
     ]
     try:
