@@ -1,4 +1,5 @@
 import contextlib
+import functools
 import math
 import operator
 import os
@@ -1082,6 +1083,23 @@ See the following documentation page for details:
 """.strip()
 
 
+class ArrayBlocks(IndexCallable):
+    """Extends getitem syntax for functions, allow array block iteration."""
+
+    def __init__(self, fn, parent):
+        super().__init__(fn)
+        self.parent = parent
+        self.chunks = parent.chunks
+
+    def __iter__(self):
+        block_iter = map(
+            functools.partial(operator.getitem, self.parent),
+            slices_from_chunks(self.chunks),
+        )
+        for block in block_iter:
+            yield block
+
+
 class Array(DaskMethodsMixin):
     """Parallel Dask Array
 
@@ -1866,7 +1884,7 @@ class Array(DaskMethodsMixin):
         -------
         A Dask array
         """
-        return IndexCallable(self._blocks)
+        return ArrayBlocks(self._blocks, self)
 
     @property
     def partitions(self):
