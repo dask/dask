@@ -80,6 +80,29 @@ def test_shuffle_npartitions_task():
     assert set(map(tuple, sc.values.tolist())) == set(map(tuple, df.values.tolist()))
 
 
+def test_shuffle_task_priorities():
+    df = pd.DataFrame({"x": np.random.random(100)})
+    ddf = dd.from_pandas(df, npartitions=10)
+
+    # ShuffleLayer
+    s = shuffle(ddf, ddf.x, shuffle="tasks", npartitions=17, max_branch=4)
+    layer = [k for k in s.dask.layers.keys() if k.startswith("shuffle-0-")]
+    layer = s.dask.layers[layer[0]]
+    k, v = next(iter(layer.annotations["priority"].items()))
+    assert v == 1
+    assert k[0].startswith("split-shuffle-0")
+    assert isinstance(k[2], tuple)  # Not true for SimpleShuffleLayer
+
+    # SimpleShuffleLayer
+    s = shuffle(ddf, ddf.x, shuffle="tasks", max_branch=32)
+    layer = [k for k in s.dask.layers.keys() if k.startswith("simple-shuffle")]
+    layer = s.dask.layers[layer[0]]
+    k, v = next(iter(layer.annotations["priority"].items()))
+    assert v == 1
+    assert k[0].startswith("split-simple-shuffle")
+    assert isinstance(k[2], int)  # Not true for ShuffleLayer
+
+
 def test_shuffle_npartitions_lt_input_partitions_task():
     df = pd.DataFrame({"x": np.random.random(100)})
     ddf = dd.from_pandas(df, npartitions=20)

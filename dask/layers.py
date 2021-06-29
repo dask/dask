@@ -411,6 +411,21 @@ class SimpleShuffleLayer(DataFrameLayer):
         self.name_input = name_input
         self.meta_input = meta_input
         self.parts_out = parts_out or range(npartitions)
+        self.split_name = "split-" + self.name
+
+        # Set high-priority to "split" tasks
+        self.annotations = self.annotations or {}
+        if "priority" not in self.annotations:
+            self.annotations["priority"] = {}
+        self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
+
+    def get_split_keys(self):
+        # Return SimpleShuffleLayer "split" keys
+        return [
+            (self.split_name, part_out, part_in)
+            for part_in in range(self.npartitions_input)
+            for part_out in self.parts_out
+        ]
 
     def get_output_keys(self):
         return {(self.name, part) for part in self.parts_out}
@@ -557,7 +572,6 @@ class SimpleShuffleLayer(DataFrameLayer):
         """Construct graph for a simple shuffle operation."""
 
         shuffle_group_name = "group-" + self.name
-        shuffle_split_name = "split-" + self.name
 
         if deserializing:
             # Use CallableLazyImport objects to avoid importing dataframe
@@ -574,7 +588,7 @@ class SimpleShuffleLayer(DataFrameLayer):
         dsk = {}
         for part_out in self.parts_out:
             _concat_list = [
-                (shuffle_split_name, part_out, part_in)
+                (self.split_name, part_out, part_in)
                 for part_in in range(self.npartitions_input)
             ]
             dsk[(self.name, part_out)] = (
@@ -583,7 +597,7 @@ class SimpleShuffleLayer(DataFrameLayer):
                 self.ignore_index,
             )
             for _, _part_out, _part_in in _concat_list:
-                dsk[(shuffle_split_name, _part_out, _part_in)] = (
+                dsk[(self.split_name, _part_out, _part_in)] = (
                     operator.getitem,
                     (shuffle_group_name, _part_in),
                     _part_out,
@@ -655,6 +669,9 @@ class ShuffleLayer(SimpleShuffleLayer):
         parts_out=None,
         annotations=None,
     ):
+        self.inputs = inputs
+        self.stage = stage
+        self.nsplits = nsplits
         super().__init__(
             name,
             column,
@@ -666,9 +683,21 @@ class ShuffleLayer(SimpleShuffleLayer):
             parts_out=parts_out or range(len(inputs)),
             annotations=annotations,
         )
-        self.inputs = inputs
-        self.stage = stage
-        self.nsplits = nsplits
+
+    def get_split_keys(self):
+        # Return ShuffleLayer "split" keys
+        keys = []
+        for part in self.parts_out:
+            out = self.inputs[part]
+            for i in range(self.nsplits):
+                keys.append(
+                    (
+                        self.split_name,
+                        out[self.stage],
+                        insert(out, self.stage, i),
+                    )
+                )
+        return keys
 
     def __repr__(self):
         return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
@@ -738,7 +767,6 @@ class ShuffleLayer(SimpleShuffleLayer):
         """Construct graph for a "rearrange-by-column" stage."""
 
         shuffle_group_name = "group-" + self.name
-        shuffle_split_name = "split-" + self.name
 
         if deserializing:
             # Use CallableLazyImport objects to avoid importing dataframe
@@ -763,7 +791,7 @@ class ShuffleLayer(SimpleShuffleLayer):
                 # Get out each individual dataframe piece from the dicts
                 _inp = insert(out, self.stage, i)
                 _idx = out[self.stage]
-                _concat_list.append((shuffle_split_name, _idx, _inp))
+                _concat_list.append((self.split_name, _idx, _inp))
 
             # concatenate those pieces together, with their friends
             dsk[(self.name, part)] = (
@@ -773,7 +801,7 @@ class ShuffleLayer(SimpleShuffleLayer):
             )
 
             for _, _idx, _inp in _concat_list:
-                dsk[(shuffle_split_name, _idx, _inp)] = (
+                dsk[(self.split_name, _idx, _inp)] = (
                     operator.getitem,
                     (shuffle_group_name, _inp),
                     _idx,
