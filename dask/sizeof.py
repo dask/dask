@@ -59,6 +59,29 @@ def sizeof_python_collection(seq):
         return getsizeof(seq) + sum(map(sizeof, seq))
 
 
+class SimpleSizeof:
+    """Sentinel class to mark a class to be skipped by the dispatcher. This only
+    works if this sentinel mixin is first in the mro.
+
+    Examples
+    --------
+
+    >>> class TheAnswer(SimpleSizeof):
+    ...         def __sizeof__(self):
+    ...             # Sizeof always add overhead of an object for GC
+    ...             return 42 - sizeof(object())
+
+    >>> sizeof(TheAnswer())
+    42
+
+    """
+
+
+@sizeof.register(SimpleSizeof)
+def sizeof_blocked(d):
+    return getsizeof(d)
+
+
 @sizeof.register(dict)
 def sizeof_python_dict(d):
     return (
