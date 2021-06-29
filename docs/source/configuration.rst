@@ -62,14 +62,18 @@ Specify Configuration
 YAML files
 ~~~~~~~~~~
 
-You can specify configuration values in YAML files. The default YAML files for ``dask`` 
-and ``distributed`` can be found in:
+You can specify configuration values in YAML files. For example, if you want to modify 
+some of the workers memory configuration default values in distributed:
 
-``dask``: `dask.yaml
-<https://github.com/dask/dask/blob/main/dask/dask.yaml>`_,
+.. code-block:: yaml
 
-``distributed``: `distributed.yaml
-<https://github.com/dask/distributed/blob/main/distributed/distributed.yaml>`_,
+   distributed:
+         workers: 
+            memory:
+               spill     : 0.85  # 0.7
+               target    : 0.75  # 0.6
+               terminate : 0.98  # 0.95
+
 
 These files can live in any of the following locations:
 
