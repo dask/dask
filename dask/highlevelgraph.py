@@ -1219,6 +1219,9 @@ def to_graphviz(
         attrs = data_attributes.get(k, {})
         attrs.setdefault("label", label(k, cache=cache))
         attrs.setdefault("shape", "box")
+        if hg.layers[k].is_materialized() is True:
+            attrs.setdefault("style", "filled")
+            attrs.setdefault("fillcolor", "gray84")
         g.node(k_name, **attrs)
 
     for k, deps in hg.dependencies.items():
