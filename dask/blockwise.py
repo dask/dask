@@ -508,7 +508,7 @@ class Blockwise(Layer):
                 if val_is_a_key:
                     keys2.append(key)
                     indices2.append((val, index))
-                    global_dependencies.add(val)
+                    global_dependencies.add(stringify(val))
                 else:
                     dsk[key] = val  # Literal
             else:
