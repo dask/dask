@@ -564,7 +564,7 @@ async def test_shuffle_priority(c, s, a, b):
     dd = pytest.importorskip("dask.dataframe")
 
     df = pd.DataFrame({"a": range(1000)})
-    ddf = dd.from_pandas(df, npartitions=5)
+    ddf = dd.from_pandas(df, npartitions=3)
     ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
     await c.compute(ddf2)
 
