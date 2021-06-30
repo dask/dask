@@ -576,7 +576,7 @@ async def test_shuffle_priority(c, s, a, b):
         if l[1] == "processing" and "simple-shuffle-" in l[0]
     ]
 
-    # Make sure all "split" tasks are processing before
+    # Make sure most "split" tasks are processing before
     # any "combine" tasks begin
     late_split = np.quantile(
         [i for i, st in enumerate(log) if st.startswith("split")], 0.75
