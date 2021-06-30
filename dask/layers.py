@@ -423,7 +423,7 @@ class SimpleShuffleLayer(DataFrameLayer):
     def get_split_keys(self):
         # Return SimpleShuffleLayer "split" keys
         return [
-            (self.split_name, part_out, part_in)
+            stringify((self.split_name, part_out, part_in))
             for part_in in range(self.npartitions_input)
             for part_out in self.parts_out
         ]
@@ -692,10 +692,12 @@ class ShuffleLayer(SimpleShuffleLayer):
             out = self.inputs[part]
             for i in range(self.nsplits):
                 keys.append(
-                    (
-                        self.split_name,
-                        out[self.stage],
-                        insert(out, self.stage, i),
+                    stringify(
+                        (
+                            self.split_name,
+                            out[self.stage],
+                            insert(out, self.stage, i),
+                        )
                     )
                 )
         return keys
