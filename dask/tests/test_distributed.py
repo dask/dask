@@ -556,3 +556,27 @@ async def test_annotation_pack_unpack(c, s, a, b):
     unpacked_hlg = HighLevelGraph.__dask_distributed_unpack__(packed_hlg)
     annotations = unpacked_hlg["annotations"]
     assert annotations == {"workers": {"n": ("alice",)}}
+
+
+@gen_cluster(client=True)
+async def test_shuffle_priority(c, s, a, b):
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"a": range(1000)})
+    ddf = dd.from_pandas(df, npartitions=5)
+    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
+    await c.compute(ddf2)
+
+    # Parse transition log for processing tasks
+    log = [
+        eval(l[0])[0]
+        for l in s.transition_log
+        if l[1] == "processing" and "simple-shuffle-" in l[0]
+    ]
+
+    # Make sure all "split" tasks are processing before
+    # any "combine" tasks begin
+    max_split = max([i for i, st in enumerate(log) if st.startswith("split")])
+    min_combine = min([i for i, st in enumerate(log) if st.startswith("simple")])
+    assert max_split < min_combine
