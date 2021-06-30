@@ -553,7 +553,6 @@ def test_map_partitions_df_input():
     """
     pd = pytest.importorskip("pandas")
     dd = pytest.importorskip("dask.dataframe")
-    dist = pytest.importorskip("distributed")
 
     def f(d, a):
         assert isinstance(d, pd.DataFrame)
@@ -572,10 +571,10 @@ def test_map_partitions_df_input():
         df = df.persist(optimize_graph=False)
         df.compute()
 
-    with dist.LocalCluster(
+    with distributed.LocalCluster(
         scheduler_port=0, asynchronous=False, n_workers=1, nthreads=1, processes=False
     ) as cluster:
-        with dist.Client(cluster, asynchronous=False):
+        with distributed.Client(cluster, asynchronous=False):
             main()
 
 
