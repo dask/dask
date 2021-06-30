@@ -546,6 +546,38 @@ async def test_map_partitions_da_input(c, s, a, b):
     await c.compute(df.map_partitions(f, arr, meta=df._meta))
 
 
+def test_map_partitions_df_input():
+    """
+    Check that map_partitions can handle a delayed
+    partition of a dataframe input
+    """
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    def f(d, a):
+        assert isinstance(d, pd.DataFrame)
+        assert isinstance(a, pd.DataFrame)
+        return d
+
+    def main():
+        delayed_df = dd.from_pandas(
+            pd.DataFrame({"a": range(5)}), npartitions=2
+        ).to_delayed()
+        dl = delayed_df[0].persist()
+        wait(dl)
+
+        df = dd.from_pandas(pd.DataFrame({"a": range(5)}), npartitions=2)
+        df = df.map_partitions(f, dl, meta=df._meta)
+        df = df.persist(optimize_graph=False)
+        df.compute()
+
+    with distributed.LocalCluster(
+        scheduler_port=0, asynchronous=False, n_workers=1, nthreads=1, processes=False
+    ) as cluster:
+        with distributed.Client(cluster, asynchronous=False):
+            main()
+
+
 @gen_cluster(client=True)
 async def test_annotation_pack_unpack(c, s, a, b):
     hlg = HighLevelGraph({"l1": MaterializedLayer({"n": 42})}, {"l1": set()})
