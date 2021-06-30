@@ -413,7 +413,19 @@ class SimpleShuffleLayer(DataFrameLayer):
         self.parts_out = parts_out or range(npartitions)
         self.split_name = "split-" + self.name
 
-        # Set high-priority to "split" tasks
+        # The scheduling policy of Dask is generally depth-first,
+        # which works great in most cases. However, in case of shuffle,
+        # it increases the memory usage significantly. This is because
+        # depth-first delays the freeing of the result of `shuffle_group()`
+        # until the end of the shuffling.
+        #
+        # We address this by manually setting a high "prioroty" to the
+        # `getitem()` ("split") tasks, using annotations. This forces a
+        # breadth-first scheduling of the tasks tath directly depend on
+        # the `shuffle_group()` output, allowing that data to be freed
+        # much earlier.
+        #
+        # See https://github.com/dask/dask/pull/6051 for a detailed discussion.
         self.annotations = self.annotations or {}
         if "priority" not in self.annotations:
             self.annotations["priority"] = {}
