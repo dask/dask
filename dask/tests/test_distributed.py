@@ -561,10 +561,11 @@ async def test_annotation_pack_unpack(c, s, a, b):
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
 
     df = pd.DataFrame({"a": range(1000)})
-    ddf = dd.from_pandas(df, npartitions=3)
+    ddf = dd.from_pandas(df, npartitions=10)
     ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
     await c.compute(ddf2)
 
@@ -577,6 +578,10 @@ async def test_shuffle_priority(c, s, a, b):
 
     # Make sure all "split" tasks are processing before
     # any "combine" tasks begin
-    max_split = max([i for i, st in enumerate(log) if st.startswith("split")])
-    min_combine = min([i for i, st in enumerate(log) if st.startswith("simple")])
-    assert max_split < min_combine
+    late_split = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
+    )
+    early_combine = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
+    )
+    assert late_split < early_combine
