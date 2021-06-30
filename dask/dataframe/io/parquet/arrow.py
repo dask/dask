@@ -176,6 +176,31 @@ def _get_all_partition_keys(ds):
 
     if file_frag is not None:
         # Check/correct order of `categories` using last file_frag
+        #
+        # Note that `_get_partition_keys` does NOT preserve the
+        # partition-hierarchy order of the keys. However, the
+        # __repr__ of `file_frag.partition_expression` DOES reflect
+        # consistent ordering.  Therefore, we use custom regex
+        # logic to determine the "correct" ordering of the
+        # `categories` output.
+        #
+        # Example (why we need to "reorder" `categories`):
+        #
+        #    # Fragment path has "hive" structure
+        #    file_frag.path
+        #
+        #        '/data/path/b=x/c=x/part.1.parquet'
+        #
+        #    # `partition_expression` preserves the hierarchy order
+        #    str(file_frag.partition_expression)
+        #
+        #        '((b == x:string) and (c == x:string))'
+        #
+        #    # `categories` may NOT preserve the hierachy order
+        #    categories.keys()
+        #
+        #        dict_keys(['c', 'b'])
+        #
         cat_keys = [
             o.split(" =")[0]
             for o in re.findall("[^(]* =", str(file_frag.partition_expression))
