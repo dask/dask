@@ -549,10 +549,10 @@ async def test_shuffle_priority(c, s, a, b):
     # Make sure most "split" tasks are processing before
     # any "combine" tasks begin
     late_split = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
+        [i for i, st in enumerate(log) if st.startswith("split")], 0.73
     )
     early_combine = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
+        [i for i, st in enumerate(log) if st.startswith("simple")], 0.27
     )
     assert late_split < early_combine
 
