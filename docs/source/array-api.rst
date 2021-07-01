@@ -188,6 +188,7 @@ Top level user functions:
    rollaxis
    rot90
    round
+   searchsorted
    sign
    signbit
    sin
@@ -212,7 +213,6 @@ Top level user functions:
    tril
    triu
    trunc
-   unify_chunks
    unique
    unravel_index
    var
@@ -396,6 +396,7 @@ Internal functions
 .. autosummary::
    blockwise
    normalize_chunks
+   unify_chunks
 
 
 Other functions
@@ -760,6 +761,7 @@ Other functions
 .. autofunction:: map_blocks
 .. autofunction:: blockwise
 .. autofunction:: normalize_chunks
+.. autofunction:: unify_chunks
 
 .. currentmodule:: dask.array
 

@@ -1,3 +1,4 @@
+import contextlib
 import difflib
 import functools
 import itertools
@@ -10,7 +11,7 @@ import numpy as np
 from tlz import concat, frequencies
 
 from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
+from ..utils import has_keyword, is_arraylike, is_cupy_type
 from .core import Array
 
 try:
@@ -65,13 +66,6 @@ def meta_from_array(x, ndim=None, dtype=None):
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
-    if (
-        not hasattr(x, "shape")
-        or not hasattr(x, "dtype")
-        or not isinstance(x.shape, tuple)
-    ):
-        return x
-
     if isinstance(x, list) or isinstance(x, tuple):
         ndims = [
             0
@@ -83,6 +77,13 @@ def meta_from_array(x, ndim=None, dtype=None):
         ]
         a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]
         return a if isinstance(x, list) else tuple(x)
+
+    if (
+        not hasattr(x, "shape")
+        or not hasattr(x, "dtype")
+        or not isinstance(x.shape, tuple)
+    ):
+        return x
 
     if ndim is None:
         ndim = x.ndim
@@ -156,8 +157,10 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 else:
                     return None
             except ValueError as e:
-                # min/max functions have no identity, attempt to use the first meta
-                if "zero-size array to reduction operation" in str(e):
+                # min/max functions have no identity, just use the same input type when there's only one
+                if len(
+                    args_meta
+                ) == 1 and "zero-size array to reduction operation" in str(e):
                     meta = args_meta[0]
                 else:
                     return None
@@ -165,7 +168,7 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:
-            with ignoring(AttributeError):
+            with contextlib.suppress(AttributeError):
                 meta = meta.astype(_dtype)
 
         if np.isscalar(meta):
@@ -201,7 +204,7 @@ def _not_empty(x):
 
 
 def _check_dsk(dsk):
-    """ Check that graph is well named and non-overlapping """
+    """Check that graph is well named and non-overlapping"""
     if not isinstance(dsk, HighLevelGraph):
         return
 
@@ -509,7 +512,7 @@ def asanyarray_safe(a, like, **kwargs):
 
 
 def validate_axis(axis, ndim):
-    """ Validate an input to axis= keywords """
+    """Validate an input to axis= keywords"""
     if isinstance(axis, (tuple, list)):
         return tuple(validate_axis(ax, ndim) for ax in axis)
     if not isinstance(axis, numbers.Integral):
@@ -563,6 +566,26 @@ def svd_flip(u, v, u_based_decision=False):
     # Force all singular vectors into same half-space
     u, v = u * signs, v * signs.T
     return u, v
+
+
+def scipy_linalg_safe(func_name, *args, **kwargs):
+    # need to evaluate at least the first input array
+    # for gpu/cpu checking
+    a = args[0]
+    if is_cupy_type(a):
+        import cupyx.scipy.linalg
+
+        func = getattr(cupyx.scipy.linalg, func_name)
+    else:
+        import scipy.linalg
+
+        func = getattr(scipy.linalg, func_name)
+
+    return func(*args, **kwargs)
+
+
+def solve_triangular_safe(a, b, lower=False):
+    return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
 
 
 def _is_nep18_active():
