@@ -73,6 +73,7 @@ def optimize_dataframe_getitem(dsk, keys):
             # See https://github.com/dask/dask/issues/5893
             return dsk
 
+        column_projection = True
         for dep in dsk.dependents[k]:
             block = dsk.layers[dep]
 
@@ -81,7 +82,12 @@ def optimize_dataframe_getitem(dsk, keys):
                 return dsk
 
             block_columns = block.selected_columns
-            if isinstance(block_columns, str) or np.issubdtype(
+            if block_columns == "__dask_key_selection__":
+                # Not a column selection if block.selected_columns
+                # returns "__dask_key_selection__"
+                column_projection = False
+                break
+            elif isinstance(block_columns, str) or np.issubdtype(
                 type(block_columns), np.integer
             ):
                 block_columns = [block_columns]
@@ -89,21 +95,23 @@ def optimize_dataframe_getitem(dsk, keys):
             columns |= set(block_columns)
 
         # Project columns and update blocks
-        old = layers[k]
-        new = old.project_columns(columns)[0]
-        if new.name != old.name:
-            columns = list(columns)
-            assert len(update_blocks)
-            for block_key, block in update_blocks.items():
-                # (('read-parquet-old', (.,)), ( ... )) ->
-                # (('read-parquet-new', (.,)), ( ... ))
-                new_block = block.modify_input_dependency(new.name)
-                layers[block_key] = new_block
-                dependencies[block_key] = {new.name}
-            dependencies[new.name] = dependencies.pop(k)
+        # import pdb; pdb.set_trace()
+        if column_projection:
+            old = layers[k]
+            new = old.project_columns(columns)[0]
+            if new.name != old.name:
+                columns = list(columns)
+                assert len(update_blocks)
+                for block_key, block in update_blocks.items():
+                    # (('read-parquet-old', (.,)), ( ... )) ->
+                    # (('read-parquet-new', (.,)), ( ... ))
+                    new_block = block.modify_input_dependency(new.name)
+                    layers[block_key] = new_block
+                    dependencies[block_key] = {new.name}
+                dependencies[new.name] = dependencies.pop(k)
 
-        layers[new.name] = new
-        if new.name != old.name:
-            del layers[old.name]
+            layers[new.name] = new
+            if new.name != old.name:
+                del layers[old.name]
 
     return HighLevelGraph(layers, dependencies)

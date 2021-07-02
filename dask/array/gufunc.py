@@ -171,7 +171,20 @@ def _validate_normalize_axes(axes, axis, keepdims, input_coredimss, output_cored
     return input_axes, output_axes
 
 
-def apply_gufunc(func, signature, *args, **kwargs):
+def apply_gufunc(
+    func,
+    signature,
+    *args,
+    axes=None,
+    axis=None,
+    keepdims=False,
+    output_dtypes=None,
+    output_sizes=None,
+    vectorize=None,
+    allow_rechunk=False,
+    meta=None,
+    **kwargs,
+):
     """
     Apply a generalized ufunc or similar python function to arrays.
 
@@ -274,15 +287,6 @@ def apply_gufunc(func, signature, *args, **kwargs):
     .. [1] https://docs.scipy.org/doc/numpy/reference/ufuncs.html
     .. [2] https://docs.scipy.org/doc/numpy/reference/c-api/generalized-ufuncs.html
     """
-    axes = kwargs.pop("axes", None)
-    axis = kwargs.pop("axis", None)
-    keepdims = kwargs.pop("keepdims", False)
-    output_dtypes = kwargs.pop("output_dtypes", None)
-    output_sizes = kwargs.pop("output_sizes", None)
-    vectorize = kwargs.pop("vectorize", None)
-    allow_rechunk = kwargs.pop("allow_rechunk", False)
-    meta = kwargs.pop("meta", None)
-
     # Input processing:
     ## Signature
     if not isinstance(signature, str):
@@ -292,38 +296,65 @@ def apply_gufunc(func, signature, *args, **kwargs):
     ## Determine nout: nout = None for functions of one direct return; nout = int for return tuples
     nout = None if not isinstance(output_coredimss, list) else len(output_coredimss)
 
-    ## Determine and handle output_dtypes
-    if output_dtypes is None:
-        if vectorize:
-            tempfunc = np.vectorize(func, signature=signature)
-        else:
-            tempfunc = func
-        output_dtypes = apply_infer_dtype(
-            tempfunc, args, kwargs, "apply_gufunc", "output_dtypes", nout
+    ## Consolidate onto `meta`
+    if meta is not None and output_dtypes is not None:
+        raise ValueError(
+            "Only one of `meta` and `output_dtypes` should be given (`meta` is preferred)."
         )
-
-    if isinstance(output_dtypes, (tuple, list)):
-        if nout is None:
-            if len(output_dtypes) > 1:
-                raise ValueError(
-                    (
-                        "Must specify single dtype or list of one dtype "
-                        "for `output_dtypes` for function with one output"
-                    )
-                )
-            otypes = output_dtypes
-            output_dtypes = output_dtypes[0]
-        else:
-            otypes = output_dtypes
-    else:
-        if nout is not None:
-            raise ValueError(
-                "Must specify tuple of dtypes for `output_dtypes` for function with multiple outputs"
+    if meta is None:
+        if output_dtypes is None:
+            ## Infer `output_dtypes`
+            if vectorize:
+                tempfunc = np.vectorize(func, signature=signature)
+            else:
+                tempfunc = func
+            output_dtypes = apply_infer_dtype(
+                tempfunc, args, kwargs, "apply_gufunc", "output_dtypes", nout
             )
-        otypes = [output_dtypes]
+
+        ## Turn `output_dtypes` into `meta`
+        if (
+            nout is None
+            and isinstance(output_dtypes, (tuple, list))
+            and len(output_dtypes) == 1
+        ):
+            output_dtypes = output_dtypes[0]
+        sample = args[0] if args else None
+        if nout is None:
+            meta = meta_from_array(sample, dtype=output_dtypes)
+        else:
+            meta = tuple(meta_from_array(sample, dtype=odt) for odt in output_dtypes)
+
+    ## Normalize `meta` format
+    meta = meta_from_array(meta)
+    if isinstance(meta, list):
+        meta = tuple(meta)
+
+    ## Validate `meta`
+    if nout is None:
+        if isinstance(meta, tuple):
+            if len(meta) == 1:
+                meta = meta[0]
+            else:
+                raise ValueError(
+                    "For a function with one output, must give a single item for `output_dtypes`/`meta`, "
+                    "not a tuple or list."
+                )
+    else:
+        if not isinstance(meta, tuple):
+            raise ValueError(
+                f"For a function with {nout} outputs, must give a tuple or list for `output_dtypes`/`meta`, "
+                "not a single item."
+            )
+        if len(meta) != nout:
+            raise ValueError(
+                f"For a function with {nout} outputs, must give a tuple or list of {nout} items for "
+                f"`output_dtypes`/`meta`, not {len(meta)}."
+            )
 
     ## Vectorize function, if required
     if vectorize:
+        otypes = [x.dtype for x in meta] if isinstance(meta, tuple) else [meta.dtype]
         func = np.vectorize(func, signature=signature, otypes=otypes)
 
     ## Miscellaneous
@@ -340,7 +371,7 @@ def apply_gufunc(func, signature, *args, **kwargs):
     args = [asarray(a) for a in args]
 
     if len(input_coredimss) != len(args):
-        ValueError(
+        raise ValueError(
             "According to `signature`, `func` requires %d arguments, but %s given"
             % (len(input_coredimss), len(args))
         )
@@ -420,37 +451,25 @@ significantly.".format(
     ### Use existing `blockwise` but only with loopdims to enforce
     ### concatenation for coredims that appear also at the output
     ### Modifying `blockwise` could improve things here.
-    if meta is not None:
-        tmp = blockwise(
-            func, loop_output_dims, *arginds, concatenate=True, meta=meta, **kwargs
-        )
-    else:
-        try:
-            tmp = blockwise(  # First try to compute meta
-                func, loop_output_dims, *arginds, concatenate=True, **kwargs
-            )
-        except ValueError:
-            # If computing meta doesn't work, provide it explicitly based on
-            # provided dtypes
-            sample = arginds[0]._meta
-            if isinstance(output_dtypes, tuple):
-                meta = tuple(
-                    meta_from_array(sample, dtype=odt)
-                    for ocd, odt in zip(output_coredimss, output_dtypes)
-                )
-            else:
-                meta = tuple(
-                    meta_from_array(sample, dtype=odt)
-                    for ocd, odt in zip((output_coredimss,), (output_dtypes,))
-                )
-            tmp = blockwise(
-                func, loop_output_dims, *arginds, concatenate=True, meta=meta, **kwargs
-            )
+    tmp = blockwise(
+        func, loop_output_dims, *arginds, concatenate=True, meta=meta, **kwargs
+    )
 
-    if isinstance(tmp._meta, tuple):
-        metas = tmp._meta
+    # NOTE: we likely could just use `meta` instead of `tmp._meta`,
+    # but we use it and validate it anyway just to be sure nothing odd has happened.
+    metas = tmp._meta
+    if nout is None:
+        assert not isinstance(
+            metas, (list, tuple)
+        ), f"meta changed from single output to multiple output during blockwise: {meta} -> {metas}"
+        metas = (metas,)
     else:
-        metas = (tmp._meta,)
+        assert isinstance(
+            metas, (list, tuple)
+        ), f"meta changed from multiple output to single output during blockwise: {meta} -> {metas}"
+        assert (
+            len(metas) == nout
+        ), f"Number of outputs changed from {nout} to {len(metas)} during blockwise"
 
     ## Prepare output shapes
     loop_output_shape = tmp.shape
@@ -461,7 +480,6 @@ significantly.".format(
     ### *) Treat direct output
     if nout is None:
         output_coredimss = [output_coredimss]
-        output_dtypes = [output_dtypes]
 
     ## Split output
     leaf_arrs = []
@@ -489,12 +507,12 @@ significantly.".format(
             leaf_arr = leaf_arr[slices]
 
         tidcs = [None] * len(leaf_arr.shape)
-        for i, oa in zip(range(-len(oax), 0), oax):
-            tidcs[oa] = i
+        for ii, oa in zip(range(-len(oax), 0), oax):
+            tidcs[oa] = ii
         j = 0
-        for i in range(len(tidcs)):
-            if tidcs[i] is None:
-                tidcs[i] = j
+        for ii in range(len(tidcs)):
+            if tidcs[ii] is None:
+                tidcs[ii] = j
                 j += 1
         leaf_arr = leaf_arr.transpose(tidcs)
         leaf_arrs.append(leaf_arr)
