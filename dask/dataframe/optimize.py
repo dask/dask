@@ -95,7 +95,6 @@ def optimize_dataframe_getitem(dsk, keys):
             columns |= set(block_columns)
 
         # Project columns and update blocks
-        # import pdb; pdb.set_trace()
         if column_projection:
             old = layers[k]
             new = old.project_columns(columns)[0]
