@@ -140,14 +140,6 @@ def test_get_dependencies_task_none():
 
 
 def test_get_deps():
-    """
-    >>> dsk = {'a': 1, 'b': (inc, 'a'), 'c': (inc, 'b')}
-    >>> dependencies, dependents = get_deps(dsk)
-    >>> dependencies
-    {'a': set(), 'b': {'a'}, 'c': {'b'}}
-    >>> dependents  # doctest: +SKIP
-    {'a': {'b'}, 'b': {'c'}, 'c': set()}
-    """
     dsk = {
         "a": [1, 2, 3],
         "b": "a",
