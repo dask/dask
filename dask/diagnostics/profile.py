@@ -45,7 +45,7 @@ class Profiler(Callback):
 
     You can activate the profiler globally
 
-    >>> prof.register()     # doctest: +SKIP
+    >>> prof.register()
 
     If you use the profiler globally you will need to clear out old results
     manually.
@@ -119,7 +119,7 @@ class ResourceProfiler(Callback):
     >>> from operator import add, mul
     >>> from dask.threaded import get
     >>> dsk = {'x': 1, 'y': (add, 'x', 10), 'z': (mul, 'y', 2)}
-    >>> with ResourceProfiler() as prof:  # doctest: +SKIP
+    >>> with ResourceProfiler() as prof:
     ...     get(dsk, 'z')
     22
 
@@ -130,12 +130,12 @@ class ResourceProfiler(Callback):
 
     You can activate the profiler globally
 
-    >>> prof.register()  # doctest: +SKIP
+    >>> prof.register()
 
     If you use the profiler globally you will need to clear out old results
     manually.
 
-    >>> prof.clear()  # doctest: +SKIP
+    >>> prof.clear()
 
     Note that when used as a context manager data will be collected throughout
     the duration of the enclosed block. In contrast, when registered globally
@@ -304,9 +304,10 @@ class CacheProfiler(Callback):
     example, the ``nbytes`` function found in ``cachey`` can be used to measure
     the number of bytes in the cache.
 
-    >>> from cachey import nbytes    # doctest: +SKIP
-    >>> with CacheProfiler(metric=nbytes) as prof:  # doctest: +SKIP
+    >>> from cachey import nbytes
+    >>> with CacheProfiler(metric=nbytes) as prof:
     ...     get(dsk, 'z')
+    22
 
     The profiling results can be visualized in a bokeh plot using the
     ``visualize`` method. Note that this requires bokeh to be installed.
@@ -315,7 +316,7 @@ class CacheProfiler(Callback):
 
     You can activate the profiler globally
 
-    >>> prof.register()  # doctest: +SKIP
+    >>> prof.register()
 
     If you use the profiler globally you will need to clear out old results
     manually.
