@@ -10,6 +10,7 @@ from dask.array.utils import assert_eq
 from dask.blockwise import (
     _BLOCKWISE_DEFAULT_PREFIX,
     Blockwise,
+    BlockwiseDepDict,
     index_subs,
     optimize_blockwise,
     rewrite_blockwise,
@@ -535,6 +536,53 @@ def test_blockwise_numpy_arg():
     x = x.map_blocks(lambda x, y: x, 1.0)
     x = x.map_blocks(lambda x, y, z: x, "abc", np.array(["a", "b"], dtype=object))
     assert_eq(x, np.arange(10))
+
+
+def test_blockwise_iodep():
+    dep = BlockwiseDepDict(
+        {
+            (0,): 2,
+            (1,): 3,
+        },
+    )
+    y = da.blockwise(
+        lambda x: np.ones(x, float) * x,
+        "i",
+        dep,
+        "i",
+        new_axes={"i": (2, 3)},
+        align_arrays=False,
+        dtype=float,
+    )
+    assert_eq(y, np.array([2.0, 2.0, 3.0, 3.0, 3.0]))
+
+
+def test_blockwise_iodep_2d():
+    dep1 = BlockwiseDepDict(
+        {
+            (0,): 2,
+            (1,): 3,
+        },
+    )
+    dep2 = BlockwiseDepDict(
+        {
+            (0,): 10,
+            (1,): 100,
+            (2,): 1000,
+        },
+    )
+    y = da.blockwise(
+        lambda x, y: np.array([[x + y]]),
+        "ij",
+        dep1,
+        "i",
+        dep2,
+        "j",
+        new_axes={"i": (1, 1), "j": (1, 1, 1)},
+        align_arrays=False,
+        dtype=int,
+    )
+    assert_eq(y, np.array([[12, 102, 1002], [13, 103, 1003]]))
 
 
 def test_bag_array_conversion():
