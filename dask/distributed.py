@@ -12,3 +12,17 @@ except ImportError as e:
         raise ImportError(msg) from e
     else:
         raise
+
+
+def __getattr__(value):
+    try:
+        import distributed
+    except ImportError as e:
+        msg = (
+            "dask.distributed is not installed.\n\n"
+            "Please either conda or pip install distributed:\n\n"
+            "  conda install dask distributed             # either conda install\n"
+            "  python -m pip install dask[distributed] --upgrade    # or pip install"
+        )
+        raise ImportError(msg) from e
+    return getattr(distributed, value)
