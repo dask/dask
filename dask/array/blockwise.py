@@ -58,6 +58,11 @@ def blockwise(
         should be specified to determine the output chunks for that
         dimension.
 
+        When this is ``False``, some arguments may be instances of
+        :class:`dask.blockwise.BlockwiseDep` instead of arrays. See the
+        examples for details.
+
+
     Examples
     --------
     2D embarrassingly parallel operation from two arrays, x, and y.
@@ -131,15 +136,6 @@ def blockwise(
 
     >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': 5}, dtype=a.dtype)
 
-    New dimensions can also be multi-chunk by specifying a tuple of chunk
-    sizes.  This has limited utility as is (because the chunks are all the
-    same), but the resulting graph can be modified to achieve more useful
-    results (see ``da.map_blocks``).
-
-    >>> z = blockwise(f, 'az', a, 'a', new_axes={'z': (5, 5)}, dtype=x.dtype)
-    >>> z.chunks
-    ((1, 1, 1), (5, 5))
-
     If the applied function changes the size of each chunk you can specify this
     with a ``adjust_chunks={...}`` dictionary holding a function for each index
     that modifies the dimension size in that index.
@@ -158,6 +154,25 @@ def blockwise(
     >>> z.compute()
     array([[1235, 1236],
            [1237, 1238]])
+
+    You can use BlockwiseDep to provide extra information to the function on
+    a per-block basis, without needing an array. Note that if a dimension is
+    not associated with any array, it must be listed with ``new_axes``, but in
+    this case it may make sense to have multiple chunks along this axis.
+
+    >>> from dask.blockwise import BlockwiseDepDict
+    >>> dep = BlockwiseDepDict({(0,): 2, (1,): 3})
+    >>> z = da.blockwise(
+    ...     lambda x: np.ones(x, float) * x,
+    ...     "i",
+    ...     dep,
+    ...     "i",
+    ...     new_axes={"i": (2, 3)},
+    ...     align_arrays=False,
+    ...     dtype=float,
+    ... )
+    >>> z.compute()
+    array([2., 2., 3., 3., 3.])
     """
     out = name
     new_axes = new_axes or {}
