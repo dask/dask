@@ -943,7 +943,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     else:
         dd.to_parquet(ddf, tmp, engine=engine, **write_kwargs)
     ddf2 = dd.read_parquet(tmp, index=df.index.name, engine=engine, **read_kwargs)
-    if df.dtypes.get("x") == "uint16" and engine == "fastparquet":
+    if str(ddf2.dtypes.get("x")) == "UInt16" and engine == "fastparquet":
         # fastparquet choooses to use masked type to be able to get true repr of
         # 16-bit int
         assert_eq(ddf.astype("UInt16"), ddf2)
