@@ -25,8 +25,8 @@ def cull(dsk, keys):
     Examples
     --------
 
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}    # doctest: +SKIP
-    >>> dsk, dependencies = cull(d, 'out')                      # doctest: +SKIP
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
+    >>> dsk, dependencies = cull(d, 'out')
     >>> dsk                                                     # doctest: +SKIP
     {'x': 1, 'out': (add, 'x', 10)}
     >>> dependencies                                            # doctest: +SKIP
@@ -236,7 +236,7 @@ def inline(dsk, keys=None, inline_constants=True, dependencies=None):
     Examples
     --------
 
-    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')} # doctest: +SKIP
+    >>> d = {'x': 1, 'y': (inc, 'x'), 'z': (add, 'x', 'y')}
     >>> inline(d)       # doctest: +SKIP
     {'x': 1, 'y': (inc, 1), 'z': (add, 1, 'y')}
 

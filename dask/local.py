@@ -61,7 +61,7 @@ Changing state
 Examples
 --------
 
->>> import pprint  # doctest: +SKIP
+>>> import pprint
 >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
 >>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
@@ -144,7 +144,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     --------
 
     >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
-    >>> from pprint import pprint  # doctest: +SKIP
+    >>> from pprint import pprint
     >>> pprint(start_state_from_dask(dsk))  # doctest: +SKIP
     {'cache': {'x': 1, 'y': 2},
      'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},

@@ -113,7 +113,7 @@ class BlockwiseDepDict(BlockwiseDep):
     that the function will be passed a single input object when
     the task is executed (e.g. a single ``tuple`` or ``dict``):
 
-    >>> import pandas as pd  # doctest: +SKIP
+    >>> import pandas as pd
     >>> func = lambda x: pd.read_csv(**x)  # doctest: +SKIP
 
     Use ``BlockwiseDepDict`` to define the input argument to
@@ -134,7 +134,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...             "names": ["a", "b"],
     ...         },
     ...     }
-    ... )  # doctest: +SKIP
+    ... )
 
     Construct a Blockwise Layer with ``dep`` speficied
     in the ``indices`` list:

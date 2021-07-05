@@ -1225,13 +1225,13 @@ def get_collection_names(collection) -> Set[str]:
     Examples
     --------
     >>> a.__dask_keys__()  # doctest: +SKIP
-    ["foo", "bar"]  # doctest: +SKIP
+    ["foo", "bar"]
     >>> get_collection_names(a)  # doctest: +SKIP
-    {"foo", "bar"}  # doctest: +SKIP
+    {"foo", "bar"}
     >>> b.__dask_keys__()  # doctest: +SKIP
-    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]  # doctest: +SKIP
+    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]
     >>> get_collection_names(b)  # doctest: +SKIP
-    {"foo-123"}  # doctest: +SKIP
+    {"foo-123"}
     """
     if not is_dask_collection(collection):
         raise TypeError(f"Expected Dask collection; got {type(collection)}")
@@ -1296,9 +1296,9 @@ def clone_key(key, seed):
     Examples
     --------
     >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
-    'inc-1d291de52f5045f8a969743daea271fd'  # doctest: +SKIP
+    'inc-1d291de52f5045f8a969743daea271fd'
     >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
-    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)  # doctest: +SKIP
+    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
     """
     if isinstance(key, tuple) and key and isinstance(key[0], str):
         return (clone_key(key[0], seed),) + key[1:]

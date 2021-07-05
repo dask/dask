@@ -690,7 +690,7 @@ class StrComparable:
 
     When comparing two objects of different types Python fails
 
-    >>> 'a' < 1  # doctest: +SKIP
+    >>> 'a' < 1
     Traceback (most recent call last):
         ...
     TypeError: '<' not supported between instances of 'str' and 'int'
