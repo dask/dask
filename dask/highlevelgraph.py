@@ -1225,13 +1225,16 @@ def to_graphviz(
             attrs.setdefault("fontsize", "10")
         elif n_tasks <= 50:
             attrs.setdefault("fontsize", "17")
-        if n_tasks <= 100:
+        elif n_tasks <= 100:
             attrs.setdefault("fontsize", "20")
-        if n_tasks <= 500:
+        elif n_tasks <= 500:
             attrs.setdefault("fontsize", "25")
-        if n_tasks <= 1000:
+        elif n_tasks <= 1000:
             attrs.setdefault("fontsize", "30")
-        # This implementation is very brute-force-y. Will make it clean once the plan is ready.
+        else:
+            attrs.setdefault("fontsize", "35")
+        # this implementation is very brute-force-y. will make it clean once the plan is ready.
+
         g.node(k_name, **attrs)
 
     for k, deps in hg.dependencies.items():
