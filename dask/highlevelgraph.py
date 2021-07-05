@@ -1219,6 +1219,19 @@ def to_graphviz(
         attrs = data_attributes.get(k, {})
         attrs.setdefault("label", label(k, cache=cache))
         attrs.setdefault("shape", "box")
+        n_tasks = len(hg.layers[k])
+        # print(n_tasks)
+        if n_tasks <= 10:
+            attrs.setdefault("fontsize", "10")
+        elif n_tasks <= 50:
+            attrs.setdefault("fontsize", "17")
+        if n_tasks <= 100:
+            attrs.setdefault("fontsize", "20")
+        if n_tasks <= 500:
+            attrs.setdefault("fontsize", "25")
+        if n_tasks <= 1000:
+            attrs.setdefault("fontsize", "30")
+        # This implementation is very brute-force-y. Will make it clean once the plan is ready.
         g.node(k_name, **attrs)
 
     for k, deps in hg.dependencies.items():
