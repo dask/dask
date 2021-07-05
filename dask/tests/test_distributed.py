@@ -529,6 +529,35 @@ async def test_futures_in_subgraphs(c, s, a, b):
 
 
 @gen_cluster(client=True)
+async def test_shuffle_priority(c, s, a, b):
+    pd = pytest.importorskip("pandas")
+    np = pytest.importorskip("numpy")
+    dd = pytest.importorskip("dask.dataframe")
+
+    df = pd.DataFrame({"a": range(1000)})
+    ddf = dd.from_pandas(df, npartitions=10)
+    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
+    await c.compute(ddf2)
+
+    # Parse transition log for processing tasks
+    log = [
+        eval(l[0])[0]
+        for l in s.transition_log
+        if l[1] == "processing" and "simple-shuffle-" in l[0]
+    ]
+
+    # Make sure most "split" tasks are processing before
+    # any "combine" tasks begin
+    late_split = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
+    )
+    early_combine = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
+    )
+    assert late_split < early_combine
+
+
+@gen_cluster(client=True)
 async def test_map_partitions_da_input(c, s, a, b):
     """Check that map_partitions can handle a dask array input"""
     np = pytest.importorskip("numpy")
@@ -544,6 +573,38 @@ async def test_map_partitions_da_input(c, s, a, b):
     df = datasets.timeseries(freq="1d").persist()
     arr = da.ones((1,), chunks=1).persist()
     await c.compute(df.map_partitions(f, arr, meta=df._meta))
+
+
+def test_map_partitions_df_input():
+    """
+    Check that map_partitions can handle a delayed
+    partition of a dataframe input
+    """
+    pd = pytest.importorskip("pandas")
+    dd = pytest.importorskip("dask.dataframe")
+
+    def f(d, a):
+        assert isinstance(d, pd.DataFrame)
+        assert isinstance(a, pd.DataFrame)
+        return d
+
+    def main():
+        delayed_df = dd.from_pandas(
+            pd.DataFrame({"a": range(5)}), npartitions=2
+        ).to_delayed()
+        dl = delayed_df[0].persist()
+        wait(dl)
+
+        df = dd.from_pandas(pd.DataFrame({"a": range(5)}), npartitions=2)
+        df = df.map_partitions(f, dl, meta=df._meta)
+        df = df.persist(optimize_graph=False)
+        df.compute()
+
+    with distributed.LocalCluster(
+        scheduler_port=0, asynchronous=False, n_workers=1, nthreads=1, processes=False
+    ) as cluster:
+        with distributed.Client(cluster, asynchronous=False):
+            main()
 
 
 @gen_cluster(client=True)

@@ -543,18 +543,12 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
 
     if not isinstance(chunks, (int, str)):
         raise ValueError("chunks must be an int or string")
-    elif isinstance(chunks, str):
-        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
-        chunks = chunks[0][0]
+
+    vchunks, hchunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+    chunks = vchunks[0]
+
     token = tokenize(N, chunks, M, k, dtype)
     name_eye = "eye-" + token
-
-    vchunks = [chunks] * (N // chunks)
-    if N % chunks != 0:
-        vchunks.append(N % chunks)
-    hchunks = [chunks] * (M // chunks)
-    if M % chunks != 0:
-        hchunks.append(M % chunks)
 
     for i, vchunk in enumerate(vchunks):
         for j, hchunk in enumerate(hchunks):
