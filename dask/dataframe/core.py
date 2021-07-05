@@ -4544,7 +4544,7 @@ class DataFrame(_Frame):
             broadcast=broadcast,
         )
 
-    @derived_from(pd.DataFrame)  # doctest: +SKIP
+    @derived_from(pd.DataFrame)
     def join(
         self,
         other,
@@ -6246,7 +6246,7 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
     {('b', 0): (<function boundary_slice at ...>, ('a', 0), 1, 3, False),
      ('b', 1): (<function boundary_slice at ...>, ('a', 1), 3, 4, False),
      ('b', 2): (<function boundary_slice at ...>, ('a', 1), 4, 6, False),
-     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, False)
+     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, True)
      ('c', 0): (<function concat at ...>,
                 (<type 'list'>, [('b', 0), ('b', 1)])),
      ('c', 1): ('b', 2),

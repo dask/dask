@@ -297,7 +297,7 @@ def daily_stock(
 
     Examples
     --------
-    >>> import dask.dataframe as dd  # doctest: +SKIP
+    >>> import dask.dataframe as dd
     >>> df = dd.demo.daily_stock('GOOG', '2010', '2011', freq='1s')  # doctest: +SKIP
     >>> df  # doctest: +SKIP
     Dask DataFrame Structure:
