@@ -134,6 +134,8 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
 
     Examples
     --------
+
+    TODO: Examples out of date
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
     ...                              (slice(10, 35),))  #  doctest: +SKIP
     >>> dsk  # doctest: +SKIP
@@ -596,6 +598,7 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
 
     When list is sorted we retain original block structure
 
+    TODO: Examples out of date
     >>> chunks, dsk = take('y', 'x', [(20, 20, 20, 20)], [1, 3, 5, 47], 8, axis=0)
     >>> chunks
     ((3, 1),)

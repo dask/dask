@@ -797,7 +797,7 @@ def svd_compressed(
 
     Examples
     --------
-    >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
+    >>> u, s, v = svd_compressed(x, 20)  # doctest: +SKIP
 
     Returns
     -------
