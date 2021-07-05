@@ -1219,6 +1219,8 @@ def to_graphviz(
         attrs = data_attributes.get(k, {})
         attrs.setdefault("label", label(k, cache=cache))
         attrs.setdefault("shape", "box")
+        if len(hg.layers[k] > 10):
+            attrs.setdefault("fillcolor", "gray93")
         g.node(k_name, **attrs)
 
     for k, deps in hg.dependencies.items():
