@@ -795,6 +795,7 @@ def test_merge(how, shuffle):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
 @pytest.mark.parametrize(
@@ -2099,6 +2100,7 @@ def test_dtype_equality_warning():
     assert len(r) == 0
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("engine", ["pandas", "cudf"])
 def test_groupby_concat_cudf(engine):
 
