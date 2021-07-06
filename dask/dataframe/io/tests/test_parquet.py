@@ -923,8 +923,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     ],
 )
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
-    if engine == "pyarrow":
-        return
     if (
         PANDAS_GT_130
         and engine == "fastparquet"
