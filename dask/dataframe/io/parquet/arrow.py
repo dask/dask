@@ -178,11 +178,9 @@ def _get_all_partition_keys(ds):
         # Check/correct order of `categories` using last file_frag
         #
         # Note that `_get_partition_keys` does NOT preserve the
-        # partition-hierarchy order of the keys. However, the
-        # __repr__ of `file_frag.partition_expression` DOES reflect
-        # consistent ordering.  Therefore, we use custom regex
-        # logic to determine the "correct" ordering of the
-        # `categories` output.
+        # partition-hierarchy order of the keys. Therefore, we
+        # use custom regex logic to determine the "correct"
+        # ordering of the `categories` output.
         #
         # Example (why we need to "reorder" `categories`):
         #
@@ -191,19 +189,15 @@ def _get_all_partition_keys(ds):
         #
         #        '/data/path/b=x/c=x/part.1.parquet'
         #
-        #    # `partition_expression` preserves the hierarchy order
-        #    str(file_frag.partition_expression)
-        #
-        #        '((b == x:string) and (c == x:string))'
-        #
         #    # `categories` may NOT preserve the hierachy order
         #    categories.keys()
         #
         #        dict_keys(['c', 'b'])
         #
         cat_keys = [
-            o.split(" =")[0]
-            for o in re.findall("[^(]* =", str(file_frag.partition_expression))
+            o.split("=")[0]
+            # Assume arrow always uses a normalized "/" sep
+            for o in re.findall("[^/]*=", str(file_frag.path))
         ]
         if set(categories) == set(cat_keys):
             return {k: categories[k] for k in cat_keys}, pkeys
