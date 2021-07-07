@@ -537,26 +537,39 @@ async def test_shuffle_priority(c, s, a, b):
     np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
 
-    df = pd.DataFrame({"a": range(1000)})
-    ddf = dd.from_pandas(df, npartitions=10)
-    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
-    await c.compute(ddf2)
+    trials_allowed = 5
+    for trial in range(trials_allowed):
 
-    # Parse transition log for processing tasks
-    log = [
-        eval(l[0])[0]
-        for l in s.transition_log
-        if l[1] == "processing" and "simple-shuffle-" in l[0]
-    ]
+        col = f"a{trial}"
+        df = pd.DataFrame({col: range(1000)})
+        ddf = dd.from_pandas(df, npartitions=10)
+        ddf2 = ddf.shuffle(col, shuffle="tasks", max_branch=32)
+        await c.compute(ddf2)
 
-    # Make sure most "split" tasks are processing before
-    # any "combine" tasks begin
-    late_split = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
-    )
-    early_combine = np.quantile(
-        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
-    )
+        # Parse transition log for processing tasks
+        log = [
+            eval(l[0])[0]
+            for l in s.transition_log
+            if l[1] == "processing" and "simple-shuffle-" in l[0]
+        ]
+
+        # Make sure most "split" tasks are processing before
+        # any "combine" tasks begin
+        late_split = np.quantile(
+            [i for i, st in enumerate(log) if st.startswith("split")], 0.75
+        )
+        early_combine = np.quantile(
+            [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
+        )
+
+        # Check criteria and allow retry since the behavior
+        # is not deterministic. Note that the test is still
+        # very likely to fail every time if the "split" tasks
+        # are not prioritized correctly
+        if late_split < early_combine:
+            break
+        s.transition_log.clear()
+
     assert late_split < early_combine
 
 
