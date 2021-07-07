@@ -9,8 +9,6 @@ from operator import add
 
 from tornado import gen
 
-from distributed import futures_of
-from distributed.client import wait
 from distributed.utils_test import client as c  # noqa F401
 from distributed.utils_test import cluster_fixture  # noqa F401
 from distributed.utils_test import loop  # noqa F401
@@ -20,6 +18,7 @@ import dask
 import dask.bag as db
 from dask import compute, delayed, persist
 from dask.delayed import Delayed
+from dask.distributed import futures_of, wait
 from dask.highlevelgraph import HighLevelGraph, MaterializedLayer
 from dask.utils import get_named_args, tmpdir
 
@@ -30,6 +29,10 @@ if "should_check_state" in get_named_args(gen_cluster):
 
 def test_can_import_client():
     from dask.distributed import Client  # noqa: F401
+
+
+def test_can_import_nested_things():
+    from dask.distributed.protocol import dumps  # noqa: F401
 
 
 @gen_cluster(client=True)
