@@ -30,9 +30,6 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/zarr-developers/zarr-python
 fi
 
-# Temporarily add extra step to install scipy from conda-forge
-mamba install -y -c conda-forge scipy
-
 # Install dask
 python -m pip install --quiet --no-deps -e .[complete]
 echo mamba list
