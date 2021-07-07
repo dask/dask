@@ -14,7 +14,7 @@ import dask
 import dask.dataframe as dd
 import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
@@ -137,7 +137,7 @@ def write_read_engines(**kwargs):
     )
 
 
-pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
+pyarrow_fastparquet_msg = "pyarrow schema and pandas metadata may disagree"
 write_read_engines_xfail = write_read_engines(
     **{
         "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
@@ -899,9 +899,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"),
             {},
             {},
-            marks=pytest.mark.xfail(
-                reason="Parquet doesn't support nanosecond precision"
-            ),
         ),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"), {}, {}),
@@ -922,12 +919,8 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     ],
 )
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
-    if (
-        PANDAS_GT_130
-        and engine == "fastparquet"
-        and read_kwargs.get("categories", None)
-    ):
-        pytest.xfail("https://github.com/dask/fastparquet/issues/577")
+    if "x" in df and df.x.dtype == "M8[ns]" and "arrow" in engine:
+        pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
 
     tmp = str(tmpdir)
     if df.index.name is None:
