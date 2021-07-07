@@ -1,4 +1,3 @@
-import inspect
 import math
 import warnings
 from collections.abc import Iterable
@@ -2046,7 +2045,7 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
         msg = f"Coarsening factors {axes} do not align with array shape {x.shape}."
         raise ValueError(msg)
 
-    if "dask" in inspect.getfile(reduction):
+    if reduction.__module__.startswith("dask."):
         reduction = getattr(np, reduction.__name__)
 
     new_chunks = {}

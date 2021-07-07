@@ -404,6 +404,7 @@ def test_eye():
 
     assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
+    assert_eq(da.eye(10, chunks=-1, dtype=int), np.eye(10, dtype=int))
 
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.eye(10000, "auto")
