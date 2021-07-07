@@ -200,7 +200,7 @@ def _get_all_partition_keys(ds):
             for o in re.findall("[^/]*=", file_frag.path)
         ]
         if set(categories) == set(cat_keys):
-            return {k: categories[k] for k in cat_keys}, pkeys
+            return {k: categories[k] for k in cat_keys if k in categories}, pkeys
     return categories, pkeys
 
 
