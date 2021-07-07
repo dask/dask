@@ -1,3 +1,4 @@
+import datetime
 import inspect
 import os
 import pickle
@@ -336,8 +337,8 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
             dsk, keys = _extract_graph_and_keys(val)
             dsk = opt(dsk, keys, **kwargs)
 
-            for opt in optimizations:
-                dsk = opt(dsk, keys, **kwargs)
+            for opt_inner in optimizations:
+                dsk = opt_inner(dsk, keys, **kwargs)
 
             graphs.append(dsk)
 
@@ -797,7 +798,19 @@ def tokenize(*args, **kwargs):
 
 normalize_token = Dispatch()
 normalize_token.register(
-    (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
+    (
+        int,
+        float,
+        str,
+        bytes,
+        type(None),
+        type,
+        slice,
+        complex,
+        type(Ellipsis),
+        datetime.date,
+    ),
+    identity,
 )
 
 
@@ -982,8 +995,7 @@ def register_numpy():
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (
-                    x.ctypes.get_as_parameter().value
-                    - x.base.ctypes.get_as_parameter().value
+                    x.ctypes._as_parameter_.value - x.base.ctypes._as_parameter_.value
                 )
             else:
                 offset = 0  # root memmap's have mmap object as base

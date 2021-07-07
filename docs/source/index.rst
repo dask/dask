@@ -1,3 +1,8 @@
+.. note::
+
+    Help inform future development and improve the Dask community experience -
+    take the `2021 Dask User Survey <https://forms.gle/F7QSGpSHwBWu8NCg8>`_
+
 ====
 Dask
 ====
@@ -181,7 +186,6 @@ messy situations in everyday problems.
    changelog.rst
    configuration.rst
    configuration-reference.rst
-   educational-resources.rst
    presentations.rst
    cheatsheet.rst
    spark.rst
@@ -191,7 +195,6 @@ messy situations in everyday problems.
    remote-data-services.rst
    gpu.rst
    cite.rst
-   funding.rst
    logos.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com

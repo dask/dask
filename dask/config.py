@@ -623,7 +623,7 @@ def deserialize(data):
     Parameters
     ----------
     data: str
-        String serialied by :func:`dask.config.serialize`
+        String serialized by :func:`dask.config.serialize`
 
     Returns
     -------
