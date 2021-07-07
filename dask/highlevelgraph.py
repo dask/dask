@@ -1194,7 +1194,7 @@ def to_graphviz(
     function_attributes=None,
     rankdir="BT",
     graph_attr={},
-    node_attr=None,
+    node_attr={},
     edge_attr=None,
     **kwargs,
 ):
@@ -1207,34 +1207,31 @@ def to_graphviz(
 
     graph_attr = graph_attr or {}
     graph_attr["rankdir"] = rankdir
+    node_attr["shape"] = "record"
     graph_attr.update(kwargs)
+
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
     )
+
+    n_tasks_dict = {}
+    for layer in hg.dependencies:
+        n_tasks_dict[layer] = len(hg.layers[layer])
+
+    mn = min(n_tasks_dict.values())
+    mx = max(n_tasks_dict.values())
 
     cache = {}
 
     for k in hg.dependencies:
         k_name = name(k)
         attrs = data_attributes.get(k, {})
-        attrs.setdefault("label", label(k, cache=cache))
-        attrs.setdefault("shape", "box")
-        n_tasks = len(hg.layers[k])
-        # print(n_tasks)
-        if n_tasks <= 10:
-            attrs.setdefault("fontsize", "10")
-        elif n_tasks <= 50:
-            attrs.setdefault("fontsize", "17")
-        elif n_tasks <= 100:
-            attrs.setdefault("fontsize", "20")
-        elif n_tasks <= 500:
-            attrs.setdefault("fontsize", "25")
-        elif n_tasks <= 1000:
-            attrs.setdefault("fontsize", "30")
-        else:
-            attrs.setdefault("fontsize", "35")
-        # this implementation is very brute-force-y. will make it clean once the plan is ready.
-
+        xlabel = (
+            "{" + label(k, cache=cache) + " | n_tasks = " + str(n_tasks_dict[k]) + "}"
+        )
+        xfontsize = int(10 + ((n_tasks_dict[k] - mn) / mx) * 20)
+        attrs.setdefault("label", str(xlabel))
+        attrs.setdefault("fontsize", str(xfontsize))
         g.node(k_name, **attrs)
 
     for k, deps in hg.dependencies.items():
