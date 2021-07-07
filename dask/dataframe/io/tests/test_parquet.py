@@ -931,6 +931,7 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     if (
         PANDAS_GT_130
         and read_kwargs.get("categories", None)
+        and engine == "fastparquet"
         and fastparquet.__version__ <= LooseVersion("0.6.3")
     ):
         pytest.xfail("https://github.com/dask/fastparquet/issues/577")
