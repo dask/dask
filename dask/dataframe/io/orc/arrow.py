@@ -20,7 +20,7 @@ class ArrowORCEngine:
 
         # Convert root directory to file list.
         # TODO: Handle hive-partitioned data
-        if len(paths) == 1 and fs.isdir(paths[0]):
+        if len(paths) == 1 and not fs.isfile(paths[0]):
             paths = fs.find(paths[0])
 
         schema = None
