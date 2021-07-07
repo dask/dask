@@ -91,7 +91,7 @@ process would become much more difficult for more complex systems.
 Instead, Dask's lower-level APIs let you write parallel code one function call
 at a time within the context of your existing for loops.  A common solution
 here is to use :doc:`Dask delayed <delayed>` to wrap individual function calls
-into a lazily constructed task graph:
+into a lazily constructed :term:`task graph`:
 
 .. code-block:: python
 

@@ -178,6 +178,7 @@ messy situations in everyday problems.
    :caption: Help & reference
 
    develop.rst
+   terminology.rst
    changelog.rst
    configuration.rst
    configuration-reference.rst
