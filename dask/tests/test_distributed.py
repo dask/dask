@@ -531,45 +531,38 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=5)
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
 
-    trials_allowed = 5
-    for trial in range(trials_allowed):
+    # Test marked as "flaky" since the scheduling behavior
+    # is not deterministic. Note that the test is still
+    # very likely to fail every time if the "split" tasks
+    # are not prioritized correctly
 
-        col = f"a{trial}"
-        df = pd.DataFrame({col: range(1000)})
-        ddf = dd.from_pandas(df, npartitions=10)
-        ddf2 = ddf.shuffle(col, shuffle="tasks", max_branch=32)
-        await c.compute(ddf2)
+    df = pd.DataFrame({"a": range(1000)})
+    ddf = dd.from_pandas(df, npartitions=10)
+    ddf2 = ddf.shuffle("a", shuffle="tasks", max_branch=32)
+    await c.compute(ddf2)
 
-        # Parse transition log for processing tasks
-        log = [
-            eval(l[0])[0]
-            for l in s.transition_log
-            if l[1] == "processing" and "simple-shuffle-" in l[0]
-        ]
+    # Parse transition log for processing tasks
+    log = [
+        eval(l[0])[0]
+        for l in s.transition_log
+        if l[1] == "processing" and "simple-shuffle-" in l[0]
+    ]
 
-        # Make sure most "split" tasks are processing before
-        # any "combine" tasks begin
-        late_split = np.quantile(
-            [i for i, st in enumerate(log) if st.startswith("split")], 0.75
-        )
-        early_combine = np.quantile(
-            [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
-        )
-
-        # Check criteria and allow retry since the behavior
-        # is not deterministic. Note that the test is still
-        # very likely to fail every time if the "split" tasks
-        # are not prioritized correctly
-        if late_split < early_combine:
-            break
-        s.transition_log.clear()
-
+    # Make sure most "split" tasks are processing before
+    # any "combine" tasks begin
+    late_split = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("split")], 0.75
+    )
+    early_combine = np.quantile(
+        [i for i, st in enumerate(log) if st.startswith("simple")], 0.25
+    )
     assert late_split < early_combine
 
 
