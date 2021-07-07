@@ -921,7 +921,13 @@ def test_read_parquet_custom_columns(tmpdir, engine):
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     if "x" in df and df.x.dtype == "M8[ns]" and "arrow" in engine:
         pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
-
+    if (
+        "x" in df
+        and df.x.dtype == "M8[ns]"
+        and engine == "fastparquet"
+        and fastparquet.__version__ <= LooseVersion("0.6.3")
+    ):
+        pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = "index"
