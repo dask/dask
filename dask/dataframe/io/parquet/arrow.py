@@ -197,7 +197,7 @@ def _get_all_partition_keys(ds):
         cat_keys = [
             o.split("=")[0]
             # Assume arrow always uses a normalized "/" sep
-            for o in re.findall("[^/]*=", str(file_frag.path))
+            for o in re.findall("[^/]*=", file_frag.path)
         ]
         if set(categories) == set(cat_keys):
             return {k: categories[k] for k in cat_keys}, pkeys
