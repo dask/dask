@@ -23,7 +23,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.7"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
@@ -89,7 +89,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.8"
           environment-file: continuous_integration/environment-latest.yaml
           activate-environment: test-environment
@@ -119,7 +119,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.7"
           activate-environment: test-environment
           auto-activate-base: false
