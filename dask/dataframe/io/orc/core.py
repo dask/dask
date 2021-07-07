@@ -50,7 +50,7 @@ class ORCEngine:
     """The API necessary to provide a new ORC reader/writer"""
 
     @classmethod
-    def read_metadata(cls, fs, paths, columns, index, partition_stripe_count, **kwargs):
+    def read_metadata(cls, fs, paths, columns, index, split_stripes, **kwargs):
         raise NotImplementedError()
 
     @classmethod
@@ -78,7 +78,7 @@ def read_orc(
     engine="pyarrow",
     columns=None,
     index=None,
-    partition_stripe_count=1,
+    split_stripes=1,
     storage_options=None,
 ):
     """Read dataframe from ORC file(s)
@@ -94,7 +94,7 @@ def read_orc(
         Columns to load. If None, loads all.
     index: str
         Column name to set as index.
-    partition_stripe_count: int or False
+    split_stripes: int or False
         Maximum number of ORC stripes to include in each output-DataFrame
         partition. Use False to specify a 1-to-1 mapping between files
         and partitions. Default is 1.
@@ -128,7 +128,7 @@ def read_orc(
         paths,
         columns,
         index,
-        partition_stripe_count,
+        split_stripes,
     )
 
     # Construct and return a Blockwise layer

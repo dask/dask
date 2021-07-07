@@ -8,7 +8,6 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe import read_orc
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 
@@ -37,7 +36,7 @@ columns = ["time", "date"]
 @pytest.mark.network
 def test_orc_with_backend():
     pytest.importorskip("requests")
-    d = read_orc(url)
+    d = dd.read_orc(url)
     assert set(d.columns) == {"time", "date"}  # order is not guaranteed
     assert len(d) == 70000
 
@@ -57,17 +56,17 @@ def orc_files():
         shutil.rmtree(d, ignore_errors=True)
 
 
-@pytest.mark.parametrize("partition_stripe_count", [1, 2])
-def test_orc_single(orc_files, partition_stripe_count):
+@pytest.mark.parametrize("split_stripes", [1, 2])
+def test_orc_single(orc_files, split_stripes):
     fn = orc_files[0]
-    d = read_orc(fn, partition_stripe_count=partition_stripe_count)
+    d = dd.read_orc(fn, split_stripes=split_stripes)
     assert len(d) == 70000
-    assert d.npartitions == 8 / partition_stripe_count
-    d2 = read_orc(fn, columns=["time", "date"])
+    assert d.npartitions == 8 / split_stripes
+    d2 = dd.read_orc(fn, columns=["time", "date"])
     assert_eq(d[columns], d2[columns], check_index=False)
 
     with pytest.raises(ValueError, match="nonexist"):
-        read_orc(fn, columns=["time", "nonexist"])
+        dd.read_orc(fn, columns=["time", "nonexist"])
 
     # Check that `optimize_dataframe_getitem` changes the
     # `columns` attribute of the "read-orc" layer
@@ -79,10 +78,10 @@ def test_orc_single(orc_files, partition_stripe_count):
 
 
 def test_orc_multiple(orc_files):
-    d = read_orc(orc_files[0])
-    d2 = read_orc(orc_files)
+    d = dd.read_orc(orc_files[0])
+    d2 = dd.read_orc(orc_files)
     assert_eq(d2[columns], dd.concat([d, d])[columns], check_index=False)
-    d2 = read_orc(os.path.dirname(orc_files[0]) + "/*.orc")
+    d2 = dd.read_orc(os.path.dirname(orc_files[0]) + "/*.orc")
     assert_eq(d2[columns], dd.concat([d, d])[columns], check_index=False)
 
 
