@@ -14,7 +14,7 @@ import dask
 import dask.dataframe as dd
 import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
-from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121
+from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
@@ -928,6 +928,13 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         and fastparquet.__version__ <= LooseVersion("0.6.3")
     ):
         pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
+    if (
+        PANDAS_GT_130
+        and read_kwargs.get("categories", None)
+        and fastparquet.__version__ <= LooseVersion("0.6.3")
+    ):
+        pytest.xfail("https://github.com/dask/fastparquet/issues/577")
+
     tmp = str(tmpdir)
     if df.index.name is None:
         df.index.name = "index"
