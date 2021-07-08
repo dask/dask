@@ -11,7 +11,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
 
     # FIXME https://github.com/mamba-org/mamba/issues/412
     # mamba uninstall --force numpy pandas
-    conda uninstall --force numpy pandas
+    conda uninstall --force numpy pandas fastparquet
 
     python -m pip install --no-deps --pre \
         -i https://pypi.anaconda.org/scipy-wheels-nightly/simple \
