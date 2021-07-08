@@ -1207,7 +1207,7 @@ def to_graphviz(
 
     graph_attr = graph_attr or {}
     graph_attr["rankdir"] = rankdir
-    node_attr["shape"] = "record"
+    node_attr["shape"] = "box"
     graph_attr.update(kwargs)
 
     g = graphviz.Digraph(
@@ -1226,11 +1226,8 @@ def to_graphviz(
     for k in hg.dependencies:
         k_name = name(k)
         attrs = data_attributes.get(k, {})
-        xlabel = (
-            "{" + label(k, cache=cache) + " | n_tasks = " + str(n_tasks_dict[k]) + "}"
-        )
         xfontsize = int(10 + ((n_tasks_dict[k] - mn) / mx) * 20)
-        attrs.setdefault("label", str(xlabel))
+        attrs.setdefault("label", label(k, cache=cache))
         attrs.setdefault("fontsize", str(xfontsize))
         g.node(k_name, **attrs)
 
