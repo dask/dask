@@ -134,6 +134,7 @@ try:
         rot90,
         round,
         searchsorted,
+        select,
         shape,
         squeeze,
         swapaxes,

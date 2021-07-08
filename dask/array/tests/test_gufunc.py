@@ -56,6 +56,16 @@ def test_apply_gufunc_axes_input_validation_01():
         apply_gufunc(foo, "(i)->()", a, axes=[0, 0])
 
 
+def test_apply_gufunc_axes_args_validation():
+    def add(x, y):
+        return x + y
+
+    a = da.from_array(np.array([1, 2, 3]), chunks=2, name="a")
+    b = da.from_array(np.array([1, 2, 3]), chunks=2, name="b")
+    with pytest.raises(ValueError):
+        apply_gufunc(add, "(),()->()", a, b, 0, output_dtypes=a.dtype)
+
+
 def test__validate_normalize_axes_01():
     with pytest.raises(ValueError):
         _validate_normalize_axes([(1, 0)], None, False, [("i", "j")], ("j",))
@@ -146,14 +156,15 @@ def test_apply_gufunc_output_dtypes_string(vectorize):
 @pytest.mark.parametrize("vectorize", [False, True])
 def test_apply_gufunc_output_dtypes_string_many_outputs(vectorize):
     def stats(x):
-        return np.mean(x, axis=-1), np.std(x, axis=-1)
+        return np.mean(x, axis=-1), np.std(x, axis=-1), np.min(x, axis=-1)
 
     a = da.random.normal(size=(10, 20, 30), chunks=(5, 5, 30))
-    mean, std = apply_gufunc(
-        stats, "(i)->(),()", a, output_dtypes=("f", "f"), vectorize=vectorize
+    mean, std, min = apply_gufunc(
+        stats, "(i)->(),(),()", a, output_dtypes=("f", "f", "f"), vectorize=vectorize
     )
     assert mean.compute().shape == (10, 20)
     assert std.compute().shape == (10, 20)
+    assert min.compute().shape == (10, 20)
 
 
 def test_apply_gufunc_pass_additional_kwargs():
@@ -161,8 +172,8 @@ def test_apply_gufunc_pass_additional_kwargs():
         assert bar == 2
         return x
 
-    ret = apply_gufunc(foo, "()->()", 1.0, output_dtypes="f", bar=2)
-    assert_eq(ret, np.array(1.0, dtype="f"))
+    ret = apply_gufunc(foo, "()->()", 1.0, output_dtypes=float, bar=2)
+    assert_eq(ret, np.array(1.0, dtype=float))
 
 
 def test_apply_gufunc_02():
@@ -306,6 +317,17 @@ def test_gufunc_mixed_inputs():
     b = da.ones((1, 8), chunks=(2, 3), dtype=int)
     x = apply_gufunc(foo, "(),()->()", a, b, output_dtypes=int)
     assert_eq(x, 2 * np.ones((2, 8), dtype=int))
+
+
+def test_gufunc_mixed_inputs_vectorize():
+    def foo(x, y):
+        return (x + y).sum(axis=1)
+
+    a = da.ones((8, 3, 5), chunks=(2, 3, 5), dtype=int)
+    b = np.ones(5, dtype=int)
+    x = apply_gufunc(foo, "(m,n),(n)->(m)", a, b, vectorize=True)
+
+    assert_eq(x, np.full((8, 3), 10, dtype=int))
 
 
 def test_gufunc():

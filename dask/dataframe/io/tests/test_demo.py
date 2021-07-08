@@ -14,8 +14,8 @@ def test_make_timeseries():
         "2000", "2015", {"A": float, "B": int, "C": str}, freq="2D", partition_freq="6M"
     )
 
-    assert df.divisions[0] == pd.Timestamp("2000-01-31", freq="6M")
-    assert df.divisions[-1] == pd.Timestamp("2014-07-31", freq="6M")
+    assert df.divisions[0] == pd.Timestamp("2000-01-31")
+    assert df.divisions[-1] == pd.Timestamp("2014-07-31")
     tm.assert_index_equal(df.columns, pd.Index(["A", "B", "C"]))
     assert df["A"].head().dtype == float
     assert df["B"].head().dtype == int
@@ -113,6 +113,7 @@ def test_no_overlaps():
     )
 
 
+@pytest.mark.xfail(reason="https://github.com/pydata/pandas-datareader/issues/867")
 @pytest.mark.network
 def test_daily_stock():
     pytest.importorskip("pandas_datareader", minversion="0.8.0")

@@ -1,3 +1,4 @@
+import contextlib
 import math
 import operator
 import os
@@ -34,6 +35,7 @@ from ..context import globalmethod
 from ..core import quote
 from ..delayed import Delayed, delayed
 from ..highlevelgraph import HighLevelGraph
+from ..layers import reshapelist
 from ..sizeof import sizeof
 from ..utils import (
     IndexCallable,
@@ -46,7 +48,6 @@ from ..utils import (
     format_bytes,
     funcname,
     has_keyword,
-    ignoring,
     is_arraylike,
     is_dataframe_like,
     is_index_like,
@@ -368,8 +369,13 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
+    from .utils import meta_from_array, ones_like_safe
+
+    # make sure that every arg is an evaluated array
     args = [
-        np.ones((1,) * x.ndim, dtype=x.dtype) if isinstance(x, Array) else x
+        ones_like_safe(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+        if is_arraylike(x)
+        else x
         for x in args
     ]
     try:
@@ -1152,18 +1158,20 @@ class Array(DaskMethodsMixin):
         else:
             if layer.collection_annotations is None:
                 layer.collection_annotations = {
-                    "type": type(self),
-                    "chunk_type": type(self._meta),
-                    "chunks": self.chunks,
-                    "dtype": dtype,
+                    "shape": self.shape,
+                    "dtype": self.dtype,
+                    "chunksize": self.chunksize,
+                    "type": typename(type(self)),
+                    "chunk_type": typename(type(self._meta)),
                 }
             else:
                 layer.collection_annotations.update(
                     {
-                        "type": type(self),
-                        "chunk_type": type(self._meta),
-                        "chunks": self.chunks,
-                        "dtype": dtype,
+                        "shape": self.shape,
+                        "dtype": self.dtype,
+                        "chunksize": self.chunksize,
+                        "type": typename(type(self)),
+                        "chunk_type": typename(type(self._meta)),
                     }
                 )
 
@@ -1298,7 +1306,11 @@ class Array(DaskMethodsMixin):
 
     @property
     def dtype(self):
-        return self._meta.dtype
+        if isinstance(self._meta, tuple):
+            dtype = self._meta[0].dtype
+        else:
+            dtype = self._meta.dtype
+        return dtype
 
     @property
     def _chunks(self):
@@ -3302,8 +3314,7 @@ def to_zarr(
         paths)
     overwrite: bool
         If given array already exists, overwrite=False will cause an error,
-        where overwrite=True will replace the existing data.  Note that this
-        check is done at computation time, not during graph creation.
+        where overwrite=True will replace the existing data.
     compute: bool
         See :func:`~dask.array.store` for more details.
     return_stored: bool
@@ -3358,14 +3369,7 @@ def to_zarr(
 
     chunks = [c[0] for c in arr.chunks]
 
-    # The zarr.create function has the side-effect of immediately
-    # creating metadata on disk.  This may not be desired,
-    # particularly if compute=False.  The caller may be creating many
-    # arrays on a slow filesystem, with the desire that any I/O be
-    # sharded across workers (not done serially on the originating
-    # machine).  Or the caller may decide later to not to do this
-    # computation, and so nothing should be written to disk.
-    z = delayed(zarr.create)(
+    z = zarr.create(
         shape=arr.shape,
         chunks=chunks,
         dtype=arr.dtype,
@@ -4312,6 +4316,7 @@ def elemwise(op, *args, **kwargs):
 
     need_enforce_dtype = False
     if "dtype" in kwargs:
+        need_enforce_dtype = True
         dt = kwargs["dtype"]
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
@@ -4544,7 +4549,7 @@ def offset_func(func, offset, *args):
         args2 = list(map(add, args, offset))
         return func(*args2)
 
-    with ignoring(Exception):
+    with contextlib.suppress(Exception):
         _offset.__name__ = "offset_" + func.__name__
 
     return _offset
@@ -4604,19 +4609,6 @@ def shapelist(a):
         return tuple([len(a)] + list(shapelist(a[0])))
     else:
         return ()
-
-
-def reshapelist(shape, seq):
-    """Reshape iterator to nested shape
-
-    >>> reshapelist((2, 3), range(6))
-    [[0, 1, 2], [3, 4, 5]]
-    """
-    if len(shape) == 1:
-        return list(seq)
-    else:
-        n = int(len(seq) / shape[0])
-        return [reshapelist(shape[1:], part) for part in partition(n, seq)]
 
 
 def transposelist(arrays, axes, extradims=0):

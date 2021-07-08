@@ -12,6 +12,8 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.sizeof import SimpleSizeof, sizeof
+
 from ..utils import is_arraylike, typename
 from ._compat import PANDAS_GT_100
 from .core import DataFrame, Index, Scalar, Series, _Frame
@@ -23,7 +25,7 @@ from .dispatch import (
     group_split_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
-    make_meta,
+    make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
     tolist_dispatch,
@@ -57,12 +59,12 @@ def _(x):
     return x
 
 
-@make_meta.register((pd.Series, pd.DataFrame))
+@make_meta_dispatch.register((pd.Series, pd.DataFrame))
 def make_meta_pandas(x, index=None):
     return x.iloc[:0]
 
 
-@make_meta.register(pd.Index)
+@make_meta_dispatch.register(pd.Index)
 def make_meta_index(x, index=None):
     return x[0:0]
 
@@ -74,6 +76,12 @@ try:
     meta_object_types += (sp.spmatrix,)
 except ImportError:
     pass
+
+
+@meta_nonempty.register(pd.DatetimeTZDtype)
+@make_meta_dispatch.register(pd.DatetimeTZDtype)
+def make_meta_pandas_datetime_tz(x, index=None):
+    return _nonempty_scalar(x)
 
 
 @make_meta_obj.register(meta_object_types)
@@ -109,7 +117,7 @@ def make_meta_object(x, index=None):
         return x[:0]
 
     if index is not None:
-        index = make_meta(index)
+        index = make_meta_dispatch(index)
 
     if isinstance(x, dict):
         return pd.DataFrame(
@@ -335,6 +343,23 @@ def hash_object_pandas(
     )
 
 
+class ShuffleGroupResult(SimpleSizeof, dict):
+    def __sizeof__(self) -> int:
+        """
+        The result of the shuffle split are typically small dictionaries
+        (#keys << 100; typically <= 32) The splits are often non-uniformly
+        distributed. Some of the splits may even be empty. Sampling the
+        dictionary for size estimation can cause severe errors.
+
+        See also https://github.com/dask/distributed/issues/4962
+        """
+        total_size = super().__sizeof__()
+        for k, df in self.items():
+            total_size += sizeof(k)
+            total_size += sizeof(df)
+        return total_size
+
+
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
     indexer, locations = pd._libs.algos.groupsort_indexer(
@@ -346,7 +371,7 @@ def group_split_pandas(df, c, k, ignore_index=False):
         df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
         for a, b in zip(locations[:-1], locations[1:])
     ]
-    return dict(zip(range(k), parts))
+    return ShuffleGroupResult(zip(range(k), parts))
 
 
 @concat_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
@@ -524,7 +549,7 @@ def is_categorical_dtype_pandas(obj):
 @group_split_dispatch.register_lazy("cudf")
 @get_parallel_type.register_lazy("cudf")
 @meta_nonempty.register_lazy("cudf")
-@make_meta.register_lazy("cudf")
+@make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
