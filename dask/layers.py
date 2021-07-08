@@ -342,26 +342,7 @@ def fractional_slice(task, axes):
 #
 
 
-class DataFrameLayer(Layer):
-    """DataFrame-based HighLevelGraph Layer"""
-
-    def project_columns(self, output_columns):
-        """Produce a column projection for this layer.
-        Given a list of required output columns, this method
-        returns a tuple with the projected layer, and any column
-        dependencies for this layer.  A value of ``None`` for
-        ``output_columns`` means that the current layer (and
-        any dependent layers) cannot be projected. This method
-        should be overridden by specialized DataFrame layers
-        to enable column projection.
-        """
-
-        # Default behavior.
-        # Return: `projected_layer`, `dep_columns`
-        return self, None
-
-
-class SimpleShuffleLayer(DataFrameLayer):
+class SimpleShuffleLayer(Layer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -852,7 +833,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return dsk
 
 
-class BroadcastJoinLayer(DataFrameLayer):
+class BroadcastJoinLayer(Layer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -1147,7 +1128,7 @@ class BroadcastJoinLayer(DataFrameLayer):
         return dsk
 
 
-class DataFrameIOLayer(Blockwise, DataFrameLayer):
+class DataFrameIOLayer(Blockwise):
     """DataFrame-based Blockwise Layer with IO
 
     Parameters
@@ -1213,7 +1194,14 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
         )
 
     def project_columns(self, columns):
-        # Method inherited from `DataFrameLayer.project_columns`
+        """Produce a column projection for this layer.
+        Given a list of required output columns, this method
+        returns a tuple with the projected layer, and any column
+        dependencies for this layer.  A value of ``None`` for
+        ``output_columns`` means that the current layer (and
+        any dependent layers) cannot be projected.
+        """
+
         if columns and (self.columns is None or columns < set(self.columns)):
 
             # Apply column projection in IO function
@@ -1230,9 +1218,11 @@ class DataFrameIOLayer(Blockwise, DataFrameLayer):
                 produces_tasks=self.produces_tasks,
                 annotations=self.annotations,
             )
+            # Return: `projected_layer`, `dep_columns`
             return layer, None
         else:
             # Default behavior
+            # Return: `projected_layer`, `dep_columns`
             return self, None
 
     def __repr__(self):
