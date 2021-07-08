@@ -121,7 +121,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
     LooseVersion(pa.__version__) < "4.0.0",
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
-@pytest.mark.parametrize("split_stripes", [True, 2, 4])
+@pytest.mark.parametrize("split_stripes", [True, False, 2, 4])
 def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
     tmp = str(tmpdir)
     data = pd.DataFrame(
@@ -136,7 +136,10 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
 
     # Check that we have the expected partition count
     # and that the data is correct
-    assert df2.npartitions == df.npartitions / split_stripes
+    if split_stripes:
+        assert df2.npartitions == df.npartitions / int(split_stripes)
+    else:
+        assert df2.npartitions == df.npartitions
     assert_eq(data, df2, check_index=False)
 
 

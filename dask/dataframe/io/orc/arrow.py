@@ -26,25 +26,42 @@ class ArrowORCEngine:
 
         schema = None
         parts = []
-        offset = 0
-        for path in paths:
-            with fs.open(path, "rb") as f:
-                o = orc.ORCFile(f)
+
+        def _get_schema(_o, schema):
+            if schema is None:
+                schema = _o.schema
+            elif schema != _o.schema:
+                raise ValueError("Incompatible schemas while parsing ORC files")
+            return schema
+
+        if split_stripes:
+            offset = 0
+            for path in paths:
+                with fs.open(path, "rb") as f:
+                    o = orc.ORCFile(f)
+                    if schema is None:
+                        schema = o.schema
+                    elif schema != o.schema:
+                        raise ValueError("Incompatible schemas while parsing ORC files")
+                    _stripes = list(range(o.nstripes))
+                    if offset:
+                        parts.append([(path, _stripes[0:offset])])
+                    while offset < o.nstripes:
+                        parts.append(
+                            [(path, _stripes[offset : offset + int(split_stripes)])]
+                        )
+                        offset += int(split_stripes)
+                    if aggregate_files and int(split_stripes) > 1:
+                        offset -= o.nstripes
+                    else:
+                        offset = 0
+        else:
+            for path in paths:
                 if schema is None:
-                    schema = o.schema
-                elif schema != o.schema:
-                    raise ValueError("Incompatible schemas while parsing ORC files")
-                _stripes = list(range(o.nstripes))
-                if offset:
-                    parts.append([(path, _stripes[0:offset])])
-                take_stripes = int(split_stripes) if split_stripes else o.nstripes
-                while offset < o.nstripes:
-                    parts.append([(path, _stripes[offset : offset + take_stripes])])
-                    offset += take_stripes
-                if aggregate_files and int(split_stripes) > 1:
-                    offset -= o.nstripes
-                else:
-                    offset = 0
+                    with fs.open(paths[0], "rb") as f:
+                        o = orc.ORCFile(f)
+                        schema = o.schema
+                parts.append([(path, None)])
 
         schema = _get_pyarrow_dtypes(schema, categories=None)
         if columns is not None:
@@ -108,6 +125,7 @@ def _read_orc_stripes(fs, path, stripes, schema, columns):
     batches = []
     with fs.open(path, "rb") as f:
         o = orc.ORCFile(f)
-        for stripe in stripes:
+        _stripes = range(o.nstripes) if stripes is None else stripes
+        for stripe in _stripes:
             batches.append(o.read_stripe(stripe, columns))
     return batches
