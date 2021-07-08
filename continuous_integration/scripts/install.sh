@@ -27,6 +27,7 @@ if [[ ${UPSTREAM_DEV} ]]; then
         git+https://github.com/dask/partd \
         git+https://github.com/dask/zict \
         git+https://github.com/dask/distributed \
+        git+https://github.com/dask/fastparquet \
         git+https://github.com/zarr-developers/zarr-python
 fi
 
