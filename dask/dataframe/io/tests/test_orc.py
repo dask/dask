@@ -115,3 +115,61 @@ def test_orc_roundtrip(tmpdir, index, columns):
     # Read
     df2 = dd.read_orc(tmp, index=index, columns=columns)
     assert_eq(data, df2, check_index=bool(index))
+
+
+@pytest.mark.skipif(
+    LooseVersion(pa.__version__) < "4.0.0",
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
+@pytest.mark.parametrize("split_stripes", [True, 2, 4])
+def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
+    tmp = str(tmpdir)
+    data = pd.DataFrame(
+        {
+            "a": np.arange(100, dtype=np.float64),
+            "b": np.random.choice(["cat", "dog", "mouse"], size=100),
+        }
+    )
+    df = dd.from_pandas(data, npartitions=8)
+    df.to_orc(tmp, write_index=False)
+    df2 = dd.read_orc(tmp, split_stripes=split_stripes, aggregate_files=True)
+
+    # Check that we have the expected partition count
+    # and that the data is correct
+    assert df2.npartitions == df.npartitions / split_stripes
+    assert_eq(data, df2, check_index=False)
+
+
+@pytest.mark.slow
+@pytest.mark.skipif(
+    LooseVersion(pa.__version__) < "4.0.0",
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
+def test_orc_roundtrip_aggregate_files_offset(tmpdir):
+
+    # TODO: Figure out a better way to test multi-stripe
+    # behavior.  There is currently no way to specify the
+    # stripe size when writing ORC files with pyarrow.
+
+    data = pd.DataFrame(
+        {
+            "a": np.arange(80_000_000, dtype=np.float64),
+            "b": np.random.choice(["cat", "dog", "mouse"], size=80_000_000),
+        }
+    )
+
+    tmp = str(tmpdir)
+    df = dd.from_pandas(data, npartitions=2)
+
+    # The following command is expected to write a
+    # distinct ORC file for each of the two partitions.
+    # Using pyarrow-4, each file contains TWO stripes.
+    df.to_orc(tmp, write_index=False)
+
+    # If we aggregate files and specify `split_stripes=3`,
+    # we should get TWO partitions after reading back.
+    # However, the first partition should now be larger than
+    # the second partition.
+    df2 = dd.read_orc(tmp, split_stripes=3, aggregate_files=True)
+    assert df2.npartitions == 2
+    assert len(df2.partitions[0].index) > 40_000_000

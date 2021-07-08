@@ -79,6 +79,7 @@ def read_orc(
     columns=None,
     index=None,
     split_stripes=1,
+    aggregate_files=None,
     storage_options=None,
 ):
     """Read dataframe from ORC file(s)
@@ -98,6 +99,11 @@ def read_orc(
         Maximum number of ORC stripes to include in each output-DataFrame
         partition. Use False to specify a 1-to-1 mapping between files
         and partitions. Default is 1.
+    aggregate_files : bool, default False
+        Whether distinct file paths may be aggregated into the same output
+        partition. A setting of True means that any two file paths may be
+        aggregated into the same output partition, while False means that
+        inter-file aggregation is prohibited.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
 
@@ -129,6 +135,7 @@ def read_orc(
         columns,
         index,
         split_stripes,
+        aggregate_files,
     )
 
     # Construct and return a Blockwise layer

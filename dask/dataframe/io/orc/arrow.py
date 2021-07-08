@@ -14,7 +14,8 @@ class ArrowORCEngine:
         paths,
         columns,
         index,
-        partition_stripe_count,
+        split_stripes,
+        aggregate_files,
         **kwargs,
     ):
 
@@ -25,26 +26,26 @@ class ArrowORCEngine:
 
         schema = None
         parts = []
+        offset = 0
         for path in paths:
-            _stripes = []
             with fs.open(path, "rb") as f:
                 o = orc.ORCFile(f)
                 if schema is None:
                     schema = o.schema
                 elif schema != o.schema:
                     raise ValueError("Incompatible schemas while parsing ORC files")
-                for stripe in range(o.nstripes):
-                    # TODO: Can filter out stripes here
-                    _stripes.append(stripe)
-                    if (
-                        partition_stripe_count
-                        and len(_stripes) >= partition_stripe_count
-                    ):
-                        parts.append([(path, _stripes)])
-                        _stripes = []
-            if _stripes:
-                # TODO: Enable multi-file parts
-                parts.append([(path, _stripes)])
+                _stripes = list(range(o.nstripes))
+                if offset:
+                    parts.append([(path, _stripes[0:offset])])
+                take_stripes = int(split_stripes) if split_stripes else o.nstripes
+                while offset < o.nstripes:
+                    parts.append([(path, _stripes[offset : offset + take_stripes])])
+                    offset += take_stripes
+                if aggregate_files and int(split_stripes) > 1:
+                    offset -= o.nstripes
+                else:
+                    offset = 0
+
         schema = _get_pyarrow_dtypes(schema, categories=None)
         if columns is not None:
             ex = set(columns) - set(schema)
@@ -53,10 +54,33 @@ class ArrowORCEngine:
                     "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
                 )
 
+        # Check if we can aggregate adjacent parts together
+        parts = cls._aggregate_files(aggregate_files, split_stripes, parts)
+
         columns = list(schema) if columns is None else columns
         index = [index] if isinstance(index, str) else index
         meta = _meta_from_dtypes(columns, schema, index, [])
         return parts, schema, meta
+
+    @classmethod
+    def _aggregate_files(cls, aggregate_files, split_stripes, parts):
+        if aggregate_files is True and int(split_stripes) > 1 and len(parts) > 1:
+            new_parts = []
+            new_part = parts[0]
+            nstripes = len(new_part[0][1])
+            for part in parts[1:]:
+                next_nstripes = len(part[0][1])
+                if next_nstripes + nstripes <= split_stripes:
+                    new_part.append(part[0])
+                    nstripes += next_nstripes
+                else:
+                    new_parts.append(new_part)
+                    new_part = part
+                    nstripes = next_nstripes
+            new_parts.append(new_part)
+            return new_parts
+        else:
+            return parts
 
     @classmethod
     def read_partition(cls, fs, parts, schema, columns, **kwargs):
