@@ -263,13 +263,13 @@ class FastParquetEngine(Engine):
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
         index_cols = index or ()
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
         if isinstance(index_cols, str):
             index_cols = [index_cols]
-
-        # fastparquet doesn't handle multiindex
-        if len(index_names) > 1:
-            raise ValueError("fastparquet cannot read DataFrame with MultiIndex.")
+        for ind in index_cols:
+            if getattr(dtypes.get(ind), "numpy_dtype", None):
+                # index does not support masked types
+                dtypes[ind] = dtypes[ind].numpy_dtype
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
 
         for cat in categories:
             if cat in meta:
