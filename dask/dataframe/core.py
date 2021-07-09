@@ -1,4 +1,5 @@
 import copy
+import functools
 import operator
 import warnings
 from collections.abc import Iterator, Sequence
@@ -29,6 +30,7 @@ from ..array.core import Array, normalize_arg
 from ..array.utils import zeros_like_safe
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from ..blockwise import Blockwise, blockwise, subs
+from ..layers import DataFrameBlockwise
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
@@ -3909,7 +3911,7 @@ class DataFrame(_Frame):
 
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(operator.getitem, name, self, key, column_dependencies=False)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         elif isinstance(key, slice):
@@ -3934,7 +3936,7 @@ class DataFrame(_Frame):
             # error is raised from pandas
             meta = self._meta[_extract_meta(key)]
 
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(operator.getitem, name, self, key, column_dependencies=False)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
         if isinstance(key, Series):
@@ -3943,7 +3945,7 @@ class DataFrame(_Frame):
                 from .multi import _maybe_align_partitions
 
                 self, key = _maybe_align_partitions([self, key])
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
+            dsk = partitionwise_graph(operator.getitem, name, self, key, column_dependencies=False)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self, key])
             return new_dd_object(graph, name, self, self.divisions)
         if isinstance(key, DataFrame):
@@ -4276,6 +4278,7 @@ class DataFrame(_Frame):
 
         # Figure out columns of the output
         df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
+
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
     @derived_from(pd.DataFrame, ua_args=["index"])
@@ -5191,6 +5194,7 @@ def elemwise(op, *args, **kwargs):
     --------
     >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
     """
+    column_dependencies = kwargs.pop("column_dependencies", None)
     meta = kwargs.pop("meta", no_default)
     out = kwargs.pop("out", None)
     transform_divisions = kwargs.pop("transform_divisions", True)
@@ -5247,7 +5251,7 @@ def elemwise(op, *args, **kwargs):
     ]
 
     # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
+    dsk = partitionwise_graph(op, _name, *args, column_dependencies=column_dependencies, **kwargs)
 
     graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
 
@@ -6822,7 +6826,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
         return get_parallel_type(meta)(dsk, name, meta, divisions)
 
 
-def partitionwise_graph(func, name, *args, **kwargs):
+def partitionwise_graph(func, name, *args, column_dependencies=None, **kwargs):
     """
     Apply a function partition-wise across arguments to create layer of a graph
 
@@ -6879,7 +6883,17 @@ def partitionwise_graph(func, name, *args, **kwargs):
         else:
             pairs.extend([arg, None])
     return blockwise(
-        func, name, "i", *pairs, numblocks=numblocks, concatenate=True, **kwargs
+        func,
+        name,
+        "i",
+        *pairs,
+        numblocks=numblocks,
+        concatenate=True,
+        initializer=functools.partial(
+            DataFrameBlockwise,
+            column_dependencies=column_dependencies,
+        ),
+        **kwargs,
     )
 
 

@@ -341,8 +341,93 @@ def fractional_slice(task, axes):
 ##
 #
 
+class DataFrameLayer(Layer):
+    """DataFrame-Layer Base Class
+    
+    The purpose of this class is to define
+    DataFrame specific attributes that should be
+    available on all DataFrame-based HLG Layers.
+    """
+    def required_input_columns(output_columns):
+        """ Return the required column dependencies
+        to produce the desired ``output_columns``.
+        A return value of ``None`` (the default)
+        should be interpretted as: "All available
+        columns are required."
+        """
+        return None
 
-class SimpleShuffleLayer(Layer):
+class DataFrameBlockwise(Blockwise, DataFrameLayer):
+    """DataFrame-Based Blockwise Layer
+    
+    The entire purpose of this class is to attach
+    DataFrameLayer attributes to the Blockwise class.
+    """
+    def __init__(self, *args, **kwargs):
+        self._column_dependencies = kwargs.pop("column_dependencies", None)
+        super().__init__(*args, **kwargs)
+
+    @classmethod
+    def from_blockwise(cls, layer, column_dependencies=None):
+        """Convert a Blockwise Layer to DataFrameBlockwise
+        
+        WARNING: Experimental.
+        """
+        return cls(
+            output=layer.output,
+            output_indices=layer.output_indices,
+            dsk=layer.dsk,
+            indices=layer.indices,
+            numblocks=layer.numblocks,
+            concatenate=layer.concatenate,
+            new_axes=layer.new_axes,
+            output_blocks=layer.output_blocks,
+            annotations=layer.annotations,
+            io_deps=layer.io_deps,
+            column_dependencies=None,
+        )
+
+    def required_input_columns(output_columns):
+        """ Blockwise column-dependency logic.
+
+        Uses the _column_dependencies attribute to return a
+        set containing all columns required to produce
+        `output_columns`. 
+        """
+        if isinstance(self._column_dependencies, dict):
+            if self._column_dependencies:
+                # Use the `_column_dependencies` dictionary
+                # to construct a set of required input columns.
+                # If an output-column name is not a key in
+                # `_column_dependencies`, we assume that the column
+                # is being "passed through" with the same name.
+                required_columns = set()
+                for col in output_columns:
+                    required_columns != self._column_dependencies.get(set(col), {col})
+                return required_columns
+            else:
+                # No dependencies between columns, so we are
+                # just passing columns through
+                return output_columns
+        elif self._column_dependencies is False:
+            # No dependencies between columns, so we are
+            # just passing columns through
+            return output_columns
+        elif self._column_dependencies is None:
+            # No column-dependency information available.
+            # Return None to imply that we need all available
+            # input columns
+            return None
+        else:
+            raise ValueError(
+                f"{type(self._column_dependencies)} is not a supported "
+                f"type for _column_dependencies attribute."
+            )
+
+    def __repr__(self):
+        return "DataFrameBlockwise<{} -> {}>".format(self.indices, self.output)
+
+class SimpleShuffleLayer(DataFrameLayer):
     """Simple HighLevelGraph Shuffle layer
 
     High-level graph layer for a simple shuffle operation in which
@@ -833,7 +918,7 @@ class ShuffleLayer(SimpleShuffleLayer):
         return dsk
 
 
-class BroadcastJoinLayer(Layer):
+class BroadcastJoinLayer(DataFrameLayer):
     """Broadcast-based Join Layer
 
     High-level graph layer for a join operation requiring the
@@ -1128,7 +1213,7 @@ class BroadcastJoinLayer(Layer):
         return dsk
 
 
-class DataFrameIOLayer(Blockwise):
+class DataFrameIOLayer(DataFrameBlockwise):
     """DataFrame-based Blockwise Layer with IO
 
     Parameters
