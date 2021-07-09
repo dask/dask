@@ -1226,7 +1226,7 @@ def to_graphviz(
     for k in hg.dependencies:
         k_name = name(k)
         attrs = data_attributes.get(k, {})
-        xfontsize = int(10 + ((n_tasks_dict[k] - mn) / mx) * 20)
+        xfontsize = int(20 + ((n_tasks_dict[k] - mn) / mx) * 20)
         attrs.setdefault("label", label(k, cache=cache))
         attrs.setdefault("fontsize", str(xfontsize))
         g.node(k_name, **attrs)
