@@ -25,26 +25,15 @@ Access Configuration
 .. autosummary::
    dask.config.get
 
-Configuration is usually read by using the ``dask.config`` module, either with
-the ``config`` dictionary or the ``get`` function. You can use ``.`` for nested access, 
+Dask configuration system is usually accessed using the :func:dask.config.get function. You can use ``.`` for nested access, 
 for example:
-
-   >>> dask.config.get("distributed.client")
-   {'heartbeat': '5s', 'scheduler-info-interval': '2s'} # use `.` for nested access
+   >>> import dask
+   >>>import.dask.distributed
+   >>> dask.config.get("distributed.client") # use `.` for nested access
+   {'heartbeat': '5s', 'scheduler-info-interval': '2s'} 
 
    >>> dask.config.get("distributed.scheduler.unknown-task-duration")
    '500ms'
-
-   >>> dask.config.get("distributed.worker.memory")
-   {'pause': 0.8,
-    'rebalance': {'measure': 'optimistic',
-                  'recipient-max': 0.6,
-                  'sender-min': 0.3,
-                  'sender-recipient-gap': 0.1},
-    'recent-to-old-time': '30s',
-    'spill': 0.7,
-    'target': 0.6,
-    'terminate': 0.95}
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
@@ -67,12 +56,15 @@ some of the workers memory configuration default values in distributed:
 
 .. code-block:: yaml
 
+   array:
+     chunk-size: 128 MiB
+     
    distributed:
-         workers: 
-            memory:
-               spill     : 0.85  # default: 0.7
-               target    : 0.75  # default: 0.6
-               terminate : 0.98  # default: 0.95
+      workers: 
+         memory:
+            spill     : 0.85  # default: 0.7
+            target    : 0.75  # default: 0.6
+            terminate : 0.98  # default: 0.95
 
 
 These files can live in any of the following locations:
