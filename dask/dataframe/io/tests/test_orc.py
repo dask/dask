@@ -1,9 +1,9 @@
 import os
 import shutil
 import tempfile
-from distutils.version import LooseVersion
 
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 from dask.dataframe import read_orc
@@ -16,7 +16,7 @@ pytest.importorskip("pyarrow.orc")
 import pyarrow as pa
 
 pytestmark = pytest.mark.skipif(
-    LooseVersion(pa.__version__) == "0.10.0",
+    parse_version(pa.__version__).base_version == parse_version("0.10.0"),
     reason=(
         "PyArrow 0.10.0 release broke the ORC reader, see "
         "https://issues.apache.org/jira/browse/ARROW-3009"

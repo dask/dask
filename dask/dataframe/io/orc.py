@@ -1,6 +1,5 @@
-from distutils.version import LooseVersion
-
 from fsspec.core import get_fs_token_paths
+from packaging.version import parse as parse_version
 
 from ...base import tokenize
 from ...highlevelgraph import HighLevelGraph
@@ -49,7 +48,7 @@ def _read_orc_stripe(fs, path, stripe, columns=None):
     with fs.open(path, "rb") as f:
         o = orc.ORCFile(f)
         table = o.read_stripe(stripe, columns)
-    if pa.__version__ < LooseVersion("0.11.0"):
+    if parse_version(pa.__version__) < parse_version("0.11.0"):
         return table.to_pandas()
     else:
         return table.to_pandas(date_as_object=False)
@@ -80,7 +79,7 @@ def read_orc(path, columns=None, storage_options=None):
     orc = import_required("pyarrow.orc", "Please install pyarrow >= 0.9.0")
     import pyarrow as pa
 
-    if LooseVersion(pa.__version__) == "0.10.0":
+    if parse_version(pa.__version__) == parse_version("0.10.0"):
         raise RuntimeError(
             "Due to a bug in pyarrow 0.10.0, the ORC reader is "
             "unavailable. Please either downgrade pyarrow to "

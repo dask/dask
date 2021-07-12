@@ -1,7 +1,6 @@
-from distutils.version import LooseVersion
-
 import numpy as np
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 import dask.array as da
@@ -12,6 +11,7 @@ from dask.sizeof import sizeof
 
 cupy = pytest.importorskip("cupy")
 cupyx = pytest.importorskip("cupyx")
+cupy_version = parse_version(cupy.__version__)
 
 
 functions = [
@@ -35,7 +35,7 @@ functions = [
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.skipif(
-            not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+            not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
             reason="NEP-18 support is not available in NumPy or CuPy older than "
             "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -47,7 +47,7 @@ functions = [
     pytest.param(
         lambda x: x.std(),
         marks=pytest.mark.skipif(
-            not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+            not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
             reason="NEP-18 support is not available in NumPy or CuPy older than "
             "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -55,7 +55,7 @@ functions = [
     pytest.param(
         lambda x: x.var(),
         marks=pytest.mark.skipif(
-            not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+            not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
             reason="NEP-18 support is not available in NumPy or CuPy older than "
             "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -318,7 +318,7 @@ def test_diagonal():
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -336,7 +336,7 @@ def test_tril_triu():
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -448,7 +448,7 @@ def test_nearest():
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -465,7 +465,7 @@ def test_constant():
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -556,7 +556,7 @@ def test_random_shapes(shape):
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.1.0"),
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.1.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.1.0 (requires https://github.com/cupy/cupy/pull/2209)",
 )
@@ -936,7 +936,7 @@ def test_cupy_sparse_concatenate(axis):
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < LooseVersion("6.4.0"),
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )

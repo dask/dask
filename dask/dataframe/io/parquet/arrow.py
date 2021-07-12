@@ -2,13 +2,13 @@ import json
 import warnings
 from collections import defaultdict
 from datetime import datetime
-from distutils.version import LooseVersion
 from functools import partial
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
+from packaging.version import parse as parse_version
 
 from dask import delayed
 
@@ -27,14 +27,16 @@ from .utils import (
 )
 
 # Check PyArrow version for feature support
-preserve_ind_supported = pa.__version__ >= LooseVersion("0.15.0")
+_pa_version = parse_version(pa.__version__)
+preserve_ind_supported = _pa_version >= parse_version("0.15.0")
 read_row_groups_supported = preserve_ind_supported
-if pa.__version__ >= LooseVersion("1.0.0"):
+if _pa_version.major >= 1:
     from pyarrow import dataset as pa_ds
 else:
     pa_ds = None
-subset_stats_supported = pa.__version__ > LooseVersion("2.0.0")
-schema_field_supported = pa.__version__ >= LooseVersion("0.15.0")
+subset_stats_supported = _pa_version > parse_version("2.0.0")
+schema_field_supported = _pa_version >= parse_version("0.15.0")
+del _pa_version
 
 #
 #  Helper Utilities
