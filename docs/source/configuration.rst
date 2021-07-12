@@ -70,9 +70,9 @@ some of the workers memory configuration default values in distributed:
    distributed:
          workers: 
             memory:
-               spill     : 0.85  # 0.7
-               target    : 0.75  # 0.6
-               terminate : 0.98  # 0.95
+               spill     : 0.85  # default: 0.7
+               target    : 0.75  # default: 0.6
+               terminate : 0.98  # default: 0.95
 
 
 These files can live in any of the following locations:
