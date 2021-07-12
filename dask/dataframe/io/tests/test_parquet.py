@@ -931,14 +931,14 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
         "x" in df
         and df.x.dtype == "M8[ns]"
         and engine == "fastparquet"
-        and fastparquet.__version__ <= LooseVersion("0.6.3")
+        and fastparquet_version <= parse_version("0.6.3")
     ):
         pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
     if (
         PANDAS_GT_130
         and read_kwargs.get("categories", None)
         and engine == "fastparquet"
-        and fastparquet.__version__ <= LooseVersion("0.6.3")
+        and fastparquet_version <= parse_version("0.6.3")
     ):
         pytest.xfail("https://github.com/dask/fastparquet/issues/577")
 
