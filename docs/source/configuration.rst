@@ -25,15 +25,16 @@ Access Configuration
 .. autosummary::
    dask.config.get
 
-Dask configuration system is usually accessed using the :func:dask.config.get function. You can use ``.`` for nested access, 
+Dask configuration system is usually accessed using the ``dask.config.get`` function. You can use ``.`` for nested access, 
 for example:
-   >>> import dask
-   >>>import.dask.distributed
-   >>> dask.config.get("distributed.client") # use `.` for nested access
-   {'heartbeat': '5s', 'scheduler-info-interval': '2s'} 
+>>> import dask
+>>> import.dask.distributed
 
-   >>> dask.config.get("distributed.scheduler.unknown-task-duration")
-   '500ms'
+>>> dask.config.get("distributed.client") # use `.` for nested access
+{'heartbeat': '5s', 'scheduler-info-interval': '2s'} 
+
+>>> dask.config.get("distributed.scheduler.unknown-task-duration")
+'500ms'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
