@@ -674,8 +674,37 @@ class ArrowDatasetEngine(Engine):
             df = df.set_index(index)
         return df
 
-    @staticmethod
+    @classmethod
+    def _get_dataset_offset(cls, path, fs, append, ignore_divisions):
+        fmd = None
+        i_offset = 0
+        if append:
+            # Make sure there are existing file fragments.
+            # Otherwise there is no need to set `append=True`
+            i_offset = len(
+                list(
+                    pa_ds.dataset(path, filesystem=fs, format="parquet").get_fragments()
+                )
+            )
+            if i_offset == 0:
+                # No dataset to append to
+                return fmd, i_offset, False
+            try:
+                fmd = pq.read_metadata(fs.sep.join([path, "_metadata"]))
+            except (IOError, FileNotFoundError):
+                # No _metadata file present - No appending allowed (for now)
+                if not ignore_divisions:
+                    # TODO: Be more flexible about existing metadata.
+                    raise NotImplementedError(
+                        "_metadata file needed to `append` "
+                        "with `engine='pyarrow-dataset'` "
+                        "unless `ignore_divisions` is `True`"
+                    )
+        return fmd, i_offset, append
+
+    @classmethod
     def initialize_write(
+        cls,
         df,
         fs,
         path,
@@ -728,31 +757,19 @@ class ArrowDatasetEngine(Engine):
             # Final (inferred) schema
             schema = _schema
 
-        dataset = fmd = None
-        i_offset = 0
+        # Check that target directory exists
+        fs.mkdirs(path, exist_ok=True)
         if append and division_info is None:
             ignore_divisions = True
-        fs.mkdirs(path, exist_ok=True)
 
+        # Extract metadata and get file offset if appending
+        fmd, i_offset, append = cls._get_dataset_offset(
+            path, fs, append, ignore_divisions
+        )
+
+        # Inspect the intial metadata if appending
         if append:
-            try:
-                # Allow append if the dataset exists.
-                # Also need dataset.metadata object if
-                # ignore_divisions is False (to check divisions)
-                dataset = pq.ParquetDataset(path, filesystem=fs)
-                if not dataset.metadata and not ignore_divisions:
-                    # TODO: Be more flexible about existing metadata.
-                    raise NotImplementedError(
-                        "_metadata file needed to `append` "
-                        "with `engine='pyarrow'` "
-                        "unless `ignore_divisions` is `True`"
-                    )
-                fmd = dataset.metadata
-            except (IOError, ValueError, IndexError):
-                # Original dataset does not exist - cannot append
-                append = False
-        if append:
-            arrow_schema = dataset.schema.to_arrow_schema()
+            arrow_schema = fmd.schema.to_arrow_schema()
             names = arrow_schema.names
             has_pandas_metadata = (
                 arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
@@ -781,16 +798,13 @@ class ArrowDatasetEngine(Engine):
                         set(dtypes.items()) ^ set(df.dtypes.iteritems())
                     )
                 )
-            i_offset = len(dataset.pieces)
 
+            # Check divisions if necessary
             if division_info["name"] not in names:
                 ignore_divisions = True
             if not ignore_divisions:
                 old_end = None
-                row_groups = [
-                    dataset.metadata.row_group(i)
-                    for i in range(dataset.metadata.num_row_groups)
-                ]
+                row_groups = [fmd.row_group(i) for i in range(fmd.num_row_groups)]
                 for row_group in row_groups:
                     for i, name in enumerate(names):
                         if name != division_info["name"]:
@@ -2056,6 +2070,30 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             return None
         else:
             return meta
+
+    @classmethod
+    def _get_dataset_offset(cls, path, fs, append, ignore_divisions):
+        dataset = fmd = None
+        i_offset = 0
+        if append:
+            try:
+                # Allow append if the dataset exists.
+                # Also need dataset.metadata object if
+                # ignore_divisions is False (to check divisions)
+                dataset = pq.ParquetDataset(path, filesystem=fs)
+                if not dataset.metadata and not ignore_divisions:
+                    # TODO: Be more flexible about existing metadata.
+                    raise NotImplementedError(
+                        "_metadata file needed to `append` "
+                        "with `engine='pyarrow-legacy'` "
+                        "unless `ignore_divisions` is `True`"
+                    )
+                fmd = dataset.metadata
+                i_offset = len(dataset.pieces)
+            except (IOError, ValueError, IndexError):
+                # Original dataset does not exist - cannot append
+                append = False
+        return fmd, i_offset, append
 
 
 # Compatibility access to legacy ArrowEngine
