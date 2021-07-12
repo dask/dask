@@ -137,7 +137,7 @@ def write_read_engines(**kwargs):
     )
 
 
-pyarrow_fastparquet_msg = "fastparquet fails reading pyarrow written directories"
+pyarrow_fastparquet_msg = "pyarrow schema and pandas metadata may disagree"
 write_read_engines_xfail = write_read_engines(
     **{
         "xfail_pyarrow-dataset_fastparquet": pyarrow_fastparquet_msg,
@@ -459,22 +459,17 @@ def test_columns_index_with_multi_index(tmpdir, engine):
     if engine == "fastparquet":
         fastparquet.write(fn, df.reset_index(), write_index=False)
 
-        # fastparquet doesn't support multi-index
-        with pytest.raises(ValueError):
-            ddf = dd.read_parquet(fn, engine=engine, index=index.names)
-
     else:
         pq.write_table(pa.Table.from_pandas(df.reset_index(), preserve_index=False), fn)
 
-        # Pyarrow supports multi-index reads
-        ddf = dd.read_parquet(fn, engine=engine, index=index.names)
-        assert_eq(ddf, df)
+    ddf = dd.read_parquet(fn, engine=engine, index=index.names)
+    assert_eq(ddf, df)
 
-        d = dd.read_parquet(fn, columns="a", engine=engine, index=index.names)
-        assert_eq(d, df["a"])
+    d = dd.read_parquet(fn, columns="a", engine=engine, index=index.names)
+    assert_eq(d, df["a"])
 
-        d = dd.read_parquet(fn, index=["a", "b"], columns=["x0", "x1"], engine=engine)
-        assert_eq(d, df2.set_index(["a", "b"])[["x0", "x1"]])
+    d = dd.read_parquet(fn, index=["a", "b"], columns=["x0", "x1"], engine=engine)
+    assert_eq(d, df2.set_index(["a", "b"])[["x0", "x1"]])
 
     # Just index
     d = dd.read_parquet(fn, index=False, engine=engine)
@@ -904,9 +899,6 @@ def test_read_parquet_custom_columns(tmpdir, engine):
             pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ns]"),
             {},
             {},
-            marks=pytest.mark.xfail(
-                reason="Parquet doesn't support nanosecond precision"
-            ),
         ),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[us]"), {}, {}),
         (pd.DataFrame({"x": [3, 2, 1]}).astype("M8[ms]"), {}, {}),
@@ -927,10 +919,20 @@ def test_read_parquet_custom_columns(tmpdir, engine):
     ],
 )
 def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
+    if "x" in df and df.x.dtype == "M8[ns]" and "arrow" in engine:
+        pytest.xfail(reason="Parquet pyarrow v1 doesn't support nanosecond precision")
+    if (
+        "x" in df
+        and df.x.dtype == "M8[ns]"
+        and engine == "fastparquet"
+        and fastparquet.__version__ <= LooseVersion("0.6.3")
+    ):
+        pytest.xfail(reason="fastparquet doesn't support nanosecond precision yet")
     if (
         PANDAS_GT_130
-        and engine == "fastparquet"
         and read_kwargs.get("categories", None)
+        and engine == "fastparquet"
+        and fastparquet.__version__ <= LooseVersion("0.6.3")
     ):
         pytest.xfail("https://github.com/dask/fastparquet/issues/577")
 
@@ -945,7 +947,12 @@ def test_roundtrip(tmpdir, df, write_kwargs, read_kwargs, engine):
     else:
         dd.to_parquet(ddf, tmp, engine=engine, **write_kwargs)
     ddf2 = dd.read_parquet(tmp, index=df.index.name, engine=engine, **read_kwargs)
-    assert_eq(ddf, ddf2)
+    if str(ddf2.dtypes.get("x")) == "UInt16" and engine == "fastparquet":
+        # fastparquet choooses to use masked type to be able to get true repr of
+        # 16-bit int
+        assert_eq(ddf.astype("UInt16"), ddf2)
+    else:
+        assert_eq(ddf, ddf2)
 
 
 def test_categories(tmpdir, engine):
