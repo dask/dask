@@ -7,13 +7,13 @@ import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
-from distutils.version import LooseVersion
 from functools import partial
 from hashlib import md5
 from numbers import Number
 from operator import getitem
 from typing import Iterator, Mapping, Set
 
+from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
@@ -911,7 +911,7 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
-    PANDAS_GT_130 = LooseVersion(pd.__version__) >= LooseVersion("1.3.0")
+    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
 
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
