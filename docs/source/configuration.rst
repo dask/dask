@@ -65,9 +65,9 @@ You can specify configuration values in YAML files. For example:
    distributed:
       workers: 
          memory:
-            spill     : 0.85  # default: 0.7
-            target    : 0.75  # default: 0.6
-            terminate : 0.98  # default: 0.95
+            spill: 0.85  # default: 0.7
+            target: 0.75  # default: 0.6
+            terminate: 0.98  # default: 0.95
 
 
 These files can live in any of the following locations:
@@ -206,11 +206,15 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilYAML" name="configConvertUtilYAML" rows="10" cols="50" class="configTextArea" wrap="off">
+   array:
+      chunk-size: 128 MiB
+ 
    distributed:
-     logging:
-       distributed: info
-       bokeh: critical
-       tornado: critical
+      workers:
+         memory:
+            spill: 0.85 
+            target: 0.75  
+            terminate: 0.98  
    </textarea>
 
 **Environment variable**
@@ -218,9 +222,10 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilEnv" name="configConvertUtilEnv" rows="10" cols="50" class="configTextArea" wrap="off">
-   export DASK_DISTRIBUTED__LOGGING__DISTRIBUTED="info"
-   export DASK_DISTRIBUTED__LOGGING__BOKEH="critical"
-   export DASK_DISTRIBUTED__LOGGING__TORNADO="critical"
+   export DASK_ARRAY__CHUNK_SIZE="128 MiB"
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__SPILL=0.85
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__TARGET=0.75
+   export DASK_DISTRIBUTED__WORKERS__MEMORY__TERMINATE=0.98
    </textarea>
 
 **Inline with dot notation**
@@ -228,9 +233,10 @@ your own configuration items below to convert back and forth.
 .. raw:: html
 
    <textarea id="configConvertUtilCode" name="configConvertUtilCode" rows="10" cols="50" class="configTextArea" wrap="off">
-   >>> dask.config.set({"distributed.logging.distributed": "info"})
-   >>> dask.config.set({"distributed.logging.bokeh": "critical"})
-   >>> dask.config.set({"distributed.logging.tornado": "critical"})
+   >>> dask.config.set({"array.chunk-size": "128 MiB"})
+   >>> dask.config.set({"distributed.workers.memory.spill": 0.85})
+   >>> dask.config.set({"distributed.workers.memory.target": 0.75})
+   >>> dask.config.set({"distributed.workers.memory.terminate": 0.98})
    </textarea>
 
 Updating Configuration
