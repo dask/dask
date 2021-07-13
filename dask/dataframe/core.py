@@ -3916,7 +3916,7 @@ class DataFrame(_Frame):
                 name,
                 self,
                 key,
-                column_dependencies={self._name: {"__const__": {key}}},
+                column_dependencies={self._name: {"__known__": {key}}},
             )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
@@ -3943,7 +3943,13 @@ class DataFrame(_Frame):
             meta = self._meta[_extract_meta(key)]
 
             dsk = partitionwise_graph(
-                operator.getitem, name, self, key, column_dependencies=False
+                operator.getitem,
+                name,
+                self,
+                key,
+                column_dependencies={self._name: {"__known__": set(key)}}
+                if isinstance(key, list)
+                else None,
             )
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
             return new_dd_object(graph, name, meta, self.divisions)
@@ -5748,6 +5754,7 @@ def map_partitions(
             column_dependencies=column_dependencies,
             _func=func,
             _meta=meta,
+            allow_column_projection=column_dependencies is not None,
             **kwargs3,
         )
     else:
@@ -5806,13 +5813,17 @@ def apply_and_enforce(*args, **kwargs):
     Ensures the output has the same columns, even if empty."""
     func = kwargs.pop("_func")
     meta = kwargs.pop("_meta")
+    allow_column_projection = kwargs.pop("allow_column_projection", False)
     df = func(*args, **kwargs)
     if is_dataframe_like(df) or is_series_like(df) or is_index_like(df):
         if not len(df):
             return meta
         if is_dataframe_like(df):
-            check_matching_columns(meta, df)
-            c = meta.columns
+            if allow_column_projection:
+                c = [col for col in meta.columns if col in df.columns]
+            else:
+                check_matching_columns(meta, df)
+                c = meta.columns
         else:
             c = meta.name
         return _rename(c, df)

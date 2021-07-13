@@ -404,7 +404,6 @@ class DataFrameBlockwise(Blockwise, DataFrameLayer):
         # there happend to be seperate
         if isinstance(self._column_dependencies, dict):
             _column_dependencies = self._column_dependencies.get(layer_dependency, None)
-            # import pdb; pdb.set_trace()
         else:
             _column_dependencies = self._column_dependencies
 
@@ -417,9 +416,11 @@ class DataFrameBlockwise(Blockwise, DataFrameLayer):
                 # is being "passed through" with the same name.
                 if "__known__" in _column_dependencies:
                     return set(_column_dependencies["__known__"])
+                if output_columns is None:
+                    return None
                 assigned_columns = set(_column_dependencies.get("__assigned__", set()))
                 required_columns = set(_column_dependencies.get("__const__", set()))
-                for col in output_columns:
+                for col in output_columns or []:
                     required_columns |= set(
                         _column_dependencies.get(
                             col,
@@ -430,7 +431,9 @@ class DataFrameBlockwise(Blockwise, DataFrameLayer):
             else:
                 # No dependencies between columns, so we are
                 # just passing columns through
-                return set(output_columns)
+                return None if output_columns is None else set(output_columns)
+        elif output_columns is None:
+            return None
         elif _column_dependencies is False:
             # No dependencies between columns, so we are
             # just passing columns through
@@ -522,6 +525,8 @@ class SimpleShuffleLayer(DataFrameLayer):
         self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
 
     def required_input_columns(self, output_columns, layer_dependency=None):
+        if output_columns is None:
+            return None
         required_columns = (
             {self.column} if isinstance(self.column, str) else set(self.column)
         )
