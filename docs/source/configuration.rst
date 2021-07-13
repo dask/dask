@@ -25,16 +25,19 @@ Access Configuration
 .. autosummary::
    dask.config.get
 
-Dask configuration system is usually accessed using the ``dask.config.get`` function. You can use ``.`` for nested access, 
-for example:
->>> import dask
->>> import.dask.distributed
+Dask's configuration system is usually accessed using the ``dask.config.get`` function.
+You can use ``.`` for nested access, for example:
 
->>> dask.config.get("distributed.client") # use `.` for nested access
-{'heartbeat': '5s', 'scheduler-info-interval': '2s'} 
+.. code-block:: python
 
->>> dask.config.get("distributed.scheduler.unknown-task-duration")
-'500ms'
+   >>> import dask
+   >>> import dask.distributed  # populate config with distributed defaults
+
+   >>> dask.config.get("distributed.client") # use `.` for nested access
+   {'heartbeat': '5s', 'scheduler-info-interval': '2s'}
+
+   >>> dask.config.get("distributed.scheduler.unknown-task-duration")
+   '500ms'
 
 You may wish to inspect the ``dask.config.config`` dictionary to get a sense
 for what configuration is being used by your current system.
@@ -52,8 +55,7 @@ Specify Configuration
 YAML files
 ~~~~~~~~~~
 
-You can specify configuration values in YAML files. For example, if you want to modify 
-some of the workers memory configuration default values in distributed:
+You can specify configuration values in YAML files. For example:
 
 .. code-block:: yaml
 
