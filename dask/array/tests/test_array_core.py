@@ -1,4 +1,6 @@
+import contextlib
 import copy
+import xml.etree.ElementTree
 from unittest import mock
 
 import pytest
@@ -48,7 +50,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -1570,6 +1572,14 @@ def test_repr_meta():
     assert "chunktype=sparse.COO" in repr(s)
 
 
+def test_repr_html_array_highlevelgraph():
+    x = da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4]
+    hg = x.dask
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
+
+
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
     d = da.from_array(x, chunks=((2, 2, 2, 2)))
@@ -2081,7 +2091,7 @@ def test_dtype_complex():
     assert_eq(da.exp(b).dtype, np.exp(y).dtype)
     assert_eq(da.floor(a).dtype, np.floor(x).dtype)
     assert_eq(da.isnan(b).dtype, np.isnan(y).dtype)
-    with ignoring(ImportError):
+    with contextlib.suppress(ImportError):
         assert da.isnull(b).dtype == "bool"
         assert da.notnull(b).dtype == "bool"
 

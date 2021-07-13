@@ -3401,7 +3401,7 @@ Dask Name: {name}, {task} tasks""".format(
         return self.map_partitions(M.dropna, enforce_metadata=False)
 
     @derived_from(pd.Series)
-    def between(self, left, right, inclusive=True):
+    def between(self, left, right, inclusive="both"):
         return self.map_partitions(
             M.between, left=left, right=right, inclusive=inclusive
         )
@@ -3806,9 +3806,10 @@ class DataFrame(_Frame):
         super().__init__(dsk, name, meta, divisions)
         if self.dask.layers[name].collection_annotations is None:
             self.dask.layers[name].collection_annotations = {
-                "type": type(self),
-                "divisions": self.divisions,
-                "dataframe_type": type(self._meta),
+                "npartitions": self.npartitions,
+                "columns": [col for col in self.columns],
+                "type": typename(type(self)),
+                "dataframe_type": typename(type(self._meta)),
                 "series_dtypes": {
                     col: self._meta[col].dtype
                     if hasattr(self._meta[col], "dtype")
@@ -3819,9 +3820,10 @@ class DataFrame(_Frame):
         else:
             self.dask.layers[name].collection_annotations.update(
                 {
-                    "type": type(self),
-                    "divisions": self.divisions,
-                    "dataframe_type": type(self._meta),
+                    "npartitions": self.npartitions,
+                    "columns": [col for col in self.columns],
+                    "type": typename(type(self)),
+                    "dataframe_type": typename(type(self._meta)),
                     "series_dtypes": {
                         col: self._meta[col].dtype
                         if hasattr(self._meta[col], "dtype")

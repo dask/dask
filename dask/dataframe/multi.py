@@ -803,32 +803,26 @@ def get_unsorted_columns(frames):
     return order
 
 
-def _concat_compat(frames, left, right):
-    if PANDAS_GT_100:
-        # join_axes removed
-        return (pd.concat, frames, 0, "outer", False, None, None, None, False, False)
-    else:
-        # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
-        # we only care about sort, to silence warnings.
-        return (
-            pd.concat,
-            frames,
-            0,
-            "outer",
-            None,
-            False,
-            None,
-            None,
-            None,
-            False,
-            False,
-        )
-
-
 def merge_asof_indexed(left, right, **kwargs):
     dsk = dict()
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
+
+    if all(map(pd.isnull, left.divisions)):
+        # results in an empty df that looks like ``meta``
+        return from_pandas(meta.iloc[len(meta) :], npartitions=left.npartitions)
+
+    if all(map(pd.isnull, right.divisions)):
+        # results in an df that looks like ``left`` with nulls for
+        # all ``right.columns``
+        return map_partitions(
+            pd.merge_asof,
+            left,
+            right=right,
+            left_index=True,
+            right_index=True,
+            meta=meta,
+        )
 
     dependencies = [left, right]
     tails = heads = None
@@ -853,8 +847,7 @@ def merge_asof_indexed(left, right, **kwargs):
                     kwargs,
                 )
             )
-        args = _concat_compat(frames, left, right)
-        dsk[(name, i)] = args
+        dsk[(name, i)] = (methods.concat, frames)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     result = new_dd_object(graph, name, meta, left.divisions)
@@ -900,7 +893,7 @@ def merge_asof(
     }
 
     if left is None or right is None:
-        raise ValueError("Cannot merge_asof on empty DataFrames")
+        raise ValueError("Cannot merge_asof on None")
 
     # if is_dataframe_like(left) and is_dataframe_like(right):
     if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):

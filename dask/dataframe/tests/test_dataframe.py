@@ -1,4 +1,5 @@
 import warnings
+import xml.etree.ElementTree
 from itertools import product
 from operator import add
 
@@ -26,6 +27,7 @@ from dask.dataframe.core import (
     total_mem_usage,
 )
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
+from dask.datasets import timeseries
 from dask.utils import M, put_lines
 
 dsk = {
@@ -240,6 +242,7 @@ def test_index_names():
     assert ddf.index.compute().name == "x"
 
 
+@pytest.mark.skipif(dd._compat.PANDAS_GT_130, reason="Freq no longer included in ts")
 @pytest.mark.parametrize(
     "npartitions",
     [
@@ -683,6 +686,11 @@ def test_dropna():
 
     assert_eq(df.dropna(thresh=3), df.loc[[20, 40]])
     assert_eq(ddf.dropna(thresh=3), df.dropna(thresh=3))
+
+    # Regression test for https://github.com/dask/dask/issues/6540
+    df = pd.DataFrame({"_0": [0, 0, np.nan], "_1": [1, 2, 3]})
+    ddf = dd.from_pandas(df, npartitions=2)
+    assert_eq(ddf.dropna(subset=["_0"]), df.dropna(subset=["_0"]))
 
 
 @pytest.mark.parametrize("lower, upper", [(2, 5), (2.5, 3.5)])
@@ -4644,6 +4652,14 @@ def test_dask_layers():
         ddi.key[0]: {dds._name},
     }
     assert ddi.__dask_layers__() == (ddi.key[0],)
+
+
+def test_repr_html_dataframe_highlevelgraph():
+    x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
+    hg = x.dask
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
 
 
 @pytest.mark.skipif(

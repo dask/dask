@@ -1,3 +1,4 @@
+import contextlib
 import math
 import operator
 import os
@@ -47,7 +48,6 @@ from ..utils import (
     format_bytes,
     funcname,
     has_keyword,
-    ignoring,
     is_arraylike,
     is_dataframe_like,
     is_index_like,
@@ -369,8 +369,13 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
+    from .utils import meta_from_array, ones_like_safe
+
+    # make sure that every arg is an evaluated array
     args = [
-        np.ones((1,) * x.ndim, dtype=x.dtype) if isinstance(x, Array) else x
+        ones_like_safe(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+        if is_arraylike(x)
+        else x
         for x in args
     ]
     try:
@@ -1153,18 +1158,20 @@ class Array(DaskMethodsMixin):
         else:
             if layer.collection_annotations is None:
                 layer.collection_annotations = {
-                    "type": type(self),
-                    "chunk_type": type(self._meta),
-                    "chunks": self.chunks,
-                    "dtype": dtype,
+                    "shape": self.shape,
+                    "dtype": self.dtype,
+                    "chunksize": self.chunksize,
+                    "type": typename(type(self)),
+                    "chunk_type": typename(type(self._meta)),
                 }
             else:
                 layer.collection_annotations.update(
                     {
-                        "type": type(self),
-                        "chunk_type": type(self._meta),
-                        "chunks": self.chunks,
-                        "dtype": dtype,
+                        "shape": self.shape,
+                        "dtype": self.dtype,
+                        "chunksize": self.chunksize,
+                        "type": typename(type(self)),
+                        "chunk_type": typename(type(self._meta)),
                     }
                 )
 
@@ -1299,7 +1306,11 @@ class Array(DaskMethodsMixin):
 
     @property
     def dtype(self):
-        return self._meta.dtype
+        if isinstance(self._meta, tuple):
+            dtype = self._meta[0].dtype
+        else:
+            dtype = self._meta.dtype
+        return dtype
 
     @property
     def _chunks(self):
@@ -4305,6 +4316,7 @@ def elemwise(op, *args, **kwargs):
 
     need_enforce_dtype = False
     if "dtype" in kwargs:
+        need_enforce_dtype = True
         dt = kwargs["dtype"]
     else:
         # We follow NumPy's rules for dtype promotion, which special cases
@@ -4537,7 +4549,7 @@ def offset_func(func, offset, *args):
         args2 = list(map(add, args, offset))
         return func(*args2)
 
-    with ignoring(Exception):
+    with contextlib.suppress(Exception):
         _offset.__name__ = "offset_" + func.__name__
 
     return _offset
