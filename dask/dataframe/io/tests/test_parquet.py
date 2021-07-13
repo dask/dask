@@ -3406,10 +3406,10 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         index="myindex",  # python-3.6 CI
     )
     if partition_on:
-        ddf1 = df1.sort_values("b")
-        ddf2 = ddf2.compute().sort_values("b")
-        ddf2.a = ddf2.a.astype("object")
-    assert_eq(ddf1, ddf2)
+        df1 = df1.sort_values("b")
+        df2 = ddf2.compute().sort_values("b")
+        df2.a = df2.a.astype("object")
+    assert_eq(df1, df2)
 
     # Check if we can avoid writing an actual file
     fmd = dd.io.parquet.create_metadata_file(

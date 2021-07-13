@@ -1,6 +1,7 @@
 import copy
 import json
 import pickle
+import threading
 import warnings
 from collections import OrderedDict, defaultdict
 from distutils.version import LooseVersion
@@ -34,6 +35,9 @@ from .utils import (
     _row_groups_to_parts,
     _sort_and_analyze_paths,
 )
+
+# Thread lock required to reset row-groups
+_FP_FILE_LOCK = threading.RLock()
 
 
 def _paths_to_cats(paths, file_scheme):
@@ -864,11 +868,12 @@ class FastParquetEngine(Engine):
                 raise ValueError("Neither path nor ParquetFile detected!")
 
             if update_parquet_file:
-                parquet_file.fmd.row_groups = row_groups
-                # NOTE: May lose cats after `_set_attrs` call
-                save_cats = parquet_file.cats
-                parquet_file._set_attrs()
-                parquet_file.cats = save_cats
+                with _FP_FILE_LOCK:
+                    parquet_file.fmd.row_groups = row_groups
+                    # NOTE: May lose cats after `_set_attrs` call
+                    save_cats = parquet_file.cats
+                    parquet_file._set_attrs()
+                    parquet_file.cats = save_cats
 
             if null_index_name:
                 if "__index_level_0__" in parquet_file.columns:
