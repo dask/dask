@@ -1,8 +1,8 @@
 import random
-from distutils.version import LooseVersion
 
 import numpy as np
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 import dask.array as da
@@ -34,7 +34,7 @@ functions = [
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.skipif(
-            sparse.__version__ >= LooseVersion("0.12.0"),
+            parse_version(sparse.__version__) >= parse_version("0.12.0"),
             reason="https://github.com/dask/dask/issues/7169",
         ),
     ),
@@ -91,7 +91,7 @@ def test_basic(func):
 
 
 @pytest.mark.skipif(
-    sparse.__version__ < LooseVersion("0.7.0+10"),
+    parse_version(sparse.__version__) < parse_version("0.7.0+10"),
     reason="fixed in https://github.com/pydata/sparse/pull/256",
 )
 def test_tensordot():
