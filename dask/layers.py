@@ -524,6 +524,19 @@ class SimpleShuffleLayer(DataFrameLayer):
         self.annotations["priority"]["__expanded_annotations__"] = None
         self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
 
+    def replace(self, new_dependencies: dict):
+        return type(self)(
+            self.name,
+            self.column,
+            self.npartitions,
+            self.npartitions_input,
+            self.ignore_index,
+            new_dependencies.get(self.name_input, self.name_input),
+            self.meta_input,
+            parts_out=self.parts_out,
+            annotations=self.annotations,
+        )
+
     def required_input_columns(self, output_columns, layer_dependency=None):
         if output_columns is None:
             return None
@@ -795,6 +808,22 @@ class ShuffleLayer(SimpleShuffleLayer):
             meta_input,
             parts_out=parts_out or range(len(inputs)),
             annotations=annotations,
+        )
+
+    def replace(self, new_dependencies: dict):
+        return type(self)(
+            self.name,
+            self.column,
+            self.inputs,
+            self.stage,
+            self.npartitions,
+            self.npartitions_input,
+            self.nsplits,
+            self.ignore_index,
+            new_dependencies.get(self.name_input, self.name_input),
+            self.meta_input,
+            parts_out=self.parts_out,
+            annotations=self.annotations,
         )
 
     def get_split_keys(self):

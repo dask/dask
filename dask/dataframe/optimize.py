@@ -136,7 +136,10 @@ def optimize_dataframe_getitem(dsk, keys):
             for block_key in dependent_keys:
                 block = layers[block_key]
                 rename_map = {old.name: new.name}
-                new_block = block.replace(rename_map)
+                try:
+                    new_block = block.replace(rename_map)
+                except NotImplementedError:
+                    return dsk
                 layers[block_key] = new_block
                 dependencies[block_key] = {
                     rename_map.get(k, k) for k in dependencies[block_key]
