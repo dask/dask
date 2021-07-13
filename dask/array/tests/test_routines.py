@@ -1929,7 +1929,7 @@ def test_ravel_multi_index_unknown_shape_fails():
 @pytest.mark.parametrize("wrap_in_list", [False, True])
 def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
     with pytest.raises(NotImplementedError, match="Dask types are not supported"):
-        da.ravel_multi_index((2, 1), list(dims) if wrap_in_list else dims)
+        da.ravel_multi_index((2, 1), [dims[0], dims[1]] if wrap_in_list else dims)
 
 
 def test_ravel_multi_index_non_int_dtype():
