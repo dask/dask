@@ -778,6 +778,30 @@ class Blockwise(Layer):
             (bind_to is not None and is_leaf),
         )
 
+    def replace(self, new_dependencies: Mapping):
+
+        # Replace layer name used in `indices` and `numblocks`
+        new_indices = (
+            (new_dependencies.get(ind[0], ind[0]), ind[1])
+            if isinstance(ind[0], str)
+            else ind
+            for ind in self.indices
+        )
+        new_numblocks = {
+            new_dependencies.get(k, k): v for k, v in self.numblocks.items()
+        }
+
+        # Return initialized replacement Layer
+        return type(self)(
+            self.output,
+            self.output_indices,
+            self.dsk,
+            new_indices,
+            new_numblocks,
+            self.concatenate,
+            self.new_axes,
+        )
+
 
 def _get_coord_mapping(
     dims,

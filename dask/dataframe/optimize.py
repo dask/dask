@@ -4,8 +4,9 @@ import operator
 import numpy as np
 
 from .. import config, core
-from ..blockwise import Blockwise, fuse_roots, optimize_blockwise
+from ..blockwise import fuse_roots, optimize_blockwise
 from ..highlevelgraph import HighLevelGraph
+from ..layers import DataFrameBlockwise
 from ..optimization import cull, fuse
 from ..utils import ensure_dict
 
@@ -78,8 +79,8 @@ def optimize_dataframe_getitem(dsk, keys):
             block = dsk.layers[dep]
 
             # Check if we're a dataframe_blockwise followed by a getitem
-            if not isinstance(block, Blockwise):
-                # getitem are Blockwise...
+            if not isinstance(block, DataFrameBlockwise):
+                # getitem are DataFrameBlockwise...
                 return dsk
 
             if len(block.dsk) != 1:
@@ -113,17 +114,7 @@ def optimize_dataframe_getitem(dsk, keys):
                 for block_key, block in update_blocks.items():
                     # (('read-parquet-old', (.,)), ( ... )) ->
                     # (('read-parquet-new', (.,)), ( ... ))
-                    new_indices = ((new.name, block.indices[0][1]), block.indices[1])
-                    numblocks = {new.name: block.numblocks[old.name]}
-                    new_block = Blockwise(
-                        block.output,
-                        block.output_indices,
-                        block.dsk,
-                        new_indices,
-                        numblocks,
-                        block.concatenate,
-                        block.new_axes,
-                    )
+                    new_block = block.replace({old.name: new.name})
                     layers[block_key] = new_block
                     dependencies[block_key] = {new.name}
                 dependencies[new.name] = dependencies.pop(k)
