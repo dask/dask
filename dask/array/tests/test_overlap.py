@@ -447,6 +447,20 @@ def test_map_overlap_multiarray_variadic():
     assert all(x.compute() == size_per_slice)
 
 
+def test_map_overlap_trim_using_drop_axis_and_different_depths():
+    x = da.ones((5, 10), dtype=float)
+
+    y = da.map_overlap(
+        lambda x: x.mean(0), x, depth=(0, 2), drop_axis=(0,), chunks=(0,), dtype=float
+    ).compute()
+    assert y.shape == (x.shape[1],)
+
+    y = da.map_overlap(
+        lambda x: x.mean(1), x, depth=(2, 0), drop_axis=(1,), chunks=(0,), dtype=float
+    ).compute()
+    assert y.shape == (x.shape[0],)
+
+
 def test_map_overlap_assumes_shape_matches_first_array_if_trim_is_false():
     # https://github.com/dask/dask/issues/6681
     x1 = da.ones((10,), chunks=(5, 5))
