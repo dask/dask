@@ -113,7 +113,6 @@ def test_no_overlaps():
     )
 
 
-@pytest.mark.xfail(reason="https://github.com/pydata/pandas-datareader/issues/867")
 @pytest.mark.network
 def test_daily_stock():
     pytest.importorskip("pandas_datareader", minversion="0.8.0")
