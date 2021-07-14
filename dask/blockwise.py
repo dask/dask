@@ -114,7 +114,7 @@ class BlockwiseDepDict(BlockwiseDep):
     the task is executed (e.g. a single ``tuple`` or ``dict``):
 
     >>> import pandas as pd
-    >>> func = lambda x: pd.read_csv(**x)  # doctest: +SKIP
+    >>> func = lambda x: pd.read_csv(**x)
 
     Use ``BlockwiseDepDict`` to define the input argument to
     ``func`` for each block/partition:
@@ -145,7 +145,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     dsk={"collection-name": (func, '_0')},
     ...     indices=[(dep, "i")],
     ...     numblocks={},
-    ... )  # doctest: +SKIP
+    ... )
 
     See Also
     --------
