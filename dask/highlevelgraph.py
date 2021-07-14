@@ -504,7 +504,7 @@ class Layer(collections.abc.Mapping):
         svg_repr = ""
         if self.collection_annotations.get("type") == "dask.array.core.Array":
             chunks = self.collection_annotations["chunks"]
-            svg_repr = "<br>\n" + svg(chunks)
+            svg_repr = "<br />" + svg(chunks)
 
         info = self.layer_info_dict()
         layer_info_table = html_from_dict(info)
