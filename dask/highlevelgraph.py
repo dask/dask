@@ -504,7 +504,7 @@ class Layer(collections.abc.Mapping):
         svg_repr = ""
         if self.collection_annotations.get("type") == "dask.array.core.Array":
             chunks = self.collection_annotations["chunks"]
-            svg_repr = svg(chunks)
+            svg_repr = "<br>\n" + svg(chunks)
 
         info = self.layer_info_dict()
         layer_info_table = html_from_dict(info)
@@ -518,7 +518,6 @@ class Layer(collections.abc.Mapping):
                     <p style="color: var(--jp-ui-font-color2, #5D5851); margin: -0.25em 0px 0px 0px;">
                         {highlevelgraph_key}
                     </p>
-                    <br>
                     {svg_repr}
                     {layer_info_table}
                 </details>
@@ -536,7 +535,8 @@ class Layer(collections.abc.Mapping):
                 info[key] = html.escape(str(val))
         if self.collection_annotations is not None:
             for key, val in self.collection_annotations.items():
-                info[key] = html.escape(str(val))
+                if key != "chunks":
+                    info[key] = html.escape(str(val))
         return info
 
 
