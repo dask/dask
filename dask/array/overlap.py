@@ -696,7 +696,16 @@ def map_overlap(
         # Find index of array argument with maximum rank and break ties by choosing first provided
         i = sorted(enumerate(args), key=lambda v: (v[1].ndim, -v[0]))[-1][0]
         # Trim using depth/boundary setting for array of highest rank
-        return trim_internal(x, depth[i], boundary[i])
+        x_depth = depth[i]
+        x_boundary = boundary[i]
+        # remove any dropped axes from depth and boundary variables
+        drop_axis = kwargs.pop("drop_axis", None)
+        if drop_axis is not None:
+            x_axis = tuple(ax for ax in range(args[i].ndim) if ax not in drop_axis)
+            # note that keys are relabeled to match values in range(x.ndim)
+            x_depth = {n: x_depth[ax] for n, ax in enumerate(x_axis)}
+            x_boundary = {n: x_boundary[ax] for n, ax in enumerate(x_axis)}
+        return trim_internal(x, x_depth, x_boundary)
     else:
         return x
 
