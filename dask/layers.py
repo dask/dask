@@ -371,26 +371,6 @@ class DataFrameBlockwise(Blockwise, DataFrameLayer):
         self._column_dependencies = kwargs.pop("column_dependencies", None)
         super().__init__(*args, **kwargs)
 
-    @classmethod
-    def from_blockwise(cls, layer, column_dependencies=None):
-        """Convert a Blockwise Layer to DataFrameBlockwise
-
-        WARNING: Experimental.
-        """
-        return cls(
-            output=layer.output,
-            output_indices=layer.output_indices,
-            dsk=layer.dsk,
-            indices=layer.indices,
-            numblocks=layer.numblocks,
-            concatenate=layer.concatenate,
-            new_axes=layer.new_axes,
-            output_blocks=layer.output_blocks,
-            annotations=layer.annotations,
-            io_deps=layer.io_deps,
-            column_dependencies=None,
-        )
-
     def required_input_columns(self, output_columns, layer_dependency=None):
         """Blockwise column-dependency logic.
 
@@ -524,7 +504,7 @@ class SimpleShuffleLayer(DataFrameLayer):
         self.annotations["priority"]["__expanded_annotations__"] = None
         self.annotations["priority"].update({_key: 1 for _key in self.get_split_keys()})
 
-    def replace(self, new_dependencies: dict):
+    def replace_dependencies(self, new_dependencies: dict):
         return type(self)(
             self.name,
             self.column,
@@ -810,7 +790,7 @@ class ShuffleLayer(SimpleShuffleLayer):
             annotations=annotations,
         )
 
-    def replace(self, new_dependencies: dict):
+    def replace_dependencies(self, new_dependencies: dict):
         return type(self)(
             self.name,
             self.column,

@@ -781,7 +781,7 @@ class Blockwise(Layer):
             (bind_to is not None and is_leaf),
         )
 
-    def replace(self, new_dependencies: Mapping):
+    def replace_dependencies(self, new_dependencies: Mapping):
 
         # Replace layer name used in `indices` and `numblocks`
         new_indices = (
