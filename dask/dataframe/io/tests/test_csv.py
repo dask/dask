@@ -1688,4 +1688,4 @@ def test_reader_signature(from_f, to_f):
     # signature contains parameters from original
     assert params & original_params
     # signature does not include unsupported kwargs
-    assert params.isdisjoint(UNSUPPORTED_KWARGS)\
+    assert params.isdisjoint(UNSUPPORTED_KWARGS)
