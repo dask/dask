@@ -5,26 +5,25 @@ The rechunk module defines:
     rechunk: a function to convert the blocks
         of an existing dask array to new chunks or blockshape
 """
-import math
 import heapq
+import math
 from functools import reduce
+from itertools import chain, count, product
+from operator import add, getitem, itemgetter, mul
 from typing import Tuple
 from warnings import warn
-
-from itertools import product, chain, count
-from operator import getitem, add, mul, itemgetter
 
 import numpy as np
 import tlz as toolz
 from tlz import accumulate
 
+from .. import config
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
-from .core import concatenate3, Array, normalize_chunks
+from .core import Array, concatenate3, normalize_chunks
 from .utils import validate_axis
 from .wrap import empty
-from .. import config
 
 
 def cumdims_label(chunks, const):
@@ -615,7 +614,7 @@ def _compute_rechunk(x, chunks):
     return Array(graph, merge_name, chunks, meta=x)
 
 
-class _PrettyBlocks(object):
+class _PrettyBlocks:
     def __init__(self, blocks):
         self.blocks = blocks
 

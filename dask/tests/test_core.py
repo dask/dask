@@ -1,21 +1,21 @@
+import pickle
 from collections import namedtuple
 
 import pytest
-import pickle
 
-from dask.utils_test import GetFunctionTestMixin, inc, add
 from dask import core
 from dask.core import (
-    istask,
+    flatten,
     get_dependencies,
     get_deps,
-    flatten,
-    subs,
-    preorder_traversal,
-    literal,
-    quote,
     has_tasks,
+    istask,
+    literal,
+    preorder_traversal,
+    quote,
+    subs,
 )
+from dask.utils_test import GetFunctionTestMixin, add, inc
 
 
 def contains(a, b):
@@ -185,7 +185,7 @@ def test_subs():
     assert subs((sum, [1, ["x"]]), "x", 2) == (sum, [1, [2]])
 
 
-class MutateOnEq(object):
+class MutateOnEq:
     hit_eq = 0
 
     def __eq__(self, other):

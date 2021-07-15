@@ -1,13 +1,17 @@
 import numpy as np
 import pytest
+from packaging.version import parse as parse_version
 
+import dask
 import dask.array as da
-from dask.array.utils import assert_eq, same_keys, AxisError, IS_NEP18_ACTIVE
 from dask.array.gufunc import apply_gufunc
+from dask.array.numpy_compat import _numpy_120
+from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
 from dask.sizeof import sizeof
 
 cupy = pytest.importorskip("cupy")
 cupyx = pytest.importorskip("cupyx")
+cupy_version = parse_version(cupy.__version__)
 
 
 functions = [
@@ -31,7 +35,7 @@ functions = [
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.skipif(
-            not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+            not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
             reason="NEP-18 support is not available in NumPy or CuPy older than "
             "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -43,7 +47,7 @@ functions = [
     pytest.param(
         lambda x: x.std(),
         marks=pytest.mark.skipif(
-            not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+            not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
             reason="NEP-18 support is not available in NumPy or CuPy older than "
             "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -51,7 +55,7 @@ functions = [
     pytest.param(
         lambda x: x.var(),
         marks=pytest.mark.skipif(
-            not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+            not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
             reason="NEP-18 support is not available in NumPy or CuPy older than "
             "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
         ),
@@ -114,6 +118,12 @@ functions = [
         ),
     ),
     pytest.param(
+        lambda x: np.exp(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
         lambda x: np.fix(x),
         marks=pytest.mark.skipif(
             not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
@@ -137,6 +147,60 @@ functions = [
             not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
         ),
     ),
+    pytest.param(
+        lambda x: np.max(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.min(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.prod(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.any(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.all(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.nansum(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.nanprod(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.nanmin(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
+    pytest.param(
+        lambda x: np.nanmax(x),
+        marks=pytest.mark.skipif(
+            not IS_NEP18_ACTIVE, reason="NEP-18 support is not available in NumPy"
+        ),
+    ),
 ]
 
 
@@ -150,14 +214,14 @@ def test_basic(func):
     ddc = func(dc)
     ddn = func(dn)
 
-    assert type(ddc._meta) == cupy.core.core.ndarray
+    assert type(ddc._meta) is cupy.ndarray
 
-    if ddc.dask.keys()[0][0].startswith("empty"):
+    if next(iter(ddc.dask.keys()))[0].startswith("empty"):
         # We can't verify for data correctness when testing empty_like
-        assert type(ddc._meta) == type(ddc.compute())
+        assert type(ddc._meta) is type(ddc.compute())
     else:
         assert_eq(ddc, ddc)  # Check that _meta and computed arrays match types
-        assert_eq(ddc, ddn)
+        assert_eq(ddc, ddn, check_type=False)
 
 
 @pytest.mark.parametrize("dtype", ["f4", "f8"])
@@ -173,7 +237,7 @@ def test_sizeof(dtype):
 def test_diag():
     v = cupy.arange(11)
     dv = da.from_array(v, chunks=(4,), asarray=False)
-    assert type(dv._meta) == cupy.core.core.ndarray
+    assert type(dv._meta) == cupy.ndarray
     assert_eq(dv, dv)  # Check that _meta and computed arrays match types
     assert_eq(da.diag(dv), cupy.diag(v))
 
@@ -181,13 +245,13 @@ def test_diag():
     dv = dv + dv + 3
     darr = da.diag(dv)
     cupyarr = cupy.diag(v)
-    assert type(darr._meta) == cupy.core.core.ndarray
+    assert type(darr._meta) == cupy.ndarray
     assert_eq(darr, darr)  # Check that _meta and computed arrays match types
     assert_eq(darr, cupyarr)
 
     x = cupy.arange(64).reshape((8, 8))
     dx = da.from_array(x, chunks=(4, 4), asarray=False)
-    assert type(dx._meta) == cupy.core.core.ndarray
+    assert type(dx._meta) == cupy.ndarray
     assert_eq(dx, dx)  # Check that _meta and computed arrays match types
     assert_eq(da.diag(dx), cupy.diag(x))
 
@@ -216,7 +280,7 @@ def test_diagonal():
     # Empty diagonal.
     assert_eq(da.diagonal(v, offset=10), np.diagonal(v, offset=10))
     assert_eq(da.diagonal(v, offset=-10), np.diagonal(v, offset=-10))
-    assert isinstance(da.diagonal(v).compute(), cupy.core.core.ndarray)
+    assert isinstance(da.diagonal(v).compute(), cupy.ndarray)
 
     with pytest.raises(ValueError):
         da.diagonal(v, axis1=-2)
@@ -254,7 +318,7 @@ def test_diagonal():
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -272,7 +336,7 @@ def test_tril_triu():
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -324,7 +388,7 @@ def test_overlap_internal():
         ]
     )
 
-    assert_eq(g, expected)
+    assert_eq(g, expected, check_type=False)
     assert same_keys(da.overlap.overlap_internal(d, {0: 2, 1: 1}), g)
 
 
@@ -360,11 +424,11 @@ def test_reflect():
 
     e = da.overlap.reflect(d, axis=0, depth=2)
     expected = np.array([1, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 8])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
     e = da.overlap.reflect(d, axis=0, depth=1)
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
 
 @pytest.mark.skipif(
@@ -376,15 +440,15 @@ def test_nearest():
 
     e = da.overlap.nearest(d, axis=0, depth=2)
     expected = np.array([0, 0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9, 9])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
     e = da.overlap.nearest(d, axis=0, depth=1)
     expected = np.array([0, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 9])
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -396,12 +460,12 @@ def test_constant():
     assert e.shape[0] == d.shape[0] + 4
     assert e.shape[1] == d.shape[1]
 
-    assert_eq(e[1, :], np.ones(8, dtype=x.dtype) * 10)
-    assert_eq(e[-1, :], np.ones(8, dtype=x.dtype) * 10)
+    assert_eq(e[1, :], np.ones(8, dtype=x.dtype) * 10, check_type=False)
+    assert_eq(e[-1, :], np.ones(8, dtype=x.dtype) * 10, check_type=False)
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -427,13 +491,13 @@ def test_boundaries():
             [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
         ]
     )
-    assert_eq(e, expected)
+    assert_eq(e, expected, check_type=False)
 
 
 def test_random_all():
     def rnd_test(func, *args, **kwargs):
         a = func(*args, **kwargs)
-        assert type(a._meta) == cupy.core.core.ndarray
+        assert type(a._meta) == cupy.ndarray
         assert_eq(a, a)  # Check that _meta and computed arrays match types
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
@@ -485,14 +549,14 @@ def test_random_shapes(shape):
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
 
     x = rs.poisson(size=shape, chunks=3)
-    assert type(x._meta) == cupy.core.core.ndarray
+    assert type(x._meta) == cupy.ndarray
     assert_eq(x, x)  # Check that _meta and computed arrays match types
     assert x._meta.shape == (0,) * len(shape)
     assert x.shape == shape
 
 
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < "6.1.0",
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.1.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.1.0 (requires https://github.com/cupy/cupy/pull/2209)",
 )
@@ -573,8 +637,12 @@ def test_tsqr(m, n, chunks, error_type):
         assert_eq((m_u, n_u), u.shape)  # shape check
         assert_eq((n_s,), s.shape)  # shape check
         assert_eq((d_vh, d_vh), vh.shape)  # shape check
-        assert_eq(np.eye(n_u, n_u), da.dot(u.T, u))  # u must be orthonormal
-        assert_eq(np.eye(d_vh, d_vh), da.dot(vh, vh.T))  # vh must be orthonormal
+        assert_eq(
+            np.eye(n_u, n_u), da.dot(u.T, u), check_type=False
+        )  # u must be orthonormal
+        assert_eq(
+            np.eye(d_vh, d_vh), da.dot(vh, vh.T), check_type=False
+        )  # vh must be orthonormal
         assert_eq(mat, da.dot(da.dot(u, da.diag(s)), vh[:n_q]))  # accuracy check
     else:
         with pytest.raises(error_type):
@@ -709,7 +777,9 @@ def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
         assert_eq((m_q, n_q), q.shape)  # shape check
         assert_eq((m_r, n_r), r.shape)  # shape check
         assert_eq(mat, np.dot(q, r))  # accuracy check
-        assert_eq(np.eye(n_q, n_q), np.dot(q.T, q))  # q must be orthonormal
+        assert_eq(
+            np.eye(n_q, n_q), np.dot(q.T, q), check_type=False
+        )  # q must be orthonormal
         assert_eq(r, np.triu(r))  # r must be upper triangular
 
         # test SVD
@@ -722,9 +792,15 @@ def test_tsqr_uncertain(m_min, n_max, chunks, vary_rows, vary_cols, error_type):
         assert_eq((m_u, n_u), u.shape)  # shape check
         assert_eq((n_s,), s.shape)  # shape check
         assert_eq((d_vh, d_vh), vh.shape)  # shape check
-        assert_eq(np.eye(n_u, n_u), np.dot(u.T, u))  # u must be orthonormal
-        assert_eq(np.eye(d_vh, d_vh), np.dot(vh, vh.T))  # vh must be orthonormal
-        assert_eq(mat, np.dot(np.dot(u, np.diag(s)), vh[:n_q]))  # accuracy check
+        assert_eq(
+            np.eye(n_u, n_u), np.dot(u.T, u), check_type=False
+        )  # u must be orthonormal
+        assert_eq(
+            np.eye(d_vh, d_vh), np.dot(vh, vh.T), check_type=False
+        )  # vh must be orthonormal
+        assert_eq(
+            mat, np.dot(np.dot(u, np.diag(s)), vh[:n_q]), check_type=False
+        )  # accuracy check
     else:
         with pytest.raises(error_type):
             q, r = da.linalg.tsqr(data)
@@ -858,8 +934,9 @@ def test_cupy_sparse_concatenate(axis):
     assert (z.toarray() == z_expected.toarray()).all()
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
-    not IS_NEP18_ACTIVE or cupy.__version__ < "6.4.0",
+    not IS_NEP18_ACTIVE or cupy_version < parse_version("6.4.0"),
     reason="NEP-18 support is not available in NumPy or CuPy older than "
     "6.4.0 (requires https://github.com/cupy/cupy/pull/2418)",
 )
@@ -872,3 +949,520 @@ def test_bincount():
 
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize(
+    "arr", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))]
+)
+@pytest.mark.parametrize(
+    "like", [np.arange(5), cupy.arange(5), da.arange(5), da.from_array(cupy.arange(5))]
+)
+def test_asanyarray(arr, like):
+    if isinstance(like, np.ndarray) and isinstance(
+        da.utils.meta_from_array(arr), cupy.ndarray
+    ):
+        with pytest.raises(TypeError):
+            a = da.utils.asanyarray_safe(arr, like=like)
+    else:
+        a = da.utils.asanyarray_safe(arr, like=like)
+        assert type(a) is type(like)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_compress():
+    carr = cupy.random.randint(0, 3, size=(10, 10))
+
+    darr = da.from_array(carr, chunks=(20, 5))
+
+    c = cupy.asarray([True])
+    res = da.compress(c, darr, axis=0)
+
+    # cupy.compress is not implemented but dask implementation does not
+    # rely on np.compress -- move originial data back to host and
+    # compare da.compress with np.compress
+    assert_eq(np.compress(c.tolist(), carr.tolist(), axis=0), res, check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize(
+    "shape, chunks, pad_width, mode, kwargs",
+    [
+        ((10,), (3,), 1, "constant", {}),
+        ((10,), (3,), 2, "constant", {"constant_values": -1}),
+        ((10,), (3,), ((2, 3)), "constant", {"constant_values": (-1, -2)}),
+        (
+            (10, 11),
+            (4, 5),
+            ((1, 4), (2, 3)),
+            "constant",
+            {"constant_values": ((-1, -2), (2, 1))},
+        ),
+        ((10,), (3,), 3, "edge", {}),
+        ((10,), (3,), 3, "linear_ramp", {}),
+        ((10,), (3,), 3, "linear_ramp", {"end_values": 0}),
+        (
+            (10, 11),
+            (4, 5),
+            ((1, 4), (2, 3)),
+            "linear_ramp",
+            {"end_values": ((-1, -2), (4, 3))},
+        ),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "reflect", {}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "symmetric", {}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "wrap", {}),
+        ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
+        ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
+        ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
+        ((10,), (3,), 1, "empty", {}),
+    ],
+)
+def test_pad(shape, chunks, pad_width, mode, kwargs):
+    np_a = np.random.random(shape)
+    da_a = da.from_array(cupy.array(np_a), chunks=chunks)
+
+    np_r = np.pad(np_a, pad_width, mode, **kwargs)
+    da_r = da.pad(da_a, pad_width, mode, **kwargs)
+
+    assert isinstance(da_r._meta, cupy.ndarray)
+    assert isinstance(da_r.compute(), cupy.ndarray)
+
+    if mode == "empty":
+        # empty pads lead to undefined values which may be different
+        assert_eq(
+            np_r[pad_width:-pad_width], da_r[pad_width:-pad_width], check_type=False
+        )
+    else:
+        assert_eq(np_r, da_r, check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize("bins_type", [np, cupy])
+def test_digitize(bins_type):
+    x = cupy.array([2, 4, 5, 6, 1])
+    bins = bins_type.array([1, 2, 3, 4, 5])
+    for chunks in [2, 4]:
+        for right in [False, True]:
+            d = da.from_array(x, chunks=chunks)
+            bins_cupy = cupy.array(bins)
+            assert_eq(
+                da.digitize(d, bins, right=right),
+                np.digitize(x, bins_cupy, right=right),
+                check_type=False,
+            )
+
+    x = cupy.random.random(size=(100, 100))
+    bins = bins_type.random.random(size=13)
+    bins.sort()
+    for chunks in [(10, 10), (10, 20), (13, 17), (87, 54)]:
+        for right in [False, True]:
+            d = da.from_array(x, chunks=chunks)
+            bins_cupy = cupy.array(bins)
+            assert_eq(
+                da.digitize(d, bins, right=right),
+                np.digitize(x, bins_cupy, right=right),
+            )
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_vindex():
+    x_np = np.arange(56).reshape((7, 8))
+    x_cp = cupy.arange(56).reshape((7, 8))
+
+    d_np = da.from_array(x_np, chunks=(3, 4))
+    d_cp = da.from_array(x_cp, chunks=(3, 4))
+
+    res_np = da.core._vindex(d_np, [0, 1, 6, 0], [0, 1, 0, 7])
+    res_cp = da.core._vindex(d_cp, [0, 1, 6, 0], [0, 1, 0, 7])
+
+    assert type(res_cp._meta) == cupy.ndarray
+    assert_eq(
+        res_cp, res_cp, check_type=False
+    )  # Check that _meta and computed arrays match types
+
+    assert_eq(res_np, res_cp, check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentile():
+    d = da.from_array(cupy.ones((16,)), chunks=(4,))
+    qs = np.array([0, 50, 100])
+
+    assert_eq(
+        da.percentile(d, qs, interpolation="midpoint"),
+        np.array([1, 1, 1], dtype=d.dtype),
+        check_type=False,
+    )
+
+    x = cupy.array([0, 0, 5, 5, 5, 5, 20, 20])
+    d = da.from_array(x, chunks=(3,))
+
+    result = da.percentile(d, qs, interpolation="midpoint")
+    assert_eq(result, np.array([0, 5, 20], dtype=result.dtype), check_type=False)
+
+    # Currently fails, tokenize(cupy.array(...)) is not deterministic.
+    # See https://github.com/dask/dask/issues/6718
+    # assert same_keys(
+    #     da.percentile(d, qs),
+    #     da.percentile(d, qs)
+    # )
+
+    assert not same_keys(
+        da.percentile(d, qs, interpolation="midpoint"),
+        da.percentile(d, [0, 50], interpolation="midpoint"),
+    )
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentiles_with_empty_arrays():
+    x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
+    res = da.percentile(x, [10, 50, 90], interpolation="midpoint")
+
+    assert type(res._meta) == cupy.ndarray
+    assert_eq(res, res)  # Check that _meta and computed arrays match types
+    assert_eq(res, np.array([1, 1, 1], dtype=x.dtype), check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentiles_with_empty_q():
+    x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
+    result = da.percentile(x, [], interpolation="midpoint")
+
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, np.array([], dtype=x.dtype))
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize("q", [5, 5.0, np.int64(5), np.float64(5)])
+def test_percentiles_with_scaler_percentile(q):
+    # Regression test to ensure da.percentile works with scalar percentiles
+    # See #3020
+    d = da.from_array(cupy.ones((16,)), chunks=(4,))
+    result = da.percentile(d, q, interpolation="midpoint")
+
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, np.array([1], dtype=d.dtype))
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentiles_with_unknown_chunk_sizes():
+    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    x = rs.random(1000, chunks=(100,))
+    x._chunks = ((np.nan,) * 10,)
+
+    result = da.percentile(x, 50, interpolation="midpoint").compute()
+    assert type(result) == cupy.ndarray
+    assert 0.1 < result < 0.9
+
+    a, b = da.percentile(x, [40, 60], interpolation="midpoint").compute()
+    assert type(a) == cupy.ndarray
+    assert type(b) == cupy.ndarray
+    assert 0.1 < a < 0.9
+    assert 0.1 < b < 0.9
+    assert a < b
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_view():
+    x = np.arange(56).reshape((7, 8))
+    d = da.from_array(cupy.array(x), chunks=(2, 3))
+
+    result = d.view()
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.view(), check_type=False)
+
+    result = d.view("i4")
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.view("i4"), check_type=False)
+
+    result = d.view("i2")
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.view("i2"), check_type=False)
+    assert all(isinstance(s, int) for s in d.shape)
+
+    x = np.arange(8, dtype="i1")
+    d = da.from_array(cupy.array(x), chunks=(4,))
+    result = d.view("i4")
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(x.view("i4"), d.view("i4"), check_type=False)
+
+    with pytest.raises(ValueError):
+        x = np.arange(8, dtype="i1")
+        d = da.from_array(cupy.array(x), chunks=(3,))
+        d.view("i4")
+
+    with pytest.raises(ValueError):
+        d.view("i4", order="asdf")
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_view_fortran():
+    x = np.asfortranarray(np.arange(64).reshape((8, 8)))
+    d = da.from_array(cupy.asfortranarray(cupy.array(x)), chunks=(2, 3))
+
+    result = d.view("i4", order="F")
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.T.view("i4").T, check_type=False)
+
+    result = d.view("i2", order="F")
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, x.T.view("i2").T, check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_getter():
+    result = da.core.getter(cupy.arange(5), (None, slice(None, None)))
+
+    assert type(result) == cupy.ndarray
+    assert_eq(result, np.arange(5)[None, :], check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_store_kwargs():
+    d = da.from_array(cupy.ones((10, 10)), chunks=(2, 2))
+    a = d + 1
+
+    called = [False]
+
+    def get_func(*args, **kwargs):
+        assert kwargs.pop("foo") == "test kwarg"
+        r = dask.get(*args, **kwargs)
+        called[0] = True
+        return r
+
+    called[0] = False
+    at = cupy.zeros(shape=(10, 10))
+    da.core.store([a], [at], scheduler=get_func, foo="test kwarg")
+    assert called[0]
+
+    called[0] = False
+    at = cupy.zeros(shape=(10, 10))
+    a.store(at, scheduler=get_func, foo="test kwarg")
+    assert called[0]
+
+    called[0] = False
+    at = cupy.zeros(shape=(10, 10))
+    da.core.store([a], [at], scheduler=get_func, return_stored=True, foo="test kwarg")
+    assert called[0]
+
+
+@pytest.mark.parametrize("sp_format", ["csr", "csc"])
+def test_sparse_dot(sp_format):
+    pytest.importorskip("cupyx")
+
+    if sp_format == "csr":
+        sp_matrix = cupyx.scipy.sparse.csr_matrix
+    elif sp_format == "csc":
+        sp_matrix = cupyx.scipy.sparse.csc_matrix
+    dtype = "f"
+    density = 0.3
+    x_shape, x_chunks = (4, 8), (2, 4)
+    y_shape, y_chunks = (8, 6), (4, 3)
+    x = cupy.random.random(x_shape, dtype=dtype)
+    y = cupy.random.random(y_shape, dtype=dtype)
+    x[x < 1 - density] = 0
+    y[y < 1 - density] = 0
+    z = x.dot(y)
+
+    da_x = da.from_array(x, chunks=x_chunks, asarray=False, fancy=False)
+    da_y = da.from_array(y, chunks=y_chunks, asarray=False, fancy=False)
+    da_x = da_x.map_blocks(sp_matrix, dtype=dtype)
+    da_y = da_y.map_blocks(sp_matrix, dtype=dtype)
+    da_z = da.dot(da_x, da_y).compute()
+
+    assert cupyx.scipy.sparse.isspmatrix(da_z)
+    assert_eq(z, da_z.todense())
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentile():
+    d = da.from_array(cupy.ones((16,)), chunks=(4,))
+    qs = np.array([0, 50, 100])
+
+    assert_eq(
+        da.percentile(d, qs, interpolation="midpoint"),
+        np.array([1, 1, 1], dtype=d.dtype),
+        check_type=False,
+    )
+
+    x = cupy.array([0, 0, 5, 5, 5, 5, 20, 20])
+    d = da.from_array(x, chunks=(3,))
+
+    result = da.percentile(d, qs, interpolation="midpoint")
+    assert_eq(result, np.array([0, 5, 20], dtype=result.dtype), check_type=False)
+
+    assert not same_keys(
+        da.percentile(d, qs, interpolation="midpoint"),
+        da.percentile(d, [0, 50], interpolation="midpoint"),
+    )
+
+
+@pytest.mark.xfail(
+    reason="Non-deterministic tokenize(cupy.array(...)), "
+    "see https://github.com/dask/dask/issues/6718"
+)
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentile_tokenize():
+    d = da.from_array(cupy.ones((16,)), chunks=(4,))
+    qs = np.array([0, 50, 100])
+
+    assert same_keys(da.percentile(d, qs), da.percentile(d, qs))
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentiles_with_empty_arrays():
+    x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
+    res = da.percentile(x, [10, 50, 90], interpolation="midpoint")
+
+    assert type(res._meta) == cupy.ndarray
+    assert_eq(res, res)  # Check that _meta and computed arrays match types
+    assert_eq(res, np.array([1, 1, 1], dtype=x.dtype), check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentiles_with_empty_q():
+    x = da.from_array(cupy.ones(10), chunks=((5, 0, 5),))
+    result = da.percentile(x, [], interpolation="midpoint")
+
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, np.array([], dtype=x.dtype), check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+@pytest.mark.parametrize("q", [5, 5.0, np.int64(5), np.float64(5)])
+def test_percentiles_with_scaler_percentile(q):
+    # Regression test to ensure da.percentile works with scalar percentiles
+    # See #3020
+    d = da.from_array(cupy.ones((16,)), chunks=(4,))
+    result = da.percentile(d, q, interpolation="midpoint")
+
+    assert type(result._meta) == cupy.ndarray
+    assert_eq(result, result)  # Check that _meta and computed arrays match types
+    assert_eq(result, np.array([1], dtype=d.dtype), check_type=False)
+
+
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
+def test_percentiles_with_unknown_chunk_sizes():
+    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
+    x = rs.random(1000, chunks=(100,))
+    x._chunks = ((np.nan,) * 10,)
+
+    result = da.percentile(x, 50, interpolation="midpoint").compute()
+    assert type(result) == cupy.ndarray
+    assert 0.1 < result < 0.9
+
+    a, b = da.percentile(x, [40, 60], interpolation="midpoint").compute()
+    assert type(a) == cupy.ndarray
+    assert type(b) == cupy.ndarray
+    assert 0.1 < a < 0.9
+    assert 0.1 < b < 0.9
+    assert a < b
+
+
+@pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
+@pytest.mark.parametrize("x_chunks", [(3, 5), (2, 3), (1, 2), (1, 1)])
+def test_index_with_int_dask_array(x_chunks, idx_chunks):
+    # test data is crafted to stress use cases:
+    # - pick from different chunks of x out of order
+    # - a chunk of x contains no matches
+    # - only one chunk of x
+    x = cupy.array(
+        [[10, 20, 30, 40, 50], [60, 70, 80, 90, 100], [110, 120, 130, 140, 150]]
+    )
+    idx = cupy.array([3, 0, 1])
+    expect = cupy.array([[40, 10, 20], [90, 60, 70], [140, 110, 120]])
+
+    x = da.from_array(x, chunks=x_chunks)
+    if idx_chunks is not None:
+        idx = da.from_array(idx, chunks=idx_chunks)
+
+    assert_eq(x[:, idx], expect)
+    assert_eq(x.T[idx, :], expect.T)
+
+
+@pytest.mark.parametrize("iscomplex", [False, True])
+@pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
+def test_cupy_lstsq(nrow, ncol, chunk, iscomplex):
+    cupy.random.seed(1)
+    A = cupy.random.randint(1, 20, (nrow, ncol))
+    b = cupy.random.randint(1, 20, nrow)
+    if iscomplex:
+        A = A + 1.0j * cupy.random.randint(1, 20, A.shape)
+        b = b + 1.0j * cupy.random.randint(1, 20, b.shape)
+
+    dA = da.from_array(A, (chunk, ncol))
+    db = da.from_array(b, chunk)
+
+    x, r, rank, s = cupy.linalg.lstsq(A, b, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
+
+    # reduce rank causes multicollinearity, only compare rank
+    A[:, 1] = A[:, 2]
+    dA = da.from_array(A, (chunk, ncol))
+    db = da.from_array(b, chunk)
+    x, r, rank, s = cupy.linalg.lstsq(
+        A, b, rcond=cupy.finfo(cupy.double).eps * max(nrow, ncol)
+    )
+    assert rank == ncol - 1
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db)
+    assert drank.compute() == rank
+
+    # 2D case
+    A = cupy.random.randint(1, 20, (nrow, ncol))
+    b2D = cupy.random.randint(1, 20, (nrow, ncol // 2))
+    if iscomplex:
+        A = A + 1.0j * cupy.random.randint(1, 20, A.shape)
+        b2D = b2D + 1.0j * cupy.random.randint(1, 20, b2D.shape)
+    dA = da.from_array(A, (chunk, ncol))
+    db2D = da.from_array(b2D, (chunk, ncol // 2))
+    x, r, rank, s = cupy.linalg.lstsq(A, b2D, rcond=-1)
+    dx, dr, drank, ds = da.linalg.lstsq(dA, db2D)
+
+    assert_eq(dx, x)
+    assert_eq(dr, r)
+    assert drank.compute() == rank
+    assert_eq(ds, s)
+
+
+def _get_symmat(size):
+    cupy.random.seed(1)
+    A = cupy.random.randint(1, 21, (size, size))
+    lA = cupy.tril(A)
+    return lA.dot(lA.T)
+
+
+@pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 3), (30, 6)])
+def test_cupy_cholesky(shape, chunk):
+    scipy_linalg = pytest.importorskip("scipy.linalg")
+
+    A = _get_symmat(shape)
+    dA = da.from_array(A, (chunk, chunk))
+
+    # Need to take the transpose because default in `cupy.linalg.cholesky` is
+    # to return lower triangle
+    assert_eq(
+        da.linalg.cholesky(dA),
+        cupy.linalg.cholesky(A).T,
+        check_graph=False,
+        check_chunks=False,
+    )
+    assert_eq(
+        da.linalg.cholesky(dA, lower=True).map_blocks(cupy.asnumpy),
+        scipy_linalg.cholesky(cupy.asnumpy(A), lower=True),
+        check_graph=False,
+        check_chunks=False,
+    )

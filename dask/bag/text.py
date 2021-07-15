@@ -1,10 +1,10 @@
 import io
-import os
 from functools import partial
 
+from fsspec.core import open_files
 from tlz import concat
 
-from ..bytes import open_files, read_bytes
+from ..bytes import read_bytes
 from ..delayed import delayed
 from ..utils import parse_bytes, system_encoding
 from .core import from_delayed
@@ -18,7 +18,7 @@ def read_text(
     compression="infer",
     encoding=system_encoding,
     errors="strict",
-    linedelimiter=os.linesep,
+    linedelimiter=None,
     collection=True,
     storage_options=None,
     files_per_partition=None,
@@ -41,7 +41,7 @@ def read_text(
         Compression format like 'gzip' or 'xz'.  Defaults to 'infer'
     encoding: string
     errors: string
-    linedelimiter: string
+    linedelimiter: string or None
     collection: bool, optional
         Return dask.bag if True, or list of delayed values if false
     storage_options: dict
@@ -89,18 +89,28 @@ def read_text(
     if isinstance(blocksize, str):
         blocksize = parse_bytes(blocksize)
 
-    files = open_files(
-        urlpath,
-        mode="rt",
-        encoding=encoding,
-        errors=errors,
-        compression=compression,
-        **(storage_options or {})
-    )
     if blocksize is None:
+        if linedelimiter in [None, "", "\n", "\r", "\r\n"]:
+            newline = linedelimiter
+            linedelimiter = None
+        else:
+            newline = ""
+        files = open_files(
+            urlpath,
+            mode="rt",
+            encoding=encoding,
+            errors=errors,
+            compression=compression,
+            newline=newline,
+            **(storage_options or {})
+        )
         if files_per_partition is None:
             blocks = [
-                delayed(list)(delayed(partial(file_to_blocks, include_path))(fil))
+                delayed(list)(
+                    delayed(
+                        partial(file_to_blocks, include_path, delimiter=linedelimiter)
+                    )(fil)
+                )
                 for fil in files
             ]
         else:
@@ -109,15 +119,18 @@ def read_text(
                 block_files = files[start : (start + files_per_partition)]
                 block_lines = delayed(concat)(
                     delayed(map)(
-                        partial(file_to_blocks, include_path),
+                        partial(file_to_blocks, include_path, delimiter=linedelimiter),
                         block_files,
                     )
                 )
                 blocks.append(block_lines)
     else:
+        # special case for linedelimiter=None: we will need to split on an actual bytestring
+        # and the line reader will then use "universal" mode. Just as well that \r\n and \n
+        # will both work (thankfully \r for MacOS is no longer a thing)
         o = read_bytes(
             urlpath,
-            delimiter=linedelimiter.encode(),
+            delimiter=linedelimiter.encode() if linedelimiter is not None else b"\n",
             blocksize=blocksize,
             sample=False,
             compression=compression,
@@ -125,7 +138,10 @@ def read_text(
             **(storage_options or {})
         )
         raw_blocks = o[1]
-        blocks = [delayed(decode)(b, encoding, errors) for b in concat(raw_blocks)]
+        blocks = [
+            delayed(decode)(b, encoding, errors, linedelimiter)
+            for b in concat(raw_blocks)
+        ]
         if include_path:
             paths = list(
                 concat([[path] * len(raw_blocks[i]) for i, path in enumerate(o[2])])
@@ -143,10 +159,21 @@ def read_text(
     return blocks
 
 
-def file_to_blocks(include_path, lazy_file):
+def file_to_blocks(include_path, lazy_file, delimiter=None):
+    # blocksize is None branch
     with lazy_file as f:
-        for line in f:
-            yield (line, lazy_file.path) if include_path else line
+        if delimiter is not None:
+            text = f.read()
+            if not text:
+                return []
+            parts = text.split(delimiter)
+            yield from (
+                (line, lazy_file.path) if include_path else line
+                for line in [line + delimiter for line in parts[:-1]] + parts[-1:]
+            )
+        else:
+            for line in f:
+                yield (line, lazy_file.path) if include_path else line
 
 
 def attach_path(block, path):
@@ -154,7 +181,17 @@ def attach_path(block, path):
         yield (p, path)
 
 
-def decode(block, encoding, errors):
+def decode(block, encoding, errors, line_delimiter):
+    # blocksize is not None branch
     text = block.decode(encoding, errors)
-    lines = io.StringIO(text)
-    return list(lines)
+    if line_delimiter in [None, "", "\n", "\r", "\r\n"]:
+        lines = io.StringIO(text, newline=line_delimiter)
+        return list(lines)
+    else:
+        if not text:
+            return []
+        parts = text.split(line_delimiter)
+        out = [t + line_delimiter for t in parts[:-1]] + (
+            parts[-1:] if not text.endswith(line_delimiter) else []
+        )
+        return out

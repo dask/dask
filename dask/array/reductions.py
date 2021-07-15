@@ -1,43 +1,29 @@
 import builtins
-from collections.abc import Iterable
+import contextlib
 import operator
+from collections.abc import Iterable
 from functools import partial
 from itertools import product, repeat
-from math import factorial, log, ceil
-
-import numpy as np
+from math import ceil, factorial, log, log2
 from numbers import Integral, Number
 
-from tlz import compose, partition_all, get, accumulate, pluck
+import numpy as np
+from tlz import accumulate, compose, drop, get, partition_all, pluck
 
-from . import chunk
-from .core import _concatenate2, Array, handle_out, implements
-from .blockwise import blockwise
-from ..blockwise import lol_tuples
-from .creation import arange, diagonal
-from .utils import full_like_safe, validate_axis, compute_meta, is_arraylike
-from .wrap import zeros, ones
-from .numpy_compat import ma_divide, divide as np_divide
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import (
-    ignoring,
-    funcname,
-    Dispatch,
-    deepmap,
-    getargspec,
-    derived_from,
-    is_series_like,
-)
 from .. import config
+from ..base import tokenize
+from ..blockwise import lol_tuples
+from ..highlevelgraph import HighLevelGraph
+from ..utils import deepmap, derived_from, funcname, getargspec, is_series_like
+from . import chunk
+from .blockwise import blockwise
+from .core import Array, _concatenate2, handle_out, implements
+from .creation import arange, diagonal
 
-# Generic functions to support chunks of different types
-empty_lookup = Dispatch("empty")
-empty_lookup.register((object, np.ndarray), np.empty)
-empty_lookup.register(np.ma.masked_array, np.ma.empty)
-divide_lookup = Dispatch("divide")
-divide_lookup.register((object, np.ndarray), np_divide)
-divide_lookup.register(np.ma.masked_array, ma_divide)
+# Keep empty_lookup here for backwards compatibility
+from .dispatch import divide_lookup, empty_lookup  # noqa: F401
+from .utils import compute_meta, full_like_safe, is_arraylike, validate_axis
+from .wrap import ones, zeros
 
 
 def divide(a, b, dtype=None):
@@ -313,7 +299,12 @@ def partial_reduce(
             meta = func(reduced_meta, computing_meta=True)
         # no meta keyword argument exists for func, and it isn't required
         except TypeError:
-            meta = func(reduced_meta)
+            try:
+                meta = func(reduced_meta)
+            except ValueError as e:
+                # min/max functions have no identity, don't apply function to meta
+                if "zero-size array to reduction operation" in str(e):
+                    meta = reduced_meta
         # when no work can be computed on the empty array (e.g., func is a ufunc)
         except ValueError:
             pass
@@ -330,7 +321,7 @@ def partial_reduce(
     if np.isscalar(meta):
         return Array(graph, name, out_chunks, dtype=dtype)
     else:
-        with ignoring(AttributeError):
+        with contextlib.suppress(AttributeError):
             meta = meta.astype(dtype)
         return Array(graph, name, out_chunks, meta=meta)
 
@@ -446,32 +437,74 @@ def nansum(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None)
     )
 
 
-with ignoring(AttributeError):
+@derived_from(np)
+def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
+    if dtype is not None:
+        dt = dtype
+    else:
+        dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
+    return reduction(
+        a,
+        chunk.nanprod,
+        chunk.prod,
+        axis=axis,
+        keepdims=keepdims,
+        dtype=dt,
+        split_every=split_every,
+        out=out,
+    )
 
-    @derived_from(np)
-    def nanprod(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None):
-        if dtype is not None:
-            dt = dtype
-        else:
-            dt = getattr(chunk.nansum(np.empty((1,), dtype=a.dtype)), "dtype", object)
-        return reduction(
-            a,
-            chunk.nanprod,
-            chunk.prod,
-            axis=axis,
-            keepdims=keepdims,
-            dtype=dt,
-            split_every=split_every,
-            out=out,
-        )
 
-    @derived_from(np)
-    def nancumsum(x, axis, dtype=None, out=None):
-        return cumreduction(chunk.nancumsum, operator.add, 0, x, axis, dtype, out=out)
+@derived_from(np)
+def nancumsum(x, axis, dtype=None, out=None, *, method="sequential"):
+    """Dask added an additional keyword-only argument ``method``.
 
-    @derived_from(np)
-    def nancumprod(x, axis, dtype=None, out=None):
-        return cumreduction(chunk.nancumprod, operator.mul, 1, x, axis, dtype, out=out)
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+        * 'sequential' performs the cumsum of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
+            first taking the sum of each block and combines the sums via a binary tree.
+            This method may be faster or more memory efficient depending on workload,
+            scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        chunk.nancumsum,
+        operator.add,
+        0,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.nansum,
+    )
+
+
+@derived_from(np)
+def nancumprod(x, axis, dtype=None, out=None, *, method="sequential"):
+    """Dask added an additional keyword-only argument ``method``.
+
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumprod.  Default is 'sequential'.
+
+        * 'sequential' performs the cumprod of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
+            taking the product of each block and combines the products via a binary tree.
+            This method may be faster or more memory efficient depending on workload,
+            scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        chunk.nancumprod,
+        operator.mul,
+        1,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.nanprod,
+    )
 
 
 @derived_from(np)
@@ -503,7 +536,7 @@ def nanmax(a, axis=None, keepdims=False, split_every=None, out=None):
 
 
 def numel(x, **kwargs):
-    """ A reduction to count the number of elements """
+    """A reduction to count the number of elements"""
 
     if hasattr(x, "mask"):
         return chunk.sum(np.ones_like(x), **kwargs)
@@ -535,7 +568,7 @@ def numel(x, **kwargs):
 
 
 def nannumel(x, **kwargs):
-    """ A reduction to count the number of elements """
+    """A reduction to count the number of elements"""
     return chunk.sum(~(np.isnan(x)), **kwargs)
 
 
@@ -558,7 +591,7 @@ def mean_combine(
     dtype="f8",
     axis=None,
     computing_meta=False,
-    **kwargs
+    **kwargs,
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -631,10 +664,6 @@ def nanmean(a, axis=None, dtype=None, keepdims=False, split_every=None, out=None
     )
 
 
-with ignoring(AttributeError):
-    nanmean = derived_from(np)(nanmean)
-
-
 def moment_chunk(
     A, order=2, sum=chunk.sum, numel=numel, dtype="f8", computing_meta=False, **kwargs
 ):
@@ -669,7 +698,7 @@ def moment_combine(
     sum=np.sum,
     axis=None,
     computing_meta=False,
-    **kwargs
+    **kwargs,
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -709,7 +738,7 @@ def moment_agg(
     sum=np.sum,
     axis=None,
     computing_meta=False,
-    **kwargs
+    **kwargs,
 ):
     if not isinstance(pairs, list):
         pairs = [pairs]
@@ -828,10 +857,6 @@ def nanvar(
     )
 
 
-with ignoring(AttributeError):
-    nanvar = derived_from(np)(nanvar)
-
-
 def _sqrt(a):
     o = np.sqrt(a)
     if isinstance(o, np.ma.masked_array) and not o.shape and o.mask.all():
@@ -891,12 +916,8 @@ def nanstd(
     return result
 
 
-with ignoring(AttributeError):
-    nanstd = derived_from(np)(nanstd)
-
-
 def _arg_combine(data, axis, argfunc, keepdims=False):
-    """ Merge intermediate results from ``arg_*`` functions"""
+    """Merge intermediate results from ``arg_*`` functions"""
     axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
     vals = data["vals"]
     arg = data["arg"]
@@ -1071,7 +1092,183 @@ nanargmin = make_arg_reduction(chunk.nanmin, _nanargmin, True)
 nanargmax = make_arg_reduction(chunk.nanmax, _nanargmax, True)
 
 
-def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
+def _prefixscan_combine(func, binop, pre, x, axis, dtype):
+    """Combine results of a parallel prefix scan such as cumsum
+
+    Parameters
+    ----------
+    func : callable
+        Cumulative function (e.g. ``np.cumsum``)
+    binop : callable
+        Associative function (e.g. ``add``)
+    pre : np.array
+        The value calculated in parallel from ``preop``.
+        For example, the sum of all the previous blocks.
+    x : np.array
+        Current block
+    axis : int
+    dtype : dtype
+
+    Returns
+    -------
+    np.array
+    """
+    # We could compute this in two tasks.
+    # This would allow us to do useful work (i.e., func), while waiting on `pre`.
+    # Using one task may guide the scheduler to do better and reduce scheduling overhead.
+    return binop(pre, func(x, axis=axis, dtype=dtype))
+
+
+def _prefixscan_first(func, x, axis, dtype):
+    """Compute the prefix scan (e.g., cumsum) on the first block
+
+    Parameters
+    ----------
+    func : callable
+        Cumulative function (e.g. ``np.cumsum``)
+    x : np.array
+        Current block
+    axis : int
+    dtype : dtype
+
+    Returns
+    -------
+    np.array
+    """
+    return func(x, axis=axis, dtype=dtype)
+
+
+def prefixscan_blelloch(func, preop, binop, x, axis=None, dtype=None, out=None):
+    """Generic function to perform parallel cumulative scan (a.k.a prefix scan)
+
+    The Blelloch prefix scan is work-efficient and exposes parallelism.
+    A parallel cumsum works by first taking the sum of each block, then do a binary tree
+    merge followed by a fan-out (i.e., the Brent-Kung pattern).  We then take the cumsum
+    of each block and add the sum of the previous blocks.
+
+    When performing a cumsum across N chunks, this method has 2 * lg(N) levels of dependencies.
+    In contrast, the sequential method has N levels of dependencies.
+
+    Floating point operations should be more accurate with this method compared to sequential.
+
+    Parameters
+    ----------
+    func : callable
+        Cumulative function (e.g. ``np.cumsum``)
+    preop : callable
+        Function to get the final value of a cumulative function (e.g., ``np.sum``)
+    binop : callable
+        Associative function (e.g. ``add``)
+    x : dask array
+    axis : int
+    dtype : dtype
+
+    Returns
+    -------
+    dask array
+    """
+    if axis is None:
+        x = x.flatten().rechunk(chunks=x.npartitions)
+        axis = 0
+    if dtype is None:
+        dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
+    assert isinstance(axis, Integral)
+    axis = validate_axis(axis, x.ndim)
+    name = "{0}-{1}".format(func.__name__, tokenize(func, axis, preop, binop, x, dtype))
+    base_key = (name,)
+
+    # Right now, the metadata for batches is incorrect, but this should be okay
+    batches = x.map_blocks(preop, axis=axis, keepdims=True, dtype=dtype)
+    # We don't need the last index until the end
+    *indices, last_index = full_indices = [
+        list(
+            product(
+                *[range(nb) if j != axis else [i] for j, nb in enumerate(x.numblocks)]
+            )
+        )
+        for i in range(x.numblocks[axis])
+    ]
+    prefix_vals = [[(batches.name,) + index for index in vals] for vals in indices]
+    dsk = {}
+    n_vals = len(prefix_vals)
+    level = 0
+    if n_vals >= 2:
+        # Upsweep
+        stride = 1
+        stride2 = 2
+        while stride2 <= n_vals:
+            for i in range(stride2 - 1, n_vals, stride2):
+                new_vals = []
+                for index, left_val, right_val in zip(
+                    indices[i], prefix_vals[i - stride], prefix_vals[i]
+                ):
+                    key = base_key + index + (level, i)
+                    dsk[key] = (binop, left_val, right_val)
+                    new_vals.append(key)
+                prefix_vals[i] = new_vals
+            stride = stride2
+            stride2 *= 2
+            level += 1
+
+        # Downsweep
+        # With `n_vals == 3`, we would have `stride = 1` and `stride = 0`, but we need
+        # to do a downsweep iteration, so make sure stride2 is at least 2.
+        stride2 = builtins.max(2, 2 ** ceil(log2(n_vals // 2)))
+        stride = stride2 // 2
+        while stride > 0:
+            for i in range(stride2 + stride - 1, n_vals, stride2):
+                new_vals = []
+                for index, left_val, right_val in zip(
+                    indices[i], prefix_vals[i - stride], prefix_vals[i]
+                ):
+                    key = base_key + index + (level, i)
+                    dsk[key] = (binop, left_val, right_val)
+                    new_vals.append(key)
+                prefix_vals[i] = new_vals
+            stride2 = stride
+            stride //= 2
+            level += 1
+
+    if full_indices:
+        for index in full_indices[0]:
+            dsk[base_key + index] = (
+                _prefixscan_first,
+                func,
+                (x.name,) + index,
+                axis,
+                dtype,
+            )
+        for indexes, vals in zip(drop(1, full_indices), prefix_vals):
+            for index, val in zip(indexes, vals):
+                dsk[base_key + index] = (
+                    _prefixscan_combine,
+                    func,
+                    binop,
+                    val,
+                    (x.name,) + index,
+                    axis,
+                    dtype,
+                )
+    if len(full_indices) < 2:
+        deps = [x]
+    else:
+        deps = [x, batches]
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
+    result = Array(graph, name, x.chunks, batches.dtype)
+    return handle_out(out, result)
+
+
+def cumreduction(
+    func,
+    binop,
+    ident,
+    x,
+    axis=None,
+    dtype=None,
+    out=None,
+    method="sequential",
+    preop=None,
+):
     """Generic function for cumulative reduction
 
     Parameters
@@ -1085,6 +1282,16 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
     x: dask Array
     axis: int
     dtype: dtype
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+        * 'sequential' performs the scan of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel scan.  It exposes parallelism by first
+          calling ``preop`` on each block and combines the values via a binary tree.
+          This method may be faster or more memory efficient depending on workload,
+          scheduler, and hardware.  More benchmarking is necessary.
+    preop: callable, optional
+        Function used by 'blelloch' method like `np.cumsum->np.sum`` or ``np.cumprod->np.prod``
 
     Returns
     -------
@@ -1095,8 +1302,19 @@ def cumreduction(func, binop, ident, x, axis=None, dtype=None, out=None):
     cumsum
     cumprod
     """
+    if method == "blelloch":
+        if preop is None:
+            raise TypeError(
+                'cumreduction with "blelloch" method required `preop=` argument'
+            )
+        return prefixscan_blelloch(func, preop, binop, x, axis, dtype, out=out)
+    elif method != "sequential":
+        raise ValueError(
+            f'Invalid method for cumreduction.  Expected "sequential" or "blelloch".  Got: {method!r}'
+        )
+
     if axis is None:
-        x = x.flatten()
+        x = x.flatten().rechunk(chunks=x.npartitions)
         axis = 0
     if dtype is None:
         dtype = getattr(func(np.empty((0,), dtype=x.dtype)), "dtype", object)
@@ -1155,13 +1373,55 @@ def _cumprod_merge(a, b):
 
 
 @derived_from(np)
-def cumsum(x, axis=None, dtype=None, out=None):
-    return cumreduction(np.cumsum, _cumsum_merge, 0, x, axis, dtype, out=out)
+def cumsum(x, axis=None, dtype=None, out=None, method="sequential"):
+    """Dask added an additional keyword-only argument ``method``.
+
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumsum.  Default is 'sequential'.
+
+        * 'sequential' performs the cumsum of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumsum.  It exposes parallelism by
+          first taking the sum of each block and combines the sums via a binary tree.
+          This method may be faster or more memory efficient depending on workload,
+          scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        np.cumsum,
+        _cumsum_merge,
+        0,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.sum,
+    )
 
 
 @derived_from(np)
-def cumprod(x, axis=None, dtype=None, out=None):
-    return cumreduction(np.cumprod, _cumprod_merge, 1, x, axis, dtype, out=out)
+def cumprod(x, axis=None, dtype=None, out=None, method="sequential"):
+    """Dask added an additional keyword-only argument ``method``.
+
+    method : {'sequential', 'blelloch'}, optional
+        Choose which method to use to perform the cumprod.  Default is 'sequential'.
+
+        * 'sequential' performs the cumprod of each prior block before the current block.
+        * 'blelloch' is a work-efficient parallel cumprod.  It exposes parallelism by first
+          taking the product of each block and combines the products via a binary tree.
+          This method may be faster or more memory efficient depending on workload,
+          scheduler, and hardware.  More benchmarking is necessary.
+    """
+    return cumreduction(
+        np.cumprod,
+        _cumprod_merge,
+        1,
+        x,
+        axis,
+        dtype,
+        out=out,
+        method=method,
+        preop=np.prod,
+    )
 
 
 def topk(a, k, axis=-1, split_every=None):
@@ -1303,7 +1563,7 @@ def trace(a, offset=0, axis1=0, axis2=1, dtype=None):
 @derived_from(np)
 def median(a, axis=None, keepdims=False, out=None):
     """
-    This works by automatically chunking the reduced axes to a single chunk
+    This works by automatically chunking the reduced axes to a single chunk if necessary
     and then calling ``numpy.median`` function across the remaining dimensions
     """
     if axis is None:
@@ -1317,7 +1577,9 @@ def median(a, axis=None, keepdims=False, out=None):
 
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
-    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
         np.median,
@@ -1350,7 +1612,9 @@ def nanmedian(a, axis=None, keepdims=False, out=None):
 
     axis = [ax + a.ndim if ax < 0 else ax for ax in axis]
 
-    a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
+    # rechunk if reduced axes are not contained in a single chunk
+    if builtins.any(a.numblocks[ax] > 1 for ax in axis):
+        a = a.rechunk({ax: -1 if ax in axis else "auto" for ax in range(a.ndim)})
 
     result = a.map_blocks(
         np.nanmedian,

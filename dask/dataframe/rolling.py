@@ -1,17 +1,18 @@
 import datetime
 import inspect
-
-import pandas as pd
-from pandas.core.window import Rolling as pd_Rolling
 from numbers import Integral
 
+import pandas as pd
+from pandas.api.types import is_datetime64_any_dtype
+from pandas.core.window import Rolling as pd_Rolling
+
 from ..base import tokenize
-from ..utils import M, funcname, derived_from, has_keyword
 from ..highlevelgraph import HighLevelGraph
+from ..utils import M, derived_from, funcname, has_keyword
+from . import methods
 from ._compat import PANDAS_VERSION
 from .core import _emulate
 from .utils import make_meta
-from . import methods
 
 
 def overlap_chunk(
@@ -77,7 +78,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
     dd.DataFrame.map_overlap
     """
     if isinstance(before, datetime.timedelta) or isinstance(after, datetime.timedelta):
-        if not df.index._meta_nonempty.is_all_dates:
+        if not is_datetime64_any_dtype(df.index._meta_nonempty.inferred_type):
             raise TypeError(
                 "Must have a `DatetimeIndex` when using string offset "
                 "for `before` and `after`"
@@ -102,7 +103,7 @@ def map_overlap(func, df, before, after, *args, **kwargs):
         meta = kwargs.pop("meta")
     else:
         meta = _emulate(func, df, *args, **kwargs)
-    meta = make_meta(meta, index=df._meta.index)
+    meta = make_meta(meta, index=df._meta.index, parent_meta=df._meta)
 
     name = "{0}-{1}".format(func_name, token)
     name_a = "overlap-prepend-" + tokenize(df, before)
@@ -253,7 +254,7 @@ def pandas_rolling_method(df, rolling_kwargs, name, *args, **kwargs):
     return getattr(rolling, name)(*args, **kwargs)
 
 
-class Rolling(object):
+class Rolling:
     """Provides rolling window calculations."""
 
     def __init__(

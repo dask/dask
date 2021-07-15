@@ -1,13 +1,12 @@
-import pandas as pd
 import numpy as np
+import pandas as pd
 from pandas.core.resample import Resampler as pd_Resampler
 
-from ..core import DataFrame, Series
 from ...base import tokenize
-from ...utils import derived_from
 from ...highlevelgraph import HighLevelGraph
-from .._compat import PANDAS_GT_0240
+from ...utils import derived_from
 from .. import methods
+from ..core import DataFrame, Series
 
 
 def getnanos(rule):
@@ -32,19 +31,14 @@ def _resample_series(
     out = getattr(series.resample(rule, **resample_kwargs), how)(
         *how_args, **how_kwargs
     )
-    if PANDAS_GT_0240:
-        new_index = pd.date_range(
-            start.tz_localize(None),
-            end.tz_localize(None),
-            freq=rule,
-            closed=reindex_closed,
-            name=out.index.name,
-        ).tz_localize(start.tz, nonexistent="shift_forward")
 
-    else:
-        new_index = pd.date_range(
-            start, end, freq=rule, closed=reindex_closed, name=out.index.name
-        )
+    new_index = pd.date_range(
+        start.tz_localize(None),
+        end.tz_localize(None),
+        freq=rule,
+        closed=reindex_closed,
+        name=out.index.name,
+    ).tz_localize(start.tz, nonexistent="shift_forward")
 
     if not out.index.isin(new_index).all():
         raise ValueError(
@@ -96,7 +90,7 @@ def _resample_bin_and_out_divs(divisions, rule, closed="left", label="left"):
     return tuple(map(pd.Timestamp, newdivs)), tuple(map(pd.Timestamp, outdivs))
 
 
-class Resampler(object):
+class Resampler:
     """Class for resampling timeseries data.
 
     This class is commonly encountered when using ``obj.resample(...)`` which

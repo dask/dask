@@ -1,17 +1,17 @@
-from distutils.version import LooseVersion
+import warnings
 
-try:
-    import fsspec
-except ImportError as e:
-    fsspec = None
+from fsspec.core import open as fs_open_file
+from fsspec.core import open_files as fs_open_files
 
-if fsspec is None or LooseVersion(fsspec.__version__) < LooseVersion("0.3.3"):
-    raise ImportError(
-        "fsspec is required to use any file-system functionality."
-        " Please install using\n"
-        "conda install -c conda-forge 'fsspec>=0.3.3'\n"
-        "or\n"
-        "python -m pip install 'fsspec>=0.3.3'"
-    )
+from ..utils import _deprecated
+from .core import read_bytes
 
-from .core import read_bytes, open_file, open_files
+
+@_deprecated(use_instead="fsspec.core.open")
+def open_file(*arg, **kwargs):
+    return fs_open_file(*arg, **kwargs)
+
+
+@_deprecated(use_instead="fsspec.core.open_files")
+def open_files(*arg, **kwargs):
+    return fs_open_files(*arg, **kwargs)

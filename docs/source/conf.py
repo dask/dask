@@ -13,14 +13,14 @@
 
 import os
 
+# Add any Sphinx extension module names here, as strings. They can be extensions
+# coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
+import sys
+
 # -- General configuration -----------------------------------------------------
 
 # If your documentation needs a minimal Sphinx version, state it here.
 # needs_sphinx = '1.0'
-
-# Add any Sphinx extension module names here, as strings. They can be extensions
-# coming with Sphinx (named 'sphinx.ext.*') or your custom ones.
-import sys
 
 
 # If extensions (or modules to document with autodoc) are in another directory,
@@ -38,6 +38,7 @@ extensions = [
     "sphinx.ext.intersphinx",
     "sphinx.ext.autosummary",
     "sphinx.ext.extlinks",
+    "sphinx.ext.viewcode",
     "numpydoc",
     "sphinx_click.ext",
     "dask_config_sphinx_ext",
@@ -300,18 +301,25 @@ extlinks = {
 #  --Options for sphinx extensions -----------------------------------------------
 
 intersphinx_mapping = {
+    "python": ("https://docs.python.org/3/", None),
     "pandas": (
         "https://pandas.pydata.org/pandas-docs/stable/",
         "https://pandas.pydata.org/pandas-docs/stable/objects.inv",
     ),
     "numpy": (
-        "https://docs.scipy.org/doc/numpy/",
-        "https://docs.scipy.org/doc/numpy/objects.inv",
+        "https://numpy.org/doc/stable/",
+        "https://numpy.org/doc/stable/objects.inv",
     ),
     "asyncssh": (
         "https://asyncssh.readthedocs.io/en/latest/",
         "https://asyncssh.readthedocs.io/en/latest/objects.inv",
     ),
+    "pyarrow": ("https://arrow.apache.org/docs/", None),
+    "zarr": (
+        "https://zarr.readthedocs.io/en/latest/",
+        "https://zarr.readthedocs.io/en/latest/objects.inv",
+    ),
+    "skimage": ("https://scikit-image.org/docs/dev/", None),
 }
 
 # Redirects
@@ -324,10 +332,12 @@ redirect_files = [
     ("dataframe-overview.html", "dataframe.html"),
     ("dataframe-performance.html", "dataframe-best-practices.html"),
     ("delayed-overview.html", "delayed.html"),
+    ("educational-resources.html", "presentations.html"),
     ("scheduler-choice.html", "setup.html"),
     ("diagnostics.html", "diagnostics-local.html"),
     ("inspect.html", "graphviz.html"),
     ("faq.html", "https://stackoverflow.com/questions/tagged/dask?sort=frequent"),
+    ("funding.html", "https://dask.org/#supported-by"),
     ("examples-tutorials.html", "https://examples.dask.org"),
     ("examples/array-extend.html", "https://examples.dask.org"),
     ("examples/array-hdf5.html", "https://examples.dask.org"),
@@ -357,9 +367,7 @@ redirect_template = """\
 </html>
 """
 
-html_context = {
-    "css_files": ["_static/theme_overrides.css"]  # override wide tables in RTD theme
-}
+html_css_files = ["_static/theme_overrides.css"]  # override wide tables in RTD theme
 
 # Rate limiting issue for github: https://github.com/sphinx-doc/sphinx/issues/7388
 linkcheck_ignore = [

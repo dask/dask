@@ -11,6 +11,7 @@ Top level user functions:
    allclose
    angle
    any
+   append
    apply_along_axis
    apply_over_axes
    arange
@@ -97,6 +98,7 @@ Top level user functions:
    greater
    greater_equal
    histogram
+   histogramdd
    hstack
    hypot
    imag
@@ -184,7 +186,9 @@ Top level user functions:
    rint
    roll
    rollaxis
+   rot90
    round
+   searchsorted
    sign
    signbit
    sin
@@ -209,7 +213,6 @@ Top level user functions:
    tril
    triu
    trunc
-   unify_chunks
    unique
    unravel_index
    var
@@ -354,6 +357,7 @@ Slightly Overlapping Computations
 .. autosummary::
    overlap.overlap
    overlap.map_overlap
+   lib.stride_tricks.sliding_window_view
    overlap.trim_internal
    overlap.trim_overlap
 
@@ -392,6 +396,7 @@ Internal functions
 .. autosummary::
    blockwise
    normalize_chunks
+   unify_chunks
 
 
 Other functions
@@ -399,18 +404,12 @@ Other functions
 
 .. currentmodule:: dask.array
 
-.. autofunction:: from_array
-.. autofunction:: from_delayed
-.. autofunction:: store
-.. autofunction:: coarsen
-.. autofunction:: stack
-.. autofunction:: concatenate
-
 .. autofunction:: add
 .. autofunction:: all
 .. autofunction:: allclose
 .. autofunction:: angle
 .. autofunction:: any
+.. autofunction:: append
 .. autofunction:: apply_along_axis
 .. autofunction:: apply_over_axes
 .. autofunction:: arange
@@ -496,6 +495,7 @@ Other functions
 .. autofunction:: greater
 .. autofunction:: greater_equal
 .. autofunction:: histogram
+.. autofunction:: histogramdd
 .. autofunction:: hstack
 .. autofunction:: hypot
 .. autofunction:: imag
@@ -581,6 +581,7 @@ Other functions
 .. autofunction:: rint
 .. autofunction:: roll
 .. autofunction:: rollaxis
+.. autofunction:: rot90
 .. autofunction:: round
 .. autofunction:: sign
 .. autofunction:: signbit
@@ -760,6 +761,7 @@ Other functions
 .. autofunction:: map_blocks
 .. autofunction:: blockwise
 .. autofunction:: normalize_chunks
+.. autofunction:: unify_chunks
 
 .. currentmodule:: dask.array
 

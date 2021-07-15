@@ -1,11 +1,10 @@
 import warnings
 
-
 # Ported from pandas
 # https://github.com/pandas-dev/pandas/blob/master/pandas/core/accessor.py
 
 
-class CachedAccessor(object):
+class CachedAccessor:
     """
     Custom property-like object (descriptor) for caching accessors.
 

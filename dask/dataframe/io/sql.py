@@ -2,11 +2,11 @@ import numpy as np
 import pandas as pd
 
 import dask
-from dask.dataframe.utils import PANDAS_GT_0240, PANDAS_VERSION
 from dask.delayed import tokenize
-from .io import from_delayed, from_pandas
+
 from ... import delayed
 from .. import methods
+from .io import from_delayed, from_pandas
 
 
 def read_sql_table(
@@ -141,7 +141,7 @@ def read_sql_table(
         q = sql.select(columns).limit(head_rows).select_from(table)
         head = pd.read_sql(q, engine, **kwargs)
 
-        if head.empty:
+        if len(head) == 0:
             # no results at all
             name = table.name
             schema = table.schema
@@ -224,8 +224,12 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
     engine = sa.create_engine(uri, **engine_kwargs)
     df = pd.read_sql(q, engine, **kwargs)
     engine.dispose()
-    if df.empty:
+    if len(df) == 0:
         return meta
+    elif len(meta.dtypes.to_dict()) == 0:
+        # only index column in loaded
+        # required only for pandas < 1.0.0
+        return df
     else:
         return df.astype(meta.dtypes.to_dict(), copy=False)
 
@@ -364,15 +368,8 @@ def to_sql(
         index_label=index_label,
         chunksize=chunksize,
         dtype=dtype,
+        method=method,
     )
-
-    if method:
-        if not PANDAS_GT_0240:
-            raise NotImplementedError(
-                "'method' requires pandas>=0.24.0. You have version %s" % PANDAS_VERSION
-            )
-        else:
-            kwargs["method"] = method
 
     def make_meta(meta):
         return meta.to_sql(**kwargs)

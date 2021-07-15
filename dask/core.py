@@ -427,7 +427,7 @@ def _toposort(dsk, keys=None, returncycle=False, dependencies=None):
 
 
 def toposort(dsk, dependencies=None):
-    """ Return a list of keys of dask sorted in topological order."""
+    """Return a list of keys of dask sorted in topological order."""
     return _toposort(dsk, dependencies=dependencies)
 
 
@@ -473,7 +473,7 @@ def isdag(d, keys):
     return not getcycle(d, keys)
 
 
-class literal(object):
+class literal:
     """A small serializable object to wrap literal values without copying"""
 
     __slots__ = ("data",)

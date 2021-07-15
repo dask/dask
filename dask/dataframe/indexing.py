@@ -1,19 +1,20 @@
-from datetime import datetime
-from collections import defaultdict
-
 import bisect
+from collections import defaultdict
+from datetime import datetime
+
 import numpy as np
 import pandas as pd
 
-from .core import new_dd_object, Series
 from ..array.core import Array
-from .utils import is_index_like, meta_nonempty
-from . import methods
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
+from . import methods
+from ._compat import PANDAS_GT_130
+from .core import Series, new_dd_object
+from .utils import is_index_like, meta_nonempty
 
 
-class _IndexerBase(object):
+class _IndexerBase:
     def __init__(self, obj):
         self.obj = obj
 
@@ -74,7 +75,7 @@ class _iLocIndexer(_IndexerBase):
 
 
 class _LocIndexer(_IndexerBase):
-    """ Helper class for the .loc accessor """
+    """Helper class for the .loc accessor"""
 
     @property
     def _meta_indexer(self):
@@ -98,7 +99,7 @@ class _LocIndexer(_IndexerBase):
         return self._loc(iindexer, cindexer)
 
     def _loc(self, iindexer, cindexer):
-        """ Helper function for the .loc accessor """
+        """Helper function for the .loc accessor"""
         if isinstance(iindexer, Series):
             return self._loc_series(iindexer, cindexer)
         elif isinstance(iindexer, Array):
@@ -118,7 +119,7 @@ class _LocIndexer(_IndexerBase):
                 return self._loc_element(iindexer, cindexer)
         else:
             if isinstance(iindexer, (list, np.ndarray)):
-                # applying map_pattition to each partitions
+                # applying map_partitions to each partition
                 # results in duplicated NaN rows
                 msg = "Cannot index with list against unknown division"
                 raise KeyError(msg)
@@ -136,7 +137,7 @@ class _LocIndexer(_IndexerBase):
         if obj.index is DatetimeIndex / PeriodIndex
         """
         idx = meta_nonempty(self.obj._meta.index)
-        iindexer = _maybe_partial_time_string(idx, iindexer, kind="loc")
+        iindexer = _maybe_partial_time_string(idx, iindexer)
         return iindexer
 
     def _loc_series(self, iindexer, cindexer):
@@ -338,7 +339,7 @@ def _coerce_loc_index(divisions, o):
     return o
 
 
-def _maybe_partial_time_string(index, indexer, kind):
+def _maybe_partial_time_string(index, indexer):
     """
     Convert indexer for partial string selection
     if data has DatetimeIndex/PeriodIndex
@@ -349,21 +350,26 @@ def _maybe_partial_time_string(index, indexer, kind):
     if not isinstance(index, (pd.DatetimeIndex, pd.PeriodIndex)):
         return indexer
 
+    if PANDAS_GT_130:
+        kind_option = {}
+    else:
+        kind_option = {"kind": "loc"}
+
     if isinstance(indexer, slice):
         if isinstance(indexer.start, str):
-            start = index._maybe_cast_slice_bound(indexer.start, "left", kind)
+            start = index._maybe_cast_slice_bound(indexer.start, "left", **kind_option)
         else:
             start = indexer.start
 
         if isinstance(indexer.stop, str):
-            stop = index._maybe_cast_slice_bound(indexer.stop, "right", kind)
+            stop = index._maybe_cast_slice_bound(indexer.stop, "right", **kind_option)
         else:
             stop = indexer.stop
         return slice(start, stop)
 
     elif isinstance(indexer, str):
-        start = index._maybe_cast_slice_bound(indexer, "left", "loc")
-        stop = index._maybe_cast_slice_bound(indexer, "right", "loc")
+        start = index._maybe_cast_slice_bound(indexer, "left", **kind_option)
+        stop = index._maybe_cast_slice_bound(indexer, "right", **kind_option)
         return slice(min(start, stop), max(start, stop))
 
     return indexer

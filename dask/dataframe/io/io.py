@@ -1,27 +1,26 @@
+import os
 from math import ceil
 from operator import getitem
-import os
 from threading import Lock
 
-import pandas as pd
 import numpy as np
+import pandas as pd
 from tlz import merge
 
-from ...base import tokenize
 from ... import array as da
+from ...base import tokenize
+from ...dataframe.core import new_dd_object
 from ...delayed import delayed
-
-from ..core import DataFrame, Series, Index, new_dd_object, has_parallel_type
-from ..shuffle import set_partition
-from ..utils import insert_meta_param_description, check_meta, make_meta, is_series_like
-
 from ...utils import M, ensure_dict
+from ..core import DataFrame, Index, Series, has_parallel_type, new_dd_object
+from ..shuffle import set_partition
+from ..utils import check_meta, insert_meta_param_description, is_series_like, make_meta
 
 lock = Lock()
 
 
 def _meta_from_array(x, columns=None, index=None, meta=None):
-    """ Create empty DataFrame or Series which has correct dtype """
+    """Create empty DataFrame or Series which has correct dtype"""
 
     if x.ndim > 2:
         raise ValueError(
@@ -136,7 +135,11 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
 
     This splits an in-memory Pandas dataframe into several parts and constructs
     a dask.dataframe from those parts on which Dask.dataframe can operate in
-    parallel.
+    parallel.  By default, the input dataframe will be sorted by the index to
+    produce cleanly-divided partitions (with known divisions).  To preserve the
+    input ordering, make sure the input index is monotonically-increasing. The
+    ``sort=False`` option will also avoid reordering, but will not result in
+    known divisions.
 
     Note that, despite parallelism, Dask.dataframe may not always be faster
     than Pandas.  We recommend that you stay with Pandas for as long as
@@ -153,8 +156,9 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
     chunksize : int, optional
         The number of rows per index partition to use.
     sort: bool
-        Sort input first to obtain cleanly divided partitions or don't sort and
-        don't get cleanly divided partitions
+        Sort the input by index first to obtain cleanly divided partitions
+        (with known divisions).  If False, the input will not be sorted, and
+        all divisions will be set to None. Default is True.
     name: string, optional
         An optional keyname for the dataframe.  Defaults to hashing the input
 
@@ -253,8 +257,9 @@ def from_bcolz(x, chunksize=None, categorize=True, index=None, lock=lock, **kwar
     if lock is True:
         lock = Lock()
 
-    import dask.array as da
     import bcolz
+
+    import dask.array as da
 
     if isinstance(x, str):
         x = bcolz.ctable(rootdir=x)
@@ -579,6 +584,7 @@ def from_delayed(
         delayed(df) if not isinstance(df, Delayed) and hasattr(df, "key") else df
         for df in dfs
     ]
+
     for df in dfs:
         if not isinstance(df, Delayed):
             raise TypeError("Expected Delayed object, got %s" % type(df).__name__)
@@ -587,6 +593,9 @@ def from_delayed(
         meta = delayed(make_meta)(dfs[0]).compute()
     else:
         meta = make_meta(meta)
+
+    if not dfs:
+        dfs = [delayed(make_meta)(meta)]
 
     name = prefix + "-" + tokenize(*dfs)
     dsk = merge(df.dask for df in dfs)

@@ -1,8 +1,7 @@
-import pytest
 import numpy as np
+import pytest
 
 import dask.array as da
-from dask.array.numpy_compat import _make_sliced_dtype
 from dask.array.utils import assert_eq
 
 
@@ -29,12 +28,6 @@ def test_basic():
     result = dx[["a", "b"]]
     expected = x[["a", "b"]]
     assert_eq(result, expected)
-
-
-def test_slice_dtype(dtype, index):
-    result = _make_sliced_dtype(dtype, index)
-    expected = np.ones((5, len(dtype)), dtype=dtype)[index].dtype
-    assert result == expected
 
 
 def test_min_max_round_funcs():

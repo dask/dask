@@ -1,10 +1,9 @@
-import re
 import os
+import re
 from functools import partial
 
-from .core import istask, get_dependencies, ishashable
-from .utils import funcname, import_required, key_split, apply
-
+from .core import get_dependencies, ishashable, istask
+from .utils import apply, funcname, import_required, key_split
 
 graphviz = import_required(
     "graphviz",
@@ -274,7 +273,12 @@ def dot_graph(dsk, filename="mydask", format=None, **kwargs):
 
 def graphviz_to_file(g, filename, format):
     fmts = [".png", ".pdf", ".dot", ".svg", ".jpeg", ".jpg"]
-    if format is None and any(filename.lower().endswith(fmt) for fmt in fmts):
+
+    if (
+        format is None
+        and filename is not None
+        and any(filename.lower().endswith(fmt) for fmt in fmts)
+    ):
         filename, format = os.path.splitext(filename)
         format = format[1:].lower()
 
@@ -293,7 +297,7 @@ def graphviz_to_file(g, filename, format):
 
     display_cls = _get_display_cls(format)
 
-    if not filename:
+    if filename is None:
         return display_cls(data=data)
 
     full_filename = ".".join([filename, format])

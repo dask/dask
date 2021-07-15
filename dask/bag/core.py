@@ -6,62 +6,60 @@ import uuid
 import warnings
 from collections import defaultdict
 from collections.abc import Iterable, Iterator
-from functools import wraps, partial, reduce
+from functools import partial, reduce, wraps
 from random import Random
 from urllib.request import urlopen
 
 import tlz as toolz
+from fsspec.core import open_files
 from tlz import (
-    merge,
-    take,
-    valmap,
-    partition_all,
-    remove,
+    accumulate,
     compose,
+    count,
     curry,
     first,
-    second,
-    accumulate,
-    peek,
     frequencies,
-    merge_with,
-    join,
-    reduceby,
-    count,
-    pluck,
     groupby,
+    join,
+    merge,
+    merge_with,
+    partition_all,
+    peek,
+    pluck,
+    reduceby,
+    remove,
+    second,
+    take,
     topk,
     unique,
-    accumulate,
+    valmap,
 )
 
 from .. import config
-from .avro import to_avro
-from ..base import tokenize, dont_optimize, DaskMethodsMixin
-from ..bytes import open_files
+from ..base import DaskMethodsMixin, dont_optimize, replace_name_in_key, tokenize
 from ..context import globalmethod
-from ..core import quote, istask, get_dependencies, reverse_dict, flatten
-from ..sizeof import sizeof
+from ..core import flatten, get_dependencies, istask, quote, reverse_dict
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
 from ..multiprocessing import get as mpget
-from ..optimization import fuse, cull, inline
+from ..optimization import cull, fuse, inline
+from ..sizeof import sizeof
 from ..utils import (
     apply,
-    system_encoding,
-    takes_multiple_arguments,
-    funcname,
     digit,
-    insert,
-    ensure_dict,
     ensure_bytes,
+    ensure_dict,
     ensure_unicode,
+    funcname,
+    insert,
+    iter_chunks,
     key_split,
     parse_bytes,
-    iter_chunks,
+    system_encoding,
+    takes_multiple_arguments,
 )
 from . import chunk
-
+from .avro import to_avro
 
 no_default = "__no__default__"
 no_result = type(
@@ -133,7 +131,7 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
 
 
 def optimize(dsk, keys, fuse_keys=None, rename_fused_keys=None, **kwargs):
-    """ Optimize a dask from a dask Bag. """
+    """Optimize a dask from a dask Bag."""
     dsk = ensure_dict(dsk)
     dsk2, dependencies = cull(dsk, keys)
     kwargs = {}
@@ -273,7 +271,7 @@ def finalize_item(results):
     return results[0]
 
 
-class StringAccessor(object):
+class StringAccessor:
     """String processing functions
 
     Examples
@@ -331,7 +329,7 @@ class StringAccessor(object):
 
 
 def robust_wraps(wrapper):
-    """ A weak version of wraps that only copies doc. """
+    """A weak version of wraps that only copies doc."""
 
     def _(wrapped):
         wrapped.__doc__ = wrapper.__doc__
@@ -352,6 +350,15 @@ class Item(DaskMethodsMixin):
     def __dask_keys__(self):
         return [self.key]
 
+    def __dask_layers__(self):
+        # Deal with instances created with Item.from_delayed()
+        # e.g.: Item.from_delayed(da.ones(1).to_delayed()[0])
+        # See Delayed.__dask_layers__
+        if isinstance(self.dask, HighLevelGraph) and len(self.dask.layers) == 1:
+            return tuple(self.dask.layers)
+        else:
+            return (self.key,)
+
     def __dask_tokenize__(self):
         return self.key
 
@@ -362,7 +369,11 @@ class Item(DaskMethodsMixin):
         return finalize_item, ()
 
     def __dask_postpersist__(self):
-        return Item, (self.key,)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        key = replace_name_in_key(self.key, rename) if rename else self.key
+        return Item(dsk, key)
 
     @staticmethod
     def from_delayed(value):
@@ -375,7 +386,7 @@ class Item(DaskMethodsMixin):
         if not isinstance(value, Delayed) and hasattr(value, "key"):
             value = delayed(value)
         assert isinstance(value, Delayed)
-        return Item(ensure_dict(value.dask), value.key)
+        return Item(value.dask, value.key)
 
     @property
     def _args(self):
@@ -468,7 +479,13 @@ class Bag(DaskMethodsMixin):
         return finalize, ()
 
     def __dask_postpersist__(self):
-        return type(self), (self.name, self.npartitions)
+        return self._rebuild, ()
+
+    def _rebuild(self, dsk, *, rename=None):
+        name = self.name
+        if rename:
+            name = rename.get(name, name)
+        return type(self)(dsk, name, self.npartitions)
 
     def __str__(self):
         return "dask.bag<%s, npartitions=%d>" % (key_split(self.name), self.npartitions)
@@ -1030,31 +1047,31 @@ class Bag(DaskMethodsMixin):
             return Bag(graph, fmt, 1)
 
     def sum(self, split_every=None):
-        """ Sum all elements """
+        """Sum all elements"""
         return self.reduction(sum, sum, split_every=split_every)
 
     def max(self, split_every=None):
-        """ Maximum element """
+        """Maximum element"""
         return self.reduction(max, max, split_every=split_every)
 
     def min(self, split_every=None):
-        """ Minimum element """
+        """Minimum element"""
         return self.reduction(min, min, split_every=split_every)
 
     def any(self, split_every=None):
-        """ Are any of the elements truthy? """
+        """Are any of the elements truthy?"""
         return self.reduction(any, any, split_every=split_every)
 
     def all(self, split_every=None):
-        """ Are all elements truthy? """
+        """Are all elements truthy?"""
         return self.reduction(all, all, split_every=split_every)
 
     def count(self, split_every=None):
-        """ Count the number of elements. """
+        """Count the number of elements."""
         return self.reduction(count, sum, split_every=split_every)
 
     def mean(self):
-        """ Arithmetic mean """
+        """Arithmetic mean"""
 
         def mean_chunk(seq):
             total, n = 0.0, 0
@@ -1070,13 +1087,13 @@ class Bag(DaskMethodsMixin):
         return self.reduction(mean_chunk, mean_aggregate, split_every=False)
 
     def var(self, ddof=0):
-        """ Variance """
+        """Variance"""
         return self.reduction(
             chunk.var_chunk, partial(chunk.var_aggregate, ddof=ddof), split_every=False
         )
 
     def std(self, ddof=0):
-        """ Standard deviation """
+        """Standard deviation"""
         return self.var(ddof=ddof).apply(math.sqrt)
 
     def join(self, other, on_self, on_other=None):
@@ -1149,7 +1166,7 @@ class Bag(DaskMethodsMixin):
         return type(self)(graph, name, self.npartitions)
 
     def product(self, other):
-        """ Cartesian product between two bags. """
+        """Cartesian product between two bags."""
         assert isinstance(other, Bag)
         name = "product-" + tokenize(self, other)
         n, m = self.npartitions, other.npartitions
@@ -1532,6 +1549,7 @@ class Bag(DaskMethodsMixin):
         0  Charlie      300
         """
         import pandas as pd
+
         import dask.dataframe as dd
 
         if meta is None:
@@ -1546,7 +1564,7 @@ class Bag(DaskMethodsMixin):
         elif columns is not None:
             raise ValueError("Can't specify both `meta` and `columns`")
         else:
-            meta = dd.utils.make_meta(meta)
+            meta = dd.utils.make_meta(meta, parent_meta=pd.DataFrame())
         # Serializing the columns and dtypes is much smaller than serializing
         # the empty frame
         cols = list(meta.columns)
@@ -1664,7 +1682,7 @@ def accumulate_part(binop, seq, initial, is_first=False):
 
 
 def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
-    """ Partition a bag along a grouper, store partitions on disk. """
+    """Partition a bag along a grouper, store partitions on disk."""
     for block in partition_all(nelements, sequence):
         d = groupby(grouper, block)
         d2 = defaultdict(list)
@@ -1675,7 +1693,7 @@ def partition(grouper, sequence, npartitions, p, nelements=2 ** 20):
 
 
 def collect(grouper, group, p, barrier_token):
-    """ Collect partitions from disk and yield k,v group pairs. """
+    """Collect partitions from disk and yield k,v group pairs."""
     d = groupby(grouper, p.get(group, lock=False))
     return list(d.items())
 
@@ -1732,7 +1750,7 @@ def from_url(urls):
 
     Examples
     --------
-    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/master/README.rst')  # doctest: +SKIP
+    >>> a = from_url('http://raw.githubusercontent.com/dask/dask/main/README.rst')  # doctest: +SKIP
     >>> a.npartitions  # doctest: +SKIP
     1
 

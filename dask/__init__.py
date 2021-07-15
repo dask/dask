@@ -1,17 +1,9 @@
 from . import config, datasets
-from .core import istask
-from .local import get_sync as get
-
-try:
-    from .delayed import delayed
-except ImportError:
-    pass
-try:
-    from .base import visualize, compute, persist, optimize, is_dask_collection
-except ImportError:
-    pass
-
 from ._version import get_versions
+from .base import annotate, compute, is_dask_collection, optimize, persist, visualize
+from .core import istask
+from .delayed import delayed
+from .local import get_sync as get
 
 versions = get_versions()
 __version__ = versions["version"]

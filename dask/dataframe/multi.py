@@ -53,41 +53,45 @@ We proceed with hash joins in the following stages:
     ``dask.dataframe.shuffle.shuffle``.
 2.  Perform embarrassingly parallel join across shuffled inputs.
 """
-from functools import wraps, partial
+import math
+import pickle
 import warnings
+from functools import partial, wraps
 
-from tlz import merge_sorted, unique, first
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_dtype_equal, is_categorical_dtype
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
+from tlz import first, merge_sorted, unique
 
-from ..base import tokenize, is_dask_collection
+from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
-from ..utils import apply
+from ..layers import BroadcastJoinLayer
+from ..utils import M, apply
+from . import methods
 from ._compat import PANDAS_GT_100
 from .core import (
-    _Frame,
     DataFrame,
-    Series,
-    map_partitions,
     Index,
+    Series,
+    _concat,
+    _Frame,
     _maybe_from_pandas,
-    new_dd_object,
     is_broadcastable,
+    map_partitions,
+    new_dd_object,
     prefix_reduction,
     suffix_reduction,
 )
+from .dispatch import group_split_dispatch, hash_object_dispatch
 from .io import from_pandas
-from . import methods
-from .shuffle import shuffle, rearrange_by_divisions
+from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
 from .utils import (
-    strip_unknown_categories,
-    is_series_like,
     asciitable,
     is_dataframe_like,
+    is_series_like,
     make_meta,
+    strip_unknown_categories,
 )
-from ..utils import M
 
 
 def align_partitions(*dfs):
@@ -231,7 +235,48 @@ allowed_right = ("inner", "right")
 
 def merge_chunk(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
-    out = lhs.merge(*args, **kwargs)
+    categorical_columns = kwargs.pop("categorical_columns", None)
+
+    rhs, *args = args
+    left_index = kwargs.get("left_index", False)
+    right_index = kwargs.get("right_index", False)
+
+    if categorical_columns is not None and PANDAS_GT_100:
+        for col in categorical_columns:
+            left = None
+            right = None
+
+            if col in lhs:
+                left = lhs[col]
+            elif col == kwargs.get("right_on", None) and left_index:
+                if is_categorical_dtype(lhs.index):
+                    left = lhs.index
+
+            if col in rhs:
+                right = rhs[col]
+            elif col == kwargs.get("left_on", None) and right_index:
+                if is_categorical_dtype(rhs.index):
+                    right = rhs.index
+
+            dtype = "category"
+            if left is not None and right is not None:
+                dtype = methods.union_categoricals(
+                    [left.astype("category"), right.astype("category")]
+                ).dtype
+
+            if left is not None:
+                if isinstance(left, pd.Index):
+                    lhs.index = left.astype(dtype)
+                else:
+                    lhs = lhs.assign(**{col: left.astype(dtype)})
+            if right is not None:
+                if isinstance(right, pd.Index):
+                    rhs.index = right.astype(dtype)
+                else:
+                    rhs = rhs.assign(**{col: right.astype(dtype)})
+
+    out = lhs.merge(rhs, *args, **kwargs)
+
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
     # of input dtypes.
@@ -241,7 +286,7 @@ def merge_chunk(lhs, *args, **kwargs):
 
 
 def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwargs):
-    """ Join two partitioned dataframes along their index """
+    """Join two partitioned dataframes along their index"""
     how = kwargs.get("how", "left")
     kwargs["left_index"] = left_index
     kwargs["right_index"] = right_index
@@ -253,6 +298,7 @@ def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwar
 
     meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
 
     dsk = dict()
     for i, (a, b) in enumerate(parts):
@@ -275,6 +321,7 @@ def hash_join(
     suffixes=("_x", "_y"),
     shuffle=None,
     indicator=False,
+    max_branch=None,
 ):
     """Join two DataFrames on particular columns with hash join
 
@@ -286,8 +333,12 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
-    lhs2 = shuffle_func(lhs, left_on, npartitions=npartitions, shuffle=shuffle)
-    rhs2 = shuffle_func(rhs, right_on, npartitions=npartitions, shuffle=shuffle)
+    lhs2 = shuffle_func(
+        lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    )
+    rhs2 = shuffle_func(
+        rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
+    )
 
     if isinstance(left_on, Index):
         left_on = None
@@ -312,7 +363,10 @@ def hash_join(
     )
 
     # dummy result
-    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **kwargs)
+    # Avoid using dummy data for a collection it is empty
+    _lhs_meta = lhs._meta_nonempty if len(lhs.columns) else lhs._meta
+    _rhs_meta = rhs._meta_nonempty if len(rhs.columns) else rhs._meta
+    meta = _lhs_meta.merge(_rhs_meta, **kwargs)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
@@ -323,6 +377,8 @@ def hash_join(
     name = "hash-join-" + token
 
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+
     dsk = {
         (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
         for i in range(npartitions)
@@ -334,11 +390,13 @@ def hash_join(
 
 
 def single_partition_join(left, right, **kwargs):
-    # if the merge is perfomed on_index, divisions can be kept, otherwise the
-    # new index will not necessarily correspond the current divisions
+    # if the merge is performed on_index, divisions can be kept, otherwise the
+    # new index will not necessarily correspond with the current divisions
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
+    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+
     name = "merge-" + tokenize(left, right, **kwargs)
     if left.npartitions == 1 and kwargs["how"] in allowed_right:
         left_key = first(left.__dask_keys__())
@@ -420,6 +478,7 @@ def merge(
     npartitions=None,
     shuffle=None,
     max_branch=None,
+    broadcast=None,
 ):
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
@@ -531,6 +590,8 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
         )
+        categorical_columns = meta.select_dtypes(include="category").columns
+
         if merge_indexed_left and left.known_divisions:
             right = rearrange_by_divisions(
                 right, right_on, left.divisions, max_branch, shuffle=shuffle
@@ -555,11 +616,57 @@ def merge(
             suffixes=suffixes,
             indicator=indicator,
             empty_index_dtype=meta.index.dtype,
+            categorical_columns=categorical_columns,
         )
     # Catch all hash join
     else:
         if left_on and right_on:
             warn_dtype_mismatch(left, right, left_on, right_on)
+
+        # Check if we should use a broadcast_join
+        # See note on `broadcast_bias` below.
+        broadcast_bias = 0.5
+        if isinstance(broadcast, float):
+            broadcast_bias = float(broadcast)
+            broadcast = None
+        elif not isinstance(broadcast, bool) and broadcast is not None:
+            # Let's be strict about the `broadcast` type to
+            # avoid arbitrarily casting int to float or bool.
+            raise ValueError(
+                f"Optional `broadcast` argument must be float or bool."
+                f"Type={type(broadcast)} is not supported."
+            )
+        bcast_side = "left" if left.npartitions < right.npartitions else "right"
+        n_small = min(left.npartitions, right.npartitions)
+        n_big = max(left.npartitions, right.npartitions)
+        if (
+            shuffle == "tasks"
+            and how in ("inner", "left", "right")
+            and how != bcast_side
+            and broadcast is not False
+        ):
+            # Note on `broadcast_bias`:
+            # We can expect the broadcast merge to be competitive with
+            # the shuffle merge when the number of partitions in the
+            # smaller collection is less than the logarithm of the number
+            # of partitions in the larger collection.  By default, we add
+            # a small preference for the shuffle-based merge by multiplying
+            # the log result by a 0.5 scaling factor.  We call this factor
+            # the `broadcast_bias`, because a larger number will make Dask
+            # more likely to select the `broadcast_join` code path.  If
+            # the user specifies a floating-point value for the `broadcast`
+            # kwarg, that value will be used as the `broadcast_bias`.
+            if broadcast or (n_small < math.log2(n_big) * broadcast_bias):
+                return broadcast_join(
+                    left,
+                    left.index if left_index else left_on,
+                    right,
+                    right.index if right_index else right_on,
+                    how,
+                    npartitions,
+                    suffixes,
+                    indicator=indicator,
+                )
 
         return hash_join(
             left,
@@ -571,6 +678,7 @@ def merge(
             suffixes,
             shuffle=shuffle,
             indicator=indicator,
+            max_branch=max_branch,
         )
 
 
@@ -662,7 +770,7 @@ def pair_partitions(L, R):
 
 
 def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
-    """ merge_asof but potentially adding rows to the beginning/end of right """
+    """merge_asof but potentially adding rows to the beginning/end of right"""
     frames = []
     if prev is not None:
         frames.append(prev)
@@ -680,10 +788,9 @@ def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
 
 def get_unsorted_columns(frames):
     """
-    Determine the unsorted colunn order.
+    Determine the unsorted column order.
 
     This should match the output of concat([frames], sort=False)
-    for pandas >=0.23
     """
     new_columns = pd.concat([frame._meta for frame in frames]).columns
     order = []
@@ -696,41 +803,26 @@ def get_unsorted_columns(frames):
     return order
 
 
-def concat_and_unsort(frames, columns):
-    """
-    Compatibility concat for Pandas <0.23.0
-
-    Concatenates and then selects the desired (unsorted) column order.
-    """
-    return pd.concat(frames)[columns]
-
-
-def _concat_compat(frames, left, right):
-    if PANDAS_GT_100:
-        # join_axes removed
-        return (pd.concat, frames, 0, "outer", False, None, None, None, False, False)
-    else:
-        # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
-        # we only care about sort, to silence warnings.
-        return (
-            pd.concat,
-            frames,
-            0,
-            "outer",
-            None,
-            False,
-            None,
-            None,
-            None,
-            False,
-            False,
-        )
-
-
 def merge_asof_indexed(left, right, **kwargs):
     dsk = dict()
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
+
+    if all(map(pd.isnull, left.divisions)):
+        # results in an empty df that looks like ``meta``
+        return from_pandas(meta.iloc[len(meta) :], npartitions=left.npartitions)
+
+    if all(map(pd.isnull, right.divisions)):
+        # results in an df that looks like ``left`` with nulls for
+        # all ``right.columns``
+        return map_partitions(
+            pd.merge_asof,
+            left,
+            right=right,
+            left_index=True,
+            right_index=True,
+            meta=meta,
+        )
 
     dependencies = [left, right]
     tails = heads = None
@@ -755,8 +847,7 @@ def merge_asof_indexed(left, right, **kwargs):
                     kwargs,
                 )
             )
-        args = _concat_compat(frames, left, right)
-        dsk[(name, i)] = args
+        dsk[(name, i)] = (methods.concat, frames)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     result = new_dd_object(graph, name, meta, left.divisions)
@@ -802,7 +893,7 @@ def merge_asof(
     }
 
     if left is None or right is None:
-        raise ValueError("Cannot merge_asof on empty DataFrames")
+        raise ValueError("Cannot merge_asof on None")
 
     # if is_dataframe_like(left) and is_dataframe_like(right):
     if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
@@ -859,31 +950,36 @@ def merge_asof(
 ###############################################################
 
 
-def concat_and_check(dfs):
+def concat_and_check(dfs, ignore_order=False):
     if len(set(map(len, dfs))) != 1:
         raise ValueError("Concatenated DataFrames of different lengths")
-    return methods.concat(dfs, axis=1)
+    return methods.concat(dfs, axis=1, ignore_order=ignore_order)
 
 
-def concat_unindexed_dataframes(dfs, **kwargs):
+def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
     name = "concat-" + tokenize(*dfs)
 
     dsk = {
-        (name, i): (concat_and_check, [(df._name, i) for df in dfs])
+        (name, i): (concat_and_check, [(df._name, i) for df in dfs], ignore_order)
         for i in range(dfs[0].npartitions)
     }
-
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat([df._meta for df in dfs], axis=1, **kwargs)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dfs)
     return new_dd_object(graph, name, meta, dfs[0].divisions)
 
 
-def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
-    """ Concatenate indexed dataframes together along the index """
+def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
+    """Concatenate indexed dataframes together along the index"""
     warn = axis != 0
+    kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
-        [df._meta for df in dfs], axis=axis, join=join, filter_warning=warn, **kwargs
+        [df._meta for df in dfs],
+        axis=axis,
+        join=join,
+        filter_warning=warn,
+        **kwargs,
     )
     empties = [strip_unknown_categories(df._meta) for df in dfs]
 
@@ -900,7 +996,10 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
     uniform = False
 
     dsk = dict(
-        ((name, i), (methods.concat, part, axis, join, uniform, filter_warning))
+        (
+            (name, i),
+            (methods.concat, part, axis, join, uniform, filter_warning, kwargs),
+        )
         for i, part in enumerate(parts2)
     )
     for df in dfs2:
@@ -909,13 +1008,19 @@ def concat_indexed_dataframes(dfs, axis=0, join="outer", **kwargs):
     return new_dd_object(dsk, name, meta, divisions)
 
 
-def stack_partitions(dfs, divisions, join="outer", **kwargs):
+def stack_partitions(dfs, divisions, join="outer", ignore_order=False, **kwargs):
     """Concatenate partitions on axis=0 by doing a simple stack"""
     # Use _meta_nonempty as pandas.concat will incorrectly cast float to datetime
     # for empty data frames. See https://github.com/pandas-dev/pandas/issues/32934.
+
+    kwargs.update({"ignore_order": ignore_order})
+
     meta = make_meta(
         methods.concat(
-            [df._meta_nonempty for df in dfs], join=join, filter_warning=False, **kwargs
+            [df._meta_nonempty for df in dfs],
+            join=join,
+            filter_warning=False,
+            **kwargs,
         )
     )
     empty = strip_unknown_categories(meta)
@@ -957,11 +1062,19 @@ def stack_partitions(dfs, divisions, join="outer", **kwargs):
         except (ValueError, TypeError):
             match = False
 
+        filter_warning = True
+        uniform = False
+
         for key in df.__dask_keys__():
             if match:
                 dsk[(name, i)] = key
             else:
-                dsk[(name, i)] = (methods.concat, [empty, key], 0, join)
+                dsk[(name, i)] = (
+                    apply,
+                    methods.concat,
+                    [[empty, key], 0, join, uniform, filter_warning],
+                    kwargs,
+                )
             i += 1
 
     return new_dd_object(dsk, name, meta, divisions)
@@ -973,7 +1086,8 @@ def concat(
     join="outer",
     interleave_partitions=False,
     ignore_unknown_divisions=False,
-    **kwargs
+    ignore_order=False,
+    **kwargs,
 ):
     """Concatenate DataFrames along rows.
 
@@ -1006,6 +1120,8 @@ def concat(
     ignore_unknown_divisions : bool, default False
         By default a warning is raised if any input has unknown divisions.
         Set to True to disable this warning.
+    ignore_order : bool, default False
+        Whether to ignore order when doing the union of categoricals.
 
     Notes
     -----
@@ -1064,6 +1180,7 @@ def concat(
     ... ], interleave_partitions=True).dtype
     CategoricalDtype(categories=['a', 'b', 'c'], ordered=False)
     """
+
     if not isinstance(dfs, list):
         raise TypeError("dfs must be a list of DataFrames/Series objects")
     if len(dfs) == 0:
@@ -1083,7 +1200,9 @@ def concat(
 
     if axis == 1:
         if all(df.known_divisions for df in dasks):
-            return concat_indexed_dataframes(dfs, axis=axis, join=join, **kwargs)
+            return concat_indexed_dataframes(
+                dfs, axis=axis, join=join, ignore_order=ignore_order, **kwargs
+            )
         elif (
             len(dasks) == len(dfs)
             and all(not df.known_divisions for df in dfs)
@@ -1092,11 +1211,11 @@ def concat(
             if not ignore_unknown_divisions:
                 warnings.warn(
                     "Concatenating dataframes with unknown divisions.\n"
-                    "We're assuming that the indexes of each dataframes"
+                    "We're assuming that the indices of each dataframes"
                     " are \n aligned. This assumption is not generally "
                     "safe."
                 )
-            return concat_unindexed_dataframes(dfs, **kwargs)
+            return concat_unindexed_dataframes(dfs, ignore_order=ignore_order, **kwargs)
         else:
             raise ValueError(
                 "Unable to concatenate DataFrame with unknown "
@@ -1114,12 +1233,320 @@ def concat(
                     # remove last to concatenate with next
                     divisions += df.divisions[:-1]
                 divisions += dfs[-1].divisions
-                return stack_partitions(dfs, divisions, join=join, **kwargs)
+                return stack_partitions(
+                    dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+                )
             elif interleave_partitions:
-                return concat_indexed_dataframes(dfs, join=join, **kwargs)
+                return concat_indexed_dataframes(
+                    dfs, join=join, ignore_order=ignore_order, **kwargs
+                )
             else:
                 divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-                return stack_partitions(dfs, divisions, join=join, **kwargs)
+                return stack_partitions(
+                    dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+                )
         else:
             divisions = [None] * (sum([df.npartitions for df in dfs]) + 1)
-            return stack_partitions(dfs, divisions, join=join, **kwargs)
+            return stack_partitions(
+                dfs, divisions, join=join, ignore_order=ignore_order, **kwargs
+            )
+
+
+def _contains_index_name(df, columns_or_index):
+    """
+    Test whether ``columns_or_index`` contains a reference
+    to the index of ``df
+
+    This is the local (non-collection) version of
+    ``dask.core.DataFrame._contains_index_name``.
+    """
+
+    def _is_index_level_reference(x, key):
+        return (
+            x.index.name is not None
+            and (np.isscalar(key) or isinstance(key, tuple))
+            and key == x.index.name
+            and key not in getattr(x, "columns", ())
+        )
+
+    if isinstance(columns_or_index, list):
+        return any(_is_index_level_reference(df, n) for n in columns_or_index)
+    else:
+        return _is_index_level_reference(df, columns_or_index)
+
+
+def _select_columns_or_index(df, columns_or_index):
+    """
+    Returns a DataFrame with columns corresponding to each
+    column or index level in columns_or_index.  If included,
+    the column corresponding to the index level is named _index.
+
+    This is the local (non-collection) version of
+    ``dask.core.DataFrame._select_columns_or_index``.
+    """
+
+    def _is_column_label_reference(df, key):
+        return (np.isscalar(key) or isinstance(key, tuple)) and key in df.columns
+
+    # Ensure columns_or_index is a list
+    columns_or_index = (
+        columns_or_index if isinstance(columns_or_index, list) else [columns_or_index]
+    )
+
+    column_names = [n for n in columns_or_index if _is_column_label_reference(df, n)]
+
+    selected_df = df[column_names]
+    if _contains_index_name(df, columns_or_index):
+        # Index name was included
+        selected_df = selected_df.assign(_index=df.index)
+
+    return selected_df
+
+
+def _split_partition(df, on, nsplits):
+    """
+    Split-by-hash a DataFrame into `nsplits` groups.
+
+    Hashing will be performed on the columns or index specified by `on`.
+    """
+
+    if isinstance(on, bytes):
+        on = pickle.loads(on)
+
+    if isinstance(on, str) or pd.api.types.is_list_like(on):
+        # If `on` is a column name or list of column names, we
+        # can hash/split by those columns.
+        on = [on] if isinstance(on, str) else list(on)
+        nset = set(on)
+        if nset.intersection(set(df.columns)) == nset:
+            ind = hash_object_dispatch(df[on], index=False)
+            ind = ind % nsplits
+            return group_split_dispatch(df, ind.values, nsplits, ignore_index=False)
+
+    # We are not joining (purely) on columns.  Need to
+    # add a "_partitions" column to perform the split.
+    if not isinstance(on, _Frame):
+        on = _select_columns_or_index(df, on)
+    partitions = partitioning_index(on, nsplits)
+    df2 = df.assign(_partitions=partitions)
+    return shuffle_group(
+        df2,
+        ["_partitions"],
+        0,
+        nsplits,
+        nsplits,
+        False,
+        nsplits,
+    )
+
+
+def _concat_wrapper(dfs):
+    """Concat and remove temporary "_partitions" column"""
+    df = _concat(dfs, False)
+    if "_partitions" in df.columns:
+        del df["_partitions"]
+    return df
+
+
+def _merge_chunk_wrapper(*args, **kwargs):
+    return merge_chunk(
+        *args,
+        **{
+            k: pickle.loads(v) if isinstance(v, bytes) else v for k, v in kwargs.items()
+        },
+    )
+
+
+def broadcast_join(
+    lhs,
+    left_on,
+    rhs,
+    right_on,
+    how="inner",
+    npartitions=None,
+    suffixes=("_x", "_y"),
+    shuffle=None,
+    indicator=False,
+    parts_out=None,
+):
+    """Join two DataFrames on particular columns by broadcasting
+
+    This broadcasts the partitions of the smaller DataFrame to each
+    partition of the larger DataFrame, joins each partition pair,
+    and then concatenates the new data for each output partition.
+    """
+
+    if npartitions:
+        # Repartition the larger collection before the merge
+        if lhs.npartitions < rhs.npartitions:
+            rhs = rhs.repartition(npartitions=npartitions)
+        else:
+            lhs = lhs.repartition(npartitions=npartitions)
+
+    if how not in ("inner", "left", "right"):
+        # Broadcast algorithm cannot handle an "outer" join
+        raise ValueError(
+            "Only 'inner', 'left' and 'right' broadcast joins are supported."
+        )
+
+    if how == "left" and lhs.npartitions < rhs.npartitions:
+        # Must broadcast rhs for a "left" broadcast join
+        raise ValueError("'left' broadcast join requires rhs broadcast.")
+
+    if how == "right" and rhs.npartitions <= lhs.npartitions:
+        # Must broadcast lhs for a "right" broadcast join
+        raise ValueError("'right' broadcast join requires lhs broadcast.")
+
+    # TODO: It *may* be beneficial to perform the hash
+    # split for "inner" join as well (even if it is not
+    # technically needed for correctness).  More testing
+    # is needed here.
+    if how != "inner":
+        # Shuffle to-be-broadcasted side by hash. This
+        # means that we will need to perform a local
+        # shuffle and split on each partition of the
+        # "other" collection (with the same hashing
+        # approach) to ensure the correct rows are
+        # joined by `merge_chunk`.  The local hash and
+        # split of lhs is in `_split_partition`.
+        if lhs.npartitions < rhs.npartitions:
+            lhs2 = shuffle_func(
+                lhs,
+                left_on,
+                shuffle="tasks",
+            )
+            lhs_name = lhs2._name
+            lhs_dep = lhs2
+            rhs_name = rhs._name
+            rhs_dep = rhs
+        else:
+            rhs2 = shuffle_func(
+                rhs,
+                right_on,
+                shuffle="tasks",
+            )
+            lhs_name = lhs._name
+            lhs_dep = lhs
+            rhs_name = rhs2._name
+            rhs_dep = rhs2
+    else:
+        lhs_name = lhs._name
+        lhs_dep = lhs
+        rhs_name = rhs._name
+        rhs_dep = rhs
+
+    if isinstance(left_on, Index):
+        left_on = None
+        left_index = True
+    else:
+        left_index = False
+
+    if isinstance(right_on, Index):
+        right_on = None
+        right_index = True
+    else:
+        right_index = False
+
+    merge_kwargs = dict(
+        how=how,
+        left_on=left_on,
+        right_on=right_on,
+        left_index=left_index,
+        right_index=right_index,
+        suffixes=suffixes,
+        indicator=indicator,
+    )
+
+    # dummy result
+    meta = lhs._meta_nonempty.merge(rhs._meta_nonempty, **merge_kwargs)
+    merge_kwargs["empty_index_dtype"] = meta.index.dtype
+    merge_kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+
+    # Assume the output partitions/divisions
+    # should correspond to the collection that
+    # is NOT broadcasted.
+    if lhs.npartitions < rhs.npartitions:
+        npartitions = rhs.npartitions
+        divisions = rhs.divisions
+        _index_names = set(rhs._meta_nonempty.index.names)
+    else:
+        npartitions = lhs.npartitions
+        divisions = lhs.divisions
+        _index_names = set(lhs._meta_nonempty.index.names)
+
+    # Cannot preserve divisions if the index is lost
+    if _index_names != set(meta.index.names):
+        divisions = [None] * (npartitions + 1)
+
+    token = tokenize(lhs, rhs, npartitions, **merge_kwargs)
+    name = "bcast-join-" + token
+    broadcast_join_layer = BroadcastJoinLayer(
+        name,
+        npartitions,
+        lhs_name,
+        lhs.npartitions,
+        rhs_name,
+        rhs.npartitions,
+        parts_out=parts_out,
+        **merge_kwargs,
+    )
+
+    graph = HighLevelGraph.from_collections(
+        name,
+        broadcast_join_layer,
+        dependencies=[lhs_dep, rhs_dep],
+    )
+
+    return new_dd_object(graph, name, meta, divisions)
+
+
+def _recursive_pairwise_outer_join(
+    dataframes_to_merge, on, lsuffix, rsuffix, npartitions, shuffle
+):
+    """
+    Schedule the merging of a list of dataframes in a pairwise method. This is a recursive function that results
+    in a much more efficient scheduling of merges than a simple loop
+    from:
+    [A] [B] [C] [D] -> [AB] [C] [D] -> [ABC] [D] -> [ABCD]
+    to:
+    [A] [B] [C] [D] -> [AB] [CD] -> [ABCD]
+    Note that either way, n-1 merges are still required, but using a pairwise reduction it can be completed in parallel.
+    :param dataframes_to_merge: A list of Dask dataframes to be merged together on their index
+    :return: A single Dask Dataframe, comprised of the pairwise-merges of all provided dataframes
+    """
+    number_of_dataframes_to_merge = len(dataframes_to_merge)
+
+    merge_options = {
+        "on": on,
+        "lsuffix": lsuffix,
+        "rsuffix": rsuffix,
+        "npartitions": npartitions,
+        "shuffle": shuffle,
+    }
+
+    # Base case 1: just return the provided dataframe and merge with `left`
+    if number_of_dataframes_to_merge == 1:
+        return dataframes_to_merge[0]
+
+    # Base case 2: merge the two provided dataframe to be merged with `left`
+    if number_of_dataframes_to_merge == 2:
+        merged_ddf = dataframes_to_merge[0].join(
+            dataframes_to_merge[1], how="outer", **merge_options
+        )
+        return merged_ddf
+
+    # Recursive case: split the list of dfs into two ~even sizes and continue down
+    else:
+        middle_index = number_of_dataframes_to_merge // 2
+        merged_ddf = _recursive_pairwise_outer_join(
+            [
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[:middle_index], **merge_options
+                ),
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[middle_index:], **merge_options
+                ),
+            ],
+            **merge_options,
+        )
+        return merged_ddf

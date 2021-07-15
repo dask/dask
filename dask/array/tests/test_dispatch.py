@@ -1,7 +1,7 @@
 import operator
 
-import pytest
 import numpy as np
+import pytest
 
 import dask.array as da
 from dask.array import Array
@@ -84,6 +84,7 @@ class EncapsulateNDArray(np.lib.mixins.NDArrayOperatorsMixin):
     astype = wrap("astype")
     sum = wrap("sum")
     prod = wrap("prod")
+    reshape = wrap("reshape")
 
 
 da.register_chunk_type(EncapsulateNDArray)
@@ -175,7 +176,7 @@ class WrappedArray(np.lib.mixins.NDArrayOperatorsMixin):
     ],
 )
 def test_binary_operation_type_precedence(op, arr_upcast, arr_downcast):
-    """ Test proper dispatch on binary operators and NumPy ufuncs"""
+    """Test proper dispatch on binary operators and NumPy ufuncs"""
     assert (
         type(op(arr_upcast, arr_downcast))
         == type(op(arr_downcast, arr_upcast))
@@ -201,7 +202,7 @@ def test_binary_operation_type_precedence(op, arr_upcast, arr_downcast):
     ],
 )
 def test_is_valid_array_chunk(arr, result):
-    """ Test is_valid_array_chunk for correctness"""
+    """Test is_valid_array_chunk for correctness"""
     assert is_valid_array_chunk(arr) is result
 
 
@@ -218,12 +219,12 @@ def test_is_valid_array_chunk(arr, result):
     ],
 )
 def test_is_valid_chunk_type(arr_type, result):
-    """ Test is_valid_chunk_type for correctness"""
+    """Test is_valid_chunk_type for correctness"""
     assert is_valid_chunk_type(arr_type) is result
 
 
 def test_direct_deferral_wrapping_override():
-    """ Directly test Dask defering to an upcast type and the ability to still wrap it."""
+    """Directly test Dask defering to an upcast type and the ability to still wrap it."""
     a = da.from_array(np.arange(4))
     b = WrappedArray(np.arange(4))
     assert a.__add__(b) is NotImplemented
@@ -231,7 +232,7 @@ def test_direct_deferral_wrapping_override():
     setattr(b, "__dask_graph__", None)
     res = a + da.from_array(b)
     assert isinstance(res, da.Array)
-    assert_eq(res, 2 * np.arange(4))
+    assert_eq(res, 2 * np.arange(4), check_type=False)
 
 
 class UnknownScalarThatUnderstandsArrayOps(np.lib.mixins.NDArrayOperatorsMixin):

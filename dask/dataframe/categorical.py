@@ -1,18 +1,19 @@
 from collections import defaultdict
-import pandas as pd
-from tlz import partition_all
 from numbers import Integral
 
-from ..base import tokenize, compute_as_if_collection
+import pandas as pd
+from pandas.api.types import is_scalar
+from tlz import partition_all
+
+from ..base import compute_as_if_collection, tokenize
+from . import methods
 from .accessor import Accessor
-from .utils import (
-    has_known_categories,
-    clear_known_categories,
-    is_scalar,
+from .dispatch import (  # noqa: F401
+    categorical_dtype,
+    categorical_dtype_dispatch,
     is_categorical_dtype,
 )
-from . import methods
-from ..utils import Dispatch
+from .utils import clear_known_categories, has_known_categories
 
 
 def _categorize_block(df, categories, index):
@@ -46,7 +47,7 @@ def _get_categories(df, columns, index):
     for col in columns:
         x = df[col]
         if is_categorical_dtype(x):
-            res[col] = pd.Series(x.cat.categories)
+            res[col] = x._constructor(x.cat.categories)
         else:
             res[col] = x.dropna().drop_duplicates()
     if index:
@@ -273,16 +274,3 @@ class CategoricalAccessor(Accessor):
             meta=meta,
             token="cat-set_categories",
         )
-
-
-categorical_dtype_dispatch = Dispatch("CategoricalDtype")
-
-
-def categorical_dtype(meta, categories=None, ordered=False):
-    func = categorical_dtype_dispatch.dispatch(type(meta))
-    return func(categories=categories, ordered=ordered)
-
-
-@categorical_dtype_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
-def categorical_dtype_pandas(categories=None, ordered=False):
-    return pd.api.types.CategoricalDtype(categories=categories, ordered=ordered)

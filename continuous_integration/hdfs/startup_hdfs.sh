@@ -8,8 +8,8 @@ rm -f $INIT_MARKER
 
 # Start the hdfs service
 echo "Starting Docker Container..."
-CONTAINER_ID=$(docker run -d -v $(pwd):/working daskdev/dask-hdfs-testing)
-export CONTAINER_ID
+export CONTAINER_ID=$(docker run --name hdfs -d -v $(pwd):/working daskdev/dask-hdfs-testing)
+docker ps
 
 # Error immediately if this fails
 if [ $? -ne 0 ]; then

@@ -1,342 +1,118 @@
 import contextlib
-from collections import defaultdict
 import logging
 import math
 import shutil
-from operator import getitem
-import uuid
 import tempfile
+import uuid
 
-import tlz as toolz
 import numpy as np
 import pandas as pd
-
-from .core import DataFrame, Series, _Frame, _concat, map_partitions, new_dd_object
+import tlz as toolz
 
 from .. import base, config
-from ..base import tokenize, compute, compute_as_if_collection, is_dask_collection
-from ..delayed import delayed
-from ..highlevelgraph import HighLevelGraph, Layer
+from ..base import compute, compute_as_if_collection, is_dask_collection, tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..layers import ShuffleLayer, SimpleShuffleLayer
 from ..sizeof import sizeof
-from ..utils import digit, insert, M
-from .utils import hash_object_dispatch, group_split_dispatch
+from ..utils import M, digit
 from . import methods
+from .core import DataFrame, Series, _Frame, map_partitions, new_dd_object
+from .dispatch import group_split_dispatch, hash_object_dispatch
 
 logger = logging.getLogger(__name__)
 
 
-class SimpleShuffleLayer(Layer):
-    """Simple HighLevelGraph Shuffle layer
-
-    High-level graph layer for a simple shuffle operation in which
-    each output partition depends on all input partitions.
-
-    Parameters
-    ----------
-    name : str
-        Name of new shuffled output collection.
-    column : str or list of str
-        Column(s) to be used to map rows to output partitions (by hashing).
-    npartitions : int
-        Number of output partitions.
-    npartitions_input : int
-        Number of partitions in the original (un-shuffled) DataFrame.
-    ignore_index: bool, default False
-        Ignore index during shuffle.  If ``True``, performance may improve,
-        but index values will not be preserved.
-    name_input : str
-        Name of input collection.
-    meta_input : pd.DataFrame-like object
-        Empty metadata of input collection.
-    parts_out : list of int (optional)
-        List of required output-partition indices.
+def _calculate_divisions(
+    df, partition_col, repartition, npartitions, upsample=1.0, partition_size=128e6
+):
     """
-
-    def __init__(
-        self,
-        name,
-        column,
-        npartitions,
-        npartitions_input,
-        ignore_index,
-        name_input,
-        meta_input,
-        parts_out=None,
-    ):
-        self.name = name
-        self.column = column
-        self.npartitions = npartitions
-        self.npartitions_input = npartitions_input
-        self.ignore_index = ignore_index
-        self.name_input = name_input
-        self.meta_input = meta_input
-        self.parts_out = parts_out or range(npartitions)
-
-    def __repr__(self):
-        return "SimpleShuffleLayer<name='{}', npartitions={}>".format(
-            self.name, self.npartitions
-        )
-
-    @property
-    def _dict(self):
-        """Materialize full dict representation"""
-        if hasattr(self, "_cached_dict"):
-            return self._cached_dict
-        else:
-            dsk = self._construct_graph()
-            self._cached_dict = dsk
-        return self._cached_dict
-
-    def __getitem__(self, key):
-        return self._dict[key]
-
-    def __iter__(self):
-        return iter(self._dict)
-
-    def __len__(self):
-        return len(self._dict)
-
-    def _keys_to_parts(self, keys):
-        """Simple utility to convert keys to partition indices."""
-        parts = set()
-        for key in keys:
-            try:
-                _name, _part = key
-            except ValueError:
-                continue
-            if _name != self.name:
-                continue
-            parts.add(_part)
-        return parts
-
-    def _cull_dependencies(self, keys, parts_out=None):
-        """Determine the necessary dependencies to produce `keys`.
-
-        For a simple shuffle, output partitions always depend on
-        all input partitions. This method does not require graph
-        materialization.
-        """
-        deps = defaultdict(set)
-        parts_out = self._keys_to_parts(keys)
-        for part in parts_out:
-            deps[(self.name, part)] |= {
-                (self.name_input, i) for i in range(self.npartitions_input)
-            }
-        return deps
-
-    def _cull(self, parts_out):
-        return SimpleShuffleLayer(
-            self.name,
-            self.column,
-            self.npartitions,
-            self.npartitions_input,
-            self.ignore_index,
-            self.name_input,
-            self.meta_input,
-            parts_out=parts_out,
-        )
-
-    def cull(self, keys, all_keys):
-        """Cull a SimpleShuffleLayer HighLevelGraph layer.
-
-        The underlying graph will only include the necessary
-        tasks to produce the keys (indicies) included in `parts_out`.
-        Therefore, "culling" the layer only requires us to reset this
-        parameter.
-        """
-        parts_out = self._keys_to_parts(keys)
-        culled_deps = self._cull_dependencies(keys, parts_out=parts_out)
-        if parts_out != self.parts_out:
-            culled_layer = self._cull(parts_out)
-            return culled_layer, culled_deps
-        else:
-            return self, culled_deps
-
-    def _construct_graph(self):
-        """Construct graph for a simple shuffle operation."""
-
-        shuffle_group_name = "group-" + self.name
-        shuffle_split_name = "split-" + self.name
-
-        dsk = {}
-        for part_out in self.parts_out:
-            _concat_list = [
-                (shuffle_split_name, part_out, part_in)
-                for part_in in range(self.npartitions_input)
-            ]
-            dsk[(self.name, part_out)] = (_concat, _concat_list, self.ignore_index)
-            for _, _part_out, _part_in in _concat_list:
-                dsk[(shuffle_split_name, _part_out, _part_in)] = (
-                    getitem,
-                    (shuffle_group_name, _part_in),
-                    _part_out,
-                )
-                if (shuffle_group_name, _part_in) not in dsk:
-                    dsk[(shuffle_group_name, _part_in)] = (
-                        shuffle_group,
-                        (self.name_input, _part_in),
-                        self.column,
-                        0,
-                        self.npartitions,
-                        self.npartitions,
-                        self.ignore_index,
-                        self.npartitions,
-                    )
-
-        return dsk
-
-
-class ShuffleLayer(SimpleShuffleLayer):
-    """Shuffle-stage HighLevelGraph layer
-
-    High-level graph layer corresponding to a single stage of
-    a multi-stage inter-partition shuffle operation.
-
-    Stage: (shuffle-group) -> (shuffle-split) -> (shuffle-join)
-
-    Parameters
-    ----------
-    name : str
-        Name of new (partially) shuffled collection.
-    column : str or list of str
-        Column(s) to be used to map rows to output partitions (by hashing).
-    inputs : list of tuples
-        Each tuple dictates the data movement for a specific partition.
-    stage : int
-        Index of the current shuffle stage.
-    npartitions : int
-        Number of output partitions for the full (multi-stage) shuffle.
-    npartitions_input : int
-        Number of partitions in the original (un-shuffled) DataFrame.
-    k : int
-        A partition is split into this many groups during each stage.
-    ignore_index: bool, default False
-        Ignore index during shuffle.  If ``True``, performance may improve,
-        but index values will not be preserved.
-    name_input : str
-        Name of input collection.
-    meta_input : pd.DataFrame-like object
-        Empty metadata of input collection.
-    parts_out : list of int (optional)
-        List of required output-partition indices.
+    Utility function to calculate divisions for calls to `map_partitions`
     """
+    sizes = df.map_partitions(sizeof) if repartition else []
+    divisions = partition_col._repartition_quantiles(npartitions, upsample=upsample)
+    mins = partition_col.map_partitions(M.min)
+    maxes = partition_col.map_partitions(M.max)
+    divisions, sizes, mins, maxes = base.compute(divisions, sizes, mins, maxes)
+    divisions = methods.tolist(divisions)
+    if type(sizes) is not list:
+        sizes = methods.tolist(sizes)
+    mins = methods.tolist(mins)
+    maxes = methods.tolist(maxes)
 
-    def __init__(
-        self,
-        name,
-        column,
-        inputs,
-        stage,
-        npartitions,
-        npartitions_input,
-        nsplits,
-        ignore_index,
-        name_input,
-        meta_input,
-        parts_out=None,
+    empty_dataframe_detected = pd.isnull(divisions).all()
+    if repartition or empty_dataframe_detected:
+        total = sum(sizes)
+        npartitions = max(math.ceil(total / partition_size), 1)
+        npartitions = min(npartitions, df.npartitions)
+        n = len(divisions)
+        try:
+            divisions = np.interp(
+                x=np.linspace(0, n - 1, npartitions + 1),
+                xp=np.linspace(0, n - 1, n),
+                fp=divisions,
+            ).tolist()
+        except (TypeError, ValueError):  # str type
+            indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
+            divisions = [divisions[i] for i in indexes]
+
+    mins = remove_nans(mins)
+    maxes = remove_nans(maxes)
+    if pd.api.types.is_categorical_dtype(partition_col.dtype):
+        dtype = partition_col.dtype
+        mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
+        maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
+
+    return divisions, mins, maxes
+
+
+def sort_values(
+    df,
+    by,
+    npartitions=None,
+    ascending=True,
+    upsample=1.0,
+    partition_size=128e6,
+    **kwargs,
+):
+    """See DataFrame.sort_values for docstring"""
+    if not ascending:
+        raise NotImplementedError("The ascending= keyword is not supported")
+    if not isinstance(by, str):
+        # support ["a"] as input
+        if isinstance(by, list) and len(by) == 1 and isinstance(by[0], str):
+            by = by[0]
+        else:
+            raise NotImplementedError(
+                "Dataframe only supports sorting by a single column which must "
+                "be passed as a string or a list of a single string.\n"
+                "You passed %s" % str(by)
+            )
+    if npartitions == "auto":
+        repartition = True
+        npartitions = max(100, df.npartitions)
+    else:
+        if npartitions is None:
+            npartitions = df.npartitions
+        repartition = False
+
+    sort_by_col = df[by]
+
+    divisions, mins, maxes = _calculate_divisions(
+        df, sort_by_col, repartition, npartitions, upsample, partition_size
+    )
+
+    if (
+        mins == sorted(mins)
+        and maxes == sorted(maxes)
+        and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+        and npartitions == df.npartitions
     ):
-        self.column = column
-        self.name = name
-        self.inputs = inputs
-        self.stage = stage
-        self.npartitions = npartitions
-        self.npartitions_input = npartitions_input
-        self.nsplits = nsplits
-        self.ignore_index = ignore_index
-        self.name_input = name_input
-        self.meta_input = meta_input
-        self.parts_out = parts_out or range(len(inputs))
+        # divisions are in the right place
+        return df.map_partitions(M.sort_values, by)
 
-    def __repr__(self):
-        return "ShuffleLayer<name='{}', stage={}, nsplits={}, npartitions={}>".format(
-            self.name, self.stage, self.nsplits, self.npartitions
-        )
-
-    def _cull_dependencies(self, keys, parts_out=None):
-        """Determine the necessary dependencies to produce `keys`.
-
-        Does not require graph materialization.
-        """
-        deps = defaultdict(set)
-        parts_out = parts_out or self._keys_to_parts(keys)
-        inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
-        for part in parts_out:
-            out = self.inputs[part]
-            for k in range(self.nsplits):
-                _part = inp_part_map[insert(out, self.stage, k)]
-                deps[(self.name, part)].add((self.name_input, _part))
-        return deps
-
-    def _cull(self, parts_out):
-        return ShuffleLayer(
-            self.name,
-            self.column,
-            self.inputs,
-            self.stage,
-            self.npartitions,
-            self.npartitions_input,
-            self.nsplits,
-            self.ignore_index,
-            self.name_input,
-            self.meta_input,
-            parts_out=parts_out,
-        )
-
-    def _construct_graph(self):
-        """Construct graph for a "rearrange-by-column" stage."""
-
-        shuffle_group_name = "group-" + self.name
-        shuffle_split_name = "split-" + self.name
-
-        dsk = {}
-        inp_part_map = {inp: i for i, inp in enumerate(self.inputs)}
-        for part in self.parts_out:
-
-            out = self.inputs[part]
-
-            _concat_list = []  # get_item tasks to concat for this output partition
-            for i in range(self.nsplits):
-                # Get out each individual dataframe piece from the dicts
-                _inp = insert(out, self.stage, i)
-                _idx = out[self.stage]
-                _concat_list.append((shuffle_split_name, _idx, _inp))
-
-            # concatenate those pieces together, with their friends
-            dsk[(self.name, part)] = (_concat, _concat_list, self.ignore_index)
-
-            for _, _idx, _inp in _concat_list:
-                dsk[(shuffle_split_name, _idx, _inp)] = (
-                    getitem,
-                    (shuffle_group_name, _inp),
-                    _idx,
-                )
-
-                if (shuffle_group_name, _inp) not in dsk:
-
-                    # Initial partitions (output of previous stage)
-                    _part = inp_part_map[_inp]
-                    if self.stage == 0:
-                        input_key = (
-                            (self.name_input, _part)
-                            if _part < self.npartitions_input
-                            else self.meta_input
-                        )
-                    else:
-                        input_key = (self.name_input, _part)
-
-                    # Convert partition into dict of dataframe pieces
-                    dsk[(shuffle_group_name, _inp)] = (
-                        shuffle_group,
-                        input_key,
-                        self.column,
-                        self.stage,
-                        self.nsplits,
-                        self.npartitions_input,
-                        self.ignore_index,
-                        self.npartitions,
-                    )
-
-        return dsk
+    df = rearrange_by_divisions(df, by, divisions)
+    df = df.map_partitions(M.sort_values, by)
+    return df
 
 
 def set_index(
@@ -351,7 +127,7 @@ def set_index(
     partition_size=128e6,
     **kwargs,
 ):
-    """ See _Frame.set_index for docstring """
+    """See _Frame.set_index for docstring"""
     if isinstance(index, Series) and index._name == df.index._name:
         return df
     if isinstance(index, (DataFrame, tuple, list)):
@@ -383,51 +159,15 @@ def set_index(
         index2 = index
 
     if divisions is None:
-        if repartition:
-            index2, df = base.optimize(index2, df)
-            parts = df.to_delayed(optimize_graph=False)
-            sizes = [delayed(sizeof)(part) for part in parts]
-        else:
-            (index2,) = base.optimize(index2)
-            sizes = []
-
-        divisions = index2._repartition_quantiles(npartitions, upsample=upsample)
-        iparts = index2.to_delayed(optimize_graph=False)
-        mins = [ipart.min() for ipart in iparts]
-        maxes = [ipart.max() for ipart in iparts]
-        sizes, mins, maxes = base.optimize(sizes, mins, maxes)
-        divisions, sizes, mins, maxes = base.compute(
-            divisions, sizes, mins, maxes, optimize_graph=False
+        divisions, mins, maxes = _calculate_divisions(
+            df, index2, repartition, npartitions, upsample, partition_size
         )
-        divisions = methods.tolist(divisions)
-
-        empty_dataframe_detected = pd.isnull(divisions).all()
-        if repartition or empty_dataframe_detected:
-            total = sum(sizes)
-            npartitions = max(math.ceil(total / partition_size), 1)
-            npartitions = min(npartitions, df.npartitions)
-            n = len(divisions)
-            try:
-                divisions = np.interp(
-                    x=np.linspace(0, n - 1, npartitions + 1),
-                    xp=np.linspace(0, n - 1, n),
-                    fp=divisions,
-                ).tolist()
-            except (TypeError, ValueError):  # str type
-                indexes = np.linspace(0, n - 1, npartitions + 1).astype(int)
-                divisions = [divisions[i] for i in indexes]
-
-        mins = remove_nans(mins)
-        maxes = remove_nans(maxes)
-        if pd.api.types.is_categorical_dtype(index2.dtype):
-            dtype = index2.dtype
-            mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
-            maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
 
         if (
             mins == sorted(mins)
             and maxes == sorted(maxes)
             and all(mx < mn for mx, mn in zip(maxes[:-1], mins[1:]))
+            and npartitions == df.npartitions
         ):
             divisions = mins + [maxes[-1]]
             result = set_sorted_index(df, index, drop=drop, divisions=divisions)
@@ -593,7 +333,7 @@ def shuffle(
         else:
             index = list(index)
         nset = set(index)
-        if nset.intersection(set(df.columns)) == nset:
+        if nset & set(df.columns) == nset:
             return rearrange_by_column(
                 df,
                 index,
@@ -606,6 +346,11 @@ def shuffle(
 
     if not isinstance(index, _Frame):
         index = df._select_columns_or_index(index)
+    elif hasattr(index, "to_frame"):
+        # If this is an index, we should still convert to a
+        # DataFrame. Otherwise, the hashed values of a column
+        # selection will not match (important when merging).
+        index = index.to_frame()
 
     partitions = index.map_partitions(
         partitioning_index,
@@ -629,7 +374,7 @@ def shuffle(
 
 
 def rearrange_by_divisions(df, column, divisions, max_branch=None, shuffle=None):
-    """ Shuffle dataframe so that column separates along divisions """
+    """Shuffle dataframe so that column separates along divisions"""
     divisions = df._meta._constructor_sliced(divisions)
     meta = df._meta._constructor_sliced([0])
     # Assign target output partitions to every row
@@ -660,6 +405,14 @@ def rearrange_by_column(
     ignore_index=False,
 ):
     shuffle = shuffle or config.get("shuffle", None) or "disk"
+
+    # if the requested output partitions < input partitions
+    # we repartition first as shuffling overhead is
+    # proportionate to the number of input partitions
+
+    if npartitions is not None and npartitions < df.npartitions:
+        df = df.repartition(npartitions=npartitions)
+
     if shuffle == "disk":
         return rearrange_by_column_disk(df, col, npartitions, compute=compute)
     elif shuffle == "tasks":
@@ -673,7 +426,7 @@ def rearrange_by_column(
         raise NotImplementedError("Unknown shuffle method %s" % shuffle)
 
 
-class maybe_buffered_partd(object):
+class maybe_buffered_partd:
     """
     If serialized, will return non-buffered partd. Otherwise returns a buffered partd
     """
@@ -759,22 +512,14 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     dsk3 = {barrier_token: (barrier, list(dsk2))}
 
     # Collect groups
-    name1 = "shuffle-collect-1" + token
+    name = "shuffle-collect-" + token
     dsk4 = {
-        (name1, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
+        (name, i): (collect, p, i, df._meta, barrier_token) for i in range(npartitions)
     }
-    cleanup_token = "cleanup-" + always_new_token
-    barrier_token2 = "barrier2-" + always_new_token
-    # A task that depends on `cleanup-`, but has a small output
-    dsk5 = {(barrier_token2, i): (barrier, part) for i, part in enumerate(dsk4)}
-    # This indirectly depends on `cleanup-` and so runs after we're done using the disk
-    dsk6 = {cleanup_token: (cleanup_partd_files, p, list(dsk5))}
 
-    name = "shuffle-collect-2" + token
-    dsk7 = {(name, i): (_noop, (name1, i), cleanup_token) for i in range(npartitions)}
     divisions = (None,) * (npartitions + 1)
 
-    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4, dsk5, dsk6, dsk7)
+    layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
     return DataFrame(graph, name, df._meta, divisions)
 
@@ -993,14 +738,23 @@ def cleanup_partd_files(p, keys):
 
 
 def collect(p, part, meta, barrier_token):
-    """ Collect partitions from partd, yield dataframes """
+    """Collect partitions from partd, yield dataframes"""
     with ensure_cleanup_on_exception(p):
         res = p.get(part)
         return res if len(res) > 0 else meta
 
 
 def set_partitions_pre(s, divisions):
-    partitions = divisions.searchsorted(s, side="right") - 1
+    try:
+        partitions = divisions.searchsorted(s, side="right") - 1
+    except TypeError:
+        # When `searchsorted` fails with `TypeError`, it may be
+        # caused by nulls in `s`. Try again with the null-values
+        # explicitly mapped to the first partition.
+        partitions = np.empty(len(s), dtype="int32")
+        partitions[s.isna()] = 0
+        not_null = s.notna()
+        partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
     partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
     return partitions
 
@@ -1130,15 +884,31 @@ def get_overlap(df, index):
 
 
 def fix_overlap(ddf, overlap):
-    """ Ensures that the upper bound on each partition of ddf is exclusive """
+    """Ensures that the upper bound on each partition of ddf (except the last) is exclusive"""
     name = "fix-overlap-" + tokenize(ddf, overlap)
     n = len(ddf.divisions) - 1
     dsk = {(name, i): (ddf._name, i) for i in range(n)}
 
+    frames = []
     for i in overlap:
-        frames = [(get_overlap, (ddf._name, i - 1), ddf.divisions[i]), (ddf._name, i)]
-        dsk[(name, i)] = (methods.concat, frames)
+
+        # `frames` is a list of data from previous partitions that we may want to
+        # move to partition i.  Here, we add "overlap" from the previous partition
+        # (i-1) to this list.
+        frames.append((get_overlap, (ddf._name, i - 1), ddf.divisions[i]))
+
+        # Make sure that any data added from partition i-1 to `frames` is removed
+        # from partition i-1.
         dsk[(name, i - 1)] = (drop_overlap, dsk[(name, i - 1)], ddf.divisions[i])
+
+        # We do not want to move "overlap" from the previous partition (i-1) into
+        # this partition (i) if the data from this partition will need to be moved
+        # to the next partition (i+1) anyway.  If we concatenate data too early,
+        # we may lose rows (https://github.com/dask/dask/issues/6972).
+        if i == ddf.npartitions - 2 or ddf.divisions[i] != ddf.divisions[i + 1]:
+            frames.append((ddf._name, i))
+            dsk[(name, i)] = (methods.concat, frames)
+            frames = []
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[ddf])
     return new_dd_object(graph, name, ddf._meta, ddf.divisions)
@@ -1148,6 +918,8 @@ def compute_and_set_divisions(df, **kwargs):
     mins = df.index.map_partitions(M.min, meta=df.index)
     maxes = df.index.map_partitions(M.max, meta=df.index)
     mins, maxes = compute(mins, maxes, **kwargs)
+    mins = remove_nans(mins)
+    maxes = remove_nans(maxes)
 
     if (
         sorted(mins) != list(mins)

@@ -1,16 +1,17 @@
 import math
 import numbers
+import uuid
 from enum import Enum
 
 from . import config, core, utils
 from .core import (
-    istask,
+    flatten,
     get_dependencies,
+    ishashable,
+    istask,
+    reverse_dict,
     subs,
     toposort,
-    flatten,
-    reverse_dict,
-    ishashable,
 )
 from .utils_test import add, inc  # noqa: F401
 
@@ -494,7 +495,10 @@ def fuse(
         dict mapping dependencies after fusion.  Useful side effect to accelerate other
         downstream optimizations.
     """
-    if not config.get("optimization.fuse.active"):
+
+    # Perform low-level fusion unless the user has
+    # specified False explicitly.
+    if config.get("optimization.fuse.active") is False:
         return dsk, dependencies
 
     if keys is not None and not isinstance(keys, set):
@@ -920,7 +924,7 @@ def _inplace_fuse_subgraphs(dsk, keys, dependencies, fused_trees, rename_keys):
             fused_trees[outkey] = chain2
 
 
-class SubgraphCallable(object):
+class SubgraphCallable:
     """Create a callable object from a dask graph.
 
     Parameters
@@ -937,10 +941,12 @@ class SubgraphCallable(object):
 
     __slots__ = ("dsk", "outkey", "inkeys", "name")
 
-    def __init__(self, dsk, outkey, inkeys, name="subgraph_callable"):
+    def __init__(self, dsk, outkey, inkeys, name=None):
         self.dsk = dsk
         self.outkey = outkey
         self.inkeys = inkeys
+        if name is None:
+            name = f"subgraph_callable-{uuid.uuid4()}"
         self.name = name
 
     def __repr__(self):
@@ -966,4 +972,4 @@ class SubgraphCallable(object):
         return (SubgraphCallable, (self.dsk, self.outkey, self.inkeys, self.name))
 
     def __hash__(self):
-        return hash(tuple((self.outkey, tuple(self.inkeys), self.name)))
+        return hash(tuple((self.outkey, frozenset(self.inkeys), self.name)))

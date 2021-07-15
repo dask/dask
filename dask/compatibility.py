@@ -1,22 +1,30 @@
 import sys
-from distutils.version import LooseVersion
 
-# TODO: remove this import once dask requires distributed > 2.3.2
-from .utils import apply  # noqa
-
-# TODO: remove this once dask requires distributed >= 2.2.0
-unicode = str  # noqa
+from packaging.version import parse as parse_version
 
 try:
-    from dataclasses import is_dataclass, fields as dataclass_fields
-
+    from math import prod
 except ImportError:
+    # Python < 3.8
+    def prod(iterable, *, start=1):
+        acc = start
+        for el in iterable:
+            acc *= el
+        return acc
 
-    def is_dataclass(x):
-        return False
 
-    def dataclass_fields(x):
-        return []
+_PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
 
 
-PY_VERSION = LooseVersion(".".join(map(str, sys.version_info[:3])))
+def __getattr__(name):
+    if name == "PY_VERSION":
+        import warnings
+
+        warnings.warn(
+            "dask.compatibility.PY_VERSION is deprecated and will be removed "
+            "in a future release.",
+            category=FutureWarning,
+        )
+        return _PY_VERSION
+    else:
+        raise AttributeError(f"module {__name__} has no attribute {name}")

@@ -1,8 +1,13 @@
 import re
 
+import pandas as pd
+
+from ....core import flatten
+from ....utils import natural_sort_key
+
 
 class Engine:
-    """ The API necessary to provide a new Parquet reader/writer """
+    """The API necessary to provide a new Parquet reader/writer"""
 
     @classmethod
     def read_metadata(
@@ -13,7 +18,7 @@ class Engine:
         index=None,
         gather_statistics=None,
         filters=None,
-        **kwargs
+        **kwargs,
     ):
         """Gather metadata about a Parquet Dataset to prepare for a read
 
@@ -54,8 +59,8 @@ class Engine:
 
             [
                 {'num-rows': 1000, 'columns': [
-                    {'name': 'id', 'min': 0, 'max': 100, 'null-count': 0},
-                    {'name': 'x', 'min': 0.0, 'max': 1.0, 'null-count': 5},
+                    {'name': 'id', 'min': 0, 'max': 100},
+                    {'name': 'x', 'min': 0.0, 'max': 1.0},
                     ]},
                 ...
             ]
@@ -104,7 +109,7 @@ class Engine:
         partition_on=None,
         ignore_divisions=False,
         division_info=None,
-        **kwargs
+        **kwargs,
     ):
         """Perform engine-specific initialization steps for this dataset
 
@@ -192,6 +197,51 @@ class Engine:
             or start from scratch (False)
         **kwargs: dict
             Other keyword arguments (including `compression`)
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        """
+        Collect parquet metadata from a file and set the file_path.
+
+        Parameters
+        ----------
+        path: str
+            Parquet-file path to extract metadata from.
+        fs: FileSystem
+        file_path: str
+            Relative path to set as `file_path` in the metadata.
+
+        Returns
+        -------
+        A metadata object.  The specific type should be recognized
+        by the aggregate_metadata method.
+        """
+        raise NotImplementedError()
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        """
+        Aggregate a list of metadata objects and optionally
+        write out the final result as a _metadata file.
+
+        Parameters
+        ----------
+        meta_list: list
+            List of metadata objects to be aggregated into a single
+            metadata object, and optionally written to disk. The
+            specific element type can be engine specific.
+        fs: FileSystem
+        out_path: str or None
+            Directory to write the final _metadata file. If None
+            is specified, the aggregated metadata will be returned,
+            and nothing will be written to disk.
+
+        Returns
+        -------
+        If out_path is None, an aggregate metadata object is returned.
+        Otherwise, None is returned.
         """
         raise NotImplementedError()
 
@@ -342,6 +392,12 @@ def _normalize_index_columns(user_columns, data_columns, user_index, data_index)
     return column_names, index_names
 
 
+def _sort_and_analyze_paths(file_list, fs, root=False):
+    file_list = sorted(file_list, key=natural_sort_key)
+    base, fns = _analyze_paths(file_list, fs, root=root)
+    return file_list, base, fns
+
+
 def _analyze_paths(file_list, fs, root=False):
     """Consolidate list of file-paths into parquet relative paths
 
@@ -413,14 +469,12 @@ def _analyze_paths(file_list, fs, root=False):
                     break
             basepath = basepath[:j]
         l = len(basepath)
-
     else:
         basepath = _join_path(root).split("/")
         l = len(basepath)
         assert all(
             p[:l] == basepath for p in path_parts_list
         ), "All paths must begin with the given root"
-    l = len(basepath)
     out_list = []
     for path_parts in path_parts_list:
         out_list.append(
@@ -431,3 +485,190 @@ def _analyze_paths(file_list, fs, root=False):
         "/".join(basepath),
         out_list,
     )  # use '/'.join() instead of _join_path to be consistent with split('/')
+
+
+def _flatten_filters(filters):
+    """Flatten DNF-formatted filters (list of tuples)"""
+    return (
+        set(flatten(tuple(flatten(filters, container=list)), container=tuple))
+        if filters
+        else []
+    )
+
+
+def _aggregate_stats(
+    file_path,
+    file_row_group_stats,
+    file_row_group_column_stats,
+    stat_col_indices,
+):
+    """Utility to aggregate the statistics for N row-groups
+    into a single dictionary.
+
+    Used by `Engine._construct_parts`
+    """
+    if len(file_row_group_stats) < 1:
+        # Empty statistics
+        return {}
+    elif len(file_row_group_column_stats) == 0:
+        assert len(file_row_group_stats) == 1
+        return file_row_group_stats[0]
+    else:
+        # Note: It would be better to avoid df_rgs and df_cols
+        #       construction altogether. It makes it fast to aggregate
+        #       the statistics for many row groups, but isn't
+        #       worthwhile for a small number of row groups.
+        if len(file_row_group_stats) > 1:
+            df_rgs = pd.DataFrame(file_row_group_stats)
+            s = {
+                "file_path_0": file_path,
+                "num-rows": df_rgs["num-rows"].sum(),
+                "num-row-groups": df_rgs["num-rows"].count(),
+                "total_byte_size": df_rgs["total_byte_size"].sum(),
+                "columns": [],
+            }
+        else:
+            s = {
+                "file_path_0": file_path,
+                "num-rows": file_row_group_stats[0]["num-rows"],
+                "num-row-groups": 1,
+                "total_byte_size": file_row_group_stats[0]["total_byte_size"],
+                "columns": [],
+            }
+
+        df_cols = None
+        if len(file_row_group_column_stats) > 1:
+            df_cols = pd.DataFrame(file_row_group_column_stats)
+        for ind, name in enumerate(stat_col_indices):
+            i = ind * 2
+            if df_cols is None:
+                s["columns"].append(
+                    {
+                        "name": name,
+                        "min": file_row_group_column_stats[0][i],
+                        "max": file_row_group_column_stats[0][i + 1],
+                    }
+                )
+            else:
+                s["columns"].append(
+                    {
+                        "name": name,
+                        "min": df_cols.iloc[:, i].min(),
+                        "max": df_cols.iloc[:, i + 1].max(),
+                    }
+                )
+        return s
+
+
+def _row_groups_to_parts(
+    gather_statistics,
+    split_row_groups,
+    aggregation_depth,
+    file_row_groups,
+    file_row_group_stats,
+    file_row_group_column_stats,
+    stat_col_indices,
+    make_part_func,
+    make_part_kwargs,
+):
+
+    # Construct `parts` and `stats`
+    parts = []
+    stats = []
+    if split_row_groups:
+        # Create parts from each file,
+        # limiting the number of row_groups in each piece
+        split_row_groups = int(split_row_groups)
+        residual = 0
+        for filename, row_groups in file_row_groups.items():
+            row_group_count = len(row_groups)
+            if residual:
+                _rgs = [0] + list(range(residual, row_group_count, split_row_groups))
+            else:
+                _rgs = list(range(residual, row_group_count, split_row_groups))
+
+            for i in _rgs:
+
+                i_end = i + split_row_groups
+                if aggregation_depth is True:
+                    if residual and i == 0:
+                        i_end = residual
+                        residual = 0
+                    _residual = i_end - row_group_count
+                    if _residual > 0:
+                        residual = _residual
+
+                rg_list = row_groups[i:i_end]
+
+                part = make_part_func(
+                    filename,
+                    rg_list,
+                    **make_part_kwargs,
+                )
+                if part is None:
+                    continue
+
+                parts.append(part)
+                if gather_statistics:
+                    stat = _aggregate_stats(
+                        filename,
+                        file_row_group_stats[filename][i:i_end],
+                        file_row_group_column_stats[filename][i:i_end],
+                        stat_col_indices,
+                    )
+                    stats.append(stat)
+    else:
+        for filename, row_groups in file_row_groups.items():
+
+            part = make_part_func(
+                filename,
+                row_groups,
+                **make_part_kwargs,
+            )
+            if part is None:
+                continue
+
+            parts.append(part)
+            if gather_statistics:
+                stat = _aggregate_stats(
+                    filename,
+                    file_row_group_stats[filename],
+                    file_row_group_column_stats[filename],
+                    stat_col_indices,
+                )
+                stats.append(stat)
+
+    return parts, stats
+
+
+def _get_aggregation_depth(aggregate_files, partition_names):
+    # Use `aggregate_files` to set `aggregation_depth`
+    #
+    # Note that `partition_names` must be ordered. `True` means that we allow
+    # aggregation of any two files. `False` means that we will never aggregate
+    # files.  If a string is specified, it must be the name of a partition
+    # column, and the "partition depth" of that column will be used for
+    # aggregation.  Note that we always convert the string into the partition
+    # "depth" to simplify the aggregation logic.
+
+    # Summary of output `aggregation_depth` settings:
+    #
+    # True  : Free-for-all aggregation (any two files may be aggregated)
+    # False : No file aggregation allowed
+    # <int> : Allow aggregation within this partition-hierarchy depth
+
+    aggregation_depth = aggregate_files
+    if isinstance(aggregate_files, str):
+        if aggregate_files in partition_names:
+            # aggregate_files corresponds to a partition column. Reset the
+            # value of this variable to reflect the partition "depth" (in the
+            # range of 1 to the total number of partition levels)
+            aggregation_depth = len(partition_names) - partition_names.index(
+                aggregate_files
+            )
+        else:
+            raise ValueError(
+                f"{aggregate_files} is not a recognized directory partition."
+            )
+
+    return aggregation_depth

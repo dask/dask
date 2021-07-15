@@ -1,15 +1,14 @@
 """ A set of NumPy functions to apply per chunk """
+import contextlib
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
+from numbers import Integral
 
-from tlz import concat
 import numpy as np
-from . import numpy_compat as npcompat
+from tlz import concat
 
 from ..core import flatten
-from ..utils import ignoring
-
-from numbers import Integral
+from . import numpy_compat as npcompat
 
 try:
     from numpy import take_along_axis
@@ -72,17 +71,17 @@ nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanmean = np.nanmean
 
 var = np.var
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanvar = np.nanvar
 
 std = np.std
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanstd = np.nanstd
 
 
@@ -259,9 +258,23 @@ def argtopk_aggregate(a_plus_idx, k, axis, keepdims):
     ]
 
 
-def arange(start, stop, step, length, dtype):
-    res = np.arange(start, stop, step, dtype)
+def arange(start, stop, step, length, dtype, like=None):
+    from .utils import arange_safe
+
+    res = arange_safe(start, stop, step, dtype, like=like)
     return res[:-1] if len(res) > length else res
+
+
+def linspace(start, stop, num, endpoint=True, dtype=None):
+    from .core import Array
+
+    if isinstance(start, Array):
+        start = start.compute()
+
+    if isinstance(stop, Array):
+        stop = stop.compute()
+
+    return np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
 
 
 def astype(x, astype_dtype=None, **kwargs):
@@ -270,10 +283,16 @@ def astype(x, astype_dtype=None, **kwargs):
 
 def view(x, dtype, order="C"):
     if order == "C":
-        x = np.ascontiguousarray(x)
+        try:
+            x = np.ascontiguousarray(x, like=x)
+        except TypeError:
+            x = np.ascontiguousarray(x)
         return x.view(dtype)
     else:
-        x = np.asfortranarray(x)
+        try:
+            x = np.asfortranarray(x, like=x)
+        except TypeError:
+            x = np.asfortranarray(x)
         return x.T.view(dtype).T
 
 

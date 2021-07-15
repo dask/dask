@@ -1,31 +1,28 @@
+import contextlib
 import numbers
-import warnings
-from itertools import product
+from itertools import chain, product
 from numbers import Integral
 from operator import getitem
 
 import numpy as np
 
+from ..base import tokenize
+from ..highlevelgraph import HighLevelGraph
+from ..utils import _deprecated, derived_from, random_state_data, skip_doctest
 from .core import (
-    normalize_chunks,
     Array,
-    slices_from_chunks,
     asarray,
     broadcast_shapes,
     broadcast_to,
+    normalize_chunks,
+    slices_from_chunks,
 )
 from .creation import arange
-from ..base import tokenize
-from ..highlevelgraph import HighLevelGraph
-from ..utils import ignoring, random_state_data, derived_from, skip_doctest
 
 
+@_deprecated()
 def doc_wraps(func):
-    """ Copy docstring from one function to another """
-    warnings.warn(
-        "dask.array.random.doc_wraps is deprecated and will be removed in a future version",
-        FutureWarning,
-    )
+    """Copy docstring from one function to another"""
 
     def _(func2):
         if func.__doc__ is not None:
@@ -35,7 +32,7 @@ def doc_wraps(func):
     return _
 
 
-class RandomState(object):
+class RandomState:
     """
     Mersenne Twister pseudo-random number generator
 
@@ -85,14 +82,15 @@ class RandomState(object):
         if size is not None and not isinstance(size, (tuple, list)):
             size = (size,)
 
-        args_shapes = {ar.shape for ar in args if isinstance(ar, (Array, np.ndarray))}
-        args_shapes.union(
-            {ar.shape for ar in kwargs.values() if isinstance(ar, (Array, np.ndarray))}
+        shapes = list(
+            {
+                ar.shape
+                for ar in chain(args, kwargs.values())
+                if isinstance(ar, (Array, np.ndarray))
+            }
         )
-
-        shapes = list(args_shapes)
         if size is not None:
-            shapes.extend([size])
+            shapes.append(size)
         # broadcast to the final size(shape)
         size = broadcast_shapes(*shapes)
         chunks = normalize_chunks(
@@ -111,7 +109,6 @@ class RandomState(object):
         # Broadcast all arguments, get tiny versions as well
         # Start adding the relevant bits to the graph
         dsk = {}
-        dsks = []
         lookup = {}
         small_args = []
         dependencies = []
@@ -120,7 +117,6 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[i] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -136,7 +132,6 @@ class RandomState(object):
                 res = _broadcast_any(ar, size, chunks)
                 if isinstance(res, Array):
                     dependencies.append(res)
-                    dsks.append(res.dask)
                     lookup[key] = res.name
                 elif isinstance(res, np.ndarray):
                     name = "array-{}".format(tokenize(res))
@@ -164,7 +159,6 @@ class RandomState(object):
                     arg.append(ar)
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         arg.append((lookup[i],) + block)
                     else:  # np.ndarray
                         arg.append((getitem, lookup[i], slc))
@@ -174,7 +168,6 @@ class RandomState(object):
                     kwrg[k] = ar
                 else:
                     if isinstance(ar, Array):
-                        dependencies.append(ar)
                         kwrg[k] = (lookup[k],) + block
                     else:  # np.ndarray
                         kwrg[k] = (getitem, lookup[k], slc)
@@ -208,7 +201,7 @@ class RandomState(object):
     def chisquare(self, df, size=None, chunks="auto", **kwargs):
         return self._wrap("chisquare", df, size=size, chunks=chunks, **kwargs)
 
-    with ignoring(AttributeError):
+    with contextlib.suppress(AttributeError):
 
         @derived_from(np.random.RandomState, skipblocks=1)
         def choice(self, a, size=None, replace=True, p=None, chunks="auto"):

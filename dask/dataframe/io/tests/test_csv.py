@@ -1,8 +1,7 @@
-from io import BytesIO
-import os
 import gzip
+import os
 from inspect import signature
-from time import sleep
+from io import BytesIO
 from unittest import mock
 
 import pytest
@@ -10,14 +9,18 @@ import pytest
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 
+from fsspec.compression import compr
 from tlz import partition_all, valmap
 
 import dask
 import dask.dataframe as dd
-from dask.dataframe._compat import tm
 from dask.base import compute_as_if_collection
+from dask.bytes.core import read_bytes
+from dask.bytes.utils import compress
 from dask.core import flatten
+from dask.dataframe._compat import tm
 from dask.dataframe.io.csv import (
+    _infer_block_size,
     auto_blocksize,
     block_mask,
     make_reader,
@@ -26,12 +29,10 @@ from dask.dataframe.io.csv import (
     UNSUPPORTED_KWARGS,
 )
 from dask.dataframe.utils import assert_eq, has_known_categories
-from dask.bytes.core import read_bytes
-from dask.bytes.utils import compress
-from dask.utils import filetexts, filetext, tmpfile, tmpdir
-from fsspec.compression import compr
+from dask.utils import filetext, filetexts, tmpdir, tmpfile
 
-fmt_bs = [(fmt, None) for fmt in compr] + [(fmt, 10) for fmt in compr]
+# List of available compression format for test_read_csv_compression
+compression_fmts = [fmt for fmt in compr] + [None]
 
 
 def normalize_text(s):
@@ -460,6 +461,23 @@ def test_read_csv_include_path_column_is_dtype_category(dd_read, files):
         assert has_known_categories(result.path)
 
 
+@pytest.mark.parametrize(
+    "dd_read,files", [(dd.read_csv, csv_files), (dd.read_table, tsv_files)]
+)
+@read_table_mark
+def test_read_csv_include_path_column_with_multiple_partitions_per_file(dd_read, files):
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", blocksize="10B", include_path_column=True)
+        assert df.npartitions > 3
+        assert df.path.dtype == "category"
+        assert has_known_categories(df.path)
+
+        dfs = dd_read("2014-01-*.csv", blocksize="10B", include_path_column=True)
+        result = dfs.compute()
+        assert result.path.dtype == "category"
+        assert has_known_categories(result.path)
+
+
 # After this point, we test just using read_csv, as all functionality
 # for both is implemented using the same code.
 
@@ -494,8 +512,11 @@ def test_read_csv_skiprows_range():
 def test_usecols():
     with filetext(timeseries) as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=["High", "Low"])
+        df_select = df[["High"]]
         expected = pd.read_csv(fn, usecols=["High", "Low"])
+        expected_select = expected[["High"]]
         assert (df.compute().values == expected.values).all()
+        assert (df_select.compute().values == expected_select.values).all()
 
 
 def test_string_blocksize():
@@ -665,7 +686,8 @@ def test_categorical_known():
 
 
 @pytest.mark.slow
-def test_compression_multiple_files():
+@pytest.mark.parametrize("compression", ["infer", "gzip"])
+def test_compression_multiple_files(compression):
     with tmpdir() as tdir:
         f = gzip.open(os.path.join(tdir, "a.csv.gz"), "wb")
         f.write(csv_text.encode())
@@ -676,7 +698,7 @@ def test_compression_multiple_files():
         f.close()
 
         with pytest.warns(UserWarning):
-            df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression="gzip")
+            df = dd.read_csv(os.path.join(tdir, "*.csv.gz"), compression=compression)
 
         assert len(df.compute()) == (len(csv_text.split("\n")) - 1) * 2
 
@@ -701,17 +723,22 @@ def test_read_csv_sensitive_to_enforce():
         assert a._name != b._name
 
 
-@pytest.mark.parametrize("fmt,blocksize", fmt_bs)
+@pytest.mark.parametrize("blocksize", [None, 10])
+@pytest.mark.parametrize("fmt", compression_fmts)
 def test_read_csv_compression(fmt, blocksize):
-    if fmt not in compress:
+    if fmt and fmt not in compress:
         pytest.skip("compress function not provided for %s" % fmt)
-    files2 = valmap(compress[fmt], csv_files)
-    with filetexts(files2, mode="b"):
+    suffix = {"gzip": ".gz", "bz2": ".bz2", "zip": ".zip", "xz": ".xz"}.get(fmt, "")
+    files2 = valmap(compress[fmt], csv_files) if fmt else csv_files
+    renamed_files = {k + suffix: v for k, v in files2.items()}
+    with filetexts(renamed_files, mode="b"):
+        # This test is using `compression="infer"` (the default) for
+        # read_csv.  The paths must have the appropriate extension.
         if fmt and blocksize:
             with pytest.warns(UserWarning):
-                df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+                df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
         else:
-            df = dd.read_csv("2014-01-*.csv", compression=fmt, blocksize=blocksize)
+            df = dd.read_csv("2014-01-*.csv" + suffix, blocksize=blocksize)
         assert_eq(
             df.compute(scheduler="sync").reset_index(drop=True),
             expected.reset_index(drop=True),
@@ -761,6 +788,23 @@ def test_auto_blocksize():
     assert isinstance(auto_blocksize(3000, 15), int)
     assert auto_blocksize(3000, 3) == 100
     assert auto_blocksize(5000, 2) == 250
+
+
+def test__infer_block_size(monkeypatch):
+    """
+    psutil returns a total memory of `None` on some systems
+    see https://github.com/dask/dask/pull/7601
+    """
+    psutil = pytest.importorskip("psutil")
+
+    class MockOutput:
+        total = None
+
+    def mock_virtual_memory():
+        return MockOutput
+
+    monkeypatch.setattr(psutil, "virtual_memory", mock_virtual_memory)
+    assert _infer_block_size()
 
 
 def test_auto_blocksize_max64mb():
@@ -830,24 +874,17 @@ def test_multiple_read_csv_has_deterministic_name():
         assert sorted(a.dask.keys(), key=str) == sorted(b.dask.keys(), key=str)
 
 
+def test_read_csv_has_different_names_based_on_blocksize():
+    with filetext(csv_text) as fn:
+        a = dd.read_csv(fn, blocksize="10kB")
+        b = dd.read_csv(fn, blocksize="20kB")
+        assert a._name != b._name
+
+
 def test_csv_with_integer_names():
     with filetext("alice,1\nbob,2") as fn:
         df = dd.read_csv(fn, header=None)
         assert list(df.columns) == [0, 1]
-
-
-@pytest.mark.slow
-def test_read_csv_of_modified_file_has_different_name():
-    with filetext(csv_text) as fn:
-        sleep(1)
-        a = dd.read_csv(fn)
-        sleep(1)
-        with open(fn, "a") as f:
-            f.write("\nGeorge,700")
-            os.fsync(f)
-        b = dd.read_csv(fn)
-
-        assert sorted(a.dask, key=str) != sorted(b.dask, key=str)
 
 
 def test_late_dtypes():
@@ -1592,6 +1629,48 @@ def test_reading_empty_csv_files_with_path():
         assert_eq(result, df, check_index=False)
 
 
+def test_read_csv_groupby_get_group(tmpdir):
+    # https://github.com/dask/dask/issues/7005
+
+    path = os.path.join(str(tmpdir), "test.csv")
+    df1 = pd.DataFrame([{"foo": 10, "bar": 4}])
+    df1.to_csv(path, index=False)
+
+    ddf1 = dd.read_csv(path)
+    ddfs = ddf1.groupby("foo")
+
+    assert_eq(df1, ddfs.get_group(10).compute())
+
+
+def test_csv_getitem_column_order(tmpdir):
+    # See: https://github.com/dask/dask/issues/7759
+
+    path = os.path.join(str(tmpdir), "test.csv")
+    columns = list("abcdefghijklmnopqrstuvwxyz")
+    values = list(range(len(columns)))
+
+    df1 = pd.DataFrame([{c: v for c, v in zip(columns, values)}])
+    df1.to_csv(path)
+
+    # Use disordered and duplicated column selection
+    columns = list("hczzkylaape")
+    df2 = dd.read_csv(path)[columns].head(1)
+    assert_eq(df1[columns], df2)
+
+
+def test_csv_parse_fail(tmpdir):
+    # See GH #7680
+    path = os.path.join(str(tmpdir), "test.csv")
+    data = b'a,b\n1,"hi\n"\n2,"oi\n"\n'
+    expected = pd.read_csv(BytesIO(data))
+    with open(path, "wb") as f:
+        f.write(data)
+    with pytest.raises(ValueError, match="EOF encountered"):
+        dd.read_csv(path, sample=13)
+    df = dd.read_csv(path, sample=13, sample_rows=1)
+    assert_eq(df, expected)
+
+
 @pytest.mark.parametrize(
     "from_f,to_f",
     [
@@ -1609,4 +1688,4 @@ def test_reader_signature(from_f, to_f):
     # signature contains parameters from original
     assert params & original_params
     # signature does not include unsupported kwargs
-    assert params.isdisjoint(UNSUPPORTED_KWARGS)
+    assert params.isdisjoint(UNSUPPORTED_KWARGS)\

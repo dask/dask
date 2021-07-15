@@ -1,12 +1,11 @@
 from collections import namedtuple
 from itertools import starmap
-from timeit import default_timer
+from multiprocessing import Pipe, Process, current_process
 from time import sleep
-from multiprocessing import Process, Pipe, current_process
+from timeit import default_timer
 
 from ..callbacks import Callback
 from ..utils import import_required
-
 
 # Stores execution data for each task
 TaskData = namedtuple(
@@ -214,7 +213,7 @@ class _Tracker(Process):
     """Background process for tracking resource usage"""
 
     def __init__(self, dt=1):
-        Process.__init__(self)
+        super().__init__()
         self.daemon = True
         self.dt = dt
         self.parent_pid = current_process().pid
@@ -347,7 +346,7 @@ class CacheProfiler(Callback):
     def _posttask(self, key, value, dsk, state, id):
         t = default_timer()
         self._cache[key] = (self._metric(value), t)
-        for k in state["released"].intersection(self._cache):
+        for k in state["released"] & self._cache.keys():
             metric, start = self._cache.pop(k)
             self.results.append(CacheData(k, dsk[k], metric, start, t))
 

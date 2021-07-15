@@ -1,8 +1,10 @@
 try:
+    from ..base import compute
+    from . import backends, dispatch, rolling
     from .core import (
         DataFrame,
-        Series,
         Index,
+        Series,
         _Frame,
         map_partitions,
         repartition,
@@ -11,33 +13,31 @@ try:
     )
     from .groupby import Aggregation
     from .io import (
+        demo,
         from_array,
-        from_pandas,
         from_bcolz,
         from_dask_array,
-        read_hdf,
-        read_sql_table,
         from_delayed,
+        from_pandas,
         read_csv,
-        to_csv,
+        read_fwf,
+        read_hdf,
+        read_json,
+        read_sql_table,
         read_table,
-        demo,
+        to_bag,
+        to_csv,
         to_hdf,
+        to_json,
         to_records,
         to_sql,
-        to_bag,
-        read_json,
-        to_json,
-        read_fwf,
     )
+    from .io.orc import read_orc
+    from .multi import concat, merge, merge_asof
     from .numeric import to_numeric
     from .optimize import optimize
-    from .multi import merge, concat, merge_asof
-    from . import rolling, backends
-    from ..base import compute
-    from .reshape import get_dummies, pivot_table, melt
+    from .reshape import get_dummies, melt, pivot_table
     from .utils import assert_eq
-    from .io.orc import read_orc
 
     try:
         from .io import read_parquet, to_parquet

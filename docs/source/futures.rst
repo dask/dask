@@ -22,7 +22,7 @@ despite its name, runs very well on a single machine).
            allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
            allowfullscreen></iframe>
 
-.. currentmodule:: distributed #doctest: +SKIP
+.. currentmodule:: distributed
 
 Examples
 --------
@@ -288,6 +288,8 @@ Additionally, for iterative algorithms, you can add more futures into the
        if condition(y):
            new_future = client.submit(...)
            seq.add(new_future)  # add back into the loop
+
+or use ``seq.update(futures)`` to add multiple futures at once.
 
 
 Fire and Forget

@@ -1,13 +1,14 @@
 import os
 import shutil
 import tempfile
-from distutils.version import LooseVersion
 
 import pytest
+from packaging.version import parse as parse_version
 
-from dask.dataframe import read_orc
-from dask.dataframe.utils import assert_eq
 import dask.dataframe as dd
+from dask.dataframe import read_orc
+from dask.dataframe.optimize import optimize_dataframe_getitem
+from dask.dataframe.utils import assert_eq
 
 pytest.importorskip("pyarrow.orc")
 
@@ -15,7 +16,7 @@ pytest.importorskip("pyarrow.orc")
 import pyarrow as pa
 
 pytestmark = pytest.mark.skipif(
-    LooseVersion(pa.__version__) == "0.10.0",
+    parse_version(pa.__version__).base_version == parse_version("0.10.0"),
     reason=(
         "PyArrow 0.10.0 release broke the ORC reader, see "
         "https://issues.apache.org/jira/browse/ARROW-3009"
@@ -63,6 +64,14 @@ def test_orc_single(orc_files):
     assert_eq(d[columns], d2[columns])
     with pytest.raises(ValueError, match="nonexist"):
         read_orc(fn, columns=["time", "nonexist"])
+
+    # Check that `optimize_dataframe_getitem` changes the
+    # `columns` attribute of the "read-orc" layer
+    d3 = d[columns]
+    keys = [(d3._name, i) for i in range(d3.npartitions)]
+    graph = optimize_dataframe_getitem(d3.__dask_graph__(), keys)
+    key = [k for k in graph.layers.keys() if k.startswith("read-orc-")][0]
+    assert set(graph.layers[key].columns) == set(columns)
 
 
 def test_orc_multiple(orc_files):

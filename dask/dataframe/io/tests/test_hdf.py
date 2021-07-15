@@ -1,17 +1,18 @@
-from distutils.version import LooseVersion
+import os
+import pathlib
+from time import sleep
+
 import numpy as np
 import pandas as pd
 import pytest
 
-import os
-from time import sleep
-import pathlib
-
 import dask
 import dask.dataframe as dd
 from dask.dataframe._compat import tm
-from dask.utils import tmpfile, tmpdir, dependency_depth
+from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
+from dask.layers import DataFrameIOLayer
+from dask.utils import dependency_depth, tmpdir, tmpfile
 
 
 def test_to_hdf():
@@ -121,8 +122,18 @@ def test_to_hdf_multiple_nodes():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             b.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df16, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df16, out)
+
+    # Test getitem optimization
+    with tmpfile("h5") as fn:
+        a.to_hdf(fn, "/data*")
+        out = dd.read_hdf(fn, "/data*")[["x"]]
+        dsk = optimize_dataframe_getitem(out.dask, keys=out.__dask_keys__())
+        read = [key for key in dsk.layers if key.startswith("read-hdf")][0]
+        subgraph = dsk.layers[read]
+        assert isinstance(subgraph, DataFrameIOLayer)
+        assert subgraph.columns == ["x"]
 
 
 def test_to_hdf_multiple_files():
@@ -204,8 +215,8 @@ def test_to_hdf_multiple_files():
     with tmpfile("h5") as fn:
         with pd.HDFStore(fn) as hdf:
             a.to_hdf(hdf, "/data*")
-            out = dd.read_hdf(fn, "/data*")
-            assert_eq(df, out)
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df, out)
 
 
 def test_to_hdf_modes_multiple_nodes():
@@ -847,9 +858,6 @@ def test_hdf_path_exceptions():
         dd.read_hdf([], "/tmp")
 
 
-@pytest.mark.skipif(
-    pd.__version__ < LooseVersion("0.24.2"), reason="HDF key behaviour changed"
-)
 def test_hdf_nonpandas_keys():
     # https://github.com/dask/dask/issues/5934
     # TODO: maybe remove this if/when pandas copes with all keys
