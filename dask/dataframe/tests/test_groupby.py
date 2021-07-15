@@ -2508,3 +2508,16 @@ def test_empty_partitions_with_value_counts():
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby("A")["B"].value_counts()
     assert_eq(expected, actual)
+
+
+def test_groupby_with_pd_grouper():
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            {"key1": ["a", "b", "a"], "key2": ["c", "c", "c"], "value": [1, 2, 3]}
+        ),
+        npartitions=3,
+    )
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(pd.Grouper(key="key1"))
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(["key1", pd.Grouper(key="key2")])
