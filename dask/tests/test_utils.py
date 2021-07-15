@@ -1,5 +1,6 @@
 import datetime
 import functools
+import inspect
 import operator
 import pickle
 
@@ -29,6 +30,7 @@ from dask.utils import (
     parse_bytes,
     is_arraylike,
     iter_chunks,
+    delegates,
 )
 from dask.utils_test import inc
 from dask.highlevelgraph import HighLevelGraph
@@ -582,3 +584,79 @@ def test_iter_chunks():
     ]
     assert list(iter_chunks(sizes, 28)) == [[14, 8, 5], [9, 7, 9, 1], [19, 8], [19]]
     assert list(iter_chunks(sizes, 67)) == [[14, 8, 5, 9, 7, 9, 1], [19, 8, 19]]
+
+
+def test_delegates():
+    # Based on [fastcore.meta.delegates](https://github.com/fastai/fastcore/blob/ae8148c85a0c57cc7fd6aa29fa13bdbfbe59be22/fastcore/meta.py#L107-L126), [original docs](https://fastcore.fast.ai/meta.html#delegates).
+    def test_sig(f, b):
+        "Test the signature of an object"
+        return str(inspect.signature(f)) == b
+
+    def baz(a, b=2, c=3):
+        return a + b + c
+
+    @delegates(baz)
+    def foo(c, a, **kwargs):
+        return c + baz(a, **kwargs)
+
+    assert test_sig(foo, '(c, a, b=2)')
+
+    @delegates(baz, keep=True)
+    def foo(c, a, **kwargs):
+        return c + baz(a, **kwargs)
+
+    assert test_sig(foo, '(c, a, b=2, **kwargs)')
+
+
+    def basefoo(e, d, c=2):
+        pass
+
+    @delegates(basefoo)
+    def foo(a, b=1, **kwargs):
+        pass
+
+    assert test_sig(foo, '(a, b=1, c=2)')  # e and d are not included b/c they don't have default parameters.
+
+    def basefoo(e, c=2, d=3):
+        pass
+
+    @delegates(basefoo, but=['d'])
+    def foo(a, b=1, **kwargs):
+        pass
+
+    assert test_sig(foo, '(a, b=1, c=2)')
+
+    class _T():
+        @classmethod
+        def foo(cls, a=1, b=2):
+            pass
+
+        @classmethod
+        @delegates(foo)
+        def bar(cls, c=3, **kwargs):
+            pass
+
+    assert test_sig(_T.bar, '(c=3, a=1, b=2)')
+
+    class _T():
+        def foo(self, a=1, b=2):
+            pass
+
+        @delegates(foo)
+        def bar(self, c=3, **kwargs):
+            pass
+
+    t = _T()
+    assert test_sig(t.bar, '(c=3, a=1, b=2)')
+
+    class BaseFoo:
+        def __init__(self, e, c=2):
+            pass
+
+    @delegates(
+    )  # since no argument was passsed here we delegate to the superclass
+    class Foo(BaseFoo):
+        def __init__(self, a, b=1, **kwargs):
+            super().__init__(**kwargs)
+
+    assert test_sig(Foo, '(a, b=1, c=2)')

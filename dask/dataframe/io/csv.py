@@ -8,11 +8,6 @@ try:
 except ImportError:
     psutil = None
 
-try:
-    from fastcore.meta import delegates
-except ImportError:
-    delegates = None
-
 import numpy as np
 import pandas as pd
 from pandas.api.types import (
@@ -30,7 +25,7 @@ from ...bytes import read_bytes, open_file, open_files
 from ..core import new_dd_object
 from ...core import flatten
 from ...delayed import delayed
-from ...utils import asciitable, parse_bytes
+from ...utils import asciitable, delegates, parse_bytes
 from ..utils import clear_known_categories
 
 import fsspec.implementations.local
@@ -633,7 +628,7 @@ you can specify ``blocksize=None`` to not split files into multiple partitions,
 at the cost of reduced parallelism.
 """
 
-UNSUPPORTED_KWARGS = ["chunksize", "index", "index_col", "iterator", "nrows"]
+UNSUPPORTED_KWARGS = {"chunksize", "index", "index_col", "iterator", "nrows"}
 
 
 def make_reader(reader, reader_name, file_type):
@@ -665,7 +660,7 @@ def make_reader(reader, reader_name, file_type):
 
     read.__doc__ = READ_DOC_TEMPLATE.format(reader=reader_name, file_type=file_type)
     read.__name__ = reader_name
-    if delegates is not None and reader is not None:
+    if reader is not None:
         try:
             read = delegates(to=reader, keep=True, but=UNSUPPORTED_KWARGS)(read)
         except Exception:

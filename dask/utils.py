@@ -1472,3 +1472,55 @@ def key_split(s):
             return result
     except Exception:
         return "Other"
+
+
+def delegates(to=None, keep=False, but=None):
+    """Decorator: replace `**kwargs` in signature with params from `to`
+
+    Decorator to include parameters from other functions.
+
+    Optionally keep `**kwargs` by setting `keep=True`.
+
+    It is important to note that **only parameters with default parameters are included**.  The reason that required arguments (i.e. those without default parameters) are automatically excluded is that you should be explicitly implementing required arguments into your function's signature rather than relying on `delegates`.
+
+    Additionally, you can exclude specific parameters from being included in the signature with the  `but` parameter.
+
+    You can also use `delegates` between methods in a class.
+
+    You can also delegate between classes.  By default, the `delegates` decorator will delegate to the superclass.
+
+    Based on [fastcore.meta.delegates](https://github.com/fastai/fastcore/blob/ae8148c85a0c57cc7fd6aa29fa13bdbfbe59be22/fastcore/meta.py#L107-L126), [original docs](https://fastcore.fast.ai/meta.html#delegates).
+
+    Parameters
+    ----------
+    to : function to be delegated to
+        Original function **kwargs are passed to
+    keep : boolean flag to keep `**kwargs`
+        Keep `**kwargs` in function signature
+    but : excluded parameters
+        Exclude specific parameters from being included in the signature
+    """
+    if but is None: but = []
+
+    def _f(f):
+        if to is None: to_f, from_f = f.__base__.__init__, f.__init__
+        else: to_f, from_f = to.__init__ if isinstance(to, type) else to, f
+        from_f = getattr(from_f, '__func__', from_f)
+        to_f = getattr(to_f, '__func__', to_f)
+        if hasattr(from_f, '__delwrap__'): return f
+        sig = inspect.signature(from_f)
+        sigd = dict(sig.parameters)
+        k = sigd.pop('kwargs')
+        s2 = {
+            k: v
+            for k, v in inspect.signature(to_f).parameters.items()
+            if v.default != inspect.Parameter.empty and k not in sigd
+            and k not in but
+        }
+        sigd.update(s2)
+        if keep: sigd['kwargs'] = k
+        else: from_f.__delwrap__ = to_f
+        from_f.__signature__ = sig.replace(parameters=sigd.values())
+        return f
+
+    return _f

@@ -1592,13 +1592,21 @@ def test_reading_empty_csv_files_with_path():
         assert_eq(result, df, check_index=False)
 
 
-def test_reader_signature():
-    pytest.importorskip("fastcore")
-    default_params = signature(make_reader(None, "", "")).parameters.keys()
-    funcs = [dd.read_csv, dd.read_table, dd.read_fwf]
-    for func in funcs:
-        params = signature(func).parameters.keys()
-        # signature includes default dask parameters
-        assert params > default_params
-        # signature does not include unsupported kwargs
-        assert params.isdisjoint(UNSUPPORTED_KWARGS)
+@pytest.mark.parametrize(
+    "from_f,to_f",
+    [
+        (dd.read_csv, pd.read_csv),
+        (dd.read_table, pd.read_table),
+        (dd.read_fwf, pd.read_fwf),
+    ],
+)
+def test_reader_signature(from_f, to_f):
+    default_params = set(signature(make_reader(None, "", "")).parameters.keys())
+    params = set(signature(from_f).parameters.keys())
+    original_params = set(signature(to_f).parameters.keys())
+    # signature includes default parameters
+    assert params > default_params
+    # signature contains parameters from original
+    assert params & original_params
+    # signature does not include unsupported kwargs
+    assert params.isdisjoint(UNSUPPORTED_KWARGS)
