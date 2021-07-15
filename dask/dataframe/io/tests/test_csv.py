@@ -20,13 +20,13 @@ from dask.bytes.utils import compress
 from dask.core import flatten
 from dask.dataframe._compat import tm
 from dask.dataframe.io.csv import (
+    UNSUPPORTED_KWARGS,
     _infer_block_size,
     auto_blocksize,
     block_mask,
     make_reader,
     pandas_read_text,
     text_blocks_to_pandas,
-    UNSUPPORTED_KWARGS,
 )
 from dask.dataframe.utils import assert_eq, has_known_categories
 from dask.utils import filetext, filetexts, tmpdir, tmpfile
