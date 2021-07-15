@@ -124,6 +124,7 @@ class Layer(collections.abc.Mapping):
 
         Examples
         --------
+        TODO: Fix this doctest
         >>> d = Layer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})  # doctest: +SKIP
         >>> d.cull({'out'})  # doctest: +SKIP
         {'x': 1, 'out': (add, 'x', 10)}

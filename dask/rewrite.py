@@ -222,16 +222,15 @@ class RuleSet:
     >>> rs.rewrite((add, 2, 0))
     2
 
-    >>> rs.rewrite((f, (g, 'a', 3)))    # doctest: +SKIP
-    (h, 'a', 3)
+    >>> rs.rewrite((f, (g, 'a', 3)))    # doctest: +ELLIPSIS
+    (<function h at ...>, 'a', 3)
 
     >>> dsk = {'a': (add, 2, 0),
     ...        'b': (f, (g, 'a', 3))}
 
     >>> from toolz import valmap
-    >>> valmap(rs.rewrite, dsk)         # doctest: +SKIP
-    {'a': 2,
-     'b': (h, 'a', 3)}
+    >>> valmap(rs.rewrite, dsk)         # doctest: +ELLIPSIS
+    {'a': 2, 'b': (<function h at ...>, 'a', 3)}
 
     Attributes
     ----------

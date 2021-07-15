@@ -107,11 +107,11 @@ def fuse_linear(dsk, keys=None, dependencies=None, rename_keys=True):
     >>> dsk # doctest: +SKIP
     {'a-b-c': (inc, (inc, 1)), 'c': 'a-b-c'}
     >>> dsk, dependencies = fuse(d, rename_keys=False)
-    >>> dsk # doctest: +SKIP
-    {'c': (inc, (inc, 1))}
+    >>> dsk # doctest: +ELLIPSIS
+    {'c': (<function inc at ...>, (<function inc at ...>, 1))}
     >>> dsk, dependencies = fuse(d, keys=['b'], rename_keys=False)
-    >>> dsk  # doctest: +SKIP
-    {'b': (inc, 1), 'c': (inc, 'b')}
+    >>> dsk  # doctest: +ELLIPSIS
+    {'b': (<function inc at ...>, 1), 'c': (<function inc at ...>, 'b')}
 
     Returns
     -------
