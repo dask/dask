@@ -141,10 +141,10 @@ def to_task_dask(expr):
 
     Examples
     --------
+    # TODO: Fix this doctest
     >>> import dask
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')
-    TODO: Fix this doctest
     >>> task, dask = to_task_dask([a, b, 3])  # doctest: +SKIP
     >>> task  # doctest: +SKIP
     ['a', 'b', 3]
