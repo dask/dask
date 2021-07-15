@@ -86,7 +86,7 @@ class ParquetFunctionWrapper:
 
         return read_parquet_part(
             self.fs,
-            self.engine.read_partition,
+            self.engine,
             self.meta,
             [(p["piece"], p.get("kwargs", {})) for p in part],
             self.columns,
@@ -107,6 +107,7 @@ def read_parquet(
     split_row_groups=None,
     read_from_paths=None,
     chunksize=None,
+    aggregate_files=None,
     **kwargs,
 ):
     """
@@ -189,15 +190,48 @@ def read_parquet(
     read_from_paths : bool, default None
         Only used by ``ArrowDatasetEngine`` when ``filters`` are specified.
         Determines whether the engine should avoid inserting large pyarrow
-        (``ParquetFileFragment``) objects in the task graph. If this option
-        is True (default), ``read_partition`` will need to regenerate the
-        appropriate fragment object from the path and row-group IDs.  This will
-        reduce the size of the task graph, but will add minor overhead to
-        ``read_partition``.
-    chunksize : int, str
-        The target task partition size.  If set, consecutive row-groups
-        from the same file will be aggregated into the same output
-        partition until the aggregate size reaches this value.
+        (``ParquetFileFragment``) objects in the task graph.  If this option
+        is True, ``read_partition`` will need to regenerate the appropriate
+        fragment object from the path and row-group IDs.  This will reduce the
+        size of the task graph, but will add minor overhead to ``read_partition``.
+        By default (None), ``ArrowDatasetEngine`` will set this option to
+        ``False`` when there are filters.
+    chunksize : int or str, default None
+        The desired size of each output ``DataFrame`` partition in terms of total
+        (uncompressed) parquet storage space. If specified, adjacent row-groups
+        and/or files will be aggregated into the same output partition until the
+        cumulative ``total_byte_size`` parquet-metadata statistic reaches this
+        value. Use `aggregate_files` to enable/disable inter-file aggregation.
+    aggregate_files : bool or str, default None
+        Whether distinct file paths may be aggregated into the same output
+        partition. This parameter requires `gather_statistics=True`, and is
+        only used when `chunksize` is specified or when `split_row_groups` is
+        an integer >1. A setting of True means that any two file paths may be
+        aggregated into the same output partition, while False means that
+        inter-file aggregation is prohibited.
+
+        For "hive-partitioned" datasets, a "partition"-column name can also be
+        specified. In this case, we allow the aggregation of any two files
+        sharing a file path up to, and including, the corresponding directory name.
+        For example, if ``aggregate_files`` is set to ``"section"`` for the
+        directory structure below, ``03.parquet`` and ``04.parquet`` may be
+        aggregated together, but ``01.parquet`` and ``02.parquet`` cannot be.
+        If, however, ``aggregate_files`` is set to ``"region"``, ``01.parquet``
+        may be aggregated with ``02.parquet``, and ``03.parquet`` may be aggregated
+        with ``04.parquet``::
+
+            dataset-path/
+            ├── region=1/
+            │   ├── section=a/
+            │   │   └── 01.parquet
+            │   ├── section=b/
+            │   └── └── 02.parquet
+            └── region=2/
+                ├── section=a/
+                │   ├── 03.parquet
+                └── └── 04.parquet
+
+        Note that the default behavior of ``aggregate_files`` is False.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -231,6 +265,7 @@ def read_parquet(
             split_row_groups=split_row_groups,
             read_from_paths=read_from_paths,
             chunksize=chunksize,
+            aggregate_files=aggregate_files,
         )
         return df[columns]
 
@@ -250,6 +285,7 @@ def read_parquet(
         split_row_groups,
         read_from_paths,
         chunksize,
+        aggregate_files,
     )
 
     if isinstance(engine, str):
@@ -268,15 +304,26 @@ def read_parquet(
     if index and isinstance(index, str):
         index = [index]
 
+    if chunksize or (
+        split_row_groups and int(split_row_groups) > 1 and aggregate_files
+    ):
+        # Require `gather_statistics=True` if `chunksize` is used,
+        # or if `split_row_groups>1` and we are aggregating files.
+        if gather_statistics is False:
+            raise ValueError("read_parquet options require gather_statistics=True")
+        gather_statistics = True
+
     read_metadata_result = engine.read_metadata(
         fs,
         paths,
         categories=categories,
         index=index,
-        gather_statistics=True if chunksize else gather_statistics,
+        gather_statistics=gather_statistics,
         filters=filters,
         split_row_groups=split_row_groups,
         read_from_paths=read_from_paths,
+        chunksize=chunksize,
+        aggregate_files=aggregate_files,
         **kwargs,
     )
 
@@ -288,18 +335,23 @@ def read_parquet(
     # compatibility with a user-defined engine.
     meta, statistics, parts, index = read_metadata_result[:4]
     common_kwargs = {}
-    if len(read_metadata_result) > 4:
-        # Engine may return common_kwargs as a separate element
-        common_kwargs = read_metadata_result[4]
-    elif len(parts):
-        # If the engine does not return a dedicated
-        # common_kwargs argument, it may be stored in
-        # the first element of `parts`
+    aggregation_depth = False
+    if len(parts):
+        # For now, `common_kwargs` and `aggregation_depth`
+        # may be stored in the first element of `parts`
         common_kwargs = parts[0].pop("common_kwargs", {})
+        aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
     parts, divisions, index, index_in_columns = process_statistics(
-        parts, statistics, filters, index, chunksize
+        parts,
+        statistics,
+        filters,
+        index,
+        chunksize,
+        split_row_groups,
+        fs,
+        aggregation_depth,
     )
 
     # Account for index and columns arguments.
@@ -342,22 +394,38 @@ def read_parquet(
     return new_dd_object(graph, output_name, meta, divisions)
 
 
-def read_parquet_part(fs, func, meta, part, columns, index, kwargs):
+def check_multi_support(engine):
+    # Helper function to check that the engine
+    # supports a multi-partition read
+    return hasattr(engine, "multi_support") and engine.multi_support()
+
+
+def read_parquet_part(fs, engine, meta, part, columns, index, kwargs):
     """Read a part of a parquet dataset
 
     This function is used by `read_parquet`."""
-
     if isinstance(part, list):
-        dfs = [
-            func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
-            for (rg, kw) in part
-        ]
-        df = concat(dfs, axis=0)
+        if len(part) == 1 or part[0][1] or not check_multi_support(engine):
+            # Part kwargs expected
+            func = engine.read_partition
+            dfs = [
+                func(fs, rg, columns.copy(), index, **toolz.merge(kwargs, kw))
+                for (rg, kw) in part
+            ]
+            df = concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+        else:
+            # No part specific kwargs, let engine read
+            # list of parts at once
+            df = engine.read_partition(
+                fs, [p[0] for p in part], columns.copy(), index, **kwargs
+            )
     else:
         # NOTE: `kwargs` are the same for all parts, while `part_kwargs` may
         #       be different for each part.
         rg, part_kwargs = part
-        df = func(fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs))
+        df = engine.read_partition(
+            fs, rg, columns, index, **toolz.merge(kwargs, part_kwargs)
+        )
 
     if meta.columns.name:
         df.columns.name = meta.columns.name
@@ -992,7 +1060,16 @@ def apply_filters(parts, statistics, filters):
     return out_parts, out_statistics
 
 
-def process_statistics(parts, statistics, filters, index, chunksize):
+def process_statistics(
+    parts,
+    statistics,
+    filters,
+    index,
+    chunksize,
+    split_row_groups,
+    fs,
+    aggregation_depth,
+):
     """Process row-group column statistics in metadata
     Used in read_parquet.
     """
@@ -1012,8 +1089,10 @@ def process_statistics(parts, statistics, filters, index, chunksize):
             parts, statistics = apply_filters(parts, statistics, filters)
 
         # Aggregate parts/statistics if we are splitting by row-group
-        if chunksize:
-            parts, statistics = aggregate_row_groups(parts, statistics, chunksize)
+        if chunksize or (split_row_groups and int(split_row_groups) > 1):
+            parts, statistics = aggregate_row_groups(
+                parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
+            )
 
         out = sorted_columns(statistics)
 
@@ -1120,25 +1199,87 @@ def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed
     return meta, index, columns
 
 
-def aggregate_row_groups(parts, stats, chunksize):
+def aggregate_row_groups(
+    parts, stats, chunksize, split_row_groups, fs, aggregation_depth
+):
     if not stats[0].get("file_path_0", None):
         return parts, stats
 
     parts_agg = []
     stats_agg = []
-    chunksize = parse_bytes(chunksize)
+
+    use_row_group_criteria = split_row_groups and int(split_row_groups) > 1
+    use_chunksize_criteria = bool(chunksize)
+    if use_chunksize_criteria:
+        chunksize = parse_bytes(chunksize)
     next_part, next_stat = [parts[0].copy()], stats[0].copy()
     for i in range(1, len(parts)):
         stat, part = stats[i], parts[i]
-        if (stat["file_path_0"] == next_stat["file_path_0"]) and (
-            (next_stat["total_byte_size"] + stat["total_byte_size"]) <= chunksize
+
+        # Criteria #1 for aggregating parts: parts are within the same file
+        same_path = stat["file_path_0"] == next_stat["file_path_0"]
+        multi_path_allowed = False
+
+        if aggregation_depth:
+
+            # Criteria #2 for aggregating parts: The part does not include
+            # row-group information, or both parts include the same kind
+            # of row_group aggregation (all None, or all indices)
+            multi_path_allowed = len(part["piece"]) == 1
+            if not (same_path or multi_path_allowed):
+                rgs = set(list(part["piece"][1]) + list(next_part[-1]["piece"][1]))
+                multi_path_allowed = (rgs == {None}) or (None not in rgs)
+
+            # Criteria #3 for aggregating parts: The parts share a
+            # directory at the "depth" allowed by `aggregation_depth`
+            if not same_path and multi_path_allowed:
+                if aggregation_depth is True:
+                    multi_path_allowed = True
+                elif isinstance(aggregation_depth, int):
+                    # Make sure files share the same directory
+                    root = stat["file_path_0"].split(fs.sep)[:-aggregation_depth]
+                    next_root = next_stat["file_path_0"].split(fs.sep)[
+                        :-aggregation_depth
+                    ]
+                    multi_path_allowed = root == next_root
+                else:
+                    raise ValueError(
+                        f"{aggregation_depth} not supported for `aggregation_depth`"
+                    )
+
+        def _check_row_group_criteria(stat, next_stat):
+            if use_row_group_criteria:
+                return (next_stat["num-row-groups"] + stat["num-row-groups"]) <= int(
+                    split_row_groups
+                )
+            else:
+                return False
+
+        def _check_chunksize_criteria(stat, next_stat):
+            if use_chunksize_criteria:
+                return (
+                    next_stat["total_byte_size"] + stat["total_byte_size"]
+                ) <= chunksize
+            else:
+                return False
+
+        stat["num-row-groups"] = stat.get("num-row-groups", 1)
+        next_stat["num-row-groups"] = next_stat.get("num-row-groups", 1)
+
+        if (same_path or multi_path_allowed) and (
+            (
+                _check_row_group_criteria(stat, next_stat)
+                or _check_chunksize_criteria(stat, next_stat)
+            )
         ):
+
             # Update part list
             next_part.append(part)
 
             # Update Statistics
             next_stat["total_byte_size"] += stat["total_byte_size"]
             next_stat["num-rows"] += stat["num-rows"]
+            next_stat["num-row-groups"] += stat["num-row-groups"]
             for col, col_add in zip(next_stat["columns"], stat["columns"]):
                 if col["name"] != col_add["name"]:
                     raise ValueError("Columns are different!!")
