@@ -447,18 +447,25 @@ def test_map_overlap_multiarray_variadic():
     assert all(x.compute() == size_per_slice)
 
 
-def test_map_overlap_trim_using_drop_axis_and_different_depths():
-    x = da.ones((5, 10), dtype=float)
+@pytest.mark.parametrize("drop_axis", ((0,), (1,), (2,), (0, 1), (1, 2), (2, 0)))
+def test_map_overlap_trim_using_drop_axis_and_different_depths(drop_axis):
+    x = da.random.standard_normal((5, 10, 8), chunks=(2, 5, 4))
+
+    def _mean(x):
+        return x.mean(axis=drop_axis)
+
+    expected = _mean(x)
+
+    # unique boundary and depth value per axis
+    boundary = (0, "reflect", "nearest")
+    depth = (1, 3, 2)
+    # to match expected result, dropped axes must have depth 0
+    depth = tuple(0 if i in drop_axis else d for i, d in enumerate(depth))
 
     y = da.map_overlap(
-        lambda x: x.mean(0), x, depth=(0, 2), drop_axis=(0,), chunks=(0,), dtype=float
+        _mean, x, depth=depth, boundary=boundary, drop_axis=drop_axis, dtype=float
     ).compute()
-    assert y.shape == (x.shape[1],)
-
-    y = da.map_overlap(
-        lambda x: x.mean(1), x, depth=(2, 0), drop_axis=(1,), chunks=(0,), dtype=float
-    ).compute()
-    assert y.shape == (x.shape[0],)
+    assert_array_almost_equal(expected, y)
 
 
 def test_map_overlap_assumes_shape_matches_first_array_if_trim_is_false():
