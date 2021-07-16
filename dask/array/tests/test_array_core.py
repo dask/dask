@@ -4211,9 +4211,11 @@ def test_normalize_chunks_nan():
 
 
 def test_pandas_from_dask_array():
+    # https://github.com/pandas-dev/pandas/issues/38645
     pd = pytest.importorskip("pandas")
     a = da.ones((12,), chunks=4)
     s = pd.Series(a, index=range(12))
+    assert s.dtype == a.dtype
     assert_eq(s.values, a)
 
 
