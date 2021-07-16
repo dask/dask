@@ -1,5 +1,6 @@
 import os
 import pathlib
+import tempfile
 from time import sleep
 
 import numpy as np
@@ -12,7 +13,7 @@ from dask.dataframe._compat import tm
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
-from dask.utils import dependency_depth, make_tmpdir
+from dask.utils import dependency_depth
 
 
 def test_to_hdf(tmp_path):
@@ -136,7 +137,7 @@ def test_to_hdf_multiple_nodes(tmp_path):
     assert subgraph.columns == ["x"]
 
 
-def test_to_hdf_multiple_files(tmp_path):
+def test_to_hdf_multiple_files():
     pytest.importorskip("tables")
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
@@ -186,37 +187,37 @@ def test_to_hdf_multiple_files(tmp_path):
     b = dd.from_pandas(df16, 16)
 
     # saving to multiple files
-    dn = make_tmpdir(tmp_path, "dn1")
-    fn = os.path.join(dn, "data_*.h5")
-    a.to_hdf(fn, "/data")
-    out = dd.read_hdf(fn, "/data")
-    assert_eq(df, out)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fn = os.path.join(tmpdir, "data_*.h5")
+        a.to_hdf(fn, "/data")
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df, out)
 
     # saving to multiple files making sure order is kept
-    dn = make_tmpdir(tmp_path, "dn2")
-    fn = os.path.join(dn, "data_*.h5")
-    b.to_hdf(fn, "/data")
-    out = dd.read_hdf(fn, "/data")
-    assert_eq(df16, out)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fn = os.path.join(tmpdir, "data_*.h5")
+        b.to_hdf(fn, "/data")
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df16, out)
 
     # saving to multiple files with custom name_function
-    dn = make_tmpdir(tmp_path, "dn3")
-    fn = os.path.join(dn, "data_*.h5")
-    a.to_hdf(fn, "/data", name_function=lambda i: "a" * (i + 1))
-    out = dd.read_hdf(fn, "/data")
-    assert_eq(df, out)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        fn = os.path.join(tmpdir, "data_*.h5")
+        a.to_hdf(fn, "/data", name_function=lambda i: "a" * (i + 1))
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df, out)
 
-    out = pd.read_hdf(os.path.join(dn, "data_a.h5"), "/data")
-    tm.assert_frame_equal(out, df.iloc[:2])
-    out = pd.read_hdf(os.path.join(dn, "data_aa.h5"), "/data")
-    tm.assert_frame_equal(out, df.iloc[2:])
+        out = pd.read_hdf(os.path.join(tmpdir, "data_a.h5"), "/data")
+        tm.assert_frame_equal(out, df.iloc[:2])
+        out = pd.read_hdf(os.path.join(tmpdir, "data_aa.h5"), "/data")
+        tm.assert_frame_equal(out, df.iloc[2:])
 
     # test hdf object
-    fn_4 = os.path.join(tmp_path, "fn_4.h5")
-    with pd.HDFStore(fn_4) as hdf:
-        a.to_hdf(hdf, "/data*")
-    out = dd.read_hdf(fn_4, "/data*")
-    assert_eq(df, out)
+    with tempfile.NamedTemporaryFile() as fn:
+        with pd.HDFStore(fn.name) as hdf:
+            a.to_hdf(hdf, "/data*")
+        out = dd.read_hdf(fn.name, "/data*")
+        assert_eq(df, out)
 
 
 def test_to_hdf_modes_multiple_nodes(tmp_path):
@@ -267,7 +268,7 @@ def test_to_hdf_modes_multiple_nodes(tmp_path):
     assert_eq(df.append(df), out)
 
 
-def test_to_hdf_modes_multiple_files(tmp_path):
+def test_to_hdf_modes_multiple_files():
     pytest.importorskip("tables")
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
@@ -275,39 +276,39 @@ def test_to_hdf_modes_multiple_files(tmp_path):
 
     # appending a single partition to existing data
     a = dd.from_pandas(df, 1)
-    dn = make_tmpdir(tmp_path, "dn1")
-    fn_1 = os.path.join(dn, "data*")
-    a.to_hdf(os.path.join(dn, "data2"), "/data")
-    a.to_hdf(fn_1, "/data", mode="a")
-    out = dd.read_hdf(fn_1, "/data*")
-    assert_eq(df.append(df), out)
+    with tempfile.TemporaryDirectory() as dn:
+        fn = os.path.join(dn, "data*")
+        a.to_hdf(os.path.join(dn, "data2"), "/data")
+        a.to_hdf(fn, "/data", mode="a")
+        out = dd.read_hdf(fn, "/data*")
+        assert_eq(df.append(df), out)
 
     # appending two partitions to existing data
     a = dd.from_pandas(df, 2)
-    dn = make_tmpdir(tmp_path, "dn2")
-    fn_2 = os.path.join(dn, "data*")
-    a.to_hdf(os.path.join(dn, "data2"), "/data")
-    a.to_hdf(fn_2, "/data", mode="a")
-    out = dd.read_hdf(fn_2, "/data")
-    assert_eq(df.append(df), out)
+    with tempfile.TemporaryDirectory() as dn:
+        fn = os.path.join(dn, "data*")
+        a.to_hdf(os.path.join(dn, "data2"), "/data")
+        a.to_hdf(fn, "/data", mode="a")
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df.append(df), out)
 
     # overwriting a file with two partitions
     a = dd.from_pandas(df, 2)
-    dn = make_tmpdir(tmp_path, "dn3")
-    fn_3 = os.path.join(dn, "data*")
-    a.to_hdf(os.path.join(dn, "data1"), "/data")
-    a.to_hdf(fn_3, "/data", mode="w")
-    out = dd.read_hdf(fn_3, "/data")
-    assert_eq(df, out)
+    with tempfile.TemporaryDirectory() as dn:
+        fn = os.path.join(dn, "data*")
+        a.to_hdf(os.path.join(dn, "data1"), "/data")
+        a.to_hdf(fn, "/data", mode="w")
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df, out)
 
     # overwriting a single partition, keeping other partitions
     a = dd.from_pandas(df, 2)
-    dn = make_tmpdir(tmp_path, "dn4")
-    fn_4 = os.path.join(dn, "data*")
-    a.to_hdf(os.path.join(dn, "data1"), "/data")
-    a.to_hdf(fn_4, "/data", mode="a", append=False)
-    out = dd.read_hdf(fn_4, "/data")
-    assert_eq(df.append(df), out)
+    with tempfile.TemporaryDirectory() as dn:
+        fn = os.path.join(dn, "data*")
+        a.to_hdf(os.path.join(dn, "data1"), "/data")
+        a.to_hdf(fn, "/data", mode="a", append=False)
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df.append(df), out)
 
 
 def test_to_hdf_link_optimizations(tmp_path):
@@ -378,7 +379,7 @@ def test_to_hdf_link_optimizations(tmp_path):
 
 
 # @pytest.mark.slow
-def test_to_hdf_lock_delays(tmp_path):
+def test_to_hdf_lock_delays():
     pytest.importorskip("tables")
     df16 = pd.DataFrame(
         {
@@ -431,23 +432,23 @@ def test_to_hdf_lock_delays(tmp_path):
         return i
 
     # saving to multiple hdf nodes
-    fn_1 = os.path.join(tmp_path, "fn_1")
-    a = a.apply(delayed_nop, axis=1, meta=a)
-    a.to_hdf(fn_1, "/data*")
-    out = dd.read_hdf(fn_1, "/data*")
-    assert_eq(df16, out)
+    with tempfile.NamedTemporaryFile() as fn:
+        a = a.apply(delayed_nop, axis=1, meta=a)
+        a.to_hdf(fn.name, "/data*")
+        out = dd.read_hdf(fn.name, "/data*")
+        assert_eq(df16, out)
 
     # saving to multiple hdf files
     # adding artificial delays to make sure last tasks finish first
-    dn = make_tmpdir(tmp_path, "dn")
-    fn = os.path.join(dn, "data*")
-    a = a.apply(delayed_nop, axis=1, meta=a)
-    a.to_hdf(fn, "/data")
-    out = dd.read_hdf(fn, "/data")
-    assert_eq(df16, out)
+    with tempfile.TemporaryDirectory() as dn:
+        fn = os.path.join(dn, "data*")
+        a = a.apply(delayed_nop, axis=1, meta=a)
+        a.to_hdf(fn, "/data")
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df16, out)
 
 
-def test_to_hdf_exceptions(tmp_path):
+def test_to_hdf_exceptions():
     pytest.importorskip("tables")
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
@@ -455,16 +456,16 @@ def test_to_hdf_exceptions(tmp_path):
     a = dd.from_pandas(df, 1)
 
     # triggering too many asterisks error
-    dn = make_tmpdir(tmp_path, "dn")
-    with pytest.raises(ValueError):
-        fn = os.path.join(dn, "data_*.h5")
-        a.to_hdf(fn, "/data_*")
+    with tempfile.TemporaryDirectory() as dn:
+        with pytest.raises(ValueError):
+            fn = os.path.join(dn, "data_*.h5")
+            a.to_hdf(fn, "/data_*")
 
     # triggering too many asterisks error
-    fn = os.path.join(dn, "fn")
-    with pd.HDFStore(fn) as hdf:
-        with pytest.raises(ValueError):
-            a.to_hdf(hdf, "/data_*_*")
+    with tempfile.NamedTemporaryFile() as fn:
+        with pd.HDFStore(fn.name) as hdf:
+            with pytest.raises(ValueError):
+                a.to_hdf(hdf, "/data_*_*")
 
 
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
@@ -515,23 +516,23 @@ def test_to_hdf_schedulers(scheduler, npartitions, tmp_path):
     a = dd.from_pandas(df, npartitions=npartitions)
 
     # test single file single node
-    fn = os.path.join(tmp_path, "fn1.h5")
-    a.to_hdf(fn, "/data", scheduler=scheduler)
-    out = pd.read_hdf(fn, "/data")
-    assert_eq(df, out)
+    with tempfile.NamedTemporaryFile() as fn:
+        a.to_hdf(fn.name, "/data", scheduler=scheduler)
+        out = pd.read_hdf(fn.name, "/data")
+        assert_eq(df, out)
 
     # test multiple files single node
-    dn = make_tmpdir(tmp_path, "dn")
-    fn = os.path.join(dn, "data_*.h5")
-    a.to_hdf(fn, "/data", scheduler=scheduler)
-    out = dd.read_hdf(fn, "/data")
-    assert_eq(df, out)
+    with tempfile.TemporaryDirectory() as dn:
+        fn = os.path.join(dn, "data_*.h5")
+        a.to_hdf(fn, "/data", scheduler=scheduler)
+        out = dd.read_hdf(fn, "/data")
+        assert_eq(df, out)
 
     # test single file multiple nodes
-    fn = os.path.join(tmp_path, "fn2.h5")
-    a.to_hdf(fn, "/data*", scheduler=scheduler)
-    out = dd.read_hdf(fn, "/data*")
-    assert_eq(df, out)
+    with tempfile.NamedTemporaryFile() as fn:
+        a.to_hdf(fn.name, "/data*", scheduler=scheduler)
+        out = dd.read_hdf(fn.name, "/data*")
+        assert_eq(df, out)
 
 
 def test_to_hdf_kwargs(tmp_path):

@@ -315,12 +315,6 @@ def filetexts(d, open=open, mode="t", use_tmpdir=True):
                     os.remove(filename)
 
 
-def make_tmpdir(base_path, *paths):
-    new_path = os.path.join(base_path, *paths)
-    os.makedirs(new_path)
-    return new_path
-
-
 def concrete(seq):
     """Make nested iterators concrete lists
 

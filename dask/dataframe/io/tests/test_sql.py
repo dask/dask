@@ -1,19 +1,18 @@
 import io
-import os
+import tempfile
 from contextlib import contextmanager
 
 import pytest
 
-# import dask
 from dask.dataframe.io.sql import read_sql_table
 from dask.dataframe.utils import assert_eq
-from dask.utils import make_tmpdir
 
 pd = pytest.importorskip("pandas")
 dd = pytest.importorskip("dask.dataframe")
 pytest.importorskip("sqlalchemy")
 pytest.importorskip("sqlite3")
 np = pytest.importorskip("numpy")
+
 
 data = """
 name,number,age,negish
@@ -31,82 +30,83 @@ df = pd.read_csv(io.StringIO(data), index_col="number")
 
 @pytest.fixture
 def db(tmp_path):
-    f = os.path.join(tmp_path, "f")
-    uri = "sqlite:///%s" % f
-    df.to_sql("test", uri, index=True, if_exists="replace")
-    yield uri
+    with tempfile.NamedTemporaryFile() as f:
+        uri = f"sqlite:///{f.name}"
+        df.to_sql("test", uri, index=True, if_exists="replace")
+        yield uri
 
 
-def test_empty(db, tmp_path):
+def test_empty(db):
     from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 
-    uri = "sqlite:///%s" % os.path.join(tmp_path, "f")
-    metadata = MetaData()
-    engine = create_engine(uri)
-    table = Table(
-        "empty_table",
-        metadata,
-        Column("id", Integer, primary_key=True),
-        Column("col2", Integer),
-    )
-    metadata.create_all(engine)
+    with tempfile.NamedTemporaryFile() as f:
+        uri = f"sqlite:///{f.name}"
+        metadata = MetaData()
+        engine = create_engine(uri)
+        table = Table(
+            "empty_table",
+            metadata,
+            Column("id", Integer, primary_key=True),
+            Column("col2", Integer),
+        )
+        metadata.create_all(engine)
 
-    dask_df = read_sql_table(table.name, uri, index_col="id", npartitions=1)
-    assert dask_df.index.name == "id"
-    assert dask_df.col2.dtype == np.dtype("int64")
-    pd_dataframe = dask_df.compute()
-    assert pd_dataframe.empty is True
+        dask_df = read_sql_table(table.name, uri, index_col="id", npartitions=1)
+        assert dask_df.index.name == "id"
+        assert dask_df.col2.dtype == np.dtype("int64")
+        pd_dataframe = dask_df.compute()
+        assert pd_dataframe.empty is True
 
 
 @pytest.mark.filterwarnings(
     "ignore:The default dtype for empty Series " "will be 'object' instead of 'float64'"
 )
 @pytest.mark.parametrize("use_head", [True, False])
-def test_single_column(db, use_head, tmp_path):
+def test_single_column(db, use_head):
     from sqlalchemy import Column, Integer, MetaData, Table, create_engine
 
-    f = os.path.join(tmp_path, "f")
-    uri = "sqlite:///%s" % f
-    metadata = MetaData()
-    engine = create_engine(uri)
-    table = Table(
-        "single_column",
-        metadata,
-        Column("id", Integer, primary_key=True),
-    )
-    metadata.create_all(engine)
-    test_data = pd.DataFrame({"id": list(range(50))}).set_index("id")
-    test_data.to_sql(table.name, uri, index=True, if_exists="replace")
-
-    if use_head:
-        dask_df = read_sql_table(table.name, uri, index_col="id", npartitions=2)
-    else:
-        dask_df = read_sql_table(
-            table.name,
-            uri,
-            head_rows=0,
-            npartitions=2,
-            meta=test_data.iloc[:0],
-            index_col="id",
+    with tempfile.NamedTemporaryFile() as f:
+        uri = f"sqlite:///{f.name}"
+        metadata = MetaData()
+        engine = create_engine(uri)
+        table = Table(
+            "single_column",
+            metadata,
+            Column("id", Integer, primary_key=True),
         )
-    assert dask_df.index.name == "id"
-    assert dask_df.npartitions == 2
-    pd_dataframe = dask_df.compute()
-    assert_eq(test_data, pd_dataframe)
+        metadata.create_all(engine)
+        test_data = pd.DataFrame({"id": list(range(50))}).set_index("id")
+        test_data.to_sql(table.name, uri, index=True, if_exists="replace")
+
+        if use_head:
+            dask_df = read_sql_table(table.name, uri, index_col="id", npartitions=2)
+        else:
+            dask_df = read_sql_table(
+                table.name,
+                uri,
+                head_rows=0,
+                npartitions=2,
+                meta=test_data.iloc[:0],
+                index_col="id",
+            )
+        assert dask_df.index.name == "id"
+        assert dask_df.npartitions == 2
+        pd_dataframe = dask_df.compute()
+        assert_eq(test_data, pd_dataframe)
 
 
-def test_passing_engine_as_uri_raises_helpful_error(db, tmp_path):
+def test_passing_engine_as_uri_raises_helpful_error(db):
     # https://github.com/dask/dask/issues/6473
     from sqlalchemy import create_engine
 
     df = pd.DataFrame([{"i": i, "s": str(i) * 2} for i in range(4)])
     ddf = dd.from_pandas(df, npartitions=2)
 
-    f = os.path.join(tmp_path, "f")
-    db = "sqlite:///%s" % f
-    engine = create_engine(db)
-    with pytest.raises(ValueError, match="Expected URI to be a string"):
-        ddf.to_sql("test", engine, if_exists="replace")
+    with tempfile.NamedTemporaryFile() as f:
+        db = f"sqlite:///{f.name}"
+        engine = create_engine(db)
+        with pytest.raises(ValueError, match="Expected URI to be a string"):
+            ddf.to_sql("test", engine, if_exists="replace")
 
 
 @pytest.mark.skip(
@@ -156,7 +156,7 @@ def test_empty_other_schema():
     engine.execute("DROP SCHEMA IF EXISTS %s CASCADE" % schema_name)
 
 
-def test_needs_rational(db, tmp_path):
+def test_needs_rational(db):
     import datetime
 
     now = datetime.datetime.now()
@@ -174,34 +174,34 @@ def test_needs_rational(db, tmp_path):
             {"a": None, "b": now + d * 1001, "c": None},
         ]
     )
-    f = os.path.join(tmp_path, "f")
-    uri = "sqlite:///%s" % f
-    df.to_sql("test", uri, index=False, if_exists="replace")
+    with tempfile.NamedTemporaryFile() as f:
+        uri = f"sqlite:///{f.name}"
+        df.to_sql("test", uri, index=False, if_exists="replace")
 
-    # one partition contains NULL
-    data = read_sql_table("test", uri, npartitions=2, index_col="b")
-    df2 = df.set_index("b")
-    assert_eq(data, df2.astype({"c": bool}))  # bools are coerced
+        # one partition contains NULL
+        data = read_sql_table("test", uri, npartitions=2, index_col="b")
+        df2 = df.set_index("b")
+        assert_eq(data, df2.astype({"c": bool}))  # bools are coerced
 
-    # one partition contains NULL, but big enough head
-    data = read_sql_table("test", uri, npartitions=2, index_col="b", head_rows=12)
-    df2 = df.set_index("b")
-    assert_eq(data, df2)
+        # one partition contains NULL, but big enough head
+        data = read_sql_table("test", uri, npartitions=2, index_col="b", head_rows=12)
+        df2 = df.set_index("b")
+        assert_eq(data, df2)
 
-    # empty partitions
-    data = read_sql_table("test", uri, npartitions=20, index_col="b")
-    part = data.get_partition(12).compute()
-    assert part.dtypes.tolist() == ["O", bool]
-    assert part.empty
-    df2 = df.set_index("b")
-    assert_eq(data, df2.astype({"c": bool}))
+        # empty partitions
+        data = read_sql_table("test", uri, npartitions=20, index_col="b")
+        part = data.get_partition(12).compute()
+        assert part.dtypes.tolist() == ["O", bool]
+        assert part.empty
+        df2 = df.set_index("b")
+        assert_eq(data, df2.astype({"c": bool}))
 
-    # explicit meta
-    data = read_sql_table("test", uri, npartitions=2, index_col="b", meta=df2[:0])
-    part = data.get_partition(1).compute()
-    assert part.dtypes.tolist() == ["O", "O"]
-    df2 = df.set_index("b")
-    assert_eq(data, df2)
+        # explicit meta
+        data = read_sql_table("test", uri, npartitions=2, index_col="b", meta=df2[:0])
+        part = data.get_partition(1).compute()
+        assert part.dtypes.tolist() == ["O", "O"]
+        df2 = df.set_index("b")
+        assert_eq(data, df2)
 
 
 def test_simple(db):
@@ -332,7 +332,7 @@ def test_range(db):
     assert data.index.max().compute() == 4
 
 
-def test_datetimes(tmp_path):
+def test_datetimes():
     import datetime
 
     now = datetime.datetime.now()
@@ -340,14 +340,14 @@ def test_datetimes(tmp_path):
     df = pd.DataFrame(
         {"a": list("ghjkl"), "b": [now + i * d for i in range(2, -3, -1)]}
     )
-    f = os.path.join(tmp_path, "f")
-    uri = "sqlite:///%s" % f
-    df.to_sql("test", uri, index=False, if_exists="replace")
-    data = read_sql_table("test", uri, npartitions=2, index_col="b")
-    assert data.index.dtype.kind == "M"
-    assert data.divisions[0] == df.b.min()
-    df2 = df.set_index("b")
-    assert_eq(data.map_partitions(lambda x: x.sort_index()), df2.sort_index())
+    with tempfile.NamedTemporaryFile() as f:
+        uri = f"sqlite:///{f.name}"
+        df.to_sql("test", uri, index=False, if_exists="replace")
+        data = read_sql_table("test", uri, npartitions=2, index_col="b")
+        assert data.index.dtype.kind == "M"
+        assert data.divisions[0] == df.b.min()
+        df2 = df.set_index("b")
+        assert_eq(data.map_partitions(lambda x: x.sort_index()), df2.sort_index())
 
 
 def test_with_func(db):
@@ -425,20 +425,21 @@ def test_extra_connection_engine_keywords(capsys, db):
 
 
 def test_no_character_index_without_divisions(db):
+
     # attempt to read the sql table with a character index and no divisions
     with pytest.raises(TypeError):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)
 
 
 @contextmanager
-def tmp_db_uri(path):
-    f = os.path.join(path, "f")
-    yield "sqlite:///%s" % f
+def tmp_db_uri():
+    with tempfile.NamedTemporaryFile() as f:
+        yield f"sqlite:///{f.name}"
 
 
 @pytest.mark.parametrize("npartitions", (1, 2))
 @pytest.mark.parametrize("parallel", (False, True))
-def test_to_sql(npartitions, parallel, tmp_path):
+def test_to_sql(npartitions, parallel):
     df_by_age = df.set_index("age")
     df_appended = pd.concat(
         [
@@ -451,15 +452,14 @@ def test_to_sql(npartitions, parallel, tmp_path):
     ddf_by_age = ddf.set_index("age")
 
     # Simple round trip test: use existing "number" index_col
-
-    with tmp_db_uri(make_tmpdir(tmp_path, "db1")) as uri:
+    with tmp_db_uri() as uri:
         ddf.to_sql("test", uri, parallel=parallel)
         result = read_sql_table("test", uri, "number")
         assert_eq(df, result)
 
     # Test writing no index, and reading back in with one of the other columns as index (`read_sql_table` requires
     # an index_col)
-    with tmp_db_uri(make_tmpdir(tmp_path, "db2")) as uri:
+    with tmp_db_uri() as uri:
         ddf.to_sql("test", uri, parallel=parallel, index=False)
 
         result = read_sql_table("test", uri, "negish")
@@ -469,13 +469,13 @@ def test_to_sql(npartitions, parallel, tmp_path):
         assert_eq(df_by_age, result)
 
     # Index by "age" instead
-    with tmp_db_uri(make_tmpdir(tmp_path, "db3")) as uri:
+    with tmp_db_uri() as uri:
         ddf_by_age.to_sql("test", uri, parallel=parallel)
         result = read_sql_table("test", uri, "age")
         assert_eq(df_by_age, result)
 
     # Index column can't have "object" dtype if no partitions are provided
-    with tmp_db_uri(make_tmpdir(tmp_path, "db4")) as uri:
+    with tmp_db_uri() as uri:
         ddf.set_index("name").to_sql("test", uri)
         with pytest.raises(
             TypeError,
@@ -484,7 +484,7 @@ def test_to_sql(npartitions, parallel, tmp_path):
             read_sql_table("test", uri, "name")
 
     # Test various "if_exists" values
-    with tmp_db_uri(make_tmpdir(tmp_path, "db5")) as uri:
+    with tmp_db_uri() as uri:
         ddf.to_sql("test", uri)
 
         # Writing a table that already exists fails
@@ -501,7 +501,7 @@ def test_to_sql(npartitions, parallel, tmp_path):
         assert_eq(df_by_age, result)
 
     # Verify number of partitions returned, when compute=False
-    with tmp_db_uri(make_tmpdir(tmp_path, "db6")) as uri:
+    with tmp_db_uri() as uri:
         result = ddf.to_sql("test", uri, parallel=parallel, compute=False)
 
         # the first result is from the "meta" insert
@@ -510,9 +510,9 @@ def test_to_sql(npartitions, parallel, tmp_path):
         assert actual == npartitions
 
 
-def test_to_sql_kwargs(tmp_path):
+def test_to_sql_kwargs():
     ddf = dd.from_pandas(df, 2)
-    with tmp_db_uri(tmp_path) as uri:
+    with tmp_db_uri() as uri:
         ddf.to_sql("test", uri, method="multi")
         with pytest.raises(
             TypeError, match="to_sql\\(\\) got an unexpected keyword argument 'unknown'"

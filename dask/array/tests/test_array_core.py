@@ -1,5 +1,6 @@
 import contextlib
 import copy
+import tempfile
 import xml.etree.ElementTree
 from unittest import mock
 
@@ -50,7 +51,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split, make_tmpdir
+from dask.utils import apply, key_split
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -4353,31 +4354,30 @@ def test_tiledb_roundtrip(tmp_path):
     # 3) write to existing tiledb.DenseArray
     a = da.random.random((3, 3))
 
-    uri = make_tmpdir(tmp_path, "uri1")
-    da.to_tiledb(a, uri)
-    tdb = da.from_tiledb(uri)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        da.to_tiledb(a, tmpdir)
+        tdb = da.from_tiledb(tmpdir)
+        assert_eq(a, tdb)
+        assert a.chunks == tdb.chunks
 
-    assert_eq(a, tdb)
-    assert a.chunks == tdb.chunks
+        # from tiledb.array
+        with tiledb.open(tmpdir) as t:
+            tdb2 = da.from_tiledb(t)
+            assert_eq(a, tdb2)
 
-    # from tiledb.array
-    with tiledb.open(uri) as t:
-        tdb2 = da.from_tiledb(t)
-        assert_eq(a, tdb2)
-
-    uri2 = make_tmpdir(tmp_path, "uri2")
-    with tiledb.empty_like(uri2, a) as t:
-        a.to_tiledb(t)
-        assert_eq(da.from_tiledb(uri2), a)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        with tiledb.empty_like(tmpdir, a) as t:
+            a.to_tiledb(t)
+            assert_eq(da.from_tiledb(tmpdir), a)
 
     # specific chunking
-    uri = make_tmpdir(tmp_path, "uri3")
-    a = da.random.random((3, 3), chunks=(1, 1))
-    a.to_tiledb(uri)
-    tdb = da.from_tiledb(uri)
+    with tempfile.TemporaryDirectory() as tmpdir:
+        a = da.random.random((3, 3), chunks=(1, 1))
+        a.to_tiledb(tmpdir)
+        tdb = da.from_tiledb(tmpdir)
 
-    assert_eq(a, tdb)
-    assert a.chunks == tdb.chunks
+        assert_eq(a, tdb)
+        assert a.chunks == tdb.chunks
 
 
 def test_tiledb_multiattr(tmp_path):
