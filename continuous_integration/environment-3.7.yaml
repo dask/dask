@@ -5,6 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7
+  - packaging
   - numpy=1.16
   - pandas=0.25
   # test dependencies

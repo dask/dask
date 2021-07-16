@@ -1057,6 +1057,10 @@ class _GroupBy:
         observed=None,
     ):
 
+        by_ = by if isinstance(by, (tuple, list)) else [by]
+        if any(isinstance(key, pd.Grouper) for key in by_):
+            raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
+
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
         self.obj = df
