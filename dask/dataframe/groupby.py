@@ -1954,7 +1954,9 @@ class SeriesGroupBy(_GroupBy):
 
 
 def _unique_aggregate(series_gb, name=None):
-    ret = pd.Series({k: v.explode().unique() for k, v in series_gb}, name=name)
+    ret = type(series_gb.obj)(
+        {k: v.explode().unique() for k, v in series_gb}, name=name
+    )
     ret.index.names = series_gb.obj.index.names
     return ret
 
