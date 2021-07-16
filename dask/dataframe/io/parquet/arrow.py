@@ -243,7 +243,7 @@ def _collect_pyarrow_dataset_frags(
                 "partition_keys": {},
                 "partition_names": [],
             }
-            return metadata, partition_info
+            return sorted(metadata, key=natural_sort_key), partition_info
 
     # Get/transate filters
     ds_filters = None
