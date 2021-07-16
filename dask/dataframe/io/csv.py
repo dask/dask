@@ -107,7 +107,7 @@ class CSVFunctionWrapper:
             rest_kwargs.pop("skiprows", None)
         if not is_last:
             write_header = True
-            rest_kwargs.pop('skipfooter', None)
+            rest_kwargs.pop("skipfooter", None)
 
         # Deal with column projection
         columns = self.full_columns
@@ -427,7 +427,7 @@ def block_mask_last(block_lists):
     Yields a flat iterable of booleans to mark the last element of the
     nested input ``block_lists`` in a flattened output.
 
-    >>> list(block_mask_last([1, 2], [3, 4], [5]]))
+    >>> list(block_mask_last([[1, 2], [3, 4], [5]]))
     [False, True, False, True, True]
     """
     for block in block_lists:
@@ -598,7 +598,7 @@ def read_pandas(
 
     # Use sample to infer dtypes and check for presence of include_path_column
     head_kwargs = kwargs.copy()
-    head_kwargs.pop('skipfooter', None)
+    head_kwargs.pop("skipfooter", None)
     try:
         head = reader(BytesIO(b_sample), nrows=sample_rows, **head_kwargs)
     except pd.errors.ParserError as e:

@@ -263,8 +263,8 @@ def test_skipfooter(dd_read, pd_read, files):
     files = {name: content + b"\n" + comment_footer for name, content in files.items()}
     skip = len(comment_footer.splitlines())
     with filetexts(files, mode="b"):
-        df = dd_read("2014-01-*.csv", skipfooter=skip, engine='python')
-        expected_df = pd.concat([pd_read(n, skipfooter=skip, engine='python') for n in sorted(files)])
+        df = dd_read("2014-01-*.csv", skipfooter=skip, engine="python")
+        expected_df = pd.concat([pd_read(n, skipfooter=skip, engine="python") for n in sorted(files)])
         assert_eq(df, expected_df, check_dtype=False)
 
 
