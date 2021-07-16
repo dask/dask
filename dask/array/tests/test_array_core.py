@@ -4210,6 +4210,13 @@ def test_normalize_chunks_nan():
     assert "auto" in str(info.value)
 
 
+def test_pandas_from_dask_array():
+    pd = pytest.importorskip("pandas")
+    a = da.ones((12,), chunks=4)
+    s = pd.Series(a, index=range(12))
+    assert_eq(s.values, a)
+
+
 def test_from_zarr_unique_name():
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
