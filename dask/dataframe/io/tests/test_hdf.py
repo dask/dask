@@ -137,7 +137,7 @@ def test_to_hdf_multiple_nodes(tmp_path):
     assert subgraph.columns == ["x"]
 
 
-def test_to_hdf_multiple_files():
+def test_to_hdf_multiple_files(tmp_path):
     pytest.importorskip("tables")
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
@@ -213,11 +213,11 @@ def test_to_hdf_multiple_files():
         tm.assert_frame_equal(out, df.iloc[2:])
 
     # test hdf object
-    with tempfile.NamedTemporaryFile() as fn:
-        with pd.HDFStore(fn.name) as hdf:
-            a.to_hdf(hdf, "/data*")
-        out = dd.read_hdf(fn.name, "/data*")
-        assert_eq(df, out)
+    fn = tmp_path / "foo.h5"
+    with pd.HDFStore(fn) as hdf:
+        a.to_hdf(hdf, "/data*")
+    out = dd.read_hdf(fn, "/data*")
+    assert_eq(df, out)
 
 
 def test_to_hdf_modes_multiple_nodes(tmp_path):
@@ -379,7 +379,7 @@ def test_to_hdf_link_optimizations(tmp_path):
 
 
 # @pytest.mark.slow
-def test_to_hdf_lock_delays():
+def test_to_hdf_lock_delays(tmp_path):
     pytest.importorskip("tables")
     df16 = pd.DataFrame(
         {
@@ -432,23 +432,23 @@ def test_to_hdf_lock_delays():
         return i
 
     # saving to multiple hdf nodes
-    with tempfile.NamedTemporaryFile() as fn:
-        a = a.apply(delayed_nop, axis=1, meta=a)
-        a.to_hdf(fn.name, "/data*")
-        out = dd.read_hdf(fn.name, "/data*")
-        assert_eq(df16, out)
+    a = a.apply(delayed_nop, axis=1, meta=a)
+    fn = tmp_path / "foo.hdf"
+    a.to_hdf(fn, "/data*")
+    out = dd.read_hdf(fn, "/data*")
+    assert_eq(df16, out)
 
     # saving to multiple hdf files
     # adding artificial delays to make sure last tasks finish first
+    a = a.apply(delayed_nop, axis=1, meta=a)
     with tempfile.TemporaryDirectory() as dn:
         fn = os.path.join(dn, "data*")
-        a = a.apply(delayed_nop, axis=1, meta=a)
         a.to_hdf(fn, "/data")
         out = dd.read_hdf(fn, "/data")
         assert_eq(df16, out)
 
 
-def test_to_hdf_exceptions():
+def test_to_hdf_exceptions(tmp_path):
     pytest.importorskip("tables")
     df = pd.DataFrame(
         {"x": ["a", "b", "c", "d"], "y": [1, 2, 3, 4]}, index=[1.0, 2.0, 3.0, 4.0]
@@ -456,16 +456,14 @@ def test_to_hdf_exceptions():
     a = dd.from_pandas(df, 1)
 
     # triggering too many asterisks error
-    with tempfile.TemporaryDirectory() as dn:
-        with pytest.raises(ValueError):
-            fn = os.path.join(dn, "data_*.h5")
-            a.to_hdf(fn, "/data_*")
+    with pytest.raises(ValueError):
+        fn = os.path.join(tmp_path, "data_*.h5")
+        a.to_hdf(fn, "/data_*")
 
     # triggering too many asterisks error
-    with tempfile.NamedTemporaryFile() as fn:
-        with pd.HDFStore(fn.name) as hdf:
-            with pytest.raises(ValueError):
-                a.to_hdf(hdf, "/data_*_*")
+    with pd.HDFStore(tmp_path / "foo.h5") as hdf:
+        with pytest.raises(ValueError):
+            a.to_hdf(hdf, "/data_*_*")
 
 
 @pytest.mark.parametrize("scheduler", ["sync", "threads", "processes"])
@@ -516,10 +514,10 @@ def test_to_hdf_schedulers(scheduler, npartitions, tmp_path):
     a = dd.from_pandas(df, npartitions=npartitions)
 
     # test single file single node
-    with tempfile.NamedTemporaryFile() as fn:
-        a.to_hdf(fn.name, "/data", scheduler=scheduler)
-        out = pd.read_hdf(fn.name, "/data")
-        assert_eq(df, out)
+    fn = tmp_path / "foo.h5"
+    a.to_hdf(fn, "/data", scheduler=scheduler)
+    out = pd.read_hdf(fn, "/data")
+    assert_eq(df, out)
 
     # test multiple files single node
     with tempfile.TemporaryDirectory() as dn:
@@ -528,11 +526,11 @@ def test_to_hdf_schedulers(scheduler, npartitions, tmp_path):
         out = dd.read_hdf(fn, "/data")
         assert_eq(df, out)
 
-    # test single file multiple nodes
-    with tempfile.NamedTemporaryFile() as fn:
-        a.to_hdf(fn.name, "/data*", scheduler=scheduler)
-        out = dd.read_hdf(fn.name, "/data*")
-        assert_eq(df, out)
+    # # test single file multiple nodes
+    fn = tmp_path / "bar.h5"
+    a.to_hdf(fn, "/data*", scheduler=scheduler)
+    out = dd.read_hdf(fn, "/data*")
+    assert_eq(df, out)
 
 
 def test_to_hdf_kwargs(tmp_path):
