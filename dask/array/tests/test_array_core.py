@@ -1,6 +1,5 @@
 import contextlib
 import copy
-import tempfile
 import xml.etree.ElementTree
 from unittest import mock
 
@@ -4353,31 +4352,31 @@ def test_tiledb_roundtrip(tmp_path):
     # 2) load from existing tiledb.DenseArray
     # 3) write to existing tiledb.DenseArray
     a = da.random.random((3, 3))
+    uri = str(tmp_path / "1")
+    da.to_tiledb(a, uri)
+    tdb = da.from_tiledb(uri)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        da.to_tiledb(a, tmpdir)
-        tdb = da.from_tiledb(tmpdir)
-        assert_eq(a, tdb)
-        assert a.chunks == tdb.chunks
+    assert_eq(a, tdb)
+    assert a.chunks == tdb.chunks
 
-        # from tiledb.array
-        with tiledb.open(tmpdir) as t:
-            tdb2 = da.from_tiledb(t)
-            assert_eq(a, tdb2)
+    # from tiledb.array
+    with tiledb.open(uri) as t:
+        tdb2 = da.from_tiledb(t)
+        assert_eq(a, tdb2)
 
-    with tempfile.TemporaryDirectory() as tmpdir:
-        with tiledb.empty_like(tmpdir, a) as t:
-            a.to_tiledb(t)
-            assert_eq(da.from_tiledb(tmpdir), a)
+    uri2 = str(tmp_path / "2")
+    with tiledb.empty_like(uri2, a) as t:
+        a.to_tiledb(t)
+        assert_eq(da.from_tiledb(uri2), a)
 
     # specific chunking
-    with tempfile.TemporaryDirectory() as tmpdir:
-        a = da.random.random((3, 3), chunks=(1, 1))
-        a.to_tiledb(tmpdir)
-        tdb = da.from_tiledb(tmpdir)
+    uri3 = str(tmp_path / "3")
+    a = da.random.random((3, 3), chunks=(1, 1))
+    a.to_tiledb(uri3)
+    tdb = da.from_tiledb(uri3)
 
-        assert_eq(a, tdb)
-        assert a.chunks == tdb.chunks
+    assert_eq(a, tdb)
+    assert a.chunks == tdb.chunks
 
 
 def test_tiledb_multiattr(tmp_path):
