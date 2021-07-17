@@ -711,3 +711,30 @@ def test_dask_layers_to_delayed():
     assert d.dask.layers.keys() == {"delayed-" + name}
     assert d.dask.dependencies == {"delayed-" + name: set()}
     assert d.__dask_layers__() == ("delayed-" + name,)
+
+
+def test_delayed_with_bind():
+    state = []
+
+    @delayed
+    def task1():
+        state.append('task1')
+
+    @delayed
+    def task2():
+        state.append('task2')
+
+    @delayed
+    def task3(x):
+        state.append('task3')
+
+    @delayed
+    def task4():
+        state.append('task4')
+
+    t1 = task1()
+    t2 = delayed(task2, bind=t1)()
+    t3 = delayed(task3, bind=t1)(t2)
+    t4 = delayed(task4, bind=[t2, t3])()
+    t4.compute()
+    assert state == ['task1', 'task2', 'task3', 'task4']

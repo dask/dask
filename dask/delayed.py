@@ -230,7 +230,7 @@ def tokenize(*args, **kwargs):
 
 
 @curry
-def delayed(obj, name=None, pure=None, nout=None, traverse=True):
+def delayed(obj, name=None, pure=None, nout=None, traverse=True, bind=None):
     """Wraps a function or object to produce a ``Delayed``.
 
     ``Delayed`` objects act as proxies for the object they wrap, but all
@@ -271,6 +271,9 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
         objects passed to ``delayed``. For large collections this can be
         expensive. If ``obj`` doesn't contain any dask objects, set
         ``traverse=False`` to avoid doing this traversal.
+    bind : dask collection(s), optional
+        Allows you to apply bind dask collections as dependencies that are not
+        epxected through the delayed-wrapped objects input arguments.
 
     Examples
     --------
@@ -433,33 +436,48 @@ def delayed(obj, name=None, pure=None, nout=None, traverse=True):
     >>> with dask.config.set(delayed_pure=True):
     ...     print(a.count(2).key == a.count(2).key)
     True
+
+    In cases where you want to apply a dependency on another dask collection,
+    but the delayed object does not take any input arguments, you can pass them
+    to ``bind``. This could be useful in cases where dependencies on side-effects
+    of functions exist (such as the writing of some data to a file), or when
+    performing fine-tuned synchronization of tasks.
+    >>> def side_effect():
+    ...     pass
+    >>> se = delayed(side_effect)()
+    >>> delayed(sum, bind=se)(1, 2).compute()
+    3
     """
     if isinstance(obj, Delayed):
-        return obj
-
-    if is_dask_collection(obj) or traverse:
-        task, collections = unpack_collections(obj)
+        delayed_obj = obj
     else:
-        task = quote(obj)
-        collections = set()
+        if is_dask_collection(obj) or traverse:
+            task, collections = unpack_collections(obj)
+        else:
+            task = quote(obj)
+            collections = set()
 
-    if not (nout is None or (type(nout) is int and nout >= 0)):
-        raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
-    if task is obj:
-        if not name:
-            try:
-                prefix = obj.__name__
-            except AttributeError:
-                prefix = type(obj).__name__
-            token = tokenize(obj, nout, pure=pure)
-            name = "%s-%s" % (prefix, token)
-        return DelayedLeaf(obj, name, pure=pure, nout=nout)
-    else:
-        if not name:
-            name = "%s-%s" % (type(obj).__name__, tokenize(task, pure=pure))
-        layer = {name: task}
-        graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
-        return Delayed(name, graph, nout)
+        if not (nout is None or (type(nout) is int and nout >= 0)):
+            raise ValueError("nout must be None or a non-negative integer, got %s" % nout)
+        if task is obj:
+            if not name:
+                try:
+                    prefix = obj.__name__
+                except AttributeError:
+                    prefix = type(obj).__name__
+                token = tokenize(obj, nout, pure=pure)
+                name = "%s-%s" % (prefix, token)
+            delayed_obj = DelayedLeaf(obj, name, pure=pure, nout=nout)
+        else:
+            if not name:
+                name = "%s-%s" % (type(obj).__name__, tokenize(task, pure=pure))
+            layer = {name: task}
+            graph = HighLevelGraph.from_collections(name, layer, dependencies=collections)
+            delayed_obj = Delayed(name, graph, nout)
+    if bind is not None:
+        delayed_obj = _bind(delayed_obj, bind)
+
+    return delayed_obj
 
 
 def right(method):
@@ -721,3 +739,9 @@ except AttributeError:
 def single_key(seq):
     """Pick out the only element of this list, a list of keys"""
     return seq[0]
+
+
+# TODO: Need to reorganize modules to avoid circular import, and allow
+#       import of this at the top. As of now this import needs to come
+#       after the definition of `def delayed` and `class Delayed`.
+from .graph_manipulation import bind as _bind
