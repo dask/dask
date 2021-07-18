@@ -19,7 +19,7 @@ from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 from dask.layers import DataFrameIOLayer
-from dask.utils import natural_sort_key, parse_bytes
+from dask.utils import natural_sort_key
 
 try:
     import fastparquet
@@ -272,6 +272,20 @@ def test_read_glob(tmpdir, write_engine, read_engine):
         gather_statistics=True,
     )
     assert_eq(ddf, ddf2)
+
+
+@write_read_engines()
+def test_gather_statistics_false(tmpdir, write_engine, read_engine):
+    tmp_path = str(tmpdir)
+    ddf.to_parquet(tmp_path, write_index=False, engine=write_engine)
+
+    ddf2 = dd.read_parquet(
+        tmp_path,
+        engine=read_engine,
+        index=False,
+        gather_statistics=False,
+    )
+    assert_eq(ddf, ddf2, check_index=False, check_divisions=False)
 
 
 @write_read_engines()
@@ -2614,6 +2628,39 @@ def test_split_row_groups_int(tmpdir, split_row_groups, gather_statistics, engin
 
 
 @PYARROW_MARK
+@pytest.mark.parametrize("split_row_groups", [8, 25])
+def test_split_row_groups_int_aggregate_files(tmpdir, engine, split_row_groups):
+    # Use pyarrow to write a multi-file dataset with
+    # multiple row-groups per file
+    row_group_size = 10
+    size = 800
+    df = pd.DataFrame(
+        {
+            "i32": np.arange(size, dtype=np.int32),
+            "f": np.arange(size, dtype=np.float64),
+        }
+    )
+    dd.from_pandas(df, npartitions=4).to_parquet(
+        str(tmpdir), engine="pyarrow", row_group_size=row_group_size, write_index=False
+    )
+
+    # Read back with both `split_row_groups>1` and
+    # `aggregate_files=True`
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine=engine,
+        split_row_groups=split_row_groups,
+        aggregate_files=True,
+    )
+
+    # Check that we are aggregating files as expected
+    npartitions_expected = math.ceil((size / row_group_size) / split_row_groups)
+    assert ddf2.npartitions == npartitions_expected
+    assert len(ddf2) == size
+    assert_eq(df, ddf2, check_index=False)
+
+
+@PYARROW_MARK
 def test_split_row_groups_filter(tmpdir, engine):
     tmp = str(tmpdir)
     df = pd.DataFrame(
@@ -2684,12 +2731,107 @@ def test_optimize_and_not(tmpdir):
 
 @PYARROW_MARK
 @pytest.mark.parametrize("metadata", [True, False])
+@pytest.mark.parametrize("partition_on", [None, "a"])
+@pytest.mark.parametrize("chunksize", [4096, "1MiB"])
+@write_read_engines()
+def test_chunksize_files(
+    tmpdir, chunksize, partition_on, write_engine, read_engine, metadata
+):
+
+    if partition_on and read_engine == "fastparquet" and not metadata:
+        pytest.skip("Fastparquet requires _metadata for partitioned data.")
+
+    df_size = 100
+    df1 = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.random(size=df_size),
+            "c": np.random.randint(1, 5, size=df_size),
+        }
+    )
+    ddf1 = dd.from_pandas(df1, npartitions=9)
+
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine=write_engine,
+        partition_on=partition_on,
+        write_metadata_file=metadata,
+        write_index=False,
+    )
+
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine=read_engine,
+        chunksize=chunksize,
+        aggregate_files=partition_on if partition_on else True,
+    )
+
+    # Check that files where aggregated as expected
+    if chunksize == 4096:
+        assert ddf2.npartitions < ddf1.npartitions
+    elif chunksize == "1MiB":
+        if partition_on:
+            assert ddf2.npartitions == 3
+        else:
+            assert ddf2.npartitions == 1
+
+    # Check that the final data is correct
+    if partition_on:
+        df2 = ddf2.compute().sort_values(["b", "c"])
+        df1 = df1.sort_values(["b", "c"])
+        assert_eq(df1[["b", "c"]], df2[["b", "c"]], check_index=False)
+    else:
+        assert_eq(ddf1, ddf2, check_divisions=False, check_index=False)
+
+
+@write_read_engines()
+@pytest.mark.parametrize("aggregate_files", ["a", "b"])
+def test_chunksize_aggregate_files(tmpdir, write_engine, read_engine, aggregate_files):
+
+    chunksize = "1MiB"
+    partition_on = ["a", "b"]
+    df_size = 100
+    df1 = pd.DataFrame(
+        {
+            "a": np.random.choice(["apple", "banana", "carrot"], size=df_size),
+            "b": np.random.choice(["small", "large"], size=df_size),
+            "c": np.random.random(size=df_size),
+            "d": np.random.randint(1, 100, size=df_size),
+        }
+    )
+    ddf1 = dd.from_pandas(df1, npartitions=9)
+
+    ddf1.to_parquet(
+        str(tmpdir),
+        engine=write_engine,
+        partition_on=partition_on,
+        write_index=False,
+    )
+    ddf2 = dd.read_parquet(
+        str(tmpdir),
+        engine=read_engine,
+        chunksize=chunksize,
+        aggregate_files=aggregate_files,
+    )
+
+    # Check that files where aggregated as expected
+    if aggregate_files == "a":
+        assert ddf2.npartitions == 3
+    elif aggregate_files == "b":
+        assert ddf2.npartitions == 6
+
+    # Check that the final data is correct
+    df2 = ddf2.compute().sort_values(["c", "d"])
+    df1 = df1.sort_values(["c", "d"])
+    assert_eq(df1[["c", "d"]], df2[["c", "d"]], check_index=False)
+
+
+@pytest.mark.parametrize("metadata", [True, False])
 @pytest.mark.parametrize("chunksize", [None, 1024, 4096, "1MiB"])
 def test_chunksize(tmpdir, chunksize, engine, metadata):
     nparts = 2
     df_size = 100
     row_group_size = 5
-    row_group_byte_size = 451  # Empirically measured
 
     df = pd.DataFrame(
         {
@@ -2723,6 +2865,7 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         split_row_groups=True,
         gather_statistics=True,
         index="index",
+        aggregate_files=True,
     )
 
     assert_eq(ddf1, ddf2, check_divisions=False)
@@ -2732,11 +2875,11 @@ def test_chunksize(tmpdir, chunksize, engine, metadata):
         assert ddf2.npartitions == num_row_groups
     else:
         # Check that we are really aggregating
-        df_byte_size = row_group_byte_size * num_row_groups
-        expected = df_byte_size // parse_bytes(chunksize)
-        remainder = (df_byte_size % parse_bytes(chunksize)) > 0
-        expected += int(remainder) * nparts
-        assert ddf2.npartitions == max(nparts, expected)
+        assert ddf2.npartitions < num_row_groups
+        if chunksize == "1MiB":
+            # Largest chunksize will result in
+            # a single output partition
+            assert ddf2.npartitions == 1
 
 
 @write_read_engines()
