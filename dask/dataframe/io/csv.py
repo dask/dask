@@ -373,14 +373,7 @@ def text_blocks_to_pandas(
     parts = []
     colname, paths = path or (None, None)
     for i in range(len(blocks)):
-        parts.append(
-            [
-                blocks[i],
-                paths[i] if paths else None,
-                is_first[i],
-                is_last[i]
-            ]
-        )
+        parts.append([blocks[i], paths[i] if paths else None, is_first[i], is_last[i]])
 
     # Create Blockwise layer
     label = "read-csv-"
