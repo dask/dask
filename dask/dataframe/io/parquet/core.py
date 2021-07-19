@@ -1,5 +1,6 @@
 import math
 import warnings
+from collections import defaultdict
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
@@ -343,7 +344,7 @@ def read_parquet(
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns, global_row_count = process_statistics(
+    parts, divisions, index, index_in_columns, partition_sizes = process_statistics(
         parts,
         statistics,
         filters,
@@ -392,13 +393,15 @@ def read_parquet(
 
         # Check if we can use the row-count
         # from the statistics
-        if global_row_count and not filters:
+        if partition_sizes and not filters:
             # Note that we cannot annotate the row count
             # if the Engine may be filtering on read
             if layer.collection_annotations:
-                layer.collection_annotations.update({"num-rows": global_row_count})
+                layer.collection_annotations.update(
+                    {"partition-sizes": partition_sizes}
+                )
             else:
-                layer.collection_annotations = {"num-rows": global_row_count}
+                layer.collection_annotations = {"partition-sizes": partition_sizes}
 
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
@@ -1085,7 +1088,7 @@ def process_statistics(
     Used in read_parquet.
     """
     index_in_columns = False
-    global_row_count = None
+    partition_sizes = None
     if statistics:
         result = list(
             zip(
@@ -1108,12 +1111,13 @@ def process_statistics(
 
         # Use statistics (if available) to calculate the total
         # number of rows in the dataset
-        global_row_count = 0
-        for stat in statistics:
+        partition_sizes = defaultdict(None)
+        for i, stat in enumerate(statistics):
             try:
-                global_row_count += stat.get("num-rows")
+                partition_sizes[i] = stat.get("num-rows")
             except KeyError:
-                global_row_count = None
+                # We don't have the size of all partitions - Bail
+                partition_sizes = None
                 break
 
         out = sorted_columns(statistics)
@@ -1160,7 +1164,7 @@ def process_statistics(
     else:
         divisions = [None] * (len(parts) + 1)
 
-    return parts, divisions, index, index_in_columns, global_row_count
+    return parts, divisions, index, index_in_columns, partition_sizes
 
 
 def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):

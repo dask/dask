@@ -3872,17 +3872,24 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
-        # Check if this is a single-layer HLG with "num-rows"
+        # Check if this is a single-layer HLG with "part-size"
         # stored in the collection_annotations. If so, we already
         # know the length
         dsk = self.dask
         if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
             layer = list(self.dask.layers.values())[0]
-            size = (layer.collection_annotations or {}).get("num-rows", None)
-            if size:
-                return size
+            partition_sizes = (layer.collection_annotations or {}).get(
+                "partition-sizes", None
+            )
+            if partition_sizes:
+                try:
+                    return sum(partition_sizes.values())
+                except TypeError:
+                    # Failed to take a sum over all partitions.
+                    # Need to take a row-count manually
+                    pass
 
-        # General Logic
+        # Manual logic
         try:
             s = self.iloc[:, 0]
         except IndexError:
