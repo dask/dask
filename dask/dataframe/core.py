@@ -3232,6 +3232,12 @@ Dask Name: {name}, {task} tasks""".format(
             for row in s:
                 yield row
 
+    @derived_from(pd.Series)
+    def __contains__(self, value):
+        for i in range(self.npartitions):
+            s = self.get_partition(i).compute()
+            yield value in s
+
     @classmethod
     def _validate_axis(cls, axis=0):
         if axis not in (0, "index", None):
