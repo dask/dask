@@ -508,7 +508,7 @@ class Blockwise(Layer):
                 if val_is_a_key:
                     keys2.append(key)
                     indices2.append((val, index))
-                    global_dependencies.add(val)
+                    global_dependencies.add(stringify(val))
                 else:
                     dsk[key] = val  # Literal
             else:
@@ -659,9 +659,12 @@ class Blockwise(Layer):
         # Gather constant dependencies (for all output keys)
         const_deps = set()
         for (arg, ind) in self.indices:
-            if ind is None and isinstance(arg, str):
-                if arg in all_hlg_keys:
-                    const_deps.add(arg)
+            if ind is None:
+                try:
+                    if arg in all_hlg_keys:
+                        const_deps.add(arg)
+                except TypeError:
+                    pass  # unhashable
 
         # Get dependencies for each output block
         key_deps = {}

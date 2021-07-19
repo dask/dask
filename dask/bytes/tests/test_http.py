@@ -2,18 +2,18 @@ import os
 import subprocess
 import sys
 import time
-from distutils.version import LooseVersion
 
 import fsspec
 import pytest
 from fsspec.core import open_files
+from packaging.version import parse as parse_version
 
 import dask.bag as db
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
 errs = (requests.exceptions.RequestException,)
-if LooseVersion(fsspec.__version__) > "0.7.4":
+if parse_version(fsspec.__version__) > parse_version("0.7.4"):
     aiohttp = pytest.importorskip("aiohttp")
     errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
 

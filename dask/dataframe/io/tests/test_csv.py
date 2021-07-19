@@ -2,7 +2,6 @@ import gzip
 import os
 import tempfile
 from io import BytesIO
-from time import sleep
 from unittest import mock
 
 import pytest
@@ -886,20 +885,6 @@ def test_csv_with_integer_names():
         assert list(df.columns) == [0, 1]
 
 
-@pytest.mark.slow
-def test_read_csv_of_modified_file_has_different_name():
-    with filetext(csv_text) as fn:
-        sleep(1)
-        a = dd.read_csv(fn)
-        sleep(1)
-        with open(fn, "a") as f:
-            f.write("\nGeorge,700")
-            os.fsync(f)
-        b = dd.read_csv(fn)
-
-        assert sorted(a.dask, key=str) != sorted(b.dask, key=str)
-
-
 def test_late_dtypes():
     text = "numbers,names,more_numbers,integers,dates\n"
     for i in range(1000):
@@ -1660,3 +1645,16 @@ def test_csv_getitem_column_order(tmp_path):
     columns = list("hczzkylaape")
     df2 = dd.read_csv(path)[columns].head(1)
     assert_eq(df1[columns], df2)
+
+
+def test_csv_parse_fail(tmpdir):
+    # See GH #7680
+    path = os.path.join(str(tmpdir), "test.csv")
+    data = b'a,b\n1,"hi\n"\n2,"oi\n"\n'
+    expected = pd.read_csv(BytesIO(data))
+    with open(path, "wb") as f:
+        f.write(data)
+    with pytest.raises(ValueError, match="EOF encountered"):
+        dd.read_csv(path, sample=13)
+    df = dd.read_csv(path, sample=13, sample_rows=1)
+    assert_eq(df, expected)

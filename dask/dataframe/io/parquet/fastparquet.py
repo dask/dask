@@ -1,13 +1,14 @@
 import copy
 import json
 import pickle
+import threading
 import warnings
 from collections import OrderedDict, defaultdict
-from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
 import tlz as toolz
+from packaging.version import parse as parse_version
 
 try:
     import fastparquet
@@ -17,6 +18,7 @@ try:
 except ImportError:
     pass
 
+from ....utils import natural_sort_key
 from ...methods import concat
 from ...utils import UNKNOWN_CATEGORIES
 from ..utils import _meta_from_dtypes
@@ -27,11 +29,15 @@ from ..utils import _meta_from_dtypes
 from .utils import (
     Engine,
     _flatten_filters,
+    _get_aggregation_depth,
     _normalize_index_columns,
     _parse_pandas_metadata,
     _row_groups_to_parts,
     _sort_and_analyze_paths,
 )
+
+# Thread lock required to reset row-groups
+_FP_FILE_LOCK = threading.RLock()
 
 
 def _paths_to_cats(paths, file_scheme):
@@ -261,13 +267,13 @@ class FastParquetEngine(Engine):
         dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
         index_cols = index or ()
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
         if isinstance(index_cols, str):
             index_cols = [index_cols]
-
-        # fastparquet doesn't handle multiindex
-        if len(index_names) > 1:
-            raise ValueError("fastparquet cannot read DataFrame with MultiIndex.")
+        for ind in index_cols:
+            if getattr(dtypes.get(ind), "numpy_dtype", None):
+                # index does not support masked types
+                dtypes[ind] = dtypes[ind].numpy_dtype
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
 
         for cat in categories:
             if cat in meta:
@@ -293,16 +299,23 @@ class FastParquetEngine(Engine):
         split_row_groups,
         index_cols,
         filters,
+        chunksize,
+        aggregation_depth,
     ):
         # Cannot gather_statistics if our `parts` is already a list
         # of paths, or if we are building a multi-index (for now).
         # We also don't "need" to gather statistics if we don't
         # want to apply any filters or calculate divisions.
+        if split_row_groups is None:
+            split_row_groups = False
+        _need_aggregation_stats = chunksize or (
+            int(split_row_groups) > 1 and aggregation_depth
+        )
         if (
             isinstance(parts, list) and len(parts) and isinstance(parts[0], str)
         ) or len(index_cols) > 1:
             gather_statistics = False
-        elif filters is None and len(index_cols) == 0:
+        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
             gather_statistics = False
 
         # Make sure gather_statistics allows filtering
@@ -335,8 +348,6 @@ class FastParquetEngine(Engine):
         # statistics are needed for part aggregation.
         if gather_statistics is None:
             gather_statistics = bool(stat_col_indices)
-        if split_row_groups is None:
-            split_row_groups = False
 
         return (
             gather_statistics,
@@ -355,11 +366,26 @@ class FastParquetEngine(Engine):
         dtypes,
         base_path,
         paths,
+        chunksize,
+        aggregation_depth,
     ):
         """Organize row-groups by file."""
 
         # Get partitioning metadata
         pqpartitions = pf.info.get("partitions", None)
+
+        # Fastparquet does not use a natural sorting
+        # order for partitioned data. Re-sort by path
+        if (
+            pqpartitions is not None
+            and aggregation_depth
+            and pf.row_groups
+            and pf.row_groups[0].columns[0].file_path
+        ):
+            pf.row_groups = sorted(
+                pf.row_groups,
+                key=lambda x: natural_sort_key(x.columns[0].file_path),
+            )
 
         # Store types specified in pandas metadata
         pandas_type = {}
@@ -455,7 +481,7 @@ class FastParquetEngine(Engine):
                             cmax = pd.Timestamp(cmax, tz=tz)
                         last = cmax_last.get(name, None)
 
-                        if not filters:
+                        if not (filters or chunksize or aggregation_depth):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -482,7 +508,10 @@ class FastParquetEngine(Engine):
                             cstats += [cmin, cmax]
                         cmax_last[name] = cmax
                     else:
-                        if not filters and column.meta_data.num_values > 0:
+                        if (
+                            not (filters or chunksize or aggregation_depth)
+                            and column.meta_data.num_values > 0
+                        ):
                             # We are collecting statistics for divisions
                             # only (no filters) - Lets bail.
                             gather_statistics = False
@@ -582,6 +611,8 @@ class FastParquetEngine(Engine):
         base_path,
         paths,
         fs,
+        chunksize,
+        aggregation_depth,
     ):
 
         # Organize row-groups by file
@@ -600,12 +631,15 @@ class FastParquetEngine(Engine):
             dtypes,
             base_path,
             paths,
+            chunksize,
+            aggregation_depth,
         )
 
         # Convert organized row-groups to parts
         parts, stats = _row_groups_to_parts(
             gather_statistics,
             split_row_groups,
+            aggregation_depth,
             file_row_groups,
             file_row_group_stats,
             file_row_group_column_stats,
@@ -635,6 +669,8 @@ class FastParquetEngine(Engine):
         categories,
         split_row_groups,
         gather_statistics,
+        chunksize,
+        aggregation_depth,
     ):
 
         # Check if `parts` is just a list of paths
@@ -656,6 +692,8 @@ class FastParquetEngine(Engine):
             split_row_groups,
             index_cols,
             filters,
+            chunksize,
+            aggregation_depth,
         )
 
         # Process row-groups and return `(parts, stats)`
@@ -670,6 +708,8 @@ class FastParquetEngine(Engine):
             base_path,
             paths,
             fs,
+            chunksize,
+            aggregation_depth,
         )
 
     @classmethod
@@ -682,6 +722,8 @@ class FastParquetEngine(Engine):
         gather_statistics=None,
         filters=None,
         split_row_groups=True,
+        chunksize=None,
+        aggregate_files=None,
         **kwargs,
     ):
         # Define the parquet-file (pf) object to use for metadata,
@@ -702,6 +744,12 @@ class FastParquetEngine(Engine):
             index,
         ) = cls._generate_dd_meta(pf, index, categories)
 
+        # Check the `aggregate_files` setting
+        aggregation_depth = _get_aggregation_depth(
+            aggregate_files,
+            list(pf.cats),
+        )
+
         # Break `pf` into a list of `parts`
         parts, stats = cls._construct_parts(
             fs,
@@ -715,6 +763,8 @@ class FastParquetEngine(Engine):
             categories,
             split_row_groups,
             gather_statistics,
+            chunksize,
+            aggregation_depth,
         )
 
         # Cannot allow `None` in columns if the user has specified index=False
@@ -726,6 +776,7 @@ class FastParquetEngine(Engine):
         # should avoid breaking the API for now.
         if len(parts):
             parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
+            parts[0]["aggregation_depth"] = aggregation_depth
 
         if len(parts) and len(parts[0]["piece"]) == 1:
 
@@ -739,7 +790,11 @@ class FastParquetEngine(Engine):
         return (meta, stats, parts, index)
 
     @classmethod
-    def read_partition(cls, fs, piece, columns, index, categories=(), **kwargs):
+    def multi_support(cls):
+        return cls == FastParquetEngine
+
+    @classmethod
+    def read_partition(cls, fs, pieces, columns, index, categories=(), **kwargs):
 
         null_index_name = False
         if isinstance(index, list):
@@ -759,30 +814,66 @@ class FastParquetEngine(Engine):
         # the desired row_group
         parquet_file = kwargs.pop("parquet_file", None)
 
-        if isinstance(piece, tuple):
-            if isinstance(piece[0], str):
-                # We have a path to read from
-                assert parquet_file is None
-                parquet_file = ParquetFile(
-                    piece[0], open_with=fs.open, sep=fs.sep, **kwargs.get("file", {})
-                )
-                rg_indices = piece[1] or list(range(len(parquet_file.row_groups)))
+        # Always convert pieces to list
+        if not isinstance(pieces, list):
+            pieces = [pieces]
 
-                # `piece[1]` will contain row-group indices
-                row_groups = [parquet_file.row_groups[rg] for rg in rg_indices]
+        sample = pieces[0]
+        if isinstance(sample, tuple):
+            if isinstance(sample[0], str):
+                # We have paths to read from
+                assert parquet_file is None
+
+                row_groups = []
+                rg_offset = 0
+                parquet_file = ParquetFile(
+                    [p[0] for p in pieces],
+                    open_with=fs.open,
+                    sep=fs.sep,
+                    **kwargs.get("file", {}),
+                )
+                for piece in pieces:
+                    _pf = (
+                        parquet_file
+                        if len(pieces) == 1
+                        else ParquetFile(
+                            piece[0],
+                            open_with=fs.open,
+                            sep=fs.sep,
+                            **kwargs.get("file", {}),
+                        )
+                    )
+                    n_local_row_groups = len(_pf.row_groups)
+                    local_rg_indices = piece[1] or list(range(n_local_row_groups))
+                    row_groups += [
+                        parquet_file.row_groups[rg + rg_offset]
+                        for rg in local_rg_indices
+                    ]
+                    rg_offset += n_local_row_groups
+                update_parquet_file = len(row_groups) < len(parquet_file.row_groups)
+
             elif parquet_file:
-                # `piece[1]` will contain actual row-group objects,
-                # but they may be pickled
-                row_groups = piece[0]
-                if isinstance(row_groups, bytes):
-                    row_groups = pickle.loads(row_groups)
-                parquet_file.fmd.row_groups = row_groups
-                # NOTE: May lose cats after `_set_attrs` call
-                save_cats = parquet_file.cats
-                parquet_file._set_attrs()
-                parquet_file.cats = save_cats
+
+                row_groups = []
+                for piece in pieces:
+                    # `piece[1]` will contain actual row-group objects,
+                    # but they may be pickled
+                    rgs = piece[0]
+                    if isinstance(rgs, bytes):
+                        rgs = pickle.loads(rgs)
+                    row_groups += rgs
+                update_parquet_file = True
+
             else:
                 raise ValueError("Neither path nor ParquetFile detected!")
+
+            if update_parquet_file:
+                with _FP_FILE_LOCK:
+                    parquet_file.fmd.row_groups = row_groups
+                    # NOTE: May lose cats after `_set_attrs` call
+                    save_cats = parquet_file.cats
+                    parquet_file._set_attrs()
+                    parquet_file.cats = save_cats
 
             if null_index_name:
                 if "__index_level_0__" in parquet_file.columns:
@@ -794,19 +885,29 @@ class FastParquetEngine(Engine):
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
 
-            # Read necessary row-groups and concatenate
-            dfs = []
-            for row_group in row_groups:
-                dfs.append(
-                    parquet_file.read_row_group_file(
-                        row_group,
-                        columns,
-                        categories,
-                        index=index,
-                        **kwargs.get("read", {}),
-                    )
+            if set(columns).issubset(
+                parquet_file.columns + list(parquet_file.cats.keys())
+            ):
+                # Convert ParquetFile to pandas
+                return parquet_file.to_pandas(
+                    columns=columns,
+                    categories=categories,
+                    index=index,
                 )
-            return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
+            else:
+                # Read necessary row-groups and concatenate
+                dfs = []
+                for row_group in row_groups:
+                    dfs.append(
+                        parquet_file.read_row_group_file(
+                            row_group,
+                            columns,
+                            categories,
+                            index=index,
+                            **kwargs.get("read", {}),
+                        )
+                    )
+                return concat(dfs, axis=0) if len(dfs) > 1 else dfs[0]
 
         else:
             # `piece` is NOT a tuple
@@ -924,7 +1025,7 @@ class FastParquetEngine(Engine):
             rgs = []
         elif partition_on:
             mkdirs = lambda x: fs.mkdirs(x, exist_ok=True)
-            if LooseVersion(fastparquet.__version__) >= "0.1.4":
+            if parse_version(fastparquet.__version__) >= parse_version("0.1.4"):
                 rgs = partition_on_columns(
                     df, partition_on, path, filename, fmd, compression, fs.open, mkdirs
                 )

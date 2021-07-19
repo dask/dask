@@ -5,6 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.7
+  - packaging
   - numpy=1.16
   - pandas=0.25
   # test dependencies
@@ -14,7 +15,10 @@ dependencies:
   - pytest-xdist
   - moto
   - flask
-  - fastparquet
+  # Temporarily pin to avoid incompatible pandas depedency.
+  # Unpin once build 0 for fastparquet=0.7.0 is marked as bad on conda-forge.
+  # https://github.com/dask/dask/pull/7907
+  - fastparquet<0.7.0
   - h5py
   - pytables
   - zarr

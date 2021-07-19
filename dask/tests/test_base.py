@@ -1,3 +1,4 @@
+import datetime
 import os
 import subprocess
 import sys
@@ -219,7 +220,7 @@ def test_tokenize_partial_func_args_kwargs_consistent():
 
 
 def test_normalize_base():
-    for i in [1, 1.1, "1", slice(1, 2, 3)]:
+    for i in [1, 1.1, "1", slice(1, 2, 3), datetime.date(2021, 6, 25)]:
         assert normalize_token(i) is i
 
 
@@ -442,6 +443,17 @@ def test_tokenize_object_with_recursion_error_returns_uuid():
     cycle["a"] = cycle
 
     assert len(tokenize(cycle)) == 32
+
+
+def test_tokenize_datetime_date():
+    # Same date
+    assert tokenize(datetime.date(2021, 6, 25)) == tokenize(datetime.date(2021, 6, 25))
+    # Different year
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2022, 6, 25))
+    # Different month
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 7, 25))
+    # Different day
+    assert tokenize(datetime.date(2021, 6, 25)) != tokenize(datetime.date(2021, 6, 26))
 
 
 def test_is_dask_collection():
