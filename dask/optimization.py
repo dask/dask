@@ -27,10 +27,10 @@ def cull(dsk, keys):
 
     >>> d = {'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)}
     >>> dsk, dependencies = cull(d, 'out')
-    >>> dsk                                                     # doctest: +SKIP
-    {'x': 1, 'out': (add, 'x', 10)}
-    >>> dependencies                                            # doctest: +SKIP
-    {'x': set(), 'out': set(['x'])}
+    >>> dsk                                                     # doctest: +ELLIPSIS
+    {'out': (<function add at ...>, 'x', 10), 'x': 1}
+    >>> dependencies                                            # doctest: +ELLIPSIS
+    {'out': ['x'], 'x': []}
 
     Returns
     -------
