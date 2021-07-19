@@ -499,7 +499,7 @@ class Layer(collections.abc.Mapping):
         else:
             shortname = self.__class__.__name__
 
-        # :(
+        # :)
 
         info = self.layer_info_dict()
         layer_info_table = html_from_dict(info)

@@ -1160,7 +1160,6 @@ class Array(DaskMethodsMixin):
                 layer.collection_annotations = {
                     "shape": self.shape,
                     "dtype": self.dtype,
-                    "chunks": self.chunks,
                     "chunksize": self.chunksize,
                     "type": typename(type(self)),
                     "chunk_type": typename(type(self._meta)),
