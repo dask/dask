@@ -499,12 +499,12 @@ class Layer(collections.abc.Mapping):
         else:
             shortname = self.__class__.__name__
 
-        from dask.array.svg import svg
-
         svg_repr = ""
         if self.collection_annotations.get("type") == "dask.array.core.Array":
             chunks = self.collection_annotations.get("chunks")
             if chunks is not None:
+                from .array.svg import svg
+
                 svg_repr = "<br />" + svg(chunks)
 
         info = self.layer_info_dict()
@@ -556,7 +556,8 @@ class MaterializedLayer(Layer):
             annotations=annotations, collection_annotations=collection_annotations
         )
         self.mapping = mapping
-        self.collection_annotations = {}
+        if self.collection_annotations is None:
+            self.collection_annotations = {}
 
     def __contains__(self, k):
         return k in self.mapping
