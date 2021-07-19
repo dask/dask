@@ -2333,11 +2333,6 @@ def test_getter():
     assert_eq(getter(np.arange(5), (None, slice(None, None))), np.arange(5)[None, :])
 
 
-def test_iter_returns_real_values():
-    x = da.ones((10, 2), chunks=(3, 1))
-    assert list(x) == list(np.array(x))
-
-
 def test_size():
     x = da.ones((10, 2), chunks=(3, 1))
     assert x.size == np.array(x).size
@@ -4213,13 +4208,6 @@ def test_normalize_chunks_nan():
     with pytest.raises(ValueError) as info:
         normalize_chunks(((np.nan, np.nan), "auto"), (10, 10), limit=10, dtype=np.uint8)
     assert "auto" in str(info.value)
-
-
-def test_pandas_from_dask_array():
-    pd = pytest.importorskip("pandas")
-    a = da.ones((12,), chunks=4)
-    s = pd.Series(a, index=range(12))
-    assert_eq(s.values, a)
 
 
 def test_from_zarr_unique_name():

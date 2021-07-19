@@ -1341,13 +1341,6 @@ class Array(DaskMethodsMixin):
             "  x.compute_chunk_sizes()"
         )
 
-    def __iter__(self):
-        """Iterating over a dask array forces values to be evaluated"""
-        for block in self.blocks:
-            array = block.compute()
-            for row in array:
-                yield row
-
     def __len__(self):
         if not self.chunks:
             raise TypeError("len() of unsized object")
