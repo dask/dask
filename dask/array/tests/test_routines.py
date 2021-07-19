@@ -575,7 +575,7 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
-    expected_output = np.array([0, 2, 2, 0, 0, 1])
+    expected_output = np.array([0, 2, 2, 0, 0, 1], dtype=e.dtype)
     assert_eq(e[0:], expected_output)  # can bincount result be sliced
 
 
@@ -1929,7 +1929,7 @@ def test_ravel_multi_index_unknown_shape_fails():
 @pytest.mark.parametrize("wrap_in_list", [False, True])
 def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
     with pytest.raises(NotImplementedError, match="Dask types are not supported"):
-        da.ravel_multi_index((2, 1), list(dims) if wrap_in_list else dims)
+        da.ravel_multi_index((2, 1), [dims[0], dims[1]] if wrap_in_list else dims)
 
 
 def test_ravel_multi_index_non_int_dtype():
