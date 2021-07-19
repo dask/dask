@@ -3236,7 +3236,9 @@ Dask Name: {name}, {task} tasks""".format(
     def __contains__(self, value):
         for i in range(self.npartitions):
             s = self.get_partition(i).compute()
-            yield value in s
+            if value in s:
+                return True
+        return False
 
     @classmethod
     def _validate_axis(cls, axis=0):
