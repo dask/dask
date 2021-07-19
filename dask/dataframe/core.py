@@ -3872,6 +3872,17 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
+        # Check if this is a single-layer HLG with "num-rows"
+        # stored in the collection_annotations. If so, we already
+        # know the length
+        dsk = self.dask
+        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
+            layer = list(self.dask.layers.values())[0]
+            size = (layer.collection_annotations or {}).get("num-rows", None)
+            if size:
+                return size
+
+        # General Logic
         try:
             s = self.iloc[:, 0]
         except IndexError:

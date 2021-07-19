@@ -2506,7 +2506,7 @@ def test_blockwise_parquet_annotations(tmpdir):
     assert len(layers) == 1
     layer = next(iter((layers.values())))
     assert isinstance(layer, DataFrameIOLayer)
-    assert layer.annotations == {"foo": "bar"}
+    assert layer.annotations["foo"] == "bar"
 
 
 @ANY_ENGINE_MARK

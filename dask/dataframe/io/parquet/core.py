@@ -343,7 +343,7 @@ def read_parquet(
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
+    parts, divisions, index, index_in_columns, global_row_count = process_statistics(
         parts,
         statistics,
         filters,
@@ -389,6 +389,17 @@ def read_parquet(
             ),
             label=label,
         )
+
+        # Check if we can use the row-count
+        # from the statistics
+        if global_row_count and not filters:
+            # Note that we cannot annotate the row count
+            # if the Engine may be filtering on read
+            if layer.collection_annotations:
+                layer.collection_annotations.update({"num-rows": global_row_count})
+            else:
+                layer.collection_annotations = {"num-rows": global_row_count}
+
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
     return new_dd_object(graph, output_name, meta, divisions)
@@ -1074,6 +1085,7 @@ def process_statistics(
     Used in read_parquet.
     """
     index_in_columns = False
+    global_row_count = None
     if statistics:
         result = list(
             zip(
@@ -1093,6 +1105,16 @@ def process_statistics(
             parts, statistics = aggregate_row_groups(
                 parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
             )
+
+        # Use statistics (if available) to calculate the total
+        # number of rows in the dataset
+        global_row_count = 0
+        for stat in statistics:
+            try:
+                global_row_count += stat.get("num-rows")
+            except KeyError:
+                global_row_count = None
+                break
 
         out = sorted_columns(statistics)
 
@@ -1138,7 +1160,7 @@ def process_statistics(
     else:
         divisions = [None] * (len(parts) + 1)
 
-    return parts, divisions, index, index_in_columns
+    return parts, divisions, index, index_in_columns, global_row_count
 
 
 def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):
