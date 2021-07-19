@@ -22,7 +22,7 @@ def __array_wrap__(numpy_ufunc, x, *args, **kwargs):
 
 
 def wrap_elemwise(numpy_ufunc, array_wrap=False, source=np):
-    """ Wrap up numpy function into dask.array """
+    """Wrap up numpy function into dask.array"""
 
     def wrapped(*args, **kwargs):
         dsk = [arg for arg in args if hasattr(arg, "_elemwise")]

@@ -5,11 +5,13 @@ channels:
 dependencies:
   # required dependencies
   - python=3.8
+  - packaging
   # For the dependencies. These will be re-installed later.
   - numpy
   - pandas
   # test dependencies
   - pytest
+  - pytest-cov
   - pytest-rerunfailures
   - pytest-xdist
   - moto

@@ -1,9 +1,9 @@
 import random
 from bisect import bisect_left
-from distutils.version import LooseVersion
 from itertools import cycle
 from operator import add, itemgetter
 
+from packaging.version import parse as parse_version
 from tlz import accumulate, groupby, pluck, unique
 
 from ..core import istask
@@ -171,18 +171,9 @@ def visualize(profilers, file_path=None, show=True, save=True, mode=None, **kwar
     The completed bokeh plot object.
     """
     bp = import_required("bokeh.plotting", _BOKEH_MISSING_MSG)
-    import bokeh
+    from bokeh.io import state
 
-    if LooseVersion(bokeh.__version__) >= "0.12.10":
-        from bokeh.io import state
-
-        in_notebook = state.curstate().notebook
-    else:
-        from bokeh.io import _state
-
-        in_notebook = _state._notebook
-
-    if not in_notebook:
+    if not state.curstate().notebook:
         file_path = file_path or "profile.html"
         bp.output_file(file_path, mode=mode)
 
@@ -381,7 +372,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         line_width=4,
         **{
             "legend_label"
-            if LooseVersion(bokeh.__version__) >= "1.4"
+            if parse_version(bokeh.__version__) >= parse_version("1.4")
             else "legend": "% CPU"
         }
     )
@@ -399,7 +390,7 @@ def plot_resources(results, palette="Viridis", **kwargs):
         line_width=4,
         **{
             "legend_label"
-            if LooseVersion(bokeh.__version__) >= "1.4"
+            if parse_version(bokeh.__version__) >= parse_version("1.4")
             else "legend": "Memory"
         }
     )

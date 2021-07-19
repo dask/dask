@@ -208,3 +208,9 @@ reusable ``ProcessPoolExecutor`` from loky_:
    from loky import get_reusable_executor
    with dask.config.set(pool=get_reusable_executor(max_workers=4)):
        x.compute()
+
+Other libraries like ipyparallel_ and mpi4py_ also supply
+``concurrent.futures.Executor`` subclasses that could be used as well.
+
+.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.executor
+.. _mpi4py: https://mpi4py.readthedocs.io/en/latest/mpi4py.futures.html

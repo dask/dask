@@ -10,6 +10,9 @@ jobs:
       matrix:
         environment: ["mindeps-array-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
+    env:
+      COVERAGE: "true"
+
     steps:
       - name: Checkout source
         uses: actions/checkout@v2
@@ -20,7 +23,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.7"
           environment-file: continuous_integration/environment-${{ matrix.environment }}.yaml
           activate-environment: test-environment
@@ -33,6 +36,9 @@ jobs:
       - name: Run tests
         shell: bash -l {0}
         run: source continuous_integration/scripts/run_tests.sh
+
+      - name: Coverage
+        uses: codecov/codecov-action@v1
 
   check-hdfs:
     runs-on: ubuntu-latest
@@ -83,7 +89,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.8"
           environment-file: continuous_integration/environment-latest.yaml
           activate-environment: test-environment
@@ -113,7 +119,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.7"
           activate-environment: test-environment
           auto-activate-base: false
