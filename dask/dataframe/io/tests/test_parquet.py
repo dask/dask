@@ -275,20 +275,6 @@ def test_read_glob(tmpdir, write_engine, read_engine):
 
 
 @write_read_engines()
-def test_gather_statistics_false(tmpdir, write_engine, read_engine):
-    tmp_path = str(tmpdir)
-    ddf.to_parquet(tmp_path, write_index=False, engine=write_engine)
-
-    ddf2 = dd.read_parquet(
-        tmp_path,
-        engine=read_engine,
-        index=False,
-        gather_statistics=False,
-    )
-    assert_eq(ddf, ddf2, check_index=False, check_divisions=False)
-
-
-@write_read_engines()
 def test_read_list(tmpdir, write_engine, read_engine):
     if write_engine == read_engine == "fastparquet" and os.name == "nt":
         # fastparquet or dask is not normalizing filepaths correctly on
