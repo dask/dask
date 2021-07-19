@@ -499,8 +499,17 @@ class Layer(collections.abc.Mapping):
         else:
             shortname = self.__class__.__name__
 
+        svg_repr = ""
+        if self.collection_annotations.get("type") == "dask.array.core.Array":
+            chunks = self.collection_annotations.get("chunks")
+            if chunks is not None:
+                from .array.svg import svg
+
+                svg_repr = "<br />" + svg(chunks)
+
         info = self.layer_info_dict()
         layer_info_table = html_from_dict(info)
+
         html = f"""
             <div style="">
                 {layer_icon}
@@ -511,6 +520,7 @@ class Layer(collections.abc.Mapping):
                     <p style="color: var(--jp-ui-font-color2, #5D5851); margin: -0.25em 0px 0px 0px;">
                         {highlevelgraph_key}
                     </p>
+                    {svg_repr}
                     {layer_info_table}
                 </details>
             </div>
@@ -527,7 +537,8 @@ class Layer(collections.abc.Mapping):
                 info[key] = html.escape(str(val))
         if self.collection_annotations is not None:
             for key, val in self.collection_annotations.items():
-                info[key] = html.escape(str(val))
+                if key != "chunks":
+                    info[key] = html.escape(str(val))
         return info
 
 
@@ -540,9 +551,13 @@ class MaterializedLayer(Layer):
         The mapping between keys and tasks, typically a dask graph.
     """
 
-    def __init__(self, mapping: Mapping, annotations=None):
-        super().__init__(annotations=annotations)
+    def __init__(self, mapping: Mapping, annotations=None, collection_annotations=None):
+        super().__init__(
+            annotations=annotations, collection_annotations=collection_annotations
+        )
         self.mapping = mapping
+        if self.collection_annotations is None:
+            self.collection_annotations = {}
 
     def __contains__(self, k):
         return k in self.mapping
