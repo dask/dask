@@ -141,7 +141,6 @@ def to_task_dask(expr):
 
     Examples
     --------
-    # TODO: Fix this doctest
     >>> import dask
     >>> a = delayed(1, 'a')
     >>> b = delayed(2, 'b')

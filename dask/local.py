@@ -61,16 +61,12 @@ Changing state
 Examples
 --------
 
->>> import pprint
->>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
->>> pprint.pprint(start_state_from_dask(dsk))
+>>> import pprint  # doctest: +SKIP
+>>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
+>>> pprint.pprint(start_state_from_dask(dsk))  # doctest: +SKIP
 {'cache': {'x': 1, 'y': 2},
  'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
- 'dependents': defaultdict(None,
-                           {'w': set(),
-                            'x': {'z'},
-                            'y': {'w'},
-                            'z': {'w'}}),
+ 'dependents': defaultdict(None, {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}}),
  'finished': set(),
  'ready': ['z'],
  'released': set(),
@@ -147,16 +143,12 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     Examples
     --------
 
-    >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}
-    >>> from pprint import pprint
-    >>> pprint(start_state_from_dask(dsk))
+    >>> dsk = {'x': 1, 'y': 2, 'z': (inc, 'x'), 'w': (add, 'z', 'y')}  # doctest: +SKIP
+    >>> from pprint import pprint  # doctest: +SKIP
+    >>> pprint(start_state_from_dask(dsk))  # doctest: +SKIP
     {'cache': {'x': 1, 'y': 2},
      'dependencies': {'w': {'z', 'y'}, 'x': set(), 'y': set(), 'z': {'x'}},
-     'dependents': defaultdict(None,
-                               {'w': set(),
-                                'x': {'z'},
-                                'y': {'w'},
-                                'z': {'w'}}),
+     'dependents': defaultdict(None, {'w': set(), 'x': {'z'}, 'y': {'w'}, 'z': {'w'}}),
      'finished': set(),
      'ready': ['z'],
      'released': set(),
