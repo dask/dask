@@ -1,5 +1,5 @@
 import io
-import tempfile
+import uuid
 from contextlib import contextmanager
 
 import pytest
@@ -425,15 +425,19 @@ def test_no_character_index_without_divisions(db):
         read_sql_table("test", db, npartitions=2, index_col="name", divisions=None)
 
 
-@contextmanager
-def tmp_db_uri():
-    with tempfile.NamedTemporaryFile() as f:
-        yield f"sqlite:///{f.name}"
+@pytest.fixture
+def tmp_db_uri(tmp_path):
+    @contextmanager
+    def _():
+        x = f"sqlite:///{tmp_path / str(uuid.uuid4().hex)}"
+        yield x
+
+    yield _
 
 
 @pytest.mark.parametrize("npartitions", (1, 2))
 @pytest.mark.parametrize("parallel", (False, True))
-def test_to_sql(npartitions, parallel):
+def test_to_sql(npartitions, parallel, tmp_db_uri):
     df_by_age = df.set_index("age")
     df_appended = pd.concat(
         [
