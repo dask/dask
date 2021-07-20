@@ -536,9 +536,8 @@ class Layer(collections.abc.Mapping):
                 info[key] = html.escape(str(val))
         if self.collection_annotations is not None:
             for key, val in self.collection_annotations.items():
-                if (
-                    key != "chunks"
-                ):  # displaying chunks can be a little overwhelming in the HTML, so we
+                # hiding chunks from the HTML table
+                if key != "chunks":
                     info[key] = html.escape(str(val))
         return info
 
