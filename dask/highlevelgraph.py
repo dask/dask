@@ -500,7 +500,10 @@ class Layer(collections.abc.Mapping):
             shortname = self.__class__.__name__
 
         svg_repr = ""
-        if self.collection_annotations.get("type") == "dask.array.core.Array":
+        if (
+            self.collection_annotations is not None
+            and self.collection_annotations.get("type") == "dask.array.core.Array"
+        ):
             chunks = self.collection_annotations.get("chunks")
             if chunks:
                 from .array.svg import svg
@@ -551,13 +554,9 @@ class MaterializedLayer(Layer):
         The mapping between keys and tasks, typically a dask graph.
     """
 
-    def __init__(self, mapping: Mapping, annotations=None, collection_annotations=None):
-        super().__init__(
-            annotations=annotations, collection_annotations=collection_annotations
-        )
+    def __init__(self, mapping: Mapping, annotations=None):
+        super().__init__(annotations=annotations)
         self.mapping = mapping
-        if collection_annotations is None:
-            self.collection_annotations = {}
 
     def __contains__(self, k):
         return k in self.mapping
