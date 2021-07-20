@@ -98,6 +98,7 @@ Top level user functions:
    greater
    greater_equal
    histogram
+   histogram2d
    histogramdd
    hstack
    hypot
@@ -495,6 +496,7 @@ Other functions
 .. autofunction:: greater
 .. autofunction:: greater_equal
 .. autofunction:: histogram
+.. autofunction:: histogram2d
 .. autofunction:: histogramdd
 .. autofunction:: hstack
 .. autofunction:: hypot
