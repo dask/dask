@@ -1194,7 +1194,7 @@ def to_graphviz(
     function_attributes=None,
     rankdir="BT",
     graph_attr={},
-    node_attr=None,
+    node_attr={},
     edge_attr=None,
     **kwargs,
 ):
@@ -1207,25 +1207,41 @@ def to_graphviz(
 
     graph_attr = graph_attr or {}
     graph_attr["rankdir"] = rankdir
+    node_attr["shape"] = "box"
     graph_attr.update(kwargs)
+
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
     )
 
+    n_tasks = {}
+    for layer in hg.dependencies:
+        n_tasks[layer] = len(hg.layers[layer])
+
+    mn = min(n_tasks.values())
+    mx = max(n_tasks.values())
+
     cache = {}
 
-    for k in hg.dependencies:
-        k_name = name(k)
-        attrs = data_attributes.get(k, {})
-        attrs.setdefault("label", label(k, cache=cache))
-        attrs.setdefault("shape", "box")
-        g.node(k_name, **attrs)
+    for layer in hg.dependencies:
+        layer_name = name(layer)
+        attrs = data_attributes.get(layer, {})
 
-    for k, deps in hg.dependencies.items():
-        k_name = name(k)
+        xlabel = label(layer, cache=cache)
+        xfontsize = (
+            20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
+        )
+
+        attrs.setdefault("label", str(xlabel))
+        attrs.setdefault("fontsize", str(xfontsize))
+
+        g.node(layer_name, **attrs)
+
+    for layer, deps in hg.dependencies.items():
+        layer_name = name(layer)
         for dep in deps:
             dep_name = name(dep)
-            g.edge(dep_name, k_name)
+            g.edge(dep_name, layer_name)
     return g
 
 
