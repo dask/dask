@@ -31,6 +31,7 @@ computation:
 
 .. code-block:: python
 
+    >>> import dask.array as da
     >>> from dask.diagnostics import ProgressBar
     >>> a = da.random.normal(size=(10000, 10000), chunks=(1000, 1000))
     >>> res = a.dot(a.T).mean(axis=0)

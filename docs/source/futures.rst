@@ -44,7 +44,7 @@ among the various worker processes or threads:
    # or
    client = Client(processes=False)  # start local workers as threads
 
-If you have `Bokeh <https://bokeh.pydata.org>`_ installed, then this starts up a
+If you have `Bokeh <https://docs.bokeh.org>`_ installed, then this starts up a
 diagnostic dashboard at ``http://localhost:8787`` .
 
 Submit Tasks

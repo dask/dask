@@ -5,6 +5,7 @@ __pycache__/
 .mypy_cache
 dask-worker-space/
 docs/build
+docs/source/generated
 build/
 dist/
 .idea/
