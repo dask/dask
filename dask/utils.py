@@ -1309,7 +1309,9 @@ def parse_bytes(s):
     1000000
     >>> parse_bytes(123)
     123
-    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    >>> parse_bytes('5 foos')
+    Traceback (most recent call last):
+        ...
     ValueError: Could not interpret 'foos' as a byte unit
     """
     if isinstance(s, (int, float)):
