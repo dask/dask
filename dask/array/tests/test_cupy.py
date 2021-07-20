@@ -2,6 +2,8 @@ import numpy as np
 import pytest
 from packaging.version import parse as parse_version
 
+pytestmark = pytest.mark.gpu
+
 import dask
 import dask.array as da
 from dask.array.gufunc import apply_gufunc
