@@ -3187,6 +3187,15 @@ def test_dataframe_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
+def test_contains_series_checks_index_not_values():
+    s = pd.Series(["a", "b", "c", "d"])
+    ds = dd.from_pandas(s, npartitions=2)
+    assert 0 in s
+    assert 0 in ds
+    assert "a" not in s
+    assert "a" not in ds
+
+
 def test_series_iteritems():
     df = pd.DataFrame({"x": [1, 2, 3, 4]})
     ddf = dd.from_pandas(df, npartitions=2)

@@ -3233,12 +3233,8 @@ Dask Name: {name}, {task} tasks""".format(
                 yield row
 
     @derived_from(pd.Series)
-    def __contains__(self, value):
-        for i in range(self.npartitions):
-            s = self.get_partition(i).compute()
-            if value in s:
-                return True
-        return False
+    def __contains__(self, key):
+        return key in self.index
 
     @classmethod
     def _validate_axis(cls, axis=0):
@@ -3782,6 +3778,9 @@ class Index(Series):
         else:
             applied = applied.clear_divisions()
         return applied
+
+    def __contains__(self, key):
+        return any(key in partition.compute() for partition in self.partitions)
 
 
 class DataFrame(_Frame):
