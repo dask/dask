@@ -308,8 +308,10 @@ class FastParquetEngine(Engine):
         # want to apply any filters or calculate divisions.
         if split_row_groups is None:
             split_row_groups = False
-        _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregation_depth
+        _need_aggregation_stats = (
+            gather_statistics
+            or chunksize
+            or (int(split_row_groups) > 1 and aggregation_depth)
         )
         if (
             isinstance(parts, list) and len(parts) and isinstance(parts[0], str)

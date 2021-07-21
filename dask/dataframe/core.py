@@ -3608,6 +3608,18 @@ Dask Name: {name}, {task} tasks""".format(
         res2 = other % self
         return res1, res2
 
+    def __len__(self):
+        # Check if partition lengths are already known
+        if self._lens:
+            try:
+                return sum(self._lens)
+            except TypeError:
+                # Failed to take a sum over all partitions.
+                # Need to take a row-count manually
+                pass
+
+        return super().__len__()
+
 
 class Index(Series):
 
@@ -3922,7 +3934,7 @@ class DataFrame(_Frame):
             meta = self._meta[_extract_meta(key)]
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            return new_dd_object(graph, name, meta, self.divisions, lens=self._lens)
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 
@@ -4295,7 +4307,9 @@ class DataFrame(_Frame):
             raise ValueError("Cannot rename index.")
 
         # *args here is index, columns but columns arg is already used
-        return self.map_partitions(M.rename, None, columns=columns)
+        return self.map_partitions(
+            M.rename, None, columns=columns, length_preserving=True
+        )
 
     def query(self, expr, **kwargs):
         """Filter dataframe with complex expression
@@ -5279,7 +5293,8 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
+    _lens = deps[0]._lens if deps else None
+    result = new_dd_object(graph, _name, meta, divisions, lens=_lens)
     return handle_out(out, result)
 
 
@@ -5630,6 +5645,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
+    length_preserving=False,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -5648,6 +5664,10 @@ def map_partitions(
         Whether or not to enforce the structure of the metadata at runtime.
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
+    length_preserving : bool
+        Whether or not the operation is guaranteed to preserve the length of
+        all partitions. This is a promise from the user to Dask that ``func``
+        will not change the row count. Default is False.
     $META
     """
     name = kwargs.pop("token", None)
@@ -5774,7 +5794,8 @@ def map_partitions(
             ) + v[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, divisions)
+    lens = dependencies[0]._lens if length_preserving and dependencies else None
+    return new_dd_object(graph, name, meta, divisions, lens=lens)
 
 
 def apply_and_enforce(*args, **kwargs):
