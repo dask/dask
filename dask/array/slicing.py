@@ -134,7 +134,6 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
 
     Examples
     --------
-
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
     ...                              (slice(10, 35),))
     >>> dsk
