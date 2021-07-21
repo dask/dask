@@ -3040,7 +3040,7 @@ class Series(_Frame):
         Examples
         --------
         >>> series.shape  # doctest: +SKIP
-        # (dd.Scalar<size-ag..., dtype=int64>,)
+        (dd.Scalar<size-ag..., dtype=int64>,)
         """
         return (self.size,)
 
@@ -6242,13 +6242,13 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
     Examples
     --------
-    >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    >>> from pprint import pprint
+    >>> pprint(repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c'))  # doctest: +ELLIPSIS
     {('b', 0): (<function boundary_slice at ...>, ('a', 0), 1, 3, False),
      ('b', 1): (<function boundary_slice at ...>, ('a', 1), 3, 4, False),
      ('b', 2): (<function boundary_slice at ...>, ('a', 1), 4, 6, False),
-     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, True)
-     ('c', 0): (<function concat at ...>,
-                (<type 'list'>, [('b', 0), ('b', 1)])),
+     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, True),
+     ('c', 0): (<function concat at ...>, [('b', 0), ('b', 1)]),
      ('c', 1): ('b', 2),
      ('c', 2): ('b', 3)}
     """
