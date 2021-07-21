@@ -3,7 +3,8 @@ API
 
 .. currentmodule:: dask.array
 
-Top level user functions:
+Top level functions
+~~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
    :toctree: generated/
