@@ -3187,13 +3187,23 @@ def test_dataframe_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
-def test_contains_series_raise_not_implemented():
+def test_contains_series_raises_deprecated_warning_preserves_behavior():
     s = pd.Series(["a", "b", "c", "d"])
     ds = dd.from_pandas(s, npartitions=2)
-    with pytest.raises(
-        NotImplementedError, match="Using the ``in`` operator is not supported"
+
+    with pytest.warns(
+        FutureWarning,
+        match="Using the ``in`` operator to test for membership in Series is deprecated",
     ):
-        assert 0 in ds
+        output = "a" in ds
+    assert output
+
+    with pytest.warns(
+        FutureWarning,
+        match="Using the ``in`` operator to test for membership in Series is deprecated",
+    ):
+        output = 0 in ds
+    assert not output
 
 
 def test_series_iteritems():

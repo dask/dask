@@ -37,6 +37,7 @@ from ..utils import (
     IndexCallable,
     M,
     OperatorMethodMixin,
+    _deprecated,
     apply,
     derived_from,
     funcname,
@@ -3232,13 +3233,16 @@ Dask Name: {name}, {task} tasks""".format(
             for row in s:
                 yield row
 
-    @derived_from(pd.Series)
-    def __contains__(self, key):
-        raise NotImplementedError(
-            "Using the ``in`` operator is not supported for Series. To test for membership "
-            "in the index use ``(s.index == key).any()`` or ``s.isin([key])``. Similarly to "
-            "test for membership in the values use ``(s == key).any()`` or ``s.isin([key])``"
+    @_deprecated(
+        message=(
+            "Using the ``in`` operator to test for membership in Series is "
+            "deprecated. To test for membership in the index use "
+            "``(s.index == key).any()``. Similarly to test for membership in "
+            "the values use ``(s == key).any()``"
         )
+    )
+    def __contains__(self, key):
+        return (self == key).any().compute()
 
     @classmethod
     def _validate_axis(cls, axis=0):
