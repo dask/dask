@@ -3234,7 +3234,11 @@ Dask Name: {name}, {task} tasks""".format(
 
     @derived_from(pd.Series)
     def __contains__(self, key):
-        return key in self.index
+        raise NotImplementedError(
+            "Using the ``in`` operator is not supported for Series. To test for membership "
+            "in the index use ``(s.index == key).any()`` or ``s.isin([key])``. Similarly to "
+            "test for membership in the values use ``(s == key).any()`` or ``s.isin([key])``"
+        )
 
     @classmethod
     def _validate_axis(cls, axis=0):
@@ -3778,9 +3782,6 @@ class Index(Series):
         else:
             applied = applied.clear_divisions()
         return applied
-
-    def __contains__(self, key):
-        return any(key in partition.compute() for partition in self.partitions)
 
 
 class DataFrame(_Frame):

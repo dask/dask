@@ -343,6 +343,10 @@ def size(x):
     return x.size
 
 
+def __contains__(x, key):
+    return key in x
+
+
 def values(df):
     return df.values
 

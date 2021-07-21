@@ -3187,13 +3187,13 @@ def test_dataframe_compute_forward_kwargs():
     x.compute(bogus_keyword=10)
 
 
-def test_contains_series_checks_index_not_values():
+def test_contains_series_raise_not_implemented():
     s = pd.Series(["a", "b", "c", "d"])
     ds = dd.from_pandas(s, npartitions=2)
-    assert 0 in s
-    assert 0 in ds
-    assert "a" not in s
-    assert "a" not in ds
+    with pytest.raises(
+        NotImplementedError, match="Using the ``in`` operator is not supported"
+    ):
+        assert 0 in ds
 
 
 def test_series_iteritems():
