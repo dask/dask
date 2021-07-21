@@ -1504,6 +1504,10 @@ class Array(DaskMethodsMixin):
             "please set ``._name``"
         )
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
     def __array__(self, dtype=None, **kwargs):
