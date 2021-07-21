@@ -1327,7 +1327,7 @@ class Array(DaskMethodsMixin):
 
         # When the chunks changes the cached properties that was
         # dependent on it needs to be deleted:
-        for key in ["numblocks", "npartitions", "shape", "ndim", "size"]:
+        for key in ["numblocks", "npartitions", "shape", "ndim", "size", "key_array"]:
             self._reset_cache(key)
 
     @property

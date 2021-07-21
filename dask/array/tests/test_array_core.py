@@ -4804,6 +4804,19 @@ def test_rechunk_auto():
     assert y.npartitions == 1
 
 
+def test_chunk_assignment_invalidates_cached_properties():
+    x = da.ones((4,), chunks=(1,))
+    y = x.copy()
+    # change chunks directly, which should change all of the tested properties
+    y._chunks = ((2, 2), (0, 0, 0, 0))
+    assert not x.ndim == y.ndim
+    assert not x.shape == y.shape
+    assert not x.size == y.size
+    assert not x.numblocks == y.numblocks
+    assert not x.npartitions == y.npartitions
+    assert not np.array_equal(x.key_array, y.key_array)
+
+
 def test_map_blocks_series():
     pd = pytest.importorskip("pandas")
     import dask.dataframe as dd
