@@ -18,16 +18,16 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
         lambda x: np.concatenate([x, x, x]),
         lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),
-        lambda x: np.dstack(x),
+        lambda x: np.dstack((x, x)),
         lambda x: np.flip(x, axis=0),
-        lambda x: np.hstack(x),
+        lambda x: np.hstack((x, x)),
         lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
         lambda x: np.block([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
-        lambda x: np.vstack(x),
+        lambda x: np.vstack((x, x)),
         lambda x: np.linalg.norm(x),
         lambda x: np.min(x),
         lambda x: np.amin(x),
@@ -47,6 +47,25 @@ def test_array_function_dask(func):
 
     assert isinstance(res_y, da.Array)
     assert_eq(res_y, res_x)
+
+
+@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda x: np.dstack(x),
+        lambda x: np.hstack(x),
+        lambda x: np.vstack(x),
+    ],
+)
+def test_stack_functions_require_sequence_of_arrays(func):
+    x = np.random.random((100, 100))
+    y = da.from_array(x, chunks=(50, 50))
+
+    with pytest.raises(
+        NotImplementedError, match="expects a sequence of arrays as the first argument"
+    ):
+        func(y)
 
 
 @pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
@@ -134,15 +153,15 @@ def test_array_function_cupy_svd(chunks):
         lambda x: np.concatenate([x, x, x]),
         lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),
-        lambda x: np.dstack(x),
+        lambda x: np.dstack((x, x)),
         lambda x: np.flip(x, axis=0),
-        lambda x: np.hstack(x),
+        lambda x: np.hstack((x, x)),
         lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
-        lambda x: np.vstack(x),
+        lambda x: np.vstack((x, x)),
         lambda x: np.linalg.norm(x),
     ],
 )
