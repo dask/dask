@@ -1,6 +1,5 @@
 import math
 import warnings
-from collections import defaultdict
 
 import tlz as toolz
 from fsspec.core import get_fs_token_paths
@@ -393,19 +392,14 @@ def read_parquet(
 
         # Check if we can use the row-count
         # from the statistics
-        if partition_sizes and not filters:
+        if not partition_sizes or filters:
             # Note that we cannot annotate the row count
             # if the Engine may be filtering on read
-            if layer.collection_annotations:
-                layer.collection_annotations.update(
-                    {"partition-sizes": partition_sizes}
-                )
-            else:
-                layer.collection_annotations = {"partition-sizes": partition_sizes}
+            partition_sizes = None
 
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(graph, output_name, meta, divisions)
+    return new_dd_object(graph, output_name, meta, divisions, lens=partition_sizes)
 
 
 def check_multi_support(engine):
@@ -1111,10 +1105,10 @@ def process_statistics(
 
         # Use statistics (if available) to calculate the total
         # number of rows in the dataset
-        partition_sizes = defaultdict(None)
+        partition_sizes = []
         for i, stat in enumerate(statistics):
             try:
-                partition_sizes[i] = stat.get("num-rows")
+                partition_sizes.append(stat.get("num-rows"))
             except KeyError:
                 # We don't have the size of all partitions - Bail
                 partition_sizes = None

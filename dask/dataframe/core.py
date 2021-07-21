@@ -115,9 +115,9 @@ def finalize(results):
 class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """A Dask object to represent a pandas scalar"""
 
-    def __init__(self, dsk, name, meta, divisions=None):
-        # divisions is ignored, only present to be compatible with other
-        # objects.
+    def __init__(self, dsk, name, meta, divisions=None, lens=None):
+        # divisions and lens are ignored, only present to be compatible
+        # with other objects.
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -299,7 +299,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions):
+    def __init__(self, dsk, name, meta, divisions, lens=None):
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -312,6 +312,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+        self._lens = lens
 
     def __dask_graph__(self):
         return self.dask
@@ -3802,8 +3803,8 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
+    def __init__(self, dsk, name, meta, divisions, lens=None):
+        super().__init__(dsk, name, meta, divisions, lens=lens)
         if self.dask.layers[name].collection_annotations is None:
             self.dask.layers[name].collection_annotations = {
                 "npartitions": self.npartitions,
@@ -3872,22 +3873,14 @@ class DataFrame(_Frame):
         return _iLocIndexer(self)
 
     def __len__(self):
-        # Check if this is a single-layer HLG with "part-size"
-        # stored in the collection_annotations. If so, we already
-        # know the length
-        dsk = self.dask
-        if isinstance(dsk, HighLevelGraph) and len(dsk.layers) == 1:
-            layer = list(self.dask.layers.values())[0]
-            partition_sizes = (layer.collection_annotations or {}).get(
-                "partition-sizes", None
-            )
-            if partition_sizes:
-                try:
-                    return sum(partition_sizes.values())
-                except TypeError:
-                    # Failed to take a sum over all partitions.
-                    # Need to take a row-count manually
-                    pass
+        # Check if partition lengths are already known
+        if self._lens:
+            try:
+                return sum(self._lens)
+            except TypeError:
+                # Failed to take a sum over all partitions.
+                # Need to take a row-count manually
+                pass
 
         # Manual logic
         try:
@@ -6813,13 +6806,13 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(dsk, name, meta, divisions, parent_meta=None, lens=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(dsk, name, meta, divisions, lens=lens)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
@@ -6837,7 +6830,7 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                     layer[(name, i) + suffix] = layer.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(dsk, name, meta, divisions, lens=lens)
 
 
 def partitionwise_graph(func, name, *args, **kwargs):
