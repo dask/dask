@@ -1240,6 +1240,10 @@ class Array(DaskMethodsMixin):
             self.__dict__.pop(key, None)
 
     @cached_property
+    def key_array(self):
+        return np.array(self.__dask_keys__(), dtype=object)
+
+    @cached_property
     def numblocks(self):
         return tuple(map(len, self.chunks))
 
@@ -1501,10 +1505,6 @@ class Array(DaskMethodsMixin):
             "It is uncommon to need to change it, but if you do\n"
             "please set ``._name``"
         )
-
-    def __iter__(self):
-        for i in range(len(self)):
-            yield self[i]
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
@@ -1830,7 +1830,7 @@ class Array(DaskMethodsMixin):
 
         name = "blocks-" + tokenize(self, index)
 
-        new_keys = np.array(self.__dask_keys__(), dtype=object)[index]
+        new_keys = self.key_array[index]
 
         chunks = tuple(
             tuple(np.array(c)[i].tolist()) for c, i in zip(self.chunks, index)
