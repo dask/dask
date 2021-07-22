@@ -4814,7 +4814,8 @@ def test_chunk_assignment_invalidates_cached_properties():
     assert not x.size == y.size
     assert not x.numblocks == y.numblocks
     assert not x.npartitions == y.npartitions
-    assert not np.array_equal(x.key_array, y.key_array)
+    assert not x.__dask_keys__() == y.__dask_keys__()
+    assert not np.array_equal(x._key_array, y._key_array)
 
 
 def test_map_blocks_series():
