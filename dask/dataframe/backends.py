@@ -103,13 +103,13 @@ def make_meta_object(x, index=None):
     Examples
     --------
 
-    >>> make_meta([('a', 'i8'), ('b', 'O')])    # doctest: +SKIP
+    >>> make_meta_object([('a', 'i8'), ('b', 'O')])
     Empty DataFrame
     Columns: [a, b]
     Index: []
-    >>> make_meta(('a', 'f8'))                  # doctest: +SKIP
+    >>> make_meta_object(('a', 'f8'))
     Series([], Name: a, dtype: float64)
-    >>> make_meta('i8')                         # doctest: +SKIP
+    >>> make_meta_object('i8')
     1
     """
 
