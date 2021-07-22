@@ -134,11 +134,12 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
 
     Examples
     --------
+    >>> from pprint import pprint
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
-    ...                              (slice(10, 35),))
-    >>> dsk
-    {('y', 0): (getitem, ('x', 0), (slice(10, 20),)),
-     ('y', 1): (getitem, ('x', 1), (slice(0, 15),))}
+    ...                              (slice(10, 35),), 8)
+    >>> pprint(dsk)
+    {('y', 0): (<built-in function getitem>, ('x', 0), (slice(10, 20, 1),)),
+     ('y', 1): (<built-in function getitem>, ('x', 1), (slice(0, 15, 1),))}
     >>> blockdims
     ((10, 15),)
 
