@@ -3622,3 +3622,42 @@ def test_custom_metadata(tmpdir, engine):
             custom_metadata=custom_metadata,
         )
     assert "User-defined key/value" in str(e.value)
+
+
+def test_partition_lengths(tmpdir, engine):
+    # Test that the "_lengths" property is properly
+    # populated and used for operations like `len(ddf)`.
+    # Do this by using `read_parquet` to generate ad
+    # DataFrame collection with known partition sizes.
+    df = pd.DataFrame({"a": range(100), "b": range(100)})
+    ddf1 = dd.from_pandas(df, npartitions=4).set_index(
+        "a",
+        divisions=[0, 10, 30, 60, 100],
+    )
+    ddf1.to_parquet(tmpdir, engine=engine)
+    ddf2 = dd.read_parquet(tmpdir, engine=engine, split_row_groups=False)
+    ddf2["c"] = ddf2["b"] + 1
+
+    # Check that `_lengths` is populated, and that
+    # basic `len` behavior is correct (even after
+    # assignment, partition, and column-selection
+    # operations)
+    assert ddf2._lengths == [10, 20, 30, 40]
+    assert len(ddf2) == 100
+    assert len(ddf2["c"]) == 100
+    assert len(ddf2[["c"]]) == 100
+    assert len(ddf2.get_partition(2)) == 30
+    assert len(ddf2.partitions[3]) == 40
+    assert len(ddf2.partitions[1:3]) == 50
+
+    # Check that `_lengths` is propagated for
+    # `map_partitions` when `preserve_length=True`
+    ddf3 = ddf2.map_partitions(lambda x: x, preserve_length=True)
+    assert ddf3._lengths == [10, 20, 30, 40]
+    assert len(ddf3) == 100
+
+    # Check that `_lengths` is NOT propagated for
+    # `map_partitions` by default
+    ddf4 = ddf2.map_partitions(lambda x: x)
+    assert ddf4._lengths is None
+    assert len(ddf4) == 100
