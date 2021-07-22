@@ -1468,3 +1468,57 @@ def test_cupy_cholesky(shape, chunk):
         check_graph=False,
         check_chunks=False,
     )
+
+
+def test_setitem_1d():
+    x = cupy.arange(10)
+    dx = da.from_array(x.copy(), chunks=(5,))
+
+    x[x > 6] = -1
+    x[x % 2 == 0] = -2
+
+    dx[dx > 6] = -1
+    dx[dx % 2 == 0] = -2
+
+    assert_eq(x, dx)
+
+
+def test_setitem_2d():
+    x = cupy.arange(24).reshape((4, 6))
+    dx = da.from_array(x.copy(), chunks=(2, 2))
+
+    x[x > 6] = -1
+    x[x % 2 == 0] = -2
+
+    dx[dx > 6] = -1
+    dx[dx % 2 == 0] = -2
+
+    assert_eq(x, dx)
+
+
+def test_setitem_extended_API_0d():
+    # 0-d array
+    x = cupy.array(9)
+    dx = da.from_array(x.copy())
+
+    x[()] = -1
+    dx[()] = -1
+    assert_eq(x, dx.compute())
+
+    x[...] = -11
+    dx[...] = -11
+    assert_eq(x, dx.compute())
+
+
+def test_setitem_extended_API_1d():
+    # 1-d array
+    x = cupy.arange(10)
+    dx = da.from_array(x.copy(), chunks=(4, 6))
+
+    x[2:8:2] = -1
+    dx[2:8:2] = -1
+    assert_eq(x, dx.compute())
+
+    x[...] = -11
+    dx[...] = -11
+    assert_eq(x, dx.compute())
