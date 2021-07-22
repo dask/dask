@@ -399,7 +399,7 @@ def read_parquet(
 
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(graph, output_name, meta, divisions, lens=partition_sizes)
+    return new_dd_object(graph, output_name, meta, divisions, lengths=partition_sizes)
 
 
 def check_multi_support(engine):
