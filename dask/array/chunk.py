@@ -319,6 +319,7 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     current chunk.
     """
     from .utils import asarray_safe, meta_from_array
+
     idx = asarray_safe(idx, like=meta_from_array(x))
 
     # Needed when idx is unsigned
