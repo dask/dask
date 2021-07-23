@@ -7,13 +7,13 @@ import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
-from distutils.version import LooseVersion
 from functools import partial
 from hashlib import md5
 from numbers import Number
 from operator import getitem
 from typing import Iterator, Mapping, Set
 
+from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
@@ -911,7 +911,7 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
-    PANDAS_GT_130 = LooseVersion(pd.__version__) >= LooseVersion("1.3.0")
+    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
 
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
@@ -1225,13 +1225,13 @@ def get_collection_names(collection) -> Set[str]:
     Examples
     --------
     >>> a.__dask_keys__()  # doctest: +SKIP
-    ["foo", "bar"]  # doctest: +SKIP
+    ["foo", "bar"]
     >>> get_collection_names(a)  # doctest: +SKIP
-    {"foo", "bar"}  # doctest: +SKIP
+    {"foo", "bar"}
     >>> b.__dask_keys__()  # doctest: +SKIP
-    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]  # doctest: +SKIP
+    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]
     >>> get_collection_names(b)  # doctest: +SKIP
-    {"foo-123"}  # doctest: +SKIP
+    {"foo-123"}
     """
     if not is_dask_collection(collection):
         raise TypeError(f"Expected Dask collection; got {type(collection)}")
@@ -1296,9 +1296,9 @@ def clone_key(key, seed):
     Examples
     --------
     >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
-    'inc-1d291de52f5045f8a969743daea271fd'  # doctest: +SKIP
+    'inc-1d291de52f5045f8a969743daea271fd'
     >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
-    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)  # doctest: +SKIP
+    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
     """
     if isinstance(key, tuple) and key and isinstance(key[0], str):
         return (clone_key(key[0], seed),) + key[1:]

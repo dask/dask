@@ -328,7 +328,7 @@ def hash_join(
     This shuffles both datasets on the joined column and then performs an
     embarrassingly parallel join partition-by-partition
 
-    >>> hash_join(a, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
+    >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
@@ -808,6 +808,22 @@ def merge_asof_indexed(left, right, **kwargs):
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
 
+    if all(map(pd.isnull, left.divisions)):
+        # results in an empty df that looks like ``meta``
+        return from_pandas(meta.iloc[len(meta) :], npartitions=left.npartitions)
+
+    if all(map(pd.isnull, right.divisions)):
+        # results in an df that looks like ``left`` with nulls for
+        # all ``right.columns``
+        return map_partitions(
+            pd.merge_asof,
+            left,
+            right=right,
+            left_index=True,
+            right_index=True,
+            meta=meta,
+        )
+
     dependencies = [left, right]
     tails = heads = None
     if kwargs["direction"] in ["backward", "nearest"]:
@@ -877,7 +893,7 @@ def merge_asof(
     }
 
     if left is None or right is None:
-        raise ValueError("Cannot merge_asof on empty DataFrames")
+        raise ValueError("Cannot merge_asof on None")
 
     # if is_dataframe_like(left) and is_dataframe_like(right):
     if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
@@ -1119,6 +1135,7 @@ def concat(
     --------
     If all divisions are known and ordered, divisions are kept.
 
+    >>> import dask.dataframe as dd
     >>> a                                               # doctest: +SKIP
     dd.DataFrame<x, divisions=(1, 3, 5)>
     >>> b                                               # doctest: +SKIP
@@ -1158,7 +1175,7 @@ def concat(
 
     Different categoricals are unioned
 
-    >> dd.concat([                                     # doctest: +SKIP
+    >>> dd.concat([
     ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
     ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
     ... ], interleave_partitions=True).dtype

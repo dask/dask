@@ -1,5 +1,6 @@
 import sys
-from distutils.version import LooseVersion
+
+from packaging.version import parse as parse_version
 
 try:
     from math import prod
@@ -12,7 +13,7 @@ except ImportError:
         return acc
 
 
-_PY_VERSION = LooseVersion(".".join(map(str, sys.version_info[:3])))
+_PY_VERSION = parse_version(".".join(map(str, sys.version_info[:3])))
 
 
 def __getattr__(name):

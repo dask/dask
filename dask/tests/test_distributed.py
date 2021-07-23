@@ -531,11 +531,17 @@ async def test_futures_in_subgraphs(c, s, a, b):
     ddf = await c.submit(dd.categorical.categorize, ddf, columns=["day"], index=False)
 
 
+@pytest.mark.flaky(reruns=5, reruns_delay=5)
 @gen_cluster(client=True)
 async def test_shuffle_priority(c, s, a, b):
     pd = pytest.importorskip("pandas")
     np = pytest.importorskip("numpy")
     dd = pytest.importorskip("dask.dataframe")
+
+    # Test marked as "flaky" since the scheduling behavior
+    # is not deterministic. Note that the test is still
+    # very likely to fail every time if the "split" tasks
+    # are not prioritized correctly
 
     df = pd.DataFrame({"a": range(1000)})
     ddf = dd.from_pandas(df, npartitions=10)
@@ -592,16 +598,16 @@ def test_map_partitions_df_input():
         return d
 
     def main():
-        delayed_df = dd.from_pandas(
-            pd.DataFrame({"a": range(5)}), npartitions=2
-        ).to_delayed()
-        dl = delayed_df[0].persist()
-        wait(dl)
+        item_df = dd.from_pandas(pd.DataFrame({"a": range(10)}), npartitions=1)
+        ddf = item_df.to_delayed()[0].persist()
+        merged_df = dd.from_pandas(pd.DataFrame({"b": range(10)}), npartitions=1)
 
-        df = dd.from_pandas(pd.DataFrame({"a": range(5)}), npartitions=2)
-        df = df.map_partitions(f, dl, meta=df._meta)
-        df = df.persist(optimize_graph=False)
-        df.compute()
+        # Notice, we include a shuffle in order to trigger a complex culling
+        merged_df = merged_df.shuffle(on="b")
+
+        merged_df.map_partitions(
+            f, ddf, meta=merged_df, enforce_metadata=False
+        ).compute()
 
     with distributed.LocalCluster(
         scheduler_port=0, asynchronous=False, n_workers=1, nthreads=1, processes=False

@@ -4210,6 +4210,21 @@ def test_normalize_chunks_nan():
     assert "auto" in str(info.value)
 
 
+def test_pandas_from_dask_array():
+    pd = pytest.importorskip("pandas")
+    from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_131
+
+    a = da.ones((12,), chunks=4)
+    s = pd.Series(a, index=range(12))
+
+    if PANDAS_GT_130 and not PANDAS_GT_131:
+        # https://github.com/pandas-dev/pandas/issues/38645
+        assert s.dtype != a.dtype
+    else:
+        assert s.dtype == a.dtype
+        assert_eq(s.values, a)
+
+
 def test_from_zarr_unique_name():
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
