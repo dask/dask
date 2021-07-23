@@ -60,4 +60,4 @@ conda config --show-sources
 conda list --show-channel-urls
 
 gpuci_logger "Python py.test for dask"
-py.test $WORKSPACE -n 4 --junitxml="$WORKSPACE/junit-dask.xml" -v --cov-config="$WORKSPACE/.coveragerc" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term
+py.test $WORKSPACE -n 4 -v -m gpu --junitxml="$WORKSPACE/junit-dask.xml" --cov-config="$WORKSPACE/.coveragerc" --cov=dask --cov-report=xml:"$WORKSPACE/dask-coverage.xml" --cov-report term
