@@ -232,7 +232,7 @@ def order(dsk, dependencies=None):
     result = {}
     i = 0
 
-    # `inner_stask` is used to perform a DFS along dependencies.  Once emptied
+    # `inner_stack` is used to perform a DFS along dependencies.  Once emptied
     # (when traversing dependencies), this continue down a path along dependents
     # until a root node is reached.
     #
@@ -281,6 +281,46 @@ def order(dsk, dependencies=None):
     # alias for speed
     set_difference = set.difference
 
+    def handle_item(item, i, add_to_inner_stack):  # TODO: better name and docstring!
+        deps = dependents[item]
+        while True:
+            result[item] = i
+            i += 1
+
+            if metrics[item][3] == 1:  # min_height
+                # Don't leave any dangling single nodes!  Finish all dependents that are
+                # ready and are also root nodes.
+                finish_now = {
+                    dep for dep in deps if not dependents[dep] and num_needed[dep] == 1
+                }
+                if finish_now:
+                    deps -= finish_now  # Safe to mutate
+                    if len(finish_now) > 1:
+                        finish_now = sorted(finish_now, key=finish_now_key)
+                    for dep in finish_now:
+                        result[dep] = i
+                        i += 1
+                    add_to_inner_stack = False
+            if deps:
+                for dep in deps:
+                    num_needed[dep] -= 1
+
+                already_seen = deps & seen
+                if already_seen:
+                    if len(deps) == len(already_seen):
+                        return None, i, add_to_inner_stack
+                    add_to_inner_stack = False
+                    deps -= already_seen
+
+                if len(deps) == 1:
+                    # Fast path!  We trim down `deps` above hoping to reach here.
+                    (item,) = deps
+                    if num_needed[item] == 0:
+                        deps = dependents[item]
+                        continue
+            break
+        return deps, i, add_to_inner_stack
+
     is_init_sorted = False
     while True:
         while inner_stacks:
@@ -307,10 +347,6 @@ def order(dsk, dependencies=None):
                     seen_update(deps)
                     continue
 
-                result[item] = i
-                i += 1
-                deps = dependents[item]
-
                 # If inner_stack is empty, then we typically add the best dependent to it.
                 # However, we don't add to it if we complete a node early via "finish_now" below
                 # or if a dependent is already on an inner_stack.  In this case, we add the
@@ -319,35 +355,8 @@ def order(dsk, dependencies=None):
                 #   1. shrink `deps` so that it can be processed faster,
                 #   2. make sure we don't process the same dependency repeatedly, and
                 #   3. make sure we don't accidentally continue down an expensive-to-compute path.
-                add_to_inner_stack = True
-                if metrics[item][3] == 1:  # min_height
-                    # Don't leave any dangling single nodes!  Finish all dependents that are
-                    # ready and are also root nodes.
-                    finish_now = {
-                        dep
-                        for dep in deps
-                        if not dependents[dep] and num_needed[dep] == 1
-                    }
-                    if finish_now:
-                        deps -= finish_now  # Safe to mutate
-                        if len(finish_now) > 1:
-                            finish_now = sorted(finish_now, key=finish_now_key)
-                        for dep in finish_now:
-                            result[dep] = i
-                            i += 1
-                        add_to_inner_stack = False
-
+                deps, i, add_to_inner_stack = handle_item(item, i, True)
                 if deps:
-                    for dep in deps:
-                        num_needed[dep] -= 1
-
-                    already_seen = deps & seen
-                    if already_seen:
-                        if len(deps) == len(already_seen):
-                            continue
-                        add_to_inner_stack = False
-                        deps -= already_seen
-
                     if len(deps) == 1:
                         # Fast path!  We trim down `deps` above hoping to reach here.
                         (dep,) = deps
