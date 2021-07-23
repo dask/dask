@@ -81,16 +81,10 @@ class Layer(collections.abc.Mapping):
             characteristics of Dask computations.
             These annotations are *not* passed to the distributed scheduler.
         """
-        if annotations:
-            self.annotations = annotations
-        else:
-            self.annotations = copy.copy(config.get("annotations", None))
-        if collection_annotations:
-            self.collection_annotations = collection_annotations
-        else:
-            self.collection_annotations = copy.copy(
-                config.get("collection_annotations", None)
-            )
+        self.annotations = annotations or copy.copy(config.get("annotations", None))
+        self.collection_annotations = collection_annotations or copy.copy(
+            config.get("collection_annotations", None)
+        )
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
@@ -502,7 +496,7 @@ class Layer(collections.abc.Mapping):
 
         svg_repr = ""
         if (
-            self.collection_annotations is not None
+            self.collection_annotations
             and self.collection_annotations.get("type") == "dask.array.core.Array"
         ):
             chunks = self.collection_annotations.get("chunks")
