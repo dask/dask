@@ -41,9 +41,10 @@ gpuci_logger "Install dask dependencies"
 gpuci_conda_retry env update --name rapids --file "$WORKSPACE/continuous_integration/environment-3.8.yaml"
 
 gpuci_logger "Install testing dependencies"
-gpuci_conda_retry install -y \
+gpuci_mamba_retry install -y \
                   cudf=21.08 \
-                  cupy
+                  cupy \
+                  cudatoolkit=$CUDA_REL
 
 gpuci_logger "Install dask"
 python setup.py install
