@@ -418,7 +418,8 @@ def test_nan_object(func):
             warnings.simplefilter("default", RuntimeWarning)
 
         assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
-        assert_eq(getattr(np, func)(x), getattr(da, func)(d))
+        # wrap the scalar in a numpy array since the dask version cannot know dtype
+        assert_eq(np.array(getattr(np, func)(x)).astype(object), getattr(da, func)(d))
 
 
 def test_0d_array():

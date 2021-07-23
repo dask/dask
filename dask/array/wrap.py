@@ -210,6 +210,8 @@ def full(shape, fill_value, *args, **kwargs):
         raise ValueError(
             f"fill_value must be scalar. Received {type(fill_value).__name__} instead."
         )
+    if "dtype" not in kwargs:
+        kwargs["dtype"] = type(fill_value)
     return _full(shape=shape, fill_value=fill_value, *args, **kwargs)
 
 
