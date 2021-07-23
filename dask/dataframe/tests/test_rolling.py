@@ -1,8 +1,7 @@
-from distutils.version import LooseVersion
-
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_130
@@ -404,7 +403,8 @@ def test_rolling_agg_aggregate():
 @pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
 def test_rolling_numba_engine():
     numba = pytest.importorskip("numba")
-    if not dd._compat.PANDAS_GT_104 and LooseVersion(numba.__version__) >= "0.49":
+    numba_version = parse_version(numba.__version__)
+    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
         # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
         pytest.xfail("Known incompatibility between pandas and numba")
 

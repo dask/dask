@@ -1,6 +1,72 @@
 Changelog
 =========
 
+2021.07.1
+---------
+
+Released on July 23, 2021
+
+.. note::
+
+  This is the last release with support for NumPy 1.17 and pandas 0.25.
+  Beginning with the next release, NumPy 1.18 and pandas 1.0 will be the minimum
+  supported versions.
+
+- Make array ``assert_eq`` check dtype (#7903`) `Julia Signell`_
+- Remove skips from doctests (6 of 6) (:pr:`7863`) `Zhengnan Zhao`_
+- Remove experimental feature warning from actors docs (:pr:`7925`) `Matthew Rocklin`_
+- Remove skips from doctests (2 of 6) (:pr:`7873`) `Zhengnan Zhao`_
+- Separate out Array and Bag API (:pr:`7917`) `Julia Signell`_
+- Implement lazy ``Array.__iter__`` (:pr:`7905`) `Julia Signell`_
+- Clean up places where we inadvertently iterate over arrays (:pr:`7913`) `Julia Signell`_
+- Add ``numeric_only`` kwarg to DataFrame reductions (:pr:`7831`) `Julia Signell`_
+- Add pytest marker for GPU tests (:pr:`7876`) `Charles Blackmon-Luca`_
+- Add support for ``histogram2d`` in ``dask.array`` (:pr:`7827`) `Doug Davis`_
+- Remove skips from doctests (1 of 6) (:pr:`7874`) `Zhengnan Zhao`_
+- Add node size scaling to the Graphviz output for the high level graphs (:pr:`7869`) `Freyam Mehta`_
+- Update old Bokeh links (:pr:`7915`) `Bryan Van de Ven`_
+- Temporarily pin ``fastparquet`` in CI (:pr:`7907`) `James Bourbeau`_
+- Add ``dask.array`` import to progress bar docs (:pr:`7910`) `Fabian Gebhart`_
+- Use separate files for each DataFrame API function and method (:pr:`7890`) `Julia Signell`_
+- Fix ``pyarrow-dataset`` ordering bug (:pr:`7902`) `Richard (Rick) Zamora`_
+- Generalize unique aggregate (:pr:`7892`) `GALI PREM SAGAR`_
+- Raise ``NotImplementedError`` when using ``pd.Grouper`` (:pr:`7857`) `Ruben van de Geer`_
+- Add ``aggregate_files`` argument to enable multi-file partitions in ``read_parquet`` (:pr:`7557`) `Richard (Rick) Zamora`_
+- Un-``xfail`` ``test_daily_stock`` (:pr:`7895`) `James Bourbeau`_
+- Update access configuration docs (:pr:`7837`) `Naty Clementi`_
+- Use packaging for version comparisons (:pr:`7820`) `Elliott Sales de Andrade`_
+- Handle infinite loops in ``merge_asof`` (:pr:`7842`) `gerrymanoim`_
+
+
+2021.07.0
+---------
+
+Released on July 9, 2021
+
+- Include ``fastparquet`` in upstream CI build (:pr:`7884`) `James Bourbeau`_
+- Blockwise: handle non-string constant dependencies  (:pr:`7849`) `Mads R. B. Kristensen`_
+- ``fastparquet`` now supports new time types, including ns precision (:pr:`7880`) `Martin Durant`_
+- Avoid ``ParquetDataset`` API when appending in ``ArrowDatasetEngine`` (:pr:`7544`) `Richard (Rick) Zamora`_
+- Add retry logic to ``test_shuffle_priority`` (:pr:`7879`) `Richard (Rick) Zamora`_
+- Use strict channel priority in CI (:pr:`7878`) `James Bourbeau`_
+- Support nested ``dask.distributed`` imports (:pr:`7866`) `Matthew Rocklin`_
+- Should check module name only, not the entire directory filepath (:pr:`7856`) `Genevieve Buckley`_
+- Updates due to https://github.com/dask/fastparquet/pull/623 (:pr:`7875`) `Martin Durant`_
+- ``da.eye`` fix for ``chunks=-1`` (:pr:`7854`) `Naty Clementi`_
+- Temporarily xfail ``test_daily_stock`` (:pr:`7858`) `James Bourbeau`_
+- Set priority annotations in ``SimpleShuffleLayer`` (:pr:`7846`) `Richard (Rick) Zamora`_
+- Blockwise: stringify constant key inputs (:pr:`7838`) `Mads R. B. Kristensen`_
+- Allow mixing dask and numpy arrays in ``@guvectorize`` (:pr:`6863`) `Julia Signell`_
+- Don't sample dict result of a shuffle group when calculating its size (:pr:`7834`) `Florian Jetter`_
+- Fix scipy tests (:pr:`7841`) `Julia Signell`_
+- Deterministically tokenize ``datetime.date`` (:pr:`7836`) `James Bourbeau`_
+- Add ``sample_rows`` to ``read_csv``-like (:pr:`7825`) `Martin Durant`_
+- Fix typo in ``config.deserialize`` docstring (:pr:`7830`) `Geoffrey Lentner`_
+- Remove warning filter in ``test_dataframe_picklable`` (:pr:`7822`) `James Bourbeau`_
+- Improvements to ``histogramdd`` (for handling inputs that are sequences-of-arrays). (:pr:`7634`) `Doug Davis`_
+- Make ``PY_VERSION`` private (:pr:`7824`) `James Bourbeau`_
+
+
 2021.06.2
 ---------
 
@@ -4324,3 +4390,7 @@ Other
 .. _`Kristopher Overholt`: https://github.com/koverholt
 .. _`tsuga`: https://github.com/tsuga
 .. _`Gabriel Miretti`: https://github.com/gmiretti
+.. _`Geoffrey Lentner`: https://github.com/glentner
+.. _`Charles Blackmon-Luca`: https://github.com/charlesbluca
+.. _`Bryan Van de Ven`: https://github.com/bryevdv
+.. _`Fabian Gebhart`: https://github.com/fgebhart

@@ -42,7 +42,7 @@ jobs:
           miniforge-variant: Mambaforge
           miniforge-version: latest
           use-mamba: true
-          channel-priority: true
+          channel-priority: strict
           python-version: "3.8"
           environment-file: continuous_integration/environment-3.8-dev.yaml
           activate-environment: test-environment
