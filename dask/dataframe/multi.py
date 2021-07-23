@@ -328,7 +328,7 @@ def hash_join(
     This shuffles both datasets on the joined column and then performs an
     embarrassingly parallel join partition-by-partition
 
-    >>> hash_join(a, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
+    >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
@@ -1135,6 +1135,7 @@ def concat(
     --------
     If all divisions are known and ordered, divisions are kept.
 
+    >>> import dask.dataframe as dd
     >>> a                                               # doctest: +SKIP
     dd.DataFrame<x, divisions=(1, 3, 5)>
     >>> b                                               # doctest: +SKIP
@@ -1174,7 +1175,7 @@ def concat(
 
     Different categoricals are unioned
 
-    >> dd.concat([                                     # doctest: +SKIP
+    >>> dd.concat([
     ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
     ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
     ... ], interleave_partitions=True).dtype
