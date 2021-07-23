@@ -313,6 +313,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+        self.__lengths = None
 
     def __dask_graph__(self):
         return self.dask
