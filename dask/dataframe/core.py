@@ -5296,7 +5296,7 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    _lengths = deps[0]._lengths if deps else None
+    _lengths = deps[0]._lengths if deps and isinstance(deps, _Frame) else None
     result = new_dd_object(graph, _name, meta, divisions, lengths=_lengths)
     return handle_out(out, result)
 
