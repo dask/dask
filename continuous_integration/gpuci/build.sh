@@ -38,7 +38,7 @@ gpuci_logger "Activate conda env"
 conda activate rapids
 
 gpuci_logger "Install dask dependencies"
-gpuci_conda_retry env update -y --name rapids --file "$WORKSPACE/continuous_integration/environment-3.8.yaml"
+gpuci_conda_retry env update --name rapids --file "$WORKSPACE/continuous_integration/environment-3.8.yaml"
 
 gpuci_logger "Install testing dependencies"
 gpuci_conda_retry install -y \
