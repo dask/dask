@@ -1518,9 +1518,7 @@ def test_index_with_int_dask_array_0d(chunks):
     assert_eq(x[:, idx0], x[:, 1])
 
 
-@pytest.mark.skip(
-    "dask.Array.nonzero() doesn't support non-NumPy arrays yet"
-)
+@pytest.mark.skip("dask.Array.nonzero() doesn't support non-NumPy arrays yet")
 @pytest.mark.parametrize("chunks", [1, 2, 3, 4, 5])
 def test_index_with_int_dask_array_nanchunks(chunks):
     # Slice by array with nan-sized chunks
@@ -1559,6 +1557,7 @@ def test_index_with_int_dask_array_indexerror(chunks):
     idx = da.from_array(cupy.array([-5]), chunks=1)
     with pytest.raises(IndexError):
         a[idx].compute()
+
 
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
