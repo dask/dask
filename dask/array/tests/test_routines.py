@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+import sys
 from numbers import Number
 
 import pytest
@@ -575,7 +576,7 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
-    expected_output = np.array([0, 2, 2, 0, 0, 1])
+    expected_output = np.array([0, 2, 2, 0, 0, 1], dtype=e.dtype)
     assert_eq(e[0:], expected_output)  # can bincount result be sliced
 
 
@@ -2526,11 +2527,24 @@ def test_tril_triu_non_square_arrays():
     [(3, 0, 3, "auto"), (3, 1, 3, "auto"), (3, -1, 3, "auto"), (5, 0, 5, 1)],
 )
 def test_tril_triu_indices(n, k, m, chunks):
-    assert_eq(
-        da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
-        np.tril_indices(n=n, k=k, m=m)[0],
-    )
-    assert_eq(
-        da.triu_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
-        np.triu_indices(n=n, k=k, m=m)[0],
-    )
+    actual = da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0]
+    expected = np.tril_indices(n=n, k=k, m=m)[0]
+
+    if sys.platform == "win32":
+        assert_eq(
+            actual.astype(expected.dtype),
+            expected,
+        )
+    else:
+        assert_eq(actual, expected)
+
+    actual = da.triu_indices(n=n, k=k, m=m, chunks=chunks)[0]
+    expected = np.triu_indices(n=n, k=k, m=m)[0]
+
+    if sys.platform == "win32":
+        assert_eq(
+            actual.astype(expected.dtype),
+            expected,
+        )
+    else:
+        assert_eq(actual, expected)
