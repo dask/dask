@@ -55,7 +55,7 @@ class ProgressBar(Callback):
 
     The duration of the last computation is available as an attribute
 
-    >>> pbar = ProgressBar()
+    >>> pbar = ProgressBar()                # doctest: +SKIP
     >>> with pbar:                          # doctest: +SKIP
     ...     out = some_computation.compute()
     [########################################] | 100% Completed | 10.4 s
@@ -65,8 +65,8 @@ class ProgressBar(Callback):
     You can also register a progress bar so that it displays for all
     computations:
 
-    >>> pbar = ProgressBar()
-    >>> pbar.register()
+    >>> pbar = ProgressBar()                # doctest: +SKIP
+    >>> pbar.register()                     # doctest: +SKIP
     >>> some_slow_computation.compute()     # doctest: +SKIP
     [########################################] | 100% Completed | 10.4 s
     """
