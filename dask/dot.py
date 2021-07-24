@@ -143,7 +143,6 @@ def to_graphviz(
     edge_attr = edge_attr or {}
 
     graph_attr["rankdir"] = rankdir
-    node_attr["shape"] = "box"
     node_attr["fontname"] = "roboto"
 
     graph_attr.update(kwargs)
