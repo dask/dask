@@ -35,8 +35,8 @@ class Profiler(Callback):
     22
 
     >>> prof.results        # doctest: +SKIP
-    [('y', (add, 'x', 10), 1435352238.48039, 1435352238.480655, 140285575100160),
-     ('z', (mul, 'y', 2), 1435352238.480657, 1435352238.480803, 140285566707456)]
+    [TaskData(key='y', task=(add, 'x', 10), start_time=..., end_time=..., worker_id=...),
+     TaskData(key='z', task=(mul, 'y', 2), start_time=..., end_time=..., worker_id=...)]
 
     These results can be visualized in a bokeh plot using the ``visualize``
     method. Note that this requires bokeh to be installed.
@@ -296,8 +296,8 @@ class CacheProfiler(Callback):
     22
 
     >>> prof.results    # doctest: +SKIP
-    [CacheData('y', (add, 'x', 10), 1, 1435352238.48039, 1435352238.480655),
-     CacheData('z', (mul, 'y', 2), 1, 1435352238.480657, 1435352238.480803)]
+    [CacheData(key='y', task=(add, 'x', 10), metric=1, cache_time=..., free_time=...),
+     CacheData(key='z', task=(mul, 'y', 2), metric=1, cache_time=..., free_time=...)]
 
     The default is to count each task (``metric`` is 1 for all tasks). Other
     functions may used as a metric instead through the ``metric`` keyword. For
