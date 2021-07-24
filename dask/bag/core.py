@@ -77,9 +77,11 @@ def lazify_task(task, start=True):
 
     Examples
     --------
-    >>> task = (sum, (list, (map, inc, [1, 2, 3])))  # doctest: +SKIP
-    >>> lazify_task(task)  # doctest: +SKIP
-    (sum, (map, inc, [1, 2, 3]))
+    >>> def inc(x):
+    ...     return x + 1
+    >>> task = (sum, (list, (map, inc, [1, 2, 3])))
+    >>> lazify_task(task)  # doctest: +ELLIPSIS
+    (<built-in function sum>, (<class 'map'>, <function inc at ...>, [1, 2, 3]))
     """
     if type(task) is list and len(task) < 50:
         return [lazify_task(arg, False) for arg in task]
@@ -109,8 +111,8 @@ def inline_singleton_lists(dsk, keys, dependencies=None):
 
     >>> d = {'b': (list, 'a'),
     ...      'c': (sum, 'b', 1)}
-    >>> inline_singleton_lists(d, 'c')  # doctest: +SKIP
-    {'c': (sum, (list, 'a'), 1)}
+    >>> inline_singleton_lists(d, 'c')
+    {'c': (<built-in function sum>, (<class 'list'>, 'a'), 1)}
 
     Pairs nicely with lazify afterwards.
     """
@@ -1758,7 +1760,7 @@ def from_url(urls):
     (b'Dask\\n',
      b'====\\n',
      b'\\n',
-     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status|\\n',
+     b'|Build Status| |Coverage| |Doc Status| |Gitter| |Version Status| |NumFOCUS|\\n',
      b'\\n',
      b'Dask is a flexible parallel computing library for analytics.  See\\n',
      b'documentation_ for more information.\\n',
