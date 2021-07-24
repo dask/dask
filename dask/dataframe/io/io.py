@@ -499,14 +499,21 @@ def _link(token, result):
     return None
 
 
-def _df_to_bag(df, index=False):
+def _df_to_bag(df, index=False, format="tuple"):
     if isinstance(df, pd.DataFrame):
-        return list(map(tuple, df.itertuples(index)))
+        if format == "tuple":
+            return list(map(tuple, df.itertuples(index)))
+        elif format == "dict":
+            tuple_to_dict = lambda x: dict(x._asdict())
+            return list(map(tuple_to_dict, df.itertuples(index)))
     elif isinstance(df, pd.Series):
-        return list(df.iteritems()) if index else list(df)
+        if format == "tuple":
+            return list(df.iteritems()) if index else list(df)
+        elif format == "dict":
+            return df.to_dict()
 
 
-def to_bag(df, index=False):
+def to_bag(df, index=False, format="tuple"):
     """Create Dask Bag from a Dask DataFrame
 
     Parameters
@@ -514,6 +521,9 @@ def to_bag(df, index=False):
     index : bool, optional
         If True, the elements are tuples of ``(index, value)``, otherwise
         they're just the ``value``.  Default is False.
+    format : tuple or dict,optional  default:tuple
+            returns bag of tuple or dict, based on this format
+            parameter.
 
     Examples
     --------
@@ -523,9 +533,9 @@ def to_bag(df, index=False):
 
     if not isinstance(df, (DataFrame, Series)):
         raise TypeError("df must be either DataFrame or Series")
-    name = "to_bag-" + tokenize(df, index)
+    name = "to_bag-" + tokenize(df, index, format)
     dsk = dict(
-        ((name, i), (_df_to_bag, block, index))
+        ((name, i), (_df_to_bag, block, index, format))
         for (i, block) in enumerate(df.__dask_keys__())
     )
     dsk.update(df.__dask_optimize__(df.__dask_graph__(), df.__dask_keys__()))

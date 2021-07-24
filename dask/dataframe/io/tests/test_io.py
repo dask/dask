@@ -509,9 +509,14 @@ def test_to_bag():
         index=pd.Index([1.0, 2.0, 3.0, 4.0], name="ind"),
     )
     ddf = dd.from_pandas(a, 2)
+    tuple_to_dict = lambda x: dict(x._asdict())
 
     assert ddf.to_bag().compute() == list(a.itertuples(False))
     assert ddf.to_bag(True).compute() == list(a.itertuples(True))
+    assert ddf.to_bag(format="dict").compute() == a.to_dict(orient="records")
+    assert ddf.to_bag(True, format="dict").compute() == list(
+        map(tuple_to_dict, a.itertuples(True))
+    )
     assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
     assert ddf.x.to_bag().compute() == list(a.x)
 
