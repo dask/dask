@@ -877,3 +877,312 @@ def test_array_store_final_order(tmpdir):
     connected_max = max([v for k, v in o.items() if k in connected_stores])
     disconnected_min = min([v for k, v in o.items() if k in disconnected_stores])
     assert connected_max < disconnected_min
+
+
+def test_eager_to_compute_dependent_to_free_parent():
+    r"""https://github.com/dask/dask/pull/7929
+
+    This graph begins with many motifs like the following:
+
+    |      |
+    c1    c2
+      \ /
+       b
+       |
+       a
+
+    We want to compute c2 and c3 pretty close together, because if we choose to
+    compute c1, then we should also compute c2 so we can release b.  Being
+    greedy here allows us to release memory sooner and be more globally optimal.
+    """
+    dsk = {
+        "join-ac838b48-7eab-4ed5-96b1-42ca515d6e44": (
+            f,
+            "finalise-3a20f5c2-a931-4205-aa1c-cc5611eb5309",
+            "finalise-ecc61ba8-281c-45cc-9d67-9b395f193c02",
+        ),
+        "lambda-b1813da8-9490-4c8b-8db3-9ba7b6c20e1c": (
+            f,
+            "lambda-fcc361be-21a0-46c8-821d-87caa95e8da4",
+            "lambda-ad489580-1682-4045-954a-caa2c09b9726",
+        ),
+        "lambda-fcc361be-21a0-46c8-821d-87caa95e8da4": (
+            f,
+            "lambda-9e3de884-53b2-4cf7-8f4e-5a721ecea05b",
+            "lambda-94aa372f-64c5-43c9-9e26-12d058d84352",
+        ),
+        "lambda-9e3de884-53b2-4cf7-8f4e-5a721ecea05b": (
+            f,
+            "lambda-3871d17e-9ba9-4b08-bc83-a08dd21bbbdf",
+            "lambda-eed31881-0973-4f9e-9738-6696349d9b74",
+        ),
+        "lambda-3871d17e-9ba9-4b08-bc83-a08dd21bbbdf": (
+            f,
+            "compute_energy_time-551d382f-2ce1-4337-aa1f-eb06984ea454",
+            "compute_energy_time-43aed8f7-d052-403b-a576-ed92cedf3c66",
+        ),
+        "read_chunk-183213b3-6c97-4c07-b9d0-072113d315b3": (f, f),
+        "normalise_channel-a59c27f2-ed8e-4d6d-8ec8-dab6be36ee03": (
+            f,
+            "read_chunk-183213b3-6c97-4c07-b9d0-072113d315b3",
+        ),
+        "lambda-231cf4fa-7694-425d-ab6b-d886f57ed40f": (
+            f,
+            "normalise_channel-a59c27f2-ed8e-4d6d-8ec8-dab6be36ee03",
+        ),
+        "compute_energy_time-551d382f-2ce1-4337-aa1f-eb06984ea454": (
+            f,
+            "lambda-231cf4fa-7694-425d-ab6b-d886f57ed40f",
+        ),
+        "read_chunk-82a4db55-f4a5-43f5-9426-8c0b72ae9e3e": (f, f),
+        "normalise_channel-79384943-c14f-4039-bc33-0702ddfe8c5a": (
+            f,
+            "read_chunk-82a4db55-f4a5-43f5-9426-8c0b72ae9e3e",
+        ),
+        "lambda-9f21016b-f3a7-4f81-a836-fd092e011f17": (
+            f,
+            "normalise_channel-79384943-c14f-4039-bc33-0702ddfe8c5a",
+        ),
+        "compute_energy_time-43aed8f7-d052-403b-a576-ed92cedf3c66": (
+            f,
+            "lambda-9f21016b-f3a7-4f81-a836-fd092e011f17",
+        ),
+        "lambda-eed31881-0973-4f9e-9738-6696349d9b74": (
+            f,
+            "compute_energy_time-722afbb6-1229-41a5-b10d-43fee0b942a5",
+            "compute_energy_time-78f3fbf2-017c-446b-affa-0bf53e5d3534",
+        ),
+        "read_chunk-08ca9f8f-64c6-45f8-88d5-50a4399e1baf": (f, f),
+        "normalise_channel-ac877174-b4e5-4464-879e-9af686c9b630": (
+            f,
+            "read_chunk-08ca9f8f-64c6-45f8-88d5-50a4399e1baf",
+        ),
+        "lambda-b644a272-fe8c-4fc7-9fed-fb3dae2f3866": (
+            f,
+            "normalise_channel-ac877174-b4e5-4464-879e-9af686c9b630",
+        ),
+        "compute_energy_time-722afbb6-1229-41a5-b10d-43fee0b942a5": (
+            f,
+            "lambda-b644a272-fe8c-4fc7-9fed-fb3dae2f3866",
+        ),
+        "read_chunk-da8b680f-c1ef-4fb1-8ead-5c8f67aa6bb6": (f, f),
+        "normalise_channel-4a422ac8-7adb-47fb-89cd-d96c43400295": (
+            f,
+            "read_chunk-da8b680f-c1ef-4fb1-8ead-5c8f67aa6bb6",
+        ),
+        "lambda-a88b2318-f52c-469d-a4af-3f58e219b779": (
+            f,
+            "normalise_channel-4a422ac8-7adb-47fb-89cd-d96c43400295",
+        ),
+        "compute_energy_time-78f3fbf2-017c-446b-affa-0bf53e5d3534": (
+            f,
+            "lambda-a88b2318-f52c-469d-a4af-3f58e219b779",
+        ),
+        "lambda-94aa372f-64c5-43c9-9e26-12d058d84352": (
+            f,
+            "lambda-8cd8c88f-6590-46c5-97e0-992e7ae4f491",
+            "lambda-9a99b8fd-18a6-43f8-94c2-9e31150998a1",
+        ),
+        "lambda-8cd8c88f-6590-46c5-97e0-992e7ae4f491": (
+            f,
+            "compute_energy_time-9162ccaf-bcb9-433e-a1ae-e745d5b72989",
+            "compute_energy_time-462a7087-cf10-4765-a817-163a4a3e0627",
+        ),
+        "read_chunk-e7ac866d-f259-4be8-bff7-af5c36d950f7": (f, f),
+        "normalise_channel-4c54379d-b0b2-4c25-9b64-3196815212dc": (
+            f,
+            "read_chunk-e7ac866d-f259-4be8-bff7-af5c36d950f7",
+        ),
+        "lambda-9e8229e8-804e-4acd-85cc-5beec4830acb": (
+            f,
+            "normalise_channel-4c54379d-b0b2-4c25-9b64-3196815212dc",
+        ),
+        "compute_energy_time-9162ccaf-bcb9-433e-a1ae-e745d5b72989": (
+            f,
+            "lambda-9e8229e8-804e-4acd-85cc-5beec4830acb",
+        ),
+        "read_chunk-05c2f1bb-a3fe-442f-8c21-115e73da5519": (f, f),
+        "normalise_channel-23711edf-f989-415b-a030-2441d6e205d7": (
+            f,
+            "read_chunk-05c2f1bb-a3fe-442f-8c21-115e73da5519",
+        ),
+        "lambda-6353dbee-35c9-4d1c-b0ee-25dee2923f28": (
+            f,
+            "normalise_channel-23711edf-f989-415b-a030-2441d6e205d7",
+        ),
+        "compute_energy_time-462a7087-cf10-4765-a817-163a4a3e0627": (
+            f,
+            "lambda-6353dbee-35c9-4d1c-b0ee-25dee2923f28",
+        ),
+        "lambda-9a99b8fd-18a6-43f8-94c2-9e31150998a1": (
+            f,
+            "compute_energy_time-fb0538c4-6b9b-45eb-b9c0-4ba2f9edb417",
+            "compute_energy_time-cfb26d70-7a10-4e7b-943e-a7f776105a79",
+        ),
+        "read_chunk-e1956e03-5b7d-4810-bdb3-e8c947a267c2": (f, f),
+        "normalise_channel-bee36443-c2f6-4b62-9705-2b277404d1c8": (
+            f,
+            "read_chunk-e1956e03-5b7d-4810-bdb3-e8c947a267c2",
+        ),
+        "lambda-39785e9c-4f70-4531-b87c-3812366507c5": (
+            f,
+            "normalise_channel-bee36443-c2f6-4b62-9705-2b277404d1c8",
+        ),
+        "compute_energy_time-fb0538c4-6b9b-45eb-b9c0-4ba2f9edb417": (
+            f,
+            "lambda-39785e9c-4f70-4531-b87c-3812366507c5",
+        ),
+        "read_chunk-edbad689-7d65-4898-8af0-602a9b8d1864": (f, f),
+        "normalise_channel-7bb2eff7-0ed3-4e7b-87ce-3ec9e8cd9f85": (
+            f,
+            "read_chunk-edbad689-7d65-4898-8af0-602a9b8d1864",
+        ),
+        "lambda-c42cad00-6a7c-4dbc-b74e-94e081aad500": (
+            f,
+            "normalise_channel-7bb2eff7-0ed3-4e7b-87ce-3ec9e8cd9f85",
+        ),
+        "compute_energy_time-cfb26d70-7a10-4e7b-943e-a7f776105a79": (
+            f,
+            "lambda-c42cad00-6a7c-4dbc-b74e-94e081aad500",
+        ),
+        "lambda-ad489580-1682-4045-954a-caa2c09b9726": (
+            f,
+            "compute_energy_time-ce153b68-fd90-48e9-8178-0d8cc8d4f2a5",
+            "compute_energy_time-cbdee506-b3fb-48d4-8064-dbd730bdaf6d",
+        ),
+        "read_chunk-13f09f14-e43b-42bb-9d60-39e0f70c2c70": (f, f),
+        "normalise_channel-a369bdf5-df4e-475c-ad0f-0eff0397d4b7": (
+            f,
+            "read_chunk-13f09f14-e43b-42bb-9d60-39e0f70c2c70",
+        ),
+        "lambda-bf488477-b595-4631-b7db-bb88249252dd": (
+            f,
+            "normalise_channel-a369bdf5-df4e-475c-ad0f-0eff0397d4b7",
+        ),
+        "compute_energy_time-ce153b68-fd90-48e9-8178-0d8cc8d4f2a5": (
+            f,
+            "lambda-bf488477-b595-4631-b7db-bb88249252dd",
+        ),
+        "read_chunk-61c5d4d2-28b2-4424-8e5d-0184a3a460e4": (f, f),
+        "normalise_channel-e4f81fc5-4639-46e5-99a4-520de6d7ac9d": (
+            f,
+            "read_chunk-61c5d4d2-28b2-4424-8e5d-0184a3a460e4",
+        ),
+        "lambda-7e4519e0-e3f1-4cf2-a2e6-1fd9f79bc325": (
+            f,
+            "normalise_channel-e4f81fc5-4639-46e5-99a4-520de6d7ac9d",
+        ),
+        "compute_energy_time-cbdee506-b3fb-48d4-8064-dbd730bdaf6d": (
+            f,
+            "lambda-7e4519e0-e3f1-4cf2-a2e6-1fd9f79bc325",
+        ),
+        "fill_hist-559b962b-354e-4790-8ae4-017da796e462": (
+            f,
+            "lambda-b1813da8-9490-4c8b-8db3-9ba7b6c20e1c",
+        ),
+        "finalise-3a20f5c2-a931-4205-aa1c-cc5611eb5309": (
+            f,
+            "fill_hist-559b962b-354e-4790-8ae4-017da796e462",
+        ),
+        "add-c09239f2-1b9b-4d54-82c6-4d52e874ab04": (
+            f,
+            "add-0366d937-62e1-4580-bc2a-dbb6d0b58477",
+            "add-23d5234f-e5c4-40c2-b7ab-9d602652bd9e",
+        ),
+        "add-0366d937-62e1-4580-bc2a-dbb6d0b58477": (
+            f,
+            "add-92b99cf7-1800-4289-80d2-399b77772aea",
+            "add-fec67e19-bfd2-4ac6-a785-1dc3f2250378",
+        ),
+        "add-92b99cf7-1800-4289-80d2-399b77772aea": (
+            f,
+            "add-62db9502-7e8a-48a7-b414-ce81400c5c32",
+            "add-3c8f2bd6-2d6f-4676-bc33-93ce1f5ad3c6",
+        ),
+        "add-62db9502-7e8a-48a7-b414-ce81400c5c32": (
+            f,
+            "fill_hist_ptp-e984e1f7-13f2-4741-94e0-f34be3b6ee3a",
+            "fill_hist_ptp-1281d98d-7fb3-4d29-a6c0-1a538d47652a",
+        ),
+        "fill_hist_ptp-e984e1f7-13f2-4741-94e0-f34be3b6ee3a": (
+            f,
+            "normalise_channel-a59c27f2-ed8e-4d6d-8ec8-dab6be36ee03",
+        ),
+        "fill_hist_ptp-1281d98d-7fb3-4d29-a6c0-1a538d47652a": (
+            f,
+            "normalise_channel-79384943-c14f-4039-bc33-0702ddfe8c5a",
+        ),
+        "add-3c8f2bd6-2d6f-4676-bc33-93ce1f5ad3c6": (
+            f,
+            "fill_hist_ptp-5acf1198-91fa-4784-9276-caa29c382e15",
+            "fill_hist_ptp-25e2e2da-95a2-4658-8db9-e689dd95b479",
+        ),
+        "fill_hist_ptp-5acf1198-91fa-4784-9276-caa29c382e15": (
+            f,
+            "normalise_channel-ac877174-b4e5-4464-879e-9af686c9b630",
+        ),
+        "fill_hist_ptp-25e2e2da-95a2-4658-8db9-e689dd95b479": (
+            f,
+            "normalise_channel-4a422ac8-7adb-47fb-89cd-d96c43400295",
+        ),
+        "add-fec67e19-bfd2-4ac6-a785-1dc3f2250378": (
+            f,
+            "add-6b47ae48-cc0d-4a5b-9eab-85b626d8e3d9",
+            "add-4b6365f9-745d-4bd0-a618-d51841436064",
+        ),
+        "add-6b47ae48-cc0d-4a5b-9eab-85b626d8e3d9": (
+            f,
+            "fill_hist_ptp-41b37863-5cea-4bc1-a017-f2fc0e878297",
+            "fill_hist_ptp-b6fd58ec-1145-4797-b2c5-e697250e2cf4",
+        ),
+        "fill_hist_ptp-41b37863-5cea-4bc1-a017-f2fc0e878297": (
+            f,
+            "normalise_channel-4c54379d-b0b2-4c25-9b64-3196815212dc",
+        ),
+        "fill_hist_ptp-b6fd58ec-1145-4797-b2c5-e697250e2cf4": (
+            f,
+            "normalise_channel-23711edf-f989-415b-a030-2441d6e205d7",
+        ),
+        "add-4b6365f9-745d-4bd0-a618-d51841436064": (
+            f,
+            "fill_hist_ptp-289a9d23-66af-430d-a0e9-8465410a055d",
+            "fill_hist_ptp-6ee556d0-6e55-491f-bc76-533ffedd95b7",
+        ),
+        "fill_hist_ptp-289a9d23-66af-430d-a0e9-8465410a055d": (
+            f,
+            "normalise_channel-bee36443-c2f6-4b62-9705-2b277404d1c8",
+        ),
+        "fill_hist_ptp-6ee556d0-6e55-491f-bc76-533ffedd95b7": (
+            f,
+            "normalise_channel-7bb2eff7-0ed3-4e7b-87ce-3ec9e8cd9f85",
+        ),
+        "add-23d5234f-e5c4-40c2-b7ab-9d602652bd9e": (
+            f,
+            "fill_hist_ptp-c589e891-97c6-4cab-b600-7018f4eee3a0",
+            "fill_hist_ptp-78d3436c-5417-4828-b9ea-47859ccaa5da",
+        ),
+        "fill_hist_ptp-c589e891-97c6-4cab-b600-7018f4eee3a0": (
+            f,
+            "normalise_channel-a369bdf5-df4e-475c-ad0f-0eff0397d4b7",
+        ),
+        "fill_hist_ptp-78d3436c-5417-4828-b9ea-47859ccaa5da": (
+            f,
+            "normalise_channel-e4f81fc5-4639-46e5-99a4-520de6d7ac9d",
+        ),
+        "finalise-ecc61ba8-281c-45cc-9d67-9b395f193c02": (
+            f,
+            "add-c09239f2-1b9b-4d54-82c6-4d52e874ab04",
+        ),
+    }
+    dependencies, dependents = get_deps(dsk)
+    o = order(dsk)
+    parents = {deps.pop() for key, deps in dependents.items() if not dependencies[key]}
+
+    def cost(deps):
+        a, b = deps
+        return abs(o[a] - o[b])
+
+    cost_of_pairs = {key: cost(dependents[key]) for key in parents}
+    # Allow one to be bad, b/c this is hard!
+    costs = sorted(cost_of_pairs.values())[:-1]
+    assert sum(costs) <= 15
