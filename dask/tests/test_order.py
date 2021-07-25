@@ -1184,5 +1184,5 @@ def test_eager_to_compute_dependent_to_free_parent():
 
     cost_of_pairs = {key: cost(dependents[key]) for key in parents}
     # Allow one to be bad, b/c this is hard!
-    costs = sorted(cost_of_pairs.values())[:-1]
-    assert sum(costs) <= 15
+    costs = sorted(cost_of_pairs.values())
+    assert sum(costs[:-1]) <= 15 or sum(costs) <= 32
