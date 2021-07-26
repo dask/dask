@@ -1407,9 +1407,7 @@ def parse_assignment_indices(indices, shape):
                 f"boolean index: {index!r}"
             )
 
-        if (
-            isinstance(index, np.ndarray) or is_dask_collection(index)
-        ) and not index.ndim:
+        if (is_arraylike(index) or is_dask_collection(index)) and not index.ndim:
             raise NotImplementedError(
                 "dask does not yet implement assignment to a scalar "
                 f"numpy or dask array index: {index!r}"
