@@ -1957,7 +1957,7 @@ class SeriesGroupBy(_GroupBy):
             token="tail",
             func=_tail_chunk,
             aggfunc=_tail_aggregate,
-            metafunc=_tail_meta,
+            metafunc=M.tail,
             chunk_kwargs={"n": n},
             aggregate_kwargs={"n": n},
             split_every=split_every,
@@ -1970,7 +1970,7 @@ class SeriesGroupBy(_GroupBy):
             token="head",
             func=_head_chunk,
             aggfunc=_head_aggregate,
-            metafunc=_head_meta,
+            metafunc=M.head,
             chunk_kwargs={"n": n},
             aggregate_kwargs={"n": n},
             split_every=split_every,
@@ -1999,10 +1999,6 @@ def _value_counts_aggregate(series_gb):
     return pd.Series(pd.concat(to_concat, names=names))
 
 
-def _tail_meta(series_gb, **kwargs):
-    return series_gb.tail(**kwargs)
-
-
 def _tail_chunk(series_gb, **kwargs):
     keys, groups = zip(*series_gb) if len(series_gb) else ((True,), (series_gb,))
     return pd.concat(
@@ -2012,10 +2008,6 @@ def _tail_chunk(series_gb, **kwargs):
 
 def _tail_aggregate(series_gb, **kwargs):
     return series_gb.tail(**kwargs).droplevel("_tail")
-
-
-def _head_meta(series_gb, **kwargs):
-    return series_gb.head(**kwargs)
 
 
 def _head_chunk(series_gb, **kwargs):

@@ -1,5 +1,6 @@
 import collections
 import warnings
+from operator import methodcaller
 
 import numpy as np
 import pandas as pd
@@ -2423,7 +2424,9 @@ def test_groupby_with_pd_grouper():
         ddf.groupby(["key1", pd.Grouper(key="key2")])
 
 
-def test_empty_partitions_with_tail():
+@pytest.mark.parametrize("operation", ["head", "tail"])
+def test_empty_partitions_with_rows_operation(operation):
+
     df = pd.DataFrame(
         data=[
             ["a1", "b1"],
@@ -2439,35 +2442,15 @@ def test_empty_partitions_with_tail():
         columns=["A", "B"],
     )
 
-    expected = df.groupby("A")["B"].tail(1)
+    caller = methodcaller(operation, 1)
+    expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
-    actual = ddf.groupby("A")["B"].tail(1)
+    actual = caller(ddf.groupby("A")["B"])
     assert_eq(expected, actual)
 
 
-def test_empty_partitions_with_head():
-    df = pd.DataFrame(
-        data=[
-            ["a1", "b1"],
-            ["a1", None],
-            ["a1", "b1"],
-            [None, None],
-            [None, None],
-            [None, None],
-            ["a3", "b3"],
-            ["a3", "b3"],
-            ["a5", "b5"],
-        ],
-        columns=["A", "B"],
-    )
-
-    expected = df.groupby("A")["B"].head(1)
-    ddf = dd.from_pandas(df, npartitions=3)
-    actual = ddf.groupby("A")["B"].head(1)
-    assert_eq(expected, actual)
-
-
-def test_groupby_with_head():
+@pytest.mark.parametrize("operation", ["head", "tail"])
+def test_groupby_with_row_operations(operation):
     df = pd.DataFrame(
         data=[
             ["a0", "b1"],
@@ -2483,29 +2466,8 @@ def test_groupby_with_head():
         columns=["A", "B"],
     )
 
-    expected = df.groupby("A")["B"].head()
+    caller = methodcaller(operation)
+    expected = caller(df.groupby("A")["B"])
     ddf = dd.from_pandas(df, npartitions=3)
-    actual = ddf.groupby("A")["B"].head()
-    assert_eq(expected, actual)
-
-
-def test_groupby_with_tail():
-    df = pd.DataFrame(
-        data=[
-            ["a0", "b1"],
-            ["a0", "b2"],
-            ["a1", "b1"],
-            ["a3", "b3"],
-            ["a3", "b3"],
-            ["a5", "b5"],
-            ["a1", "b1"],
-            ["a1", "b1"],
-            ["a1", "b1"],
-        ],
-        columns=["A", "B"],
-    )
-
-    expected = df.groupby("A")["B"].tail()
-    ddf = dd.from_pandas(df, npartitions=3)
-    actual = ddf.groupby("A")["B"].tail()
+    actual = caller(ddf.groupby("A")["B"])
     assert_eq(expected, actual)
