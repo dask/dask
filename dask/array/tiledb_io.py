@@ -27,17 +27,14 @@ def from_tiledb(uri, attribute=None, chunks=None, storage_options=None, **kwargs
     Examples
     --------
 
-    >>> # create a tiledb array
-    >>> import tiledb, numpy as np, tempfile  # doctest: +SKIP
-    >>> uri = tempfile.NamedTemporaryFile().name  # doctest: +SKIP
-    >>> tiledb.from_numpy(uri, np.arange(0,9).reshape(3,3))  # doctest: +SKIP
-    <tiledb.libtiledb.DenseArray object at 0x...>
-    >>> # read back the array
-    >>> import dask.array as da  # doctest: +SKIP
-    >>> tdb_ar = da.from_tiledb(uri)  # doctest: +SKIP
-    >>> tdb_ar.shape  # doctest: +SKIP
+    >>> import tempfile, tiledb
+    >>> import dask.array as da, numpy as np
+    >>> uri = tempfile.NamedTemporaryFile().name
+    >>> _ = tiledb.from_numpy(uri, np.arange(0,9).reshape(3,3))  # create a tiledb array
+    >>> tdb_ar = da.from_tiledb(uri)  # read back the array
+    >>> tdb_ar.shape
     (3, 3)
-    >>> tdb_ar.mean().compute()  # doctest: +SKIP
+    >>> tdb_ar.mean().compute()
     4.0
     """
     import tiledb
@@ -111,13 +108,13 @@ def to_tiledb(
     Examples
     --------
 
-    >>> import dask.array as da, tempfile  # doctest: +SKIP
-    >>> uri = tempfile.NamedTemporaryFile().name   # doctest: +SKIP
-    >>> data = da.random.random(5,5)  # doctest: +SKIP
-    >>> da.to_tiledb(data, uri)  # doctest: +SKIP
-    >>> import tiledb  # doctest: +SKIP
-    >>> tdb_ar = tiledb.open(uri)  # doctest: +SKIP
-    >>> all(tdb_ar == data)  # doctest: +SKIP
+    >>> import dask.array as da, tempfile
+    >>> uri = tempfile.NamedTemporaryFile().name
+    >>> data = da.random.random(5,5)
+    >>> da.to_tiledb(data, uri)
+    >>> import tiledb
+    >>> tdb_ar = tiledb.open(uri)
+    >>> all(tdb_ar == data)
     True
 
     .. _chunk specification: https://docs.tiledb.io/en/stable/tutorials/tiling-dense.html
