@@ -542,7 +542,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
 
     combined = []
     if prepend is not None:
-        prepend = asarray_safe(prepend, like=a)
+        prepend = asarray_safe(prepend, like=meta_from_array(a))
         if prepend.ndim == 0:
             shape = list(a.shape)
             shape[axis] = 1
@@ -552,7 +552,7 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
     combined.append(a)
 
     if append is not None:
-        append = asarray_safe(append, like=a)
+        append = asarray_safe(append, like=meta_from_array(a))
         if append.ndim == 0:
             shape = list(a.shape)
             shape[axis] = 1
