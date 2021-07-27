@@ -540,10 +540,37 @@ def test_diff_prepend(n):
     )
 
     if n > 0:
-        # When n == 0 the result is the input array, it doesn't raise
+        # When order is 0 the result is the input array, it doesn't raise
         # an error
         with pytest.raises(ValueError):
             da.diff(a, n, prepend=np.zeros((3, 3)))
+
+
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_append(n):
+    x = np.arange(5) + 1
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, append=0), np.diff(x, n, append=0))
+    assert_eq(da.diff(a, n, append=[0]), np.diff(x, n, append=[0]))
+    assert_eq(da.diff(a, n, append=[-1, 0]), np.diff(x, n, append=[-1, 0]))
+
+    x = np.arange(16).reshape(4, 4)
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, axis=1, append=0), np.diff(x, n, axis=1, append=0))
+    assert_eq(
+        da.diff(a, n, axis=1, append=[[0], [0], [0], [0]]),
+        np.diff(x, n, axis=1, append=[[0], [0], [0], [0]]),
+    )
+    assert_eq(da.diff(a, n, axis=0, append=0), np.diff(x, n, axis=0, append=0))
+    assert_eq(
+        da.diff(a, n, axis=0, append=[[0, 0, 0, 0]]),
+        np.diff(x, n, axis=0, append=[[0, 0, 0, 0]]),
+    )
+
+    with pytest.raises(ValueError):
+        # When order is 0 the result is the input array, it doesn't raise
+        # an error
+        da.diff(a, n, append=np.zeros((3, 3)))
 
 
 @pytest.mark.parametrize("shape", [(10,), (10, 15)])
