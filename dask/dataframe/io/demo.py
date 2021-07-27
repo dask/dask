@@ -265,7 +265,7 @@ def generate_day(
     )
 
 
-@_deprecated()
+@_deprecated(use_instead="dask.datasets.timeseries for generating example DataFrames")
 def daily_stock(
     symbol,
     start,
