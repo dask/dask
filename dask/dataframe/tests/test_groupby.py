@@ -1859,13 +1859,10 @@ def test_groupby_select_column_agg(func):
     assert_eq(actual, expected)
 
 
-@pytest.mark.filterwarnings(
-    "ignore:Dropping of nuisance columns:FutureWarning"
-)  # https://github.com/dask/dask/issues/7714
 @pytest.mark.parametrize(
     "func",
     [
-        lambda x: x.std(),
+        lambda x: x.std(numeric_only=True),
         lambda x: x.groupby("x").std(),
         lambda x: x.groupby("x").var(),
         lambda x: x.groupby("x").mean(),
@@ -2248,6 +2245,7 @@ def test_groupby_dropna_pandas(dropna):
     assert_eq(dask_result, pd_result)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("dropna", [False, True, None])
 @pytest.mark.parametrize("by", ["a", "c", "d", ["a", "b"], ["a", "c"], ["a", "d"]])
 def test_groupby_dropna_cudf(dropna, by):
@@ -2349,6 +2347,7 @@ def test_groupby_split_out_multiindex(split_out, column):
     assert_eq(ddf_result, ddf_result_so1, check_index=False)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("backend", ["cudf", "pandas"])
 def test_groupby_large_ints_exception(backend):
     data_source = pytest.importorskip(backend)
@@ -2508,3 +2507,16 @@ def test_empty_partitions_with_value_counts():
     ddf = dd.from_pandas(df, npartitions=3)
     actual = ddf.groupby("A")["B"].value_counts()
     assert_eq(expected, actual)
+
+
+def test_groupby_with_pd_grouper():
+    ddf = dd.from_pandas(
+        pd.DataFrame(
+            {"key1": ["a", "b", "a"], "key2": ["c", "c", "c"], "value": [1, 2, 3]}
+        ),
+        npartitions=3,
+    )
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(pd.Grouper(key="key1"))
+    with pytest.raises(NotImplementedError):
+        ddf.groupby(["key1", pd.Grouper(key="key2")])

@@ -113,10 +113,9 @@ def test_no_overlaps():
     )
 
 
-@pytest.mark.xfail(reason="https://github.com/pydata/pandas-datareader/issues/867")
 @pytest.mark.network
 def test_daily_stock():
-    pytest.importorskip("pandas_datareader", minversion="0.8.0")
+    pytest.importorskip("pandas_datareader", minversion="0.10.0")
     df = dd.demo.daily_stock("GOOG", start="2010-01-01", stop="2010-01-30", freq="1h")
     assert isinstance(df, dd.DataFrame)
     assert 10 < df.npartitions < 31

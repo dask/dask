@@ -1,11 +1,11 @@
 import os
 import shutil
 import tempfile
-from distutils.version import LooseVersion
 
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 from dask.dataframe.optimize import optimize_dataframe_getitem
@@ -17,7 +17,7 @@ pytest.importorskip("pyarrow.orc")
 import pyarrow as pa
 
 pytestmark = pytest.mark.skipif(
-    LooseVersion(pa.__version__) == "0.10.0",
+    parse_version(pa.__version__).base_version == parse_version("0.10.0"),
     reason=(
         "PyArrow 0.10.0 release broke the ORC reader, see "
         "https://issues.apache.org/jira/browse/ARROW-3009"
@@ -86,7 +86,7 @@ def test_orc_multiple(orc_files):
 
 
 @pytest.mark.skipif(
-    LooseVersion(pa.__version__) < "4.0.0",
+    parse_version(pa.__version__) < "4.0.0",
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
 @pytest.mark.parametrize("index", [None, "i32"])
@@ -118,7 +118,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
 
 
 @pytest.mark.skipif(
-    LooseVersion(pa.__version__) < "4.0.0",
+    parse_version(pa.__version__) < "4.0.0",
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
 @pytest.mark.parametrize("split_stripes", [True, False, 2, 4])
@@ -145,7 +145,7 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    LooseVersion(pa.__version__) < "4.0.0",
+    parse_version(pa.__version__) < "4.0.0",
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
 def test_orc_roundtrip_aggregate_files_offset(tmpdir):

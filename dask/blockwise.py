@@ -113,8 +113,8 @@ class BlockwiseDepDict(BlockwiseDep):
     that the function will be passed a single input object when
     the task is executed (e.g. a single ``tuple`` or ``dict``):
 
-    >>> import pandas as pd  # doctest: +SKIP
-    >>> func = lambda x: pd.read_csv(**x)  # doctest: +SKIP
+    >>> import pandas as pd
+    >>> func = lambda x: pd.read_csv(**x)
 
     Use ``BlockwiseDepDict`` to define the input argument to
     ``func`` for each block/partition:
@@ -134,7 +134,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...             "names": ["a", "b"],
     ...         },
     ...     }
-    ... )  # doctest: +SKIP
+    ... )
 
     Construct a Blockwise Layer with ``dep`` speficied
     in the ``indices`` list:
@@ -145,7 +145,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     dsk={"collection-name": (func, '_0')},
     ...     indices=[(dep, "i")],
     ...     numblocks={},
-    ... )  # doctest: +SKIP
+    ... )
 
     See Also
     --------
@@ -659,9 +659,12 @@ class Blockwise(Layer):
         # Gather constant dependencies (for all output keys)
         const_deps = set()
         for (arg, ind) in self.indices:
-            if ind is None and isinstance(arg, str):
-                if arg in all_hlg_keys:
-                    const_deps.add(arg)
+            if ind is None:
+                try:
+                    if arg in all_hlg_keys:
+                        const_deps.add(arg)
+                except TypeError:
+                    pass  # unhashable
 
         # Get dependencies for each output block
         key_deps = {}

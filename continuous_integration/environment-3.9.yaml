@@ -5,6 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.9
+  - packaging
   - numpy
   - pandas
   # test dependencies

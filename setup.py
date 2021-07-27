@@ -13,7 +13,7 @@ extras_require = {
     "array": ["numpy >= 1.16"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.16", "pandas >= 0.25.0"],
-    "distributed": ["distributed == 2021.06.2"],
+    "distributed": ["distributed == 2021.07.1"],
     "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
     "delayed": [],  # keeping for backwards compatibility
 }
@@ -22,6 +22,7 @@ extras_require["complete"] = sorted({v for req in extras_require.values() for v 
 extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist"]
 
 install_requires = [
+    "packaging >= 20.0",
     "pyyaml",
     "cloudpickle >= 1.1.1",
     "fsspec >= 0.6.0",

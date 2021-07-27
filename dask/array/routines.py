@@ -119,12 +119,22 @@ def atleast_1d(*arys):
 
 @derived_from(np)
 def vstack(tup, allow_unknown_chunksizes=False):
+    if isinstance(tup, Array):
+        raise NotImplementedError(
+            "``vstack`` expects a sequence of arrays as the first argument"
+        )
+
     tup = tuple(atleast_2d(x) for x in tup)
     return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @derived_from(np)
 def hstack(tup, allow_unknown_chunksizes=False):
+    if isinstance(tup, Array):
+        raise NotImplementedError(
+            "``hstack`` expects a sequence of arrays as the first argument"
+        )
+
     if all(x.ndim == 1 for x in tup):
         return concatenate(
             tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes
@@ -137,6 +147,11 @@ def hstack(tup, allow_unknown_chunksizes=False):
 
 @derived_from(np)
 def dstack(tup, allow_unknown_chunksizes=False):
+    if isinstance(tup, Array):
+        raise NotImplementedError(
+            "``dstack`` expects a sequence of arrays as the first argument"
+        )
+
     tup = tuple(atleast_3d(x) for x in tup)
     return concatenate(tup, axis=2, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
@@ -977,6 +992,80 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return n, bins
 
 
+def histogram2d(x, y, bins=10, range=None, normed=None, weights=None, density=None):
+    """Blocked variant of :func:`numpy.histogram2d`.
+
+    Parameters
+    ----------
+    x : dask.array.Array
+        An array containing the `x`-coordinates of the points to be
+        histogrammed.
+    y : dask.array.Array
+        An array containing the `y`-coordinates of the points to be
+        histogrammed.
+    bins : sequence of arrays describing bin edges, int, or sequence of ints
+        The bin specification. See the `bins` argument description for
+        :py:func:`histogramdd` for a complete description of all
+        possible bin configurations (this function is a 2D specific
+        version of histogramdd).
+    range : tuple of pairs, optional.
+        The leftmost and rightmost edges of the bins along each
+        dimension when integers are passed to `bins`; of the form:
+        ((xmin, xmax), (ymin, ymax)).
+    normed : bool, optional
+        An alias for the density argument that behaves identically. To
+        avoid confusion with the broken argument in the `histogram`
+        function, `density` should be preferred.
+    weights : dask.array.Array, optional
+        An array of values weighing each sample in the input data. The
+        chunks of the weights must be identical to the chunking along
+        the 0th (row) axis of the data sample.
+    density : bool, optional
+        If False (the default) return the number of samples in each
+        bin. If True, the returned array represents the probability
+        density function at each bin.
+
+    Returns
+    -------
+    dask.array.Array
+        The values of the histogram.
+    dask.array.Array
+        The edges along the `x`-dimension.
+    dask.array.Array
+        The edges along the `y`-dimension.
+
+    See Also
+    --------
+    histogram
+    histogramdd
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.array([2, 4, 2, 4, 2, 4])
+    >>> y = da.array([2, 2, 4, 4, 2, 4])
+    >>> bins = 2
+    >>> range = ((0, 6), (0, 6))
+    >>> h, xedges, yedges = da.histogram2d(x, y, bins=bins, range=range)
+    >>> h
+    dask.array<sum-aggregate, shape=(2, 2), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
+    >>> xedges
+    dask.array<array, shape=(3,), dtype=float64, chunksize=(3,), chunktype=numpy.ndarray>
+    >>> h.compute()
+    array([[2., 1.],
+           [1., 2.]])
+    """
+    counts, edges = histogramdd(
+        (x, y),
+        bins=bins,
+        range=range,
+        normed=normed,
+        weights=weights,
+        density=density,
+    )
+    return counts, edges[0], edges[1]
+
+
 def _block_histogramdd_rect(sample, bins, range, weights):
     """Call numpy.histogramdd for a blocked/chunked calculation.
 
@@ -1099,8 +1188,8 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     range : sequence of pairs, optional
         A sequence of length D, each a (min, max) tuple giving the
         outer bin edges to be used if the edges are not given
-        explicitly in ``bins``. If defined, this argument is required
-        to have an entry for each dimension. Unlike
+        explicitly in `bins`. If defined, this argument is required to
+        have an entry for each dimension. Unlike
         :func:`numpy.histogramdd`, if `bins` does not define bin
         edges, this argument is required (this function will not
         automatically use the min and max of of the value in a given
@@ -1121,6 +1210,14 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     See Also
     --------
     histogram
+
+    Returns
+    -------
+    dask.array.Array
+        The values of the histogram.
+    list(dask.array.Array)
+        Sequence of arrays representing the bin edges along each
+        dimension.
 
     Examples
     --------
@@ -1240,7 +1337,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
                 "Input array and weights must have the same shape "
                 "and chunk structure along the first dimension."
             )
-        elif not rectangular_sample and weights.numblocks != n_chunks:
+        elif not rectangular_sample and weights.numblocks[0] != n_chunks:
             raise ValueError(
                 "Input arrays and weights must have the same shape "
                 "and chunk structure."
