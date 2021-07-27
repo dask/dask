@@ -3,7 +3,7 @@ import pandas as pd
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
-from ...utils import random_state_data
+from ...utils import _deprecated, random_state_data
 from ..core import DataFrame, tokenize
 
 __all__ = ["make_timeseries"]
@@ -265,6 +265,7 @@ def generate_day(
     )
 
 
+@_deprecated()
 def daily_stock(
     symbol,
     start,
