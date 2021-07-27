@@ -225,8 +225,7 @@ def test_diagonal():
 
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
-    reason="Requires CuPy 6.4.0+ "
-    "(with https://github.com/cupy/cupy/pull/2418)",
+    reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_tril_triu():
     A = cupy.random.randn(20, 20)
@@ -243,8 +242,7 @@ def test_tril_triu():
 
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
-    reason="Requires CuPy 6.4.0+ "
-    "(with https://github.com/cupy/cupy/pull/2418)",
+    reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_tril_triu_non_square_arrays():
     A = cupy.random.randint(0, 11, (30, 35))
@@ -343,8 +341,7 @@ def test_nearest():
 
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
-    reason="Requires CuPy 6.4.0+ "
-    "(with https://github.com/cupy/cupy/pull/2418)",
+    reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_constant():
     x = cupy.arange(64).reshape((8, 8))
@@ -360,8 +357,7 @@ def test_constant():
 
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
-    reason="Requires CuPy 6.4.0+ "
-    "(with https://github.com/cupy/cupy/pull/2418)",
+    reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_boundaries():
     x = cupy.arange(64).reshape((8, 8))
@@ -451,8 +447,7 @@ def test_random_shapes(shape):
 
 @pytest.mark.skipif(
     cupy_version < parse_version("6.1.0"),
-    reason="Requires CuPy 6.1.0+ "
-    "(with https://github.com/cupy/cupy/pull/2209)",
+    reason="Requires CuPy 6.1.0+ (with https://github.com/cupy/cupy/pull/2209)",
 )
 @pytest.mark.parametrize(
     "m,n,chunks,error_type",
@@ -828,8 +823,7 @@ def test_cupy_sparse_concatenate(axis):
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
-    reason="Requires CuPy 6.4.0+ "
-    "(with https://github.com/cupy/cupy/pull/2418)",
+    reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
 )
 def test_bincount():
     x = cupy.array([2, 1, 5, 2, 1])
