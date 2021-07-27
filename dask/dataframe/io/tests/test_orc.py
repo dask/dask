@@ -86,7 +86,7 @@ def test_orc_multiple(orc_files):
 
 
 @pytest.mark.skipif(
-    parse_version(pa.__version__) < "4.0.0",
+    parse_version(pa.__version__) < parse_version("4.0.0"),
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
 @pytest.mark.parametrize("index", [None, "i32"])
@@ -118,7 +118,7 @@ def test_orc_roundtrip(tmpdir, index, columns):
 
 
 @pytest.mark.skipif(
-    parse_version(pa.__version__) < "4.0.0",
+    parse_version(pa.__version__) < parse_version("4.0.0"),
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
 @pytest.mark.parametrize("split_stripes", [True, False, 2, 4])
@@ -145,7 +145,7 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
 
 @pytest.mark.slow
 @pytest.mark.skipif(
-    parse_version(pa.__version__) < "4.0.0",
+    parse_version(pa.__version__) < parse_version("4.0.0"),
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
 def test_orc_roundtrip_aggregate_files_offset(tmpdir):
