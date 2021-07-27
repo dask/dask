@@ -6780,8 +6780,7 @@ def maybe_shift_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        is_anchored = freq.is_anchored()
-        if is_anchored or not hasattr(freq, "delta"):
+        if freq.is_anchored() or not hasattr(freq, "delta"):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])
