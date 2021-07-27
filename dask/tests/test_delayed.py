@@ -574,6 +574,7 @@ def test_finalize_name():
     def key(s):
         if isinstance(s, tuple):
             s = s[0]
+        # Ignore _ in 'ones_like'
         return s.split("-")[0].replace("_", "")
 
     assert all(key(k).isalpha() for k in v.dask)
