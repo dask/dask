@@ -573,6 +573,11 @@ def test_diff_append(n):
         da.diff(a, n, append=np.zeros((3, 3)))
 
 
+def test_diff_negative_order():
+    with pytest.raises(ValueError):
+        da.diff(da.arange(10), -1)
+
+
 @pytest.mark.parametrize("shape", [(10,), (10, 15)])
 @pytest.mark.parametrize("to_end, to_begin", [[None, None], [0, 0], [[1, 2], [3, 4]]])
 def test_ediff1d(shape, to_end, to_begin):

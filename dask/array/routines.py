@@ -537,6 +537,8 @@ def diff(a, n=1, axis=-1, prepend=None, append=None):
 
     if n == 0:
         return a
+    if n < 0:
+        raise ValueError("order must be non-negative but got %d" % n)
 
     combined = []
     if prepend is not None:
