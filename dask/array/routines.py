@@ -35,6 +35,7 @@ from .einsumfuncs import einsum  # noqa
 from .ufunc import multiply, sqrt
 from .utils import (
     array_safe,
+    asanyarray_safe,
     asarray_safe,
     meta_from_array,
     safe_wraps,
@@ -530,10 +531,27 @@ def ptp(a, axis=None):
 
 
 @derived_from(np)
-def diff(a, n=1, axis=-1):
+def diff(a, n=1, axis=-1, prepend=None):
     a = asarray(a)
     n = int(n)
     axis = int(axis)
+
+    if n == 0:
+        return a
+
+    combined = []
+    if prepend is not None:
+        prepend = asanyarray_safe(prepend, like=a)
+        if prepend.ndim == 0:
+            shape = list(a.shape)
+            shape[axis] = 1
+            prepend = broadcast_to(prepend, tuple(shape))
+        combined.append(prepend)
+
+    combined.append(a)
+
+    if len(combined) > 1:
+        a = concatenate(combined, axis)
 
     sl_1 = a.ndim * [slice(None)]
     sl_2 = a.ndim * [slice(None)]
