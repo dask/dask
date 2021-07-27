@@ -8,7 +8,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import tm
+from dask.dataframe._compat import PANDAS_GT_110, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -2332,6 +2332,9 @@ def test_groupby_sort_true_split_out():
         M.sum(ddf.groupby("x", sort=True), split_out=2)
 
 
+@pytest.mark.skipif(
+    not PANDAS_GT_110, reason="observed only supported for newer pandas"
+)
 @pytest.mark.parametrize("known_cats", [True, False])
 @pytest.mark.parametrize("ordered_cats", [True, False])
 @pytest.mark.parametrize("groupby", ["cat_1", ["cat_1", "cat_2"]])
