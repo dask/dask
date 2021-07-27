@@ -1693,10 +1693,10 @@ def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
             )
 
     new_df = dd.read_csv(
-        "new.csv", header=None, delimiter=",", dtype=str, blocksize=None
+        new_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
     )
     old_df = dd.read_csv(
-        "old.csv", header=None, delimiter=",", dtype=str, blocksize=None
+        old_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
     )
 
     assert new_df.dask.keys() != old_df.dask.keys()
