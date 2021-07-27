@@ -567,10 +567,11 @@ def test_diff_append(n):
         np.diff(x, n, axis=0, append=[[0, 0, 0, 0]]),
     )
 
-    with pytest.raises(ValueError):
-        # When order is 0 the result is the input array, it doesn't raise
-        # an error
-        da.diff(a, n, append=np.zeros((3, 3)))
+    if n > 0:
+        with pytest.raises(ValueError):
+            # When order is 0 the result is the input array, it doesn't raise
+            # an error
+            da.diff(a, n, append=np.zeros((3, 3)))
 
 
 def test_diff_negative_order():
