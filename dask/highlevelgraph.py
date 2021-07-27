@@ -1209,7 +1209,7 @@ def to_graphviz(
 
     graph_attr["rankdir"] = rankdir
     node_attr["shape"] = "box"
-    node_attr["fontname"] = "roboto"
+    node_attr["fontname"] = "helvetica"
 
     graph_attr.update(kwargs)
     g = graphviz.Digraph(

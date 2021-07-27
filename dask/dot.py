@@ -143,7 +143,7 @@ def to_graphviz(
     edge_attr = edge_attr or {}
 
     graph_attr["rankdir"] = rankdir
-    node_attr["fontname"] = "roboto"
+    node_attr["fontname"] = "helvetica"
 
     graph_attr.update(kwargs)
     g = graphviz.Digraph(
