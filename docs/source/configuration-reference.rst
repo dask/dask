@@ -82,19 +82,10 @@ Admin
     :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
 
 
-UCX
-~~~
-
-.. dask-config-block::
-   :location: ucx
-   :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
-   :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
-
-
 RMM
 ~~~
 
 .. dask-config-block::
-    :location: rmm
+    :location: distributed.rmm
     :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
     :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
