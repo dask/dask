@@ -145,7 +145,7 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
 
 def test_orc_roundtrip_aggregate_files_offset(tmpdir):
 
-    # PyORC required to write orc files with a specific
+    # PyORC required to write orc files with specific
     # stripe sizes
     pyorc = pytest.importorskip("pyorc")
 
