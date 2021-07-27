@@ -6,8 +6,8 @@ dependencies:
   # required dependencies
   - python=3.7
   - packaging
-  - numpy=1.16
-  - pandas=0.25
+  - numpy=1.18
+  - pandas=1.0
   # test dependencies
   - pytest
   - pytest-cov
@@ -25,7 +25,7 @@ dependencies:
   # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
   - sqlalchemy<1.4.0
-  - pyarrow=0.14
+  - pyarrow=1
   - coverage
   - jsonschema
   # other -- IO

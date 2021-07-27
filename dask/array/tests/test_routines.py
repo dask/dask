@@ -10,7 +10,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
+from dask.array.utils import AxisError, assert_eq, same_keys
 
 
 def test_array():
@@ -1292,8 +1292,7 @@ def test_union1d(shape, reverse):
     result = np.union1d(dx1, dx2)
     expected = np.union1d(x1, x2)
 
-    if IS_NEP18_ACTIVE:
-        assert isinstance(result, da.Array)
+    assert isinstance(result, da.Array)
 
     assert_eq(result, expected)
 
