@@ -157,6 +157,8 @@ def to_orc(
     path,
     engine="pyarrow",
     write_index=True,
+    append=False,
+    partition_on=None,
     storage_options=None,
     compute=True,
     compute_kwargs=None,
@@ -178,6 +180,13 @@ def to_orc(
         that one; if both, it will use 'fastparquet'.
     write_index : boolean, default True
         Whether or not to write the index. Defaults to True.
+    append : boolean, default False
+        If False (default), construct data-set from scratch. If True, add new
+        file(s) to an existing data-set (if one exists).
+    partition_on : list, default None
+        Construct directory-based partitioning by splitting on these fields'
+        values. Each dask partition will result in one or more datafiles,
+        there will be no global groupby.
     storage_options : dict, default None
         Key/value pairs to be passed on to the file-system backend, if any.
     compute : bool, default True
@@ -209,8 +218,23 @@ def to_orc(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
+    # For now, raise an error if the user is appending to a
+    # partitioned dataset - We should be able to handle this
+    # in the future.
+    if append and partition_on:
+        raise ValueError(
+            "append=True is not yet supported for partitioned ORC datasets"
+        )
+
+    fs.mkdirs(path, exist_ok=True)
+    if append:
+        pass
+
     # Use i_offset and df.npartitions to define file-name list
     fs.mkdirs(path, exist_ok=True)
+    if append:
+        # Check
+        pass
     filenames = [f"part.{i}.orc" for i in range(df.npartitions)]
 
     # Construct IO graph
@@ -221,6 +245,8 @@ def to_orc(
         path,
         engine,
         write_index,
+        partition_on,
+        append,
         storage_options,
     )
     part_tasks = []
