@@ -26,6 +26,7 @@ dependencies:
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
   - sqlalchemy<1.4.0
   - pyarrow
+  - pyorc
   - coverage
   - jsonschema
   # other -- IO

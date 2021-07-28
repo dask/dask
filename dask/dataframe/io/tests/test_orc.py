@@ -143,7 +143,7 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
     assert_eq(data, df2, check_index=False)
 
 
-def test_orc_roundtrip_aggregate_files_offset(tmpdir):
+def test_orc_roundtrip_aggregate_files_offset(tmp_path):
 
     # PyORC required to write orc files with specific
     # stripe sizes
@@ -157,25 +157,25 @@ def test_orc_roundtrip_aggregate_files_offset(tmpdir):
         }
     )
 
-    path = str(tmpdir)
+    # TODO: Use pyarrow to write the files for this test
+    # once the python API exposes the stripe size.
     for i in range(0, size, size // 2):
         _df = df[i : i + size // 2]
-        with open(os.path.join(path, f"data_{i}.orc"), "wb") as f:
-            writer = pyorc.Writer(
+        with open(tmp_path / f"data_{i}.orc", "wb") as f:
+            with pyorc.Writer(
                 f,
                 "struct<num:int,text:string>",
                 struct_repr=pyorc.StructRepr.DICT,
                 stripe_size=1_000,
                 compression=pyorc.CompressionKind.NONE,
                 compression_block_size=1_000,
-            )
-            writer.writerows(_df.to_dict(orient="records"))
-            writer.close()
+            ) as writer:
+                writer.writerows(_df.to_dict(orient="records"))
 
     # Default read should give back 10 partitions. Therefore,
     # specifying split_stripes=6 & aggregate_files=True should
     # produce 2 partitions (with the first being larger than
     # the second)
-    df2 = dd.read_orc(path, split_stripes=6, aggregate_files=True)
+    df2 = dd.read_orc(tmp_path, split_stripes=6, aggregate_files=True)
     assert df2.npartitions == 2
-    assert len(df2.partitions[0].index) > 5_000
+    assert len(df2.partitions[0].index) > size / 2
