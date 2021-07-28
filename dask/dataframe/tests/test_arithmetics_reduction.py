@@ -1266,7 +1266,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df, func)(**kwargs),
             getattr(ddf, func)(**kwargs),
-            check_dtypes=func in ["mean", "max"]
+            check_dtype=func in ["mean", "max"]
             and (PANDAS_GT_120 or not PANDAS_GT_100),
         )
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
@@ -1293,8 +1293,6 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df_numerics, func)(),
             getattr(ddf_numerics, func)(),
-            check_dtypes=func in ["mean", "max"]
-            and (PANDAS_GT_120 or not PANDAS_GT_100),
             check_dtype=func in ["mean", "max"]
             and (PANDAS_GT_120 or not PANDAS_GT_100),
         )
