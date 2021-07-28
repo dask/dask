@@ -13,7 +13,7 @@ PANDAS_GT_130 = PANDAS_VERSION >= parse_version("1.3.0")
 PANDAS_GT_131 = PANDAS_VERSION >= parse_version("1.3.1")
 
 
-import pandas.testing as tm  # noqa: F401
+import pandas.testing as tm
 
 
 def assert_categorical_equal(left, right, *args, **kwargs):
