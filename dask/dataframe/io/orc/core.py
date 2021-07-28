@@ -209,7 +209,7 @@ def to_orc(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
-    # Use i_offset and df.npartitions to define file-name list
+    # Use df.npartitions to define file-name list
     fs.mkdirs(path, exist_ok=True)
     filenames = [f"part.{i}.orc" for i in range(df.npartitions)]
 
