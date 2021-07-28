@@ -1194,23 +1194,24 @@ def to_graphviz(
     data_attributes=None,
     function_attributes=None,
     rankdir="BT",
-    graph_attr={},
-    node_attr={},
+    graph_attr=None,
+    node_attr=None,
     edge_attr=None,
     **kwargs,
 ):
     from .dot import graphviz, label, name
 
-    if data_attributes is None:
-        data_attributes = {}
-    if function_attributes is None:
-        function_attributes = {}
-
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
     graph_attr = graph_attr or {}
+    node_attr = node_attr or {}
+    edge_attr = edge_attr or {}
+
     graph_attr["rankdir"] = rankdir
     node_attr["shape"] = "box"
-    graph_attr.update(kwargs)
+    node_attr["fontname"] = "helvetica"
 
+    graph_attr.update(kwargs)
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
     )
