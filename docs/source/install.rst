@@ -99,7 +99,7 @@ These optional dependencies and their minimum supported versions are listed belo
 +---------------+----------+--------------------------------------------------------------+
 |     numpy     | >=1.18   |                   Required for dask.array                    |
 +---------------+----------+--------------------------------------------------------------+
-|     pandas    | >=1.0.0  |                  Required for dask.dataframe                 |
+|     pandas    | >=1.0  |                  Required for dask.dataframe                 |
 +---------------+----------+--------------------------------------------------------------+
 |     psutil    |          |             Enables a more accurate CPU count                |
 +---------------+----------+--------------------------------------------------------------+
