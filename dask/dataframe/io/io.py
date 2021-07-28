@@ -504,13 +504,18 @@ def _df_to_bag(df, index=False, format="tuple"):
         if format == "tuple":
             return list(map(tuple, df.itertuples(index)))
         elif format == "dict":
-            tuple_to_dict = lambda x: dict(x._asdict())
-            return list(map(tuple_to_dict, df.itertuples(index)))
+            if index:
+                return [
+                    {**{"index": idx}, **values}
+                    for values, idx in zip(df.to_dict("records"), df.index)
+                ]
+            else:
+                return df.to_dict(orient="records")
     elif isinstance(df, pd.Series):
         if format == "tuple":
             return list(df.iteritems()) if index else list(df)
         elif format == "dict":
-            return df.to_dict()
+            return df.to_frame().to_dict(orient="records")
 
 
 def to_bag(df, index=False, format="tuple"):
@@ -521,9 +526,8 @@ def to_bag(df, index=False, format="tuple"):
     index : bool, optional
         If True, the elements are tuples of ``(index, value)``, otherwise
         they're just the ``value``.  Default is False.
-    format : tuple or dict,optional  default:tuple
-            returns bag of tuple or dict, based on this format
-            parameter.
+    format : {"tuple", "dict"},optional
+            Whether to return a bag of tuples or dictionaries.
 
     Examples
     --------

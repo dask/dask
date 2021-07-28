@@ -519,13 +519,26 @@ def test_to_bag():
         {"x": "d", "y": 5},
     ]
     assert ddf.to_bag(True, format="dict").compute() == [
-        {"Index": 1.0, "x": "a", "y": 2},
-        {"Index": 2.0, "x": "b", "y": 3},
-        {"Index": 3.0, "x": "c", "y": 4},
-        {"Index": 4.0, "x": "d", "y": 5},
+        {"index": 1.0, "x": "a", "y": 2},
+        {"index": 2.0, "x": "b", "y": 3},
+        {"index": 3.0, "x": "c", "y": 4},
+        {"index": 4.0, "x": "d", "y": 5},
     ]
     assert ddf.x.to_bag(True).compute() == list(a.x.iteritems())
     assert ddf.x.to_bag().compute() == list(a.x)
+
+    assert ddf.x.to_bag(True, format="dict").compute() == [
+        {"x": "a"},
+        {"x": "b"},
+        {"x": "c"},
+        {"x": "d"},
+    ]
+    assert ddf.x.to_bag(format="dict").compute() == [
+        {"x": "a"},
+        {"x": "b"},
+        {"x": "c"},
+        {"x": "d"},
+    ]
 
 
 def test_to_records():
