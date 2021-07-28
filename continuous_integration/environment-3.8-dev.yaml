@@ -26,7 +26,6 @@ dependencies:
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
   - sqlalchemy<1.4.0
   - pyarrow
-  - pyorc
   - jsonschema
   # other -- IO
   - bcolz
@@ -60,3 +59,5 @@ dependencies:
   - python-xxhash
   - mmh3
   - pip
+  - pip:
+   - pyorc
