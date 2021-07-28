@@ -8,11 +8,19 @@ from typing import List, Tuple
 import numpy as np
 from tlz import concat, interleave, sliding_window
 
+from .. import config
 from ..base import is_dask_collection, tokenize
 from ..core import flatten
 from ..delayed import Delayed, unpack_collections
 from ..highlevelgraph import HighLevelGraph
-from ..utils import apply, derived_from, funcname, is_arraylike, is_cupy_type
+from ..utils import (
+    apply,
+    derived_from,
+    funcname,
+    is_arraylike,
+    is_cupy_type,
+    parse_bytes,
+)
 from . import chunk
 from .core import (
     Array,
@@ -263,6 +271,26 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(transpose(m, axes_list), axes[1])
 
 
+def _tensordot_rechunk(array, inner_axes, limit=None):
+    """Optimize rechunking for tensordot computation."""
+    if limit is None:
+        limit = parse_bytes(config.get("array.chunk-size"))
+
+    inner_chunks = [array.shape[ax] for ax in inner_axes]
+    while limit < (np.prod(inner_chunks) * array.dtype.itemsize):
+        inner_chunks[np.argmax(inner_chunks)] = np.max(inner_chunks) // 2
+
+    optimal_chunks = []
+    for ax in range(array.ndim):
+        if ax in inner_axes:
+            idx = inner_axes.index(ax)
+            optimal_chunks.append(inner_chunks[idx])
+        else:
+            optimal_chunks.append("auto")
+
+    return array.rechunk(optimal_chunks)
+
+
 def _tensordot(a, b, axes):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
@@ -278,7 +306,7 @@ def _tensordot(a, b, axes):
 
 
 @derived_from(np)
-def tensordot(lhs, rhs, axes=2):
+def tensordot(lhs, rhs, axes=2, auto_rechunk=True):
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
     else:
@@ -310,17 +338,23 @@ def tensordot(lhs, rhs, axes=2):
         if concatenate:
             out_index.remove(left_index[l])
 
-    intermediate = blockwise(
-        _tensordot,
-        out_index,
-        lhs,
-        left_index,
-        rhs,
-        right_index,
-        dtype=dt,
-        concatenate=concatenate,
-        axes=(left_axes, right_axes),
-    )
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore")
+        if auto_rechunk is True:
+            lhs = _tensordot_rechunk(lhs, left_axes)
+            rhs = _tensordot_rechunk(rhs, right_axes)
+
+        intermediate = blockwise(
+            _tensordot,
+            out_index,
+            lhs,
+            left_index,
+            rhs,
+            right_index,
+            dtype=dt,
+            concatenate=concatenate,
+            axes=(left_axes, right_axes),
+        )
 
     if concatenate:
         return intermediate
