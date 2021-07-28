@@ -109,10 +109,61 @@ class ArrowORCEngine:
             return pa.Table.from_batches(batches).to_pandas(date_as_object=False)
 
     @classmethod
-    def write_partition(cls, df, path, fs, filename, **kwargs):
+    def write_partition(cls, df, path, fs, filename, partition_on, **kwargs):
+
         table = pa.Table.from_pandas(df)
-        with fs.open(fs.sep.join([path, filename]), "wb") as f:
-            orc.write_table(table, f)
+        if partition_on:
+            _write_partitioned(
+                table,
+                path,
+                fs,
+                filename,
+                partition_on,
+                **kwargs,
+            )
+        else:
+            with fs.open(fs.sep.join([path, filename]), "wb") as f:
+                orc.write_table(table, f, **kwargs)
+
+
+def _write_partitioned(table, root_path, fs, filename, partition_cols, **kwargs):
+    """Write table to a partitioned dataset with pyarrow"""
+    fs.mkdirs(root_path, exist_ok=True)
+
+    df = table.to_pandas(ignore_metadata=True)
+
+    partition_keys = [df[col] for col in partition_cols]
+    data_df = df.drop(partition_cols, axis="columns")
+    data_cols = df.columns.drop(partition_cols)
+    if len(data_cols) == 0:
+        raise ValueError("No data left to save outside partition columns")
+
+    subschema = table.schema
+    for col in table.schema.names:
+        if col in partition_cols:
+            subschema = subschema.remove(subschema.get_field_index(col))
+
+    for keys, subgroup in data_df.groupby(partition_keys):
+        if not isinstance(keys, tuple):
+            keys = (keys,)
+        subdir = fs.sep.join(
+            [
+                "{colname}={value}".format(colname=name, value=val)
+                for name, val in zip(partition_cols, keys)
+            ]
+        )
+        subtable = pa.Table.from_pandas(
+            subgroup,
+            nthreads=1,
+            preserve_index=False,
+            schema=subschema,
+            safe=False,
+        )
+        prefix = fs.sep.join([root_path, subdir])
+        fs.mkdirs(prefix, exist_ok=True)
+        full_path = fs.sep.join([prefix, filename])
+        with fs.open(full_path, "wb") as f:
+            orc.write_table(subtable, f, **kwargs)
 
 
 def _read_orc_stripes(fs, path, stripes, schema, columns):

@@ -7,7 +7,7 @@ from ....base import tokenize
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
-from ....utils import apply
+from ....utils import apply, natural_sort_key
 from ...core import new_dd_object
 
 
@@ -58,7 +58,7 @@ class ORCEngine:
         raise NotImplementedError()
 
     @classmethod
-    def write_partition(cls, df, path, fs, filename, **kwargs):
+    def write_partition(cls, df, path, fs, filename, partition_on, **kwargs):
         raise NotImplementedError
 
 
@@ -218,24 +218,12 @@ def to_orc(
         # Not writing index - might as well drop it
         df = df.reset_index(drop=True)
 
-    # For now, raise an error if the user is appending to a
-    # partitioned dataset - We should be able to handle this
-    # in the future.
-    if append and partition_on:
-        raise ValueError(
-            "append=True is not yet supported for partitioned ORC datasets"
-        )
-
+    # Use i_offset and df.npartitions to define file-name list.
+    # For `append=True`, we use the total number of existing files
+    # to define `i_offset`
     fs.mkdirs(path, exist_ok=True)
-    if append:
-        pass
-
-    # Use i_offset and df.npartitions to define file-name list
-    fs.mkdirs(path, exist_ok=True)
-    if append:
-        # Check
-        pass
-    filenames = [f"part.{i}.orc" for i in range(df.npartitions)]
+    i_offset = len(collect_files(path, fs)) if append else 0
+    filenames = [f"part.{i+i_offset}.orc" for i in range(df.npartitions)]
 
     # Construct IO graph
     dsk = {}
@@ -246,7 +234,7 @@ def to_orc(
         engine,
         write_index,
         partition_on,
-        append,
+        i_offset,
         storage_options,
     )
     part_tasks = []
@@ -259,6 +247,7 @@ def to_orc(
                 path,
                 fs,
                 filename,
+                partition_on,
             ],
         )
         part_tasks.append((name, d))
@@ -272,3 +261,70 @@ def to_orc(
             compute_kwargs = dict()
         out = out.compute(**compute_kwargs)
     return out
+
+
+def _is_data_file_path(path, fs, ignore_prefix=None, require_suffix=None):
+    # Check that we are not ignoring this path/dir
+    if ignore_prefix and path.startswith(ignore_prefix):
+        return False
+    # If file, check that we are allowing this suffix
+    if fs.isfile(path) and require_suffix and path.endswith(require_suffix):
+        return False
+    return True
+
+
+def collect_files(root, fs, ignore_prefix="_", require_suffix=None):
+
+    # First, check if we are dealing with a file
+    if fs.isfile(root):
+        if _is_data_file_path(
+            root,
+            fs,
+            ignore_prefix=ignore_prefix,
+            require_suffix=require_suffix,
+        ):
+            return [root]
+        return []
+
+    # Otherwise, recursively handle each item in
+    # the current `root` directory
+    all_paths = []
+    for sub in fs.ls(root):
+        all_paths += collect_files(
+            sub,
+            fs,
+            ignore_prefix=ignore_prefix,
+            require_suffix=require_suffix,
+        )
+
+    return all_paths
+
+
+def collect_partitions(file_list, root, fs, partition_sep="=", dtypes=None):
+
+    # Always sort files by `natural_sort_key` to ensure
+    # files within the same directory partition are together
+    files = sorted(file_list, key=natural_sort_key)
+
+    # Construct partitions
+    parts = []
+    root_len = len(root.split(fs.sep))
+    dtypes = dtypes or {}
+    for path in files:
+        # Strip root and file name
+        _path = path.split(fs.sep)[root_len:-1]
+        partition = []
+        for d in _path:
+            _split = d.split(partition_sep)
+            if len(_split) == 2:
+                col = _split[0]
+                partition.append(
+                    (
+                        _split[0],
+                        dtypes[col](_split[1]) if col in dtypes else _split[1],
+                    )
+                )
+        if partition:
+            parts.append(partition)
+
+    return files, parts
