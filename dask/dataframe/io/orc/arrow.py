@@ -21,8 +21,7 @@ class ArrowORCEngine(ORCEngine):
         **kwargs,
     ):
 
-        # Convert root directory to file list.
-        # TODO: Handle hive-partitioned data
+        # Generate a full file list
         hive_partitions = []
         unique_hive_partitions = {}
         if len(paths) == 1 and not fs.isfile(paths[0]):
@@ -33,6 +32,20 @@ class ArrowORCEngine(ORCEngine):
                 hive_partitions,
                 unique_hive_partitions,
             ) = collect_partitions(paths, root_dir, fs)
+
+        # Set the file-aggregation depth
+        partition_columns = list(unique_hive_partitions.keys())
+        directory_aggregation_depth = 0
+        if isinstance(aggregate_files, str):
+            try:
+                directory_aggregation_depth = (
+                    partition_columns.index(aggregate_files) + 1
+                )
+            except ValueError:
+                raise ValueError(
+                    f"{aggregate_files} is not a recognized partition column. "
+                    f"Please check the aggregate_files argument."
+                )
 
         schema = None
         parts = []
@@ -61,7 +74,11 @@ class ArrowORCEngine(ORCEngine):
                             ]
                         )
                         offset += int(split_stripes)
-                    if aggregate_files and int(split_stripes) > 1:
+                    if (
+                        aggregate_files
+                        and int(split_stripes) > 1
+                        and directory_aggregation_depth < 1
+                    ):
                         offset -= o.nstripes
                     else:
                         offset = 0
@@ -83,8 +100,11 @@ class ArrowORCEngine(ORCEngine):
                 )
 
         # Check if we can aggregate adjacent parts together
-        parts = cls._aggregate_files(aggregate_files, split_stripes, parts)
+        parts = cls._aggregate_files(
+            aggregate_files, directory_aggregation_depth, split_stripes, parts
+        )
 
+        # Create metadata
         columns = list(schema) if columns is None else columns
         index = [index] if isinstance(index, str) else index
         meta = _meta_from_dtypes(columns, schema, index, [])
@@ -100,9 +120,10 @@ class ArrowORCEngine(ORCEngine):
         return parts, schema, meta, {"partition_uniques": unique_hive_partitions}
 
     @classmethod
-    def _aggregate_files(cls, aggregate_files, split_stripes, parts):
-        # TODO: Allow aggregate_files to specify a specific hive-partition column name
-        if aggregate_files is True and int(split_stripes) > 1 and len(parts) > 1:
+    def _aggregate_files(
+        cls, aggregate_files, directory_aggregation_depth, split_stripes, parts
+    ):
+        if aggregate_files and int(split_stripes) > 1 and len(parts) > 1:
             new_parts = []
             new_part = parts[0]
             nstripes = len(new_part[0][1])
@@ -113,7 +134,8 @@ class ArrowORCEngine(ORCEngine):
                 # For partitioned data, we do not allow file aggregation between
                 # different hive partitions
                 if (next_nstripes + nstripes <= split_stripes) and (
-                    hive_parts == new_hive_parts
+                    hive_parts[:directory_aggregation_depth]
+                    == new_hive_parts[:directory_aggregation_depth]
                 ):
                     new_part.append(part[0])
                     nstripes += next_nstripes
@@ -131,22 +153,38 @@ class ArrowORCEngine(ORCEngine):
     def read_partition(
         cls, fs, parts, schema, columns, partition_uniques=None, **kwargs
     ):
-        batches = []
-        for path, stripes, hive_parts in parts:
-            batches += _read_orc_stripes(fs, path, stripes, schema, columns)
-        arrow_table = pa.Table.from_batches(batches)
+        # Create a seperate table for each directory partition.
+        # We are only creating a single pyarrow table if there
+        # are no partition columns.
+        tables = []
+        partitions = []
+        path, stripes, hive_parts = parts[0]
+        batches = _read_orc_stripes(fs, path, stripes, schema, columns)
+        for path, stripes, next_hive_parts in parts[1:]:
+            if hive_parts == next_hive_parts:
+                batches += _read_orc_stripes(fs, path, stripes, schema, columns)
+            else:
+                tables.append(pa.Table.from_batches(batches))
+                partitions.append(hive_parts)
+                batches = _read_orc_stripes(fs, path, stripes, schema, columns)
+                hive_parts = next_hive_parts
+        tables.append(pa.Table.from_batches(batches))
+        partitions.append(hive_parts)
 
-        # Add partition columns
+        # Add partition columns to each pyarrow table
         partition_uniques = partition_uniques or {}
-        for (part_name, cat) in hive_parts:
-            if part_name not in arrow_table.schema.names:
-                # We read from file paths, so the partition
-                # columns are NOT in our table yet.
-                categories = partition_uniques[part_name]
-                cat_ind = np.full(len(arrow_table), categories.index(cat), dtype="i4")
-                arr = pa.DictionaryArray.from_arrays(cat_ind, pa.array(categories))
-                arrow_table = arrow_table.append_column(part_name, arr)
+        for i, hive_parts in enumerate(partitions):
+            for (part_name, cat) in hive_parts:
+                if part_name not in tables[i].schema.names:
+                    # We read from file paths, so the partition
+                    # columns are NOT in our table yet.
+                    categories = partition_uniques[part_name]
+                    cat_ind = np.full(len(tables[i]), categories.index(cat), dtype="i4")
+                    arr = pa.DictionaryArray.from_arrays(cat_ind, pa.array(categories))
+                    tables[i] = tables[i].append_column(part_name, arr)
 
+        # Concatenate arrow tables and convert to pandas
+        arrow_table = pa.concat_tables(tables) if len(tables) > 1 else tables[0]
         if parse_version(pa.__version__) < parse_version("0.11.0"):
             return arrow_table.to_pandas()
         else:

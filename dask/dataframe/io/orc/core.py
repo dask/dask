@@ -86,11 +86,13 @@ def read_orc(
         Maximum number of ORC stripes to include in each output-DataFrame
         partition. Use False to specify a 1-to-1 mapping between files
         and partitions. Default is 1.
-    aggregate_files : bool, default False
+    aggregate_files : bool or str, default False
         Whether distinct file paths may be aggregated into the same output
         partition. A setting of True means that any two file paths may be
         aggregated into the same output partition, while False means that
-        inter-file aggregation is prohibited.
+        inter-file aggregation is prohibited. If the name of a partition
+        column is specified, any file within the same partition directory
+        (e.g. ``"/<aggregate_files>=*/"``) may be aggregated.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
 
