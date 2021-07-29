@@ -161,7 +161,7 @@ def test_orc_roundtrip_aggregate_files_offset(tmp_path):
     # once the python API exposes the stripe size.
     for i in range(0, size, size // 2):
         _df = df[i : i + size // 2]
-        with open(tmp_path / f"data_{i}.orc", "wb") as f:
+        with open(os.path.join(tmp_path, f"data_{i}.orc"), "wb") as f:
             with pyorc.Writer(
                 f,
                 "struct<num:int,text:string>",
@@ -178,4 +178,4 @@ def test_orc_roundtrip_aggregate_files_offset(tmp_path):
     # the second)
     df2 = dd.read_orc(tmp_path, split_stripes=6, aggregate_files=True)
     assert df2.npartitions == 2
-    assert len(df2.partitions[0].index) > size / 2
+    assert len(df2.partitions[0].index) > size // 2
