@@ -1802,3 +1802,71 @@ def test_setitem_errs():
     # RHS has extra leading size 1 dimensions compared to LHS
     x = cupy.arange(12).reshape((3, 4))
     dx = da.from_array(x, chunks=(2, 3))
+
+
+@pytest.mark.parametrize(
+    "shape, axis",
+    [[(10, 15, 20), 0], [(10, 15, 20), 1], [(10, 15, 20), 2], [(10, 15, 20), -1]],
+)
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff(shape, n, axis):
+    x = cupy.random.randint(0, 10, shape)
+    a = da.from_array(x, chunks=(len(shape) * (5,)))
+
+    assert_eq(da.diff(a, n, axis), cupy.diff(x, n, axis))
+
+
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_prepend(n):
+    x = cupy.arange(5) + 1
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, prepend=0), cupy.diff(x, n, prepend=0))
+    assert_eq(da.diff(a, n, prepend=[0]), cupy.diff(x, n, prepend=[0]))
+    assert_eq(da.diff(a, n, prepend=[-1, 0]), cupy.diff(x, n, prepend=[-1, 0]))
+
+    x = cupy.arange(16).reshape(4, 4)
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, axis=1, prepend=0), cupy.diff(x, n, axis=1, prepend=0))
+    assert_eq(
+        da.diff(a, n, axis=1, prepend=[[0], [0], [0], [0]]),
+        cupy.diff(x, n, axis=1, prepend=[[0], [0], [0], [0]]),
+    )
+    assert_eq(da.diff(a, n, axis=0, prepend=0), cupy.diff(x, n, axis=0, prepend=0))
+    assert_eq(
+        da.diff(a, n, axis=0, prepend=[[0, 0, 0, 0]]),
+        cupy.diff(x, n, axis=0, prepend=[[0, 0, 0, 0]]),
+    )
+
+    if n > 0:
+        # When order is 0 the result is the icupyut array, it doesn't raise
+        # an error
+        with pytest.raises(ValueError):
+            da.diff(a, n, prepend=cupy.zeros((3, 3)))
+
+
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_append(n):
+    x = cupy.arange(5) + 1
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, append=0), cupy.diff(x, n, append=0))
+    assert_eq(da.diff(a, n, append=[0]), cupy.diff(x, n, append=[0]))
+    assert_eq(da.diff(a, n, append=[-1, 0]), cupy.diff(x, n, append=[-1, 0]))
+
+    x = cupy.arange(16).reshape(4, 4)
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, axis=1, append=0), cupy.diff(x, n, axis=1, append=0))
+    assert_eq(
+        da.diff(a, n, axis=1, append=[[0], [0], [0], [0]]),
+        cupy.diff(x, n, axis=1, append=[[0], [0], [0], [0]]),
+    )
+    assert_eq(da.diff(a, n, axis=0, append=0), cupy.diff(x, n, axis=0, append=0))
+    assert_eq(
+        da.diff(a, n, axis=0, append=[[0, 0, 0, 0]]),
+        cupy.diff(x, n, axis=0, append=[[0, 0, 0, 0]]),
+    )
+
+    if n > 0:
+        with pytest.raises(ValueError):
+            # When order is 0 the result is the icupyut array, it doesn't raise
+            # an error
+            da.diff(a, n, append=cupy.zeros((3, 3)))

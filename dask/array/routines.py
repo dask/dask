@@ -523,10 +523,37 @@ def ptp(a, axis=None):
 
 
 @derived_from(np)
-def diff(a, n=1, axis=-1):
+def diff(a, n=1, axis=-1, prepend=None, append=None):
     a = asarray(a)
     n = int(n)
     axis = int(axis)
+
+    if n == 0:
+        return a
+    if n < 0:
+        raise ValueError("order must be non-negative but got %d" % n)
+
+    combined = []
+    if prepend is not None:
+        prepend = asarray_safe(prepend, like=meta_from_array(a))
+        if prepend.ndim == 0:
+            shape = list(a.shape)
+            shape[axis] = 1
+            prepend = broadcast_to(prepend, tuple(shape))
+        combined.append(prepend)
+
+    combined.append(a)
+
+    if append is not None:
+        append = asarray_safe(append, like=meta_from_array(a))
+        if append.ndim == 0:
+            shape = list(a.shape)
+            shape[axis] = 1
+            append = np.broadcast_to(append, tuple(shape))
+        combined.append(append)
+
+    if len(combined) > 1:
+        a = concatenate(combined, axis)
 
     sl_1 = a.ndim * [slice(None)]
     sl_2 = a.ndim * [slice(None)]
