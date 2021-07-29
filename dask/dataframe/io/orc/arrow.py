@@ -108,9 +108,6 @@ class ArrowORCEngine(ORCEngine):
         aggregate_files,
         directory_aggregation_depth,
     ):
-        def _new_part(path, strip_start, stripe_end, hive_part):
-            return [(path, _stripes[strip_start:stripe_end], hive_part)]
-
         def _new_stat(hive_part, stat_columns):
             return {
                 "columns": [
@@ -140,14 +137,18 @@ class ArrowORCEngine(ORCEngine):
                         raise ValueError("Incompatible schemas while parsing ORC files")
                     _stripes = list(range(o.nstripes))
                     if offset:
-                        parts.append(_new_part(path, 0, offset, hive_part))
+                        parts.append([(path, _stripes[0:offset], hive_part)])
                         if need_stat_columns:
                             stats.append(_new_stat(hive_part, need_stat_columns))
                     while offset < o.nstripes:
                         parts.append(
-                            _new_part(
-                                path, offset, offset + int(split_stripes), hive_part
-                            )
+                            [
+                                (
+                                    path,
+                                    _stripes[offset : offset + int(split_stripes)],
+                                    hive_part,
+                                )
+                            ]
                         )
                         if need_stat_columns:
                             stats.append(_new_stat(hive_part, need_stat_columns))
