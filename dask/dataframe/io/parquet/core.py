@@ -504,8 +504,8 @@ def to_parquet(
     write_metadata_file : bool, default True
         Whether to write the special "_metadata" file.
     compute : bool, default True
-        If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        If :obj:`True` (default) then the result is computed immediately. If  :obj:`False`
+        then a ``dask.dataframe.Scalar`` object is returned for future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
     schema : Schema object, dict, or {"infer", None}, default None
