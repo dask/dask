@@ -4,7 +4,6 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
 from ....base import tokenize
-from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply
@@ -192,7 +191,7 @@ def to_orc(
         Key/value pairs to be passed on to the file-system backend, if any.
     compute : bool, default True
         If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        then a ``Scalar`` object is returned for future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
 
