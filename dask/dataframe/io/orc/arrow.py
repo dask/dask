@@ -21,7 +21,8 @@ class ArrowORCEngine(ORCEngine):
         aggregate_files,
     ):
 
-        # Generate a full file list
+        # Generate a full list of files and
+        # directory partitions
         directory_partitions = []
         directory_partition_keys = {}
         if len(paths) == 1 and not fs.isfile(paths[0]):
@@ -33,7 +34,9 @@ class ArrowORCEngine(ORCEngine):
                 directory_partition_keys,
             ) = collect_partitions(paths, root_dir, fs)
 
-        # Set the file-aggregation depth
+        # Set the file-aggregation depth if the data has
+        # directory partitions, and one of these partition
+        # columns was specified by `aggregate_files`
         directory_aggregation_depth = 0
         if isinstance(aggregate_files, str):
             try:
@@ -46,7 +49,12 @@ class ArrowORCEngine(ORCEngine):
                     f"Please check the aggregate_files argument."
                 )
 
-        # Gather initial partitions and partition statistics
+        # Gather a list of partitions and corresponding
+        # statistics.  Each element in this initial partition
+        # list will only correspond to a single path. The
+        # following `_aggregate_files` method is required
+        # to coalesce multiple paths into a single
+        # `read_partition` task
         parts, statistics, schema = cls._gather_parts(
             fs,
             paths,
@@ -92,6 +100,10 @@ class ArrowORCEngine(ORCEngine):
         aggregate_files,
         directory_aggregation_depth,
     ):
+        if filters is not None:
+            raise ValueError(
+                "Filters are not currently supported by the 'pyarrow' orc engine."
+            )
         schema = None
         parts = []
         if split_stripes:
