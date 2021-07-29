@@ -1,6 +1,6 @@
 import os
-import sys
 import shutil
+import sys
 import tempfile
 
 import numpy as np
@@ -163,8 +163,8 @@ def test_orc_roundtrip_aggregate_files_offset(tmp_path):
     )
 
     # TODO: Use pyarrow to write the files for this test
-    # once the python API exposes the stripe size. Note that
-    # pyorc does not seem to work consistently for python-3.9
+    # once the python API exposes the stripe size. Note
+    # that pyorc sometimes crashes for python-3.9
     # See: https://github.com/noirello/pyorc/issues/10
     for i in range(0, size, size // 2):
         _df = df[i : i + size // 2]
