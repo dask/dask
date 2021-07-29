@@ -12,7 +12,7 @@ from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
-from ...core import DataFrame, new_dd_object
+from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
 from .utils import _sort_and_analyze_paths
 
@@ -696,9 +696,10 @@ def to_parquet(
         )
         part_tasks.append((name, d))
 
+    final_name = "metadata-" + name
     # Collect metadata and write _metadata
     if write_metadata_file:
-        dsk[name] = (
+        dsk[(final_name, 0)] = (
             apply,
             engine.write_metadata,
             [
@@ -710,10 +711,10 @@ def to_parquet(
             {"append": append, "compression": compression},
         )
     else:
-        dsk[name] = (lambda x: None, part_tasks)
+        dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Delayed(name, graph)
+    out = Scalar(graph, final_name, "")
 
     if compute:
         if compute_kwargs is None:
