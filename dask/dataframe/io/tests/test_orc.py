@@ -1,5 +1,6 @@
 import os
 import shutil
+import sys
 import tempfile
 
 import numpy as np
@@ -143,6 +144,10 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
     assert_eq(data, df2, check_index=False)
 
 
+@pytest.mark.skipif(
+    sys.version_info[:2] > (3, 8),
+    reason=("PyORC sometimes crashes for python-3.9"),
+)
 def test_orc_roundtrip_aggregate_files_offset(tmp_path):
 
     # PyORC required to write orc files with specific
@@ -158,7 +163,9 @@ def test_orc_roundtrip_aggregate_files_offset(tmp_path):
     )
 
     # TODO: Use pyarrow to write the files for this test
-    # once the python API exposes the stripe size.
+    # once the python API exposes the stripe size. Note
+    # that pyorc sometimes crashes for python-3.9
+    # See: https://github.com/noirello/pyorc/issues/10
     for i in range(0, size, size // 2):
         _df = df[i : i + size // 2]
         with open(os.path.join(tmp_path, f"data_{i}.orc"), "wb") as f:

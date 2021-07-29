@@ -63,6 +63,7 @@ def read_orc(
     engine="pyarrow",
     columns=None,
     index=None,
+    filters=None,
     split_stripes=1,
     aggregate_files=None,
     storage_options=None,
@@ -80,6 +81,9 @@ def read_orc(
         Columns to load. If None, loads all.
     index: str
         Column name to set as index.
+    filters : Any, default None
+        Passed through to the `ORCEngine.read_metadata`. Filtering is
+        not currently supported by the default "pyarrow" engine.
     split_stripes: int or False
         Maximum number of ORC stripes to include in each output-DataFrame
         partition. Use False to specify a 1-to-1 mapping between files
@@ -122,6 +126,7 @@ def read_orc(
         paths,
         columns,
         index,
+        filters,
         split_stripes,
         aggregate_files,
     )
@@ -129,7 +134,13 @@ def read_orc(
     # Construct and return a Blockwise layer
     label = "read-orc-"
     output_name = label + tokenize(
-        fs_token, path, columns, index, split_stripes, aggregate_files
+        fs_token,
+        path,
+        columns,
+        index,
+        split_stripes,
+        aggregate_files,
+        filters,
     )
     layer = DataFrameIOLayer(
         output_name,
