@@ -16,29 +16,29 @@ class ArrowORCEngine(ORCEngine):
         paths,
         columns,
         index,
+        filters,
         split_stripes,
         aggregate_files,
     ):
 
         # Generate a full file list
-        hive_partitions = []
-        unique_hive_partitions = {}
+        directory_partitions = []
+        directory_partition_keys = {}
         if len(paths) == 1 and not fs.isfile(paths[0]):
             root_dir = paths[0]
             paths = collect_files(root_dir, fs)
             (
                 paths,
-                hive_partitions,
-                unique_hive_partitions,
+                directory_partitions,
+                directory_partition_keys,
             ) = collect_partitions(paths, root_dir, fs)
 
         # Set the file-aggregation depth
-        partition_columns = list(unique_hive_partitions.keys())
         directory_aggregation_depth = 0
         if isinstance(aggregate_files, str):
             try:
                 directory_aggregation_depth = (
-                    partition_columns.index(aggregate_files) + 1
+                    list(directory_partition_keys).index(aggregate_files) + 1
                 )
             except ValueError:
                 raise ValueError(
@@ -46,13 +46,58 @@ class ArrowORCEngine(ORCEngine):
                     f"Please check the aggregate_files argument."
                 )
 
+        # Gather initial partitions and partition statistics
+        parts, statistics, schema = cls._gather_parts(
+            fs,
+            paths,
+            columns,
+            filters,
+            split_stripes,
+            directory_partitions,
+            aggregate_files,
+            directory_aggregation_depth,
+        )
+
+        # Aggregate adjacent partitions together
+        # when possible/desired
+        parts = cls._aggregate_files(
+            aggregate_files,
+            directory_aggregation_depth,
+            split_stripes,
+            parts,
+            statistics,
+        )
+
+        # Create metadata
+        meta = cls._create_meta(columns, schema, index, directory_partition_keys)
+
+        # Define common kwargs
+        common_kwargs = {
+            "schema": schema,
+            "partition_uniques": directory_partition_keys,
+            "filters": filters,
+        }
+
+        return parts, meta, common_kwargs
+
+    @classmethod
+    def _gather_parts(
+        cls,
+        fs,
+        paths,
+        columns,
+        filters,
+        split_stripes,
+        directory_partitions,
+        aggregate_files,
+        directory_aggregation_depth,
+    ):
         schema = None
         parts = []
-
         if split_stripes:
             offset = 0
             for i, path in enumerate(paths):
-                hive_part = hive_partitions[i] if hive_partitions else []
+                hive_part = directory_partitions[i] if directory_partitions else []
                 with fs.open(path, "rb") as f:
                     o = orc.ORCFile(f)
                     if schema is None:
@@ -83,7 +128,7 @@ class ArrowORCEngine(ORCEngine):
                         offset = 0
         else:
             for i, path in enumerate(paths):
-                hive_part = hive_partitions[i] if hive_partitions else []
+                hive_part = directory_partitions[i] if directory_partitions else []
                 if schema is None:
                     with fs.open(paths[0], "rb") as f:
                         o = orc.ORCFile(f)
@@ -98,33 +143,32 @@ class ArrowORCEngine(ORCEngine):
                     "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
                 )
 
-        # Check if we can aggregate adjacent parts together
-        parts = cls._aggregate_files(
-            aggregate_files, directory_aggregation_depth, split_stripes, parts
-        )
+        return parts, [], schema
 
-        # Create metadata
+    @classmethod
+    def _create_meta(cls, columns, schema, index, directory_partition_keys):
         columns = list(schema) if columns is None else columns
         index = [index] if isinstance(index, str) else index
         meta = _meta_from_dtypes(columns, schema, index, [])
 
         # Deal with hive-partitioned data
-        for column, uniques in unique_hive_partitions.items():
+        for column, uniques in directory_partition_keys.items():
             if column not in meta.columns:
                 meta[column] = pd.Series(
                     pd.Categorical(categories=uniques, values=[]),
                     index=meta.index,
                 )
 
-        return (
-            parts,
-            meta,
-            {"schema": schema, "partition_uniques": unique_hive_partitions},
-        )
+        return meta
 
     @classmethod
     def _aggregate_files(
-        cls, aggregate_files, directory_aggregation_depth, split_stripes, parts
+        cls,
+        aggregate_files,
+        directory_aggregation_depth,
+        split_stripes,
+        parts,
+        statistics,
     ):
         if aggregate_files and int(split_stripes) > 1 and len(parts) > 1:
             new_parts = []
@@ -158,6 +202,7 @@ class ArrowORCEngine(ORCEngine):
         fs,
         parts,
         columns,
+        filters=None,
         schema=None,
         partition_uniques=None,
     ):

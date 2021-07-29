@@ -7,7 +7,17 @@ class ORCEngine:
     """The API necessary to provide a new ORC reader/writer"""
 
     @classmethod
-    def read_metadata(cls, fs, paths, columns, index, split_stripes, **kwargs):
+    def read_metadata(
+        cls,
+        fs,
+        paths,
+        columns,
+        index,
+        filters,
+        split_stripes,
+        aggregate_files,
+        **kwargs
+    ):
         raise NotImplementedError()
 
     @classmethod
