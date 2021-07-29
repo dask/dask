@@ -191,7 +191,7 @@ def to_orc(
         Key/value pairs to be passed on to the file-system backend, if any.
     compute : bool, default True
         If True (default) then the result is computed immediately. If False
-        then a ``Scalar`` object is returned for future computation.
+        then a ``dask.dataframe.Scalar`` object is returned for future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
 

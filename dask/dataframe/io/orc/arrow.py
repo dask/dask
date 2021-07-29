@@ -4,6 +4,8 @@ import pyarrow as pa
 import pyarrow.orc as orc
 from packaging.version import parse as parse_version
 
+from ..parquet.core import apply_filters
+from ..parquet.utils import _flatten_filters
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from .utils import ORCEngine, collect_files, collect_partitions
 
@@ -55,7 +57,6 @@ class ArrowORCEngine(ORCEngine):
         # following `_aggregate_files` method is required
         # to coalesce multiple paths into a single
         # `read_partition` task
-        filters = cls._check_filters(filters)
         parts, statistics, schema = cls._gather_parts(
             fs,
             paths,
@@ -63,9 +64,14 @@ class ArrowORCEngine(ORCEngine):
             filters,
             split_stripes,
             directory_partitions,
+            directory_partition_keys,
             aggregate_files,
             directory_aggregation_depth,
         )
+
+        # Apply filters if applicable
+        if statistics and filters:
+            parts, statistics = apply_filters(parts, statistics, filters)
 
         # Aggregate adjacent partitions together
         # when possible/desired
@@ -98,11 +104,30 @@ class ArrowORCEngine(ORCEngine):
         filters,
         split_stripes,
         directory_partitions,
+        directory_partition_keys,
         aggregate_files,
         directory_aggregation_depth,
     ):
+        def _new_part(path, strip_start, stripe_end, hive_part):
+            return [(path, _stripes[strip_start:stripe_end], hive_part)]
+
+        def _new_stat(hive_part, stat_columns):
+            return {
+                "columns": [
+                    {"name": key, "min": val, "max": val}
+                    for (key, val) in hive_part
+                    if key in stat_columns
+                ]
+            }
+
+        # Check if filters contain
+        need_stat_columns = [
+            col for col in _flatten_filters(filters) if col in directory_partition_keys
+        ]
+
         schema = None
         parts = []
+        stats = []
         if split_stripes:
             offset = 0
             for i, path in enumerate(paths):
@@ -115,17 +140,17 @@ class ArrowORCEngine(ORCEngine):
                         raise ValueError("Incompatible schemas while parsing ORC files")
                     _stripes = list(range(o.nstripes))
                     if offset:
-                        parts.append([(path, _stripes[0:offset], hive_part)])
+                        parts.append(_new_part(path, 0, offset, hive_part))
+                        if need_stat_columns:
+                            stats.append(_new_stat(hive_part, need_stat_columns))
                     while offset < o.nstripes:
                         parts.append(
-                            [
-                                (
-                                    path,
-                                    _stripes[offset : offset + int(split_stripes)],
-                                    hive_part,
-                                )
-                            ]
+                            _new_part(
+                                path, offset, offset + int(split_stripes), hive_part
+                            )
                         )
+                        if need_stat_columns:
+                            stats.append(_new_stat(hive_part, need_stat_columns))
                         offset += int(split_stripes)
                     if (
                         aggregate_files
@@ -143,6 +168,8 @@ class ArrowORCEngine(ORCEngine):
                         o = orc.ORCFile(f)
                         schema = o.schema
                 parts.append([(path, None, hive_part)])
+                if need_stat_columns:
+                    stats.append(_new_stat(hive_part, need_stat_columns))
 
         schema = _get_pyarrow_dtypes(schema, categories=None)
         if columns is not None:
@@ -152,17 +179,7 @@ class ArrowORCEngine(ORCEngine):
                     "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
                 )
 
-        return parts, [], schema
-
-    @classmethod
-    def _check_filters(cls, filters):
-        if filters is not None:
-            raise ValueError(
-                "Filters are not currently supported by the 'pyarrow' orc engine."
-            )
-        # Subclasses my override this method to check that
-        # the provided filters are in a desired/supported format
-        return filters
+        return parts, stats, schema
 
     @classmethod
     def _create_meta(cls, columns, schema, index, directory_partition_keys):
