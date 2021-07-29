@@ -55,6 +55,7 @@ class ArrowORCEngine(ORCEngine):
         # following `_aggregate_files` method is required
         # to coalesce multiple paths into a single
         # `read_partition` task
+        filters = cls._check_filters(filters)
         parts, statistics, schema = cls._gather_parts(
             fs,
             paths,
@@ -100,10 +101,6 @@ class ArrowORCEngine(ORCEngine):
         aggregate_files,
         directory_aggregation_depth,
     ):
-        if filters is not None:
-            raise ValueError(
-                "Filters are not currently supported by the 'pyarrow' orc engine."
-            )
         schema = None
         parts = []
         if split_stripes:
@@ -156,6 +153,16 @@ class ArrowORCEngine(ORCEngine):
                 )
 
         return parts, [], schema
+
+    @classmethod
+    def _check_filters(cls, filters):
+        if filters is not None:
+            raise ValueError(
+                "Filters are not currently supported by the 'pyarrow' orc engine."
+            )
+        # Subclasses my override this method to check that
+        # the provided filters are in a desired/supported format
+        return filters
 
     @classmethod
     def _create_meta(cls, columns, schema, index, directory_partition_keys):
