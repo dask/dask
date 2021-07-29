@@ -18,10 +18,9 @@ class ORCFunctionWrapper:
     Reads ORC data from disk to produce a partition.
     """
 
-    def __init__(self, fs, columns, schema, engine, index, common_kwargs=None):
+    def __init__(self, fs, columns, engine, index, common_kwargs=None):
         self.fs = fs
         self.columns = columns
-        self.schema = schema
         self.engine = engine
         self.index = index
         self.common_kwargs = common_kwargs or {}
@@ -40,7 +39,6 @@ class ORCFunctionWrapper:
         _df = self.engine.read_partition(
             self.fs,
             parts,
-            self.schema,
             self.columns,
             **self.common_kwargs,
         )
@@ -117,8 +115,9 @@ def read_orc(
 
     # Let backend engine generate a list of parts
     # from the ORC metadata.  The backend should also
-    # return the schema and DataFrame-collection metadata
-    parts, schema, meta, common_kwargs = engine.read_metadata(
+    # return the DataFrame-collection metadata and
+    # a dictionary of any other `common_kwargs` info
+    parts, meta, common_kwargs = engine.read_metadata(
         fs,
         paths,
         columns,
@@ -129,14 +128,14 @@ def read_orc(
 
     # Construct and return a Blockwise layer
     label = "read-orc-"
-    output_name = label + tokenize(fs_token, path, columns)
+    output_name = label + tokenize(
+        fs_token, path, columns, index, split_stripes, aggregate_files
+    )
     layer = DataFrameIOLayer(
         output_name,
         columns,
         parts,
-        ORCFunctionWrapper(
-            fs, columns, schema, engine, index, common_kwargs=common_kwargs
-        ),
+        ORCFunctionWrapper(fs, columns, engine, index, common_kwargs=common_kwargs),
         label=label,
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})

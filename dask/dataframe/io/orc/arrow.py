@@ -18,7 +18,6 @@ class ArrowORCEngine(ORCEngine):
         index,
         split_stripes,
         aggregate_files,
-        **kwargs,
     ):
 
         # Generate a full file list
@@ -117,7 +116,11 @@ class ArrowORCEngine(ORCEngine):
                     index=meta.index,
                 )
 
-        return parts, schema, meta, {"partition_uniques": unique_hive_partitions}
+        return (
+            parts,
+            meta,
+            {"schema": schema, "partition_uniques": unique_hive_partitions},
+        )
 
     @classmethod
     def _aggregate_files(
@@ -151,7 +154,12 @@ class ArrowORCEngine(ORCEngine):
 
     @classmethod
     def read_partition(
-        cls, fs, parts, schema, columns, partition_uniques=None, **kwargs
+        cls,
+        fs,
+        parts,
+        columns,
+        schema=None,
+        partition_uniques=None,
     ):
         # Create a seperate table for each directory partition.
         # We are only creating a single pyarrow table if there
