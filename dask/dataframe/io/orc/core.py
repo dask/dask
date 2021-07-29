@@ -8,7 +8,7 @@ from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply
-from ...core import new_dd_object
+from ...core import Scalar, new_dd_object
 from .utils import ORCEngine, collect_files
 
 
@@ -252,9 +252,10 @@ def to_orc(
             ],
         )
         part_tasks.append((name, d))
-    dsk[name] = (lambda x: None, part_tasks)
+    final_name = "final-" + name
+    dsk[(final_name, 0)] = (lambda x: None, part_tasks)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Delayed(name, graph)
+    out = Scalar(graph, final_name, "")
 
     # Compute or return future
     if compute:
