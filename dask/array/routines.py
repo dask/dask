@@ -363,13 +363,13 @@ def tensordot(lhs, rhs, axes=2, rechunk=True):
 
 
 @derived_from(np)
-def dot(a, b):
-    return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)))
+def dot(a, b, rechunk=True):
+    return tensordot(a, b, axes=((a.ndim - 1,), (b.ndim - 2,)), rechunk=rechunk)
 
 
 @derived_from(np)
-def vdot(a, b):
-    return dot(a.conj().ravel(), b.ravel())
+def vdot(a, b, rechunk=True):
+    return dot(a.conj().ravel(), b.ravel(), rechunk=rechunk)
 
 
 def _matmul(a, b):
