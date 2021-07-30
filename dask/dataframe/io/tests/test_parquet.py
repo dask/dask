@@ -3012,7 +3012,10 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
         dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
     assert "out of bounds" in str(e.value)
 
-    from dask.dataframe.io.parquet.arrow import ArrowEngine
+    if pa_version >= parse_version("5.0.0"):
+        from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as ArrowEngine
+    else:
+        from dask.dataframe.io.parquet.arrow import ArrowEngine
 
     class ArrowEngineWithTimestampClamp(ArrowEngine):
         @classmethod
