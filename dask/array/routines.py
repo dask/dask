@@ -306,7 +306,7 @@ def _tensordot(a, b, axes):
 
 
 @derived_from(np)
-def tensordot(lhs, rhs, axes=2, auto_rechunk=True):
+def tensordot(lhs, rhs, axes=2, rechunk=True):
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
     else:
@@ -340,7 +340,7 @@ def tensordot(lhs, rhs, axes=2, auto_rechunk=True):
 
     with warnings.catch_warnings():
         warnings.simplefilter("ignore")
-        if auto_rechunk is True:
+        if rechunk is True:
             lhs = _tensordot_rechunk(lhs, left_axes)
             rhs = _tensordot_rechunk(rhs, right_axes)
 
