@@ -292,6 +292,7 @@ def text_blocks_to_pandas(
     specified_dtypes=None,
     path=None,
     blocksize=None,
+    urlpath=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -379,7 +380,7 @@ def text_blocks_to_pandas(
 
     # Create Blockwise layer
     label = "read-csv-"
-    name = label + tokenize(reader, columns, enforce, head, blocksize)
+    name = label + tokenize(reader, urlpath, columns, enforce, head, blocksize)
     layer = DataFrameIOLayer(
         name,
         columns,
@@ -616,6 +617,7 @@ def read_pandas(
         specified_dtypes=specified_dtypes,
         path=path,
         blocksize=blocksize,
+        urlpath=urlpath,
     )
 
 

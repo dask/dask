@@ -62,7 +62,7 @@ Diagnostic Web Servers
 ----------------------
 
 Additionally, Dask schedulers and workers host interactive diagnostic web
-servers using `Bokeh <https://bokeh.pydata.org>`_.  These are optional, but
+servers using `Bokeh <https://docs.bokeh.org>`_.  These are optional, but
 generally useful to users.  The diagnostic server on the scheduler is
 particularly valuable, and is served on port ``8787`` by default (configurable
 with the ``--dashboard-address`` keyword).

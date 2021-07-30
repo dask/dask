@@ -1671,6 +1671,40 @@ def test_csv_parse_fail(tmpdir):
     assert_eq(df, expected)
 
 
+def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
+    # https://github.com/dask/dask/issues/7904
+    import random
+    from shutil import copyfile
+
+    old_csv_path = os.path.join(str(tmpdir), "old.csv")
+    new_csv_path = os.path.join(str(tmpdir), "new_csv")
+
+    # Create random CSV
+    with open(old_csv_path, "w") as f:
+        for _ in range(10):
+            f.write(
+                f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"
+            )
+
+    copyfile(old_csv_path, new_csv_path)
+
+    # Add three new rows
+    with open(new_csv_path, "a") as f:
+        for _ in range(3):
+            f.write(
+                f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"
+            )
+
+    new_df = dd.read_csv(
+        new_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
+    )
+    old_df = dd.read_csv(
+        old_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
+    )
+
+    assert new_df.dask.keys() != old_df.dask.keys()
+
+
 @pytest.mark.parametrize(
     "from_f,to_f",
     [
@@ -1680,7 +1714,8 @@ def test_csv_parse_fail(tmpdir):
     ],
 )
 def test_reader_signature(from_f, to_f):
-    default_params = set(signature(make_reader(None, "", "")).parameters.keys())
+    default_params = set(
+        signature(make_reader(None, "", "")).parameters.keys())
     params = set(signature(from_f).parameters.keys())
     original_params = set(signature(to_f).parameters.keys())
     # signature includes default parameters

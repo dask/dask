@@ -1235,6 +1235,71 @@ def test_reductions_frame_dtypes():
     assert_eq(df_numerics.var(), ddf_numerics.var())
 
 
+def test_reductions_frame_dtypes_numeric_only():
+    df = pd.DataFrame(
+        {
+            "int": [1, 2, 3, 4, 5, 6, 7, 8],
+            "float": [1.0, 2.0, 3.0, 4.0, np.nan, 6.0, 7.0, 8.0],
+            "dt": [pd.NaT] + [datetime(2011, i, 1) for i in range(1, 8)],
+            "str": list("abcdefgh"),
+            "timedelta": pd.to_timedelta([1, 2, 3, 4, 5, 6, 7, np.nan]),
+            "bool": [True, False] * 4,
+        }
+    )
+
+    ddf = dd.from_pandas(df, 3)
+    kwargs = {"numeric_only": True}
+    funcs = [
+        "sum",
+        "prod",
+        "product",
+        "min",
+        "max",
+        "mean",
+        "var",
+        "std",
+        "count",
+        "sem",
+    ]
+
+    for func in funcs:
+        assert_eq(
+            getattr(df, func)(**kwargs),
+            getattr(ddf, func)(**kwargs),
+            check_dtypes=func in ["mean", "max"]
+            and (PANDAS_GT_120 or not PANDAS_GT_100),
+        )
+        with pytest.raises(NotImplementedError, match="'numeric_only=False"):
+            getattr(ddf, func)(numeric_only=False)
+
+    assert_eq(df.sem(ddof=0, **kwargs), ddf.sem(ddof=0, **kwargs))
+    assert_eq(df.std(ddof=0, **kwargs), ddf.std(ddof=0, **kwargs))
+    assert_eq(df.var(ddof=0, **kwargs), ddf.var(ddof=0, **kwargs))
+    assert_eq(df.var(skipna=False, **kwargs), ddf.var(skipna=False, **kwargs))
+    assert_eq(
+        df.var(skipna=False, ddof=0, **kwargs), ddf.var(skipna=False, ddof=0, **kwargs)
+    )
+
+    # ------ only include numerics columns ------ #
+    assert_eq(df._get_numeric_data(), ddf._get_numeric_data())
+
+    df_numerics = df[["int", "float", "bool"]]
+    ddf_numerics = ddf[["int", "float", "bool"]]
+
+    assert_eq(df_numerics, ddf._get_numeric_data())
+    assert ddf_numerics._get_numeric_data().dask == ddf_numerics.dask
+
+    for func in funcs:
+        assert_eq(
+            getattr(df_numerics, func)(),
+            getattr(ddf_numerics, func)(),
+            check_dtypes=func in ["mean", "max"]
+            and (PANDAS_GT_120 or not PANDAS_GT_100),
+            check_dtype=func in ["mean", "max"]
+            and (PANDAS_GT_120 or not PANDAS_GT_100),
+        )
+
+
 @pytest.mark.parametrize("split_every", [False, 2])
 def test_reductions_frame_nan(split_every):
     df = pd.DataFrame(
