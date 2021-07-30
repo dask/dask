@@ -711,6 +711,11 @@ def to_parquet(
             {"append": append, "compression": compression},
         )
     else:
+        if compute:
+            import dask
+
+            dask.compute(*part_tasks, **{compute_kwargs or {}})
+            return
         dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])

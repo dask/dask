@@ -923,7 +923,9 @@ def to_csv(
         if scheduler is not None and compute_kwargs.get("scheduler") is None:
             compute_kwargs["scheduler"] = scheduler
 
-        delayed(values).compute(**compute_kwargs)
+        import dask
+
+        dask.compute(*values, **compute_kwargs)
         return [f.path for f in files]
     else:
         return values
