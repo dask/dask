@@ -2325,26 +2325,10 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
 
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
     dataset = {"validate_schema": False}
-    engine_use = engine
-    # if schema != "infer" and engine.startswith("pyarrow"):
-    #    engine_use = "pyarrow-legacy"
-    ddf2.to_parquet(
-        tmp_path, engine=engine_use, write_metadata_file=False, schema=schema
-    )
-    ddf_read = dd.read_parquet(tmp_path, engine=engine_use, dataset=dataset)
+    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
+    ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset=dataset)
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
-
-    # # Can force schema validation on each partition in pyarrow
-    # if engine.startswith("pyarrow") and schema is None:
-    #     dataset = {"validate_schema": True}
-    #     engine_use = engine
-    #     if schema != "infer":
-    #         engine_use = "pyarrow-legacy"
-    #     # The schema mismatch should raise an error if the
-    #     # dataset was written with `schema=None` (no inference)
-    #     with pytest.raises(ValueError):
-    #         ddf_read = dd.read_parquet(tmp_path, dataset=dataset, engine=engine_use)
 
 
 @PYARROW_MARK
