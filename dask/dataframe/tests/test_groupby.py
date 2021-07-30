@@ -8,7 +8,7 @@ import pytest
 import dask
 import dask.dataframe as dd
 from dask.dataframe import _compat
-from dask.dataframe._compat import PANDAS_GT_100, tm
+from dask.dataframe._compat import PANDAS_GT_110, tm
 from dask.dataframe.utils import assert_dask_graph, assert_eq, assert_max_deps
 from dask.utils import M
 
@@ -926,106 +926,6 @@ def test_groupby_normalize_index():
 
     assert d.groupby([d["a"], d["b"]]).index == ["a", "b"]
     assert d.groupby([d["a"], "b"]).index == ["a", "b"]
-
-
-@pytest.mark.parametrize(
-    "spec",
-    [
-        {"b": {"c": "mean"}, "c": {"a": "max", "b": "min"}},
-        {"b": "mean", "c": ["min", "max"]},
-        {"b": np.sum, "c": ["min", np.max, np.std, np.var]},
-        [
-            "sum",
-            "mean",
-            "min",
-            "max",
-            "count",
-            "size",
-            "std",
-            "var",
-            "first",
-            "last",
-            "prod",
-        ],
-        "var",
-        {"b": "mean", "c": "first", "d": "last", "a": ["first", "last"]},
-        {"b": {"c": "mean"}, "c": {"a": "first", "b": "last"}},
-    ],
-)
-@pytest.mark.parametrize("split_every", [False, None])
-@pytest.mark.parametrize(
-    "grouper",
-    [
-        lambda df: "a",
-        lambda df: ["a", "d"],
-        lambda df: [df["a"], df["d"]],
-        lambda df: df["a"],
-        lambda df: df["a"] > 2,
-    ],
-)
-def test_aggregate__examples(spec, split_every, grouper):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10,
-        },
-        columns=["c", "b", "a", "d"],
-    )
-    ddf = dd.from_pandas(pdf, npartitions=10)
-
-    # Warning from pandas deprecation .agg(dict[dict])
-    # it's from pandas, so no reason to assert the deprecation warning,
-    # but we should still test it for now
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        with pytest.warns(None):
-            assert_eq(
-                pdf.groupby(grouper(pdf)).agg(spec),
-                ddf.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-            )
-
-
-@pytest.mark.parametrize(
-    "spec",
-    [
-        {"b": "sum", "c": "min", "d": "max"},
-        ["sum"],
-        ["sum", "mean", "min", "max", "count", "size", "std", "var", "first", "last"],
-        "sum",
-        "size",
-    ],
-)
-@pytest.mark.parametrize("split_every", [False, None])
-@pytest.mark.parametrize(
-    "grouper",
-    [lambda df: [df["a"], df["d"]], lambda df: df["a"], lambda df: df["a"] > 2],
-)
-def test_series_aggregate__examples(spec, split_every, grouper):
-    pdf = pd.DataFrame(
-        {
-            "a": [1, 2, 3, 1, 1, 2, 4, 3, 7] * 10,
-            "b": [4, 2, 7, 3, 3, 1, 1, 1, 2] * 10,
-            "c": [0, 1, 2, 3, 4, 5, 6, 7, 8] * 10,
-            "d": [3, 2, 1, 3, 2, 1, 2, 6, 4] * 10,
-        },
-        columns=["c", "b", "a", "d"],
-    )
-    ps = pdf["c"]
-
-    ddf = dd.from_pandas(pdf, npartitions=10)
-    ds = ddf["c"]
-    # Warning from pandas deprecation .agg(dict[dict])
-    # it's from pandas, so no reason to assert the deprecation warning,
-    # but we should still test it for now
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        with pytest.warns(None):
-            assert_eq(
-                ps.groupby(grouper(pdf)).agg(spec),
-                ds.groupby(grouper(ddf)).agg(spec, split_every=split_every),
-            )
 
 
 def test_aggregate__single_element_groups(agg_func):
@@ -2199,16 +2099,9 @@ def test_groupby_transform_ufunc_partitioning(npartitions, indexed):
             lambda grp: grp.agg("mean"),
         ),
         (lambda df: df.groupby(["category_1", "category_2"]), lambda grp: grp.mean()),
-        pytest.param(
+        (
             lambda df: df.groupby(["category_1", "category_2"]),
             lambda grp: grp.agg("mean"),
-            marks=pytest.mark.xfail(
-                not dask.dataframe.utils.PANDAS_GT_100,
-                reason=(
-                    "Should work starting from pandas 1.0.0: "
-                    "https://github.com/dask/dask/pull/5423"
-                ),
-            ),
         ),
     ],
 )
@@ -2440,7 +2333,7 @@ def test_groupby_sort_true_split_out():
 
 
 @pytest.mark.skipif(
-    not dd._compat.PANDAS_GT_100, reason="observed only supported for newer pandas"
+    not PANDAS_GT_110, reason="observed only supported for newer pandas"
 )
 @pytest.mark.parametrize("known_cats", [True, False])
 @pytest.mark.parametrize("ordered_cats", [True, False])

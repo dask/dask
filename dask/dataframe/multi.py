@@ -68,7 +68,6 @@ from ..highlevelgraph import HighLevelGraph
 from ..layers import BroadcastJoinLayer
 from ..utils import M, apply
 from . import methods
-from ._compat import PANDAS_GT_100
 from .core import (
     DataFrame,
     Index,
@@ -241,7 +240,7 @@ def merge_chunk(lhs, *args, **kwargs):
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
 
-    if categorical_columns is not None and PANDAS_GT_100:
+    if categorical_columns is not None:
         for col in categorical_columns:
             left = None
             right = None

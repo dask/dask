@@ -400,7 +400,6 @@ def test_rolling_agg_aggregate():
     )
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
 def test_rolling_numba_engine():
     numba = pytest.importorskip("numba")
     numba_version = parse_version(numba.__version__)
@@ -418,11 +417,3 @@ def test_rolling_numba_engine():
         df.rolling(3).apply(f, engine="numba", raw=True),
         ddf.rolling(3).apply(f, engine="numba", raw=True),
     )
-
-
-@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas>1.0.0")
-def test_rolling_apply_numba_raises():
-    df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
-    ddf = dd.from_pandas(df, npartitions=3)
-    with pytest.raises(NotImplementedError, match="pandas>=1.0.0"):
-        ddf.rolling(3).apply(lambda x: x.sum(), engine="numba", raw=True)

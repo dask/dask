@@ -1076,9 +1076,7 @@ def test_read_csv_with_datetime_index_partitions_n():
         assert_eq(df, ddf)
 
 
-xfail_pandas_100 = pytest.mark.xfail(
-    dd._compat.PANDAS_GT_100, reason="https://github.com/dask/dask/issues/5787"
-)
+xfail_pandas_100 = pytest.mark.xfail(reason="https://github.com/dask/dask/issues/5787")
 
 
 @pytest.mark.parametrize(

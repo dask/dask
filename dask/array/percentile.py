@@ -186,7 +186,7 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     >>> merge_percentiles(finalq, qs, vals, Ns=Ns)
     array([ 1,  2,  3,  4, 10, 11, 12, 13])
     """
-    from .utils import array_safe, empty_like_safe
+    from .utils import array_safe
 
     if isinstance(finalq, Iterator):
         finalq = list(finalq)
@@ -220,7 +220,7 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
     # transform qs and Ns into number of observations between percentiles
     counts = []
     for q, N in zip(qs, Ns):
-        count = empty_like_safe(finalq, shape=len(q))
+        count = np.empty_like(finalq, shape=len(q))
         count[1:] = np.diff(array_safe(q, like=q[0]))
         count[0] = q[0]
         count *= N

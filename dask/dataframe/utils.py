@@ -23,7 +23,7 @@ from ..utils import is_series_like as dask_is_series_like
 from ..utils import typename
 from . import _dtypes  # noqa: F401 register pandas extension types
 from . import methods
-from ._compat import PANDAS_GT_100, PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
+from ._compat import PANDAS_GT_110, PANDAS_GT_120, tm  # noqa: F401
 from .dispatch import make_meta  # noqa : F401
 from .dispatch import make_meta_obj, meta_nonempty  # noqa : F401
 from .extensions import make_scalar

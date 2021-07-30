@@ -22,7 +22,7 @@ from .creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
 from .dispatch import divide_lookup, empty_lookup  # noqa: F401
-from .utils import compute_meta, full_like_safe, is_arraylike, validate_axis
+from .utils import compute_meta, is_arraylike, validate_axis
 from .wrap import ones, zeros
 
 
@@ -549,7 +549,7 @@ def numel(x, **kwargs):
     if axis is None:
         prod = np.prod(shape, dtype=dtype)
         return (
-            full_like_safe(x, prod, shape=(1,) * len(shape), dtype=dtype)
+            np.full_like(x, prod, shape=(1,) * len(shape), dtype=dtype)
             if keepdims is True
             else prod
         )
@@ -564,7 +564,7 @@ def numel(x, **kwargs):
         )
     else:
         new_shape = tuple(shape[dim] for dim in range(len(shape)) if dim not in axis)
-    return full_like_safe(x, prod, shape=new_shape, dtype=dtype)
+    return np.full_like(x, prod, shape=new_shape, dtype=dtype)
 
 
 def nannumel(x, **kwargs):
