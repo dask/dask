@@ -622,8 +622,8 @@ def map_blocks(
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
 
-    >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
-    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), chunktype=numpy.ndarray>
+    >>> x.map_blocks(lambda x: x + 1, name='increment')
+    dask.array<increment, shape=(1000,), dtype=int64, chunksize=(100,), chunktype=numpy.ndarray>
 
     For functions that may not handle 0-d arrays, it's also possible to specify
     ``meta`` with an empty array matching the type of the expected result. In
@@ -933,7 +933,6 @@ def store(
 
     Examples
     --------
-    >>> x = ...  # doctest: +SKIP
 
     >>> import h5py  # doctest: +SKIP
     >>> f = h5py.File('myfile.hdf5', mode='a')  # doctest: +SKIP
@@ -1161,6 +1160,7 @@ class Array(DaskMethodsMixin):
                     "shape": self.shape,
                     "dtype": self.dtype,
                     "chunksize": self.chunksize,
+                    "chunks": self.chunks,
                     "type": typename(type(self)),
                     "chunk_type": typename(type(self._meta)),
                 }
@@ -1170,6 +1170,7 @@ class Array(DaskMethodsMixin):
                         "shape": self.shape,
                         "dtype": self.dtype,
                         "chunksize": self.chunksize,
+                        "chunks": self.chunks,
                         "type": typename(type(self)),
                         "chunk_type": typename(type(self._meta)),
                     }
@@ -1704,8 +1705,12 @@ class Array(DaskMethodsMixin):
         out = "setitem-" + tokenize(self, key, value)
         dsk = setitem_array(out, self, key, value)
 
+        meta = meta_from_array(self._meta)
+        if np.isscalar(meta):
+            meta = np.array(meta)
+
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
-        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype)
+        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype, meta=meta)
 
         self._meta = y._meta
         self.dask = y.dask
