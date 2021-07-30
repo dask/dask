@@ -7,7 +7,7 @@ from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from ....base import tokenize
+from ....base import compute_as_if_collection, tokenize
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
@@ -860,14 +860,14 @@ def create_metadata_file(
 
     # Convert the raw graph to a `Delayed` object
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[])
-    out = Delayed(name, graph)
 
     # Optionally compute the result
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
-        out = out.compute(**compute_kwargs)
-    return out
+        compute_as_if_collection(DataFrame, graph, [name], **compute_kwargs)
+    else:
+        return Delayed(name, graph)
 
 
 _ENGINES = {}
