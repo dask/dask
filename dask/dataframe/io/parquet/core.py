@@ -5,7 +5,6 @@ import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 
 from ....base import tokenize
 from ....delayed import Delayed
@@ -912,26 +911,19 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-legacy", "pyarrow-dataset"):
+
         pa = import_required("pyarrow", "`pyarrow` not installed")
         pa_version = parse_version(pa.__version__)
 
-        if pa_version < parse_version("0.13.1"):
-            raise RuntimeError("PyArrow version >= 0.13.1 required")
-
-        if pa_version.major >= 1 and engine in ("pyarrow", "arrow"):
+        if engine in ("pyarrow", "arrow"):
             engine = "pyarrow-dataset"
-        elif pa_version.major < 1 and engine == "pyarrow-datset":
-            raise ValueError(
-                "`ArrowDatasetEngine` ('pyarrow-dataset') requires "
-                "pyarrow>=1. Please use `engine='pyarrow'`."
-            )
         elif pa_version.major >= 5 and engine == "pyarrow-legacy":
             raise ValueError(
                 "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "
                 "for pyarrow>=5. Please use `engine='pyarrow'`."
             )
 
-        if engine == "pyarrow-dataset" and pa_version.major >= 1:
+        if engine == "pyarrow-dataset":
             from .arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
