@@ -698,6 +698,9 @@ def to_parquet(
 
     final_name = "metadata-" + name
     # Collect metadata and write _metadata
+    if compute_kwargs is None:
+        compute_kwargs = dict()
+
     if write_metadata_file:
         dsk[(final_name, 0)] = (
             apply,
@@ -710,22 +713,16 @@ def to_parquet(
             ],
             {"append": append, "compression": compression},
         )
+        if compute:
+            compute_as_if_collection(DataFrame, dsk, (final_name, 0), **compute_kwargs)
     else:
         if compute:
-            import dask
-
-            dask.compute(*part_tasks, **{compute_kwargs or {}})
+            compute_as_if_collection(DataFrame, dsk, part_tasks, **compute_kwargs)
             return
         dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Scalar(graph, final_name, "")
-
-    if compute:
-        if compute_kwargs is None:
-            compute_kwargs = dict()
-        out = out.compute(**compute_kwargs)
-    return out
+    return Scalar(graph, final_name, "")
 
 
 def create_metadata_file(
