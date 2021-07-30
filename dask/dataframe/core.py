@@ -31,6 +31,7 @@ from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
+from ..expr import Expr
 from ..highlevelgraph import HighLevelGraph
 from ..optimization import SubgraphCallable
 from ..utils import (
@@ -212,7 +213,7 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
         return np.asarray(self.compute())
 
     @property
-    def _args(self):
+    def args(self):
         return (self.dask, self._name, self._meta)
 
     def __getstate__(self):
@@ -299,7 +300,7 @@ def _scalar_binary(op, self, other, inv=False):
         return Scalar(graph, name, meta)
 
 
-class _Frame(DaskMethodsMixin, OperatorMethodMixin):
+class _Frame(Expr):
     """Superclass for DataFrame and Series
 
     Parameters
@@ -329,6 +330,14 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+
+    @property
+    def args(self):
+        return self.dask, self._name, self._meta, self.divisions
+
+    @property
+    def dependencies(self):
+        return ()
 
     def __dask_graph__(self):
         return self.dask
@@ -396,7 +405,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         return meta_nonempty(self._meta)
 
     @property
-    def _args(self):
+    def args(self):
         return (self.dask, self._name, self._meta, self.divisions)
 
     def __getstate__(self):
@@ -475,7 +484,7 @@ Dask Name: {name}, {task} tasks"""
             klass=self.__class__.__name__,
             data=data,
             name=key_split(self._name),
-            task=len(self.dask),
+            task=len(self.__dask_graph__()),
         )
 
     @property
@@ -2834,7 +2843,7 @@ Dask Name: {name}, {task} tasks"""
             (name1, i): (getitem, key, 0)
             for i, key in enumerate(aligned.__dask_keys__())
         }
-        dsk1.update(aligned.dask)
+        dsk1.update(aligned.__dask_graph__())
         result1 = new_dd_object(dsk1, name1, meta1, aligned.divisions)
 
         name2 = "align2-" + token
@@ -2842,7 +2851,7 @@ Dask Name: {name}, {task} tasks"""
             (name2, i): (getitem, key, 1)
             for i, key in enumerate(aligned.__dask_keys__())
         }
-        dsk2.update(aligned.dask)
+        dsk2.update(aligned.__dask_graph__())
         result2 = new_dd_object(dsk2, name2, meta2, aligned.divisions)
 
         return result1, result2
@@ -3165,7 +3174,7 @@ Dask Name: {name}, {task} tasks""".format(
             data=self.to_string(),
             footer=footer,
             name=key_split(self._name),
-            task=len(self.dask),
+            task=len(self.__dask_graph__()),
         )
 
     def rename(self, index=None, inplace=False, sorted_index=False):
@@ -5233,6 +5242,17 @@ def is_broadcastable(dfs, s):
 
 
 def elemwise(op, *args, **kwargs):
+    tmp = _Elemwise(op, *args, **kwargs)
+
+    if is_series_like(tmp._meta):
+        return ElemwiseSeries(op, *args, **kwargs)
+    if is_dataframe_like(tmp._meta):
+        return ElemwiseDataFrame(op, *args, **kwargs)
+    if is_index_like(tmp._meta):
+        return ElemwiseIndex(op, *args, **kwargs)
+
+
+class _Elemwise(_Frame):
     """Elementwise operation for Dask dataframes
 
     Parameters
@@ -5255,85 +5275,120 @@ def elemwise(op, *args, **kwargs):
     --------
     >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
     """
-    meta = kwargs.pop("meta", no_default)
-    out = kwargs.pop("out", None)
-    transform_divisions = kwargs.pop("transform_divisions", True)
 
-    _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
+    @property
+    def args(self):
+        return (self.op,) + self._args
 
-    args = _maybe_from_pandas(args)
+    @property
+    def dependencies(self):
+        return [arg for arg in self.args if isinstance(arg, (_Frame, Scalar, Array))]
 
-    from .multi import _maybe_align_partitions
+    def __dask_graph__(self):
+        return HighLevelGraph.from_collections(
+            self._name,
+            self._generate_dask_layer(),
+            dependencies=self.dependencies,
+        )
 
-    args = _maybe_align_partitions(args)
-    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
-    dfs = [df for df in dasks if isinstance(df, _Frame)]
+    def __init__(self, op, *args, **kwargs):
+        self._args = args
+        self._kwargs = kwargs.copy()
+        self.op = op
 
-    # Clean up dask arrays if present
-    deps = dasks.copy()
-    for i, a in enumerate(dasks):
-        if not isinstance(a, Array):
-            continue
-        # Ensure that they have similar-ish chunk structure
-        if not all(not a.chunks or len(a.chunks[0]) == df.npartitions for df in dfs):
-            msg = (
-                "When combining dask arrays with dataframes they must "
-                "match chunking exactly.  Operation: %s" % funcname(op)
-            )
-            raise ValueError(msg)
-        # Rechunk to have a single chunk along all other axes
-        if a.ndim > 1:
-            a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
-            dasks[i] = a
+        self._meta = kwargs.pop("meta", no_default)
+        # out = kwargs.pop("out", None)
+        transform_divisions = kwargs.pop("transform_divisions", True)
 
-    divisions = dfs[0].divisions
-    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
-        try:
-            divisions = op(
-                *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
-                **kwargs,
-            )
-            if isinstance(divisions, pd.Index):
-                divisions = methods.tolist(divisions)
-        except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
+        self._name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
 
-    _is_broadcastable = partial(is_broadcastable, dfs)
-    dfs = list(remove(_is_broadcastable, dfs))
+        args = _maybe_from_pandas(args)
 
-    other = [
-        (i, arg)
-        for i, arg in enumerate(args)
-        if not isinstance(arg, (_Frame, Scalar, Array))
-    ]
+        from .multi import _maybe_align_partitions
 
-    # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
+        args = _maybe_align_partitions(args)
+        dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
+        dfs = [df for df in dasks if isinstance(df, _Frame)]
 
-    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
+        # Clean up dask arrays if present
+        for i, a in enumerate(dasks):
+            if not isinstance(a, Array):
+                continue
+            # Ensure that they have similar-ish chunk structure
+            if not all(
+                not a.chunks or len(a.chunks[0]) == df.npartitions for df in dfs
+            ):
+                msg = (
+                    "When combining dask arrays with dataframes they must "
+                    "match chunking exactly.  Operation: %s" % funcname(op)
+                )
+                raise ValueError(msg)
+            # Rechunk to have a single chunk along all other axes
+            if a.ndim > 1:
+                a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
+                dasks[i] = a
 
-    if meta is no_default:
-        if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
-            # should not occur in current funcs
-            msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
-            raise NotImplementedError(msg)
-        # For broadcastable series, use no rows.
-        parts = [
-            d._meta
-            if _is_broadcastable(d)
-            else np.empty((), dtype=d.dtype)
-            if isinstance(d, Array)
-            else d._meta_nonempty
-            for d in dasks
+        divisions = dfs[0].divisions
+        if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+            try:
+                divisions = op(
+                    *[
+                        pd.Index(arg.divisions) if arg is dfs[0] else arg
+                        for arg in args
+                    ],
+                    **kwargs,
+                )
+                if isinstance(divisions, pd.Index):
+                    divisions = methods.tolist(divisions)
+            except Exception:
+                pass
+            else:
+                if not valid_divisions(divisions):
+                    divisions = [None] * (dfs[0].npartitions + 1)
+
+        self.divisions = divisions
+
+        _is_broadcastable = partial(is_broadcastable, dfs)
+        dfs = list(remove(_is_broadcastable, dfs))
+
+        other = [
+            (i, arg)
+            for i, arg in enumerate(args)
+            if not isinstance(arg, (_Frame, Scalar, Array))
         ]
-        with raise_on_meta_error(funcname(op)):
-            meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
-    return handle_out(out, result)
+        if self._meta is no_default:
+            if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
+                # should not occur in current funcs
+                msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
+                raise NotImplementedError(msg)
+            # For broadcastable series, use no rows.
+            parts = [
+                d._meta
+                if _is_broadcastable(d)
+                else np.empty((), dtype=d.dtype)
+                if isinstance(d, Array)
+                else d._meta_nonempty
+                for d in dasks
+            ]
+            with raise_on_meta_error(funcname(op)):
+                self._meta = partial_by_order(*parts, function=op, other=other)
+
+    def _generate_dask_layer(self):
+        # adjust the key length of Scalar
+        return partitionwise_graph(self.op, self._name, *self._args, **self._kwargs)
+
+
+class ElemwiseDataFrame(_Elemwise, DataFrame):
+    pass
+
+
+class ElemwiseSeries(_Elemwise, Series):
+    pass
+
+
+class ElemwiseIndex(_Elemwise, Index):
+    pass
 
 
 def handle_out(out, result):
@@ -5428,24 +5483,7 @@ def split_out_on_cols(df, cols=None):
 
 
 @insert_meta_param_description
-def apply_concat_apply(
-    args,
-    chunk=None,
-    aggregate=None,
-    combine=None,
-    meta=no_default,
-    token=None,
-    chunk_kwargs=None,
-    aggregate_kwargs=None,
-    combine_kwargs=None,
-    split_every=None,
-    split_out=None,
-    split_out_setup=None,
-    split_out_setup_kwargs=None,
-    sort=None,
-    ignore_index=False,
-    **kwargs,
-):
+class apply_concat_apply(Scalar):
     """Apply a function to blocks, then concat, then apply again
 
     Parameters
@@ -5501,144 +5539,232 @@ def apply_concat_apply(
 
     >>> apply_concat_apply([a, b], chunk=chunk, aggregate=agg)  # doctest: +SKIP
     """
-    if chunk_kwargs is None:
-        chunk_kwargs = dict()
-    if aggregate_kwargs is None:
-        aggregate_kwargs = dict()
-    chunk_kwargs.update(kwargs)
-    aggregate_kwargs.update(kwargs)
 
-    if combine is None:
-        if combine_kwargs:
-            raise ValueError("`combine_kwargs` provided with no `combine`")
-        combine = aggregate
-        combine_kwargs = aggregate_kwargs
-    else:
-        if combine_kwargs is None:
-            combine_kwargs = dict()
-        combine_kwargs.update(kwargs)
-
-    if not isinstance(args, (tuple, list)):
-        args = [args]
-
-    dfs = [arg for arg in args if isinstance(arg, _Frame)]
-
-    npartitions = set(arg.npartitions for arg in dfs)
-    if len(npartitions) > 1:
-        raise ValueError("All arguments must have same number of partitions")
-    npartitions = npartitions.pop()
-
-    if split_every is None:
-        split_every = 8
-    elif split_every is False:
-        split_every = npartitions
-    elif split_every < 2 or not isinstance(split_every, Integral):
-        raise ValueError("split_every must be an integer >= 2")
-
-    token_key = tokenize(
-        token or (chunk, aggregate),
-        meta,
-        args,
-        chunk_kwargs,
-        aggregate_kwargs,
-        combine_kwargs,
-        split_every,
-        split_out,
-        split_out_setup,
-        split_out_setup_kwargs,
-    )
-
-    # Chunk
-    a = "{0}-chunk-{1}".format(token or funcname(chunk), token_key)
-    if len(args) == 1 and isinstance(args[0], _Frame) and not chunk_kwargs:
-        dsk = {
-            (a, 0, i, 0): (chunk, key) for i, key in enumerate(args[0].__dask_keys__())
-        }
-    else:
-        dsk = {
-            (a, 0, i, 0): (
-                apply,
-                chunk,
-                [(x._name, i) if isinstance(x, _Frame) else x for x in args],
-                chunk_kwargs,
-            )
-            for i in range(npartitions)
-        }
-
-    # Split
-    if split_out and split_out > 1:
-        split_prefix = "split-%s" % token_key
-        shard_prefix = "shard-%s" % token_key
-        for i in range(npartitions):
-            dsk[(split_prefix, i)] = (
-                hash_shard,
-                (a, 0, i, 0),
-                split_out,
-                split_out_setup,
-                split_out_setup_kwargs,
-                ignore_index,
-            )
-            for j in range(split_out):
-                dsk[(shard_prefix, 0, i, j)] = (getitem, (split_prefix, i), j)
-        a = shard_prefix
-    else:
-        split_out = 1
-
-    # Combine
-    b = "{0}-combine-{1}".format(token or funcname(combine), token_key)
-    k = npartitions
-    depth = 0
-    while k > split_every:
-        for part_i, inds in enumerate(partition_all(split_every, range(k))):
-            for j in range(split_out):
-                conc = (_concat, [(a, depth, i, j) for i in inds], ignore_index)
-                if combine_kwargs:
-                    dsk[(b, depth + 1, part_i, j)] = (
-                        apply,
-                        combine,
-                        [conc],
-                        combine_kwargs,
-                    )
-                else:
-                    dsk[(b, depth + 1, part_i, j)] = (combine, conc)
-        k = part_i + 1
-        a = b
-        depth += 1
-
-    if sort is not None:
-        if sort and split_out > 1:
-            raise NotImplementedError(
-                "Cannot guarantee sorted keys for `split_out>1`."
-                " Try using split_out=1, or grouping with sort=False."
-            )
-        aggregate_kwargs = aggregate_kwargs or {}
-        aggregate_kwargs["sort"] = sort
-
-    # Aggregate
-    for j in range(split_out):
-        b = "{0}-agg-{1}".format(token or funcname(aggregate), token_key)
-        conc = (_concat, [(a, depth, i, j) for i in range(k)], ignore_index)
-        if aggregate_kwargs:
-            dsk[(b, j)] = (apply, aggregate, [conc], aggregate_kwargs)
-        else:
-            dsk[(b, j)] = (aggregate, conc)
-
-    if meta is no_default:
-        meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
-        meta = _emulate(
-            aggregate, _concat([meta_chunk], ignore_index), udf=True, **aggregate_kwargs
+    def __dask_graph__(self):
+        return HighLevelGraph.from_collections(
+            self._name,
+            self._generate_dask_layer(),
+            dependencies=self.dependencies,
         )
-    meta = make_meta(
-        meta,
-        index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None),
-        parent_meta=dfs[0]._meta,
-    )
 
-    graph = HighLevelGraph.from_collections(b, dsk, dependencies=dfs)
+    @property
+    def args(self):
+        return (
+            self._args,
+            self.chunk,
+            self.aggregate,
+            self.combine,
+            self.meta,
+            self.token,
+            self.chunk_kwargs,
+            self.aggregate_kwargs,
+            self.combine_kwargs,
+            self.split_every,
+            self.split_out,
+            self.split_out_setup,
+            self.split_out_setup_kwargs,
+            self.sort,
+            self.ignore_index,
+            self.kwargs,
+        )
 
-    divisions = [None] * (split_out + 1)
+    @property
+    def dependencies(self):
+        return [arg for arg in self._args if isinstance(arg, _Frame)]
 
-    return new_dd_object(graph, b, meta, divisions, parent_meta=dfs[0]._meta)
+    def __init__(
+        self,
+        args,
+        chunk=None,
+        aggregate=None,
+        combine=None,
+        meta=no_default,
+        token=None,
+        chunk_kwargs=None,
+        aggregate_kwargs=None,
+        combine_kwargs=None,
+        split_every=None,
+        split_out=None,
+        split_out_setup=None,
+        split_out_setup_kwargs=None,
+        sort=None,
+        ignore_index=False,
+        **kwargs,
+    ):
+        if not isinstance(args, (tuple, list)):
+            args = [args]
+        args = tuple(args)
+
+        self._args = args
+        self.chunk = chunk
+        self.aggregate = aggregate
+        self.combine = combine
+        self.meta = meta
+        self.token = token
+        self.chunk_kwargs = chunk_kwargs
+        self.aggregate_kwargs = aggregate_kwargs
+        self.combine_kwargs = combine_kwargs
+        self.split_every = split_every
+        self.split_out = split_out
+        self.split_out_setup = split_out_setup
+        self.split_out_setup_kwargs = split_out_setup_kwargs
+        self.sort = sort
+        self.ignore_index = ignore_index
+        self.kwargs = kwargs
+
+        if chunk_kwargs is None:
+            chunk_kwargs = dict()
+        if aggregate_kwargs is None:
+            aggregate_kwargs = dict()
+        chunk_kwargs.update(kwargs)
+        aggregate_kwargs.update(kwargs)
+
+        if combine is None:
+            if combine_kwargs:
+                raise ValueError("`combine_kwargs` provided with no `combine`")
+            combine = aggregate
+            combine_kwargs = aggregate_kwargs
+        else:
+            if combine_kwargs is None:
+                combine_kwargs = dict()
+            combine_kwargs.update(kwargs)
+
+        dfs = [arg for arg in args if isinstance(arg, _Frame)]
+
+        npartitions = set(arg.npartitions for arg in dfs)
+        if len(npartitions) > 1:
+            raise ValueError("All arguments must have same number of partitions")
+        self.npartitions = npartitions.pop()
+
+        if self.split_every is None:
+            self.split_every = 8
+        elif self.split_every is False:
+            self.split_every = self.npartitions
+        elif self.split_every < 2 or not isinstance(self.split_every, Integral):
+            raise ValueError("split_every must be an integer >= 2")
+
+        self._token_key = tokenize(
+            token or (chunk, aggregate),
+            meta,
+            args,
+            chunk_kwargs,
+            aggregate_kwargs,
+            combine_kwargs,
+            split_every,
+            split_out,
+            split_out_setup,
+            split_out_setup_kwargs,
+        )
+
+        if meta is no_default:
+            meta_chunk = _emulate(chunk, *args, udf=True, **chunk_kwargs)
+            meta = _emulate(
+                aggregate,
+                _concat([meta_chunk], ignore_index),
+                udf=True,
+                **aggregate_kwargs,
+            )
+        self._meta = make_meta(
+            meta,
+            index=(getattr(make_meta(dfs[0]), "index", None) if dfs else None),
+            parent_meta=dfs[0]._meta,
+        )
+
+        # self.divisions = [None] * ((split_out or 1) + 1)
+        self._name = "{0}-agg-{1}".format(token or funcname(aggregate), self._token_key)
+
+    def _generate_dask_layer(self):
+        # Chunk
+        a = "{0}-chunk-{1}".format(self.token or funcname(self.chunk), self._token_key)
+        if (
+            len(self._args) == 1
+            and isinstance(self._args[0], _Frame)
+            and not self.chunk_kwargs
+        ):
+            dsk = {
+                (a, 0, i, 0): (self.chunk, key)
+                for i, key in enumerate(self._args[0].__dask_keys__())
+            }
+        else:
+            dsk = {
+                (a, 0, i, 0): (
+                    apply,
+                    self.chunk,
+                    [(x._name, i) if isinstance(x, _Frame) else x for x in self._args],
+                    self.chunk_kwargs,
+                )
+                for i in range(self.npartitions)
+            }
+
+        # Split
+        if self.split_out and self.split_out > 1:
+            split_prefix = "split-%s" % self._token_key
+            shard_prefix = "shard-%s" % self._token_key
+            for i in range(self.npartitions):
+                dsk[(split_prefix, i)] = (
+                    hash_shard,
+                    (a, 0, i, 0),
+                    self.split_out,
+                    self.split_out_setup,
+                    self.split_out_setup_kwargs,
+                    self.ignore_index,
+                )
+                for j in range(self.split_out):
+                    dsk[(shard_prefix, 0, i, j)] = (getitem, (self.split_prefix, i), j)
+            a = shard_prefix
+        else:
+            self.split_out = 1
+
+        # Combine
+        b = "{0}-combine-{1}".format(
+            self.token or funcname(self.combine), self._token_key
+        )
+        k = self.npartitions
+        depth = 0
+        while k > self.split_every:
+            for part_i, inds in enumerate(partition_all(self.split_every, range(k))):
+                for j in range(self.split_out):
+                    conc = (
+                        _concat,
+                        [(a, depth, i, j) for i in inds],
+                        self.ignore_index,
+                    )
+                    if self.combine_kwargs:
+                        dsk[(b, depth + 1, part_i, j)] = (
+                            apply,
+                            self.combine,
+                            [conc],
+                            self.combine_kwargs,
+                        )
+                    else:
+                        dsk[(b, depth + 1, part_i, j)] = (self.combine, conc)
+            k = part_i + 1
+            a = b
+            depth += 1
+
+        if self.sort is not None:
+            if self.sort and self.split_out > 1:
+                raise NotImplementedError(
+                    "Cannot guarantee sorted keys for `split_out>1`."
+                    " Try using split_out=1, or grouping with sort=False."
+                )
+            aggregate_kwargs = self.aggregate_kwargs or {}
+            aggregate_kwargs["sort"] = self.sort
+
+        # Aggregate
+        for j in range(self.split_out):
+            conc = (_concat, [(a, depth, i, j) for i in range(k)], self.ignore_index)
+            if self.aggregate_kwargs:
+                dsk[(self._name, j)] = (
+                    apply,
+                    self.aggregate,
+                    [conc],
+                    self.aggregate_kwargs,
+                )
+            else:
+                dsk[(self._name, j)] = (self.aggregate, conc)
+
+        return dsk
 
 
 aca = apply_concat_apply
@@ -6811,7 +6937,7 @@ def maybe_shift_divisions(df, periods, freq):
     if df.known_divisions:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
         divisions = divs.shift(periods, freq=freq).index
-        return type(df)(df.dask, df._name, df._meta, divisions)
+        return type(df)(df.__dask_graph__(), df._name, df._meta, divisions)
     return df
 
 

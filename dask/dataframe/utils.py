@@ -571,8 +571,8 @@ def assert_eq(
 
 
 def assert_dask_graph(dask, label):
-    if hasattr(dask, "dask"):
-        dask = dask.dask
+    if hasattr(dask, "__dask_graph__"):
+        dask = dask.__dask_graph__()
     assert isinstance(dask, Mapping)
     for k in dask:
         if isinstance(k, tuple):
@@ -598,7 +598,7 @@ def assert_divisions(ddf):
         except AttributeError:
             return x.index
 
-    results = get_sync(ddf.dask, ddf.__dask_keys__())
+    results = get_sync(ddf.__dask_graph__(), ddf.__dask_keys__())
     for i, df in enumerate(results[:-1]):
         if len(df):
             assert index(df).min() >= ddf.divisions[i]
@@ -610,9 +610,9 @@ def assert_divisions(ddf):
 
 
 def assert_sane_keynames(ddf):
-    if not hasattr(ddf, "dask"):
+    if not hasattr(ddf, "__dask_graph__"):
         return
-    for k in ddf.dask.keys():
+    for k in ddf.__dask_graph__().keys():
         while isinstance(k, tuple):
             k = k[0]
         assert isinstance(k, (str, bytes))
@@ -658,7 +658,7 @@ def assert_dask_dtypes(ddf, res, numeric_equal=True):
 
 
 def assert_max_deps(x, n, eq=True):
-    dependencies, dependents = get_deps(x.dask)
+    dependencies, dependents = get_deps(x.__dask_graph__())
     if eq:
         assert max(map(len, dependencies.values())) == n
     else:
