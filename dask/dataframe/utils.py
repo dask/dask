@@ -552,7 +552,7 @@ def assert_eq(
     if isinstance(a, pd.DataFrame):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
-        tm.assert_frame_equal(a, b, **kwargs)
+        tm.assert_frame_equal(a, b, check_dtype=check_dtype, **kwargs)
     elif isinstance(a, pd.Series):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
