@@ -3388,7 +3388,7 @@ def test_parquet_pyarrow_write_empty_metadata_append(tmpdir):
     )
 
 
-@PYARROW_LE_MARK
+@PYARROW_MARK
 @pytest.mark.parametrize("partition_on", [None, "a"])
 @write_read_engines()
 def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
@@ -3412,7 +3412,7 @@ def test_create_metadata_file(tmpdir, write_engine, read_engine, partition_on):
         fns = glob.glob(os.path.join(tmpdir, "*.parquet"))
     dd.io.parquet.create_metadata_file(
         fns,
-        engine="pyarrow-legacy",
+        engine="pyarrow",
         split_every=3,  # Force tree reduction
     )
 
