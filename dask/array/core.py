@@ -1160,6 +1160,7 @@ class Array(DaskMethodsMixin):
                     "shape": self.shape,
                     "dtype": self.dtype,
                     "chunksize": self.chunksize,
+                    "chunks": self.chunks,
                     "type": typename(type(self)),
                     "chunk_type": typename(type(self._meta)),
                 }
@@ -1169,6 +1170,7 @@ class Array(DaskMethodsMixin):
                         "shape": self.shape,
                         "dtype": self.dtype,
                         "chunksize": self.chunksize,
+                        "chunks": self.chunks,
                         "type": typename(type(self)),
                         "chunk_type": typename(type(self._meta)),
                     }
