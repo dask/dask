@@ -560,7 +560,7 @@ def assert_eq(
             a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
         )
     elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b, **kwargs)
+        tm.assert_index_equal(a, b, exact=check_dtype, **kwargs)
     else:
         if a == b:
             return True
