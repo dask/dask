@@ -278,7 +278,7 @@ def _tensordot_rechunk(array, inner_axes, limit=None):
 
     inner_chunks = [array.shape[ax] for ax in inner_axes]
     while limit < (np.prod(inner_chunks) * array.dtype.itemsize):
-        inner_chunks[np.argmax(inner_chunks)] = np.max(inner_chunks) // 2
+        inner_chunks[np.argmax(inner_chunks)] = int(math.ceil(np.max(inner_chunks) / 2))
 
     optimal_chunks = []
     for ax in range(array.ndim):
