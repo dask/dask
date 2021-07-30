@@ -1714,8 +1714,7 @@ def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
     ],
 )
 def test_reader_signature(from_f, to_f):
-    default_params = set(
-        signature(make_reader(None, "", "")).parameters.keys())
+    default_params = set(signature(make_reader(None, "", "")).parameters.keys())
     params = set(signature(from_f).parameters.keys())
     original_params = set(signature(to_f).parameters.keys())
     # signature includes default parameters
