@@ -918,6 +918,19 @@ def get_engine(engine):
         if pa_version < parse_version("0.13.1"):
             raise RuntimeError("PyArrow version >= 0.13.1 required")
 
+        if pa_version.major >= 1 and engine in ("pyarrow", "arrow"):
+            engine = "pyarrow-dataset"
+        elif pa_version.major < 1 and engine == "pyarrow-datset":
+            raise ValueError(
+                "`ArrowDatasetEngine` ('pyarrow-dataset') requires "
+                "pyarrow>=1. Please use `engine='pyarrow'`."
+            )
+        elif pa_version.major >= 5 and engine == "pyarrow-legacy":
+            raise ValueError(
+                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "
+                "for pyarrow>=5. Please use `engine='pyarrow'`."
+            )
+
         if engine == "pyarrow-dataset" and pa_version.major >= 1:
             from .arrow import ArrowDatasetEngine
 
