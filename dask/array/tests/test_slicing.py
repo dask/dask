@@ -1064,3 +1064,23 @@ def test_slice_array_3d_with_bool_numpy_array():
     actual = array[mask].compute()
     expected = np.arange(13, 24)
     assert_eq(actual, expected)
+
+
+def test_slicing_with_0d_numpy_arrays():
+    x = da.arange(10)
+    x_np = np.arange(10)
+
+    actual = x[np.array(0)]
+    expected = x_np[np.array(0)]
+    assert_eq(actual, expected)
+
+    y = da.arange(25).reshape((5, 5))
+    y_np = np.arange(25).reshape((5, 5))
+
+    actual = y[np.array(1), np.array(2)]
+    expected = y_np[np.array(1), np.array(2)]
+    assert_eq(actual, expected)
+
+    actual = y[[2, 3], np.array(4)]
+    expected = y_np[[2, 3], np.array(4)]
+    assert_eq(actual, expected)

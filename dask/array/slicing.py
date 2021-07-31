@@ -231,10 +231,10 @@ def slice_wrap_lists(out_name, in_name, blockdims, index, itemsize):
     if not len(blockdims) == len(index):
         raise IndexError("Too many indices for array")
 
+    # Handle 0-d arrays, e.g. np.array(0)
+    index = [int(ind) if is_arraylike(ind) and ind.ndim == 0 else ind for ind in index]
     # Do we have more than one list in the index?
-    where_list = [
-        i for i, ind in enumerate(index) if is_arraylike(ind) and ind.ndim > 0
-    ]
+    where_list = [i for i, ind in enumerate(index) if is_arraylike(ind)]
     if len(where_list) > 1:
         raise NotImplementedError("Don't yet support nd fancy indexing")
     # Is the single list an empty list? In this case just treat it as a zero
