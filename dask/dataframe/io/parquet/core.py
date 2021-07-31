@@ -5,6 +5,7 @@ import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
+from packaging.version import parse as parse_version
 
 from ....base import tokenize
 from ....delayed import Delayed
