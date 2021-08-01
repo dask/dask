@@ -1959,7 +1959,7 @@ class SeriesGroupBy(_GroupBy):
             aggfunc=_tail_aggregate,
             metafunc=M.tail,
             chunk_kwargs={"n": n},
-            aggregate_kwargs={"n": n},
+            aggregate_kwargs={"n": n, "index_levels": len(self.index)},
             split_every=split_every,
             split_out=split_out,
         )
@@ -1972,7 +1972,7 @@ class SeriesGroupBy(_GroupBy):
             aggfunc=_head_aggregate,
             metafunc=M.head,
             chunk_kwargs={"n": n},
-            aggregate_kwargs={"n": n},
+            aggregate_kwargs={"n": n, "index_levels": len(self.index)},
             split_every=split_every,
             split_out=split_out,
         )
@@ -2001,21 +2001,19 @@ def _value_counts_aggregate(series_gb):
 
 def _tail_chunk(series_gb, **kwargs):
     keys, groups = zip(*series_gb) if len(series_gb) else ((True,), (series_gb,))
-    return pd.concat(
-        [group.tail(**kwargs) for group in groups], keys=keys, names=["_tail"]
-    )
+    return pd.concat([group.tail(**kwargs) for group in groups], keys=keys)
 
 
 def _tail_aggregate(series_gb, **kwargs):
-    return series_gb.tail(**kwargs).droplevel("_tail")
+    levels = kwargs.pop("index_levels")
+    return series_gb.tail(**kwargs).droplevel(list(range(levels)))
 
 
 def _head_chunk(series_gb, **kwargs):
     keys, groups = zip(*series_gb) if len(series_gb) else ((True,), (series_gb,))
-    return pd.concat(
-        [group.head(**kwargs) for group in groups], keys=keys, names=["_head"]
-    )
+    return pd.concat([group.head(**kwargs) for group in groups], keys=keys)
 
 
 def _head_aggregate(series_gb, **kwargs):
-    return series_gb.head(**kwargs).droplevel("_head")
+    levels = kwargs.pop("index_levels")
+    return series_gb.head(**kwargs).droplevel(list(range(levels)))
