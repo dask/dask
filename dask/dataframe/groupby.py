@@ -1953,26 +1953,28 @@ class SeriesGroupBy(_GroupBy):
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def tail(self, n=5, split_every=None, split_out=1):
+        index_levels = len(self.index) if isinstance(self.index, list) else 1
         return self._aca_agg(
             token="tail",
             func=_tail_chunk,
             aggfunc=_tail_aggregate,
             metafunc=M.tail,
             chunk_kwargs={"n": n},
-            aggregate_kwargs={"n": n, "index_levels": len(self.index)},
+            aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
         )
 
     @derived_from(pd.core.groupby.SeriesGroupBy)
     def head(self, n=5, split_every=None, split_out=1):
+        index_levels = len(self.index) if isinstance(self.index, list) else 1
         return self._aca_agg(
             token="head",
             func=_head_chunk,
             aggfunc=_head_aggregate,
             metafunc=M.head,
             chunk_kwargs={"n": n},
-            aggregate_kwargs={"n": n, "index_levels": len(self.index)},
+            aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
             split_out=split_out,
         )
