@@ -335,9 +335,7 @@ def test_tensordot():
 
     assert same_keys(da.tensordot(a, b, axes=(1, 0)), da.tensordot(a, b, axes=(1, 0)))
 
-    # Increasing number of chunks warning
-    with pytest.warns(da.PerformanceWarning):
-        assert not same_keys(da.tensordot(a, b, axes=0), da.tensordot(a, b, axes=1))
+    assert not same_keys(da.tensordot(a, b, axes=0), da.tensordot(a, b, axes=1))
 
 
 @pytest.mark.parametrize(

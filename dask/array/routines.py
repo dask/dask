@@ -32,6 +32,7 @@ from .core import (
     broadcast_to,
     concatenate,
     elemwise,
+    from_array,
     implements,
     is_scalar_for_elemwise,
     map_blocks,
@@ -307,6 +308,11 @@ def _tensordot(a, b, axes):
 
 @derived_from(np)
 def tensordot(lhs, rhs, axes=2, rechunk=True):
+    if not isinstance(lhs, Array):
+        lhs = from_array(lhs)
+    if not isinstance(rhs, Array):
+        rhs = from_array(rhs)
+
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
     else:
