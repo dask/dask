@@ -5,14 +5,13 @@ import tlz as toolz
 from fsspec.core import get_fs_token_paths
 from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
-from packaging.version import parse as parse_version
 
 from ....base import tokenize
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
-from ...core import DataFrame, new_dd_object
+from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
 from .utils import _sort_and_analyze_paths
 
@@ -504,8 +503,8 @@ def to_parquet(
     write_metadata_file : bool, default True
         Whether to write the special "_metadata" file.
     compute : bool, default True
-        If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        If :obj:`True` (default) then the result is computed immediately. If  :obj:`False`
+        then a ``dask.dataframe.Scalar`` object is returned for future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
     schema : Schema object, dict, or {"infer", None}, default None
@@ -696,9 +695,10 @@ def to_parquet(
         )
         part_tasks.append((name, d))
 
+    final_name = "metadata-" + name
     # Collect metadata and write _metadata
     if write_metadata_file:
-        dsk[name] = (
+        dsk[(final_name, 0)] = (
             apply,
             engine.write_metadata,
             [
@@ -710,10 +710,10 @@ def to_parquet(
             {"append": append, "compression": compression},
         )
     else:
-        dsk[name] = (lambda x: None, part_tasks)
+        dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Delayed(name, graph)
+    out = Scalar(graph, final_name, "")
 
     if compute:
         if compute_kwargs is None:
@@ -911,13 +911,7 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-legacy", "pyarrow-dataset"):
-        pa = import_required("pyarrow", "`pyarrow` not installed")
-        pa_version = parse_version(pa.__version__)
-
-        if pa_version < parse_version("0.13.1"):
-            raise RuntimeError("PyArrow version >= 0.13.1 required")
-
-        if engine == "pyarrow-dataset" and pa_version.major >= 1:
+        if engine == "pyarrow-dataset":
             from .arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
