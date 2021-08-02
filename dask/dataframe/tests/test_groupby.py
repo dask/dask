@@ -2425,7 +2425,7 @@ def test_groupby_with_pd_grouper():
 
 
 @pytest.mark.parametrize("operation", ["head", "tail"])
-def test_empty_partitions_with_rows_operation(operation):
+def test_groupby_empty_partitions_with_rows_operation(operation):
 
     df = pd.DataFrame(
         data=[
@@ -2474,7 +2474,7 @@ def test_groupby_with_row_operations(operation):
 
 
 @pytest.mark.parametrize("operation", ["head", "tail"])
-def test_groupby_with_row_operations(operation):
+def test_groupby_multi_index_with_row_operations(operation):
     df = pd.DataFrame(
         data=[
             ["a0", "b1"],

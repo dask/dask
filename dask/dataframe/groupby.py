@@ -1140,7 +1140,7 @@ class _GroupBy:
         token,
         func,
         aggfunc=None,
-        metafunc=None,
+        meta=None,
         split_every=None,
         split_out=1,
         chunk_kwargs={},
@@ -1149,10 +1149,9 @@ class _GroupBy:
         if aggfunc is None:
             aggfunc = func
 
-        if metafunc is None:
-            metafunc = func
+        if meta is None:
+            meta = func(self._meta_nonempty)
 
-        meta = metafunc(self._meta_nonempty)
         columns = meta.name if is_series_like(meta) else meta.columns
 
         token = self._token_prefix + token
@@ -1958,7 +1957,7 @@ class SeriesGroupBy(_GroupBy):
             token="tail",
             func=_tail_chunk,
             aggfunc=_tail_aggregate,
-            metafunc=M.tail,
+            meta=M.tail(self._meta_nonempty),
             chunk_kwargs={"n": n},
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
@@ -1972,7 +1971,7 @@ class SeriesGroupBy(_GroupBy):
             token="head",
             func=_head_chunk,
             aggfunc=_head_aggregate,
-            metafunc=M.head,
+            meta=M.head(self._meta_nonempty),
             chunk_kwargs={"n": n},
             aggregate_kwargs={"n": n, "index_levels": index_levels},
             split_every=split_every,
