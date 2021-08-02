@@ -15,8 +15,6 @@ import dask.dataframe as dd
 import dask.multiprocessing
 from dask.blockwise import Blockwise, optimize_blockwise
 from dask.dataframe._compat import PANDAS_GT_110, PANDAS_GT_121, PANDAS_GT_130
-from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
-from dask.dataframe.io.parquet.core import get_engine
 from dask.dataframe.io.parquet.utils import _parse_pandas_metadata
 from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
@@ -172,8 +170,11 @@ else:
 
 @PYARROW_MARK
 def test_pyarrow_getengine():
+    from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
+    from dask.dataframe.io.parquet.core import get_engine
+
     # Check that the default engine for "pyarrow"/"arrow"
-    # is not the `pyarrow.dataset`-based engine
+    # is the `pyarrow.dataset`-based engine
     assert get_engine("pyarrow") == ArrowDatasetEngine
     assert get_engine("arrow") == ArrowDatasetEngine
 
