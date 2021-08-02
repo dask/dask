@@ -1242,8 +1242,22 @@ def to_graphviz(
             20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
         )
 
+        layers = {
+            "DataFrameIOLayer": "#D6D6FF",
+            "ShuffleLayer": "#D9F2FF",
+            "SimpleShuffleLayer": "#D9F2FF",
+            "BlockwiseLayer": "#DDFFCC",
+            "BlockwiseCreateArray": "#DDFFCC",
+            "MaterializedLayer": "#DBDEE5",
+        }
+
+        layer_type = str(type(hg.layers[layer]).__name__)
+        xcolor = layers.get(layer_type)
+
         attrs.setdefault("label", str(xlabel))
         attrs.setdefault("fontsize", str(xfontsize))
+        attrs.setdefault("fillcolor", str(xcolor))
+        attrs.setdefault("style", "filled")
 
         g.node(layer_name, **attrs)
 
