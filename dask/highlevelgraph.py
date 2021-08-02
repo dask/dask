@@ -1246,6 +1246,7 @@ def to_graphviz(
             "DataFrameIOLayer": "#D6D6FF",
             "ShuffleLayer": "#D9F2FF",
             "SimpleShuffleLayer": "#D9F2FF",
+            "Blockwise": "#DDFFCC",
             "BlockwiseLayer": "#DDFFCC",
             "BlockwiseCreateArray": "#DDFFCC",
             "MaterializedLayer": "#DBDEE5",
@@ -1266,6 +1267,19 @@ def to_graphviz(
         for dep in deps:
             dep_name = name(dep)
             g.edge(dep_name, layer_name)
+
+    legend_title = "Legend"
+    legend_label = (
+        '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10">'
+        "<TR><TD><B>Legend</B></TD></TR>"
+        '<TR><TD BGCOLOR="#DDFFCC">Blockwise</TD></TR>'
+        '<TR><TD BGCOLOR="#D9F2FF">Shuffle</TD></TR>'
+        '<TR><TD BGCOLOR="#D6D6FF">DataFrameIO</TD></TR>'
+        '<TR><TD BGCOLOR="#DBDEE5">Materialized</TD></TR></TABLE>>'
+    )
+
+    g.node(legend_title, label=legend_label, margin="0")
+
     return g
 
 
