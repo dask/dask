@@ -1237,15 +1237,15 @@ def to_graphviz(
         layer_name = name(layer)
         attrs = data_attributes.get(layer, {})
 
-        xlabel = label(layer, cache=cache)
-        xfontsize = (
+        node_label = label(layer, cache=cache)
+        node_size = (
             20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
         )
-        xtooltip = str(type(hg.layers[layer]).__name__)
+        node_tooltip = str(type(hg.layers[layer]).__name__)
 
-        attrs.setdefault("label", str(xlabel))
-        attrs.setdefault("fontsize", str(xfontsize))
-        attrs.setdefault("tooltip", str(xtooltip))
+        attrs.setdefault("label", str(node_label))
+        attrs.setdefault("fontsize", str(node_size))
+        attrs.setdefault("tooltip", str(node_tooltip))
 
         g.node(layer_name, **attrs)
 
