@@ -199,9 +199,6 @@ def test_deep_bases_win_over_dependents(abcde):
     dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
-    print()
-    for key in sorted(dsk):
-        print(key, ":", o[key])
     assert o[e] < o[d]  # ambiguous, but this is what we currently expect
     assert o[b] < o[c]
 
