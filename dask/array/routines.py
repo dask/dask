@@ -1598,8 +1598,75 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     return r
 
 
+def unique_no_structured_arr(
+    ar, return_index=False, return_inverse=False, return_counts=False
+):
+    # A simplified version of `unique`, that allows computing unique for array
+    # types that don't support structured arrays (such as cupy.ndarray), but
+    # can only compute values at the moment.
+
+    if (
+        return_index is not False
+        or return_inverse is not False
+        or return_counts is not False
+    ):
+        raise ValueError(
+            "dask.array.unique does not support `return_index`, `return_inverse` "
+            "or `return_counts` with array types that don't support structured "
+            "arrays."
+        )
+
+    ar = ar.ravel()
+
+    args = [ar, "i"]
+    meta = meta_from_array(ar)
+
+    out = blockwise(np.unique, "i", *args, meta=meta)
+    out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
+
+    out_parts = [out]
+
+    name = "unique-aggregate-" + out.name
+    dsk = {
+        (name, 0): (
+            (np.unique,)
+            + tuple(
+                (np.concatenate, o.__dask_keys__())
+                if hasattr(o, "__dask_keys__")
+                else o
+                for o in out_parts
+            )
+        )
+    }
+
+    dependencies = [o for o in out_parts if hasattr(o, "__dask_keys__")]
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+    chunks = ((np.nan,),)
+    out = Array(graph, name, chunks, meta=meta)
+
+    result = [out]
+
+    if len(result) == 1:
+        result = result[0]
+    else:
+        result = tuple(result)
+
+    return result
+
+
 @derived_from(np)
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
+    try:
+        meta = meta_from_array(ar)
+        np.empty_like(meta, dtype=[("a", np.int), ("b", np.float)])
+    except TypeError:
+        return unique_no_structured_arr(
+            ar,
+            return_index=return_index,
+            return_inverse=return_inverse,
+            return_counts=return_counts,
+        )
+
     ar = ar.ravel()
 
     # Run unique on each chunk and collect results in a Dask Array of
