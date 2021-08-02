@@ -6,7 +6,7 @@ import pandas as pd
 import pytest
 
 import dask.dataframe as dd
-from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_120, PANDAS_VERSION
+from dask.dataframe._compat import PANDAS_GT_120, PANDAS_VERSION
 from dask.dataframe.utils import assert_dask_graph, assert_eq, make_meta
 
 try:
@@ -1173,16 +1173,11 @@ def test_reductions_frame_dtypes():
     df_no_timedelta = df.drop("timedelta", axis=1, inplace=False)
     ddf_no_timedelta = dd.from_pandas(df_no_timedelta, 3)
 
-    if not PANDAS_GT_100:
-        # https://github.com/pandas-dev/pandas/issues/30886
-        assert_eq(df.sum(), ddf.sum())
-        assert_eq(df_no_timedelta.mean(), ddf_no_timedelta.mean())
-    else:
-        assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
-        assert_eq(
-            df_no_timedelta.drop(columns="dt").mean(),
-            ddf_no_timedelta.drop(columns="dt").mean(),
-        )
+    assert_eq(df.drop(columns="dt").sum(), ddf.drop(columns="dt").sum())
+    assert_eq(
+        df_no_timedelta.drop(columns="dt").mean(),
+        ddf_no_timedelta.drop(columns="dt").mean(),
+    )
 
     assert_eq(df.prod(), ddf.prod())
     assert_eq(df.product(), ddf.product())
@@ -1266,8 +1261,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df, func)(**kwargs),
             getattr(ddf, func)(**kwargs),
-            check_dtype=func in ["mean", "max"]
-            and (PANDAS_GT_120 or not PANDAS_GT_100),
+            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
         )
         with pytest.raises(NotImplementedError, match="'numeric_only=False"):
             getattr(ddf, func)(numeric_only=False)
@@ -1293,8 +1287,7 @@ def test_reductions_frame_dtypes_numeric_only():
         assert_eq(
             getattr(df_numerics, func)(),
             getattr(ddf_numerics, func)(),
-            check_dtype=func in ["mean", "max"]
-            and (PANDAS_GT_120 or not PANDAS_GT_100),
+            check_dtype=func in ["mean", "max"] and PANDAS_GT_120,
         )
 
 
