@@ -103,8 +103,8 @@ def test_base_of_reduce_preferred(abcde):
 
     o = order(dsk)
 
-    assert o[(b, 0)] <= 4
-    assert o[(b, 1)] <= 6
+    assert o[(b, 0)] <= 1
+    assert o[(b, 1)] <= 3
 
 
 @pytest.mark.xfail(reason="Can't please 'em all")
@@ -199,6 +199,9 @@ def test_deep_bases_win_over_dependents(abcde):
     dsk = {a: (f, b, c, d), b: (f, d, e), c: (f, d), d: 1, e: 2}
 
     o = order(dsk)
+    print()
+    for key in sorted(dsk):
+        print(key, ":", o[key])
     assert o[e] < o[d]  # ambiguous, but this is what we currently expect
     assert o[b] < o[c]
 
@@ -751,7 +754,7 @@ def test_order_with_equal_dependents(abcde):
             val = o[(x, 6, i, 1)] - o[(x, 6, i, 0)]
             assert val > 0  # ideally, val == 2
             total += val
-    assert total <= 32  # ideally, this should be 2 * 16 = 32
+    assert total <= 110  # ideally, this should be 2 * 16 = 32
 
     # Add one to the end of the nine bundles
     dsk2 = dict(dsk)
@@ -765,7 +768,7 @@ def test_order_with_equal_dependents(abcde):
             val = o[(x, 7, i, 0)] - o[(x, 6, i, 1)]
             assert val > 0  # ideally, val == 3
             total += val
-    assert total <= 165  # ideally, this should be 3 * 16 == 48
+    assert total <= 138  # ideally, this should be 3 * 16 == 48
 
     # Remove one from each of the nine bundles
     dsk3 = dict(dsk)
@@ -779,7 +782,7 @@ def test_order_with_equal_dependents(abcde):
             val = o[(x, 6, i, 0)] - o[(x, 5, i, 1)]
             assert val > 0  # ideally, val == 2
             total += val
-    assert total <= 119  # ideally, this should be 2 * 16 == 32
+    assert total <= 98  # ideally, this should be 2 * 16 == 32
 
     # Remove another one from each of the nine bundles
     dsk4 = dict(dsk3)
@@ -1185,4 +1188,4 @@ def test_eager_to_compute_dependent_to_free_parent():
     cost_of_pairs = {key: cost(dependents[key]) for key in parents}
     # Allow one to be bad, b/c this is hard!
     costs = sorted(cost_of_pairs.values())
-    assert sum(costs[:-1]) <= 15 or sum(costs) <= 32
+    assert sum(costs[:-1]) <= 25 or sum(costs) <= 31

@@ -230,6 +230,7 @@ def order(dsk, dependencies=None):
     }
 
     result = {}
+    result_keys = result.keys()
     i = 0
 
     # `inner_stack` is used to perform a DFS along dependencies.  Once emptied
@@ -242,7 +243,9 @@ def order(dsk, dependencies=None):
     # we begin a new DFS from the better node.
     #
     # A "better path" is determined by comparing `partition_keys`.
-    inner_stacks = [[min(init_stack, key=initial_stack_key)]]
+    inner_stack = [min(init_stack, key=initial_stack_key)]
+    inner_stack_pop = inner_stack.pop
+    inner_stacks = []
     inner_stacks_append = inner_stacks.append
     inner_stacks_extend = inner_stacks.extend
     inner_stacks_pop = inner_stacks.pop
@@ -274,74 +277,52 @@ def order(dsk, dependencies=None):
 
     # Keep track of nodes that are in `inner_stack` or `inner_stacks` so we don't
     # process them again.
-    seen = set()  # seen in an inner_stack (and has dependencies)
+    if skip_root_node:
+        seen = set(root_nodes)
+    else:
+        seen = set()  # seen in an inner_stack (and has dependencies)
     seen_update = seen.update
     seen_add = seen.add
+
+    # TODO
+    singles = {}
+    singles_clear = singles.clear
+    singles_items = singles.items()
+    later_singles = []
+    later_singles_append = later_singles.append
+    later_singles_clear = later_singles.clear
 
     # alias for speed
     set_difference = set.difference
 
     is_init_sorted = False
     while True:
-        while inner_stacks:
-            inner_stack = inner_stacks_pop()
-            inner_stack_pop = inner_stack.pop
-            while inner_stack:
-                # Perform a DFS along dependencies until we complete our tactical goal
+        while True:
+            # Perform a DFS along dependencies until we complete our tactical goal
+            if inner_stack:
                 item = inner_stack_pop()
                 if item in result:
                     continue
-
                 if num_needed[item]:
-                    if skip_root_node and item in root_nodes:
+                    if not skip_root_node or item not in root_nodes:
+                        inner_stack.append(item)
+                        deps = set_difference(dependencies[item], result)
+                        if 1 < len(deps) < 1000:
+                            inner_stack.extend(
+                                sorted(deps, key=dependencies_key, reverse=True)
+                            )
+                        else:
+                            inner_stack.extend(deps)
+                        seen_update(deps)
+                    if not singles:
                         continue
-
-                    inner_stack.append(item)
-                    deps = set_difference(dependencies[item], result)
-                    if 1 < len(deps) < 1000:
-                        inner_stack.extend(
-                            sorted(deps, key=dependencies_key, reverse=True)
-                        )
-                    else:
-                        inner_stack.extend(deps)
-                    seen_update(deps)
-                    continue
-
-                # If inner_stack is empty, then we typically add the best dependent to it.
-                # However, we don't add to it if we complete a node early via "finish_now" below
-                # or if a dependent is already on an inner_stack.  In this case, we add the
-                # dependents (not in an inner_stack) to next_nodes or later_nodes to handle later.
-                # This serves three purposes:
-                #   1. shrink `deps` so that it can be processed faster,
-                #   2. make sure we don't process the same dependency repeatedly, and
-                #   3. make sure we don't accidentally continue down an expensive-to-compute path.
-
-                deps = dependents[item]
-                add_to_inner_stack = True
-                item_key = partition_keys[item]
-                while True:
-                    # Be greedy!  This loop will repeat while the item has a single dependent
-                    # (after removing `finish_now` and `already_seen` from the dependents) and
-                    # this dependent is ready to run.  Let me explain.
-                    #
-                    # In simple terms, if there is a single dependent that's ready to run, and doing
-                    # so will allow the current node to be released from memory, then we should do so.
-                    # In the short term, it gains us little, but it also costs us litle.  Longer term,
-                    # this strategy may provide more opportunities for saving memory.
-                    #
-                    # In reality, computing a dependent here *may* allow the parent to be released
-                    # immediately, but not necessarily.  There is, however, an expectation that the
-                    # parent will be released *soon*, because its other dependents are already on the
-                    # inner stacks (and in `already_seen`).
-                    #
-                    # Hence, this can introduce locally sub-optimal behavior (more memory, and more
-                    # work that may not go towards our tactical goal) with the goal of being more
-                    # globally optimal.  The risk from being locally sub-optimal is most likely low,
-                    # and the reward for being more globally optimal is potentially very high, so I
-                    # think this strategy is probably a good idea in general.  Heh, even so, I expect
-                    # there are pathological failure cases to be found :)
+                    process_singles = True
+                else:
                     result[item] = i
                     i += 1
+                    deps = dependents[item]
+                    add_to_inner_stack = True
+
                     if metrics[item][3] == 1:  # min_height
                         # Don't leave any dangling single nodes!  Finish all dependents that are
                         # ready and are also root nodes.
@@ -358,130 +339,317 @@ def order(dsk, dependencies=None):
                                 result[dep] = i
                                 i += 1
                             add_to_inner_stack = False
-                    if deps:
-                        for dep in deps:
-                            num_needed[dep] -= 1
 
-                        already_seen = deps & seen
-                        if already_seen:
-                            if len(deps) == len(already_seen):
-                                deps = None
-                                break
-                            add_to_inner_stack = False
-                            deps -= already_seen
+                    for dep in deps:
+                        num_needed[dep] -= 1
+                    process_singles = False
+            elif inner_stacks:
+                inner_stack = inner_stacks_pop()
+                inner_stack_pop = inner_stack.pop
+                continue
+            elif singles:
+                process_singles = True
+            elif later_singles:
+                deps = set()
+                for single in later_singles:
+                    if single in result:
+                        continue
+                    while True:
+                        dep2 = dependents[single]
+                        result[single] = i
+                        i += 1
+                        if metrics[single][3] == 1:  # min_height
+                            # Don't leave any dangling single nodes!  Finish all dependents that are
+                            # ready and are also root nodes.
+                            finish_now = {
+                                dep
+                                for dep in dep2
+                                if not dependents[dep] and num_needed[dep] == 1
+                            }
+                            if finish_now:
+                                dep2 -= finish_now  # Safe to mutate
+                                if len(finish_now) > 1:
+                                    finish_now = sorted(finish_now, key=finish_now_key)
+                                for dep in finish_now:
+                                    result[dep] = i
+                                    i += 1
+                        if dep2:
+                            for dep in dep2:
+                                num_needed[dep] -= 1
 
-                        if len(deps) == 1:
-                            # Fast path!  We trim down `deps` above hoping to reach here.
-                            (item,) = deps
-                            if num_needed[item] == 0:
-                                deps = dependents[item]
-                                key = partition_keys[item]
-                                if key < item_key:
-                                    # We have three reasonable choices for item_key: first, last, min.
-                                    # I don't have a principled reason for choosing any of the options.
-                                    # So, let's choose min.  It may be the most conservative by avoiding
-                                    # accidentally going down an expensive-to-compute path.
-                                    item_key = key
-                                continue
-                    break
+                            if len(dep2) == 1:
+                                # Fast path!  We trim down `dep2` above hoping to reach here.
+                                if skip_root_node and dep2 == root_nodes:
+                                    break
+                                (single,) = dep2
+                                if num_needed[single] == 0:
+                                    dep2 = dependents[single]
+                                    continue
+                            deps |= dep2
+                        break
+                later_singles_clear()
+                deps -= result_keys
+                if not deps:
+                    continue
+                add_to_inner_stack = process_singles = False
+            else:
+                break
 
-                if deps:
-                    if len(deps) == 1:
-                        # Fast path!  We trim down `deps` above hoping to reach here.
-                        (dep,) = deps
-                        if not inner_stack:
-                            if add_to_inner_stack:
-                                inner_stack = [dep]
-                                inner_stack_pop = inner_stack.pop
-                                seen_add(dep)
-                                continue
-                            key = partition_keys[dep]
-                        else:
-                            key = partition_keys[dep]
-                            if key < partition_keys[inner_stack[0]]:
-                                # Run before `inner_stack` (change tactical goal!)
-                                inner_stacks_append(inner_stack)
-                                inner_stack = [dep]
-                                inner_stack_pop = inner_stack.pop
-                                seen_add(dep)
-                                continue
-                        if key < item_key:
-                            next_nodes[key].append(deps)
-                        else:
-                            later_nodes[key].append(deps)
+            if process_singles:
+                deps = set()
+                for single, parent in singles_items:
+                    if single in result:
+                        continue
+                    if len(dependents[parent] - result_keys) > 1:
+                        later_singles_append(single)
+                        continue
+
+                    while True:
+                        dep2 = dependents[single]
+                        result[single] = i
+                        i += 1
+                        if metrics[single][3] == 1:  # min_height
+                            # Don't leave any dangling single nodes!  Finish all dependents that are
+                            # ready and are also root nodes.
+                            finish_now = {
+                                dep
+                                for dep in dep2
+                                if not dependents[dep] and num_needed[dep] == 1
+                            }
+                            if finish_now:
+                                dep2 -= finish_now  # Safe to mutate
+                                if len(finish_now) > 1:
+                                    finish_now = sorted(finish_now, key=finish_now_key)
+                                for dep in finish_now:
+                                    result[dep] = i
+                                    i += 1
+                        if dep2:
+                            for dep in dep2:
+                                num_needed[dep] -= 1
+
+                            already_seen = dep2 & seen
+                            if already_seen:
+                                if len(dep2) == len(already_seen):
+                                    if len(already_seen) == 1:
+                                        (single,) = already_seen
+                                        if num_needed[single] == 0:
+                                            later_singles_append(single)
+                                    break
+                                dep2 = dep2 - already_seen
+
+                            if len(dep2) == 1:
+                                # Fast path!  We trim down `dep2` above hoping to reach here.
+                                (single,) = dep2
+                                if num_needed[single] == 0:
+                                    if not already_seen:
+                                        dep2 = dependents[single]
+                                        continue
+                                    later_singles_append(single)
+                                    break
+                            deps |= dep2
+                        break
+
+                deps -= result_keys
+                singles_clear()
+                if not deps:
+                    continue
+                add_to_inner_stack = False
+
+            # If inner_stack is empty, then we typically add the best dependent to it.
+            # However, we don't add to it if we complete a node early via "finish_now" above
+            # or if a dependent is already on an inner_stack.  In this case, we add the
+            # dependents (not in an inner_stack) to next_nodes or later_nodes to handle later.
+            # This serves three purposes:
+            #   1. shrink `deps` so that it can be processed faster,
+            #   2. make sure we don't process the same dependency repeatedly, and
+            #   3. make sure we don't accidentally continue down an expensive-to-compute path.
+            if deps:
+                already_seen = deps & seen
+                if already_seen:
+                    if len(deps) == len(already_seen):
+                        if len(already_seen) == 1:
+                            (dep,) = already_seen
+                            if num_needed[dep] == 0:
+                                singles[dep] = item
+                        continue
+                    add_to_inner_stack = False
+                    deps = deps - already_seen
+
+                if len(deps) == 1:
+                    # Fast path!  We trim down `deps` above hoping to reach here.
+                    (dep,) = deps
+                    if not inner_stack:
+                        if add_to_inner_stack:
+                            inner_stack = [dep]
+                            inner_stack_pop = inner_stack.pop
+                            seen_add(dep)
+                            continue
+                        key = partition_keys[dep]
                     else:
-                        # Slow path :(.  This requires grouping by partition_key.
-                        dep_pools = defaultdict(list)
-                        for dep in deps:
-                            dep_pools[partition_keys[dep]].append(dep)
-                        if inner_stack:
-                            # If we have an inner_stack, we need to look for a "better" path
-                            prev_key = partition_keys[inner_stack[0]]
-                            now_keys = []  # < inner_stack[0]
-                            for key, vals in dep_pools.items():
-                                if key < prev_key:
-                                    now_keys.append(key)
-                                elif key < item_key:
-                                    next_nodes[key].append(vals)
-                                else:
-                                    later_nodes[key].append(vals)
-                            if now_keys:
-                                # Run before `inner_stack` (change tactical goal!)
-                                inner_stacks_append(inner_stack)
-                                if 1 < len(now_keys):
-                                    now_keys.sort(reverse=True)
-                                for key in now_keys:
-                                    pool = dep_pools[key]
-                                    if 1 < len(pool) < 100:
-                                        pool.sort(key=dependents_key, reverse=True)
-                                    inner_stacks_extend([dep] for dep in pool)
-                                    seen_update(pool)
-                                inner_stack = inner_stacks_pop()
-                                inner_stack_pop = inner_stack.pop
+                        key = partition_keys[dep]
+                        if key < partition_keys[inner_stack[0]]:
+                            # Run before `inner_stack` (change tactical goal!)
+                            inner_stacks_append(inner_stack)
+                            inner_stack = [dep]
+                            inner_stack_pop = inner_stack.pop
+                            seen_add(dep)
+                            continue
+                    if num_needed[dep] == 0:
+                        singles[dep] = item
+                    elif key < partition_keys[item]:
+                        next_nodes[key].append(deps)
+                    else:
+                        later_nodes[key].append(deps)
+                elif len(deps) == 2:
+                    # We special-case when len(deps) == 2 so that we may place a dep on singles.
+                    dep, dep2 = deps
+                    key = partition_keys[dep]
+                    key2 = partition_keys[dep2]
+                    if (
+                        key2 < key
+                        or key == key2
+                        and dependents_key(dep2) < dependents_key(dep)
+                    ):
+                        dep, dep2 = dep2, dep
+                        key, key2 = key2, key
+                    if inner_stack:
+                        prev_key = partition_keys[inner_stack[0]]
+                        if key2 < prev_key:
+                            inner_stacks_append(inner_stack)
+                            inner_stacks_append([dep2])
+                            inner_stack = [dep]
+                            inner_stack_pop = inner_stack.pop
+                            seen_update(deps)
+                            if num_needed[dep2] == 0:
+                                singles[dep2] = item
+                        elif key < prev_key:
+                            inner_stacks_append(inner_stack)
+                            inner_stack = [dep]
+                            inner_stack_pop = inner_stack.pop
+                            seen_add(dep)
+                            if num_needed[dep2] == 0:
+                                singles[dep2] = item
+                            elif key2 < partition_keys[item]:
+                                next_nodes[key2].append([dep2])
+                            else:
+                                later_nodes[key2].append([dep2])
                         else:
-                            # If we don't have an inner_stack, then we don't need to look
-                            # for a "better" path, but we do need traverse along dependents.
-                            if add_to_inner_stack:
-                                min_key = min(dep_pools)
-                                min_pool = dep_pools.pop(min_key)
-                                if len(min_pool) == 1:
-                                    inner_stack = min_pool
-                                    seen_update(inner_stack)
-                                elif (
-                                    10 * item_key
-                                    > 11 * len(min_pool) * len(min_pool) * min_key
-                                ):
-                                    # Put all items in min_pool onto inner_stacks.
-                                    # I know this is a weird comparison.  Hear me out.
-                                    # Although it is often beneficial to put all of the items in `min_pool`
-                                    # onto `inner_stacks` to process next, it is very easy to be overzealous.
-                                    # Sometimes it is actually better to defer until `next_nodes` is handled.
-                                    # We should only put items onto `inner_stacks` that we're reasonably
-                                    # confident about.  The above formula is a best effort heuristic given
-                                    # what we have easily available.  It is obviously very specific to our
-                                    # choice of partition_key.  Dask tests take this route about 40%.
-                                    if len(min_pool) < 100:
-                                        min_pool.sort(key=dependents_key, reverse=True)
-                                    inner_stacks_extend([dep] for dep in min_pool)
-                                    inner_stack = inner_stacks_pop()
-                                    seen_update(min_pool)
-                                else:
-                                    # Put one item in min_pool onto inner_stack and the rest into next_nodes.
-                                    if len(min_pool) < 100:
-                                        inner_stack = [
-                                            min(min_pool, key=dependents_key)
-                                        ]
-                                    else:
-                                        inner_stack = [min_pool.pop()]
-                                    next_nodes[min_key].append(min_pool)
-                                    seen_update(inner_stack)
-
+                            item_key = partition_keys[item]
+                            if key2 < item_key:
+                                next_nodes[key].append([dep])
+                                next_nodes[key2].append([dep2])
+                            elif key < item_key:
+                                next_nodes[key].append([dep])
+                                later_nodes[key2].append([dep2])
+                            else:
+                                later_nodes[key].append([dep])
+                                later_nodes[key2].append([dep2])
+                    else:
+                        if add_to_inner_stack:
+                            if num_needed[dep2] == 0:
+                                inner_stacks_append(inner_stack)
+                                inner_stack = [dep]
                                 inner_stack_pop = inner_stack.pop
-                            for key, vals in dep_pools.items():
-                                if key < item_key:
-                                    next_nodes[key].append(vals)
+                                seen_add(dep)
+                                singles[dep2] = item
+                            elif key == key2 and 5 * partition_keys[item] > 22 * key:
+                                inner_stacks_append(inner_stack)
+                                inner_stacks_append([dep2])
+                                inner_stack = [dep]
+                                inner_stack_pop = inner_stack.pop
+                                seen_update(deps)
+                            else:
+                                inner_stacks_append(inner_stack)
+                                inner_stack = [dep]
+                                inner_stack_pop = inner_stack.pop
+                                seen_add(dep)
+                                if key2 < partition_keys[item]:
+                                    next_nodes[key2].append([dep2])
                                 else:
-                                    later_nodes[key].append(vals)
+                                    later_nodes[key2].append([dep2])
+                        else:
+                            item_key = partition_keys[item]
+                            if key2 < item_key:
+                                next_nodes[key].append([dep])
+                                next_nodes[key2].append([dep2])
+                            elif key < item_key:
+                                next_nodes[key].append([dep])
+                                later_nodes[key2].append([dep2])
+                            else:
+                                later_nodes[key].append([dep])
+                                later_nodes[key2].append([dep2])
+                else:
+                    # Slow path :(.  This requires grouping by partition_key.
+                    dep_pools = defaultdict(list)
+                    for dep in deps:
+                        dep_pools[partition_keys[dep]].append(dep)
+                    item_key = partition_keys[item]
+                    if inner_stack:
+                        # If we have an inner_stack, we need to look for a "better" path
+                        prev_key = partition_keys[inner_stack[0]]
+                        now_keys = []  # < inner_stack[0]
+                        for key, vals in dep_pools.items():
+                            if key < prev_key:
+                                now_keys.append(key)
+                            elif key < item_key:
+                                next_nodes[key].append(vals)
+                            else:
+                                later_nodes[key].append(vals)
+                        if now_keys:
+                            # Run before `inner_stack` (change tactical goal!)
+                            inner_stacks_append(inner_stack)
+                            if 1 < len(now_keys):
+                                now_keys.sort(reverse=True)
+                            for key in now_keys:
+                                pool = dep_pools[key]
+                                if 1 < len(pool) < 100:
+                                    pool.sort(key=dependents_key, reverse=True)
+                                inner_stacks_extend([dep] for dep in pool)
+                                seen_update(pool)
+                            inner_stack = inner_stacks_pop()
+                            inner_stack_pop = inner_stack.pop
+                    else:
+                        # If we don't have an inner_stack, then we don't need to look
+                        # for a "better" path, but we do need traverse along dependents.
+                        if add_to_inner_stack:
+                            min_key = min(dep_pools)
+                            min_pool = dep_pools.pop(min_key)
+                            if len(min_pool) == 1:
+                                inner_stack = min_pool
+                                seen_update(inner_stack)
+                            elif (
+                                10 * item_key
+                                > 11 * len(min_pool) * len(min_pool) * min_key
+                            ):
+                                # Put all items in min_pool onto inner_stacks.
+                                # I know this is a weird comparison.  Hear me out.
+                                # Although it is often beneficial to put all of the items in `min_pool`
+                                # onto `inner_stacks` to process next, it is very easy to be overzealous.
+                                # Sometimes it is actually better to defer until `next_nodes` is handled.
+                                # We should only put items onto `inner_stacks` that we're reasonably
+                                # confident about.  The above formula is a best effort heuristic given
+                                # what we have easily available.  It is obviously very specific to our
+                                # choice of partition_key.  Dask tests take this route about 40%.
+                                if len(min_pool) < 100:
+                                    min_pool.sort(key=dependents_key, reverse=True)
+                                inner_stacks_extend([dep] for dep in min_pool)
+                                inner_stack = inner_stacks_pop()
+                                seen_update(min_pool)
+                            else:
+                                # Put one item in min_pool onto inner_stack and the rest into next_nodes.
+                                if len(min_pool) < 100:
+                                    inner_stack = [min(min_pool, key=dependents_key)]
+                                else:
+                                    inner_stack = [min_pool.pop()]
+                                next_nodes[min_key].append(min_pool)
+                                seen_update(inner_stack)
+
+                            inner_stack_pop = inner_stack.pop
+                        for key, vals in dep_pools.items():
+                            if key < item_key:
+                                next_nodes[key].append(vals)
+                            else:
+                                later_nodes[key].append(vals)
 
         if len(dependencies) == len(result):
             break  # all done!
