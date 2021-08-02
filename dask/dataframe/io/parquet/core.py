@@ -919,7 +919,7 @@ def get_engine(engine):
         if engine in ("pyarrow", "arrow"):
             engine = "pyarrow-dataset"
         elif pa_version.major >= 5 and engine == "pyarrow-legacy":
-            raise ValueError(
+            warnings.warn(
                 "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "
                 "for pyarrow>=5. Please use `engine='pyarrow'`."
             )
