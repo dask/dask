@@ -10,7 +10,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
+from dask.array.utils import AxisError, assert_eq, same_keys
 
 
 def test_array():
@@ -514,6 +514,67 @@ def test_diff(shape, n, axis):
     a = da.from_array(x, chunks=(len(shape) * (5,)))
 
     assert_eq(da.diff(a, n, axis), np.diff(x, n, axis))
+
+
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_prepend(n):
+    x = np.arange(5) + 1
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, prepend=0), np.diff(x, n, prepend=0))
+    assert_eq(da.diff(a, n, prepend=[0]), np.diff(x, n, prepend=[0]))
+    assert_eq(da.diff(a, n, prepend=[-1, 0]), np.diff(x, n, prepend=[-1, 0]))
+
+    x = np.arange(16).reshape(4, 4)
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, axis=1, prepend=0), np.diff(x, n, axis=1, prepend=0))
+    assert_eq(
+        da.diff(a, n, axis=1, prepend=[[0], [0], [0], [0]]),
+        np.diff(x, n, axis=1, prepend=[[0], [0], [0], [0]]),
+    )
+    assert_eq(da.diff(a, n, axis=0, prepend=0), np.diff(x, n, axis=0, prepend=0))
+    assert_eq(
+        da.diff(a, n, axis=0, prepend=[[0, 0, 0, 0]]),
+        np.diff(x, n, axis=0, prepend=[[0, 0, 0, 0]]),
+    )
+
+    if n > 0:
+        # When order is 0 the result is the input array, it doesn't raise
+        # an error
+        with pytest.raises(ValueError):
+            da.diff(a, n, prepend=np.zeros((3, 3)))
+
+
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_append(n):
+    x = np.arange(5) + 1
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, append=0), np.diff(x, n, append=0))
+    assert_eq(da.diff(a, n, append=[0]), np.diff(x, n, append=[0]))
+    assert_eq(da.diff(a, n, append=[-1, 0]), np.diff(x, n, append=[-1, 0]))
+
+    x = np.arange(16).reshape(4, 4)
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, axis=1, append=0), np.diff(x, n, axis=1, append=0))
+    assert_eq(
+        da.diff(a, n, axis=1, append=[[0], [0], [0], [0]]),
+        np.diff(x, n, axis=1, append=[[0], [0], [0], [0]]),
+    )
+    assert_eq(da.diff(a, n, axis=0, append=0), np.diff(x, n, axis=0, append=0))
+    assert_eq(
+        da.diff(a, n, axis=0, append=[[0, 0, 0, 0]]),
+        np.diff(x, n, axis=0, append=[[0, 0, 0, 0]]),
+    )
+
+    if n > 0:
+        with pytest.raises(ValueError):
+            # When order is 0 the result is the input array, it doesn't raise
+            # an error
+            da.diff(a, n, append=np.zeros((3, 3)))
+
+
+def test_diff_negative_order():
+    with pytest.raises(ValueError):
+        da.diff(da.arange(10), -1)
 
 
 @pytest.mark.parametrize("shape", [(10,), (10, 15)])
@@ -1290,8 +1351,7 @@ def test_union1d(shape, reverse):
     result = np.union1d(dx1, dx2)
     expected = np.union1d(x1, x2)
 
-    if IS_NEP18_ACTIVE:
-        assert isinstance(result, da.Array)
+    assert isinstance(result, da.Array)
 
     assert_eq(result, expected)
 

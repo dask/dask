@@ -42,14 +42,7 @@ from .core import (
 from .creation import arange, diag, empty, indices, tri
 from .einsumfuncs import einsum  # noqa
 from .ufunc import multiply, sqrt
-from .utils import (
-    array_safe,
-    asarray_safe,
-    meta_from_array,
-    safe_wraps,
-    validate_axis,
-    zeros_like_safe,
-)
+from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
 from .wrap import ones
 
 # save built-in for histogram functions which use range as a kwarg.
@@ -570,10 +563,37 @@ def ptp(a, axis=None):
 
 
 @derived_from(np)
-def diff(a, n=1, axis=-1):
+def diff(a, n=1, axis=-1, prepend=None, append=None):
     a = asarray(a)
     n = int(n)
     axis = int(axis)
+
+    if n == 0:
+        return a
+    if n < 0:
+        raise ValueError("order must be non-negative but got %d" % n)
+
+    combined = []
+    if prepend is not None:
+        prepend = asarray_safe(prepend, like=meta_from_array(a))
+        if prepend.ndim == 0:
+            shape = list(a.shape)
+            shape[axis] = 1
+            prepend = broadcast_to(prepend, tuple(shape))
+        combined.append(prepend)
+
+    combined.append(a)
+
+    if append is not None:
+        append = asarray_safe(append, like=meta_from_array(a))
+        if append.ndim == 0:
+            shape = list(a.shape)
+            shape[axis] = 1
+            append = np.broadcast_to(append, tuple(shape))
+        combined.append(append)
+
+    if len(combined) > 1:
+        a = concatenate(combined, axis)
 
     sl_1 = a.ndim * [slice(None)]
     sl_2 = a.ndim * [slice(None)]
@@ -712,7 +732,7 @@ def _bincount_agg(bincounts, dtype, **kwargs):
         return bincounts
 
     n = max(map(len, bincounts))
-    out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
+    out = np.zeros_like(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
         out[: len(b)] += b
     return out
@@ -2376,7 +2396,7 @@ def tril(m, k=0):
         *m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m)
     )
 
-    return where(mask, m, zeros_like_safe(m, shape=(1,)))
+    return where(mask, m, np.zeros_like(m, shape=(1,)))
 
 
 @derived_from(np)
@@ -2390,7 +2410,7 @@ def triu(m, k=0):
         like=meta_from_array(m),
     )
 
-    return where(mask, zeros_like_safe(m, shape=(1,)), m)
+    return where(mask, np.zeros_like(m, shape=(1,)), m)
 
 
 @derived_from(np)
