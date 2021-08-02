@@ -24,8 +24,8 @@ Conversation happens in the following places:
     `https://dask.slack.com/ <https://join.slack.com/t/dask/shared_invite/zt-mfmh7quc-nIrXL6ocgiUH2haLYA914g>`_.
 4.  **Monthly developer meeting** happens the first Thursday of the month at
     10:00 US Central Time in `this video meeting <https://us06web.zoom.us/j/87619866741?pwd=S2RxMlRKcnVvakt4NHZoS1cwOGZoZz09>`_.
-    Meeting notes are available at
-    https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit
+    Meeting notes are available in
+    `this Google doc <https://docs.google.com/document/d/1UqNAP87a56ERH_xkQsS5Q_0PKYybd5Lj2WANy_hRzI0/edit>`_.
 
     .. raw:: html
 
