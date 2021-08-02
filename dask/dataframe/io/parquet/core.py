@@ -165,15 +165,12 @@ def read_parquet(
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
         which selects the FastParquetEngine if fastparquet is installed (and
-        ArrowLegacyEngine otherwise).  If 'pyarrow-dataset' is specified, the
-        ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
-        for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
-        specified, the ArrowLegacyEngine will be used (which leverages the
-        pyarrow.parquet.ParquetDataset API).
-        NOTE: 'pyarrow-dataset' enables row-wise filtering, but requires
-        pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
-        ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
-        option will be deprecated once the ParquetDataset API is deprecated.
+        ArrowDatasetEngine otherwise).  If 'pyarrow' or 'pyarrow-dataset' is
+        specified, the ArrowDatasetEngine (which leverages the pyarrow.dataset
+        API) will be used. If 'pyarrow-legacy' is specified, ArrowLegacyEngine
+        will be used (which leverages the pyarrow.parquet.ParquetDataset API).
+        NOTE: The 'pyarrow-legacy' option (ArrowLegacyEngine) is deprecated
+        for pyarrow>=5.
     gather_statistics : bool, default None
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -921,7 +918,8 @@ def get_engine(engine):
         elif pa_version.major >= 5 and engine == "pyarrow-legacy":
             warnings.warn(
                 "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "
-                "for pyarrow>=5. Please use `engine='pyarrow'`."
+                "for pyarrow>=5. Please use `engine='pyarrow'`.",
+                FutureWarning,
             )
 
         if engine == "pyarrow-dataset":
