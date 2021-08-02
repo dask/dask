@@ -1241,9 +1241,11 @@ def to_graphviz(
         xfontsize = (
             20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
         )
+        xtooltip = str(type(hg.layers[layer]).__name__)
 
         attrs.setdefault("label", str(xlabel))
         attrs.setdefault("fontsize", str(xfontsize))
+        attrs.setdefault("tooltip", str(xtooltip))
 
         g.node(layer_name, **attrs)
 
