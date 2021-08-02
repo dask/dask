@@ -13,17 +13,7 @@ from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 
 pytest.importorskip("pyarrow.orc")
-
-# Skip for broken ORC reader
-import pyarrow as pa
-
-pytestmark = pytest.mark.skipif(
-    parse_version(pa.__version__).base_version == parse_version("0.10.0"),
-    reason=(
-        "PyArrow 0.10.0 release broke the ORC reader, see "
-        "https://issues.apache.org/jira/browse/ARROW-3009"
-    ),
-)
+pa = pytest.importorskip("pyarrow")
 
 
 url = (
