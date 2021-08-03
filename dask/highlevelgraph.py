@@ -341,7 +341,7 @@ class Layer(collections.abc.Mapping):
           - Serializable by msgpack (notice, msgpack converts lists to tuples)
           - All remote data must be unpacked (see unpack_remotedata())
           - All keys must be converted to strings now or when unpacking
-          - All tasks must be typesetted (see typeset_dask_graph())
+          - All tasks must be typeset (see typeset_dask_graph())
 
         The default implementation materialize the layer thus layers such as Blockwise
         and ShuffleLayer should implement a specialized pack and unpack function in
