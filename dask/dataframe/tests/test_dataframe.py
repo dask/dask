@@ -3994,6 +3994,14 @@ def test_to_datetime():
         check_divisions=False,
     )
 
+    with pytest.raises(NotImplementedError) as exc:
+        res = dd.to_datetime("2021-08-03")
+    assert "non-index-able arguments" in str(exc.value)
+
+    with pytest.raises(NotImplementedError) as exc:
+        res = dd.to_datetime(2021)
+    assert "non-index-able arguments" in str(exc.value)
+
 
 def test_to_timedelta():
     s = pd.Series(range(10))
