@@ -918,7 +918,18 @@ def nanstd(
 
 def _arg_combine(data, axis, argfunc, keepdims=False):
     """Merge intermediate results from ``arg_*`` functions"""
-    axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
+    if isinstance(data, dict):
+        # Array type doesn't support structured arrays (e.g., CuPy),
+        # therefore `data` is stored in a `dict`.
+        assert data["vals"].ndim == data["arg"].ndim
+        axis = (
+            None
+            if len(axis) == data["vals"].ndim or data["vals"].ndim == 1
+            else axis[0]
+        )
+    else:
+        axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
+
     vals = data["vals"]
     arg = data["arg"]
     if axis is None:
@@ -957,9 +968,14 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
             fill_value = np.ma.maximum_fill_value(vals)
         vals = np.ma.filled(vals, fill_value)
 
-    result = np.empty(
-        shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
-    )
+    try:
+        result = np.empty_like(
+            vals, shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
+        )
+    except TypeError:
+        # Array type doesn't support structured arrays (e.g., CuPy)
+        result = dict()
+
     result["vals"] = vals
     result["arg"] = arg
     return result
@@ -967,9 +983,15 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
 
 def arg_combine(func, argfunc, data, axis=None, **kwargs):
     arg, vals = _arg_combine(data, axis, argfunc, keepdims=True)
-    result = np.empty(
-        shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
-    )
+
+    try:
+        result = np.empty_like(
+            vals, shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
+        )
+    except TypeError:
+        # Array type doesn't support structured arrays (e.g., CuPy).
+        result = dict()
+
     result["vals"] = vals
     result["arg"] = arg
     return result
