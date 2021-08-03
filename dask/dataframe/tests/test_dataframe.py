@@ -3995,11 +3995,11 @@ def test_to_datetime():
     )
 
     with pytest.raises(NotImplementedError) as exc:
-        res = dd.to_datetime("2021-08-03")
+        dd.to_datetime("2021-08-03")
     assert "non-index-able arguments" in str(exc.value)
 
     with pytest.raises(NotImplementedError) as exc:
-        res = dd.to_datetime(2021)
+        dd.to_datetime(2021)
     assert "non-index-able arguments" in str(exc.value)
 
 
