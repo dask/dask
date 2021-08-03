@@ -230,7 +230,6 @@ def order(dsk, dependencies=None):
     }
 
     result = {}
-    result_keys = result.keys()
     i = 0
 
     # `inner_stack` is used to perform a DFS along dependencies.  Once emptied
@@ -388,7 +387,7 @@ def order(dsk, dependencies=None):
                             deps |= dep2
                         break
                 later_singles_clear()
-                deps -= result_keys
+                deps = set_difference(deps, result)
                 if not deps:
                     continue
                 add_to_inner_stack = process_singles = False
@@ -400,7 +399,7 @@ def order(dsk, dependencies=None):
                 for single, parent in singles_items:
                     if single in result:
                         continue
-                    if len(dependents[parent] - result_keys) > 1:
+                    if len(set_difference(dependents[parent], result)) > 1:
                         later_singles_append(single)
                         continue
 
@@ -433,7 +432,8 @@ def order(dsk, dependencies=None):
                                     if len(already_seen) == 1:
                                         (single,) = already_seen
                                         if num_needed[single] == 0:
-                                            later_singles_append(single)
+                                            dep2 = dependents[single]
+                                            continue
                                     break
                                 dep2 = dep2 - already_seen
 
@@ -449,7 +449,7 @@ def order(dsk, dependencies=None):
                             deps |= dep2
                         break
 
-                deps -= result_keys
+                deps = set_difference(deps, result)
                 singles_clear()
                 if not deps:
                     continue
