@@ -1,9 +1,10 @@
 import warnings
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from tlz import partition
+
+import dask.dataframe as dd
 
 #  preserve compatibility while moving dispatch objects
 from .dispatch import (  # noqa: F401
