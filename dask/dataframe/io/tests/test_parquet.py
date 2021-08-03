@@ -64,11 +64,16 @@ SKIP_PYARROW_LE = SKIP_PYARROW
 SKIP_PYARROW_LE_REASON = "pyarrow not found"
 SKIP_PYARROW_DS = SKIP_PYARROW
 SKIP_PYARROW_DS_REASON = "pyarrow not found"
-if pa and pa_version.major >= 5:
-    SKIP_PYARROW_LE = True
-    SKIP_PYARROW_LE_REASON = "pyarrow < 5.0.0 required for pyarrow legacy API"
-PYARROW_LE_MARK = pytest.mark.skipif(SKIP_PYARROW_LE, reason=SKIP_PYARROW_LE_REASON)
-
+if pa_version.major >= 5 and not SKIP_PYARROW:
+    # NOTE: We should use PYARROW_LE_MARK to skip
+    # pyarrow-legacy tests one pyarrow officially
+    # removes ParquetDataset support in the future.
+    PYARROW_LE_MARK = pytest.mark.filterwarnings(
+        "ignore::DeprecationWarning",
+        "ignore::FutureWarning",
+    )
+else:
+    PYARROW_LE_MARK = pytest.mark.skipif(SKIP_PYARROW_LE, reason=SKIP_PYARROW_LE_REASON)
 PYARROW_DS_MARK = pytest.mark.skipif(SKIP_PYARROW_DS, reason=SKIP_PYARROW_DS_REASON)
 
 ANY_ENGINE_MARK = pytest.mark.skipif(
