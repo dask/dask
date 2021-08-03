@@ -1703,6 +1703,32 @@ class ArrowDatasetEngine(Engine):
         )
         return arrow_table
 
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        with fs.open(path, "rb") as f:
+            meta = pq.ParquetFile(f).metadata
+        if file_path:
+            meta.set_file_path(file_path)
+        return meta
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        meta = None
+        for _meta in meta_list:
+            if meta:
+                _append_row_groups(meta, _meta)
+            else:
+                meta = _meta
+        if out_path:
+            metadata_path = fs.sep.join([out_path, "_metadata"])
+            with fs.open(metadata_path, "wb") as fil:
+                if not meta:
+                    raise ValueError("Cannot write empty metdata!")
+                meta.write_metadata_file(fil)
+            return None
+        else:
+            return meta
+
 
 #
 #  PyArrow Legacy API [PyArrow<1.0.0]
@@ -2134,32 +2160,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             cls._parquet_piece_as_arrow,
             **kwargs,
         )
-
-    @classmethod
-    def collect_file_metadata(cls, path, fs, file_path):
-        with fs.open(path, "rb") as f:
-            meta = pq.ParquetFile(f).metadata
-        if file_path:
-            meta.set_file_path(file_path)
-        return meta
-
-    @classmethod
-    def aggregate_metadata(cls, meta_list, fs, out_path):
-        meta = None
-        for _meta in meta_list:
-            if meta:
-                _append_row_groups(meta, _meta)
-            else:
-                meta = _meta
-        if out_path:
-            metadata_path = fs.sep.join([out_path, "_metadata"])
-            with fs.open(metadata_path, "wb") as fil:
-                if not meta:
-                    raise ValueError("Cannot write empty metdata!")
-                meta.write_metadata_file(fil)
-            return None
-        else:
-            return meta
 
     @classmethod
     def multi_support(cls):
