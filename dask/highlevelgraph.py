@@ -1241,11 +1241,25 @@ def to_graphviz(
         node_size = (
             20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
         )
-        node_tooltip = str(type(hg.layers[layer]).__name__)
+
+        node_tooltips = f"Layer Type: {str(type(hg.layers[layer]).__name__)}\n"
+        node_tooltips += f"N Tasks: {n_tasks[layer]}\n"
+
+        if hg.layers[layer].collection_annotations:
+            ca = hg.layers[layer].collection_annotations
+            if ca.get("type") == "dask.array.core.Array":
+                node_tooltips += f"Array Shape: {ca.get('shape')}\n"
+                node_tooltips += f"Data Type: {ca.get('dtype')}\n"
+                node_tooltips += f"Chunk Size: {ca.get('chunksize')}\n"
+                node_tooltips += f"Chunk Type: {ca.get('chunk_type')}\n"
+            if ca.get("type") == "dask.dataframe.core.DataFrame":
+                node_tooltips += f"N Partitions: {ca.get('npartitions')}\n"
+                node_tooltips += f"DataFrame Type: {ca.get('dataframe_type')}\n"
+                node_tooltips += f"DataFrame Columns: {ca.get('columns')}\n"
 
         attrs.setdefault("label", str(node_label))
         attrs.setdefault("fontsize", str(node_size))
-        attrs.setdefault("tooltip", str(node_tooltip))
+        attrs.setdefault("tooltip", str(node_tooltips))
 
         g.node(layer_name, **attrs)
 
