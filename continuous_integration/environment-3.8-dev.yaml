@@ -5,6 +5,7 @@ channels:
 dependencies:
   # required dependencies
   - python=3.8
+  - packaging
   # For the dependencies. These will be re-installed later.
   - numpy
   - pandas
@@ -24,7 +25,8 @@ dependencies:
   # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
   - sqlalchemy<1.4.0
-  - pyarrow
+  # TODO: Remove pyarrow pinning once pyarrow=5 deprecations have been resolved
+  - pyarrow<5
   - jsonschema
   # other -- IO
   - bcolz

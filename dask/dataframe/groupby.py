@@ -22,7 +22,6 @@ from .core import (
 from .methods import concat, drop_columns
 from .shuffle import shuffle
 from .utils import (
-    PANDAS_GT_100,
     PANDAS_GT_110,
     insert_meta_param_description,
     is_dataframe_like,
@@ -279,8 +278,6 @@ def _groupby_aggregate(
     df, aggfunc=None, levels=None, dropna=None, sort=False, observed=None, **kwargs
 ):
     dropna = {"dropna": dropna} if dropna is not None else {}
-    if not PANDAS_GT_100 and observed:
-        raise NotImplementedError("``observed`` is only supported for pandas >= 1.0.0")
     observed = {"observed": observed} if observed is not None else {}
 
     grouped = df.groupby(level=levels, sort=sort, **observed, **dropna)
@@ -1056,6 +1053,10 @@ class _GroupBy:
         sort=None,
         observed=None,
     ):
+
+        by_ = by if isinstance(by, (tuple, list)) else [by]
+        if any(isinstance(key, pd.Grouper) for key in by_):
+            raise NotImplementedError("pd.Grouper is currently not supported by Dask.")
 
         assert isinstance(df, (DataFrame, Series))
         self.group_keys = group_keys
@@ -1950,7 +1951,9 @@ class SeriesGroupBy(_GroupBy):
 
 
 def _unique_aggregate(series_gb, name=None):
-    ret = pd.Series({k: v.explode().unique() for k, v in series_gb}, name=name)
+    ret = type(series_gb.obj)(
+        {k: v.explode().unique() for k, v in series_gb}, name=name
+    )
     ret.index.names = series_gb.obj.index.names
     return ret
 

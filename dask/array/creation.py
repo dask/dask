@@ -25,7 +25,7 @@ from .core import (
     stack,
 )
 from .ufunc import greater_equal, rint
-from .utils import AxisError, meta_from_array, zeros_like_safe
+from .utils import AxisError, meta_from_array
 from .wrap import empty, full, ones, zeros
 
 
@@ -543,18 +543,12 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
 
     if not isinstance(chunks, (int, str)):
         raise ValueError("chunks must be an int or string")
-    elif isinstance(chunks, str):
-        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
-        chunks = chunks[0][0]
+
+    vchunks, hchunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+    chunks = vchunks[0]
+
     token = tokenize(N, chunks, M, k, dtype)
     name_eye = "eye-" + token
-
-    vchunks = [chunks] * (N // chunks)
-    if N % chunks != 0:
-        vchunks.append(N % chunks)
-    hchunks = [chunks] * (M // chunks)
-    if M % chunks != 0:
-        hchunks.append(M % chunks)
 
     for i, vchunk in enumerate(vchunks):
         for j, hchunk in enumerate(hchunks):
@@ -614,7 +608,7 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
-                dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
+                dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
     return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
@@ -861,9 +855,6 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     """
     Helper function to find the linear ramp for a chunk.
     """
-
-    from .utils import empty_like_safe
-
     num1 = num + 1
 
     shape = list(start.shape)
@@ -872,7 +863,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = empty_like_safe(start, shape, dtype=dtype)
+    result = np.empty_like(start, shape=shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)

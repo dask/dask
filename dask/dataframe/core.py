@@ -26,7 +26,6 @@ except ImportError:
 from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
-from ..array.utils import zeros_like_safe
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
@@ -63,7 +62,6 @@ from .dispatch import (
 )
 from .optimize import optimize
 from .utils import (
-    PANDAS_GT_100,
     PANDAS_GT_110,
     PANDAS_GT_120,
     check_matching_columns,
@@ -84,6 +82,23 @@ from .utils import (
 no_default = "__no_default__"
 
 pd.set_option("compute.use_numexpr", False)
+
+
+def _numeric_only(func):
+    """Decorator for methods that accept a numeric_only kwarg"""
+
+    @wraps(func)
+    def wrapper(self, *args, **kwargs):
+        # numeric_only is None by default - in that case self = self.
+        if kwargs.get("numeric_only") is False:
+            raise NotImplementedError(
+                "'numeric_only=False' is not implemented in Dask."
+            )
+        elif kwargs.get("numeric_only") is True:
+            self = self._get_numeric_data()
+        return func(self, *args, **kwargs)
+
+    return wrapper
 
 
 def _concat(args, ignore_index=False):
@@ -1711,6 +1726,7 @@ Dask Name: {name}, {task} tasks"""
             "any", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def sum(
         self,
@@ -1720,6 +1736,7 @@ Dask Name: {name}, {task} tasks"""
         dtype=None,
         out=None,
         min_count=None,
+        numeric_only=None,
     ):
         result = self._reduction_agg(
             "sum", axis=axis, skipna=skipna, split_every=split_every, out=out
@@ -1735,6 +1752,7 @@ Dask Name: {name}, {task} tasks"""
         else:
             return result
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def prod(
         self,
@@ -1744,6 +1762,7 @@ Dask Name: {name}, {task} tasks"""
         dtype=None,
         out=None,
         min_count=None,
+        numeric_only=None,
     ):
         result = self._reduction_agg(
             "prod", axis=axis, skipna=skipna, split_every=split_every, out=out
@@ -1761,14 +1780,20 @@ Dask Name: {name}, {task} tasks"""
 
     product = prod  # aliased dd.product
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def max(self, axis=None, skipna=True, split_every=False, out=None):
+    def max(
+        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
+    ):
         return self._reduction_agg(
             "max", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def min(self, axis=None, skipna=True, split_every=False, out=None):
+    def min(
+        self, axis=None, skipna=True, split_every=False, out=None, numeric_only=None
+    ):
         return self._reduction_agg(
             "min", axis=axis, skipna=skipna, split_every=split_every, out=out
         )
@@ -1839,8 +1864,9 @@ Dask Name: {name}, {task} tasks"""
                 result.divisions = (min(self.columns), max(self.columns))
             return result
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def count(self, axis=None, split_every=False):
+    def count(self, axis=None, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         token = self._token_prefix + "count"
         if axis == 1:
@@ -1875,8 +1901,17 @@ Dask Name: {name}, {task} tasks"""
         )
         return mode_series
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def mean(self, axis=None, skipna=True, split_every=False, dtype=None, out=None):
+    def mean(
+        self,
+        axis=None,
+        skipna=True,
+        split_every=False,
+        dtype=None,
+        out=None,
+        numeric_only=None,
+    ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "mean")
         meta = self._meta_nonempty.mean(axis=axis, skipna=skipna)
@@ -1909,9 +1944,17 @@ Dask Name: {name}, {task} tasks"""
                 result.divisions = (self.columns.min(), self.columns.max())
             return handle_out(out, result)
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def var(
-        self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None
+        self,
+        axis=None,
+        skipna=True,
+        ddof=1,
+        split_every=False,
+        dtype=None,
+        out=None,
+        numeric_only=None,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "var")
@@ -1933,18 +1976,8 @@ Dask Name: {name}, {task} tasks"""
                 result = self._var_1d(self, skipna, ddof, split_every)
                 return handle_out(out, result)
 
-            count_timedeltas = len(
-                self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns
-            )
-
             # pandas 1.0+ does not implement var on timedelta
-
-            if not PANDAS_GT_100 and count_timedeltas == len(self._meta.columns):
-                result = self._var_timedeltas(skipna, ddof, split_every)
-            elif not PANDAS_GT_100 and count_timedeltas > 0:
-                result = self._var_mixed(skipna, ddof, split_every)
-            else:
-                result = self._var_numeric(skipna, ddof, split_every)
+            result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
@@ -2056,9 +2089,17 @@ Dask Name: {name}, {task} tasks"""
             graph, name, column._meta_nonempty.var(), divisions=[None, None]
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def std(
-        self, axis=None, skipna=True, ddof=1, split_every=False, dtype=None, out=None
+        self,
+        axis=None,
+        skipna=True,
+        ddof=1,
+        split_every=False,
+        dtype=None,
+        out=None,
+        numeric_only=None,
     ):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "std")
@@ -2089,8 +2130,11 @@ Dask Name: {name}, {task} tasks"""
             )
             return handle_out(out, result)
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def skew(self, axis=None, bias=True, nan_policy="propagate", out=None):
+    def skew(
+        self, axis=None, bias=True, nan_policy="propagate", out=None, numeric_only=None
+    ):
         """
         .. note::
 
@@ -2189,9 +2233,16 @@ Dask Name: {name}, {task} tasks"""
             graph, name, num._meta_nonempty.skew(), divisions=[None, None]
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
     def kurtosis(
-        self, axis=None, fisher=True, bias=True, nan_policy="propagate", out=None
+        self,
+        axis=None,
+        fisher=True,
+        bias=True,
+        nan_policy="propagate",
+        out=None,
+        numeric_only=None,
     ):
         """
         .. note::
@@ -2302,8 +2353,9 @@ Dask Name: {name}, {task} tasks"""
             graph, name, num._meta_nonempty.kurtosis(), divisions=[None, None]
         )
 
+    @_numeric_only
     @derived_from(pd.DataFrame)
-    def sem(self, axis=None, skipna=None, ddof=1, split_every=False):
+    def sem(self, axis=None, skipna=None, ddof=1, split_every=False, numeric_only=None):
         axis = self._validate_axis(axis)
         _raise_if_object_series(self, "sem")
         meta = self._meta_nonempty.sem(axis=axis, skipna=skipna, ddof=ddof)
@@ -2816,10 +2868,7 @@ Dask Name: {name}, {task} tasks"""
         date = self.divisions[0] + offset
         end = self.loc._get_partitions(date)
 
-        if PANDAS_GT_100:
-            is_anchored = offset.is_anchored()
-        else:
-            is_anchored = offset.isAnchored()
+        is_anchored = offset.is_anchored()
 
         include_right = is_anchored or not hasattr(offset, "delta")
 
@@ -3040,7 +3089,7 @@ class Series(_Frame):
         Examples
         --------
         >>> series.shape  # doctest: +SKIP
-        # (dd.Scalar<size-ag..., dtype=int64>,)
+        (dd.Scalar<size-ag..., dtype=int64>,)
         """
         return (self.size,)
 
@@ -3401,7 +3450,7 @@ Dask Name: {name}, {task} tasks""".format(
         return self.map_partitions(M.dropna, enforce_metadata=False)
 
     @derived_from(pd.Series)
-    def between(self, left, right, inclusive=True):
+    def between(self, left, right, inclusive="both"):
         return self.map_partitions(
             M.between, left=left, right=right, inclusive=inclusive
         )
@@ -4544,7 +4593,7 @@ class DataFrame(_Frame):
             broadcast=broadcast,
         )
 
-    @derived_from(pd.DataFrame)  # doctest: +SKIP
+    @derived_from(pd.DataFrame)
     def join(
         self,
         other,
@@ -4758,12 +4807,15 @@ class DataFrame(_Frame):
         dask.DataFrame.map_partitions
         """
 
+        if broadcast is not None:
+            warnings.warn(
+                "The `broadcast` argument is no longer used/supported. "
+                "It will be dropped in a future release.",
+                category=FutureWarning,
+            )
+
         axis = self._validate_axis(axis)
         pandas_kwargs = {"axis": axis, "raw": raw, "result_type": result_type}
-
-        if not PANDAS_GT_100:
-            pandas_kwargs["broadcast"] = broadcast
-            pandas_kwargs["reduce"] = None
 
         kwds.update(pandas_kwargs)
 
@@ -6055,8 +6107,8 @@ def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
     df = df.astype("float64", copy=False)
-    sums = zeros_like_safe(df.values, shape=shape)
-    counts = zeros_like_safe(df.values, shape=shape)
+    sums = np.zeros_like(df.values, shape=shape)
+    counts = np.zeros_like(df.values, shape=shape)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
@@ -6067,7 +6119,7 @@ def cov_corr_chunk(df, corr=False):
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             mu = (sums / counts).T
-        m = zeros_like_safe(df.values, shape=shape)
+        m = np.zeros_like(df.values, shape=shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
             # Avoid using ufunc.outer (not supported by cupy)
@@ -6242,13 +6294,13 @@ def repartition_divisions(a, b, name, out1, out2, force=False):
 
     Examples
     --------
-    >>> repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c')  # doctest: +SKIP
+    >>> from pprint import pprint
+    >>> pprint(repartition_divisions([1, 3, 7], [1, 4, 6, 7], 'a', 'b', 'c'))  # doctest: +ELLIPSIS
     {('b', 0): (<function boundary_slice at ...>, ('a', 0), 1, 3, False),
      ('b', 1): (<function boundary_slice at ...>, ('a', 1), 3, 4, False),
      ('b', 2): (<function boundary_slice at ...>, ('a', 1), 4, 6, False),
-     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, False)
-     ('c', 0): (<function concat at ...>,
-                (<type 'list'>, [('b', 0), ('b', 1)])),
+     ('b', 3): (<function boundary_slice at ...>, ('a', 1), 6, 7, True),
+     ('c', 0): (<function concat at ...>, [('b', 0), ('b', 1)]),
      ('c', 1): ('b', 2),
      ('c', 2): ('b', 3)}
     """
@@ -6735,11 +6787,7 @@ def maybe_shift_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if PANDAS_GT_100:
-            is_anchored = freq.is_anchored()
-        else:
-            is_anchored = freq.isAnchored()
-        if is_anchored or not hasattr(freq, "delta"):
+        if freq.is_anchored() or not hasattr(freq, "delta"):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])

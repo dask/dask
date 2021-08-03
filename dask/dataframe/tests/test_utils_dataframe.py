@@ -8,7 +8,6 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    PANDAS_GT_100,
     PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
     check_matching_columns,
@@ -376,6 +375,21 @@ def test_check_meta():
     )
     assert str(err.value) == exp
 
+    # pandas dtype metadata error
+    with pytest.raises(ValueError) as err:
+        check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
+    assert str(err.value) == (
+        "Metadata mismatch found.\n"
+        "\n"
+        "Partition type: `pandas.core.series.Series`\n"
+        "+----------+--------+\n"
+        "|          | dtype  |\n"
+        "+----------+--------+\n"
+        "| Found    | object |\n"
+        "| Expected | string |\n"
+        "+----------+--------+"
+    )
+
 
 def test_check_matching_columns_raises_appropriate_errors():
     df = pd.DataFrame(columns=["a", "b", "c"])
@@ -477,7 +491,6 @@ def test_apply_and_enforce_message():
         apply_and_enforce(_func=func, _meta=meta)
 
 
-@pytest.mark.skipif(not PANDAS_GT_100, reason="Only pandas>1")
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
     with pytest.warns(None) as w:

@@ -1,4 +1,5 @@
 import operator
+from functools import partial
 from numbers import Number
 
 import numpy as np
@@ -12,14 +13,7 @@ from ..utils import apply, derived_from
 from .core import Array, concatenate, dotmany, from_delayed
 from .creation import eye
 from .random import RandomState
-from .utils import (
-    array_safe,
-    meta_from_array,
-    ones_like_safe,
-    solve_triangular_safe,
-    svd_flip,
-    zeros_like_safe,
-)
+from .utils import array_safe, meta_from_array, solve_triangular_safe, svd_flip
 
 
 def _cumsum_blocks(it):
@@ -797,7 +791,7 @@ def svd_compressed(
 
     Examples
     --------
-    >>> u, s, vt = svd_compressed(x, 20)  # doctest: +SKIP
+    >>> u, s, v = svd_compressed(x, 20)  # doctest: +SKIP
 
     Returns
     -------
@@ -942,7 +936,7 @@ def svd(a, coerce_signs=True):
         m, n = a.shape
         k = min(a.shape)
         mu, ms, mv = np.linalg.svd(
-            ones_like_safe(a._meta, shape=(1, 1), dtype=a._meta.dtype)
+            np.ones_like(a._meta, shape=(1, 1), dtype=a._meta.dtype)
         )
         u, s, v = delayed(np.linalg.svd, nout=3)(a, full_matrices=False)
         u = from_delayed(u, shape=(m, k), meta=mu)
@@ -1325,9 +1319,8 @@ def _cholesky(a):
         for j in range(hdim):
             if i < j:
                 dsk[name, i, j] = (
-                    zeros_like_safe,
+                    partial(np.zeros_like, shape=(a.chunks[0][i], a.chunks[1][j])),
                     meta_from_array(a),
-                    (a.chunks[0][i], a.chunks[1][j]),
                 )
                 dsk[name_upper, j, i] = (name, i, j)
             elif i == j:

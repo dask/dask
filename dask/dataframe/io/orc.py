@@ -1,11 +1,8 @@
-from distutils.version import LooseVersion
-
 from fsspec.core import get_fs_token_paths
 
 from ...base import tokenize
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
-from ...utils import import_required
 from ..core import DataFrame
 from .utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
@@ -43,16 +40,12 @@ class ORCFunctionWrapper:
 
 def _read_orc_stripe(fs, path, stripe, columns=None):
     """Pull out specific data from specific part of ORC file"""
-    orc = import_required("pyarrow.orc", "Please install pyarrow >= 0.9.0")
-    import pyarrow as pa
+    from pyarrow import orc
 
     with fs.open(path, "rb") as f:
         o = orc.ORCFile(f)
         table = o.read_stripe(stripe, columns)
-    if pa.__version__ < LooseVersion("0.11.0"):
-        return table.to_pandas()
-    else:
-        return table.to_pandas(date_as_object=False)
+    return table.to_pandas(date_as_object=False)
 
 
 def read_orc(path, columns=None, storage_options=None):
@@ -77,18 +70,7 @@ def read_orc(path, columns=None, storage_options=None):
     >>> df = dd.read_orc('https://github.com/apache/orc/raw/'
     ...                  'master/examples/demo-11-zlib.orc')  # doctest: +SKIP
     """
-    orc = import_required("pyarrow.orc", "Please install pyarrow >= 0.9.0")
-    import pyarrow as pa
-
-    if LooseVersion(pa.__version__) == "0.10.0":
-        raise RuntimeError(
-            "Due to a bug in pyarrow 0.10.0, the ORC reader is "
-            "unavailable. Please either downgrade pyarrow to "
-            "0.9.0, or use the pyarrow master branch (in which "
-            "this issue is fixed).\n\n"
-            "For more information see: "
-            "https://issues.apache.org/jira/browse/ARROW-3009"
-        )
+    from pyarrow import orc
 
     storage_options = storage_options or {}
     fs, fs_token, paths = get_fs_token_paths(

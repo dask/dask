@@ -1,5 +1,6 @@
 import contextlib
 import itertools
+import sys
 from numbers import Number
 
 import pytest
@@ -9,7 +10,7 @@ from dask.delayed import delayed
 np = pytest.importorskip("numpy")
 
 import dask.array as da
-from dask.array.utils import IS_NEP18_ACTIVE, AxisError, assert_eq, same_keys
+from dask.array.utils import AxisError, assert_eq, same_keys
 
 
 def test_array():
@@ -517,6 +518,67 @@ def test_diff(shape, n, axis):
     assert_eq(da.diff(a, n, axis), np.diff(x, n, axis))
 
 
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_prepend(n):
+    x = np.arange(5) + 1
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, prepend=0), np.diff(x, n, prepend=0))
+    assert_eq(da.diff(a, n, prepend=[0]), np.diff(x, n, prepend=[0]))
+    assert_eq(da.diff(a, n, prepend=[-1, 0]), np.diff(x, n, prepend=[-1, 0]))
+
+    x = np.arange(16).reshape(4, 4)
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, axis=1, prepend=0), np.diff(x, n, axis=1, prepend=0))
+    assert_eq(
+        da.diff(a, n, axis=1, prepend=[[0], [0], [0], [0]]),
+        np.diff(x, n, axis=1, prepend=[[0], [0], [0], [0]]),
+    )
+    assert_eq(da.diff(a, n, axis=0, prepend=0), np.diff(x, n, axis=0, prepend=0))
+    assert_eq(
+        da.diff(a, n, axis=0, prepend=[[0, 0, 0, 0]]),
+        np.diff(x, n, axis=0, prepend=[[0, 0, 0, 0]]),
+    )
+
+    if n > 0:
+        # When order is 0 the result is the input array, it doesn't raise
+        # an error
+        with pytest.raises(ValueError):
+            da.diff(a, n, prepend=np.zeros((3, 3)))
+
+
+@pytest.mark.parametrize("n", [0, 1, 2])
+def test_diff_append(n):
+    x = np.arange(5) + 1
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, append=0), np.diff(x, n, append=0))
+    assert_eq(da.diff(a, n, append=[0]), np.diff(x, n, append=[0]))
+    assert_eq(da.diff(a, n, append=[-1, 0]), np.diff(x, n, append=[-1, 0]))
+
+    x = np.arange(16).reshape(4, 4)
+    a = da.from_array(x, chunks=2)
+    assert_eq(da.diff(a, n, axis=1, append=0), np.diff(x, n, axis=1, append=0))
+    assert_eq(
+        da.diff(a, n, axis=1, append=[[0], [0], [0], [0]]),
+        np.diff(x, n, axis=1, append=[[0], [0], [0], [0]]),
+    )
+    assert_eq(da.diff(a, n, axis=0, append=0), np.diff(x, n, axis=0, append=0))
+    assert_eq(
+        da.diff(a, n, axis=0, append=[[0, 0, 0, 0]]),
+        np.diff(x, n, axis=0, append=[[0, 0, 0, 0]]),
+    )
+
+    if n > 0:
+        with pytest.raises(ValueError):
+            # When order is 0 the result is the input array, it doesn't raise
+            # an error
+            da.diff(a, n, append=np.zeros((3, 3)))
+
+
+def test_diff_negative_order():
+    with pytest.raises(ValueError):
+        da.diff(da.arange(10), -1)
+
+
 @pytest.mark.parametrize("shape", [(10,), (10, 15)])
 @pytest.mark.parametrize("to_end, to_begin", [[None, None], [0, 0], [[1, 2], [3, 4]]])
 def test_ediff1d(shape, to_end, to_begin):
@@ -575,7 +637,7 @@ def test_bincount():
     assert da.bincount(d, minlength=6).name != da.bincount(d, minlength=7).name
     assert da.bincount(d, minlength=6).name == da.bincount(d, minlength=6).name
 
-    expected_output = np.array([0, 2, 2, 0, 0, 1])
+    expected_output = np.array([0, 2, 2, 0, 0, 1], dtype=e.dtype)
     assert_eq(e[0:], expected_output)  # can bincount result be sliced
 
 
@@ -838,6 +900,69 @@ def test_histogram_delayed_n_bins_raises_with_density():
         da.histogram(data, bins=da.array(10), range=[0, 1], density=True)
 
 
+@pytest.mark.parametrize("weights", [True, False])
+@pytest.mark.parametrize("density", [True, False])
+@pytest.mark.parametrize("bins", [(5, 6), 5])
+def test_histogram2d(weights, density, bins):
+    n = 800
+    b = bins
+    r = ((0, 1), (0, 1))
+    x = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    y = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    w = da.random.uniform(0.2, 1.1, size=(n,), chunks=(200,)) if weights else None
+    a1, b1x, b1y = da.histogram2d(x, y, bins=b, range=r, density=density, weights=w)
+    a2, b2x, b2y = np.histogram2d(x, y, bins=b, range=r, density=density, weights=w)
+    a3, b3x, b3y = np.histogram2d(
+        x.compute(),
+        y.compute(),
+        bins=b,
+        range=r,
+        density=density,
+        weights=w.compute() if weights else None,
+    )
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+    if not (weights or density):
+        assert a1.sum() == n
+        assert a2.sum() == n
+    assert same_keys(
+        da.histogram2d(x, y, bins=b, range=r, density=density, weights=w)[0],
+        a1,
+    )
+    assert a1.compute().shape == a3.shape
+
+
+@pytest.mark.parametrize("weights", [True, False])
+@pytest.mark.parametrize("density", [True, False])
+def test_histogram2d_array_bins(weights, density):
+    n = 800
+    xbins = [0.0, 0.2, 0.6, 0.9, 1.0]
+    ybins = [0.0, 0.1, 0.4, 0.5, 1.0]
+    b = [xbins, ybins]
+    x = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    y = da.random.uniform(0, 1, size=(n,), chunks=(200,))
+    w = da.random.uniform(0.2, 1.1, size=(n,), chunks=(200,)) if weights else None
+    a1, b1x, b1y = da.histogram2d(x, y, bins=b, density=density, weights=w)
+    a2, b2x, b2y = np.histogram2d(x, y, bins=b, density=density, weights=w)
+    a3, b3x, b3y = np.histogram2d(
+        x.compute(),
+        y.compute(),
+        bins=b,
+        density=density,
+        weights=w.compute() if weights else None,
+    )
+    assert_eq(a1, a2)
+    assert_eq(a1, a3)
+    if not (weights or density):
+        assert a1.sum() == n
+        assert a2.sum() == n
+    assert same_keys(
+        da.histogram2d(x, y, bins=b, density=density, weights=w)[0],
+        a1,
+    )
+    assert a1.compute().shape == a3.shape
+
+
 def test_histogramdd():
     n1, n2 = 800, 3
     x = da.random.uniform(0, 1, size=(n1, n2), chunks=(200, 3))
@@ -850,6 +975,7 @@ def test_histogramdd():
     assert a1.sum() == n1
     assert a2.sum() == n1
     assert same_keys(da.histogramdd(x, bins=bins)[0], a1)
+    assert a1.compute().shape == a3.shape
 
 
 def test_histogramdd_seq_of_arrays():
@@ -860,7 +986,9 @@ def test_histogramdd_seq_of_arrays():
     by = [0.0, 0.30, 0.70, 0.8, 1.0]
     (a1, b1) = da.histogramdd([x, y], bins=[bx, by])
     (a2, b2) = np.histogramdd([x, y], bins=[bx, by])
+    (a3, b3) = np.histogramdd((x.compute(), y.compute()), bins=[bx, by])
     assert_eq(a1, a2)
+    assert_eq(a1, a3)
 
 
 def test_histogramdd_alternative_bins_range():
@@ -871,7 +999,9 @@ def test_histogramdd_alternative_bins_range():
     ranges = ((0, 1),) * len(bins)
     (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
     (a2, b2) = np.histogramdd(x, bins=bins, range=ranges)
+    (a3, b3) = np.histogramdd(x.compute(), bins=bins, range=ranges)
     assert_eq(a1, a2)
+    assert_eq(a1, a3)
     bins = 4
     (a1, b1) = da.histogramdd(x, bins=bins, range=ranges)
     (a2, b2) = np.histogramdd(x, bins=bins, range=ranges)
@@ -891,22 +1021,13 @@ def test_histogramdd_weighted():
     ranges = ((0, 1),) * len(bins)
     (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w)
     (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w)
+    (a3, b3) = np.histogramdd(x.compute(), bins=bins, range=ranges, weights=w.compute())
     assert_eq(a1, a2)
+    assert_eq(a1, a3)
     bins = 4
     (a1, b1) = da.histogramdd(x, bins=bins, range=ranges, weights=w)
     (a2, b2) = np.histogramdd(x, bins=bins, range=ranges, weights=w)
-    assert_eq(a1, a2)
-
-
-def test_histogramdd_trigger_rechunk():
-    n = 600
-    x = da.random.uniform(0, 1, size=(n,), chunks=200)
-    y = da.random.uniform(0, 1, size=(n,), chunks=200)
-    bins = (6, 7)
-    ranges = ((0, 1),) * len(bins)
-    (a1, b1) = da.histogramdd([x, y], bins=bins, range=ranges)
-    (a2, b2) = np.histogramdd([x, y], bins=bins, range=ranges)
-    (a3, b3) = np.histogramdd([x.compute(), y.compute()], bins=bins, range=ranges)
+    (a3, b3) = np.histogramdd(x.compute(), bins=bins, range=ranges, weights=w.compute())
     assert_eq(a1, a2)
     assert_eq(a1, a3)
 
@@ -918,8 +1039,10 @@ def test_histogramdd_density():
     (a1, b1) = da.histogramdd(x, bins=bins, density=True)
     (a2, b2) = np.histogramdd(x, bins=bins, density=True)
     (a3, b3) = da.histogramdd(x, bins=bins, normed=True)
+    (a4, b4) = np.histogramdd(x.compute(), bins=bins, density=True)
     assert_eq(a1, a2)
     assert_eq(a1, a3)
+    assert_eq(a1, a4)
     assert same_keys(da.histogramdd(x, bins=bins, density=True)[0], a1)
 
 
@@ -936,12 +1059,39 @@ def test_histogramdd_weighted_density():
     assert_eq(a1, a3)
 
 
-def test_histogramdd_raises_incompat_sample_chuks():
+def test_histogramdd_raises_incompat_sample_chunks():
     data = da.random.random(size=(10, 3), chunks=(5, 1))
     with pytest.raises(
         ValueError, match="Input array can only be chunked along the 0th axis"
     ):
         da.histogramdd(data, bins=10, range=((0, 1),) * 3)
+
+
+def test_histogramdd_raises_incompat_multiarg_chunks():
+    x = da.random.random(size=(10,), chunks=2)
+    y = da.random.random(size=(10,), chunks=2)
+    z = da.random.random(size=(10,), chunks=5)
+    with pytest.raises(
+        ValueError, match="All coordinate arrays must be chunked identically."
+    ):
+        da.histogramdd((x, y, z), bins=(3,) * 3, range=((0, 1),) * 3)
+
+
+def test_histogramdd_raises_incompat_weight_chunks():
+    x = da.random.random(size=(10,), chunks=2)
+    y = da.random.random(size=(10,), chunks=2)
+    z = da.atleast_2d((x, y)).T.rechunk((2, 2))
+    w = da.random.random(size=(10,), chunks=5)
+    with pytest.raises(
+        ValueError,
+        match="Input arrays and weights must have the same shape and chunk structure.",
+    ):
+        da.histogramdd((x, y), bins=(3,) * 2, range=((0, 1),) * 2, weights=w)
+    with pytest.raises(
+        ValueError,
+        match="Input array and weights must have the same shape and chunk structure along the first dimension.",
+    ):
+        da.histogramdd(z, bins=(3,) * 2, range=((0, 1),) * 2, weights=w)
 
 
 def test_histogramdd_raises_incompat_bins_or_range():
@@ -979,6 +1129,21 @@ def test_histogramdd_raise_normed_and_density():
     ranges = ((0, 1),) * 3
     with pytest.raises(TypeError, match="Cannot specify both 'normed' and 'density'"):
         da.histogramdd(data, bins=bins, range=ranges, normed=True, density=True)
+
+
+def test_histogramdd_raise_incompat_shape():
+    # 1D
+    data = da.random.random(size=(10,), chunks=(2,))
+    with pytest.raises(
+        ValueError, match="Single array input to histogramdd should be columnar"
+    ):
+        da.histogramdd(data, bins=4, range=((-3, 3),))
+    # 3D (not columnar)
+    data = da.random.random(size=(4, 4, 4), chunks=(2, 2, 2))
+    with pytest.raises(
+        ValueError, match="Single array input to histogramdd should be columnar"
+    ):
+        da.histogramdd(data, bins=4, range=((-3, 3),))
 
 
 def test_histogramdd_edges():
@@ -1188,8 +1353,7 @@ def test_union1d(shape, reverse):
     result = np.union1d(dx1, dx2)
     expected = np.union1d(x1, x2)
 
-    if IS_NEP18_ACTIVE:
-        assert isinstance(result, da.Array)
+    assert isinstance(result, da.Array)
 
     assert_eq(result, expected)
 
@@ -1889,7 +2053,7 @@ def test_ravel_multi_index_unknown_shape_fails():
 @pytest.mark.parametrize("wrap_in_list", [False, True])
 def test_ravel_multi_index_delayed_dims(dims, wrap_in_list):
     with pytest.raises(NotImplementedError, match="Dask types are not supported"):
-        da.ravel_multi_index((2, 1), list(dims) if wrap_in_list else dims)
+        da.ravel_multi_index((2, 1), [dims[0], dims[1]] if wrap_in_list else dims)
 
 
 def test_ravel_multi_index_non_int_dtype():
@@ -2423,11 +2587,24 @@ def test_tril_triu_non_square_arrays():
     [(3, 0, 3, "auto"), (3, 1, 3, "auto"), (3, -1, 3, "auto"), (5, 0, 5, 1)],
 )
 def test_tril_triu_indices(n, k, m, chunks):
-    assert_eq(
-        da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
-        np.tril_indices(n=n, k=k, m=m)[0],
-    )
-    assert_eq(
-        da.triu_indices(n=n, k=k, m=m, chunks=chunks)[0].compute(),
-        np.triu_indices(n=n, k=k, m=m)[0],
-    )
+    actual = da.tril_indices(n=n, k=k, m=m, chunks=chunks)[0]
+    expected = np.tril_indices(n=n, k=k, m=m)[0]
+
+    if sys.platform == "win32":
+        assert_eq(
+            actual.astype(expected.dtype),
+            expected,
+        )
+    else:
+        assert_eq(actual, expected)
+
+    actual = da.triu_indices(n=n, k=k, m=m, chunks=chunks)[0]
+    expected = np.triu_indices(n=n, k=k, m=m)[0]
+
+    if sys.platform == "win32":
+        assert_eq(
+            actual.astype(expected.dtype),
+            expected,
+        )
+    else:
+        assert_eq(actual, expected)

@@ -11,11 +11,10 @@ from pandas.io.formats import format as pandas_format
 import dask
 import dask.array as da
 import dask.dataframe as dd
-from dask.array.numpy_compat import _numpy_118
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -306,12 +305,7 @@ def test_rename_series():
     ind.name = "renamed"
     dind.name = "renamed"
     assert ind.name == "renamed"
-    with warnings.catch_warnings():
-        if _numpy_118:
-            # Catch DeprecationWarning from numpy from rewrite_blockwise
-            # where we attempt to do `'str' in ndarray`.
-            warnings.simplefilter("ignore", DeprecationWarning)
-        assert_eq(dind, ind)
+    assert_eq(dind, ind)
 
 
 def test_rename_series_method():
@@ -1712,9 +1706,6 @@ def test_combine_first():
     assert_eq(ddf1.B.combine_first(df2.B), df1.B.combine_first(df2.B))
 
 
-@pytest.mark.filterwarnings(
-    "ignore:The 'freq' argument in Timestamp is deprecated:FutureWarning"
-)  #  PANDAS_GT_130 https://github.com/pandas-dev/pandas/issues/41949
 def test_dataframe_picklable():
     from pickle import dumps, loads
 
@@ -2370,16 +2361,6 @@ def test_select_dtypes(include, exclude):
     tm.assert_series_equal(a.dtypes.value_counts(), df.dtypes.value_counts())
 
     tm.assert_series_equal(result.dtypes.value_counts(), expected.dtypes.value_counts())
-
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        ctx = pytest.warns(FutureWarning)
-
-        with ctx:
-            tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
-            tm.assert_series_equal(
-                result.get_ftype_counts(), expected.get_ftype_counts()
-            )
 
 
 def test_deterministic_apply_concat_apply_names():
@@ -3354,7 +3335,6 @@ def _assert_info(df, ddf, memory_usage=True):
     assert stdout_pd == stdout_da
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="Changed info repr")
 def test_info():
     from io import StringIO
 
@@ -3389,7 +3369,6 @@ def test_info():
     assert ddf.info(buf=None) is None
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="Changed info repr")
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
@@ -3425,7 +3404,6 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="Changed info repr")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -4594,7 +4572,6 @@ def test_fuse_roots():
     hlg.validate()
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
 def test_attrs_dataframe():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.attrs = {"date": "2020-10-16"}
@@ -4604,7 +4581,6 @@ def test_attrs_dataframe():
     assert df.abs().attrs == ddf.abs().attrs
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
 def test_attrs_series():
     s = pd.Series([1, 2], name="A")
     s.attrs["unit"] = "kg"
@@ -4614,7 +4590,6 @@ def test_attrs_series():
     assert s.fillna(1).attrs == ds.fillna(1).attrs
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
 @pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
 def test_attrs_series_in_dataframes():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})

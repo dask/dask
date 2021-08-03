@@ -2,7 +2,6 @@ import itertools
 import random
 import sys
 from array import array
-from distutils.version import LooseVersion
 
 from .utils import Dispatch
 
@@ -57,6 +56,29 @@ def sizeof_python_collection(seq):
         return getsizeof(seq) + int(num_items / num_samples * sum(map(sizeof, samples)))
     else:
         return getsizeof(seq) + sum(map(sizeof, seq))
+
+
+class SimpleSizeof:
+    """Sentinel class to mark a class to be skipped by the dispatcher. This only
+    works if this sentinel mixin is first in the mro.
+
+    Examples
+    --------
+
+    >>> class TheAnswer(SimpleSizeof):
+    ...         def __sizeof__(self):
+    ...             # Sizeof always add overhead of an object for GC
+    ...             return 42 - sizeof(object())
+
+    >>> sizeof(TheAnswer())
+    42
+
+    """
+
+
+@sizeof.register(SimpleSizeof)
+def sizeof_blocked(d):
+    return getsizeof(d)
 
 
 @sizeof.register(dict)
@@ -193,10 +215,3 @@ def register_pyarrow():
     @sizeof.register(pa.ChunkedArray)
     def sizeof_pyarrow_chunked_array(data):
         return int(_get_col_size(data)) + 1000
-
-    # Handle pa.Column for pyarrow < 0.15
-    if pa.__version__ < LooseVersion("0.15.0"):
-
-        @sizeof.register(pa.Column)
-        def sizeof_pyarrow_column(col):
-            return int(_get_col_size(col)) + 1000

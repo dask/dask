@@ -369,8 +369,13 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
+    from .utils import meta_from_array
+
+    # make sure that every arg is an evaluated array
     args = [
-        np.ones((1,) * x.ndim, dtype=x.dtype) if isinstance(x, Array) else x
+        np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+        if is_arraylike(x)
+        else x
         for x in args
     ]
     try:
@@ -617,8 +622,8 @@ def map_blocks(
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
 
-    >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
-    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), chunktype=numpy.ndarray>
+    >>> x.map_blocks(lambda x: x + 1, name='increment')
+    dask.array<increment, shape=(1000,), dtype=int64, chunksize=(100,), chunktype=numpy.ndarray>
 
     For functions that may not handle 0-d arrays, it's also possible to specify
     ``meta`` with an empty array matching the type of the expected result. In
@@ -928,7 +933,6 @@ def store(
 
     Examples
     --------
-    >>> x = ...  # doctest: +SKIP
 
     >>> import h5py  # doctest: +SKIP
     >>> f = h5py.File('myfile.hdf5', mode='a')  # doctest: +SKIP
@@ -1156,6 +1160,7 @@ class Array(DaskMethodsMixin):
                     "shape": self.shape,
                     "dtype": self.dtype,
                     "chunksize": self.chunksize,
+                    "chunks": self.chunks,
                     "type": typename(type(self)),
                     "chunk_type": typename(type(self._meta)),
                 }
@@ -1165,6 +1170,7 @@ class Array(DaskMethodsMixin):
                         "shape": self.shape,
                         "dtype": self.dtype,
                         "chunksize": self.chunksize,
+                        "chunks": self.chunks,
                         "type": typename(type(self)),
                         "chunk_type": typename(type(self._meta)),
                     }
@@ -1497,6 +1503,10 @@ class Array(DaskMethodsMixin):
             "please set ``._name``"
         )
 
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
+
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
     def __array__(self, dtype=None, **kwargs):
@@ -1695,8 +1705,12 @@ class Array(DaskMethodsMixin):
         out = "setitem-" + tokenize(self, key, value)
         dsk = setitem_array(out, self, key, value)
 
+        meta = meta_from_array(self._meta)
+        if np.isscalar(meta):
+            meta = np.array(meta)
+
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
-        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype)
+        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype, meta=meta)
 
         self._meta = y._meta
         self.dask = y.dask
@@ -4763,8 +4777,6 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    from .utils import IS_NEP18_ACTIVE
-
     # We need this as __array_function__ may not exist on older NumPy versions.
     # And to reduce verbosity.
     NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, "__array_function__", None)
@@ -4778,7 +4790,7 @@ def concatenate3(arrays):
         key=lambda x: getattr(x, "__array_priority__", 0),
     )
 
-    if IS_NEP18_ACTIVE and not all(
+    if not all(
         NDARRAY_ARRAY_FUNCTION
         is getattr(type(arr), "__array_function__", NDARRAY_ARRAY_FUNCTION)
         for arr in core.flatten(arrays, container=(list, tuple))
@@ -5104,8 +5116,6 @@ def _vindex_merge(locations, values):
            [40, 50, 60],
            [10, 20, 30]])
     """
-    from .utils import empty_like_safe
-
     locations = list(map(list, locations))
     values = list(values)
 
@@ -5117,7 +5127,7 @@ def _vindex_merge(locations, values):
 
     dtype = values[0].dtype
 
-    x = empty_like_safe(values[0], dtype=dtype, shape=shape)
+    x = np.empty_like(values[0], dtype=dtype, shape=shape)
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):

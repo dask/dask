@@ -74,3 +74,16 @@ def test_meta_from_array_type_inputs():
     assert_eq(x, x)
 
     assert da.from_array(np.ones(5).astype(np.int32), meta=np.ndarray).dtype == np.int32
+
+
+@pytest.mark.parametrize(
+    "a,b",
+    [
+        (da.array([1]), 1.0),
+        (da.array([1, 2]), [1.0, 2]),
+        (da.array([1, 2]), np.array([1.0, 2])),
+    ],
+)
+def test_assert_eq_checks_dtype(a, b):
+    with pytest.raises(AssertionError, match="a and b have different dtypes"):
+        assert_eq(a, b)

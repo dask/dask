@@ -1,13 +1,12 @@
 import random
-from distutils.version import LooseVersion
 
 import numpy as np
 import pytest
+from packaging.version import parse as parse_version
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_117
-from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
+from dask.array.utils import assert_eq
 
 sparse = pytest.importorskip("sparse")
 if sparse:
@@ -34,7 +33,7 @@ functions = [
     pytest.param(
         lambda x: x.mean(),
         marks=pytest.mark.skipif(
-            sparse.__version__ >= LooseVersion("0.12.0"),
+            parse_version(sparse.__version__) >= parse_version("0.12.0"),
             reason="https://github.com/dask/dask/issues/7169",
         ),
     ),
@@ -91,7 +90,7 @@ def test_basic(func):
 
 
 @pytest.mark.skipif(
-    sparse.__version__ < LooseVersion("0.7.0+10"),
+    parse_version(sparse.__version__) < parse_version("0.7.0+10"),
     reason="fixed in https://github.com/pydata/sparse/pull/256",
 )
 def test_tensordot():
@@ -175,13 +174,11 @@ def test_metadata():
     assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
     assert isinstance((y - z)._meta, sparse.COO)
     assert isinstance(y.persist()._meta, sparse.COO)
-    if IS_NEP18_ACTIVE:
-        assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
-        assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
-        assert isinstance(np.stack([y, y])._meta, sparse.COO)
-        if _numpy_117:
-            assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
-            assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
+    assert isinstance(np.stack([y, y])._meta, sparse.COO)
+    assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
 
 
 def test_html_repr():
