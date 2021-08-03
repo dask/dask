@@ -262,14 +262,10 @@ def _tensordot(a, b, axes):
     tensordot = tensordot_lookup.dispatch(type(x))
     x = tensordot(a, b, axes=axes)
 
-    is_sparse = "sparse" in str(type(x))
-    if is_sparse and len(axes[0]) == 1:
-        return x
-    else:
-        ind = [slice(None, None)] * x.ndim
-        for a in sorted(axes[0]):
-            ind.insert(a, None)
-        x = x[tuple(ind)]
+    ind = [slice(None, None)] * x.ndim
+    for a in sorted(axes[0]):
+        ind.insert(a, None)
+    x = x[tuple(ind)]
 
     return x
 
@@ -296,12 +292,6 @@ def tensordot(lhs, rhs, axes=2):
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
 
-    is_sparse = "sparse" in str(type(lhs._meta)) or "sparse" in str(type(rhs._meta))
-    if is_sparse and len(left_axes) == 1:
-        concatenate = True
-    else:
-        concatenate = False
-
     dt = np.promote_types(lhs.dtype, rhs.dtype)
 
     left_index = list(range(lhs.ndim))
@@ -311,8 +301,6 @@ def tensordot(lhs, rhs, axes=2):
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
-        if concatenate:
-            out_index.remove(left_index[l])
 
     intermediate = blockwise(
         _tensordot,
@@ -322,14 +310,12 @@ def tensordot(lhs, rhs, axes=2):
         rhs,
         right_index,
         dtype=dt,
-        concatenate=concatenate,
+        concatenate=False,
         axes=(left_axes, right_axes),
+        meta=lhs._meta,
     )
 
-    if concatenate:
-        return intermediate
-    else:
-        return intermediate.sum(axis=left_axes)
+    return intermediate.sum(axis=left_axes)
 
 
 @derived_from(np)

@@ -81,7 +81,7 @@ def test_basic(func):
     xx = func(x)
     yy = func(y)
 
-    assert_eq(xx, yy)
+    assert_eq(xx, yy, check_meta=False)
 
     if yy.shape:
         zz = yy.compute()
