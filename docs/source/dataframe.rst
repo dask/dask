@@ -5,7 +5,6 @@ DataFrame
    :maxdepth: 1
    :hidden:
 
-   dataframe-api.rst
    dataframe-create.rst
    dataframe-best-practices.rst
    dataframe-design.rst
