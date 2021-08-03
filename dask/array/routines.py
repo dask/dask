@@ -24,6 +24,7 @@ from .core import (
     broadcast_to,
     concatenate,
     elemwise,
+    from_array,
     implements,
     is_scalar_for_elemwise,
     map_blocks,
@@ -261,7 +262,10 @@ def _tensordot(a, b, axes):
     tensordot = tensordot_lookup.dispatch(type(x))
     x = tensordot(a, b, axes=axes)
 
-    if len(axes[0]) != 1:
+    is_sparse = "sparse" in str(type(x))
+    if is_sparse and len(axes[0]) == 1:
+        return x
+    else:
         ind = [slice(None, None)] * x.ndim
         for a in sorted(axes[0]):
             ind.insert(a, None)
@@ -272,6 +276,11 @@ def _tensordot(a, b, axes):
 
 @derived_from(np)
 def tensordot(lhs, rhs, axes=2):
+    if not isinstance(lhs, Array):
+        lhs = from_array(lhs)
+    if not isinstance(rhs, Array):
+        rhs = from_array(rhs)
+
     if isinstance(axes, Iterable):
         left_axes, right_axes = axes
     else:
@@ -286,7 +295,9 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
-    if len(left_axes) == 1:
+
+    is_sparse = "sparse" in str(type(lhs._meta)) or "sparse" in str(type(rhs._meta))
+    if is_sparse and len(left_axes) == 1:
         concatenate = True
     else:
         concatenate = False
