@@ -1,6 +1,34 @@
 Talks & Tutorials
 =================
 
+.. raw:: html
+
+   <iframe width="560"
+           height="315"
+           src="https://www.youtube.com/embed/nnndxbr_Xq4"
+           style="margin: 0 auto 20px auto; display: block;"
+           frameborder="0"
+           allow="accelerometer; autoplay; encrypted-media; gyroscope; picture-in-picture"
+           allowfullscreen></iframe>
+
+Dask Tutorial
+-------------
+`Dask Tutorial <https://tutorial.dask.org>`__ provides an overview of Dask and is typically delivered in 3 hours
+
+
+Dask Slides
+-----------
+`Dask Slides <https://dask.org/slides>`__ provide a quick overview of the motivation for Dask.
+
+Dask YouTube channel
+--------------------
+You can find lots of videos about Dask on the `Dask YouTube channel <https://www.youtube.com/c/dask-dev>`__
+
+.. contents:: :local:
+
+Presentations
+-------------
+
 * PyCon Korea 2019, August 2019
 
   * `Adapting from Spark to Dask: what to expect (18 minutes)

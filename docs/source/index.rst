@@ -132,6 +132,8 @@ messy situations in everyday problems.
 
    install.rst
    10-minutes-to-dask.rst
+   presentations.rst
+   faq.rst
 
 .. toctree::
    :maxdepth: 1
@@ -156,8 +158,6 @@ messy situations in everyday problems.
    develop.rst
    changelog.rst
    configuration.rst
-   presentations.rst
-   institutional-faq.rst
 
 .. _`Anaconda Inc`: https://www.anaconda.com
 .. _`3-clause BSD license`: https://github.com/dask/dask/blob/main/LICENSE.txt

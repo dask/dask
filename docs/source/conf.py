@@ -336,7 +336,6 @@ redirect_files = [
     ("scheduler-choice.html", "setup.html"),
     ("diagnostics.html", "diagnostics-local.html"),
     ("inspect.html", "graphviz.html"),
-    ("faq.html", "https://stackoverflow.com/questions/tagged/dask?sort=frequent"),
     ("funding.html", "https://dask.org/#supported-by"),
     ("examples-tutorials.html", "https://examples.dask.org"),
     ("examples/array-extend.html", "https://examples.dask.org"),
@@ -353,6 +352,8 @@ redirect_files = [
     ("use-cases.html", "https://stories.dask.org"),
     ("bag-overview.html", "bag.html"),
     ("distributed.html", "https://distributed.dask.org"),
+    ("institutional-faq.html", "faq.html"),
+    ("cite.html", "faq.html#how-do-I-cite-dask"),
 ]
 
 
