@@ -1140,6 +1140,7 @@ class _GroupBy:
         token,
         func,
         aggfunc=None,
+        meta=None,
         split_every=None,
         split_out=1,
         chunk_kwargs={},
@@ -1148,7 +1149,9 @@ class _GroupBy:
         if aggfunc is None:
             aggfunc = func
 
-        meta = func(self._meta_nonempty)
+        if meta is None:
+            meta = func(self._meta_nonempty)
+
         columns = meta.name if is_series_like(meta) else meta.columns
 
         token = self._token_prefix + token
@@ -1804,7 +1807,6 @@ class _GroupBy:
 
 
 class DataFrameGroupBy(_GroupBy):
-
     _token_prefix = "dataframe-groupby-"
 
     def __getitem__(self, key):
@@ -1849,7 +1851,6 @@ class DataFrameGroupBy(_GroupBy):
 
 
 class SeriesGroupBy(_GroupBy):
-
     _token_prefix = "series-groupby-"
 
     def __init__(self, df, by=None, slice=None, observed=None, **kwargs):
@@ -1949,6 +1950,34 @@ class SeriesGroupBy(_GroupBy):
             split_out=split_out,
         )
 
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def tail(self, n=5, split_every=None, split_out=1):
+        index_levels = len(self.index) if isinstance(self.index, list) else 1
+        return self._aca_agg(
+            token="tail",
+            func=_tail_chunk,
+            aggfunc=_tail_aggregate,
+            meta=M.tail(self._meta_nonempty),
+            chunk_kwargs={"n": n},
+            aggregate_kwargs={"n": n, "index_levels": index_levels},
+            split_every=split_every,
+            split_out=split_out,
+        )
+
+    @derived_from(pd.core.groupby.SeriesGroupBy)
+    def head(self, n=5, split_every=None, split_out=1):
+        index_levels = len(self.index) if isinstance(self.index, list) else 1
+        return self._aca_agg(
+            token="head",
+            func=_head_chunk,
+            aggfunc=_head_aggregate,
+            meta=M.head(self._meta_nonempty),
+            chunk_kwargs={"n": n},
+            aggregate_kwargs={"n": n, "index_levels": index_levels},
+            split_every=split_every,
+            split_out=split_out,
+        )
+
 
 def _unique_aggregate(series_gb, name=None):
     ret = type(series_gb.obj)(
@@ -1969,3 +1998,23 @@ def _value_counts_aggregate(series_gb):
     to_concat = {k: v.groupby(level=1).sum() for k, v in series_gb}
     names = list(series_gb.obj.index.names)
     return pd.Series(pd.concat(to_concat, names=names))
+
+
+def _tail_chunk(series_gb, **kwargs):
+    keys, groups = zip(*series_gb) if len(series_gb) else ((True,), (series_gb,))
+    return pd.concat([group.tail(**kwargs) for group in groups], keys=keys)
+
+
+def _tail_aggregate(series_gb, **kwargs):
+    levels = kwargs.pop("index_levels")
+    return series_gb.tail(**kwargs).droplevel(list(range(levels)))
+
+
+def _head_chunk(series_gb, **kwargs):
+    keys, groups = zip(*series_gb) if len(series_gb) else ((True,), (series_gb,))
+    return pd.concat([group.head(**kwargs) for group in groups], keys=keys)
+
+
+def _head_aggregate(series_gb, **kwargs):
+    levels = kwargs.pop("index_levels")
+    return series_gb.head(**kwargs).droplevel(list(range(levels)))
