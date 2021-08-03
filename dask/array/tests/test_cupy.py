@@ -223,6 +223,7 @@ def test_diagonal():
     assert_eq(da.diagonal(v, 1, 2, 1), np.diagonal(v, 1, 2, 1))
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
@@ -240,6 +241,7 @@ def test_tril_triu():
             assert_eq(da.tril(dA, k), np.tril(A, k))
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.4.0"),
     reason="Requires CuPy 6.4.0+ (with https://github.com/cupy/cupy/pull/2418)",
@@ -445,6 +447,7 @@ def test_random_shapes(shape):
     assert x.shape == shape
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skipif(
     cupy_version < parse_version("6.1.0"),
     reason="Requires CuPy 6.1.0+ (with https://github.com/cupy/cupy/pull/2209)",
@@ -792,7 +795,7 @@ def test_sparse_hstack_vstack_csr():
 
 
 @pytest.mark.parametrize("axis", [0, 1])
-def test_cupy_sparse_concatenate(axis):
+def test_sparse_concatenate(axis):
     pytest.importorskip("cupyx")
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
@@ -1274,9 +1277,10 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
     assert_eq(x.T[idx, :], expect.T)
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
-def test_cupy_lstsq(nrow, ncol, chunk, iscomplex):
+def test_lstsq(nrow, ncol, chunk, iscomplex):
     cupy.random.seed(1)
     A = cupy.random.randint(1, 20, (nrow, ncol))
     b = cupy.random.randint(1, 20, nrow)
@@ -1331,7 +1335,7 @@ def _get_symmat(size):
 
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 3), (30, 6)])
-def test_cupy_cholesky(shape, chunk):
+def test_cholesky(shape, chunk):
     scipy_linalg = pytest.importorskip("scipy.linalg")
 
     A = _get_symmat(shape)
@@ -1353,6 +1357,7 @@ def test_cupy_cholesky(shape, chunk):
     )
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("idx_chunks", [None, 3, 2, 1])
 @pytest.mark.parametrize("x_chunks", [(3, 5), (2, 3), (1, 2), (1, 1)])
 def test_index_with_int_dask_array(x_chunks, idx_chunks):
@@ -1387,6 +1392,7 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
     assert_eq(x.T[idx, :], expect.T)
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("chunks", [1, 2, 3])
 def test_index_with_int_dask_array_0d(chunks):
     # Slice by 0-dimensional array
@@ -1401,6 +1407,7 @@ def test_index_with_int_dask_array_0d(chunks):
     assert_eq(x[:, idx0], x[:, 1])
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.skip("dask.Array.nonzero() doesn't support non-NumPy arrays yet")
 @pytest.mark.parametrize("chunks", [1, 2, 3, 4, 5])
 def test_index_with_int_dask_array_nanchunks(chunks):
@@ -1412,6 +1419,7 @@ def test_index_with_int_dask_array_nanchunks(chunks):
     assert_eq(a[a.nonzero()], cupy.array([]))
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("chunks", [2, 4])
 def test_index_with_int_dask_array_negindex(chunks):
     a = da.arange(4, chunks=chunks, like=cupy.array(()))
@@ -1423,6 +1431,7 @@ def test_index_with_int_dask_array_negindex(chunks):
     assert_eq(a[idx], cupy.array([3, 0]))
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("chunks", [2, 4])
 def test_index_with_int_dask_array_indexerror(chunks):
     a = da.arange(4, chunks=chunks, like=cupy.array(()))
@@ -1442,6 +1451,7 @@ def test_index_with_int_dask_array_indexerror(chunks):
         a[idx].compute()
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize(
     "dtype", ["int8", "int16", "int32", "int64", "uint8", "uint16", "uint32", "uint64"]
 )
@@ -1816,6 +1826,7 @@ def test_diff(shape, n, axis):
     assert_eq(da.diff(a, n, axis), cupy.diff(x, n, axis))
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("n", [0, 1, 2])
 def test_diff_prepend(n):
     x = cupy.arange(5) + 1
@@ -1844,6 +1855,7 @@ def test_diff_prepend(n):
             da.diff(a, n, prepend=cupy.zeros((3, 3)))
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("n", [0, 1, 2])
 def test_diff_append(n):
     x = cupy.arange(5) + 1
