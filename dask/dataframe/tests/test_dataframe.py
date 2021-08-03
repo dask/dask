@@ -3994,13 +3994,9 @@ def test_to_datetime():
         check_divisions=False,
     )
 
-    with pytest.raises(NotImplementedError) as exc:
-        dd.to_datetime("2021-08-03")
-    assert "non-index-able arguments" in str(exc.value)
-
-    with pytest.raises(NotImplementedError) as exc:
-        dd.to_datetime(2021)
-    assert "non-index-able arguments" in str(exc.value)
+    for arg in ("2021-08-03", 2021):
+        with pytest.raises(NotImplementedError, match="non-index-able arguments"):
+            dd.to_datetime(arg)
 
 
 def test_to_timedelta():
