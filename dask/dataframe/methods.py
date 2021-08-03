@@ -1,5 +1,6 @@
 import warnings
 
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 from tlz import partition
@@ -304,7 +305,7 @@ def assign(df, *pairs):
     # (to avoid modifying the original)
     pairs = dict(partition(2, pairs))
     deep = bool(set(pairs) & set(df.columns))
-    df = df.copy(deep=bool(deep))
+    df = df.copy() if isinstance(df, dd.core.DataFrame) else df.copy(deep=bool(deep))
     for name, val in pairs.items():
         df[name] = val
     return df
