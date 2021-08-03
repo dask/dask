@@ -1,11 +1,11 @@
-Presentations On Dask
-=====================
+Talks & Tutorials
+=================
 
 * PyCon Korea 2019, August 2019
 
   * `Adapting from Spark to Dask: what to expect (18 minutes)
     <https://www.youtube.com/watch?v=tx7qTHSlHKw>`__
-    
+
 * SciPy 2019, July 2019
 
   * `Refactoring the SciPy Ecosystem for Heterogeneous Computing (29 minutes)
@@ -18,7 +18,7 @@ Presentations On Dask
     <https://www.youtube.com/watch?v=x67K9FiPFBQ>`__
   * `Dask image:A Library for Distributed Image Processing (22 minutes)
     <https://www.youtube.com/watch?v=XGUS174vvLs>`__
-    
+
 * EuroPython 2019, July 2019
 
   * `Distributed Multi-GPU Computing with Dask, CuPy and RAPIDS (29 minutes)
@@ -45,7 +45,7 @@ Presentations On Dask
 
   * `Dask: Parallelism in Python (1 hour, 2 minutes)
     <https://www.youtube.com/watch?v=rZlshXJydgQ>`__
-    
+
 * PYCON 2017, May 2017
 
   * `Dask: A Pythonic Distributed Data Science Framework (46 minutes)

@@ -1,5 +1,5 @@
-Institutional FAQ
-=================
+FAQ
+===
 
 **Question**: *Is appropriate for adoption within a larger institutional context?*
 
