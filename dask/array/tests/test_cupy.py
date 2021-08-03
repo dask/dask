@@ -795,7 +795,7 @@ def test_sparse_hstack_vstack_csr():
 
 
 @pytest.mark.parametrize("axis", [0, 1])
-def test_cupy_sparse_concatenate(axis):
+def test_sparse_concatenate(axis):
     pytest.importorskip("cupyx")
 
     rs = da.random.RandomState(RandomState=cupy.random.RandomState)
@@ -1280,7 +1280,7 @@ def test_index_with_int_dask_array(x_chunks, idx_chunks):
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("iscomplex", [False, True])
 @pytest.mark.parametrize(("nrow", "ncol", "chunk"), [(20, 10, 5), (100, 10, 10)])
-def test_cupy_lstsq(nrow, ncol, chunk, iscomplex):
+def test_lstsq(nrow, ncol, chunk, iscomplex):
     cupy.random.seed(1)
     A = cupy.random.randint(1, 20, (nrow, ncol))
     b = cupy.random.randint(1, 20, nrow)
@@ -1335,7 +1335,7 @@ def _get_symmat(size):
 
 
 @pytest.mark.parametrize(("shape", "chunk"), [(20, 10), (12, 3), (30, 3), (30, 6)])
-def test_cupy_cholesky(shape, chunk):
+def test_cholesky(shape, chunk):
     scipy_linalg = pytest.importorskip("scipy.linalg")
 
     A = _get_symmat(shape)
