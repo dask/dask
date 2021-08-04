@@ -285,13 +285,12 @@ def test_tokenize_pandas_extension_array():
         ),
     ]
 
-    if dd._compat.PANDAS_GT_100:
-        arrays.extend(
-            [
-                pd.array(["a", "b", None], dtype="string"),
-                pd.array([True, False, None], dtype="boolean"),
-            ]
-        )
+    arrays.extend(
+        [
+            pd.array(["a", "b", None], dtype="string"),
+            pd.array([True, False, None], dtype="boolean"),
+        ]
+    )
 
     for arr in arrays:
         assert tokenize(arr) == tokenize(arr)

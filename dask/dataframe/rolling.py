@@ -10,7 +10,6 @@ from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import M, derived_from, funcname, has_keyword
 from . import methods
-from ._compat import PANDAS_VERSION
 from .core import _emulate
 from .utils import make_meta
 
@@ -403,10 +402,6 @@ class Rolling:
         if has_keyword(meta.apply, "engine"):
             # PANDAS_GT_100
             compat_kwargs = dict(engine=engine, engine_kwargs=engine_kwargs)
-        elif engine != "cython" or engine_kwargs is not None:
-            raise NotImplementedError(
-                f"Specifying the engine requires pandas>=1.0.0. Version '{PANDAS_VERSION}' installed."
-            )
         if raw is None:
             # PANDAS_GT_100: The default changed from None to False
             raw = inspect.signature(meta.apply).parameters["raw"]
