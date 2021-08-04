@@ -318,7 +318,7 @@ monitored
 <https://gpuci.gpuopenanalytics.com/job/dask/job/dask-build-environment/job/branch/job/dask-build-env-main/>`_
 .  Note, the ``dask-build-environment`` has two separate Dockerfiles for Dask
 and Distributed similiarlly, gpuCI will run for both `Dask
-https://gpuci.gpuopenanalytics.com/job/dask/job/dask/job/prb/job/dask-prb/>`_
+<https://gpuci.gpuopenanalytics.com/job/dask/job/dask/job/prb/job/dask-prb/>`_
 and `Distributed
 <https://gpuci.gpuopenanalytics.com/job/dask/job/distributed/job/prb/job/distributed-prb/>`_
 
