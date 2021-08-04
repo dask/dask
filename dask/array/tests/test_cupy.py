@@ -1164,7 +1164,7 @@ def test_sparse_dot(sp_format):
     da_z = da.dot(da_x, da_y).compute()
 
     assert cupyx.scipy.sparse.isspmatrix(da_z)
-    assert_eq(z, da_z.todense())
+    assert_eq(z, da_z.todense(), check_type=False)
 
 
 @pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
