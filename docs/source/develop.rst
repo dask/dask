@@ -302,7 +302,7 @@ with the commit message ``test-upstream``
 The CI workflows for Github Actions are defined in
 `.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
 with additonal scripts and metadata located in `continuous_integration
-<https://github.com/dask/dask/tree/main/continuous_integration`_
+<https://github.com/dask/dask/tree/main/continuous_integration>`_
 
 
 GPU CI
