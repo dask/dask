@@ -288,56 +288,6 @@ will be run each time you commit changes. You can skip these checks with
 ``git commit --no-verify`` or with the short version ``git commit -n``.
 
 
-Dask CI Infrastructure
-----------------------
-
-Github Actions
-~~~~~~~~~~~~~~
-
-Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
-These CI builds will run the test suite across a variety of Python versions, operating
-systems, and package dependency versions.  Additionally, Dask can upstream Xarray tests
-with the commit message ``test-upstream``
-
-The CI workflows for Github Actions are defined in
-`.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
-with additonal scripts and metadata located in `continuous_integration
-<https://github.com/dask/dask/tree/main/continuous_integration>`_
-
-
-GPU CI
-~~~~~~
-
-Pull requests are also tested with a GPU enabled CI environment provided by
-NVIDIA: `gpuCI <https://gpuci.gpuopenanalytics.com/>`_ .
-Unlike Github Actions, the CI environment for gpuCI is controlled with a `docker image
-<https://github.com/rapidsai/dask-build-environment/>`_ .  When making commits
-to the repo, a new image is built.  The docker image building process can be
-monitored
-`here
-<https://gpuci.gpuopenanalytics.com/job/dask/job/dask-build-environment/job/branch/job/dask-build-env-main/>`_
-.  Note, the ``dask-build-environment`` has two separate Dockerfiles for Dask
-and Distributed similiarlly, gpuCI will run for both `Dask
-<https://gpuci.gpuopenanalytics.com/job/dask/job/dask/job/prb/job/dask-prb/>`_
-and `Distributed
-<https://gpuci.gpuopenanalytics.com/job/dask/job/distributed/job/prb/job/distributed-prb/>`_
-
-For each PR, gpuCI will run all tests decorated with the pytest marker
-``@pytest.mark.gpu``.  This is configured in the `gpuci folder
-<https://github.com/dask/dask/tree/main/continuous_integration/gpuci>`_ .
-Like Github Actions, gpuCI will not run when first time contributors to Dask or
-Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
-
-> Can one of the admins verify this patch?
-
-Dask Maintainers can then approve gpuCI builds for these PRs with following choices:
-
-- To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
-- To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
-
-For more information about gpuCI please consult the `docs page
-<https://docs.rapids.ai/gpuci>`_
-
 Contributing to Documentation
 -----------------------------
 
@@ -379,5 +329,61 @@ The resulting HTML files end up in the ``build/html`` directory.
 
 You can now make edits to rst files and run ``make html`` again to update
 the affected pages.
+
+
+Dask CI Infrastructure
+----------------------
+
+Github Actions
+~~~~~~~~~~~~~~
+
+Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
+These CI builds will run the test suite across a variety of Python versions, operating
+systems, and package dependency versions.  Addtionally, if a commit message
+includes the phrase ``test-upstream``, then an additional CI build will be
+triggered which uses the development versions of several dependencies
+including: NumPy, pandas, fsspec, etc.
+
+The CI workflows for Github Actions are defined in
+`.github/workflows <https://github.com/dask/dask/tree/main/.github/workflows>`_
+with additonal scripts and metadata located in `continuous_integration
+<https://github.com/dask/dask/tree/main/continuous_integration>`_
+
+
+GPU CI
+~~~~~~
+
+Pull requests are also tested with a GPU enabled CI environment provided by
+NVIDIA: `gpuCI <https://gpuci.gpuopenanalytics.com/>`_.
+Unlike Github Actions, the CI environment for gpuCI is controlled with the
+`rapidsai/dask-build-environment <https://github.com/rapidsai/dask-build-environment/>`_
+docker image.  When making commits to the
+`dask-build-environment repo <https://github.com/rapidsai/dask-build-environment/>`_ , a new image is built.
+The docker image building process can be monitored
+`here <https://gpuci.gpuopenanalytics.com/job/dask/job/dask-build-environment/job/branch/job/dask-build-env-main/>`_.
+Note, the ``dask-build-environment`` has two separate Dockerfiles for Dask
+and Distributed similiarlly, gpuCI will run for both `Dask
+<https://gpuci.gpuopenanalytics.com/job/dask/job/dask/job/prb/job/dask-prb/>`_
+and `Distributed
+<https://gpuci.gpuopenanalytics.com/job/dask/job/distributed/job/prb/job/distributed-prb/>`_
+
+For each PR, gpuCI will run all tests decorated with the pytest marker
+``@pytest.mark.gpu``.  This is configured in the `gpuci folder
+<https://github.com/dask/dask/tree/main/continuous_integration/gpuci>`_ .
+Like Github Actions, gpuCI will not run when first time contributors to Dask or
+Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
+
+.. note:: Can one of the admins verify this patch?
+
+.. image:: images/gputester-msg.png
+
+Dask Maintainers can then approve gpuCI builds for these PRs with following choices:
+
+- To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
+- To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
+
+For more information about gpuCI please consult the `docs page
+<https://docs.rapids.ai/gpuci>`_
+
 
 .. _Sphinx: https://www.sphinx-doc.org/
