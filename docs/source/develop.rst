@@ -308,8 +308,8 @@ with additonal scripts and metadata located in `continuous_integration
 GPU CI
 ~~~~~~
 
-As Dask seamlessly work with GPUs, Dask will also test PRs with a GPU enabled
-CI environment provided by NVIDIA: `gpuCI <https://gpuci.gpuopenanalytics.com/>`_ .
+Pull requests are also tested with a GPU enabled CI environment provided by
+NVIDIA: `gpuCI <https://gpuci.gpuopenanalytics.com/>`_ .
 Unlike Github Actions, the CI environment for gpuCI is controlled with a `docker image
 <https://github.com/rapidsai/dask-build-environment/>`_ .  When making commits
 to the repo, a new image is built.  The docker image building process can be
