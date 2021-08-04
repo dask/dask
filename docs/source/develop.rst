@@ -323,7 +323,7 @@ and `Distributed
 <https://gpuci.gpuopenanalytics.com/job/dask/job/distributed/job/prb/job/distributed-prb/>`_
 
 For each PR, gpuCI will run all tests decorated with the pytest marker
-`@pytest.mark.gpu`.  This is configured in the `gpuci folder
+``@pytest.mark.gpu``.  This is configured in the `gpuci folder
 <https://github.com/dask/dask/tree/main/continuous_integration/gpuci>`_ .
 Like Github Actions, gpuCI will not run when first time authors to Dask or
 Distributed submit PRs.  In this case, a gpuCI bot will comment on the PR:
