@@ -62,5 +62,4 @@ dependencies:
   - mmh3
   - pip
   - pip:
-    - pyorc
     - git+https://github.com/dask/distributed

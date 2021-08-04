@@ -60,5 +60,3 @@ dependencies:
   - python-xxhash
   - mmh3
   - pip
-  - pip:
-   - pyorc
