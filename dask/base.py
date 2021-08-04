@@ -19,9 +19,9 @@ from tlz.functoolz import Compose
 
 from . import config, local, threaded
 from .context import thread_state
-from .core import flatten, get_deps
+from .core import flatten
 from .core import get as simple_get
-from .core import literal, quote
+from .core import get_deps, literal, quote
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, apply, ensure_dict, key_split
 
