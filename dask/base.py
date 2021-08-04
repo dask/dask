@@ -21,7 +21,7 @@ from . import config, local, threaded
 from .context import thread_state
 from .core import flatten
 from .core import get as simple_get
-from .core import get_deps, literal, quote
+from .core import literal, quote
 from .hashing import hash_buffer_hex
 from .utils import Dispatch, apply, ensure_dict, key_split
 
@@ -653,17 +653,15 @@ def visualize(*args, **kwargs):
         "order-age",
         "order-increases",
         "order-decreases",
-        "order-runpressure",
-        "order-releasepressure",
+        "order-pressure",
         "age",
         "increases",
         "decreases",
-        "runpressure",
-        "releasepressure",
+        "pressure",
     }:
         import matplotlib.pyplot as plt
 
-        from .order import order
+        from .order import diagnostics, order
 
         o = order(dsk)
         try:
@@ -678,41 +676,23 @@ def visualize(*args, **kwargs):
         def label(x):
             return str(values[x])
 
+        data_values = None
         if color != "order":
-            dependencies, dependents = get_deps(dsk)
-            num_in_memory = 0
-            age = {}
-            runpressure = {}
-            releasepressure = {}
-            num_needed = {key: len(val) for key, val in dependents.items()}
-            for i, key in enumerate(sorted(dsk, key=o.__getitem__)):
-                runpressure[key] = num_in_memory + 1
-                if dependents[key]:
-                    num_in_memory += 1
-                else:
-                    age[key] = 0
-                    releasepressure[key] = num_in_memory + 1
-                tot = 0
-                for dep in dependencies[key]:
-                    num_needed[dep] -= 1
-                    if num_needed[dep] == 0:
-                        age[dep] = i - o[dep]
-                        releasepressure[dep] = num_in_memory
-                        tot += 1
-                num_in_memory -= tot
-            if color.endswith("-age"):
-                values = age
-            elif color.endswith("-runpressure"):
-                values = runpressure
-            elif color.endswith("-releasepressure"):
-                values = releasepressure
-            elif color.endswith("-increases"):
+            info = diagnostics(dsk, o)[0]
+            if color.endswith("age"):
+                values = {key: val.age for key, val in info.items()}
+            elif color.endswith("pressure"):
+                values = {key: val.runpressure for key, val in info.items()}
+                data_values = {key: val.releasepressure for key, val in info.items()}
+            elif color.endswith("increases"):
                 values = {
-                    key: max(0, releasepressure[key] - runpressure[key]) for key in o
+                    key: max(0, val.releasepressure - val.runpressure)
+                    for key, val in info.items()
                 }
             else:  # decreases
                 values = {
-                    key: max(0, runpressure[key] - releasepressure[key]) for key in o
+                    key: max(0, val.runpressure - val.releasepressure)
+                    for key, val in info.items()
                 }
 
             if color.startswith("order-"):
@@ -722,16 +702,23 @@ def visualize(*args, **kwargs):
 
         else:
             values = o
-
         maxval = kwargs.pop("maxval", None)
         if maxval is None:
             maxval = max(1, max(values.values()))
         colors = {k: _colorize(cmap(v / maxval, bytes=True)) for k, v in values.items()}
+        if data_values is None:
+            data_values = values
+            data_colors = colors
+        else:
+            data_colors = {
+                k: _colorize(cmap(v / maxval, bytes=True))
+                for k, v in data_values.items()
+            }
 
         kwargs["function_attributes"] = {
             k: {"color": v, "label": label(k)} for k, v in colors.items()
         }
-        kwargs["data_attributes"] = {k: {"color": v} for k, v in colors.items()}
+        kwargs["data_attributes"] = {k: {"color": v} for k, v in data_colors.items()}
     elif color:
         raise NotImplementedError("Unknown value color=%s" % color)
 

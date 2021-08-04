@@ -75,7 +75,7 @@ Work towards *small goals* with *big steps*.
     This relies on the regularity of graph constructors like dask.array to be a
     good proxy for ordering.  This is usually a good idea and a sane default.
 """
-from collections import defaultdict
+from collections import defaultdict, namedtuple
 from math import log
 
 from .core import get_dependencies, get_deps, getcycle, reverse_dict  # noqa: F401
@@ -712,3 +712,43 @@ class StrComparable:
             return self.obj < other.obj
         except Exception:
             return str(self.obj) < str(other.obj)
+
+
+def diagnostics(dsk, o=None, dependencies=None):
+    """TODO"""
+    if dependencies is None:
+        dependencies, dependents = get_deps(dsk)
+    else:
+        dependents = reverse_dict(dependencies)
+    if o is None:
+        o = order(dsk, dependencies=dependencies)
+
+    pressure = []
+    num_in_memory = 0
+    age = {}
+    runpressure = {}
+    releasepressure = {}
+    num_needed = {key: len(val) for key, val in dependents.items()}
+    for i, key in enumerate(sorted(dsk, key=o.__getitem__)):
+        pressure.append(num_in_memory)
+        runpressure[key] = num_in_memory
+        tot = 0
+        if dependents[key]:
+            tot -= 1
+        else:
+            age[key] = 0
+            releasepressure[key] = num_in_memory
+        for dep in dependencies[key]:
+            num_needed[dep] -= 1
+            if num_needed[dep] == 0:
+                age[dep] = i - o[dep]
+                releasepressure[dep] = num_in_memory
+                tot += 1
+        num_in_memory -= tot
+
+    info = namedtuple("OrderInfo", ("order", "age", "runpressure", "releasepressure"))
+    rv = {
+        key: info(val, age[key], runpressure[key], releasepressure[key])
+        for key, val in o.items()
+    }
+    return rv, pressure
