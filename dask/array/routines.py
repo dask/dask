@@ -257,17 +257,18 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(transpose(m, axes_list), axes[1])
 
 
-def _tensordot(a, b, axes):
+def _tensordot(a, b, axes, is_sparse):
     x = max([a, b], key=lambda x: x.__array_priority__)
     tensordot = tensordot_lookup.dispatch(type(x))
     x = tensordot(a, b, axes=axes)
-
-    ind = [slice(None, None)] * x.ndim
-    for a in sorted(axes[0]):
-        ind.insert(a, None)
-    x = x[tuple(ind)]
-
-    return x
+    if is_sparse and len(axes[0]) == 1:
+        return x
+    else:
+        ind = [slice(None, None)] * x.ndim
+        for a in sorted(axes[0]):
+            ind.insert(a, None)
+        x = x[tuple(ind)]
+        return x
 
 
 @derived_from(np)
@@ -282,7 +283,6 @@ def tensordot(lhs, rhs, axes=2):
     else:
         left_axes = tuple(range(lhs.ndim - axes, lhs.ndim))
         right_axes = tuple(range(0, axes))
-
     if isinstance(left_axes, Integral):
         left_axes = (left_axes,)
     if isinstance(right_axes, Integral):
@@ -291,17 +291,20 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
-
+    is_sparse = "sparse" in str(type(lhs._meta)) or "sparse" in str(type(rhs._meta))
+    if is_sparse and len(left_axes) == 1:
+        concatenate = True
+    else:
+        concatenate = False
     dt = np.promote_types(lhs.dtype, rhs.dtype)
-
     left_index = list(range(lhs.ndim))
     right_index = list(range(lhs.ndim, lhs.ndim + rhs.ndim))
     out_index = left_index + right_index
-
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
-
+        if concatenate:
+            out_index.remove(left_index[l])
     intermediate = blockwise(
         _tensordot,
         out_index,
@@ -310,12 +313,14 @@ def tensordot(lhs, rhs, axes=2):
         rhs,
         right_index,
         dtype=dt,
-        concatenate=False,
+        concatenate=concatenate,
         axes=(left_axes, right_axes),
-        meta=lhs._meta,
+        is_sparse=is_sparse,
     )
-
-    return intermediate.sum(axis=left_axes)
+    if concatenate:
+        return intermediate
+    else:
+        return intermediate.sum(axis=left_axes)
 
 
 @derived_from(np)
