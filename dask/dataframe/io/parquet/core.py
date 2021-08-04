@@ -864,7 +864,7 @@ def create_metadata_file(
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
-        compute_as_if_collection(DataFrame, graph, [name], **compute_kwargs)
+        return compute_as_if_collection(DataFrame, graph, name, **compute_kwargs)
     else:
         return Delayed(name, graph)
 
