@@ -1242,20 +1242,29 @@ def to_graphviz(
             20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
         )
 
-        node_tooltips = f"Layer Type: {str(type(hg.layers[layer]).__name__)}\n"
-        node_tooltips += f"N Tasks: {n_tasks[layer]}\n"
+        layer_type = str(type(hg.layers[layer]).__name__)
+        node_tooltips = (
+            f"A {layer_type.replace('Layer', '')} Layer with {n_tasks[layer]} Tasks.\n"
+        )
 
         if hg.layers[layer].collection_annotations:
             ca = hg.layers[layer].collection_annotations
             if ca.get("type") == "dask.array.core.Array":
-                node_tooltips += f"Array Shape: {ca.get('shape')}\n"
-                node_tooltips += f"Data Type: {ca.get('dtype')}\n"
-                node_tooltips += f"Chunk Size: {ca.get('chunksize')}\n"
-                node_tooltips += f"Chunk Type: {ca.get('chunk_type')}\n"
+                node_tooltips += (
+                    f"A Dask Array of size {ca.get('shape')} with chunks of size {ca.get('chunksize')}.\n"
+                    f"The Array Type is {ca.get('dtype')} and the chunks are of {ca.get('chunk_type')} type"
+                )
             if ca.get("type") == "dask.dataframe.core.DataFrame":
-                node_tooltips += f"N Partitions: {ca.get('npartitions')}\n"
-                node_tooltips += f"DataFrame Type: {ca.get('dataframe_type')}\n"
-                node_tooltips += f"DataFrame Columns: {ca.get('columns')}\n"
+                dftype = (
+                    "pandas"
+                    if ca.get("dataframe_type") == "pandas.core.frame.DataFrame"
+                    else "pandas"
+                )
+
+                node_tooltips += (
+                    f"A Dask DataFrame made up of {ca.get('npartitions')} {dftype} partitions.\n"
+                    f"{len(ca.get('columns'))} columns: {ca.get('columns')}."
+                )
 
         attrs.setdefault("label", str(node_label))
         attrs.setdefault("fontsize", str(node_size))
