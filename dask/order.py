@@ -450,22 +450,23 @@ def order(dsk, dependencies=None):
                 deps = set_difference(deps, result)
                 if not deps:
                     continue
-                add_to_inner_stack = process_singles = False
+                add_to_inner_stack = False
+                process_singles = True
             else:
                 break
 
-            if process_singles:
+            if process_singles and singles:
                 # We gather all dependents of all singles into `deps`, which we then process below.
                 # A lingering question is: what should we use for `item`?  `item_key` is used to
                 # determine whether each dependent goes to `next_nodes` or `later_nodes`.  Currently,
                 # we use the last value of `item` (i.e., we don't do anything).
                 deps = set()
-                process_singles = True if inner_stack or inner_stacks else False
+                add_to_inner_stack = True if inner_stack or inner_stacks else False
                 for single, parent in singles_items:
                     if single in result:
                         continue
                     if (
-                        process_singles
+                        add_to_inner_stack
                         and len(set_difference(dependents[parent], result)) > 1
                     ):
                         later_singles_append(single)
@@ -498,7 +499,7 @@ def order(dsk, dependencies=None):
                         if dep2:
                             for dep in dep2:
                                 num_needed[dep] -= 1
-                            if process_singles:
+                            if add_to_inner_stack:
                                 already_seen = dep2 & seen
                                 if already_seen:
                                     if len(dep2) == len(already_seen):
@@ -602,14 +603,20 @@ def order(dsk, dependencies=None):
                         inner_stack_pop = inner_stack.pop
                         seen_update(deps)
                         if not num_needed[dep2]:
-                            singles[dep2] = item
+                            if process_singles:
+                                later_singles_append(dep2)
+                            else:
+                                singles[dep2] = item
                     elif key < prev_key:
                         inner_stacks_append(inner_stack)
                         inner_stack = [dep]
                         inner_stack_pop = inner_stack.pop
                         seen_add(dep)
                         if not num_needed[dep2]:
-                            singles[dep2] = item
+                            if process_singles:
+                                later_singles_append(dep2)
+                            else:
+                                singles[dep2] = item
                         elif key2 < partition_keys[item]:
                             next_nodes[key2].append([dep2])
                         else:
