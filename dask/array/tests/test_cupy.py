@@ -1574,7 +1574,13 @@ def test_setitem_extended_API_1d():
                 reason="Unsupported assigning `list` to CuPy array",
             ),
         ),
-        [(slice(None), [9, 8, 8]), [-80, -81, 91]],
+        pytest.param(
+            (slice(None), [9, 8, 8]),
+            [[-80, -81, 91]],
+            marks=pytest.mark.xfail(
+                reason="Flaky test on gpuCI",
+            ),
+        ),
         [([True, False, False, False, True, False], 2), -1],
         [(3, [True, True, False, True, True, False, True, False, True, True]), -1],
         [(np.array([False, False, True, True, False, False]), slice(5, 7)), -1],
