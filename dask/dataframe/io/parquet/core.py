@@ -917,8 +917,9 @@ def get_engine(engine):
             engine = "pyarrow-dataset"
         elif pa_version.major >= 5 and engine == "pyarrow-legacy":
             warnings.warn(
-                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "
-                "for pyarrow>=5. Please use `engine='pyarrow'`.",
+                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated for "
+                "pyarrow>=5 and will be removed in a future release. Please "
+                "use `engine='pyarrow'` or `engine='pyarrow-dataset'`.",
                 FutureWarning,
             )
 
