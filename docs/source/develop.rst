@@ -326,7 +326,7 @@ For each PR, gpuCI will run all tests decorated with the pytest marker
 ``@pytest.mark.gpu``.  This is configured in the `gpuci folder
 <https://github.com/dask/dask/tree/main/continuous_integration/gpuci>`_ .
 Like Github Actions, gpuCI will not run when first time contributors to Dask or
-Distributed submit PRs.  In this case, a gpuCI bot will comment on the PR:
+Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
 
 > Can one of the admins verify this patch?
 
