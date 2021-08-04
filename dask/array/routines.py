@@ -271,6 +271,14 @@ def _tensordot(a, b, axes, is_sparse):
         return x
 
 
+def _tensordot_is_sparse(x):
+    is_sparse = "sparse" in str(type(x._meta))
+    if is_sparse:
+        # exclude pydata sparse arrays, no workaround required for these in tensordot
+        is_sparse = "sparse._coo.core.COO" not in str(type(x._meta))
+    return is_sparse
+
+
 @derived_from(np)
 def tensordot(lhs, rhs, axes=2):
     if not isinstance(lhs, Array):
@@ -291,7 +299,7 @@ def tensordot(lhs, rhs, axes=2):
         left_axes = tuple(left_axes)
     if isinstance(right_axes, list):
         right_axes = tuple(right_axes)
-    is_sparse = "sparse" in str(type(lhs._meta)) or "sparse" in str(type(rhs._meta))
+    is_sparse = _tensordot_is_sparse(lhs) or _tensordot_is_sparse(rhs)
     if is_sparse and len(left_axes) == 1:
         concatenate = True
     else:
