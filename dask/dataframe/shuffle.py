@@ -497,9 +497,9 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
     }
 
     dependencies = []
-    layer = {}
     if compute:
-        graph = HighLevelGraph.merge(df.dask, dsk1, dsk2)
+        dsk2 = HighLevelGraph.from_collections(name, dsk2, dependencies=[df])
+        graph = HighLevelGraph.merge(dsk1, dsk2)
         keys = [p, sorted(dsk2)]
         pp, values = compute_as_if_collection(DataFrame, graph, keys)
         dsk1 = {p: pp}
@@ -521,7 +521,7 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
 
     layer = toolz.merge(dsk1, dsk2, dsk3, dsk4)
     graph = HighLevelGraph.from_collections(name, layer, dependencies=dependencies)
-    return DataFrame(graph, name, df._meta, divisions)
+    return new_dd_object(graph, name, df._meta, divisions)
 
 
 def _noop(x, cleanup_token):
