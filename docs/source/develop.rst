@@ -332,10 +332,8 @@ Distributed submit PRs.  In this case, the gpuCI bot will comment on the PR:
 
 Dask Maintainers can approved build these PRs with following choices:
 
-- To approve PR author for just the current PR, comment the command:
-  - ``ok to test``
-- To approve PR author for all PRs in the future, comment the command:
-  - ``add to allowlist``
+- To only approve the PR contributor for the current PR, leave a comment which states ``ok to test``
+- To approve the current PR and all future PRs from the contributor, leave a comment which states ``add to allowlist``
 
 For more information about gpuCI please consult the `docs page
 <https://docs.rapids.ai/gpuci>`_
