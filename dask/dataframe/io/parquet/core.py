@@ -859,14 +859,14 @@ def create_metadata_file(
 
     # Convert the raw graph to a `Delayed` object
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[])
+    out = Delayed(name, graph)
 
     # Optionally compute the result
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
-        return compute_as_if_collection(DataFrame, graph, name, **compute_kwargs)
-    else:
-        return Delayed(name, graph)
+        out = out.compute(**compute_kwargs)
+    return out
 
 
 _ENGINES = {}
