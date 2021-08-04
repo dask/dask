@@ -295,8 +295,8 @@ Github Actions
 ~~~~~~~~~~~~~~
 
 Dask uses Github Actions for Continuous Integration (CI) testing for each PR.
-The actions will run the test suite across a variety of Python versions, Operating
-Systems, and NumPy and Pandas versions.  Additionally, Dask can upstream Xarray tests
+These CI builds will run the test suite across a variety of Python versions, operating
+systems, and package dependency versions.  Additionally, Dask can upstream Xarray tests
 with the commit message ``test-upstream``
 
 The CI workflows for Github Actions are defined in
