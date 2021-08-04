@@ -184,7 +184,7 @@ def test_pyarrow_getengine():
     assert get_engine("arrow") == ArrowDatasetEngine
 
     if SKIP_PYARROW_LE:
-        with pytest.raises(FutureWarning):
+        with pytest.warns(FutureWarning):
             get_engine("pyarrow-legacy")
 
 
