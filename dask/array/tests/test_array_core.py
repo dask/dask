@@ -43,7 +43,6 @@ from dask.array.core import (
     stack,
     store,
 )
-from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import broadcast_dimensions
@@ -2675,7 +2674,6 @@ def test_concatenate3_2():
     )
 
 
-@pytest.mark.skipif(not _numpy_117, reason="NEP-18 is not enabled by default")
 @pytest.mark.parametrize("one_d", [True, False])
 @mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
 def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
@@ -4209,6 +4207,21 @@ def test_normalize_chunks_nan():
     with pytest.raises(ValueError) as info:
         normalize_chunks(((np.nan, np.nan), "auto"), (10, 10), limit=10, dtype=np.uint8)
     assert "auto" in str(info.value)
+
+
+def test_pandas_from_dask_array():
+    pd = pytest.importorskip("pandas")
+    from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_131
+
+    a = da.ones((12,), chunks=4)
+    s = pd.Series(a, index=range(12))
+
+    if PANDAS_GT_130 and not PANDAS_GT_131:
+        # https://github.com/pandas-dev/pandas/issues/38645
+        assert s.dtype != a.dtype
+    else:
+        assert s.dtype == a.dtype
+        assert_eq(s.values, a)
 
 
 def test_from_zarr_unique_name():

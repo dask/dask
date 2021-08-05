@@ -15,7 +15,6 @@ from pandas.api.types import (
 from dask.sizeof import SimpleSizeof, sizeof
 
 from ..utils import is_arraylike, typename
-from ._compat import PANDAS_GT_100
 from .core import DataFrame, Index, Scalar, Series, _Frame
 from .dispatch import (
     categorical_dtype_dispatch,
@@ -103,13 +102,13 @@ def make_meta_object(x, index=None):
     Examples
     --------
 
-    >>> make_meta([('a', 'i8'), ('b', 'O')])    # doctest: +SKIP
+    >>> make_meta_object([('a', 'i8'), ('b', 'O')])
     Empty DataFrame
     Columns: [a, b]
     Index: []
-    >>> make_meta(('a', 'f8'))                  # doctest: +SKIP
+    >>> make_meta_object(('a', 'f8'))
     Series([], Name: a, dtype: float64)
-    >>> make_meta('i8')                         # doctest: +SKIP
+    >>> make_meta_object('i8')
     1
     """
 
@@ -181,8 +180,7 @@ def meta_nonempty_dataframe(x):
         data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
-    if PANDAS_GT_100:
-        res.attrs = x.attrs
+    res.attrs = x.attrs
     return res
 
 
@@ -281,10 +279,7 @@ def _nonempty_series(s, idx=None):
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
     elif is_sparse(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
-        if PANDAS_GT_100:
-            data = pd.array([entry, entry], dtype=dtype)
-        else:
-            data = pd.SparseArray([entry, entry], dtype=dtype)
+        data = pd.array([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
@@ -295,8 +290,7 @@ def _nonempty_series(s, idx=None):
         data = np.array([entry, entry], dtype=dtype)
 
     out = pd.Series(data, name=s.name, index=idx)
-    if PANDAS_GT_100:
-        out.attrs = s.attrs
+    out.attrs = s.attrs
     return out
 
 

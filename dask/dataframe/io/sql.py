@@ -346,13 +346,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from tempfile import NamedTemporaryFile
-    >>> from sqlalchemy import create_engine    # doctest: +SKIP
-    >>> with NamedTemporaryFile() as f:         # doctest: +SKIP
-    ...     db = 'sqlite:///%s' %f              # doctest: +SKIP
-    ...     ddf.to_sql('test', db)              # doctest: +SKIP
-    ...     engine = create_engine(db, echo=False) # doctest: +SKIP
-    ...     result = engine.execute("SELECT * FROM test").fetchall() # doctest: +SKIP
-    >>> result                                  # doctest: +SKIP
+    >>> from sqlalchemy import create_engine
+    >>> with tmpfile() as f:
+    ...     db = 'sqlite:///%s' %f
+    ...     ddf.to_sql('test', db)
+    ...     engine = create_engine(db, echo=False)
+    ...     result = engine.execute("SELECT * FROM test").fetchall()
+    >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):
