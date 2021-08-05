@@ -1577,9 +1577,7 @@ def test_setitem_extended_API_1d():
         pytest.param(
             (slice(None), [9, 8, 8]),
             [[-80, -81, 91]],
-            marks=pytest.mark.xfail(
-                reason="Flaky test on gpuCI",
-            ),
+            marks=pytest.mark.flaky(reruns=10),
         ),
         [([True, False, False, False, True, False], 2), -1],
         [(3, [True, True, False, True, True, False, True, False, True, True]), -1],
