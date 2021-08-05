@@ -6811,16 +6811,15 @@ def to_datetime(arg, meta=None, **kwargs):
         if isinstance(arg, Index):
             meta = pd.DatetimeIndex([])
             meta.name = arg.name
+        elif not (is_dataframe_like(arg) or is_series_like(arg)):
+            raise NotImplementedError(
+                "dask.dataframe.to_datetime does not support "
+                "non-index-able arguments (like scalars)"
+            )
         else:
-            try:
-                meta = pd.Series([pd.Timestamp("2000")])
-                meta.index = meta.index.astype(arg.index.dtype)
-                meta.index.name = arg.index.name
-            except AttributeError:
-                raise NotImplementedError(
-                    "dask.dataframe.to_datetime does not support "
-                    "non-index-able arguments (like scalars)"
-                )
+            meta = pd.Series([pd.Timestamp("2000")])
+            meta.index = meta.index.astype(arg.index.dtype)
+            meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
 
 
