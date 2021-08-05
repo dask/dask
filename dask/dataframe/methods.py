@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
-import dask.dataframe as dd
+from dask.utils import has_keyword
 
 #  preserve compatibility while moving dispatch objects
 from .dispatch import (  # noqa: F401
@@ -306,7 +306,7 @@ def assign(df, *pairs):
     # (to avoid modifying the original)
     pairs = dict(partition(2, pairs))
     deep = bool(set(pairs) & set(df.columns))
-    df = df.copy() if isinstance(df, dd.core.DataFrame) else df.copy(deep=bool(deep))
+    df = df.copy(deep=bool(deep)) if has_keyword(df.copy, "deep") else df.copy()
     for name, val in pairs.items():
         df[name] = val
     return df
