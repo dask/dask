@@ -526,7 +526,7 @@ def assert_eq(
     a,
     b,
     check_names=True,
-    check_dtypes=True,
+    check_dtype=True,
     check_divisions=True,
     check_index=True,
     **kwargs,
@@ -540,8 +540,8 @@ def assert_eq(
             assert at == bt, (at, bt)
     assert_sane_keynames(a)
     assert_sane_keynames(b)
-    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtypes)
-    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtypes)
+    a = _check_dask(a, check_names=check_names, check_dtypes=check_dtype)
+    b = _check_dask(b, check_names=check_names, check_dtypes=check_dtype)
     if not check_index:
         a = a.reset_index(drop=True)
         b = b.reset_index(drop=True)
@@ -552,13 +552,15 @@ def assert_eq(
     if isinstance(a, pd.DataFrame):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
-        tm.assert_frame_equal(a, b, **kwargs)
+        tm.assert_frame_equal(a, b, check_dtype=check_dtype, **kwargs)
     elif isinstance(a, pd.Series):
         a = _maybe_sort(a)
         b = _maybe_sort(b)
-        tm.assert_series_equal(a, b, check_names=check_names, **kwargs)
+        tm.assert_series_equal(
+            a, b, check_names=check_names, check_dtype=check_dtype, **kwargs
+        )
     elif isinstance(a, pd.Index):
-        tm.assert_index_equal(a, b, **kwargs)
+        tm.assert_index_equal(a, b, exact=check_dtype, **kwargs)
     else:
         if a == b:
             return True

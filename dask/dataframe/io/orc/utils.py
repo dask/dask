@@ -4,6 +4,8 @@ from ....utils import natural_sort_key
 
 
 class ORCEngine:
+    """The API necessary to provide a new ORC reader/writer"""
+
     @classmethod
     def read_metadata(
         cls,
