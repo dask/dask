@@ -8,6 +8,7 @@ from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply
 from ...core import DataFrame, Scalar, new_dd_object
+from .utils import ORCEngine
 
 
 class ORCFunctionWrapper:
@@ -43,22 +44,6 @@ class ORCFunctionWrapper:
         if self.index:
             _df.set_index(self.index, inplace=True)
         return _df
-
-
-class ORCEngine:
-    """The API necessary to provide a new ORC reader/writer"""
-
-    @classmethod
-    def read_metadata(cls, fs, paths, columns, index, split_stripes, **kwargs):
-        raise NotImplementedError()
-
-    @classmethod
-    def read_partition(cls, fs, part, columns, **kwargs):
-        raise NotImplementedError()
-
-    @classmethod
-    def write_partition(cls, df, path, fs, filename, **kwargs):
-        raise NotImplementedError
 
 
 def _get_engine(engine):
