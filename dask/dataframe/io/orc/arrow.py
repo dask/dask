@@ -1,6 +1,5 @@
 import pyarrow as pa
 import pyarrow.orc as orc
-from packaging.version import parse as parse_version
 
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 
@@ -103,10 +102,7 @@ class ArrowORCEngine:
         batches = []
         for path, stripes in parts:
             batches += _read_orc_stripes(fs, path, stripes, schema, columns)
-        if parse_version(pa.__version__) < parse_version("0.11.0"):
-            return pa.Table.from_batches(batches).to_pandas()
-        else:
-            return pa.Table.from_batches(batches).to_pandas(date_as_object=False)
+        return pa.Table.from_batches(batches).to_pandas(date_as_object=False)
 
     @classmethod
     def write_partition(cls, df, path, fs, filename, **kwargs):

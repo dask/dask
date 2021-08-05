@@ -1,10 +1,6 @@
 class ORCEngine:
     """The API necessary to provide a new ORC reader/writer"""
 
-
-class ORCEngine:
-    """The API necessary to provide a new ORC reader/writer"""
-
     @classmethod
     def read_metadata(
         cls, fs, paths, columns, index, split_stripes, aggregate_files, **kwargs
