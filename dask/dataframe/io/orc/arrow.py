@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc as orc
-from packaging.version import parse as parse_version
 
 from ..parquet.core import apply_filters
 from ..parquet.utils import _flatten_filters
@@ -281,10 +280,7 @@ class ArrowORCEngine(ORCEngine):
 
         # Concatenate arrow tables and convert to pandas
         arrow_table = pa.concat_tables(tables) if len(tables) > 1 else tables[0]
-        if parse_version(pa.__version__) < parse_version("0.11.0"):
-            return arrow_table.to_pandas()
-        else:
-            return arrow_table.to_pandas(date_as_object=False)
+        return arrow_table.to_pandas(date_as_object=False)
 
     @classmethod
     def write_partition(cls, df, path, fs, filename, partition_on, **kwargs):
