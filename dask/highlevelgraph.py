@@ -1247,24 +1247,23 @@ def to_graphviz(
             f"A {layer_type.replace('Layer', '')} Layer with {n_tasks[layer]} Tasks.\n"
         )
 
-        if hg.layers[layer].collection_annotations:
-            ca = hg.layers[layer].collection_annotations
-
-            if ca.get("type") == "dask.array.core.Array":
+        layer_ca = hg.layers[layer].collection_annotations
+        if layer_ca:
+            if layer_ca.get("type") == "dask.array.core.Array":
                 node_tooltips += (
-                    f"Array Shape: {ca.get('shape')}\n"
-                    f"Data Type: {ca.get('dtype')}\n"
-                    f"Chunk Size: {ca.get('chunksize')}\n"
-                    f"Chunk Type: {ca.get('chunk_type')}\n"
+                    f"Array Shape: {layer_ca.get('shape')}\n"
+                    f"Data Type: {layer_ca.get('dtype')}\n"
+                    f"Chunk Size: {layer_ca.get('chunksize')}\n"
+                    f"Chunk Type: {layer_ca.get('chunk_type')}\n"
                 )
 
-            if ca.get("type") == "dask.dataframe.core.DataFrame":
+            if layer_ca.get("type") == "dask.dataframe.core.DataFrame":
                 dftype = {"pandas.core.frame.DataFrame": "pandas"}
 
                 node_tooltips += (
-                    f"Number of Partitions: {ca.get('npartitions')}\n"
-                    f"DataFrame Type: {dftype.get(ca.get('dataframe_type'))}\n"
-                    f"{len(ca.get('columns'))} DataFrame Columns: {ca.get('columns')}\n"
+                    f"Number of Partitions: {layer_ca.get('npartitions')}\n"
+                    f"DataFrame Type: {dftype.get(layer_ca.get('dataframe_type'))}\n"
+                    f"{len(layer_ca.get('columns'))} DataFrame Columns: {layer_ca.get('columns')}\n"
                 )
 
         attrs.setdefault("label", str(node_label))
