@@ -4,6 +4,8 @@ import pyarrow as pa
 import pyarrow.orc as orc
 from packaging.version import parse as parse_version
 
+from ..parquet.core import apply_filters
+from ..parquet.utils import _flatten_filters
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
 from .utils import ORCEngine, collect_files, collect_partitions
 
@@ -62,9 +64,14 @@ class ArrowORCEngine(ORCEngine):
             filters,
             split_stripes,
             directory_partitions,
+            directory_partition_keys,
             aggregate_files,
             directory_aggregation_depth,
         )
+
+        # Apply filters if applicable
+        if statistics and filters:
+            parts, statistics = apply_filters(parts, statistics, filters)
 
         # Aggregate adjacent partitions together
         # when possible/desired
@@ -97,15 +104,27 @@ class ArrowORCEngine(ORCEngine):
         filters,
         split_stripes,
         directory_partitions,
+        directory_partition_keys,
         aggregate_files,
         directory_aggregation_depth,
     ):
-        if filters is not None:
-            raise ValueError(
-                "Filters are not currently supported by the 'pyarrow' orc engine."
-            )
+        def _new_stat(hive_part, stat_columns):
+            return {
+                "columns": [
+                    {"name": key, "min": val, "max": val}
+                    for (key, val) in hive_part
+                    if key in stat_columns
+                ]
+            }
+
+        # Check if filters contain
+        need_stat_columns = [
+            col for col in _flatten_filters(filters) if col in directory_partition_keys
+        ]
+
         schema = None
         parts = []
+        stats = []
         if split_stripes:
             offset = 0
             for i, path in enumerate(paths):
@@ -119,6 +138,8 @@ class ArrowORCEngine(ORCEngine):
                     _stripes = list(range(o.nstripes))
                     if offset:
                         parts.append([(path, _stripes[0:offset], hive_part)])
+                        if need_stat_columns:
+                            stats.append(_new_stat(hive_part, need_stat_columns))
                     while offset < o.nstripes:
                         parts.append(
                             [
@@ -129,6 +150,8 @@ class ArrowORCEngine(ORCEngine):
                                 )
                             ]
                         )
+                        if need_stat_columns:
+                            stats.append(_new_stat(hive_part, need_stat_columns))
                         offset += int(split_stripes)
                     if (
                         aggregate_files
@@ -146,16 +169,18 @@ class ArrowORCEngine(ORCEngine):
                         o = orc.ORCFile(f)
                         schema = o.schema
                 parts.append([(path, None, hive_part)])
+                if need_stat_columns:
+                    stats.append(_new_stat(hive_part, need_stat_columns))
 
         schema = _get_pyarrow_dtypes(schema, categories=None)
         if columns is not None:
-            ex = set(columns) - set(schema)
+            ex = set(columns) - (set(schema) | set(directory_partition_keys))
             if ex:
                 raise ValueError(
                     "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
                 )
 
-        return parts, [], schema
+        return parts, stats, schema
 
     @classmethod
     def _create_meta(cls, columns, schema, index, directory_partition_keys):
@@ -223,24 +248,30 @@ class ArrowORCEngine(ORCEngine):
         # are no partition columns.
         tables = []
         partitions = []
+        partition_uniques = partition_uniques or {}
+        if columns:
+            # Seperate file columns and partition columns
+            file_columns = [c for c in columns if c in set(schema)]
+            partition_columns = [c for c in columns if c not in set(schema)]
+        else:
+            file_columns, partition_columns = None, list(partition_uniques)
         path, stripes, hive_parts = parts[0]
-        batches = _read_orc_stripes(fs, path, stripes, schema, columns)
+        batches = _read_orc_stripes(fs, path, stripes, schema, file_columns)
         for path, stripes, next_hive_parts in parts[1:]:
             if hive_parts == next_hive_parts:
-                batches += _read_orc_stripes(fs, path, stripes, schema, columns)
+                batches += _read_orc_stripes(fs, path, stripes, schema, file_columns)
             else:
                 tables.append(pa.Table.from_batches(batches))
                 partitions.append(hive_parts)
-                batches = _read_orc_stripes(fs, path, stripes, schema, columns)
+                batches = _read_orc_stripes(fs, path, stripes, schema, file_columns)
                 hive_parts = next_hive_parts
         tables.append(pa.Table.from_batches(batches))
         partitions.append(hive_parts)
 
         # Add partition columns to each pyarrow table
-        partition_uniques = partition_uniques or {}
         for i, hive_parts in enumerate(partitions):
             for (part_name, cat) in hive_parts:
-                if part_name not in tables[i].schema.names:
+                if part_name in partition_columns:
                     # We read from file paths, so the partition
                     # columns are NOT in our table yet.
                     categories = partition_uniques[part_name]

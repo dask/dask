@@ -4,11 +4,10 @@ from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
 from ....base import tokenize
-from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply
-from ...core import new_dd_object
+from ...core import Scalar, new_dd_object
 from .utils import ORCEngine, collect_files
 
 
@@ -81,9 +80,21 @@ def read_orc(
         Columns to load. If None, loads all.
     index: str
         Column name to set as index.
-    filters : Any, default None
-        Passed through to the `ORCEngine.read_metadata`. Filtering is
-        not currently supported by the default "pyarrow" engine.
+    filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
+        List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
+        Using this argument will NOT result in row-wise filtering of the final
+        partitions. Filtering is only performed at the partition level, i.e.,
+        to prevent the loading of some stripes and/or files.
+
+        Filtering is only supported for directory-partitioned columns for the
+        defualt ``ORCEngine`` backend. Predicates for any other columns will
+        be ignored.
+
+        For the "pyarrow" engine, predicates can be expressed in disjunctive
+        normal form (DNF). This means that the innermost tuple describes a single
+        column predicate. These inner predicates are combined with an AND
+        conjunction into a larger predicate. The outer-most list then combines all
+        of the combined filters with an OR disjunction.
     split_stripes: int or False
         Maximum number of ORC stripes to include in each output-DataFrame
         partition. Use False to specify a 1-to-1 mapping between files
@@ -192,7 +203,7 @@ def to_orc(
         Key/value pairs to be passed on to the file-system backend, if any.
     compute : bool, default True
         If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        then a ``dask.dataframe.Scalar`` object is returned for future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
 
@@ -252,9 +263,10 @@ def to_orc(
             ],
         )
         part_tasks.append((name, d))
-    dsk[name] = (lambda x: None, part_tasks)
+    final_name = "final-" + name
+    dsk[(final_name, 0)] = (lambda x: None, part_tasks)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Delayed(name, graph)
+    out = Scalar(graph, final_name, "")
 
     # Compute or return future
     if compute:

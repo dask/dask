@@ -145,6 +145,40 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
 
 
 @pytest.mark.skipif(
+    parse_version(pa.__version__) < parse_version("4.0.0"),
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
+@pytest.mark.parametrize("columns", [None, ["b", "a2"]])
+@pytest.mark.parametrize("aggregate_files", [False, "a2"])
+@pytest.mark.parametrize("split_stripes", [False, 2, 100])
+def test_partition_on(tmpdir, columns, aggregate_files, split_stripes):
+    df = pd.DataFrame(
+        {
+            "a1": np.random.choice(["A", "B", "C"], size=100),
+            "a2": np.random.choice(["X", "Y", "Z"], size=100),
+            "b": np.random.random(size=100),
+            "c": np.random.randint(1, 5, size=100),
+            "d": np.arange(0, 100),
+        }
+    )
+    d = dd.from_pandas(df, npartitions=2)
+    d.to_orc(tmpdir, partition_on=["a1", "a2"], write_index=False)
+
+    # Read back
+    ddf = dd.read_orc(
+        tmpdir,
+        columns=columns,
+        aggregate_files=aggregate_files,
+        split_stripes=split_stripes,
+    )
+    if aggregate_files and split_stripes == 100:
+        assert ddf.npartitions == 9
+    out = ddf.compute()
+    for val in df.a2.unique():
+        assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
+
+
+@pytest.mark.skipif(
     sys.version_info[:2] > (3, 8),
     reason=("PyORC sometimes crashes for python-3.9"),
 )
