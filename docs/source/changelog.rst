@@ -1,10 +1,10 @@
 Changelog
 =========
 
-2021.07.1
+2021.07.2
 ---------
 
-Released on July 23, 2021
+Released on July 30, 2021
 
 .. note::
 
@@ -12,7 +12,28 @@ Released on July 23, 2021
   Beginning with the next release, NumPy 1.18 and pandas 1.0 will be the minimum
   supported versions.
 
-- Make array ``assert_eq`` check dtype (#7903`) `Julia Signell`_
+- Add ``dask.array`` SVG to the HTML Repr (:pr:`7886`) `Freyam Mehta`_
+- Avoid use of ``Delayed`` in ``to_parquet`` (:pr:`7958`) `Matthew Rocklin`_
+- Temporarily pin ``pyarrow<5`` in CI (:pr:`7960`) `James Bourbeau`_
+- Add deprecation warning for top-level ``ucx`` and ``rmm`` config values (:pr:`7956`) `James Bourbeau`_
+- Remove skips from doctests (4 of 6) (:pr:`7865`) `Zhengnan Zhao`_
+- Remove skips from doctests (5 of 6) (:pr:`7864`) `Zhengnan Zhao`_
+- Adds missing prepend/append functionality to ``da.diff`` (:pr:`7946`) `Peter Andreas Entschev`_
+- Change graphviz font family to sans (:pr:`7931`) `Freyam Mehta`_
+- Fix read-csv name - when path is different, use different name for task (:pr:`7942`) `Julia Signell`_
+- Update configuration reference for ``ucx`` and ``rmm`` changes (:pr:`7943`) `James Bourbeau`_
+- Add meta support to ``__setitem__`` (:pr:`7940`) `Peter Andreas Entschev`_
+- NEP-35 support for ``slice_with_int_dask_array`` (:pr:`7927`) `Peter Andreas Entschev`_
+- Unpin fastparquet in CI (:pr:`7928`) `James Bourbeau`_
+- Remove skips from doctests (3 of 6) (:pr:`7872`) `Zhengnan Zhao`_
+
+
+2021.07.1
+---------
+
+Released on July 23, 2021
+
+- Make array ``assert_eq`` check dtype (:pr:`7903`) `Julia Signell`_
 - Remove skips from doctests (6 of 6) (:pr:`7863`) `Zhengnan Zhao`_
 - Remove experimental feature warning from actors docs (:pr:`7925`) `Matthew Rocklin`_
 - Remove skips from doctests (2 of 6) (:pr:`7873`) `Zhengnan Zhao`_

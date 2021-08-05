@@ -3,11 +3,11 @@ import copy
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
 
-from ....base import tokenize
+from ....base import compute_as_if_collection, tokenize
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply
-from ...core import Scalar, new_dd_object
+from ...core import DataFrame, Scalar, new_dd_object
 from .utils import ORCEngine, collect_files
 
 
@@ -266,11 +266,10 @@ def to_orc(
     final_name = "final-" + name
     dsk[(final_name, 0)] = (lambda x: None, part_tasks)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Scalar(graph, final_name, "")
 
     # Compute or return future
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
-        out = out.compute(**compute_kwargs)
-    return out
+        return compute_as_if_collection(DataFrame, graph, part_tasks, **compute_kwargs)
+    return Scalar(graph, name, "")

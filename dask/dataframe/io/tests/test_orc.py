@@ -1,6 +1,5 @@
 import os
 import shutil
-import sys
 import tempfile
 
 import numpy as np
@@ -13,17 +12,7 @@ from dask.dataframe.optimize import optimize_dataframe_getitem
 from dask.dataframe.utils import assert_eq
 
 pytest.importorskip("pyarrow.orc")
-
-# Skip for broken ORC reader
-import pyarrow as pa
-
-pytestmark = pytest.mark.skipif(
-    parse_version(pa.__version__).base_version == parse_version("0.10.0"),
-    reason=(
-        "PyArrow 0.10.0 release broke the ORC reader, see "
-        "https://issues.apache.org/jira/browse/ARROW-3009"
-    ),
-)
+pa = pytest.importorskip("pyarrow")
 
 
 url = (
@@ -178,45 +167,11 @@ def test_partition_on(tmpdir, columns, aggregate_files, split_stripes):
         assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
 
 
-@pytest.mark.skipif(
-    sys.version_info[:2] > (3, 8),
-    reason=("PyORC sometimes crashes for python-3.9"),
-)
-def test_orc_roundtrip_aggregate_files_offset(tmp_path):
-
-    # PyORC required to write orc files with specific
-    # stripe sizes
-    pyorc = pytest.importorskip("pyorc")
-
-    size = 10_000
-    df = pd.DataFrame(
-        {
-            "num": np.random.randint(100, size=size),
-            "text": np.random.choice(["dog", "cat", "bird"], size),
-        }
-    )
-
-    # TODO: Use pyarrow to write the files for this test
-    # once the python API exposes the stripe size. Note
-    # that pyorc sometimes crashes for python-3.9
-    # See: https://github.com/noirello/pyorc/issues/10
-    for i in range(0, size, size // 2):
-        _df = df[i : i + size // 2]
-        with open(os.path.join(tmp_path, f"data_{i}.orc"), "wb") as f:
-            with pyorc.Writer(
-                f,
-                "struct<num:int,text:string>",
-                struct_repr=pyorc.StructRepr.DICT,
-                stripe_size=1_000,
-                compression=pyorc.CompressionKind.NONE,
-                compression_block_size=1_000,
-            ) as writer:
-                writer.writerows(_df.to_dict(orient="records"))
-
-    # Default read should give back 10 partitions. Therefore,
-    # specifying split_stripes=6 & aggregate_files=True should
+def test_orc_aggregate_files_offset(orc_files):
+    # Default read should give back 16 partitions. Therefore,
+    # specifying split_stripes=11 & aggregate_files=True should
     # produce 2 partitions (with the first being larger than
     # the second)
-    df2 = dd.read_orc(tmp_path, split_stripes=6, aggregate_files=True)
+    df2 = dd.read_orc(orc_files[:2], split_stripes=11, aggregate_files=True)
     assert df2.npartitions == 2
-    assert len(df2.partitions[0].index) > size // 2
+    assert len(df2.partitions[0].index) > len(df2.index) // 2
