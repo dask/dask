@@ -1249,21 +1249,22 @@ def to_graphviz(
 
         if hg.layers[layer].collection_annotations:
             ca = hg.layers[layer].collection_annotations
-            if ca.get("type") == "dask.array.core.Array":
-                node_tooltips += (
-                    f"A Dask Array of size {ca.get('shape')} with chunks of size {ca.get('chunksize')}.\n"
-                    f"The Array Type is {ca.get('dtype')} and the chunks are of {ca.get('chunk_type')} type"
-                )
-            if ca.get("type") == "dask.dataframe.core.DataFrame":
-                dftype = (
-                    "pandas"
-                    if ca.get("dataframe_type") == "pandas.core.frame.DataFrame"
-                    else "pandas"
-                )
 
+            if ca.get("type") == "dask.array.core.Array":
+                node_tooltips += f"Array Shape: {ca.get('shape')}\n"
+                node_tooltips += f"Data Type: {ca.get('dtype')}\n"
+                node_tooltips += f"Chunk Size: {ca.get('chunksize')}\n"
+                node_tooltips += f"Chunk Type: {ca.get('chunk_type')}\n"
+
+            if ca.get("type") == "dask.dataframe.core.DataFrame":
+                dftype = {"pandas.core.frame.DataFrame": "pandas"}
+
+                node_tooltips += f"Number of Partitions: {ca.get('npartitions')}\n"
                 node_tooltips += (
-                    f"A Dask DataFrame made up of {ca.get('npartitions')} {dftype} partitions.\n"
-                    f"{len(ca.get('columns'))} columns: {ca.get('columns')}."
+                    f"DataFrame Type: {dftype.get(ca.get('dataframe_type'))}\n"
+                )
+                node_tooltips += (
+                    f"{len(ca.get('columns'))} DataFrame Columns: {ca.get('columns')}\n"
                 )
 
         attrs.setdefault("label", str(node_label))
