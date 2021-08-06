@@ -6,7 +6,7 @@ import pytest
 
 import dask
 from dask.blockwise import Blockwise, blockwise_token
-from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer
+from dask.highlevelgraph import HighLevelGraph, Layer, MaterializedLayer, to_graphviz
 from dask.utils_test import inc
 
 
@@ -265,3 +265,18 @@ def test_len_does_not_materialize():
     assert len(hg) == len(a) + len(b) == 7
 
     assert not hg.layers["b"].is_materialized()
+
+
+def test_node_tooltips():
+    da = pytest.importorskip("dask.array")
+
+    a = da.ones((1000, 1000), chunks=(100, 100))
+    b = a + a.T
+    c = b.sum(axis=1)
+
+    hg = c.dask
+    g = to_graphviz(hg)
+
+    for layer in g.body:
+        if "label" in layer:
+            assert "tooltip" in layer
