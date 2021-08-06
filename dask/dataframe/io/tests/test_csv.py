@@ -1189,10 +1189,24 @@ def test_robust_column_mismatch():
     k = sorted(files)[-1]
     files[k] = files[k].replace(b"name", b"Name")
     with filetexts(files, mode="b"):
-        ddf = dd.read_csv("2014-01-*.csv")
+        ddf = dd.read_csv(
+            "2014-01-*.csv", header=None, skiprows=1, names=["name", "amount", "id"]
+        )
         df = pd.read_csv("2014-01-01.csv")
         assert (df.columns == ddf.columns).all()
         assert_eq(ddf, ddf)
+
+
+def test_different_columns_are_allowed():
+    files = csv_files.copy()
+    k = sorted(files)[-1]
+    files[k] = files[k].replace(b"name", b"address")
+    with filetexts(files, mode="b"):
+        ddf = dd.read_csv("2014-01-*.csv")
+
+        # since enforce is False, meta doesn't have to match computed
+        assert (ddf.columns == ["name", "amount", "id"]).all()
+        assert (ddf.compute().columns == ["name", "amount", "id", "address"]).all()
 
 
 def test_error_if_sample_is_too_small():
