@@ -1259,11 +1259,12 @@ def to_graphviz(
 
             if layer_ca.get("type") == "dask.dataframe.core.DataFrame":
                 dftype = {"pandas.core.frame.DataFrame": "pandas"}
+                cols = layer_ca.get("columns")
 
                 node_tooltips += (
                     f"Number of Partitions: {layer_ca.get('npartitions')}\n"
                     f"DataFrame Type: {dftype.get(layer_ca.get('dataframe_type'))}\n"
-                    f"{len(layer_ca.get('columns'))} DataFrame Columns: {layer_ca.get('columns')}\n"
+                    f"{len(cols)} DataFrame Columns: {str(cols) if len(str(cols)) <= 40 else '[...]'}\n"
                 )
 
         attrs.setdefault("label", str(node_label))
