@@ -869,7 +869,7 @@ class HighLevelGraph(Mapping):
                 raise TypeError(g)
         return cls(layers, dependencies)
 
-    def visualize(self, filename="dask.pdf", format=None, **kwargs):
+    def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
