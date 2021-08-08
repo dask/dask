@@ -26,7 +26,6 @@ except ImportError:
 from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
-from ..array.utils import zeros_like_safe
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
 from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
@@ -63,7 +62,6 @@ from .dispatch import (
 )
 from .optimize import optimize
 from .utils import (
-    PANDAS_GT_100,
     PANDAS_GT_110,
     PANDAS_GT_120,
     check_matching_columns,
@@ -1978,18 +1976,8 @@ Dask Name: {name}, {task} tasks"""
                 result = self._var_1d(self, skipna, ddof, split_every)
                 return handle_out(out, result)
 
-            count_timedeltas = len(
-                self._meta_nonempty.select_dtypes(include=[np.timedelta64]).columns
-            )
-
             # pandas 1.0+ does not implement var on timedelta
-
-            if not PANDAS_GT_100 and count_timedeltas == len(self._meta.columns):
-                result = self._var_timedeltas(skipna, ddof, split_every)
-            elif not PANDAS_GT_100 and count_timedeltas > 0:
-                result = self._var_mixed(skipna, ddof, split_every)
-            else:
-                result = self._var_numeric(skipna, ddof, split_every)
+            result = self._var_numeric(skipna, ddof, split_every)
 
             if isinstance(self, DataFrame):
                 result.divisions = (self.columns.min(), self.columns.max())
@@ -2880,10 +2868,7 @@ Dask Name: {name}, {task} tasks"""
         date = self.divisions[0] + offset
         end = self.loc._get_partitions(date)
 
-        if PANDAS_GT_100:
-            is_anchored = offset.is_anchored()
-        else:
-            is_anchored = offset.isAnchored()
+        is_anchored = offset.is_anchored()
 
         include_right = is_anchored or not hasattr(offset, "delta")
 
@@ -4454,6 +4439,12 @@ class DataFrame(_Frame):
 
         return to_parquet(self, path, *args, **kwargs)
 
+    def to_orc(self, path, *args, **kwargs):
+        """See dd.to_orc docstring for more information"""
+        from .io import to_orc
+
+        return to_orc(self, path, *args, **kwargs)
+
     @derived_from(pd.DataFrame)
     def to_string(self, max_rows=5):
         # option_context doesn't affect
@@ -4824,12 +4815,15 @@ class DataFrame(_Frame):
         dask.DataFrame.map_partitions
         """
 
+        if broadcast is not None:
+            warnings.warn(
+                "The `broadcast` argument is no longer used/supported. "
+                "It will be dropped in a future release.",
+                category=FutureWarning,
+            )
+
         axis = self._validate_axis(axis)
         pandas_kwargs = {"axis": axis, "raw": raw, "result_type": result_type}
-
-        if not PANDAS_GT_100:
-            pandas_kwargs["broadcast"] = broadcast
-            pandas_kwargs["reduce"] = None
 
         kwds.update(pandas_kwargs)
 
@@ -6121,8 +6115,8 @@ def cov_corr_chunk(df, corr=False):
     """Chunk part of a covariance or correlation computation"""
     shape = (df.shape[1], df.shape[1])
     df = df.astype("float64", copy=False)
-    sums = zeros_like_safe(df.values, shape=shape)
-    counts = zeros_like_safe(df.values, shape=shape)
+    sums = np.zeros_like(df.values, shape=shape)
+    counts = np.zeros_like(df.values, shape=shape)
     for idx, col in enumerate(df):
         mask = df.iloc[:, idx].notnull()
         sums[idx] = df[mask].sum().values
@@ -6133,7 +6127,7 @@ def cov_corr_chunk(df, corr=False):
         with warnings.catch_warnings(record=True):
             warnings.simplefilter("always")
             mu = (sums / counts).T
-        m = zeros_like_safe(df.values, shape=shape)
+        m = np.zeros_like(df.values, shape=shape)
         mask = df.isnull().values
         for idx, x in enumerate(df):
             # Avoid using ufunc.outer (not supported by cupy)
@@ -6801,11 +6795,7 @@ def maybe_shift_divisions(df, periods, freq):
 
     is_offset = isinstance(freq, pd.DateOffset)
     if is_offset:
-        if PANDAS_GT_100:
-            is_anchored = freq.is_anchored()
-        else:
-            is_anchored = freq.isAnchored()
-        if is_anchored or not hasattr(freq, "delta"):
+        if freq.is_anchored() or not hasattr(freq, "delta"):
             # Can't infer divisions on relative or anchored offsets, as
             # divisions may now split identical index value.
             # (e.g. index_partitions = [[1, 2, 3], [3, 4, 5]])

@@ -11,7 +11,7 @@ from dask.array.gufunc import (
     as_gufunc,
     gufunc,
 )
-from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
+from dask.array.utils import assert_eq
 
 
 # Copied from `numpy.lib.test_test_function_base.py`:
@@ -615,9 +615,6 @@ def test_apply_gufunc_via_numba_02():
     assert_eq(x, y)
 
 
-@pytest.mark.skipif(
-    not IS_NEP18_ACTIVE, reason="NEP18 required for sparse meta propagation"
-)
 def test_preserve_meta_type():
     sparse = pytest.importorskip("sparse")
 

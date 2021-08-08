@@ -43,7 +43,6 @@ from dask.array.core import (
     stack,
     store,
 )
-from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import broadcast_dimensions
@@ -2675,7 +2674,6 @@ def test_concatenate3_2():
     )
 
 
-@pytest.mark.skipif(not _numpy_117, reason="NEP-18 is not enabled by default")
 @pytest.mark.parametrize("one_d", [True, False])
 @mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
 def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
