@@ -20,6 +20,7 @@ try:
         from_delayed,
         from_pandas,
         read_csv,
+        read_delta_table,
         read_fwf,
         read_hdf,
         read_json,

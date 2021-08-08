@@ -1,5 +1,6 @@
 from . import demo
 from .csv import read_csv, read_fwf, read_table, to_csv
+from .delta import read_delta_table
 from .hdf import read_hdf, to_hdf
 from .io import (
     dataframe_from_ctable,
