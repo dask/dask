@@ -267,7 +267,7 @@ def test_len_does_not_materialize():
     assert not hg.layers["b"].is_materialized()
 
 
-def test_node_tooltips():
+def test_node_tooltips_exist():
     da = pytest.importorskip("dask.array")
 
     a = da.ones((1000, 1000), chunks=(100, 100))
