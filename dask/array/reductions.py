@@ -1061,7 +1061,7 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
     )
     # The dtype of `tmp` doesn't actually matter, just need to provide something
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    tmp = Array(graph, name, chunks, dtype=x.dtype)
+    tmp = Array(graph, name, chunks, meta=x._meta)
     dtype = np.argmin([1]).dtype
     result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
     return handle_out(out, result)
