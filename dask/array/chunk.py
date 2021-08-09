@@ -396,3 +396,13 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
             idx_final if i == axis else slice(None) for i in range(chunk_outputs.ndim)
         )
     ]
+
+
+def getitem(obj, index):
+    result = obj[index]
+    try:
+        if obj.size >= 2 * result.size:
+            result = result.copy()
+    except AttributeError:
+        pass
+    return result

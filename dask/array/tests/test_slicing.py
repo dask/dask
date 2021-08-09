@@ -21,7 +21,9 @@ from dask.array.slicing import (
     slicing_plan,
     take,
 )
-from dask.array.utils import assert_eq, getitem, same_keys
+from dask.array.utils import assert_eq, same_keys
+
+from ..chunk import getitem
 
 
 def test_slice_1d():

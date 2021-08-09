@@ -13,7 +13,7 @@ from .. import config, core, utils
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import is_arraylike
-from .utils import getitem
+from .chunk import getitem
 
 colon = slice(None, None, None)
 
