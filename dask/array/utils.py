@@ -530,3 +530,13 @@ def scipy_linalg_safe(func_name, *args, **kwargs):
 
 def solve_triangular_safe(a, b, lower=False):
     return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
+
+
+def getitem(obj, index):
+    result = obj[index]
+    try:
+        if obj.size >= 2 * result.size:
+            result = result.copy()
+    except AttributeError:
+        pass
+    return result

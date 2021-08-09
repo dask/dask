@@ -4,7 +4,7 @@ import math
 import warnings
 from itertools import product
 from numbers import Integral, Number
-from operator import add, getitem, itemgetter
+from operator import add, itemgetter
 
 import numpy as np
 from tlz import accumulate, concat, memoize, merge, pluck
@@ -13,6 +13,7 @@ from .. import config, core, utils
 from ..base import is_dask_collection, tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import is_arraylike
+from .utils import getitem
 
 colon = slice(None, None, None)
 
