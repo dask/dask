@@ -10,7 +10,6 @@ from tlz import concat, frequencies
 
 from ..highlevelgraph import HighLevelGraph
 from ..utils import has_keyword, is_arraylike, is_cupy_type
-from .core import Array
 
 try:
     AxisError = np.AxisError
@@ -45,6 +44,8 @@ def meta_from_array(x, ndim=None, dtype=None):
     -------
     array-like with zero elements of the correct dtype
     """
+    from .core import Array
+
     # If using x._meta, x must be a Dask Array, some libraries (e.g. zarr)
     # implement a _meta attribute that are incompatible with Dask Array._meta
     if hasattr(x, "_meta") and isinstance(x, Array):
@@ -239,6 +240,8 @@ def _get_dt_meta_computed(x, check_shape=True, check_graph=True, check_chunks=Tr
     x_meta = None
     x_computed = None
 
+    from .core import Array
+
     if isinstance(x, Array):
         assert x.dtype is not None
         adt = x.dtype
@@ -398,6 +401,8 @@ def arange_safe(*args, like, **kwargs):
 def _array_like_safe(np_func, da_func, a, like, **kwargs):
     if like is a and hasattr(a, "__array_function__"):
         return a
+
+    from .core import Array
 
     if isinstance(like, Array):
         return da_func(a, **kwargs)
