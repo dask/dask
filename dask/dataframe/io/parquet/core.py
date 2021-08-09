@@ -7,12 +7,12 @@ from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from ....base import tokenize
+from ....base import compute_as_if_collection, tokenize
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
 from ....utils import apply, import_required, natural_sort_key, parse_bytes
-from ...core import DataFrame, new_dd_object
+from ...core import DataFrame, Scalar, new_dd_object
 from ...methods import concat
 from .utils import _sort_and_analyze_paths
 
@@ -165,15 +165,12 @@ def read_parquet(
         Parquet reader library to use. Options include: 'auto', 'fastparquet',
         'pyarrow', 'pyarrow-dataset', and 'pyarrow-legacy'. Defaults to 'auto',
         which selects the FastParquetEngine if fastparquet is installed (and
-        ArrowLegacyEngine otherwise).  If 'pyarrow-dataset' is specified, the
-        ArrowDatasetEngine (which leverages the pyarrow.dataset API) will be used
-        for newer PyArrow versions (>=1.0.0). If 'pyarrow' or 'pyarrow-legacy' are
-        specified, the ArrowLegacyEngine will be used (which leverages the
-        pyarrow.parquet.ParquetDataset API).
-        NOTE: 'pyarrow-dataset' enables row-wise filtering, but requires
-        pyarrow>=1.0. The behavior of 'pyarrow' will most likely change to
-        ArrowDatasetEngine in a future release, and the 'pyarrow-legacy'
-        option will be deprecated once the ParquetDataset API is deprecated.
+        ArrowDatasetEngine otherwise).  If 'pyarrow' or 'pyarrow-dataset' is
+        specified, the ArrowDatasetEngine (which leverages the pyarrow.dataset
+        API) will be used. If 'pyarrow-legacy' is specified, ArrowLegacyEngine
+        will be used (which leverages the pyarrow.parquet.ParquetDataset API).
+        NOTE: The 'pyarrow-legacy' option (ArrowLegacyEngine) is deprecated
+        for pyarrow>=5.
     gather_statistics : bool, default None
         Gather the statistics for each dataset partition. By default,
         this will only be done if the _metadata file is available. Otherwise,
@@ -504,8 +501,8 @@ def to_parquet(
     write_metadata_file : bool, default True
         Whether to write the special "_metadata" file.
     compute : bool, default True
-        If True (default) then the result is computed immediately. If False
-        then a ``dask.delayed`` object is returned for future computation.
+        If :obj:`True` (default) then the result is computed immediately. If  :obj:`False`
+        then a ``dask.dataframe.Scalar`` object is returned for future computation.
     compute_kwargs : dict, default True
         Options to be passed in to the compute method
     schema : Schema object, dict, or {"infer", None}, default None
@@ -530,6 +527,7 @@ def to_parquet(
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
+    compute_kwargs = compute_kwargs or {}
 
     if compression == "default":
         if snappy is not None:
@@ -696,9 +694,11 @@ def to_parquet(
         )
         part_tasks.append((name, d))
 
+    final_name = "metadata-" + name
     # Collect metadata and write _metadata
+
     if write_metadata_file:
-        dsk[name] = (
+        dsk[(final_name, 0)] = (
             apply,
             engine.write_metadata,
             [
@@ -710,16 +710,21 @@ def to_parquet(
             {"append": append, "compression": compression},
         )
     else:
-        dsk[name] = (lambda x: None, part_tasks)
+        dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Delayed(name, graph)
 
     if compute:
-        if compute_kwargs is None:
-            compute_kwargs = dict()
-        out = out.compute(**compute_kwargs)
-    return out
+        if write_metadata_file:
+            return compute_as_if_collection(
+                DataFrame, graph, (final_name, 0), **compute_kwargs
+            )
+        else:
+            return compute_as_if_collection(
+                DataFrame, graph, part_tasks, **compute_kwargs
+            )
+    else:
+        return Scalar(graph, final_name, "")
 
 
 def create_metadata_file(
@@ -911,13 +916,21 @@ def get_engine(engine):
         return eng
 
     elif engine in ("pyarrow", "arrow", "pyarrow-legacy", "pyarrow-dataset"):
+
         pa = import_required("pyarrow", "`pyarrow` not installed")
         pa_version = parse_version(pa.__version__)
 
-        if pa_version < parse_version("0.13.1"):
-            raise RuntimeError("PyArrow version >= 0.13.1 required")
+        if engine in ("pyarrow", "arrow"):
+            engine = "pyarrow-dataset"
+        elif pa_version.major >= 5 and engine == "pyarrow-legacy":
+            warnings.warn(
+                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated for "
+                "pyarrow>=5 and will be removed in a future release. Please "
+                "use `engine='pyarrow'` or `engine='pyarrow-dataset'`.",
+                FutureWarning,
+            )
 
-        if engine == "pyarrow-dataset" and pa_version.major >= 1:
+        if engine == "pyarrow-dataset":
             from .arrow import ArrowDatasetEngine
 
             _ENGINES[engine] = eng = ArrowDatasetEngine
