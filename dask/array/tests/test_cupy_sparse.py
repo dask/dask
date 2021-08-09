@@ -77,33 +77,3 @@ def test_sparse_dot(sp_format):
 
     assert cupyx.scipy.sparse.isspmatrix(da_z)
     assert_eq(z, da_z.todense())
-
-
-@pytest.mark.parametrize("axis", [0, 1])
-def test_sparse_sum(axis):
-    pytest.importorskip("cupyx")
-
-    rs = da.random.RandomState(RandomState=cupy.random.RandomState)
-    meta = cupyx.scipy.sparse.csr_matrix((0, 0))
-
-    x = rs.random((1000, 10), chunks=(100, 10))
-    x[x < 0.9] = 0
-    y = x.map_blocks(cupyx.scipy.sparse.csr_matrix, meta=meta)
-    print(y)
-
-    z = y.sum(axis=0)
-    print(z)
-    z = z.compute()
-
-    # print(z)
-    print(type(z))
-
-    # if axis == 0:
-    #     sp_concatenate = cupyx.scipy.sparse.vstack
-    # elif axis == 1:
-    #     sp_concatenate = cupyx.scipy.sparse.hstack
-    # z_expected = sp_concatenate(
-    #     [cupyx.scipy.sparse.csr_matrix(e.compute()) for e in xs]
-    # )
-
-    # assert (z.toarray() == z_expected.toarray()).all()
