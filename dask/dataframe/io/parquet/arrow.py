@@ -30,14 +30,9 @@ from .utils import (
 
 # Check PyArrow version for feature support
 _pa_version = parse_version(pa.__version__)
-preserve_ind_supported = _pa_version >= parse_version("0.15.0")
-read_row_groups_supported = preserve_ind_supported
-if _pa_version.major >= 1:
-    from pyarrow import dataset as pa_ds
-else:
-    pa_ds = None
+from pyarrow import dataset as pa_ds
+
 subset_stats_supported = _pa_version > parse_version("2.0.0")
-schema_field_supported = _pa_version >= parse_version("0.15.0")
 del _pa_version
 
 #
@@ -84,7 +79,7 @@ def _write_partitioned(
     df = table.to_pandas(ignore_metadata=True)
     index_cols = list(index_cols) if index_cols else []
     preserve_index = False
-    if index_cols and preserve_ind_supported:
+    if index_cols:
         df.set_index(index_cols, inplace=True)
         preserve_index = True
 
@@ -243,7 +238,7 @@ def _collect_pyarrow_dataset_frags(
                 "partition_keys": {},
                 "partition_names": [],
             }
-            return metadata, partition_info
+            return sorted(metadata, key=natural_sort_key), partition_info
 
     # Get/transate filters
     ds_filters = None
@@ -410,7 +405,7 @@ def _read_table_from_path(
     are specified (otherwise fragments are converted directly
     into tables).
     """
-    if partition_keys or (not read_row_groups_supported and row_groups != [None]):
+    if partition_keys:
         tables = []
         for rg in row_groups:
             piece = pq.ParquetDatasetPiece(
@@ -797,7 +792,7 @@ class ArrowDatasetEngine(Engine):
             # If we have object columns, we need to sample partitions
             # until we find non-null data for each column in `sample`
             sample = [col for col in df.columns if df[col].dtype == "object"]
-            if schema_field_supported and sample and schema == "infer":
+            if sample and schema == "infer":
                 delayed_schema_from_pandas = delayed(pa.Schema.from_pandas)
                 for i in range(df.npartitions):
                     # Keep data on worker
@@ -1708,6 +1703,32 @@ class ArrowDatasetEngine(Engine):
         )
         return arrow_table
 
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        with fs.open(path, "rb") as f:
+            meta = pq.ParquetFile(f).metadata
+        if file_path:
+            meta.set_file_path(file_path)
+        return meta
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        meta = None
+        for _meta in meta_list:
+            if meta:
+                _append_row_groups(meta, _meta)
+            else:
+                meta = _meta
+        if out_path:
+            metadata_path = fs.sep.join([out_path, "_metadata"])
+            with fs.open(metadata_path, "wb") as fil:
+                if not meta:
+                    raise ValueError("Cannot write empty metdata!")
+                meta.write_metadata_file(fil)
+            return None
+        else:
+            return meta
+
 
 #
 #  PyArrow Legacy API [PyArrow<1.0.0]
@@ -2139,32 +2160,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             cls._parquet_piece_as_arrow,
             **kwargs,
         )
-
-    @classmethod
-    def collect_file_metadata(cls, path, fs, file_path):
-        with fs.open(path, "rb") as f:
-            meta = pq.ParquetFile(f).metadata
-        if file_path:
-            meta.set_file_path(file_path)
-        return meta
-
-    @classmethod
-    def aggregate_metadata(cls, meta_list, fs, out_path):
-        meta = None
-        for _meta in meta_list:
-            if meta:
-                _append_row_groups(meta, _meta)
-            else:
-                meta = _meta
-        if out_path:
-            metadata_path = fs.sep.join([out_path, "_metadata"])
-            with fs.open(metadata_path, "wb") as fil:
-                if not meta:
-                    raise ValueError("Cannot write empty metdata!")
-                meta.write_metadata_file(fil)
-            return None
-        else:
-            return meta
 
     @classmethod
     def multi_support(cls):

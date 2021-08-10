@@ -181,8 +181,6 @@ def pandas_read_text(
 
     if enforce and columns and (list(df.columns) != list(columns)):
         raise ValueError("Columns do not match", df.columns, columns)
-    elif columns:
-        df.columns = columns
     if path:
         colname, path, paths = path
         code = paths.index(path)
@@ -294,6 +292,7 @@ def text_blocks_to_pandas(
     specified_dtypes=None,
     path=None,
     blocksize=None,
+    urlpath=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -376,7 +375,7 @@ def text_blocks_to_pandas(
 
     # Create Blockwise layer
     label = "read-csv-"
-    name = label + tokenize(reader, columns, enforce, head, blocksize)
+    name = label + tokenize(reader, urlpath, columns, enforce, head, blocksize)
     layer = DataFrameIOLayer(
         name,
         columns,
@@ -630,6 +629,7 @@ def read_pandas(
         specified_dtypes=specified_dtypes,
         path=path,
         blocksize=blocksize,
+        urlpath=urlpath,
     )
 
 
@@ -935,7 +935,9 @@ def to_csv(
         if scheduler is not None and compute_kwargs.get("scheduler") is None:
             compute_kwargs["scheduler"] = scheduler
 
-        delayed(values).compute(**compute_kwargs)
+        import dask
+
+        dask.compute(*values, **compute_kwargs)
         return [f.path for f in files]
     else:
         return values

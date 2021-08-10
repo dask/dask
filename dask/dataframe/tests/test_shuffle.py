@@ -620,6 +620,7 @@ def test_set_index():
     assert_eq(d5, full.set_index(["b"]))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("engine", ["pandas", "cudf"])
 def test_set_index_interpolate(engine):
     if engine == "cudf":
@@ -639,7 +640,13 @@ def test_set_index_interpolate(engine):
 
     d1 = d.set_index("x", npartitions=3)
     assert d1.npartitions == 3
-    assert set(d1.divisions) == set([1, 2, 4])
+    if engine == "cudf":
+        # cuDF has to use "linear" interpolation as "nearest" interpolation
+        # is not supported by CuPy. The result for d1.divisions is different
+        # in this case.
+        assert set(d1.divisions) == set([1, 2, 3, 4])
+    else:
+        assert set(d1.divisions) == set([1, 2, 4])
 
     d2 = d.set_index("y", npartitions=3)
     assert d2.divisions[0] == 1.0
@@ -647,6 +654,7 @@ def test_set_index_interpolate(engine):
     assert d2.divisions[3] == 2.0
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("engine", ["pandas", "cudf"])
 def test_set_index_interpolate_int(engine):
     if engine == "cudf":
@@ -669,6 +677,7 @@ def test_set_index_interpolate_int(engine):
     assert all(np.issubdtype(type(x), np.integer) for x in d1.divisions)
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("engine", ["pandas", "cudf"])
 def test_set_index_interpolate_large_uint(engine):
     if engine == "cudf":

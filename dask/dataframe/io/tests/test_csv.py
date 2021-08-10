@@ -1096,9 +1096,7 @@ def test_read_csv_with_datetime_index_partitions_n():
         assert_eq(df, ddf)
 
 
-xfail_pandas_100 = pytest.mark.xfail(
-    dd._compat.PANDAS_GT_100, reason="https://github.com/dask/dask/issues/5787"
-)
+xfail_pandas_100 = pytest.mark.xfail(reason="https://github.com/dask/dask/issues/5787")
 
 
 @pytest.mark.parametrize(
@@ -1211,10 +1209,24 @@ def test_robust_column_mismatch():
     k = sorted(files)[-1]
     files[k] = files[k].replace(b"name", b"Name")
     with filetexts(files, mode="b"):
-        ddf = dd.read_csv("2014-01-*.csv")
+        ddf = dd.read_csv(
+            "2014-01-*.csv", header=None, skiprows=1, names=["name", "amount", "id"]
+        )
         df = pd.read_csv("2014-01-01.csv")
         assert (df.columns == ddf.columns).all()
         assert_eq(ddf, ddf)
+
+
+def test_different_columns_are_allowed():
+    files = csv_files.copy()
+    k = sorted(files)[-1]
+    files[k] = files[k].replace(b"name", b"address")
+    with filetexts(files, mode="b"):
+        ddf = dd.read_csv("2014-01-*.csv")
+
+        # since enforce is False, meta doesn't have to match computed
+        assert (ddf.columns == ["name", "amount", "id"]).all()
+        assert (ddf.compute().columns == ["name", "amount", "id", "address"]).all()
 
 
 def test_error_if_sample_is_too_small():
@@ -1686,3 +1698,37 @@ def test_csv_parse_fail(tmpdir):
         dd.read_csv(path, sample=13)
     df = dd.read_csv(path, sample=13, sample_rows=1)
     assert_eq(df, expected)
+
+
+def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
+    # https://github.com/dask/dask/issues/7904
+    import random
+    from shutil import copyfile
+
+    old_csv_path = os.path.join(str(tmpdir), "old.csv")
+    new_csv_path = os.path.join(str(tmpdir), "new_csv")
+
+    # Create random CSV
+    with open(old_csv_path, "w") as f:
+        for _ in range(10):
+            f.write(
+                f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"
+            )
+
+    copyfile(old_csv_path, new_csv_path)
+
+    # Add three new rows
+    with open(new_csv_path, "a") as f:
+        for _ in range(3):
+            f.write(
+                f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"
+            )
+
+    new_df = dd.read_csv(
+        new_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
+    )
+    old_df = dd.read_csv(
+        old_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
+    )
+
+    assert new_df.dask.keys() != old_df.dask.keys()
