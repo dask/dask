@@ -106,7 +106,6 @@ class CSVFunctionWrapper:
             write_header = True
             rest_kwargs.pop("skiprows", None)
         if not is_last:
-            write_header = True
             rest_kwargs.pop("skipfooter", None)
 
         # Deal with column projection
