@@ -12,7 +12,7 @@ import os
 import time
 import warnings
 from io import StringIO
-from operator import add, getitem, sub
+from operator import add, sub
 from threading import Lock
 
 from numpy import nancumprod, nancumsum
@@ -52,6 +52,7 @@ from dask.delayed import Delayed, delayed
 from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
+from ..chunk import getitem
 from .test_dispatch import EncapsulateNDArray
 
 
