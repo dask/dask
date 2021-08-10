@@ -869,7 +869,7 @@ class HighLevelGraph(Mapping):
                 raise TypeError(g)
         return cls(layers, dependencies)
 
-    def visualize(self, filename="dask.pdf", format=None, **kwargs):
+    def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
@@ -1239,13 +1239,39 @@ def to_graphviz(
         layer_name = name(layer)
         attrs = data_attributes.get(layer, {})
 
-        xlabel = label(layer, cache=cache)
-        xfontsize = (
+        node_label = label(layer, cache=cache)
+        node_size = (
             20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
         )
 
-        attrs.setdefault("label", str(xlabel))
-        attrs.setdefault("fontsize", str(xfontsize))
+        layer_type = str(type(hg.layers[layer]).__name__)
+        node_tooltips = (
+            f"A {layer_type.replace('Layer', '')} Layer with {n_tasks[layer]} Tasks.\n"
+        )
+
+        layer_ca = hg.layers[layer].collection_annotations
+        if layer_ca:
+            if layer_ca.get("type") == "dask.array.core.Array":
+                node_tooltips += (
+                    f"Array Shape: {layer_ca.get('shape')}\n"
+                    f"Data Type: {layer_ca.get('dtype')}\n"
+                    f"Chunk Size: {layer_ca.get('chunksize')}\n"
+                    f"Chunk Type: {layer_ca.get('chunk_type')}\n"
+                )
+
+            if layer_ca.get("type") == "dask.dataframe.core.DataFrame":
+                dftype = {"pandas.core.frame.DataFrame": "pandas"}
+                cols = layer_ca.get("columns")
+
+                node_tooltips += (
+                    f"Number of Partitions: {layer_ca.get('npartitions')}\n"
+                    f"DataFrame Type: {dftype.get(layer_ca.get('dataframe_type'))}\n"
+                    f"{len(cols)} DataFrame Columns: {str(cols) if len(str(cols)) <= 40 else '[...]'}\n"
+                )
+
+        attrs.setdefault("label", str(node_label))
+        attrs.setdefault("fontsize", str(node_size))
+        attrs.setdefault("tooltip", str(node_tooltips))
 
         if color == "layer_type":
             layers = {
