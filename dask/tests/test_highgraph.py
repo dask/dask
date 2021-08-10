@@ -269,6 +269,7 @@ def test_len_does_not_materialize():
 
 def test_node_tooltips_exist():
     da = pytest.importorskip("dask.array")
+    pytest.importorskip("graphviz")
 
     a = da.ones((1000, 1000), chunks=(100, 100))
     b = a + a.T
@@ -279,4 +280,7 @@ def test_node_tooltips_exist():
 
     for layer in g.body:
         if "label" in layer:
-            assert "tooltip" in layer
+            start = layer.find('tooltip="') + len('tooltip="')
+            end = layer.find('"', start)
+            tooltip = layer[start:end]
+            assert len(tooltip) > 0
