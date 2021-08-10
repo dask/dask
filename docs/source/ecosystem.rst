@@ -17,9 +17,9 @@ Array
   dealing with complex datasets.
 - `cupy <https://docs.cupy.dev/en/stable>`_: Part of the Rapids project, GPU-enabled arrays
   can be used as the blocks of Dask Arrays. See the section :doc:`gpu` for more information.
-- `sparse <https://github.com/pydata/sparse/>`_: Implements sparse arrays of arbitrary dimension
-  on top of `numpy` and `scipy.sparse`.
-- `pint <https://pint.readthedocs.io/>_: Allows arithmetic operations between them and conversions
+- `sparse <https://github.com/pydata/sparse>`_: Implements sparse arrays of arbitrary dimension
+  on top of ``numpy`` and ``scipy.sparse``.
+- `pint <https://pint.readthedocs.io>`_: Allows arithmetic operations between them and conversions
   from and to different units.
 
 DataFrame
@@ -48,7 +48,7 @@ Machine Learning
 ~~~~~~~~~~~~~~~~
 - `dask-ml <https://ml.dask.org>`_: Implements distributed versions of common machine learning algorithms.
 - `scikit-learn <https://scikit-learn.org/stable/>`_: Provide 'dask' to the joblib backend to parallelize
-   scikit-learn algorithms with dask as the processor.
+  scikit-learn algorithms with dask as the processor.
 - `xgboost <https://xgboost.readthedocs.io>`_: Powerful and popular library for gradient boosted trees;
   includes native support for distributed training using dask.
 - `lightgbm <https://lightgbm.readthedocs.io>`_: Similar to XGBoost; lightgmb also natively supplies native
