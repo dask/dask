@@ -168,3 +168,43 @@ Best Practices
 
 For a list of common problems and recommendations see :doc:`Delayed Best
 Practices <delayed-best-practices>`.
+
+
+Indirect Dependencies
+---------------------
+
+Sometimes you might find yourself wanting to add a dependency to a task that does
+not take the result of that dependency as an input. For example when a task depends
+on the side-effect of another task. In these cases you can use
+``dask.graph_manipulation.bind``.
+
+.. code-block:: python
+
+    import dask
+    from dask.graph_manipulation import bind
+
+    DATA = []
+
+    @dask.delayed
+    def inc(x):
+        return x + 1
+
+    @dask.delayed
+    def add_data(x):
+        DATA.append(x)
+
+    @dask.delayed
+    def sum_data(x):
+        return sum(DATA) + x
+
+    a = inc(1)
+    b = add_data(a)
+    c = inc(3)
+    d = add_data(c)
+    e = inc(5)
+    f = bind(sum_data, [b, d])(e)
+    f.compute()
+
+``sum_data`` will operate on DATA only after both the expected items have
+been appended to it. ``bind`` can also be used along with direct dependencies
+passed through the function arguments.
