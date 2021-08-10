@@ -9,7 +9,7 @@ import heapq
 import math
 from functools import reduce
 from itertools import chain, count, product
-from operator import add, getitem, itemgetter, mul
+from operator import add, itemgetter, mul
 from typing import Tuple
 from warnings import warn
 
@@ -21,6 +21,7 @@ from .. import config
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from ..utils import parse_bytes
+from .chunk import getitem
 from .core import Array, concatenate3, normalize_chunks
 from .utils import validate_axis
 from .wrap import empty
