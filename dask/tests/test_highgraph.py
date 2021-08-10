@@ -280,6 +280,7 @@ def test_node_tooltips_exist():
 
     for layer in g.body:
         if "label" in layer:
+            assert "tooltip" in layer
             start = layer.find('tooltip="') + len('tooltip="')
             end = layer.find('"', start)
             tooltip = layer[start:end]
