@@ -1035,15 +1035,13 @@ def store(
 
         return result
     else:
-        name = "store-" + str(uuid.uuid1())
-        dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
-        result = Delayed(name, dsk)
-
         if compute:
-            result.compute(**kwargs)
+            compute_as_if_collection(Array, store_dsk, store_keys, **kwargs)
             return None
         else:
-            return result
+            name = "store-" + str(uuid.uuid1())
+            dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
+            return Delayed(name, dsk)
 
 
 def blockdims_from_blockshape(shape, chunks):

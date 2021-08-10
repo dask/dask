@@ -7,7 +7,7 @@ from fsspec.implementations.local import LocalFileSystem
 from fsspec.utils import stringify_path
 from packaging.version import parse as parse_version
 
-from ....base import tokenize
+from ....base import compute_as_if_collection, tokenize
 from ....delayed import Delayed
 from ....highlevelgraph import HighLevelGraph
 from ....layers import DataFrameIOLayer
@@ -527,6 +527,7 @@ def to_parquet(
     --------
     read_parquet: Read parquet data to dask.dataframe
     """
+    compute_kwargs = compute_kwargs or {}
 
     if compression == "default":
         if snappy is not None:
@@ -695,6 +696,7 @@ def to_parquet(
 
     final_name = "metadata-" + name
     # Collect metadata and write _metadata
+
     if write_metadata_file:
         dsk[(final_name, 0)] = (
             apply,
@@ -711,13 +713,18 @@ def to_parquet(
         dsk[(final_name, 0)] = (lambda x: None, part_tasks)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
-    out = Scalar(graph, final_name, "")
 
     if compute:
-        if compute_kwargs is None:
-            compute_kwargs = dict()
-        out = out.compute(**compute_kwargs)
-    return out
+        if write_metadata_file:
+            return compute_as_if_collection(
+                DataFrame, graph, (final_name, 0), **compute_kwargs
+            )
+        else:
+            return compute_as_if_collection(
+                DataFrame, graph, part_tasks, **compute_kwargs
+            )
+    else:
+        return Scalar(graph, final_name, "")
 
 
 def create_metadata_file(
@@ -917,8 +924,9 @@ def get_engine(engine):
             engine = "pyarrow-dataset"
         elif pa_version.major >= 5 and engine == "pyarrow-legacy":
             warnings.warn(
-                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated "
-                "for pyarrow>=5. Please use `engine='pyarrow'`.",
+                "`ArrowLegacyEngine` ('pyarrow-legacy') is deprecated for "
+                "pyarrow>=5 and will be removed in a future release. Please "
+                "use `engine='pyarrow'` or `engine='pyarrow-dataset'`.",
                 FutureWarning,
             )
 
