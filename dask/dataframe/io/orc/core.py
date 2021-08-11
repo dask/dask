@@ -52,7 +52,7 @@ def _get_engine(engine):
         from .arrow import ArrowORCEngine
 
         return ArrowORCEngine
-    elif not isinstance(engine, ORCEngine):
+    elif not issubclass(engine, ORCEngine):
         raise TypeError("engine must be 'pyarrow', or an ORCEngine object")
     return engine
 
@@ -66,6 +66,9 @@ def read_orc(
     split_stripes=1,
     aggregate_files=None,
     storage_options=None,
+    gather_statistics=None,
+    sample_data=None,
+    read_kwargs=None,
 ):
     """Read dataframe from ORC file(s)
 
@@ -140,7 +143,13 @@ def read_orc(
         filters,
         split_stripes,
         aggregate_files,
+        gather_statistics,
+        sample_data,
+        read_kwargs or {},
     )
+
+    # Add read_kwargs to common_kwargs
+    common_kwargs.update(read_kwargs or {})
 
     # Construct and return a Blockwise layer
     label = "read-orc-"
@@ -152,6 +161,7 @@ def read_orc(
         split_stripes,
         aggregate_files,
         filters,
+        read_kwargs,
     )
     layer = DataFrameIOLayer(
         output_name,

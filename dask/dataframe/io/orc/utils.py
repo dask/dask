@@ -11,12 +11,14 @@ class ORCEngine:
         cls,
         fs,
         paths,
-        columns,
-        index,
-        filters,
-        split_stripes,
-        aggregate_files,
-        **kwargs
+        columns=None,
+        index=None,
+        filters=None,
+        split_stripes=True,
+        aggregate_files=False,
+        gather_statistics=True,
+        sample_data=False,
+        read_kwargs=None,
     ):
         raise NotImplementedError()
 

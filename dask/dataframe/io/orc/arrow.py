@@ -15,11 +15,14 @@ class ArrowORCEngine(ORCEngine):
         cls,
         fs,
         paths,
-        columns,
-        index,
-        filters,
-        split_stripes,
-        aggregate_files,
+        columns=None,
+        index=None,
+        filters=None,
+        split_stripes=True,
+        aggregate_files=False,
+        gather_statistics=True,
+        sample_data=False,
+        read_kwargs=None,
     ):
 
         # Generate a full list of files and
@@ -53,37 +56,51 @@ class ArrowORCEngine(ORCEngine):
         # Gather a list of partitions and corresponding
         # statistics.  Each element in this initial partition
         # list will only correspond to a single path. The
-        # following `_aggregate_files` method is required
+        # following `aggregate_files` method is required
         # to coalesce multiple paths into a single
-        # `read_partition` task
-        parts, statistics, schema = cls._gather_parts(
+        # `read_partition` task. Note that `gather_parts`
+        # will use `cls._filter_stripes` to apply filters
+        # on each path independently.
+        parts, statistics, schema = cls.gather_parts(
             fs,
             paths,
-            columns,
-            filters,
-            split_stripes,
-            directory_partitions,
-            directory_partition_keys,
-            aggregate_files,
-            directory_aggregation_depth,
+            columns=columns,
+            filters=filters,
+            split_stripes=split_stripes,
+            directory_partitions=directory_partitions,
+            directory_partition_keys=directory_partition_keys,
+            aggregate_files=aggregate_files,
+            gather_statistics=gather_statistics,
+            directory_aggregation_depth=directory_aggregation_depth,
         )
 
-        # Apply filters if applicable
-        if statistics and filters:
-            parts, statistics = apply_filters(parts, statistics, filters)
+        divisions = None
+        if index and statistics:
+            divisions = cls._calculate_divisions(index, statistics)
 
         # Aggregate adjacent partitions together
         # when possible/desired
-        parts = cls._aggregate_files(
-            aggregate_files,
-            directory_aggregation_depth,
-            split_stripes,
-            parts,
-            statistics,
-        )
+        if aggregate_files:
+            parts = cls._aggregate_files(
+                parts,
+                directory_aggregation_depth=directory_aggregation_depth,
+                split_stripes=split_stripes,
+                statistics=statistics,
+                divisions=divisions,
+            )
 
         # Create metadata
-        meta = cls._create_meta(columns, schema, index, directory_partition_keys)
+        meta = cls.create_output_meta(
+            sample={
+                "path": parts[0][0],
+                "fs": fs,
+                "read_kwargs": read_kwargs or {},
+            } if sample_data and parts else None,
+            columns=columns,
+            schema=schema,
+            index=index,
+            directory_partition_keys=directory_partition_keys,
+        )
 
         # Define common kwargs
         common_kwargs = {
@@ -92,84 +109,112 @@ class ArrowORCEngine(ORCEngine):
             "filters": filters,
         }
 
-        return parts, meta, common_kwargs
+        return parts, meta, divisions, common_kwargs
 
     @classmethod
-    def _gather_parts(
+    def gather_parts(
         cls,
         fs,
         paths,
-        columns,
-        filters,
-        split_stripes,
-        directory_partitions,
-        directory_partition_keys,
-        aggregate_files,
-        directory_aggregation_depth,
+        columns=None,
+        filters=None,
+        split_stripes=True,
+        directory_partitions=None,
+        directory_partition_keys=None,
+        aggregate_files=False,
+        gather_statistics=True,
+        directory_aggregation_depth=0,
     ):
-        def _new_stat(hive_part, stat_columns):
-            return {
-                "columns": [
-                    {"name": key, "min": val, "max": val}
-                    for (key, val) in hive_part
-                    if key in stat_columns
-                ]
-            }
 
-        # Check if filters contain
-        need_stat_columns = [
-            col for col in _flatten_filters(filters) if col in directory_partition_keys
-        ]
+        # Check if we are filtering by directory columns
+        dir_columns_need_stats = {
+            col for col in _flatten_filters(filters)
+            if col in directory_partition_keys
+        }
+        if index in directory_partition_keys:
+            dir_columns_need_stats.add(index)
+        file_columns_need_stats = set()  # Populated with schema below
 
+        # Main loop(s) to gather stripes/statistics for
+        # each file. After this, each element of `parts` will
+        # correspond to a group of stripes for a single file/path.
         schema = None
         parts = []
-        stats = []
+        statistics = []
         if split_stripes:
             offset = 0
             for i, path in enumerate(paths):
                 hive_part = directory_partitions[i] if directory_partitions else []
+                hive_part_need_stats = [(k, v) for k, v in hive_part if k in dir_columns_need_stats]
                 with fs.open(path, "rb") as f:
                     o = orc.ORCFile(f)
+                    nstripes = o.nstripes
                     if schema is None:
                         schema = o.schema
+                        file_columns_need_stats = {
+                            col for col in _flatten_filters(filters)
+                            if col in schema.names
+                        } |= ({index} if index in schema.names else {})
+
                     elif schema != o.schema:
                         raise ValueError("Incompatible schemas while parsing ORC files")
-                    _stripes = list(range(o.nstripes))
+
+                    stripes, stats = cls.filter_file_stripes(
+                        orc_file=o,
+                        filters=filters,
+                        stat_columns=file_columns_need_stats,
+                        stat_hive_part=filtered_hive_part,
+                        path_or_buffer=f,
+                        gather_statistics=gather_statisics,
+                    )
                     if offset:
-                        parts.append([(path, _stripes[0:offset], hive_part)])
-                        if need_stat_columns:
-                            stats.append(_new_stat(hive_part, need_stat_columns))
-                    while offset < o.nstripes:
-                        parts.append(
-                            [
-                                (
-                                    path,
-                                    _stripes[offset : offset + int(split_stripes)],
-                                    hive_part,
+                        new_part_stripes = stripes[0:offset]
+                        if new_part_stripes:
+                            parts.append([(path, new_part_stripes, hive_part)])
+                            if gather_statistics:
+                                statistics.append(cls._aggregate_stats(stats[0:offset]))
+                    while offset < nstripes:
+                        new_part_stripes = stripes[offset : offset + int(split_stripes)]
+                        if new_part_stripes:
+                            parts.append([(path, new_part_stripes, hive_part)])
+                            if gather_statistics:
+                                statistics.append(
+                                    cls._aggregate_stats(
+                                        stats[offset : offset + int(split_stripes)]
+                                    )
                                 )
-                            ]
-                        )
-                        if need_stat_columns:
-                            stats.append(_new_stat(hive_part, need_stat_columns))
                         offset += int(split_stripes)
                     if (
                         aggregate_files
                         and int(split_stripes) > 1
                         and directory_aggregation_depth < 1
                     ):
-                        offset -= o.nstripes
+                        offset -= nstripes
                     else:
                         offset = 0
         else:
             for i, path in enumerate(paths):
                 hive_part = directory_partitions[i] if directory_partitions else []
+                hive_part_need_stats = [(k, v) for k, v in hive_part if k in dir_columns_need_stats]
                 if schema is None:
                     with fs.open(paths[0], "rb") as f:
                         o = orc.ORCFile(f)
                         schema = o.schema
-                parts.append([(path, None, hive_part)])
-                if need_stat_columns:
-                    stats.append(_new_stat(hive_part, need_stat_columns))
+                        file_columns_need_stats = {
+                            col for col in _flatten_filters(filters)
+                            if col in schema.names
+                        } |= ({index} if index in schema.names else {})
+                stripes, stats = cls.filter_file_stripes(
+                    orc_file=None,
+                    filters=filters,
+                    stat_columns=file_columns_to_filter,
+                    stat_hive_part=filtered_hive_part,
+                    path_or_buffer=path,
+                    gather_statistics=gather_statisics,
+                )
+                parts.append([(path, stripes, hive_part)])
+                if gather_statisics:
+                    statistics.append(cls._aggregate_stats(stats))
 
         schema = _get_pyarrow_dtypes(schema, categories=None)
         if columns is not None:
@@ -179,16 +224,130 @@ class ArrowORCEngine(ORCEngine):
                     "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
                 )
 
-        return parts, stats, schema
+        return parts, statistics, schema
 
     @classmethod
-    def _create_meta(cls, columns, schema, index, directory_partition_keys):
+    def filter_file_stripes(
+        cls,
+        orc_file=None,
+        filters=None,
+        stat_columns=None,  # Not used (see note)
+        stat_hive_part=None,
+        file_path=None,
+        fs=None,  # Not used (see note)
+        file_handle=None,  # Not used (see note)
+        gather_statistics=True,  # Not used (see note)
+    ):
+        """Filter stripes in a single file and gather statistics"""
+
+        # NOTE: ArrowORCEngine only supports filtering on
+        # directory partition columns. However, derived
+        # classes may want to implement custom filtering.
+        # ArrowORCEngine will pass in `stat_columns`,
+        # `path_or_buffer` and `gather_statistics` kwargs
+        # for this purpose.
+
+        statistics = []
+        stripes = [None] if orc_file is None else list(range(orc_file.nstripes))
+        if stat_hive_part:
+            for stripe in stripes:
+                statistics.append(
+                    {
+                        "num-rows": None,  # Not available with PyArrow
+                        "file-path": file_path,
+                        "columns": [
+                            {"name": key, "min": val, "max": val}
+                            for (key, val) in stat_hive_part
+                            if key in stat_columns
+                        ]
+                    }
+                )
+            stripes, statistics = apply_filters(stripes, statistics, filters)
+        return stripes, statistics
+
+    @classmethod
+    def _calculate_divisions(cls, index, statistics):
+        if statistics:
+            divisions = []
+            for icol, column_stats in enumerate(statistics[0].get("columns", [])):
+                if column_stats.get("name", None) == index:
+                    divisions = [
+                        column_stats.get("min", None),
+                        column_stats.get("max", None),
+                    ]
+                    break
+            if divisions and None not in divisions:
+                for stat in statistics[1:]:
+                    next_division = stat["columns"][icol].get("max", None)
+                    if next_division is None or next_division < divisions[-1]:
+                        return None
+                    divisions.append(next_division)
+            return divisions
+        return None
+
+    @classmethod
+    def _aggregate_stats(cls, statistics):
+        """Aggregate a list of statistics"""
+        if statistics:
+
+            # Check if we are already "aggregated"
+            nstats = len(statistics)
+            if nstats == 1:
+                return statistics
+
+            # Populate statistic lists
+            counts = []
+            column_counts = defaultdict(list)
+            column_mins = defaultdict(list)
+            column_maxs = defaultdict(list)
+            use_count = statistics[0].get("num-rows", None) is not None
+            for stat in statistics:
+                if use_count:
+                    counts.append(stat.get("num-rows"))
+                for col_stats in stat["columns"]:
+                    name = col_stats["name"]
+                    if use_count:
+                        column_counts[name].append(col_stats.get("count"))
+                    column_mins[name].append(col_stats.get("min", None))
+                    column_maxs[name].append(col_stats.get("max", None))
+
+            # Perform aggregation
+            output = {}
+            output["file-path"] = statistics[0].get("file-path", None)
+            if use_count:
+                output["row-count"] = sum(counts)
+            column_stats = []
+            for k in column_counts.keys():
+                column_stat = {"name": k}
+                if use_count:
+                    column_stat["count"] = sum(column_counts[k])
+                try:
+                    column_stat["min"] = min(column_mins[k])
+                    column_stat["max"] = max(column_maxs[k])
+                except TypeError:
+                    column_stat["min"] = None
+                    column_stat["max"] = None
+                column_stats.append(column_stat)
+            output["columns"] = column_stats
+            return output
+        else:
+            return {}
+
+    @classmethod
+    def create_output_meta(
+        cls,
+        sample=None,
+        columns=None,
+        schema=None,
+        index=None,
+        directory_partition_keys=None,
+    ):
         columns = list(schema) if columns is None else columns
         index = [index] if isinstance(index, str) else index
         meta = _meta_from_dtypes(columns, schema, index, [])
 
         # Deal with hive-partitioned data
-        for column, uniques in directory_partition_keys.items():
+        for column, uniques in (directory_partition_keys or {}).items():
             if column not in meta.columns:
                 meta[column] = pd.Series(
                     pd.Categorical(categories=uniques, values=[]),
@@ -200,13 +359,13 @@ class ArrowORCEngine(ORCEngine):
     @classmethod
     def _aggregate_files(
         cls,
-        aggregate_files,
-        directory_aggregation_depth,
-        split_stripes,
         parts,
-        statistics,
+        directory_aggregation_depth=0,
+        split_stripes=1,
+        statistics=None,  # Not used (yet)
+        divisions=None,
     ):
-        if aggregate_files and int(split_stripes) > 1 and len(parts) > 1:
+        if int(split_stripes) > 1 and len(parts) > 1:
             new_parts = []
             new_part = parts[0]
             nstripes = len(new_part[0][1])
@@ -224,6 +383,7 @@ class ArrowORCEngine(ORCEngine):
                     nstripes += next_nstripes
                 else:
                     new_parts.append(new_part)
+                    new_stats.append
                     new_part = part
                     nstripes = next_nstripes
                     hive_parts = new_hive_parts
