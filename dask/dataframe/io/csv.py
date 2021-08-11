@@ -179,8 +179,6 @@ def pandas_read_text(
 
     if enforce and columns and (list(df.columns) != list(columns)):
         raise ValueError("Columns do not match", df.columns, columns)
-    elif columns:
-        df.columns = columns
     if path:
         colname, path, paths = path
         code = paths.index(path)
@@ -923,7 +921,9 @@ def to_csv(
         if scheduler is not None and compute_kwargs.get("scheduler") is None:
             compute_kwargs["scheduler"] = scheduler
 
-        delayed(values).compute(**compute_kwargs)
+        import dask
+
+        dask.compute(*values, **compute_kwargs)
         return [f.path for f in files]
     else:
         return values
