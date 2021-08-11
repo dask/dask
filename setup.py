@@ -28,6 +28,7 @@ install_requires = [
     "fsspec >= 0.6.0",
     "toolz >= 0.8.2",
     "partd >= 0.3.10",
+    "jinja2",
 ]
 
 packages = [
