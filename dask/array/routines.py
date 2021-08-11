@@ -1658,7 +1658,7 @@ def unique_no_structured_arr(
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
     try:
         meta = meta_from_array(ar)
-        np.empty_like(meta, dtype=[("a", np.int), ("b", np.float)])
+        np.empty_like(meta, dtype=[("a", int), ("b", float)])
     except TypeError:
         return unique_no_structured_arr(
             ar,
