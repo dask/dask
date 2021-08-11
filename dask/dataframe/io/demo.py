@@ -1,3 +1,5 @@
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -13,8 +15,12 @@ def make_float(n, rstate):
     return rstate.rand(n) * 2 - 1
 
 
-def make_int(n, rstate, lam=1000):
+def _make_int_deprecated(n, rstate, lam=1000):
     return rstate.poisson(lam, size=n)
+
+
+def make_int(n, rstate, low=0, high=1e9):
+    return rstate.randint(low=low, high=high, size=n)
 
 
 names = [
@@ -108,7 +114,16 @@ def make_timeseries_part(start, end, dtypes, freq, state_data, kwargs):
             for kk, v in kwargs.items()
             if kk.rsplit("_", 1)[0] == k
         }
-        columns[k] = make[dt](len(index), state, **kws)
+        if dt is int and "lam" in kws:
+            warnings.warn(
+                "Poisson integer generation in Dask's timeseries demo utility is deprecated. "
+                "Support for the `lam` keyword argument will be removed in a future release. "
+                "Please use `low` and `high` instead (see `dask.dataframe.io.demo.make_int`).",
+                category=FutureWarning,
+            )
+            columns[k] = _make_int_deprecated(len(index), state, **kws)
+        else:
+            columns[k] = make[dt](len(index), state, **kws)
     df = pd.DataFrame(columns, index=index, columns=sorted(columns))
     if df.index[-1] == end:
         df = df.iloc[:-1]
