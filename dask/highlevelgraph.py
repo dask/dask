@@ -1274,20 +1274,30 @@ def to_graphviz(
         attrs.setdefault("tooltip", str(node_tooltips))
 
         if color == "layer_type":
-            layers = {
-                "DataFrameIOLayer": "#D6D6FF",
-                "ShuffleLayer": "#D9F2FF",
-                "SimpleShuffleLayer": "#D9F2FF",
-                "Blockwise": "#DDFFCC",
-                "BlockwiseLayer": "#DDFFCC",
-                "BlockwiseCreateArray": "#DDFFCC",
-                "MaterializedLayer": "#DBDEE5",
+            colors = {
+                "purple": "#CCC7F9",
+                "rose": "#F9CCC7",
+                "pink": "#FFD9F2",
+                "blue": "#D9F2FF",
+                "green": "#D9FFE6",
+                "gray": "#DBDEE5",
             }
 
-            layer_type = str(type(hg.layers[layer]).__name__)
-            xcolor = layers.get(layer_type)
+            layer_colors = {
+                "DataFrameIOLayer": "purple",
+                "ShuffleLayer": "rose",
+                "SimpleShuffleLayer": "rose",
+                "ArrayOverlayLayer": "pink",
+                "BroadcastJoinLayer": "blue",
+                "Blockwise": "green",
+                "BlockwiseLayer": "green",
+                "BlockwiseCreateArray": "green",
+                "MaterializedLayer": "gray",
+            }
 
-            attrs.setdefault("fillcolor", str(xcolor))
+            node_color = colors.get(layer_colors.get(layer_type))
+
+            attrs.setdefault("fillcolor", str(node_color))
             attrs.setdefault("style", "filled")
 
         g.node(layer_name, **attrs)
@@ -1299,17 +1309,24 @@ def to_graphviz(
             g.edge(dep_name, layer_name)
 
     if color == "layer_type":
-        legend_title = "Legend"
+        legend_title = "Key"
         legend_label = (
-            '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="10">'
-            "<TR><TD><B>Legend</B></TD></TR>"
-            '<TR><TD BGCOLOR="#DDFFCC">Blockwise</TD></TR>'
-            '<TR><TD BGCOLOR="#D9F2FF">Shuffle</TD></TR>'
-            '<TR><TD BGCOLOR="#D6D6FF">DataFrameIO</TD></TR>'
+            '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">'
+            "<TR><TD><B>Key</B></TD></TR>"
+            '<TR><TD BGCOLOR="#CCC7F9">DataFrame IO</TD></TR>'
+            '<TR><TD BGCOLOR="#F9CCC7">Shuffle</TD></TR>'
+            '<TR><TD BGCOLOR="#FFD9F2">Array Overlay</TD></TR>'
+            '<TR><TD BGCOLOR="#D9F2FF">Broadcast Join</TD></TR>'
+            '<TR><TD BGCOLOR="#D9FFE6">Blockwise</TD></TR>'
             '<TR><TD BGCOLOR="#DBDEE5">Materialized</TD></TR></TABLE>>'
         )
 
-        g.node(legend_title, label=legend_label, margin="0")
+        attrs = data_attributes.get(legend_title, {})
+        attrs.setdefault("label", str(legend_label))
+        attrs.setdefault("fontsize", "20")
+        attrs.setdefault("margin", "0")
+
+        g.node(legend_title, **attrs)
 
     return g
 
