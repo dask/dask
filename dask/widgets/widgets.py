@@ -14,7 +14,7 @@ FILTERS = {
     "format_time_ago": format_time_ago,
     "html_escape": html.escape,
     "key_split": key_split,
-    "type": lambda cls: type(cls).__name__,
+    "type": type,
     "typename": typename,
 }
 
