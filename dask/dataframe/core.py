@@ -51,6 +51,7 @@ from ..utils import (
     random_state_data,
     typename,
 )
+from ..widgets import get_template
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
@@ -5077,8 +5078,8 @@ class DataFrame(_Frame):
     def to_html(self, max_rows=5):
         # pd.Series doesn't have html repr
         data = self._repr_data().to_html(max_rows=max_rows, show_dimensions=False)
-        return self._HTML_FMT.format(
-            data=data, name=key_split(self._name), task=len(self.dask)
+        return get_template("dataframe.html.j2").render(
+            data=data, name=self._name, task=self.dask
         )
 
     def _repr_data(self):
@@ -5093,16 +5094,12 @@ class DataFrame(_Frame):
             )
         return series_df
 
-    _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
-{data}
-<div>Dask Name: {name}, {task} tasks</div>"""
-
     def _repr_html_(self):
         data = self._repr_data().to_html(
             max_rows=5, show_dimensions=False, notebook=True
         )
-        return self._HTML_FMT.format(
-            data=data, name=key_split(self._name), task=len(self.dask)
+        return get_template("dataframe.html.j2").render(
+            data=data, name=self._name, task=self.dask
         )
 
     def _select_columns_or_index(self, columns_or_index):
