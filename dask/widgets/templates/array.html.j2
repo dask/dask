@@ -10,11 +10,13 @@
                     </tr>
                 </thead>
                 <tbody>
+                    {% if nbytes %}
                     <tr>
                         <th> Bytes </th>
-                        <td> {{ nbytes if nbytes else "" }} </td>
+                        <td> {{ nbytes }} </td>
                         <td> {{ cbytes }} </td>
                     </tr>
+                    {% endif %}
                     <tr>
                         <th> Shape </th>
                         <td> {{ array.shape }} </td>
