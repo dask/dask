@@ -66,7 +66,7 @@ def read_orc(
     split_stripes=1,
     aggregate_files=None,
     storage_options=None,
-    gather_statistics=None,
+    gather_statistics=True,
     dataset_kwargs=None,
     read_kwargs=None,
 ):
@@ -187,7 +187,8 @@ def read_orc(
         label=label,
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})
-    return new_dd_object(graph, output_name, meta, [None] * (len(parts) + 1))
+    divisions = divisions or ([None] * (len(parts) + 1))
+    return new_dd_object(graph, output_name, meta, divisions)
 
 
 def to_orc(

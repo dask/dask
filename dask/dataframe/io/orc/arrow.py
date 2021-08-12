@@ -98,8 +98,7 @@ class ArrowORCEngine(ORCEngine):
         columns = list(schema) if columns is None else columns
 
         # Construct initial meta
-        index = [index] if isinstance(index, str) else index
-        meta = _meta_from_dtypes(columns, schema, index, [])
+        meta = _meta_from_dtypes(columns, schema, None, [])
 
         # Deal with hive-partitioned data
         for column, uniques in (directory_partition_keys or {}).items():
@@ -109,6 +108,9 @@ class ArrowORCEngine(ORCEngine):
                     index=meta.index,
                 )
 
+        if index:
+            index = [index] if isinstance(index, str) else index
+            meta.set_index(index, inplace=True)
         return meta
 
     @classmethod
@@ -149,10 +151,11 @@ class ArrowORCEngine(ORCEngine):
         # list will only correspond to a single path. The
         # following `aggregate_files` method is required
         # to coalesce multiple paths into a single
-        # `read_partition` task. Note that `gather_parts`
-        # will use `cls._filter_stripes` to apply filters
-        # on each path independently.
-        parts, statistics = cls.gather_parts(
+        # `read_partition` task. Note that `_gather_parts`
+        # will use `cls.filter_file_stripes` to apply filters
+        # on each path (and collect statistics) independently.
+        # Therefore, this call can be parallelized over the paths.
+        parts, statistics = cls._gather_parts(
             dataset_info,
             index=index,
             columns=columns,
@@ -170,7 +173,7 @@ class ArrowORCEngine(ORCEngine):
         # Aggregate adjacent partitions together
         # when possible/desired
         if aggregate_files:
-            parts = cls._aggregate_files(
+            parts, divisions = cls._aggregate_files(
                 parts,
                 directory_aggregation_depth=directory_aggregation_depth,
                 split_stripes=split_stripes,
@@ -188,7 +191,7 @@ class ArrowORCEngine(ORCEngine):
         return parts, divisions, common_kwargs
 
     @classmethod
-    def gather_parts(
+    def _gather_parts(
         cls,
         dataset_info,
         index=None,
@@ -235,21 +238,21 @@ class ArrowORCEngine(ORCEngine):
                         file_path=path,
                         gather_statistics=gather_statistics,
                     )
+                    if stripes == []:
+                        continue
                     if offset:
                         new_part_stripes = stripes[0:offset]
                         if new_part_stripes:
                             parts.append([(path, new_part_stripes, hive_part)])
                             if gather_statistics:
-                                statistics.append(cls._aggregate_stats(stats[0:offset]))
+                                statistics += cls._aggregate_stats(stats[0:offset])
                     while offset < nstripes:
                         new_part_stripes = stripes[offset : offset + int(split_stripes)]
                         if new_part_stripes:
                             parts.append([(path, new_part_stripes, hive_part)])
                             if gather_statistics:
-                                statistics.append(
-                                    cls._aggregate_stats(
-                                        stats[offset : offset + int(split_stripes)]
-                                    )
+                                statistics += cls._aggregate_stats(
+                                    stats[offset : offset + int(split_stripes)]
                                 )
                         offset += int(split_stripes)
                     if (
@@ -276,9 +279,11 @@ class ArrowORCEngine(ORCEngine):
                     file_handle=None,
                     gather_statistics=gather_statistics,
                 )
+                if stripes == []:
+                    continue
                 parts.append([(path, stripes, hive_part)])
                 if gather_statistics:
-                    statistics.append(cls._aggregate_stats(stats))
+                    statistics += cls._aggregate_stats(stats)
 
         return parts, statistics
 
@@ -314,11 +319,11 @@ class ArrowORCEngine(ORCEngine):
                         "columns": [
                             {"name": key, "min": val, "max": val}
                             for (key, val) in stat_hive_part
-                            if key in stat_columns
                         ],
                     }
                 )
-            stripes, statistics = apply_filters(stripes, statistics, filters)
+            if filters:
+                stripes, statistics = apply_filters(stripes, statistics, filters)
         return stripes, statistics
 
     @classmethod
@@ -400,10 +405,12 @@ class ArrowORCEngine(ORCEngine):
     ):
         if int(split_stripes) > 1 and len(parts) > 1:
             new_parts = []
+            new_divisions = [divisions[0]] if divisions else None
+            new_max = divisions[1] if divisions else None
             new_part = parts[0]
             nstripes = len(new_part[0][1])
             hive_parts = new_part[0][2]
-            for part in parts[1:]:
+            for i, part in enumerate(parts[1:]):
                 next_nstripes = len(part[0][1])
                 new_hive_parts = part[0][2]
                 # For partitioned data, we do not allow file aggregation between
@@ -413,16 +420,22 @@ class ArrowORCEngine(ORCEngine):
                     == new_hive_parts[:directory_aggregation_depth]
                 ):
                     new_part.append(part[0])
+                    new_max = divisions[i] if divisions else None
                     nstripes += next_nstripes
                 else:
                     new_parts.append(new_part)
+                    if divisions:
+                        new_divisions.append(new_max)
                     new_part = part
+                    new_max = divisions[i] if divisions else None
                     nstripes = next_nstripes
                     hive_parts = new_hive_parts
             new_parts.append(new_part)
-            return new_parts
+            if divisions:
+                new_divisions.append(new_max)
+            return new_parts, new_divisions
         else:
-            return parts
+            return parts, divisions
 
     @classmethod
     def read_partition(

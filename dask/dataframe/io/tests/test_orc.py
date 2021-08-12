@@ -137,34 +137,54 @@ def test_orc_roundtrip_aggregate_files(tmpdir, split_stripes):
     parse_version(pa.__version__) < parse_version("4.0.0"),
     reason=("PyArrow>=4.0.0 required for ORC write support."),
 )
-@pytest.mark.parametrize("columns", [None, ["b", "a2"]])
-@pytest.mark.parametrize("aggregate_files", [False, "a2"])
+@pytest.mark.parametrize("columns", [None, ["b", "a1"]])
+@pytest.mark.parametrize("aggregate_files", [False, "a1"])
 @pytest.mark.parametrize("split_stripes", [False, 2, 100])
-def test_partition_on(tmpdir, columns, aggregate_files, split_stripes):
+@pytest.mark.parametrize("index", [None, "a1"])
+@pytest.mark.parametrize("filters", [None, [("a1", "<", "C")]])
+def test_partition_on(tmpdir, columns, aggregate_files, split_stripes, index, filters):
     df = pd.DataFrame(
         {
-            "a1": np.random.choice(["A", "B", "C"], size=100),
+            "a1": ["A"] * 33 + ["B"] * 33 + ["C"] * 34,
             "a2": np.random.choice(["X", "Y", "Z"], size=100),
             "b": np.random.random(size=100),
             "c": np.random.randint(1, 5, size=100),
             "d": np.arange(0, 100),
         }
     )
+    if index:
+        df = df.set_index(index)
     d = dd.from_pandas(df, npartitions=2)
-    d.to_orc(tmpdir, partition_on=["a1", "a2"], write_index=False)
+    d.to_orc(tmpdir, partition_on=["a1", "a2"], write_index=bool(index))
 
     # Read back
     ddf = dd.read_orc(
         tmpdir,
+        index=index,
         columns=columns,
+        filters=filters,
         aggregate_files=aggregate_files,
         split_stripes=split_stripes,
     )
+
+    # Check that the final index is correct,
+    # but reset it to simplify data checks
+    assert ddf.index.name == df.index.name
+    if df.index.name is not None:
+        df = df.reset_index(drop=False)
+        ddf = ddf.reset_index(drop=False)
+
+    # Check file aggregation
     if aggregate_files and split_stripes == 100:
-        assert ddf.npartitions == 9
+        if filters:
+            assert ddf.npartitions == 2
+        else:
+            assert ddf.npartitions == 3
     out = ddf.compute()
-    for val in df.a2.unique():
-        assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
+    if filters:
+        df = df[df.a1 < "C"]
+    for val in df.a1.unique():
+        assert set(df.b[df.a1 == val]) == set(out.b[out.a1 == val])
 
 
 def test_orc_aggregate_files_offset(orc_files):
