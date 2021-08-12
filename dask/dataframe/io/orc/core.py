@@ -135,17 +135,17 @@ def read_orc(
     # from the ORC metadata.  The backend should also
     # return the DataFrame-collection metadata and
     # a dictionary of any other `common_kwargs` info
-    parts, meta, common_kwargs = engine.read_metadata(
+    parts, meta, divisions, common_kwargs = engine.read_metadata(
         fs,
         paths,
-        columns,
-        index,
-        filters,
-        split_stripes,
-        aggregate_files,
-        gather_statistics,
-        sample_data,
-        read_kwargs or {},
+        columns=columns,
+        index=index,
+        filters=filters,
+        split_stripes=split_stripes,
+        aggregate_files=aggregate_files,
+        gather_statistics=gather_statistics,
+        sample_data=sample_data,
+        read_kwargs=read_kwargs or {},
     )
 
     # Add read_kwargs to common_kwargs

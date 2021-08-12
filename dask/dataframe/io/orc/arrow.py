@@ -66,6 +66,7 @@ class ArrowORCEngine(ORCEngine):
             paths,
             columns=columns,
             filters=filters,
+            index=index,
             split_stripes=split_stripes,
             directory_partitions=directory_partitions,
             directory_partition_keys=directory_partition_keys,
@@ -118,6 +119,7 @@ class ArrowORCEngine(ORCEngine):
         paths,
         columns=None,
         filters=None,
+        index=None,
         split_stripes=True,
         directory_partitions=None,
         directory_partition_keys=None,
@@ -154,7 +156,7 @@ class ArrowORCEngine(ORCEngine):
                         file_columns_need_stats = {
                             col for col in _flatten_filters(filters)
                             if col in schema.names
-                        } |= ({index} if index in schema.names else {})
+                        } | ({index} if index in schema.names else set())
 
                     elif schema != o.schema:
                         raise ValueError("Incompatible schemas while parsing ORC files")
@@ -163,9 +165,10 @@ class ArrowORCEngine(ORCEngine):
                         orc_file=o,
                         filters=filters,
                         stat_columns=file_columns_need_stats,
-                        stat_hive_part=filtered_hive_part,
-                        path_or_buffer=f,
-                        gather_statistics=gather_statisics,
+                        stat_hive_part=hive_part_need_stats,
+                        file_handle=f,
+                        file_path=path,
+                        gather_statistics=gather_statistics,
                     )
                     if offset:
                         new_part_stripes = stripes[0:offset]
@@ -203,17 +206,18 @@ class ArrowORCEngine(ORCEngine):
                         file_columns_need_stats = {
                             col for col in _flatten_filters(filters)
                             if col in schema.names
-                        } |= ({index} if index in schema.names else {})
+                        } | ({index} if index in schema.names else set())
                 stripes, stats = cls.filter_file_stripes(
                     orc_file=None,
                     filters=filters,
-                    stat_columns=file_columns_to_filter,
-                    stat_hive_part=filtered_hive_part,
-                    path_or_buffer=path,
-                    gather_statistics=gather_statisics,
+                    stat_columns=file_columns_need_stats,
+                    stat_hive_part=hive_part_need_stats,
+                    file_path=path,
+                    file_handle=None,
+                    gather_statistics=gather_statistics,
                 )
                 parts.append([(path, stripes, hive_part)])
-                if gather_statisics:
+                if gather_statistics:
                     statistics.append(cls._aggregate_stats(stats))
 
         schema = _get_pyarrow_dtypes(schema, categories=None)
@@ -383,7 +387,6 @@ class ArrowORCEngine(ORCEngine):
                     nstripes += next_nstripes
                 else:
                     new_parts.append(new_part)
-                    new_stats.append
                     new_part = part
                     nstripes = next_nstripes
                     hive_parts = new_hive_parts
@@ -509,7 +512,7 @@ def _read_orc_stripes(fs, path, stripes, schema, columns):
     batches = []
     with fs.open(path, "rb") as f:
         o = orc.ORCFile(f)
-        _stripes = range(o.nstripes) if stripes is None else stripes
+        _stripes = range(o.nstripes) if stripes in (None, [None]) else stripes
         for stripe in _stripes:
             batches.append(o.read_stripe(stripe, columns))
     return batches
