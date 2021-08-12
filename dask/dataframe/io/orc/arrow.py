@@ -6,6 +6,9 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.orc as orc
 
+from ....base import tokenize
+from ....delayed import Delayed
+from ....utils import apply
 from ..parquet.core import apply_filters
 from ..parquet.utils import _flatten_filters
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
@@ -122,6 +125,7 @@ class ArrowORCEngine(ORCEngine):
         split_stripes=True,
         aggregate_files=False,
         gather_statistics=True,
+        allow_worker_gather=None,
     ):
 
         # Extract column and index from meta
@@ -155,16 +159,63 @@ class ArrowORCEngine(ORCEngine):
         # will use `cls.filter_file_stripes` to apply filters
         # on each path (and collect statistics) independently.
         # Therefore, this call can be parallelized over the paths.
-        parts, statistics = cls._gather_parts(
-            dataset_info,
-            index=index,
-            columns=columns,
-            filters=filters,
-            split_stripes=split_stripes,
-            aggregate_files=aggregate_files,
-            gather_statistics=gather_statistics,
-            directory_aggregation_depth=directory_aggregation_depth,
+        npaths = len(dataset_info["paths"])
+        worker_gather = (allow_worker_gather is True) or (
+            npaths > 1
+            and allow_worker_gather is not False
+            and not aggregate_files  # Worker-gather can change file agg
         )
+        if worker_gather:
+            # Collect partition plan on workers (in parallel)
+            gather_parts_dsk = {}
+            name = "gather-orc-parts-" + tokenize(
+                meta,
+                dataset_info,
+                filters,
+                split_stripes,
+                aggregate_files,
+                gather_statistics,
+            )
+            finalize_list = []
+            for i in range(npaths):
+                finalize_list.append((name, i))
+                gather_parts_dsk[finalize_list[-1]] = (
+                    apply,
+                    cls._gather_parts,
+                    [dataset_info],
+                    {
+                        "path_indices": [i],
+                        "index": index,
+                        "columns": columns,
+                        "filters": filters,
+                        "split_stripes": split_stripes,
+                        "aggregate_files": aggregate_files,
+                        "gather_statistics": gather_statistics,
+                        "directory_aggregation_depth": directory_aggregation_depth,
+                    },
+                )
+
+            def _combine_parts(parts_and_stats):
+                parts, stats = [], []
+                for part, stat in parts_and_stats:
+                    parts += part
+                    stats += stat
+                return parts, stats
+
+            gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
+            parts, statistics = Delayed("final-" + name, gather_parts_dsk).compute()
+        else:
+            # Collect partition plan on client (serial)
+            parts, statistics = cls._gather_parts(
+                dataset_info,
+                index=index,
+                columns=columns,
+                filters=filters,
+                split_stripes=split_stripes,
+                aggregate_files=aggregate_files,
+                gather_statistics=gather_statistics,
+                directory_aggregation_depth=directory_aggregation_depth,
+            )
 
         divisions = None
         if index and statistics:
@@ -194,6 +245,7 @@ class ArrowORCEngine(ORCEngine):
     def _gather_parts(
         cls,
         dataset_info,
+        path_indices=None,
         index=None,
         columns=None,
         filters=None,
@@ -211,6 +263,9 @@ class ArrowORCEngine(ORCEngine):
         dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
         file_columns_need_stats = dataset_info["file_columns_need_stats"]
 
+        if path_indices is None:
+            path_indices = range(len(paths))
+
         # Main loop(s) to gather stripes/statistics for
         # each file. After this, each element of `parts` will
         # correspond to a group of stripes for a single file/path.
@@ -218,7 +273,8 @@ class ArrowORCEngine(ORCEngine):
         statistics = []
         if split_stripes:
             offset = 0
-            for i, path in enumerate(paths):
+            for i in path_indices:
+                path = paths[i]
                 hive_part = directory_partitions[i] if directory_partitions else []
                 hive_part_need_stats = [
                     (k, v) for k, v in hive_part if k in dir_columns_need_stats
@@ -264,7 +320,8 @@ class ArrowORCEngine(ORCEngine):
                     else:
                         offset = 0
         else:
-            for i, path in enumerate(paths):
+            for i in path_indices:
+                path = paths[i]
                 hive_part = directory_partitions[i] if directory_partitions else []
                 hive_part_need_stats = [
                     (k, v) for k, v in hive_part if k in dir_columns_need_stats

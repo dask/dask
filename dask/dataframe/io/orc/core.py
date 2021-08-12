@@ -67,6 +67,7 @@ def read_orc(
     aggregate_files=None,
     storage_options=None,
     gather_statistics=True,
+    allow_worker_gather=None,
     dataset_kwargs=None,
     read_kwargs=None,
 ):
@@ -161,6 +162,7 @@ def read_orc(
         split_stripes=split_stripes,
         aggregate_files=aggregate_files,
         gather_statistics=gather_statistics,
+        allow_worker_gather=allow_worker_gather,
     )
 
     # Add read_kwargs to common_kwargs
