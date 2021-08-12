@@ -195,3 +195,10 @@ def test_orc_aggregate_files_offset(orc_files):
     df2 = dd.read_orc(orc_files[:2], split_stripes=11, aggregate_files=True)
     assert df2.npartitions == 2
     assert len(df2.partitions[0].index) > len(df2.index) // 2
+
+
+def test_orc_names(orc_files, tmp_path):
+    df = dd.read_orc(orc_files)
+    assert df._name.startswith("read-orc")
+    out = df.to_orc(tmp_path, compute=False)
+    assert out._name.startswith("to-orc")

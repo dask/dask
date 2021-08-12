@@ -268,7 +268,7 @@ def to_orc(
 
     # Construct IO graph
     dsk = {}
-    name = "to-parquet-" + tokenize(
+    name = "to-orc-" + tokenize(
         df,
         fs,
         path,

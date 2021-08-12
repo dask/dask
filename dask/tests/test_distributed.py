@@ -610,7 +610,12 @@ def test_map_partitions_df_input():
         ).compute()
 
     with distributed.LocalCluster(
-        scheduler_port=0, asynchronous=False, n_workers=1, nthreads=1, processes=False
+        scheduler_port=0,
+        dashboard_address=":0",
+        asynchronous=False,
+        n_workers=1,
+        nthreads=1,
+        processes=False,
     ) as cluster:
         with distributed.Client(cluster, asynchronous=False):
             main()
