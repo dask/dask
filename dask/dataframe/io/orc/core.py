@@ -67,7 +67,7 @@ def read_orc(
     aggregate_files=None,
     storage_options=None,
     gather_statistics=None,
-    sample_data=None,
+    dataset_kwargs=None,
     read_kwargs=None,
 ):
     """Read dataframe from ORC file(s)
@@ -131,21 +131,36 @@ def read_orc(
         path, mode="rb", storage_options=storage_options
     )
 
-    # Let backend engine generate a list of parts
-    # from the ORC metadata.  The backend should also
-    # return the DataFrame-collection metadata and
-    # a dictionary of any other `common_kwargs` info
-    parts, meta, divisions, common_kwargs = engine.read_metadata(
+    # Let engine convert the paths into a dictionary
+    # of engine-specific datset information
+    dataset_info = engine.get_dataset_info(
         fs,
         paths,
         columns=columns,
         index=index,
         filters=filters,
+        gather_statistics=gather_statistics,
+        dataset_kwargs=dataset_kwargs,
+    )
+
+    # Construct the `_meta` for the output collection.
+    # Note that we do this before actually generating
+    # the "plan" for output partitions.
+    meta = engine.construct_output_meta(
+        dataset_info,
+        index=index,
+        columns=columns,
+        read_kwargs=read_kwargs,
+    )
+
+    # Construct the output-partition "plan"
+    (parts, divisions, common_kwargs,) = engine.construct_partition_plan(
+        meta,
+        dataset_info,
+        filters=filters,
         split_stripes=split_stripes,
         aggregate_files=aggregate_files,
         gather_statistics=gather_statistics,
-        sample_data=sample_data,
-        read_kwargs=read_kwargs or {},
     )
 
     # Add read_kwargs to common_kwargs
@@ -161,6 +176,7 @@ def read_orc(
         split_stripes,
         aggregate_files,
         filters,
+        dataset_kwargs,
         read_kwargs,
     )
     layer = DataFrameIOLayer(

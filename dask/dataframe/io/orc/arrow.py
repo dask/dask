@@ -1,3 +1,6 @@
+import warnings
+from collections import defaultdict
+
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -11,19 +14,21 @@ from .utils import ORCEngine, collect_files, collect_partitions
 
 class ArrowORCEngine(ORCEngine):
     @classmethod
-    def read_metadata(
+    def get_dataset_info(
         cls,
         fs,
         paths,
         columns=None,
         index=None,
         filters=None,
-        split_stripes=True,
-        aggregate_files=False,
         gather_statistics=True,
-        sample_data=False,
-        read_kwargs=None,
+        dataset_kwargs=None,
     ):
+        if dataset_kwargs:
+            warnings.warn(
+                "Pyarrow ORC engine does not currently support "
+                "any 'dataset_kwargs' options."
+            )
 
         # Generate a full list of files and
         # directory partitions
@@ -37,6 +42,92 @@ class ArrowORCEngine(ORCEngine):
                 directory_partitions,
                 directory_partition_keys,
             ) = collect_partitions(paths, root_dir, fs)
+
+        with fs.open(paths[0], "rb") as f:
+            o = orc.ORCFile(f)
+            schema = o.schema
+
+        # Save list of directory-partition columns and
+        # file columns that we will need statistics for
+        dir_columns_need_stats = {
+            col for col in _flatten_filters(filters) if col in directory_partition_keys
+        } | ({index} if index in directory_partition_keys else set())
+        file_columns_need_stats = {
+            col for col in _flatten_filters(filters) if col in schema.names
+        }
+        # Before including the index column, raise an error
+        # if the user is trying to filter with gather_statistics=False
+        if file_columns_need_stats and gather_statistics is False:
+            raise ValueError(
+                "Cannot filter ORC stripes when `gather_statistics=False`."
+            )
+        file_columns_need_stats |= {index} if index in schema.names else set()
+
+        # Convert schema and check columns
+        pa_schema = _get_pyarrow_dtypes(schema, categories=None)
+        if columns is not None:
+            ex = set(columns) - (set(pa_schema) | set(directory_partition_keys))
+            if ex:
+                raise ValueError(
+                    "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
+                )
+
+        # Return the final `dataset_info` dictionary
+        return {
+            "fs": fs,
+            "paths": paths,
+            "schema": schema,
+            "pa_schema": pa_schema,
+            "dir_columns_need_stats": dir_columns_need_stats,
+            "file_columns_need_stats": file_columns_need_stats,
+            "directory_partitions": directory_partitions,
+            "directory_partition_keys": directory_partition_keys,
+        }
+
+    @classmethod
+    def construct_output_meta(
+        cls,
+        dataset_info,
+        index=None,
+        columns=None,
+        read_kwargs=None,
+    ):
+        # Use dataset_info to define `columns`
+        schema = dataset_info["pa_schema"]
+        directory_partition_keys = dataset_info["directory_partition_keys"]
+        columns = list(schema) if columns is None else columns
+
+        # Construct initial meta
+        index = [index] if isinstance(index, str) else index
+        meta = _meta_from_dtypes(columns, schema, index, [])
+
+        # Deal with hive-partitioned data
+        for column, uniques in (directory_partition_keys or {}).items():
+            if column not in meta.columns:
+                meta[column] = pd.Series(
+                    pd.Categorical(categories=uniques, values=[]),
+                    index=meta.index,
+                )
+
+        return meta
+
+    @classmethod
+    def construct_partition_plan(
+        cls,
+        meta,
+        dataset_info,
+        filters=None,
+        split_stripes=True,
+        aggregate_files=False,
+        gather_statistics=True,
+    ):
+
+        # Extract column and index from meta
+        columns = list(meta.columns)
+        index = meta.index.name
+
+        # Extract necessary dataset_info values
+        directory_partition_keys = dataset_info["directory_partition_keys"]
 
         # Set the file-aggregation depth if the data has
         # directory partitions, and one of these partition
@@ -61,15 +152,12 @@ class ArrowORCEngine(ORCEngine):
         # `read_partition` task. Note that `gather_parts`
         # will use `cls._filter_stripes` to apply filters
         # on each path independently.
-        parts, statistics, schema = cls.gather_parts(
-            fs,
-            paths,
+        parts, statistics = cls.gather_parts(
+            dataset_info,
+            index=index,
             columns=columns,
             filters=filters,
-            index=index,
             split_stripes=split_stripes,
-            directory_partitions=directory_partitions,
-            directory_partition_keys=directory_partition_keys,
             aggregate_files=aggregate_files,
             gather_statistics=gather_statistics,
             directory_aggregation_depth=directory_aggregation_depth,
@@ -90,78 +178,55 @@ class ArrowORCEngine(ORCEngine):
                 divisions=divisions,
             )
 
-        # Create metadata
-        meta = cls.create_output_meta(
-            sample={
-                "path": parts[0][0],
-                "fs": fs,
-                "read_kwargs": read_kwargs or {},
-            } if sample_data and parts else None,
-            columns=columns,
-            schema=schema,
-            index=index,
-            directory_partition_keys=directory_partition_keys,
-        )
-
         # Define common kwargs
         common_kwargs = {
-            "schema": schema,
-            "partition_uniques": directory_partition_keys,
+            "schema": dataset_info["pa_schema"],
+            "partition_uniques": dataset_info["directory_partition_keys"],
             "filters": filters,
         }
 
-        return parts, meta, divisions, common_kwargs
+        return parts, divisions, common_kwargs
 
     @classmethod
     def gather_parts(
         cls,
-        fs,
-        paths,
+        dataset_info,
+        index=None,
         columns=None,
         filters=None,
-        index=None,
         split_stripes=True,
-        directory_partitions=None,
-        directory_partition_keys=None,
         aggregate_files=False,
         gather_statistics=True,
         directory_aggregation_depth=0,
     ):
 
-        # Check if we are filtering by directory columns
-        dir_columns_need_stats = {
-            col for col in _flatten_filters(filters)
-            if col in directory_partition_keys
-        }
-        if index in directory_partition_keys:
-            dir_columns_need_stats.add(index)
-        file_columns_need_stats = set()  # Populated with schema below
+        # Extract necessary info from dataset_info
+        fs = dataset_info["fs"]
+        paths = dataset_info["paths"]
+        schema = dataset_info["schema"]
+        directory_partitions = dataset_info["directory_partitions"]
+        dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
+        file_columns_need_stats = dataset_info["file_columns_need_stats"]
 
         # Main loop(s) to gather stripes/statistics for
         # each file. After this, each element of `parts` will
         # correspond to a group of stripes for a single file/path.
-        schema = None
         parts = []
         statistics = []
         if split_stripes:
             offset = 0
             for i, path in enumerate(paths):
                 hive_part = directory_partitions[i] if directory_partitions else []
-                hive_part_need_stats = [(k, v) for k, v in hive_part if k in dir_columns_need_stats]
+                hive_part_need_stats = [
+                    (k, v) for k, v in hive_part if k in dir_columns_need_stats
+                ]
                 with fs.open(path, "rb") as f:
                     o = orc.ORCFile(f)
                     nstripes = o.nstripes
-                    if schema is None:
-                        schema = o.schema
-                        file_columns_need_stats = {
-                            col for col in _flatten_filters(filters)
-                            if col in schema.names
-                        } | ({index} if index in schema.names else set())
-
-                    elif schema != o.schema:
+                    if schema != o.schema:
                         raise ValueError("Incompatible schemas while parsing ORC files")
-
                     stripes, stats = cls.filter_file_stripes(
+                        fs=fs,
                         orc_file=o,
                         filters=filters,
                         stat_columns=file_columns_need_stats,
@@ -198,16 +263,11 @@ class ArrowORCEngine(ORCEngine):
         else:
             for i, path in enumerate(paths):
                 hive_part = directory_partitions[i] if directory_partitions else []
-                hive_part_need_stats = [(k, v) for k, v in hive_part if k in dir_columns_need_stats]
-                if schema is None:
-                    with fs.open(paths[0], "rb") as f:
-                        o = orc.ORCFile(f)
-                        schema = o.schema
-                        file_columns_need_stats = {
-                            col for col in _flatten_filters(filters)
-                            if col in schema.names
-                        } | ({index} if index in schema.names else set())
+                hive_part_need_stats = [
+                    (k, v) for k, v in hive_part if k in dir_columns_need_stats
+                ]
                 stripes, stats = cls.filter_file_stripes(
+                    fs=fs,
                     orc_file=None,
                     filters=filters,
                     stat_columns=file_columns_need_stats,
@@ -220,25 +280,17 @@ class ArrowORCEngine(ORCEngine):
                 if gather_statistics:
                     statistics.append(cls._aggregate_stats(stats))
 
-        schema = _get_pyarrow_dtypes(schema, categories=None)
-        if columns is not None:
-            ex = set(columns) - (set(schema) | set(directory_partition_keys))
-            if ex:
-                raise ValueError(
-                    "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
-                )
-
-        return parts, statistics, schema
+        return parts, statistics
 
     @classmethod
     def filter_file_stripes(
         cls,
+        fs=None,  # Not used (see note)
         orc_file=None,
         filters=None,
         stat_columns=None,  # Not used (see note)
         stat_hive_part=None,
         file_path=None,
-        fs=None,  # Not used (see note)
         file_handle=None,  # Not used (see note)
         gather_statistics=True,  # Not used (see note)
     ):
@@ -263,7 +315,7 @@ class ArrowORCEngine(ORCEngine):
                             {"name": key, "min": val, "max": val}
                             for (key, val) in stat_hive_part
                             if key in stat_columns
-                        ]
+                        ],
                     }
                 )
             stripes, statistics = apply_filters(stripes, statistics, filters)
@@ -336,29 +388,6 @@ class ArrowORCEngine(ORCEngine):
             return output
         else:
             return {}
-
-    @classmethod
-    def create_output_meta(
-        cls,
-        sample=None,
-        columns=None,
-        schema=None,
-        index=None,
-        directory_partition_keys=None,
-    ):
-        columns = list(schema) if columns is None else columns
-        index = [index] if isinstance(index, str) else index
-        meta = _meta_from_dtypes(columns, schema, index, [])
-
-        # Deal with hive-partitioned data
-        for column, uniques in (directory_partition_keys or {}).items():
-            if column not in meta.columns:
-                meta[column] = pd.Series(
-                    pd.Categorical(categories=uniques, values=[]),
-                    index=meta.index,
-                )
-
-        return meta
 
     @classmethod
     def _aggregate_files(
