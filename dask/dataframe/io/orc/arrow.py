@@ -126,9 +126,10 @@ class ArrowORCEngine(ORCEngine):
                     index=meta.index,
                 )
 
+        # Set index if one was specified
         if index:
-            index = [index] if isinstance(index, str) else index
             meta.set_index(index, inplace=True)
+
         return meta
 
     @classmethod
@@ -232,12 +233,13 @@ class ArrowORCEngine(ORCEngine):
                 directory_aggregation_depth=directory_aggregation_depth,
             )
 
+        # Use avilable statistics to calculate divisions
         divisions = None
         if index and statistics:
             divisions = cls._calculate_divisions(index, statistics)
 
         # Aggregate adjacent partitions together
-        # when possible/desired
+        # (when possible/desired)
         if aggregate_files:
             parts, divisions = cls._aggregate_files(
                 parts,
@@ -279,6 +281,7 @@ class ArrowORCEngine(ORCEngine):
         dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
         file_columns_need_stats = dataset_info["file_columns_need_stats"]
 
+        # Assume we are processing all paths if paths=None
         if path_indices is None:
             path_indices = range(len(paths))
 
