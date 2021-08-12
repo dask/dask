@@ -1,6 +1,64 @@
 Changelog
 =========
 
+2021.07.2
+---------
+
+Released on July 30, 2021
+
+.. note::
+
+  This is the last release with support for NumPy 1.17 and pandas 0.25.
+  Beginning with the next release, NumPy 1.18 and pandas 1.0 will be the minimum
+  supported versions.
+
+- Add ``dask.array`` SVG to the HTML Repr (:pr:`7886`) `Freyam Mehta`_
+- Avoid use of ``Delayed`` in ``to_parquet`` (:pr:`7958`) `Matthew Rocklin`_
+- Temporarily pin ``pyarrow<5`` in CI (:pr:`7960`) `James Bourbeau`_
+- Add deprecation warning for top-level ``ucx`` and ``rmm`` config values (:pr:`7956`) `James Bourbeau`_
+- Remove skips from doctests (4 of 6) (:pr:`7865`) `Zhengnan Zhao`_
+- Remove skips from doctests (5 of 6) (:pr:`7864`) `Zhengnan Zhao`_
+- Adds missing prepend/append functionality to ``da.diff`` (:pr:`7946`) `Peter Andreas Entschev`_
+- Change graphviz font family to sans (:pr:`7931`) `Freyam Mehta`_
+- Fix read-csv name - when path is different, use different name for task (:pr:`7942`) `Julia Signell`_
+- Update configuration reference for ``ucx`` and ``rmm`` changes (:pr:`7943`) `James Bourbeau`_
+- Add meta support to ``__setitem__`` (:pr:`7940`) `Peter Andreas Entschev`_
+- NEP-35 support for ``slice_with_int_dask_array`` (:pr:`7927`) `Peter Andreas Entschev`_
+- Unpin fastparquet in CI (:pr:`7928`) `James Bourbeau`_
+- Remove skips from doctests (3 of 6) (:pr:`7872`) `Zhengnan Zhao`_
+
+
+2021.07.1
+---------
+
+Released on July 23, 2021
+
+- Make array ``assert_eq`` check dtype (:pr:`7903`) `Julia Signell`_
+- Remove skips from doctests (6 of 6) (:pr:`7863`) `Zhengnan Zhao`_
+- Remove experimental feature warning from actors docs (:pr:`7925`) `Matthew Rocklin`_
+- Remove skips from doctests (2 of 6) (:pr:`7873`) `Zhengnan Zhao`_
+- Separate out Array and Bag API (:pr:`7917`) `Julia Signell`_
+- Implement lazy ``Array.__iter__`` (:pr:`7905`) `Julia Signell`_
+- Clean up places where we inadvertently iterate over arrays (:pr:`7913`) `Julia Signell`_
+- Add ``numeric_only`` kwarg to DataFrame reductions (:pr:`7831`) `Julia Signell`_
+- Add pytest marker for GPU tests (:pr:`7876`) `Charles Blackmon-Luca`_
+- Add support for ``histogram2d`` in ``dask.array`` (:pr:`7827`) `Doug Davis`_
+- Remove skips from doctests (1 of 6) (:pr:`7874`) `Zhengnan Zhao`_
+- Add node size scaling to the Graphviz output for the high level graphs (:pr:`7869`) `Freyam Mehta`_
+- Update old Bokeh links (:pr:`7915`) `Bryan Van de Ven`_
+- Temporarily pin ``fastparquet`` in CI (:pr:`7907`) `James Bourbeau`_
+- Add ``dask.array`` import to progress bar docs (:pr:`7910`) `Fabian Gebhart`_
+- Use separate files for each DataFrame API function and method (:pr:`7890`) `Julia Signell`_
+- Fix ``pyarrow-dataset`` ordering bug (:pr:`7902`) `Richard (Rick) Zamora`_
+- Generalize unique aggregate (:pr:`7892`) `GALI PREM SAGAR`_
+- Raise ``NotImplementedError`` when using ``pd.Grouper`` (:pr:`7857`) `Ruben van de Geer`_
+- Add ``aggregate_files`` argument to enable multi-file partitions in ``read_parquet`` (:pr:`7557`) `Richard (Rick) Zamora`_
+- Un-``xfail`` ``test_daily_stock`` (:pr:`7895`) `James Bourbeau`_
+- Update access configuration docs (:pr:`7837`) `Naty Clementi`_
+- Use packaging for version comparisons (:pr:`7820`) `Elliott Sales de Andrade`_
+- Handle infinite loops in ``merge_asof`` (:pr:`7842`) `gerrymanoim`_
+
+
 2021.07.0
 ---------
 
@@ -4354,3 +4412,6 @@ Other
 .. _`tsuga`: https://github.com/tsuga
 .. _`Gabriel Miretti`: https://github.com/gmiretti
 .. _`Geoffrey Lentner`: https://github.com/glentner
+.. _`Charles Blackmon-Luca`: https://github.com/charlesbluca
+.. _`Bryan Van de Ven`: https://github.com/bryevdv
+.. _`Fabian Gebhart`: https://github.com/fgebhart

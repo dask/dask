@@ -21,7 +21,7 @@ Dashboard
             allowfullscreen>
     </iframe>
 
-If `Bokeh <https://bokeh.pydata.org/en/latest/>`_ is installed
+If `Bokeh <https://docs.bokeh.org>`_ is installed
 then the dashboard will start up automatically whenever the scheduler is created.
 For local use this happens when you create a client with no arguments:
 

@@ -2,15 +2,11 @@ import numpy as np
 import pytest
 
 import dask.array as da
-from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
+from dask.array.utils import assert_eq
 
 from .test_dispatch import EncapsulateNDArray, WrappedArray
 
-missing_arrfunc_cond = not IS_NEP18_ACTIVE
-missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
 
-
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
@@ -18,16 +14,16 @@ missing_arrfunc_reason = "NEP-18 support is not available in NumPy"
         lambda x: np.concatenate([x, x, x]),
         lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),
-        lambda x: np.dstack(x),
+        lambda x: np.dstack((x, x)),
         lambda x: np.flip(x, axis=0),
-        lambda x: np.hstack(x),
+        lambda x: np.hstack((x, x)),
         lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
         lambda x: np.block([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
-        lambda x: np.vstack(x),
+        lambda x: np.vstack((x, x)),
         lambda x: np.linalg.norm(x),
         lambda x: np.min(x),
         lambda x: np.amin(x),
@@ -49,7 +45,24 @@ def test_array_function_dask(func):
     assert_eq(res_y, res_x)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
+@pytest.mark.parametrize(
+    "func",
+    [
+        lambda x: np.dstack(x),
+        lambda x: np.hstack(x),
+        lambda x: np.vstack(x),
+    ],
+)
+def test_stack_functions_require_sequence_of_arrays(func):
+    x = np.random.random((100, 100))
+    y = da.from_array(x, chunks=(50, 50))
+
+    with pytest.raises(
+        NotImplementedError, match="expects a sequence of arrays as the first argument"
+    ):
+        func(y)
+
+
 @pytest.mark.parametrize("func", [np.fft.fft, np.fft.fft2])
 def test_array_function_fft(func):
     x = np.random.random((100, 100))
@@ -62,7 +75,6 @@ def test_array_function_fft(func):
     assert_eq(res_y, res_x)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
@@ -81,7 +93,6 @@ def test_array_notimpl_function_dask(func):
         func(y)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func", [lambda x: np.real(x), lambda x: np.imag(x), lambda x: np.transpose(x)]
 )
@@ -95,7 +106,6 @@ def test_array_function_sparse(func):
     assert_eq(func(x), func(y))
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 def test_array_function_sparse_tensordot():
     sparse = pytest.importorskip("sparse")
     x = np.random.random((2, 3, 4))
@@ -111,7 +121,6 @@ def test_array_function_sparse_tensordot():
     )
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize("chunks", [(100, 100), (500, 100)])
 def test_array_function_cupy_svd(chunks):
     cupy = pytest.importorskip("cupy")
@@ -127,22 +136,21 @@ def test_array_function_cupy_svd(chunks):
     assert_eq(v, v_base)
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [
         lambda x: np.concatenate([x, x, x]),
         lambda x: np.cov(x, x),
         lambda x: np.dot(x, x),
-        lambda x: np.dstack(x),
+        lambda x: np.dstack((x, x)),
         lambda x: np.flip(x, axis=0),
-        lambda x: np.hstack(x),
+        lambda x: np.hstack((x, x)),
         lambda x: np.matmul(x, x),
         lambda x: np.mean(x),
         lambda x: np.stack([x, x]),
         lambda x: np.sum(x),
         lambda x: np.var(x),
-        lambda x: np.vstack(x),
+        lambda x: np.vstack((x, x)),
         lambda x: np.linalg.norm(x),
     ],
 )
@@ -172,16 +180,12 @@ def test_non_existent_func():
     # Regression test for __array_function__ becoming default in numpy 1.17
     # dask has no sort function, so ensure that this still calls np.sort
     x = da.from_array(np.array([1, 2, 4, 3]), chunks=(2,))
-    if IS_NEP18_ACTIVE:
-        with pytest.warns(
-            FutureWarning, match="The `numpy.sort` function is not implemented by Dask"
-        ):
-            assert list(np.sort(x)) == [1, 2, 3, 4]
-    else:
+    with pytest.warns(
+        FutureWarning, match="The `numpy.sort` function is not implemented by Dask"
+    ):
         assert list(np.sort(x)) == [1, 2, 3, 4]
 
 
-@pytest.mark.skipif(missing_arrfunc_cond, reason=missing_arrfunc_reason)
 @pytest.mark.parametrize(
     "func",
     [

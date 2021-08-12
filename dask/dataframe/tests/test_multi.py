@@ -847,6 +847,7 @@ def test_merge(how, shuffle):
     #         pd.merge(A, B, left_index=True, right_on='y'))
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("parts", [(3, 3), (3, 1), (1, 3)])
 @pytest.mark.parametrize("how", ["leftsemi", "leftanti"])
 @pytest.mark.parametrize(
@@ -2151,6 +2152,7 @@ def test_dtype_equality_warning():
     assert len(r) == 0
 
 
+@pytest.mark.gpu
 @pytest.mark.parametrize("engine", ["pandas", "cudf"])
 def test_groupby_concat_cudf(engine):
 
@@ -2244,12 +2246,8 @@ def test_categorical_join():
     assert actual_dask.join_col.dtype == "category"
 
     actual = actual_dask.compute()
-    if dd._compat.PANDAS_GT_100:
-        assert actual.join_col.dtype == "category"
-        assert assert_eq(expected, actual)
-    else:
-        assert actual.join_col.dtype == "object"
-        assert (expected.values == actual.values).all()
+    assert actual.join_col.dtype == "category"
+    assert assert_eq(expected, actual)
 
 
 def test_categorical_merge_with_columns_missing_from_left():
@@ -2300,9 +2298,8 @@ def test_categorical_merge_retains_category_dtype():
     actual_dask = df1.merge(df2, on="A")
     assert actual_dask.A.dtype == "category"
 
-    if dd._compat.PANDAS_GT_100:
-        actual = actual_dask.compute()
-        assert actual.A.dtype == "category"
+    actual = actual_dask.compute()
+    assert actual.A.dtype == "category"
 
 
 def test_categorical_merge_does_not_raise_setting_with_copy_warning():

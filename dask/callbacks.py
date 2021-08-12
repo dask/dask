@@ -21,26 +21,26 @@ class Callback:
 
     You may then construct a callback object with any number of them
 
-    >>> cb = Callback(pretask=pretask, finish=finish) # doctest: +SKIP
+    >>> cb = Callback(pretask=pretask, finish=finish)
 
     And use it either as a context manager over a compute/get call
 
     >>> with cb:            # doctest: +SKIP
-    ...     x.compute()     # doctest: +SKIP
+    ...     x.compute()
 
     Or globally with the ``register`` method
 
-    >>> cb.register()       # doctest: +SKIP
-    >>> cb.unregister()     # doctest: +SKIP
+    >>> cb.register()
+    >>> cb.unregister()
 
     Alternatively subclass the ``Callback`` class with your own methods.
 
-    >>> class PrintKeys(Callback):      # doctest: +SKIP
+    >>> class PrintKeys(Callback):
     ...     def _pretask(self, key, dask, state):
     ...         print("Computing: {0}!".format(repr(key)))
 
     >>> with PrintKeys():   # doctest: +SKIP
-    ...     x.compute()     # doctest: +SKIP
+    ...     x.compute()
     """
 
     active = set()

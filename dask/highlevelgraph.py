@@ -81,16 +81,10 @@ class Layer(collections.abc.Mapping):
             characteristics of Dask computations.
             These annotations are *not* passed to the distributed scheduler.
         """
-        if annotations:
-            self.annotations = annotations
-        else:
-            self.annotations = copy.copy(config.get("annotations", None))
-        if collection_annotations:
-            self.collection_annotations = collection_annotations
-        else:
-            self.collection_annotations = copy.copy(
-                config.get("collection_annotations", None)
-            )
+        self.annotations = annotations or copy.copy(config.get("annotations", None))
+        self.collection_annotations = collection_annotations or copy.copy(
+            config.get("collection_annotations", None)
+        )
 
     @abc.abstractmethod
     def is_materialized(self) -> bool:
@@ -124,9 +118,10 @@ class Layer(collections.abc.Mapping):
 
         Examples
         --------
-        >>> d = Layer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})  # doctest: +SKIP
-        >>> d.cull({'out'})  # doctest: +SKIP
-        {'x': 1, 'out': (add, 'x', 10)}
+        >>> d = MaterializedLayer({'x': 1, 'y': (inc, 'x'), 'out': (add, 'x', 10)})
+        >>> _, deps = d.cull({'out'}, d.keys())
+        >>> deps
+        {'out': {'x'}, 'x': set()}
 
         Returns
         -------
@@ -499,6 +494,17 @@ class Layer(collections.abc.Mapping):
         else:
             shortname = self.__class__.__name__
 
+        svg_repr = ""
+        if (
+            self.collection_annotations
+            and self.collection_annotations.get("type") == "dask.array.core.Array"
+        ):
+            chunks = self.collection_annotations.get("chunks")
+            if chunks:
+                from .array.svg import svg
+
+                svg_repr = "<br />" + svg(chunks)
+
         info = self.layer_info_dict()
         layer_info_table = html_from_dict(info)
         html = f"""
@@ -511,6 +517,7 @@ class Layer(collections.abc.Mapping):
                     <p style="color: var(--jp-ui-font-color2, #5D5851); margin: -0.25em 0px 0px 0px;">
                         {highlevelgraph_key}
                     </p>
+                    {svg_repr}
                     {layer_info_table}
                 </details>
             </div>
@@ -527,7 +534,9 @@ class Layer(collections.abc.Mapping):
                 info[key] = html.escape(str(val))
         if self.collection_annotations is not None:
             for key, val in self.collection_annotations.items():
-                info[key] = html.escape(str(val))
+                # Hide verbose chunk details from the HTML table
+                if key != "chunks":
+                    info[key] = html.escape(str(val))
         return info
 
 
@@ -860,7 +869,7 @@ class HighLevelGraph(Mapping):
                 raise TypeError(g)
         return cls(layers, dependencies)
 
-    def visualize(self, filename="dask.pdf", format=None, **kwargs):
+    def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
@@ -1193,39 +1202,82 @@ def to_graphviz(
     data_attributes=None,
     function_attributes=None,
     rankdir="BT",
-    graph_attr={},
+    graph_attr=None,
     node_attr=None,
     edge_attr=None,
     **kwargs,
 ):
     from .dot import graphviz, label, name
 
-    if data_attributes is None:
-        data_attributes = {}
-    if function_attributes is None:
-        function_attributes = {}
-
+    data_attributes = data_attributes or {}
+    function_attributes = function_attributes or {}
     graph_attr = graph_attr or {}
+    node_attr = node_attr or {}
+    edge_attr = edge_attr or {}
+
     graph_attr["rankdir"] = rankdir
+    node_attr["shape"] = "box"
+    node_attr["fontname"] = "helvetica"
+
     graph_attr.update(kwargs)
     g = graphviz.Digraph(
         graph_attr=graph_attr, node_attr=node_attr, edge_attr=edge_attr
     )
 
+    n_tasks = {}
+    for layer in hg.dependencies:
+        n_tasks[layer] = len(hg.layers[layer])
+
+    mn = min(n_tasks.values())
+    mx = max(n_tasks.values())
+
     cache = {}
 
-    for k in hg.dependencies:
-        k_name = name(k)
-        attrs = data_attributes.get(k, {})
-        attrs.setdefault("label", label(k, cache=cache))
-        attrs.setdefault("shape", "box")
-        g.node(k_name, **attrs)
+    for layer in hg.dependencies:
+        layer_name = name(layer)
+        attrs = data_attributes.get(layer, {})
 
-    for k, deps in hg.dependencies.items():
-        k_name = name(k)
+        node_label = label(layer, cache=cache)
+        node_size = (
+            20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
+        )
+
+        layer_type = str(type(hg.layers[layer]).__name__)
+        node_tooltips = (
+            f"A {layer_type.replace('Layer', '')} Layer with {n_tasks[layer]} Tasks.\n"
+        )
+
+        layer_ca = hg.layers[layer].collection_annotations
+        if layer_ca:
+            if layer_ca.get("type") == "dask.array.core.Array":
+                node_tooltips += (
+                    f"Array Shape: {layer_ca.get('shape')}\n"
+                    f"Data Type: {layer_ca.get('dtype')}\n"
+                    f"Chunk Size: {layer_ca.get('chunksize')}\n"
+                    f"Chunk Type: {layer_ca.get('chunk_type')}\n"
+                )
+
+            if layer_ca.get("type") == "dask.dataframe.core.DataFrame":
+                dftype = {"pandas.core.frame.DataFrame": "pandas"}
+                cols = layer_ca.get("columns")
+
+                node_tooltips += (
+                    f"Number of Partitions: {layer_ca.get('npartitions')}\n"
+                    f"DataFrame Type: {dftype.get(layer_ca.get('dataframe_type'))}\n"
+                    f"{len(cols)} DataFrame Columns: {str(cols) if len(str(cols)) <= 40 else '[...]'}\n"
+                )
+
+        attrs.setdefault("label", str(node_label))
+        attrs.setdefault("fontsize", str(node_size))
+        attrs.setdefault("tooltip", str(node_tooltips))
+
+        g.node(layer_name, **attrs)
+
+    for layer, deps in hg.dependencies.items():
+        layer_name = name(layer)
         for dep in deps:
             dep_name = name(dep)
-            g.edge(dep_name, k_name)
+            g.edge(dep_name, layer_name)
     return g
 
 
