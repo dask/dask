@@ -3492,11 +3492,11 @@ Dask Name: {name}, {task} tasks""".format(
     def combine_first(self, other):
         return self.map_partitions(M.combine_first, other)
 
-    def to_bag(self, index=False):
+    def to_bag(self, index=False, format="tuple"):
         """Create a Dask Bag from a Series"""
         from .io import to_bag
 
-        return to_bag(self, index)
+        return to_bag(self, index, format=format)
 
     @derived_from(pd.Series)
     def to_frame(self, name=None):
@@ -4418,7 +4418,7 @@ class DataFrame(_Frame):
         meta = self._meta.explode(column)
         return self.map_partitions(M.explode, column, meta=meta, enforce_metadata=False)
 
-    def to_bag(self, index=False):
+    def to_bag(self, index=False, format="tuple"):
         """Convert to a dask Bag of tuples of each row.
 
         Parameters
@@ -4426,10 +4426,12 @@ class DataFrame(_Frame):
         index : bool, optional
             If True, the index is included as the first element of each tuple.
             Default is False.
+        format : {"tuple", "dict"},optional
+            Whether to return a bag of tuples or dictionaries.
         """
         from .io import to_bag
 
-        return to_bag(self, index)
+        return to_bag(self, index, format)
 
     def to_parquet(self, path, *args, **kwargs):
         """See dd.to_parquet docstring for more information"""
