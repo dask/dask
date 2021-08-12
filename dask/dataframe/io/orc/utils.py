@@ -7,19 +7,45 @@ class ORCEngine:
     """The API necessary to provide a new ORC reader/writer"""
 
     @classmethod
-    def read_metadata(
+    def get_dataset_info(
         cls,
-        fs,
-        paths,
+        path,
         columns=None,
         index=None,
         filters=None,
-        split_stripes=True,
-        aggregate_files=False,
         gather_statistics=True,
-        sample_data=False,
-        read_kwargs=None,
+        dataset_kwargs=None,
+        storage_options=None,
     ):
+        """Return general ORC-dataset information
+
+        Parameters
+        ----------
+        path: str or list(str)
+            Location of file(s), which can be a full URL with protocol
+            specifier, and may include glob character if a single string.
+        columns: None or list(str)
+            Columns to load. If None, loads all.
+        index: str
+            Column name to set as index.
+        filters : Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
+            List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
+            Filtering granularity depends on the engine, but is typically
+            ath the directory or stripe level (not row-wise).
+        gather_statistics : bool, default True
+            Whether to allow the engine to gather file and stripe statistics.
+        dataset_kwargs : dict, optional
+            Dictionary of key-word arguments to pass to the engine's
+            ``get_dataset_info`` method.
+        storage_options: None or dict
+            Further parameters to pass to the file-system backend.
+
+        Returns
+        -------
+        dataset_info : dict
+            A dictionary of general dataset information that the engine may
+            use in ``construct_output_meta`` and ``construct_partition_plan``.
+        """
         raise NotImplementedError()
 
     @classmethod

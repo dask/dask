@@ -17,8 +17,7 @@ class ORCFunctionWrapper:
     Reads ORC data from disk to produce a partition.
     """
 
-    def __init__(self, fs, columns, engine, index, common_kwargs=None):
-        self.fs = fs
+    def __init__(self, columns, engine, index, common_kwargs=None):
         self.columns = columns
         self.engine = engine
         self.index = index
@@ -36,7 +35,6 @@ class ORCFunctionWrapper:
 
     def __call__(self, parts):
         _df = self.engine.read_partition(
-            self.fs,
             parts,
             self.columns,
             **self.common_kwargs,
@@ -112,6 +110,18 @@ def read_orc(
         (e.g. ``"/<aggregate_files>=*/"``) may be aggregated.
     storage_options: None or dict
         Further parameters to pass to the bytes backend.
+    gather_statistics : bool, default True
+        Whether to allow the engine to gather file and stripe statistics.
+    allow_worker_gather : bool, optional
+        Whether to allow the engine to parallelize the task of gathering
+        and filtering ouput partition information. The default behavior
+        may be engine dependent.
+    dataset_kwargs : dict, optional
+        Dictionary of key-word arguments to pass to the engine's
+        ``get_dataset_info`` method.
+    read_kwargs : dict, optional
+        Dictionary of key-word arguments to pass to the engine's
+        ``read_partition`` method.
 
     Returns
     -------
@@ -126,22 +136,16 @@ def read_orc(
     # Get engine
     engine = _get_engine(engine)
 
-    # Process file path(s)
-    storage_options = storage_options or {}
-    fs, fs_token, paths = get_fs_token_paths(
-        path, mode="rb", storage_options=storage_options
-    )
-
     # Let engine convert the paths into a dictionary
     # of engine-specific datset information
     dataset_info = engine.get_dataset_info(
-        fs,
-        paths,
+        path,
         columns=columns,
         index=index,
         filters=filters,
         gather_statistics=gather_statistics,
         dataset_kwargs=dataset_kwargs,
+        storage_options=storage_options,
     )
 
     # Construct the `_meta` for the output collection.
@@ -155,7 +159,7 @@ def read_orc(
     )
 
     # Construct the output-partition "plan"
-    (parts, divisions, common_kwargs,) = engine.construct_partition_plan(
+    parts, divisions, common_kwargs = engine.construct_partition_plan(
         meta,
         dataset_info,
         filters=filters,
@@ -171,8 +175,7 @@ def read_orc(
     # Construct and return a Blockwise layer
     label = "read-orc-"
     output_name = label + tokenize(
-        fs_token,
-        path,
+        dataset_info,
         columns,
         index,
         split_stripes,
@@ -185,7 +188,7 @@ def read_orc(
         output_name,
         columns,
         parts,
-        ORCFunctionWrapper(fs, columns, engine, index, common_kwargs=common_kwargs),
+        ORCFunctionWrapper(columns, engine, index, common_kwargs=common_kwargs),
         label=label,
     )
     graph = HighLevelGraph({output_name: layer}, {output_name: set()})

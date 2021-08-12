@@ -1,10 +1,10 @@
-import warnings
 from collections import defaultdict
 
 import numpy as np
 import pandas as pd
 import pyarrow as pa
 import pyarrow.orc as orc
+from fsspec.core import get_fs_token_paths
 
 from ....base import tokenize
 from ....delayed import Delayed
@@ -19,22 +19,33 @@ class ArrowORCEngine(ORCEngine):
     @classmethod
     def get_dataset_info(
         cls,
-        fs,
-        paths,
+        path,
         columns=None,
         index=None,
         filters=None,
         gather_statistics=True,
         dataset_kwargs=None,
+        storage_options=None,
     ):
+        # ArrowORCEngine does not support optional
+        # dataset_kwargs yet. Raise an error to avoid
+        # silent failures.
         if dataset_kwargs:
-            warnings.warn(
+            raise ValueError(
                 "Pyarrow ORC engine does not currently support "
                 "any 'dataset_kwargs' options."
             )
 
+        # Process file path(s)
+        fs, _, paths = get_fs_token_paths(
+            path, mode="rb", storage_options=storage_options or {}
+        )
+
         # Generate a full list of files and
-        # directory partitions
+        # directory partitions. We would like to use
+        # something like the pyarrow.dataset API to
+        # do this, but we will need to do it manually
+        # until ORC is supported upstream.
         directory_partitions = []
         directory_partition_keys = {}
         if len(paths) == 1 and not fs.isfile(paths[0]):
@@ -46,12 +57,13 @@ class ArrowORCEngine(ORCEngine):
                 directory_partition_keys,
             ) = collect_partitions(paths, root_dir, fs)
 
+        # Sample the 0th file to geth the schema
         with fs.open(paths[0], "rb") as f:
             o = orc.ORCFile(f)
             schema = o.schema
 
-        # Save list of directory-partition columns and
-        # file columns that we will need statistics for
+        # Save a list of directory-partition columns and a list
+        # of file columns that we will need statistics for
         dir_columns_need_stats = {
             col for col in _flatten_filters(filters) if col in directory_partition_keys
         } | ({index} if index in directory_partition_keys else set())
@@ -66,7 +78,8 @@ class ArrowORCEngine(ORCEngine):
             )
         file_columns_need_stats |= {index} if index in schema.names else set()
 
-        # Convert schema and check columns
+        # Convert the orc schema to a pyarrow schema
+        # and check that the columns agree with the schema
         pa_schema = _get_pyarrow_dtypes(schema, categories=None)
         if columns is not None:
             ex = set(columns) - (set(pa_schema) | set(directory_partition_keys))
@@ -75,11 +88,13 @@ class ArrowORCEngine(ORCEngine):
                     "Requested columns (%s) not in schema (%s)" % (ex, set(schema))
                 )
 
-        # Return the final `dataset_info` dictionary
+        # Return a final `dataset_info` dictionary.
+        # We use a dictionary here to make the `ORCEngine`
+        # API as flexible as possible.
         return {
             "fs": fs,
             "paths": paths,
-            "schema": schema,
+            "orc_schema": schema,
             "pa_schema": pa_schema,
             "dir_columns_need_stats": dir_columns_need_stats,
             "file_columns_need_stats": file_columns_need_stats,
@@ -234,6 +249,7 @@ class ArrowORCEngine(ORCEngine):
 
         # Define common kwargs
         common_kwargs = {
+            "fs": dataset_info["fs"],
             "schema": dataset_info["pa_schema"],
             "partition_uniques": dataset_info["directory_partition_keys"],
             "filters": filters,
@@ -258,7 +274,7 @@ class ArrowORCEngine(ORCEngine):
         # Extract necessary info from dataset_info
         fs = dataset_info["fs"]
         paths = dataset_info["paths"]
-        schema = dataset_info["schema"]
+        schema = dataset_info["orc_schema"]
         directory_partitions = dataset_info["directory_partitions"]
         dir_columns_need_stats = dataset_info["dir_columns_need_stats"]
         file_columns_need_stats = dataset_info["file_columns_need_stats"]
@@ -497,9 +513,9 @@ class ArrowORCEngine(ORCEngine):
     @classmethod
     def read_partition(
         cls,
-        fs,
         parts,
         columns,
+        fs=None,
         filters=None,
         schema=None,
         partition_uniques=None,
