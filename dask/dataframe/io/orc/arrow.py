@@ -520,6 +520,7 @@ class ArrowORCEngine(ORCEngine):
         filters=None,
         schema=None,
         partition_uniques=None,
+        **kwargs,
     ):
         # Create a separate table for each directory partition.
         # We are only creating a single pyarrow table if there
@@ -534,14 +535,18 @@ class ArrowORCEngine(ORCEngine):
         else:
             file_columns, partition_columns = None, list(partition_uniques)
         path, stripes, hive_parts = parts[0]
-        batches = _read_orc_stripes(fs, path, stripes, schema, file_columns)
+        batches = _read_orc_stripes(fs, path, stripes, schema, file_columns, **kwargs)
         for path, stripes, next_hive_parts in parts[1:]:
             if hive_parts == next_hive_parts:
-                batches += _read_orc_stripes(fs, path, stripes, schema, file_columns)
+                batches += _read_orc_stripes(
+                    fs, path, stripes, schema, file_columns, **kwargs
+                )
             else:
                 tables.append(pa.Table.from_batches(batches))
                 partitions.append(hive_parts)
-                batches = _read_orc_stripes(fs, path, stripes, schema, file_columns)
+                batches = _read_orc_stripes(
+                    fs, path, stripes, schema, file_columns, **kwargs
+                )
                 hive_parts = next_hive_parts
         tables.append(pa.Table.from_batches(batches))
         partitions.append(hive_parts)
@@ -618,7 +623,7 @@ def _write_partitioned(table, root_path, fs, filename, partition_cols, **kwargs)
             orc.write_table(subtable, f, **kwargs)
 
 
-def _read_orc_stripes(fs, path, stripes, schema, columns):
+def _read_orc_stripes(fs, path, stripes, schema, columns, **kwargs):
     # Construct a list of RecordBatch objects.
     # Each ORC stripe will corresonpond to a single RecordBatch.
     if columns is None:
@@ -629,5 +634,5 @@ def _read_orc_stripes(fs, path, stripes, schema, columns):
         o = orc.ORCFile(f)
         _stripes = range(o.nstripes) if stripes in (None, [None]) else stripes
         for stripe in _stripes:
-            batches.append(o.read_stripe(stripe, columns))
+            batches.append(o.read_stripe(stripe, columns, **kwargs))
     return batches
