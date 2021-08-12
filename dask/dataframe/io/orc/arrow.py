@@ -178,6 +178,7 @@ class ArrowORCEngine(ORCEngine):
         npaths = len(dataset_info["paths"])
         worker_gather = (allow_worker_gather is True) or (
             npaths > 1
+            and (split_stripes or filters or index)
             and allow_worker_gather is not False
             and not aggregate_files  # Worker-gather can change file agg
         )
@@ -272,6 +273,7 @@ class ArrowORCEngine(ORCEngine):
         gather_statistics=True,
         directory_aggregation_depth=0,
     ):
+        """Gather partitioning plan for every path in the dataset"""
 
         # Extract necessary info from dataset_info
         fs = dataset_info["fs"]
@@ -290,14 +292,14 @@ class ArrowORCEngine(ORCEngine):
         # correspond to a group of stripes for a single file/path.
         parts = []
         statistics = []
-        if split_stripes:
-            offset = 0
-            for i in path_indices:
-                path = paths[i]
-                hive_part = directory_partitions[i] if directory_partitions else []
-                hive_part_need_stats = [
-                    (k, v) for k, v in hive_part if k in dir_columns_need_stats
-                ]
+        offset = 0
+        for i in path_indices:
+            path = paths[i]
+            hive_part = directory_partitions[i] if directory_partitions else []
+            hive_part_need_stats = [
+                (k, v) for k, v in hive_part if k in dir_columns_need_stats
+            ]
+            if split_stripes:
                 with fs.open(path, "rb") as f:
                     o = orc.ORCFile(f)
                     nstripes = o.nstripes
@@ -338,13 +340,7 @@ class ArrowORCEngine(ORCEngine):
                         offset -= nstripes
                     else:
                         offset = 0
-        else:
-            for i in path_indices:
-                path = paths[i]
-                hive_part = directory_partitions[i] if directory_partitions else []
-                hive_part_need_stats = [
-                    (k, v) for k, v in hive_part if k in dir_columns_need_stats
-                ]
+            else:
                 stripes, stats = cls.filter_file_stripes(
                     fs=fs,
                     orc_file=None,
@@ -366,12 +362,12 @@ class ArrowORCEngine(ORCEngine):
     @classmethod
     def filter_file_stripes(
         cls,
-        fs=None,  # Not used (see note)
         orc_file=None,
         filters=None,
-        stat_columns=None,  # Not used (see note)
         stat_hive_part=None,
         file_path=None,
+        fs=None,  # Not used (see note)
+        stat_columns=None,  # Not used (see note)
         file_handle=None,  # Not used (see note)
         gather_statistics=True,  # Not used (see note)
     ):
@@ -380,8 +376,8 @@ class ArrowORCEngine(ORCEngine):
         # NOTE: ArrowORCEngine only supports filtering on
         # directory partition columns. However, derived
         # classes may want to implement custom filtering.
-        # ArrowORCEngine will pass in `stat_columns`,
-        # `path_or_buffer` and `gather_statistics` kwargs
+        # ArrowORCEngine will pass in `fs`, `stat_columns`,
+        # `file_handle` and `gather_statistics` kwargs
         # for this purpose.
 
         statistics = []
@@ -404,6 +400,7 @@ class ArrowORCEngine(ORCEngine):
 
     @classmethod
     def _calculate_divisions(cls, index, statistics):
+        """Use statistics to calculate divisions"""
         if statistics:
             divisions = []
             for icol, column_stats in enumerate(statistics[0].get("columns", [])):
@@ -425,6 +422,7 @@ class ArrowORCEngine(ORCEngine):
     @classmethod
     def _aggregate_stats(cls, statistics):
         """Aggregate a list of statistics"""
+
         if statistics:
 
             # Check if we are already "aggregated"
@@ -476,8 +474,8 @@ class ArrowORCEngine(ORCEngine):
         parts,
         directory_aggregation_depth=0,
         split_stripes=1,
-        statistics=None,  # Not used (yet)
         divisions=None,
+        statistics=None,  # Not used (yet)
     ):
         if int(split_stripes) > 1 and len(parts) > 1:
             new_parts = []
@@ -523,7 +521,7 @@ class ArrowORCEngine(ORCEngine):
         schema=None,
         partition_uniques=None,
     ):
-        # Create a seperate table for each directory partition.
+        # Create a separate table for each directory partition.
         # We are only creating a single pyarrow table if there
         # are no partition columns.
         tables = []
@@ -565,7 +563,6 @@ class ArrowORCEngine(ORCEngine):
 
     @classmethod
     def write_partition(cls, df, path, fs, filename, partition_on, **kwargs):
-
         table = pa.Table.from_pandas(df)
         if partition_on:
             _write_partitioned(
