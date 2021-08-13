@@ -207,7 +207,7 @@ def to_orc(
         write_index,
         storage_options,
     )
-    final_name = "final-" + name
+    final_name = name + "-final"
     part_tasks = []
     for d, filename in enumerate(filenames):
         part_tasks.append((name, d))
