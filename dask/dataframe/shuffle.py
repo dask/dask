@@ -498,8 +498,8 @@ def rearrange_by_column_disk(df, column, npartitions=None, compute=False):
 
     dependencies = []
     if compute:
-        dsk2 = HighLevelGraph.from_collections(name, dsk2, dependencies=[df])
-        graph = HighLevelGraph.merge(dsk1, dsk2)
+        graph = HighLevelGraph.merge(df.dask, dsk1, dsk2)
+        graph = HighLevelGraph.from_collections(name, graph, dependencies=[df])
         keys = [p, sorted(dsk2)]
         pp, values = compute_as_if_collection(DataFrame, graph, keys)
         dsk1 = {p: pp}
