@@ -151,6 +151,10 @@ def test_orc_names(orc_files, tmp_path):
     assert out._name.startswith("to-orc")
 
 
+@pytest.mark.skipif(
+    parse_version(pa.__version__) < parse_version("4.0.0"),
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
 def test_to_orc_delayed(tmp_path):
     # See: https://github.com/dask/dask/issues/8022
     df = pd.DataFrame(np.random.randn(100, 4), columns=["a", "b", "c", "d"])

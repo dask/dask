@@ -2,6 +2,7 @@ import copy
 
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
+from packaging.version import parse as parse_version
 
 from ....base import compute_as_if_collection, tokenize
 from ....highlevelgraph import HighLevelGraph
@@ -46,10 +47,15 @@ class ORCFunctionWrapper:
         return _df
 
 
-def _get_engine(engine):
+def _get_engine(engine, write=False):
     # Get engine
     if engine == "pyarrow":
+        import pyarrow as pa
+
         from .arrow import ArrowORCEngine
+
+        if write and parse_version(pa.__version__) < parse_version("4.0.0"):
+            raise ValueError("to_orc is not supported for pyarrow<4.0.0")
 
         return ArrowORCEngine
     elif not isinstance(engine, ORCEngine):
@@ -181,7 +187,7 @@ def to_orc(
     """
 
     # Get engine
-    engine = _get_engine(engine)
+    engine = _get_engine(engine, write=True)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
