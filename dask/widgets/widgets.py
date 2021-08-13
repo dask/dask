@@ -2,17 +2,8 @@ import datetime
 import html
 import os.path
 
-try:
-    from jinja2 import Environment, FileSystemLoader, Template
-    from jinja2.exceptions import TemplateNotFound
-except ImportError as e:
-    msg = (
-        "Dask diagnostics requirements are not installed.\n\n"
-        "Please either conda or pip install as follows:\n\n"
-        "  conda install dask                     # either conda install\n"
-        '  python -m pip install "dask[diagnostics]" --upgrade  # or python -m pip install'
-    )
-    raise ImportError(msg) from e
+from jinja2 import Environment, FileSystemLoader, Template
+from jinja2.exceptions import TemplateNotFound
 
 from ..utils import format_bytes, format_time, format_time_ago, key_split, typename
 
