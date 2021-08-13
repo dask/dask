@@ -1,3 +1,4 @@
+import glob
 import os
 import shutil
 import tempfile
@@ -143,8 +144,31 @@ def test_orc_aggregate_files_offset(orc_files):
     assert len(df2.partitions[0].index) > len(df2.index) // 2
 
 
+@pytest.mark.skipif(
+    parse_version(pa.__version__) < parse_version("4.0.0"),
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
 def test_orc_names(orc_files, tmp_path):
     df = dd.read_orc(orc_files)
     assert df._name.startswith("read-orc")
     out = df.to_orc(tmp_path, compute=False)
     assert out._name.startswith("to-orc")
+
+
+@pytest.mark.skipif(
+    parse_version(pa.__version__) < parse_version("4.0.0"),
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
+def test_to_orc_delayed(tmp_path):
+    # See: https://github.com/dask/dask/issues/8022
+    df = pd.DataFrame(np.random.randn(100, 4), columns=["a", "b", "c", "d"])
+    ddf = dd.from_pandas(df, npartitions=4)
+
+    eager_path = os.path.join(tmp_path, "eager_orc_dataset")
+    ddf.to_orc(eager_path)
+    assert len(glob.glob(os.path.join(eager_path, "*"))) == 4
+
+    delayed_path = os.path.join(tmp_path, "delayed_orc_dataset")
+    dataset = ddf.to_orc(delayed_path, compute=False)
+    dataset.compute()
+    assert len(glob.glob(os.path.join(delayed_path, "*"))) == 4
