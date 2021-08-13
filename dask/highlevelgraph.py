@@ -870,6 +870,51 @@ class HighLevelGraph(Mapping):
         return cls(layers, dependencies)
 
     def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
+        """
+        Visualize several dask high level graphs at once.
+
+        Requires ``graphviz`` to be installed. All options that are not the dask
+        graph(s) should be passed as keyword arguments.
+
+        Parameters
+        ----------
+        dsk : dict(s) or collection(s)
+            The dask high level graph(s) to visualize.
+        filename : str or None, optional
+            The name of the file to write to disk. If the provided `filename`
+            doesn't include an extension, '.svg' will be used by default.
+            If `filename` is None, no file will be written, and we communicate
+            with dot using only pipes.
+        format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
+            Format in which to write output file.  Default is 'svg'.
+        color : {None, 'layer_type'}, optional
+            Options to color nodes.
+            - None, the default, no colors.
+            - 'layer_type', colored nodes based on the layer type.
+        **kwargs
+           Additional keyword arguments to forward to ``to_graphviz``.
+
+        Examples
+        --------
+        >>> x.dask.visualize(filename='dask.svg')  # doctest: +SKIP
+        >>> x.dask.visualize(filename='dask.svg', color='layer_type')  # doctest: +SKIP
+
+        Returns
+        -------
+        result : IPython.diplay.Image, IPython.display.SVG, or None
+            See dask.dot.dot_graph for more information.
+
+        See Also
+        --------
+        dask.dot.dot_graph
+        dask.base.visualize # low level variant
+
+        Notes
+        -----
+        For more information on optimization see here:
+
+        https://docs.dask.org/en/latest/optimize.html
+        """
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
@@ -1228,8 +1273,8 @@ def to_graphviz(
     for layer in hg.dependencies:
         n_tasks[layer] = len(hg.layers[layer])
 
-    mn = min(n_tasks.values())
-    mx = max(n_tasks.values())
+    min_tasks = min(n_tasks.values())
+    max_tasks = max(n_tasks.values())
 
     cache = {}
 
@@ -1241,7 +1286,9 @@ def to_graphviz(
 
         node_label = label(layer, cache=cache)
         node_size = (
-            20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
+            20
+            if max_tasks == min_tasks
+            else int(20 + ((n_tasks[layer] - min_tasks) / (max_tasks - min_tasks)) * 20)
         )
 
         layer_type = str(type(hg.layers[layer]).__name__)
@@ -1312,7 +1359,7 @@ def to_graphviz(
         legend_title = "Key"
         legend_label = (
             '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">'
-            "<TR><TD><B>Key</B></TD></TR>"
+            "<TR><TD><B>Legend: Layer types</B></TD></TR>"
             '<TR><TD BGCOLOR="#CCC7F9">DataFrame IO</TD></TR>'
             '<TR><TD BGCOLOR="#F9CCC7">Shuffle</TD></TR>'
             '<TR><TD BGCOLOR="#FFD9F2">Array Overlay</TD></TR>'
