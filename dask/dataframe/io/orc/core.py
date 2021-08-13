@@ -208,10 +208,8 @@ def to_orc(
         storage_options,
     )
     final_name = name + "-final"
-    part_tasks = []
     for d, filename in enumerate(filenames):
-        part_tasks.append((name, d))
-        dsk[part_tasks[-1]] = (
+        dsk[(name, d)] = (
             apply,
             engine.write_partition,
             [
@@ -221,6 +219,7 @@ def to_orc(
                 filename,
             ],
         )
+    part_tasks = list(dsk.keys())
     dsk[(final_name, 0)] = (lambda x: None, part_tasks)
     graph = HighLevelGraph.from_collections((final_name, 0), dsk, dependencies=[df])
 
