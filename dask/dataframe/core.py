@@ -2886,7 +2886,6 @@ Dask Name: {name}, {task} tasks"""
             date,
             include_right,
             True,
-            "loc",
         )
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
@@ -2920,7 +2919,6 @@ Dask Name: {name}, {task} tasks"""
             None,
             True,
             False,
-            "loc",
         )
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
         return new_dd_object(graph, name, self, divs)
