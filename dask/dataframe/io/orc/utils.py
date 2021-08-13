@@ -67,6 +67,9 @@ class ORCEngine:
             Columns to load. If None, loads all.
         index: str
             Column name to set as index.
+        sample_data : bool, optional
+            Whether to sample data to construct output collection metadata.
+            Default behavior is engine specific.
         read_kwargs : dict, optional
             Dictionary of key-word arguments to pass to the engine's
             ``read_partition`` method.
