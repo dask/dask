@@ -8,11 +8,12 @@ except ImportError as e:
         "  conda install dask                     # either conda install\n"
         '  python -m pip install "dask[diagnostics]" --upgrade  # or python -m pip install'
     )
+    exception = e
     FILTERS = dict()
     TEMPLATE_PATHS = []
 
     def get_environment(*args, **kwargs):
-        raise ImportError(msg) from e
+        raise ImportError(msg) from exception
 
     def get_template(*args, **kwargs):
-        raise ImportError(msg) from e
+        raise ImportError(msg) from exception
