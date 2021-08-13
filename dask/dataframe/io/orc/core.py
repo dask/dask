@@ -207,9 +207,11 @@ def to_orc(
         write_index,
         storage_options,
     )
+    final_name = "final-" + name
     part_tasks = []
     for d, filename in enumerate(filenames):
-        dsk[(name, d)] = (
+        part_tasks.append((name, d))
+        dsk[part_tasks[-1]] = (
             apply,
             engine.write_partition,
             [
@@ -219,13 +221,12 @@ def to_orc(
                 filename,
             ],
         )
-        part_tasks.append((name, d))
-    dsk[name] = (lambda x: None, part_tasks)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    dsk[(final_name, 0)] = (lambda x: None, part_tasks)
+    graph = HighLevelGraph.from_collections((final_name, 0), dsk, dependencies=[df])
 
     # Compute or return future
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
         return compute_as_if_collection(DataFrame, graph, part_tasks, **compute_kwargs)
-    return Scalar(graph, name, "")
+    return Scalar(graph, final_name, "")
