@@ -1,7 +1,8 @@
 import os.path
 
 import pytest
-from jinja2 import Environment, Template, TemplateNotFound
+
+jinja2 = pytest.importorskip("jinja2")
 
 from dask.utils import format_bytes
 from dask.widgets import FILTERS, TEMPLATE_PATHS, get_environment, get_template
@@ -17,18 +18,18 @@ def setup_testing():
 
 def test_widgets():
     template = get_template("example.html.j2")
-    assert isinstance(template, Template)
+    assert isinstance(template, jinja2.Template)
     rendered = template.render(foo="bar")
     assert "Hello bar" in rendered
 
 
 def test_environment():
     environment = get_environment()
-    assert isinstance(environment, Environment)
+    assert isinstance(environment, jinja2.Environment)
 
 
 def test_unknown_template():
-    with pytest.raises(TemplateNotFound) as e:
+    with pytest.raises(jinja2.TemplateNotFound) as e:
         get_template("does_not_exist.html.j2")
 
         # The error should contain all the registered template directories to help the user
