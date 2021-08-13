@@ -1010,6 +1010,7 @@ class ArrowDatasetEngine(Engine):
         # Use pyarrow.dataset API
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
+        _dataset_kwargs = dataset_kwargs.copy()
 
         # Discover Partitioning - Note that we need to avoid creating
         # this factory until it is actually used.  The `partitioning`
@@ -1017,10 +1018,20 @@ class ArrowDatasetEngine(Engine):
         # in, containing a `dict` with a required "obj" argument and
         # optional "arg" and "kwarg" elements.  Note that the "obj"
         # value must support the "discover" attribute.
-        partitioning = dataset_kwargs.get(
+        partitioning = _dataset_kwargs.pop(
             "partitioning",
             {"obj": pa_ds.HivePartitioning},
         )
+
+        # Check if the user wants to ignore the global metadata file
+        ignore_metadata_file = _dataset_kwargs.pop(
+            "ignore_metadata_file",
+            False,
+        )
+
+        # Check that we are not silently ignoring any dataset_kwargs
+        if _dataset_kwargs:
+            raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
 
         if len(paths) == 1 and fs.isdir(paths[0]):
 
@@ -1030,7 +1041,7 @@ class ArrowDatasetEngine(Engine):
             paths = fs.sep.join([base, fns[0]])
 
             meta_path = fs.sep.join([paths, "_metadata"])
-            if fs.exists(meta_path):
+            if fs.exists(meta_path) and not ignore_metadata_file:
                 # Use _metadata file
                 ds = pa_ds.parquet_dataset(
                     meta_path,
@@ -1048,16 +1059,17 @@ class ArrowDatasetEngine(Engine):
             if "_metadata" in fns:
                 # Pyarrow cannot handle "_metadata" when `paths` is a list
                 # Use _metadata file
-                ds = pa_ds.parquet_dataset(
-                    meta_path,
-                    filesystem=fs,
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
-                )
-                if gather_statistics is None:
-                    gather_statistics = True
+                if not ignore_metadata_file:
+                    ds = pa_ds.parquet_dataset(
+                        meta_path,
+                        filesystem=fs,
+                        partitioning=partitioning["obj"].discover(
+                            *partitioning.get("args", []),
+                            **partitioning.get("kwargs", {}),
+                        ),
+                    )
+                    if gather_statistics is None:
+                        gather_statistics = True
 
                 # Populate valid_paths, since the original path list
                 # must be used to filter the _metadata-based dataset
