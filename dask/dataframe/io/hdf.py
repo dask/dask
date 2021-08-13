@@ -452,14 +452,14 @@ def _build_parts(paths, key, start, stop, chunksize, sorted_index, mode):
             path, key, stop, sorted_index, chunksize, mode
         )
 
-        for k, stop, division in zip(keys, stops, divisions):
+        for k, s, d in zip(keys, stops, divisions):
 
-            if division and global_divisions:
-                global_divisions = global_divisions[:-1] + division
-            elif division:
-                global_divisions = division
+            if d and global_divisions:
+                global_divisions = global_divisions[:-1] + d
+            elif d:
+                global_divisions = d
 
-            parts.extend(_one_path_one_key(path, k, start, stop, chunksize))
+            parts.extend(_one_path_one_key(path, k, start, s, chunksize))
 
     return parts, global_divisions or [None] * (len(parts) + 1)
 

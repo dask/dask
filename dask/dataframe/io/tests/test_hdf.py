@@ -199,6 +199,16 @@ def test_to_hdf_multiple_files():
         out = dd.read_hdf(fn, "/data")
         assert_eq(df16, out)
 
+    # saving to multiple files where first file is longer
+    # https://github.com/dask/dask/issues/8023
+    with tmpdir() as dn:
+        fn1 = os.path.join(dn, "data_1.h5")
+        fn2 = os.path.join(dn, "data_2.h5")
+        b.to_hdf(fn1, "/data")
+        a.to_hdf(fn2, "/data")
+        out = dd.read_hdf([fn1, fn2], "/data")
+        assert_eq(pd.concat([df16, df]), out)
+
     # saving to multiple files with custom name_function
     with tmpdir() as dn:
         fn = os.path.join(dn, "data_*.h5")
