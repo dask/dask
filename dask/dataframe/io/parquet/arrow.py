@@ -521,12 +521,16 @@ class ArrowDatasetEngine(Engine):
         read_from_paths=None,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
         # This may also set split_row_groups and gather_statistics,
         # depending on _metadata availability.
+        dataset_kwargs = kwargs.get("dataset", {})
+        if ignore_metadata_file:
+            dataset_kwargs["ignore_metadata_file"] = ignore_metadata_file
         (
             schema,
             metadata,
@@ -541,7 +545,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             index,
-            kwargs.get("dataset", {}),
+            dataset_kwargs,
         )
 
         # Process metadata to define `meta` and `index_cols`
@@ -1750,6 +1754,10 @@ class ArrowDatasetEngine(Engine):
 def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     """Generate a ParquetDataset object"""
     kwargs = dataset_kwargs.copy()
+    ignore_metadata_file = kwargs.pop("ignore_metadata_file", False)
+    if ignore_metadata_file:
+        raise ValueError("ignore_metadata_file not supported for ArrowLegacyEngine.")
+
     if "validate_schema" not in kwargs:
         kwargs["validate_schema"] = False
     if len(paths) > 1:

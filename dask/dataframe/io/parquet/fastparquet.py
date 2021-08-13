@@ -724,8 +724,16 @@ class FastParquetEngine(Engine):
         split_row_groups=True,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
         **kwargs,
     ):
+        # Check if user has specified ignore_metadata_file=True
+        # (not supported for now)
+        if ignore_metadata_file:
+            raise ValueError(
+                "ignore_metadata_file not supported for FastParquetEngine."
+            )
+
         # Define the parquet-file (pf) object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will
