@@ -51,9 +51,7 @@ def try_loc(df, iindexer, cindexer=None):
         return df.head(0).loc[:, cindexer]
 
 
-def boundary_slice(
-    df, start, stop, right_boundary=True, left_boundary=True, kind="loc"
-):
+def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kind=None):
     """Index slice start/stop. Can switch include/exclude boundaries.
 
     Examples
@@ -88,7 +86,13 @@ def boundary_slice(
     if len(df.index) == 0:
         return df
 
-    if kind == "loc" and not df.index.is_monotonic:
+    if kind is not None:
+        warnings.warn(
+            "The `kind` argument is no longer used/supported. "
+            "It will be dropped in a future release.",
+            category=FutureWarning,
+        )
+    if not df.index.is_monotonic:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
@@ -104,13 +108,13 @@ def boundary_slice(
             else:
                 df = df[df.index < stop]
         return df
-    else:
-        result = getattr(df, kind)[start:stop]
+
+    result = df.loc[start:stop]
     if not right_boundary and stop is not None:
-        right_index = result.index.get_slice_bound(stop, "left", kind)
+        right_index = result.index.get_slice_bound(stop, "left")
         result = result.iloc[:right_index]
     if not left_boundary and start is not None:
-        left_index = result.index.get_slice_bound(start, "right", kind)
+        left_index = result.index.get_slice_bound(start, "right")
         result = result.iloc[left_index:]
     return result
 
