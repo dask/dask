@@ -144,6 +144,10 @@ def test_orc_aggregate_files_offset(orc_files):
     assert len(df2.partitions[0].index) > len(df2.index) // 2
 
 
+@pytest.mark.skipif(
+    parse_version(pa.__version__) < parse_version("4.0.0"),
+    reason=("PyArrow>=4.0.0 required for ORC write support."),
+)
 def test_orc_names(orc_files, tmp_path):
     df = dd.read_orc(orc_files)
     assert df._name.startswith("read-orc")
