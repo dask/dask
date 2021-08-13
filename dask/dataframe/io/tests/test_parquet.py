@@ -3589,7 +3589,6 @@ def test_custom_metadata(tmpdir, engine):
     assert "User-defined key/value" in str(e.value)
 
 
-@PYARROW_MARK
 @pytest.mark.parametrize("gather_statistics", [True, None])
 def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
     tmpdir = str(tmpdir)
