@@ -4,6 +4,8 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
+from ._compat import PANDAS_GT_140
+
 #  preserve compatibility while moving dispatch objects
 from .dispatch import (  # noqa: F401
     concat,
@@ -86,13 +88,20 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
     if len(df.index) == 0:
         return df
 
-    if kind is not None:
-        warnings.warn(
-            "The `kind` argument is no longer used/supported. "
-            "It will be dropped in a future release.",
-            category=FutureWarning,
-        )
-    if not df.index.is_monotonic:
+    if PANDAS_GT_140:
+        if kind is not None:
+            warnings.warn(
+                "The `kind` argument is no longer used/supported. "
+                "It will be dropped in a future release.",
+                category=FutureWarning,
+            )
+        kind_opts = {}
+        kind = "loc"
+    else:
+        kind = kind or "loc"
+        kind_opts = {"kind": kind}
+
+    if kind == "loc" and not df.index.is_monotonic:
         # Pandas treats missing keys differently for label-slicing
         # on monotonic vs. non-monotonic indexes
         # If the index is monotonic, `df.loc[start:stop]` is fine.
@@ -109,12 +118,12 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
                 df = df[df.index < stop]
         return df
 
-    result = df.loc[start:stop]
+    result = getattr(df, kind)[start:stop]
     if not right_boundary and stop is not None:
-        right_index = result.index.get_slice_bound(stop, "left")
+        right_index = result.index.get_slice_bound(stop, "left", **kind_opts)
         result = result.iloc[:right_index]
     if not left_boundary and start is not None:
-        left_index = result.index.get_slice_bound(start, "right")
+        left_index = result.index.get_slice_bound(start, "right", **kind_opts)
         result = result.iloc[left_index:]
     return result
 
