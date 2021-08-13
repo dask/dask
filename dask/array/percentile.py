@@ -4,8 +4,6 @@ from numbers import Number
 import numpy as np
 from tlz import merge
 
-from dask.dataframe.dispatch import _percentile
-
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from .core import Array
@@ -61,6 +59,8 @@ def percentile(a, q, interpolation="linear", method="default"):
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
+    from dask.dataframe.dispatch import _percentile
+
     from .utils import array_safe, meta_from_array
 
     if not a.ndim == 1:
