@@ -108,8 +108,13 @@ class ArrowORCEngine(ORCEngine):
         dataset_info,
         index=None,
         columns=None,
+        sample_data=False,
         read_kwargs=None,
     ):
+        # Check sample_data == False
+        if sample_data:
+            raise ValueError("ArrowORCEngine does not support sample_data=True")
+
         # Use dataset_info to define `columns`
         schema = dataset_info["pa_schema"]
         directory_partition_keys = dataset_info["directory_partition_keys"]

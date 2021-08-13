@@ -66,6 +66,7 @@ def read_orc(
     storage_options=None,
     gather_statistics=True,
     allow_worker_gather=None,
+    sample_data=None,
     dataset_kwargs=None,
     read_kwargs=None,
 ):
@@ -105,6 +106,9 @@ def read_orc(
         Whether to allow the engine to parallelize the task of gathering
         and filtering ouput partition information. The default behavior
         may be engine dependent.
+    sample_data : bool, optional
+        Whether to sample data to construct output collection metadata.
+        Default behavior is engine specific.
     dataset_kwargs : dict, optional
         Dictionary of key-word arguments to pass to the engine's
         ``get_dataset_info`` method.
@@ -152,6 +156,7 @@ def read_orc(
         dataset_info,
         index=index,
         columns=columns,
+        sample_data=sample_data,
         read_kwargs=read_kwargs,
     )
 
