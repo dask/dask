@@ -463,11 +463,13 @@ def get_async(
                     ntasks = nready
                     chunksize = -(ntasks // -num_workers)
                 else:
-                    ntasks = min(nready, chunksize * num_workers)
+                    used_workers = -(len(state["running"]) // -chunksize)
+                    avail_workers = max(num_workers - used_workers, 0)
+                    ntasks = min(nready, chunksize * avail_workers)
 
                 # Prep all ready tasks for submission
                 args = []
-                for i, key in zip(range(ntasks), state["ready"]):
+                for key in state["ready"][nready - ntasks : nready]:
                     # Notify task is running
                     state["running"].add(key)
                     for f in pretask_cbs:
@@ -487,7 +489,7 @@ def get_async(
                             pack_exception,
                         )
                     )
-                del state["ready"][:ntasks]
+                del state["ready"][nready - ntasks : nready]
 
                 # Batch submit
                 for i in range(-(len(args) // -chunksize)):
