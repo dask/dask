@@ -2507,7 +2507,7 @@ class Array(DaskMethodsMixin):
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
         """See da.rechunk for docstring"""
-        from . import rechunk  # avoid circular import
+        from .rechunk import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
 
