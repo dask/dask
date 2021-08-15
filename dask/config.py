@@ -10,6 +10,41 @@ from collections.abc import Mapping
 
 import yaml
 
+
+class ConfigDict(dict):
+    # def __init__(self, *args, **kw):
+    #     super(ConfigDict, self).__init__(*args, **kw)
+    #     for key, value in self.items():
+    #         if isinstance(value, dict):
+    #             self[key] = ConfigDict(value)
+
+    def _repr_html_(self):
+        attr = self
+
+        rows = ""
+
+        for key, val in attr.items():
+            rows += f"""
+            <tr>
+                <th style="text-align: left; width: 150px;">{key}</th>
+                <td style="text-align: left;">{val}</td>
+            </tr>
+            """
+
+        html = f"""
+            <div style="margin-left: auto;">
+                <h3 style="margin-bottom: 0px;"><b>Dask Config</b></h3>
+                <p>
+                    <table style="width: 100%;">
+                    {rows}
+                    </table>
+                </p>
+            </div>
+        """
+
+        return html
+
+
 no_default = "__no_default__"
 
 
