@@ -1,6 +1,43 @@
 Changelog
 =========
 
+2021.08.0
+---------
+
+Released on Ausgust 13, 2021
+
+- Fix ``to_orc`` delayed compute behavior (:pr:`8035`) `Richard (Rick) Zamora`_
+- Don't convert to low-level task graph in ``compute_as_if_collection`` (:pr:`7969`) `James Bourbeau`_
+- Fix multifile read for hdf (:pr:`8033`) `Julia Signell`_
+- Resolve warning in ``distributed`` tests (:pr:`8025`) `James Bourbeau`_
+- Update ``to_orc`` collection name (:pr:`8024`) `James Bourbeau`_
+- Resolve ``skipfooter`` problem (:pr:`7855`) `Ross`_
+- Raise ``NotImplementedError`` for non-indexable arg passed to ``to_datetime`` (:pr:`7989`) `Doug Davis`_
+- Ensure we error on warnings from ``distributed`` (:pr:`8002`) `James Bourbeau`_
+- Added ``dict`` format in ``to_bag`` accessories of DataFrame (:pr:`7932`) `gurunath`_
+- Delayed docs indirect dependencies (:pr:`8016`) `aa1371`_
+- Add tooltips to graphviz high-level graphs (:pr:`7973`) `Freyam Mehta`_
+- Close 2021 User Survey (:pr:`8007`) `Julia Signell`_
+- Reorganize CuPy tests into multiple files (:pr:`8013`) `Peter Andreas Entschev`_
+- Refactor and Expand Dask-Dataframe ORC API (:pr:`7756`) `Richard (Rick) Zamora`_
+- Don't enforce columns if ``enforce=False`` (:pr:`7916`) `Julia Signell`_
+- Fix ``map_overlap`` trimming behavior when ``drop_axis`` is not ``None`` (:pr:`7894`) `Gregory R. Lee`_
+- Mark gpuCI CuPy test as flaky (:pr:`7994`) `Peter Andreas Entschev`_
+- Avoid using ``Delayed`` in ``to_csv`` and ``to_parquet`` (:pr:`7968`) `Matthew Rocklin`_
+- Removed redundant ``check_dtypes`` (:pr:`7952`) `gurunath`_
+- Use ``pytest.warns`` instead of raises for checking parquet engine deprecation (:pr:`7993`) `Joris Van den Bossche`_
+- Bump ``RAPIDS_VER`` in gpuCI to 21.10 (:pr:`7991`) `Charles Blackmon-Luca`_
+- Add back ``pyarrow-legacy`` test coverage for ``pyarrow>=5`` (:pr:`7988`) `Richard (Rick) Zamora`_
+- Allow ``pyarrow>=5`` in ``to_parquet`` and ``read_parquet`` (:pr:`7967`) `Richard (Rick) Zamora`_
+- Skip CuPy tests requiring NEP-35 when NumPy < 1.20 is available (:pr:`7982`) `Peter Andreas Entschev`_
+- Add ``tail`` and ``head`` to ``SeriesGroupby`` (:pr:`7935`) `Daniel Mesejo-León`_
+- Update Zoom link for monthly meeting (:pr:`7979`) `James Bourbeau`_
+- Add gpuCI build script (:pr:`7966`) `Charles Blackmon-Luca`_
+- Deprecate ``daily_stock`` utility (:pr:`7949`) `James Bourbeau`_
+- Add ``distributed.nanny`` to configuration reference docs (:pr:`7955`) `James Bourbeau`_
+- Require NumPy 1.18+ & Pandas 1.0+ (:pr:`7939`) `John A Kirkham`_
+
+
 2021.07.2
 ---------
 
@@ -4415,3 +4452,7 @@ Other
 .. _`Charles Blackmon-Luca`: https://github.com/charlesbluca
 .. _`Bryan Van de Ven`: https://github.com/bryevdv
 .. _`Fabian Gebhart`: https://github.com/fgebhart
+.. _`Ross`: https://github.com/rhjmoore
+.. _`gurunath`: https://github.com/rajagurunath
+.. _`aa1371`: https://github.com/aa1371
+.. _`Gregory R. Lee`: https://github.com/grlee77
