@@ -8,7 +8,7 @@ except ImportError as e:
         "  conda install dask                     # either conda install\n"
         '  python -m pip install "dask[diagnostics]" --upgrade  # or python -m pip install'
     )
-    exception = e
+    exception = e  # Explicit reference for e as it will be lost outside the try block
     FILTERS = dict()
     TEMPLATE_PATHS = []
 
