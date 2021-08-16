@@ -667,7 +667,7 @@ urlpath : string or list
 blocksize : str, int or None, optional
     Number of bytes by which to cut up larger files. Default value is computed
     based on available physical memory and the number of cores, up to a maximum
-    of 64MB. Can be a number like ``64000000` or a string like ``"64MB"``. If
+    of 64MB. Can be a number like ``64000000`` or a string like ``"64MB"``. If
     ``None``, a single block is used for each file.
 sample : int, optional
     Number of bytes to use when determining dtypes
