@@ -489,8 +489,7 @@ def get_async(
                             pack_exception,
                         )
                     )
-                while len(state["ready"]) > nready - ntasks:
-                    state["ready"].pop()
+                del state["ready"][:ntasks]
 
                 # Batch submit
                 for i in range(-(len(args) // -chunksize)):
