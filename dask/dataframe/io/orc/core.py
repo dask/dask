@@ -2,6 +2,7 @@ import copy
 
 from fsspec.core import get_fs_token_paths
 from fsspec.utils import stringify_path
+from packaging.version import parse as parse_version
 
 from ....base import compute_as_if_collection, tokenize
 from ....highlevelgraph import HighLevelGraph
@@ -46,10 +47,15 @@ class ORCFunctionWrapper:
         return _df
 
 
-def _get_engine(engine):
+def _get_engine(engine, write=False):
     # Get engine
     if engine == "pyarrow":
+        import pyarrow as pa
+
         from .arrow import ArrowORCEngine
+
+        if write and parse_version(pa.__version__) < parse_version("4.0.0"):
+            raise ValueError("to_orc is not supported for pyarrow<4.0.0")
 
         return ArrowORCEngine
     elif not isinstance(engine, ORCEngine):
@@ -181,7 +187,7 @@ def to_orc(
     """
 
     # Get engine
-    engine = _get_engine(engine)
+    engine = _get_engine(engine, write=True)
 
     if hasattr(path, "name"):
         path = stringify_path(path)
@@ -199,7 +205,7 @@ def to_orc(
 
     # Construct IO graph
     dsk = {}
-    name = "to-parquet-" + tokenize(
+    name = "to-orc-" + tokenize(
         df,
         fs,
         path,
@@ -207,7 +213,7 @@ def to_orc(
         write_index,
         storage_options,
     )
-    part_tasks = []
+    final_name = name + "-final"
     for d, filename in enumerate(filenames):
         dsk[(name, d)] = (
             apply,
@@ -219,13 +225,13 @@ def to_orc(
                 filename,
             ],
         )
-        part_tasks.append((name, d))
-    dsk[name] = (lambda x: None, part_tasks)
-    graph = HighLevelGraph.from_collections(name, dsk, dependencies=[df])
+    part_tasks = list(dsk.keys())
+    dsk[(final_name, 0)] = (lambda x: None, part_tasks)
+    graph = HighLevelGraph.from_collections((final_name, 0), dsk, dependencies=[df])
 
     # Compute or return future
     if compute:
         if compute_kwargs is None:
             compute_kwargs = dict()
         return compute_as_if_collection(DataFrame, graph, part_tasks, **compute_kwargs)
-    return Scalar(graph, name, "")
+    return Scalar(graph, final_name, "")
