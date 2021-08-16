@@ -3585,7 +3585,7 @@ def test_custom_metadata(tmpdir, engine):
 @pytest.mark.parametrize("categorical", [True, None])
 def test_categorical_partitions(tmpdir, engine, categorical):
     tmpdir = str(tmpdir)
-    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    df1 = pd.DataFrame({"a": range(100), "b": ["cat", "dog"] * 50})
     ddf1 = dd.from_pandas(df1, npartitions=2)
     ddf1.to_parquet(path=tmpdir, partition_on=["b"], engine=engine)
     if engine == "pyarrow-dataset" or categorical:
@@ -3595,7 +3595,9 @@ def test_categorical_partitions(tmpdir, engine, categorical):
             categorical_partitions=categorical,
         )
         if categorical:
-            df1.b = df1.b.astype("category")
+            # Ensure that our categorical dtype
+            # and row-ordering are the same
+            df1.b = df1.b.astype(ddf2.b.dtype)
             df1.sort_values("a", inplace=True)
         df2 = ddf2.compute().sort_values("a")
         assert_eq(df1, df2)
