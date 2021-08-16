@@ -3580,3 +3580,31 @@ def test_custom_metadata(tmpdir, engine):
             custom_metadata=custom_metadata,
         )
     assert "User-defined key/value" in str(e.value)
+
+
+@pytest.mark.parametrize("categorical", [True, None])
+def test_categorical_hive_columns(tmpdir, engine, categorical):
+    tmpdir = str(tmpdir)
+    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf1.to_parquet(path=tmpdir, partition_on=["b"], engine=engine)
+    if engine == "pyarrow-dataset" or categorical:
+        ddf2 = dd.read_parquet(
+            tmpdir,
+            engine=engine,
+            categorical_hive_columns=categorical,
+        )
+        if categorical:
+            df1.b = df1.b.astype("category")
+            df1.sort_values("a", inplace=True)
+        df2 = ddf2.compute().sort_values("a")
+        assert_eq(df1, df2)
+    else:
+        # `categorical_hive_columns=False` is not supported
+        # for "fastparquet" or "pyarrow-legacy"
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                tmpdir,
+                engine=engine,
+                categorical_hive_columns=categorical,
+            )

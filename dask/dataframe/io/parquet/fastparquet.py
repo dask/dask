@@ -724,8 +724,16 @@ class FastParquetEngine(Engine):
         split_row_groups=True,
         chunksize=None,
         aggregate_files=None,
+        categorical_hive_columns=True,
         **kwargs,
     ):
+
+        if not categorical_hive_columns:
+            raise ValueError(
+                "`categorical_hive_columns=False` is not supported for "
+                "`engine='fastparquet'`."
+            )
+
         # Define the parquet-file (pf) object to use for metadata,
         # Also, initialize `parts`.  If `parts` is populated here,
         # then each part will correspond to a file.  Otherwise, each part will

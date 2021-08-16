@@ -108,6 +108,7 @@ def read_parquet(
     read_from_paths=None,
     chunksize=None,
     aggregate_files=None,
+    categorical_hive_columns=True,
     **kwargs,
 ):
     """
@@ -229,6 +230,9 @@ def read_parquet(
                 └── └── 04.parquet
 
         Note that the default behavior of ``aggregate_files`` is False.
+    categorical_hive_columns : bool, default True
+        Specify if directory-partitioned (hive) columns should be read in as
+        "category" dtypes.
     **kwargs: dict (of dicts)
         Passthrough key-word arguments for read backend.
         The top-level keys correspond to the appropriate operation type, and
@@ -263,6 +267,7 @@ def read_parquet(
             read_from_paths=read_from_paths,
             chunksize=chunksize,
             aggregate_files=aggregate_files,
+            categorical_hive_columns=categorical_hive_columns,
         )
         return df[columns]
 
@@ -283,6 +288,7 @@ def read_parquet(
         read_from_paths,
         chunksize,
         aggregate_files,
+        categorical_hive_columns,
     )
 
     if isinstance(engine, str):
@@ -321,6 +327,7 @@ def read_parquet(
         read_from_paths=read_from_paths,
         chunksize=chunksize,
         aggregate_files=aggregate_files,
+        categorical_hive_columns=categorical_hive_columns,
         **kwargs,
     )
 
