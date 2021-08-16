@@ -469,7 +469,7 @@ def get_async(
 
                 # Prep all ready tasks for submission
                 args = []
-                for key in state["ready"][nready - ntasks : nready]:
+                for key in state["ready"][:ntasks]:
                     # Notify task is running
                     state["running"].add(key)
                     for f in pretask_cbs:
@@ -489,7 +489,8 @@ def get_async(
                             pack_exception,
                         )
                     )
-                del state["ready"][nready - ntasks : nready]
+                while len(state["ready"]) > nready - ntasks:
+                    state["ready"].pop()
 
                 # Batch submit
                 for i in range(-(len(args) // -chunksize)):
