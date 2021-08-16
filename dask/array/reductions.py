@@ -22,7 +22,13 @@ from .creation import arange, diagonal
 
 # Keep empty_lookup here for backwards compatibility
 from .dispatch import divide_lookup, empty_lookup  # noqa: F401
-from .utils import compute_meta, is_arraylike, validate_axis
+from .utils import (
+    asarray_safe,
+    compute_meta,
+    is_arraylike,
+    meta_from_array,
+    validate_axis,
+)
 from .wrap import ones, zeros
 
 
@@ -918,7 +924,18 @@ def nanstd(
 
 def _arg_combine(data, axis, argfunc, keepdims=False):
     """Merge intermediate results from ``arg_*`` functions"""
-    axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
+    if isinstance(data, dict):
+        # Array type doesn't support structured arrays (e.g., CuPy),
+        # therefore `data` is stored in a `dict`.
+        assert data["vals"].ndim == data["arg"].ndim
+        axis = (
+            None
+            if len(axis) == data["vals"].ndim or data["vals"].ndim == 1
+            else axis[0]
+        )
+    else:
+        axis = None if len(axis) == data.ndim or data.ndim == 1 else axis[0]
+
     vals = data["vals"]
     arg = data["arg"]
     if axis is None:
@@ -957,9 +974,14 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
             fill_value = np.ma.maximum_fill_value(vals)
         vals = np.ma.filled(vals, fill_value)
 
-    result = np.empty(
-        shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
-    )
+    try:
+        result = np.empty_like(
+            vals, shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
+        )
+    except TypeError:
+        # Array type doesn't support structured arrays (e.g., CuPy)
+        result = dict()
+
     result["vals"] = vals
     result["arg"] = arg
     return result
@@ -967,9 +989,15 @@ def arg_chunk(func, argfunc, x, axis, offset_info):
 
 def arg_combine(func, argfunc, data, axis=None, **kwargs):
     arg, vals = _arg_combine(data, axis, argfunc, keepdims=True)
-    result = np.empty(
-        shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
-    )
+
+    try:
+        result = np.empty_like(
+            vals, shape=vals.shape, dtype=[("vals", vals.dtype), ("arg", arg.dtype)]
+        )
+    except TypeError:
+        # Array type doesn't support structured arrays (e.g., CuPy).
+        result = dict()
+
     result["vals"] = vals
     result["arg"] = arg
     return result
@@ -1037,10 +1065,18 @@ def arg_reduction(x, chunk, combine, agg, axis=None, split_every=None, out=None)
         ((name,) + k, (chunk, (old,) + k, axis, off))
         for (k, off) in zip(keys, offset_info)
     )
-    # The dtype of `tmp` doesn't actually matter, just need to provide something
+
+    dtype = np.argmin(asarray_safe([1], like=meta_from_array(x)))
+    meta = None
+    if is_arraylike(dtype):
+        # This case occurs on non-NumPy types (e.g., CuPy), where the returned
+        # value is an ndarray rather than a scalar.
+        meta = dtype
+        dtype = meta.dtype
+
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[x])
-    tmp = Array(graph, name, chunks, dtype=x.dtype)
-    dtype = np.argmin([1]).dtype
+    tmp = Array(graph, name, chunks, dtype=dtype, meta=meta)
+
     result = _tree_reduce(tmp, agg, axis, False, dtype, split_every, combine)
     return handle_out(out, result)
 
