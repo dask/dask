@@ -3583,7 +3583,7 @@ def test_custom_metadata(tmpdir, engine):
 
 
 @pytest.mark.parametrize("categorical", [True, None])
-def test_categorical_hive_columns(tmpdir, engine, categorical):
+def test_categorical_partitions(tmpdir, engine, categorical):
     tmpdir = str(tmpdir)
     df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
     ddf1 = dd.from_pandas(df1, npartitions=2)
@@ -3592,7 +3592,7 @@ def test_categorical_hive_columns(tmpdir, engine, categorical):
         ddf2 = dd.read_parquet(
             tmpdir,
             engine=engine,
-            categorical_hive_columns=categorical,
+            categorical_partitions=categorical,
         )
         if categorical:
             df1.b = df1.b.astype("category")
@@ -3600,11 +3600,11 @@ def test_categorical_hive_columns(tmpdir, engine, categorical):
         df2 = ddf2.compute().sort_values("a")
         assert_eq(df1, df2)
     else:
-        # `categorical_hive_columns=False` is not supported
+        # `categorical_partitions=False` is not supported
         # for "fastparquet" or "pyarrow-legacy"
         with pytest.raises(ValueError):
             dd.read_parquet(
                 tmpdir,
                 engine=engine,
-                categorical_hive_columns=categorical,
+                categorical_partitions=categorical,
             )

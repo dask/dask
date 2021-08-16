@@ -724,13 +724,13 @@ class FastParquetEngine(Engine):
         split_row_groups=True,
         chunksize=None,
         aggregate_files=None,
-        categorical_hive_columns=True,
+        categorical_partitions=True,
         **kwargs,
     ):
 
-        if not categorical_hive_columns:
+        if not categorical_partitions:
             raise ValueError(
-                "`categorical_hive_columns=False` is not supported for "
+                "`categorical_partitions=False` is not supported for "
                 "`engine='fastparquet'`."
             )
 

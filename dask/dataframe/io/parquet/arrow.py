@@ -521,7 +521,7 @@ class ArrowDatasetEngine(Engine):
         read_from_paths=None,
         chunksize=None,
         aggregate_files=None,
-        categorical_hive_columns=True,
+        categorical_partitions=True,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
@@ -529,7 +529,7 @@ class ArrowDatasetEngine(Engine):
         # This may also set split_row_groups and gather_statistics,
         # depending on _metadata availability.
         _dataset_kwargs = kwargs.get("dataset", {})
-        _dataset_kwargs["categorical_hive_columns"] = categorical_hive_columns
+        _dataset_kwargs["categorical_partitions"] = categorical_partitions
         (
             schema,
             metadata,
@@ -627,7 +627,7 @@ class ArrowDatasetEngine(Engine):
 
         # Check if hive/directory partitions should be
         # converted to a "category" dtype
-        categorical_hive_columns = kwargs.pop("categorical_hive_columns", True)
+        categorical_partitions = kwargs.pop("categorical_partitions", True)
 
         # Always convert pieces to list
         if not isinstance(pieces, list):
@@ -680,7 +680,7 @@ class ArrowDatasetEngine(Engine):
                     # We read from file paths, so the partition
                     # columns are NOT in our table yet.
                     cat = keys_dict.get(partition.name, None)
-                    if categorical_hive_columns:
+                    if categorical_partitions:
                         cat_ind = np.full(
                             len(arrow_table), partition.keys.index(cat), dtype="i4"
                         )
@@ -695,7 +695,7 @@ class ArrowDatasetEngine(Engine):
 
         # For pyarrow.dataset api, need to convert partition columns
         # to categorigal manually.
-        if categorical_hive_columns and partitions and isinstance(partitions, list):
+        if categorical_partitions and partitions and isinstance(partitions, list):
             for partition in partitions:
                 if df[partition.name].dtype.name != "category":
                     # We read directly from fragments, so the partition
@@ -1027,7 +1027,7 @@ class ArrowDatasetEngine(Engine):
         # in, containing a `dict` with a required "obj" argument and
         # optional "arg" and "kwargs" elements.  Note that the "obj"
         # value must support the "discover" attribute.
-        categorical_hive_columns = dataset_kwargs.pop("categorical_hive_columns", True)
+        categorical_partitions = dataset_kwargs.pop("categorical_partitions", True)
         if "partitioning" in dataset_kwargs:
             partitioning = dataset_kwargs["partitioning"]
             default_partitioning_kwargs = {}
@@ -1038,7 +1038,7 @@ class ArrowDatasetEngine(Engine):
             # file, there is a danger that file and partition columns may
             # overlap.  In that case, using `infer_dictionary=True` can
             # cause pyarrow errors.
-            default_partitioning_kwargs = {"infer_dictionary": categorical_hive_columns}
+            default_partitioning_kwargs = {"infer_dictionary": categorical_partitions}
 
         if len(paths) == 1 and fs.isdir(paths[0]):
 
@@ -1134,7 +1134,7 @@ class ArrowDatasetEngine(Engine):
         # reproduce a `fragment` (for row-wise filtering)
         # on the worker.
         partition_info["partitioning"] = partitioning
-        partition_info["categorical_hive_columns"] = categorical_hive_columns
+        partition_info["categorical_partitions"] = categorical_partitions
 
         return (
             schema,
@@ -1154,7 +1154,7 @@ class ArrowDatasetEngine(Engine):
         """
         partition_obj = partition_info["partitions"]
         partitions = partition_info["partition_names"]
-        categorical_hive_columns = partition_info.get("categorical_hive_columns", True)
+        categorical_partitions = partition_info.get("categorical_partitions", True)
         columns = None
 
         pandas_metadata = _get_pandas_metadata(schema)
@@ -1223,7 +1223,7 @@ class ArrowDatasetEngine(Engine):
                 meta, cols=[c for c in categories if c not in meta.index.names]
             )
 
-        if partition_obj and categorical_hive_columns:
+        if partition_obj and categorical_partitions:
 
             for partition in partition_obj:
                 if isinstance(index, list) and partition.name == index[0]:
@@ -1612,8 +1612,8 @@ class ArrowDatasetEngine(Engine):
         common_kwargs = {
             "partitioning": partition_info["partitioning"],
             "partitions": partitions,
-            "categorical_hive_columns": partition_info.get(
-                "categorical_hive_columns", True
+            "categorical_partitions": partition_info.get(
+                "categorical_partitions", True
             ),
             "categories": categories,
             "filters": filters,
@@ -1828,10 +1828,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         This method overrides `ArrowDatasetEngine._gather_metadata`.
         """
 
-        categorical_hive_columns = dataset_kwargs.pop("categorical_hive_columns", True)
-        if not categorical_hive_columns:
+        categorical_partitions = dataset_kwargs.pop("categorical_partitions", True)
+        if not categorical_partitions:
             raise ValueError(
-                "`categorical_hive_columns=False` is not supported for "
+                "`categorical_partitions=False` is not supported for "
                 "`engine='pyarrow-legacy'`. Try `engine='pyarrow-datset'`."
             )
 
