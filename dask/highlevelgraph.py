@@ -1321,28 +1321,19 @@ def to_graphviz(
         attrs.setdefault("tooltip", str(node_tooltips))
 
         if color == "layer_type":
-            colors = {
-                "purple": "#CCC7F9",
-                "rose": "#F9CCC7",
-                "pink": "#FFD9F2",
-                "blue": "#D9F2FF",
-                "green": "#D9FFE6",
-                "gray": "#DBDEE5",
-            }
-
             layer_colors = {
-                "DataFrameIOLayer": "purple",
-                "ShuffleLayer": "rose",
-                "SimpleShuffleLayer": "rose",
-                "ArrayOverlayLayer": "pink",
-                "BroadcastJoinLayer": "blue",
-                "Blockwise": "green",
-                "BlockwiseLayer": "green",
-                "BlockwiseCreateArray": "green",
-                "MaterializedLayer": "gray",
+                "DataFrameIOLayer": "#CCC7F9",  # purple
+                "ShuffleLayer": "#F9CCC7",  # rose
+                "SimpleShuffleLayer": "#F9CCC7",  # rose
+                "ArrayOverlayLayer": "#FFD9F2",  # pink
+                "BroadcastJoinLayer": "#D9F2FF",  # blue
+                "Blockwise": "#D9FFE6",  # green
+                "BlockwiseLayer": "#D9FFE6",  # green
+                "BlockwiseCreateArray": "#D9FFE6",  # green
+                "MaterializedLayer": "#DBDEE5",  # gray
             }
 
-            node_color = colors.get(layer_colors.get(layer_type))
+            node_color = layer_colors.get(layer_type)
 
             attrs.setdefault("fillcolor", str(node_color))
             attrs.setdefault("style", "filled")
