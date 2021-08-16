@@ -181,7 +181,7 @@ def start_state_from_dask(dsk, cache=None, sortkey=None):
     waiting_data = dict((k, v.copy()) for k, v in dependents.items() if v)
 
     ready_set = set([k for k, v in waiting.items() if not v])
-    ready = sorted(ready_set, key=sortkey)
+    ready = sorted(ready_set, key=sortkey, reverse=True)
     waiting = dict((k, v) for k, v in waiting.items() if v)
 
     state = {
@@ -262,7 +262,7 @@ def finish_task(
 
     Mutates.  This should run atomically (with a lock).
     """
-    for dep in sorted(state["dependents"][key], key=sortkey):
+    for dep in sorted(state["dependents"][key], key=sortkey, reverse=True):
         s = state["waiting"][dep]
         s.remove(key)
         if not s:
