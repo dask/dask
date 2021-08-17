@@ -4167,6 +4167,7 @@ def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
@@ -4218,6 +4219,7 @@ def asanyarray(a, *, like=None):
         creation of a Dask array compatible with that passed in via this
         argument. If ``like`` is a Dask array, the chunk type of the
         resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
