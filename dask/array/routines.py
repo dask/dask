@@ -41,8 +41,8 @@ _range = range
 
 
 @derived_from(np)
-def array(x, dtype=None, ndmin=None):
-    x = asarray(x)
+def array(x, dtype=None, ndmin=None, *, like=None):
+    x = asarray(x, like=like)
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
     if dtype is not None and x.dtype != dtype:

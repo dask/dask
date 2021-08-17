@@ -4194,7 +4194,7 @@ def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a):
+def asanyarray(a, *, like=None):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4230,7 +4230,10 @@ def asanyarray(a):
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asanyarray(a)
+        if like is not None:
+            a = np.asarray(a, like=meta_from_array(like))
+        else:
+            a = np.asarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 
