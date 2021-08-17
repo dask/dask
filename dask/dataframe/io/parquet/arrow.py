@@ -1028,8 +1028,8 @@ class ArrowDatasetEngine(Engine):
         # optional "arg" and "kwargs" elements.  Note that the "obj"
         # value must support the "discover" attribute.
         categorical_partitions = dataset_kwargs.pop("categorical_partitions", True)
-        if "partitioning" in dataset_kwargs:
-            partitioning = dataset_kwargs["partitioning"]
+        if "partitioning" in dataset_kwargs or not categorical_partitions:
+            partitioning = dataset_kwargs.get("partitioning", {"obj": pa_ds.HivePartitioning})
             default_partitioning_kwargs = {}
         else:
             partitioning = {"obj": pa_ds.HivePartitioning}
@@ -1038,7 +1038,7 @@ class ArrowDatasetEngine(Engine):
             # file, there is a danger that file and partition columns may
             # overlap.  In that case, using `infer_dictionary=True` can
             # cause pyarrow errors.
-            default_partitioning_kwargs = {"infer_dictionary": categorical_partitions}
+            default_partitioning_kwargs = {"max_partition_dictionary_size": -1}
 
         if len(paths) == 1 and fs.isdir(paths[0]):
 
