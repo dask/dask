@@ -3212,7 +3212,6 @@ def test_pyarrow_dataset_read_from_paths(
 ):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
-    df["b"] = df["b"].astype("category")
     ddf = dd.from_pandas(df, npartitions=2)
 
     if test_filter_partitioned:
@@ -3226,6 +3225,7 @@ def test_pyarrow_dataset_read_from_paths(
         read_from_paths=read_from_paths,
     )
 
+    ddf.b = ddf.b.astype(read_df.b.dtype)
     if test_filter_partitioned:
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
     else:
