@@ -1027,20 +1027,9 @@ class ArrowDatasetEngine(Engine):
         # in, containing a `dict` with a required "obj" argument and
         # optional "arg" and "kwargs" elements.  Note that the "obj"
         # value must support the "discover" attribute.
-        categorical_partitions = dataset_kwargs.pop("categorical_partitions", True)
-        if "partitioning" in dataset_kwargs or not categorical_partitions:
-            partitioning = dataset_kwargs.get(
-                "partitioning", {"obj": pa_ds.HivePartitioning}
-            )
-            default_partitioning_kwargs = {}
-        else:
-            partitioning = {"obj": pa_ds.HivePartitioning}
-            # NOTE: Only want to pass `default_partitioning_kwargs` below
-            # when a _metadata file is present. If there is no _metadata
-            # file, there is a danger that file and partition columns may
-            # overlap.  In that case, using `infer_dictionary=True` can
-            # cause pyarrow errors.
-            default_partitioning_kwargs = {"max_partition_dictionary_size": -1}
+        partitioning = dataset_kwargs.get(
+            "partitioning", {"obj": pa_ds.HivePartitioning}
+        )
 
         if len(paths) == 1 and fs.isdir(paths[0]):
 
@@ -1057,7 +1046,7 @@ class ArrowDatasetEngine(Engine):
                     filesystem=fs,
                     partitioning=partitioning["obj"].discover(
                         *partitioning.get("args", []),
-                        **partitioning.get("kwargs", default_partitioning_kwargs),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 if gather_statistics is None:
@@ -1073,7 +1062,7 @@ class ArrowDatasetEngine(Engine):
                     filesystem=fs,
                     partitioning=partitioning["obj"].discover(
                         *partitioning.get("args", []),
-                        **partitioning.get("kwargs", default_partitioning_kwargs),
+                        **partitioning.get("kwargs", {}),
                     ),
                 )
                 if gather_statistics is None:
@@ -1136,7 +1125,9 @@ class ArrowDatasetEngine(Engine):
         # reproduce a `fragment` (for row-wise filtering)
         # on the worker.
         partition_info["partitioning"] = partitioning
-        partition_info["categorical_partitions"] = categorical_partitions
+        partition_info["categorical_partitions"] = dataset_kwargs.pop(
+            "categorical_partitions", True
+        )
 
         return (
             schema,
