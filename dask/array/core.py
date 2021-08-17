@@ -1,5 +1,4 @@
 import contextlib
-import inspect
 import math
 import operator
 import os
@@ -1571,7 +1570,7 @@ class Array(DaskMethodsMixin):
 
         # If ``like`` is contained in ``da_func``'s signature, add ``like=self``
         # to the kwargs dictionary.
-        if "like" in inspect.getfullargspec(da_func).kwonlyargs:
+        if has_keyword(da_func, "like"):
             kwargs["like"] = self
 
         return da_func(*args, **kwargs)
