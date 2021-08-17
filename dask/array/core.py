@@ -4231,9 +4231,9 @@ def asanyarray(a, *, like=None):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
         if like is not None:
-            a = np.asarray(a, like=meta_from_array(like))
+            a = np.asanyarray(a, like=meta_from_array(like))
         else:
-            a = np.asarray(a)
+            a = np.asanyarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 
