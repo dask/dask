@@ -1029,7 +1029,9 @@ class ArrowDatasetEngine(Engine):
         # value must support the "discover" attribute.
         categorical_partitions = dataset_kwargs.pop("categorical_partitions", True)
         if "partitioning" in dataset_kwargs or not categorical_partitions:
-            partitioning = dataset_kwargs.get("partitioning", {"obj": pa_ds.HivePartitioning})
+            partitioning = dataset_kwargs.get(
+                "partitioning", {"obj": pa_ds.HivePartitioning}
+            )
             default_partitioning_kwargs = {}
         else:
             partitioning = {"obj": pa_ds.HivePartitioning}
