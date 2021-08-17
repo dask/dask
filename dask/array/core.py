@@ -4159,6 +4159,14 @@ def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
         dataframes.  Dask.array is unable to verify that chunks line up.  If
         data comes from differently aligned sources then this can cause
         unexpected results.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
 
     Returns
     -------
@@ -4202,6 +4210,14 @@ def asanyarray(a, *, like=None):
     ----------
     a : array-like
         Input data, in any form that can be converted to a dask array.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
 
     Returns
     -------
