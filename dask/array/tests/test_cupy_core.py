@@ -604,3 +604,16 @@ def test_setitem_errs():
     # RHS has extra leading size 1 dimensions compared to LHS
     x = cupy.arange(12).reshape((3, 4))
     dx = da.from_array(x, chunks=(2, 3))
+
+
+@pytest.mark.parametrize("xp", [np, da])
+@pytest.mark.parametrize("array_func", ["array", "asarray", "asanyarray"])
+def test_array_like(xp, array_func):
+    cp_func = getattr(cupy, array_func)
+    xp_func = getattr(xp, array_func)
+
+    cp_a = cp_func([1, 2, 3])
+    xp_a = xp_func([1, 2, 3], like=da.from_array(cupy.array(())))
+    assert isinstance(xp_a, da.Array)
+    assert isinstance(xp_a._meta, cupy.ndarray)
+    assert_eq(xp_a, cp_a)
