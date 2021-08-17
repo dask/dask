@@ -140,3 +140,31 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
         )
     else:
         assert_eq(np_r, da_r, check_type=False)
+
+
+@pytest.mark.parametrize("xp", [np, da])
+@pytest.mark.parametrize(
+    "N, M, k, dtype, chunks",
+    [
+        (3, None, 0, float, "auto"),
+        (4, None, 0, float, "auto"),
+        (3, 4, 0, bool, "auto"),
+        (3, None, 1, int, "auto"),
+        (3, None, -1, int, "auto"),
+        (3, None, 2, int, 1),
+        (6, 8, -2, int, (3, 4)),
+        (6, 8, 0, int, (3, "auto")),
+    ],
+)
+def test_tri_like(xp, N, M, k, dtype, chunks):
+    xp_tri = getattr(xp, "tri")
+
+    args = [N, M, k, dtype]
+
+    cp_a = cupy.tri(*args)
+
+    if xp is da:
+        args.append(chunks)
+    xp_a = xp_tri(*args, like=da.from_array(cupy.array(())))
+
+    assert_eq(xp_a, cp_a)
