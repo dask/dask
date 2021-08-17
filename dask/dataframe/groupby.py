@@ -968,7 +968,7 @@ def _apply_func_to_columns(df_like, prefix, func):
         columns = df_like.columns
     else:
         # handle GroupBy objects
-        columns = df_like._selected_obj.columns
+        columns = df_like.obj.columns
 
     columns = sorted(col for col in columns if col.startswith(prefix))
 
