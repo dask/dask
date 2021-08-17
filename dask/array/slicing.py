@@ -139,8 +139,8 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
     >>> dsk, blockdims = slice_array('y', 'x', [(20, 20, 20, 20, 20)],
     ...                              (slice(10, 35),), 8)
     >>> pprint(dsk)
-    {('y', 0): (<built-in function getitem>, ('x', 0), (slice(10, 20, 1),)),
-     ('y', 1): (<built-in function getitem>, ('x', 1), (slice(0, 15, 1),))}
+    {('y', 0): (<function getitem at 0x...>, ('x', 0), (slice(10, 20, 1),)),
+     ('y', 1): (<function getitem at 0x...>, ('x', 1), (slice(0, 15, 1),))}
     >>> blockdims
     ((10, 15),)
 
@@ -592,9 +592,9 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     >>> chunks
     ((2, 1, 1),)
     >>> pprint(dsk)
-    {('y', 0): (<built-in function getitem>, ('x', 0), (array([5, 1]),)),
-     ('y', 1): (<built-in function getitem>, ('x', 2), (array([7]),)),
-     ('y', 2): (<built-in function getitem>, ('x', 0), (array([3]),))}
+    {('y', 0): (<function getitem at 0x...>, ('x', 0), (array([5, 1]),)),
+     ('y', 1): (<function getitem at 0x...>, ('x', 2), (array([7]),)),
+     ('y', 2): (<function getitem at 0x...>, ('x', 0), (array([3]),))}
 
     When list is sorted we retain original block structure
 
@@ -602,8 +602,8 @@ def take(outname, inname, chunks, index, itemsize, axis=0):
     >>> chunks
     ((3, 1),)
     >>> pprint(dsk)
-    {('y', 0): (<built-in function getitem>, ('x', 0), (array([1, 3, 5]),)),
-     ('y', 1): (<built-in function getitem>, ('x', 2), (array([7]),))}
+    {('y', 0): (<function getitem at 0x...>, ('x', 0), (array([1, 3, 5]),)),
+     ('y', 1): (<function getitem at 0x...>, ('x', 2), (array([7]),))}
 
     When any indexed blocks would otherwise grow larger than
     dask.config.array.chunk-size, we might split them,
