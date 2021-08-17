@@ -12,22 +12,29 @@ from .core import Array
 
 @wraps(np.percentile)
 def _percentile(a, q, interpolation="linear"):
+    import pandas as pd
+
     n = len(a)
     if not len(a):
         return None, n
     if isinstance(q, Iterator):
         q = list(q)
     if a.dtype.name == "category":
-        result = np.percentile(a.codes, q, interpolation=interpolation)
-        import pandas as pd
+        result = np.percentile(a.cat.codes, q, interpolation=interpolation)
 
-        return pd.Categorical.from_codes(result, a.categories, a.ordered), n
-    if np.issubdtype(a.dtype, np.datetime64):
-        a2 = a.astype("i8")
-        result = np.percentile(a2, q, interpolation=interpolation).astype(a.dtype)
+        return pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered), n
+    if isinstance(a.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
+        a.dtype, np.datetime64
+    ):
+        if isinstance(a, (pd.Series, pd.Index)):
+            values = a.values
+        else:
+            values = a
+        a2 = values.view("i8")
+        result = np.percentile(a2, q, interpolation=interpolation).astype(values.dtype)
         if q[0] == 0:
             # https://github.com/dask/dask/issues/6864
-            result[0] = min(result[0], a.min())
+            result[0] = min(result[0], values.min())
         return result, n
     if not np.issubdtype(a.dtype, np.number):
         interpolation = "nearest"
@@ -84,6 +91,8 @@ def percentile(a, q, interpolation="linear", method="default"):
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
+    from dask.dataframe.dispatch import _percentile
+
     from .utils import array_safe, meta_from_array
 
     if not a.ndim == 1:

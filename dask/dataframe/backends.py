@@ -12,6 +12,7 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
 from ..utils import is_arraylike, typename
@@ -27,6 +28,7 @@ from .dispatch import (
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
+    percentile_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -547,3 +549,8 @@ def is_categorical_dtype_pandas(obj):
 @make_meta_obj.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
+
+
+@percentile_dispatch.register((pd.Series, np.ndarray, pd.Index))
+def percentile(a, q, interpolation="linear"):
+    return _percentile(a, q, interpolation)

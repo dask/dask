@@ -108,8 +108,12 @@ def _tensordot(a, b, axes=2):
 def register_cupy():
     import cupy
 
+    from dask.dataframe.backends import percentile
+    from dask.dataframe.dispatch import percentile_dispatch
+
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
+    percentile_dispatch.register(cupy.ndarray, percentile)
 
     @einsum_lookup.register(cupy.ndarray)
     def _cupy_einsum(*args, **kwargs):

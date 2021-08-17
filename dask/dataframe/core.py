@@ -6012,14 +6012,15 @@ def quantile(df, q, method="default"):
         }
     else:
 
-        from dask.array.percentile import _percentile, merge_percentiles
+        from dask.array.percentile import merge_percentiles
+        from dask.dataframe.dispatch import _percentile
 
         # Add 0 and 100 during calculation for more robust behavior (hopefully)
         calc_qs = np.pad(qs, 1, mode="constant")
         calc_qs[-1] = 100
         name = "quantiles-1-" + token
         val_dsk = {
-            (name, i): (_percentile, (getattr, key, "values"), calc_qs)
+            (name, i): (_percentile, key, calc_qs)
             for i, key in enumerate(df.__dask_keys__())
         }
 
