@@ -417,8 +417,6 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
     elif isinstance(data.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
         data.dtype, np.integer
     ):
-        # CuPy doesn't currently support "nearest" interpolation,
-        # so it's special cased in the condition above.
         interpolation = "nearest"
     vals, n = _percentile(data, qs, interpolation=interpolation)
     if (

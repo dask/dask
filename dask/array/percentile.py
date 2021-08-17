@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from functools import wraps
 from numbers import Number
 
 import numpy as np
@@ -7,6 +8,37 @@ from tlz import merge
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
 from .core import Array
+
+
+@wraps(np.percentile)
+def _percentile(a, q, interpolation="linear"):
+    import pandas as pd
+
+    n = len(a)
+    if not len(a):
+        return None, n
+    if isinstance(q, Iterator):
+        q = list(q)
+    if a.dtype.name == "category":
+        result = np.percentile(a.cat.codes, q, interpolation=interpolation)
+
+        return pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered), n
+    if isinstance(a.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
+        a.dtype, np.datetime64
+    ):
+        if isinstance(a, (pd.Series, pd.Index)):
+            values = a.values
+        else:
+            values = a
+        a2 = values.view("i8")
+        result = np.percentile(a2, q, interpolation=interpolation).astype(values.dtype)
+        if q[0] == 0:
+            # https://github.com/dask/dask/issues/6864
+            result[0] = min(result[0], values.min())
+        return result, n
+    if not np.issubdtype(a.dtype, np.number):
+        interpolation = "nearest"
+    return np.percentile(a, q, interpolation=interpolation), n
 
 
 def _tdigest_chunk(a):
