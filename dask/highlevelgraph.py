@@ -878,8 +878,6 @@ class HighLevelGraph(Mapping):
 
         Parameters
         ----------
-        dsk : dict(s) or collection(s)
-            The dask high level graph(s) to visualize.
         filename : str or None, optional
             The name of the file to write to disk. If the provided `filename`
             doesn't include an extension, '.svg' will be used by default.
@@ -1279,6 +1277,18 @@ def to_graphviz(
     cache = {}
 
     color = kwargs.get("color")
+    if color == "layer_type":
+        layer_colors = {
+            "DataFrameIOLayer": ["#CCC7F9", False],  # purple
+            "ShuffleLayer": ["#F9CCC7", False],  # rose
+            "SimpleShuffleLayer": ["#F9CCC7", False],  # rose
+            "ArrayOverlayLayer": ["#FFD9F2", False],  # pink
+            "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
+            "Blockwise": ["#D9FFE6", False],  # green
+            "BlockwiseLayer": ["#D9FFE6", False],  # green
+            "BlockwiseCreateArray": ["#D9FFE6", False],  # green
+            "MaterializedLayer": ["#DBDEE5", False],  # gray
+        }
 
     for layer in hg.dependencies:
         layer_name = name(layer)
@@ -1321,19 +1331,8 @@ def to_graphviz(
         attrs.setdefault("tooltip", str(node_tooltips))
 
         if color == "layer_type":
-            layer_colors = {
-                "DataFrameIOLayer": "#CCC7F9",  # purple
-                "ShuffleLayer": "#F9CCC7",  # rose
-                "SimpleShuffleLayer": "#F9CCC7",  # rose
-                "ArrayOverlayLayer": "#FFD9F2",  # pink
-                "BroadcastJoinLayer": "#D9F2FF",  # blue
-                "Blockwise": "#D9FFE6",  # green
-                "BlockwiseLayer": "#D9FFE6",  # green
-                "BlockwiseCreateArray": "#D9FFE6",  # green
-                "MaterializedLayer": "#DBDEE5",  # gray
-            }
-
-            node_color = layer_colors.get(layer_type)
+            node_color = layer_colors.get(layer_type)[0]
+            layer_colors.get(layer_type)[1] = True
 
             attrs.setdefault("fillcolor", str(node_color))
             attrs.setdefault("style", "filled")
@@ -1348,16 +1347,17 @@ def to_graphviz(
 
     if color == "layer_type":
         legend_title = "Key"
+
         legend_label = (
             '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">'
             "<TR><TD><B>Legend: Layer types</B></TD></TR>"
-            '<TR><TD BGCOLOR="#CCC7F9">DataFrame IO</TD></TR>'
-            '<TR><TD BGCOLOR="#F9CCC7">Shuffle</TD></TR>'
-            '<TR><TD BGCOLOR="#FFD9F2">Array Overlay</TD></TR>'
-            '<TR><TD BGCOLOR="#D9F2FF">Broadcast Join</TD></TR>'
-            '<TR><TD BGCOLOR="#D9FFE6">Blockwise</TD></TR>'
-            '<TR><TD BGCOLOR="#DBDEE5">Materialized</TD></TR></TABLE>>'
         )
+
+        for layer_type, color in layer_colors.items():
+            if color[1]:
+                legend_label += f'<TR><TD BGCOLOR="{color[0]}">{layer_type}</TD></TR>'
+
+        legend_label += "</TABLE>>"
 
         attrs = data_attributes.get(legend_title, {})
         attrs.setdefault("label", str(legend_label))
