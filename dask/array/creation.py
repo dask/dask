@@ -683,7 +683,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 
 @derived_from(np)
-def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
+def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
