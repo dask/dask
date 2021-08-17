@@ -1,4 +1,5 @@
 import contextlib
+import inspect
 import math
 import operator
 import os
@@ -1567,6 +1568,12 @@ class Array(DaskMethodsMixin):
         da_func = getattr(module, func.__name__)
         if da_func is func:
             return handle_nonmatching_names(func, args, kwargs)
+
+        # If ``like`` is contained in ``da_func``'s signature, add ``like=self``
+        # to the kwargs dictionary.
+        if "like" in inspect.getfullargspec(da_func).kwonlyargs:
+            kwargs["like"] = self
+
         return da_func(*args, **kwargs)
 
     @property
