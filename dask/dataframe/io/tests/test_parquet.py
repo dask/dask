@@ -3225,7 +3225,7 @@ def test_pyarrow_dataset_read_from_paths(
         read_from_paths=read_from_paths,
     )
 
-    ddf.b = ddf.b.astype(read_df.b.dtype)
+    ddf.b = ddf.b.astype(read_df.b.compute().dtype)
     if test_filter_partitioned:
         assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
     else:
