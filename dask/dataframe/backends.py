@@ -554,7 +554,7 @@ def _register_cudf():
 
 @wraps(np.percentile)
 @percentile_dispatch.register((pd.Series, np.ndarray, pd.Index))
-def percentile_pandas(a, q, interpolation="linear"):
+def percentile(a, q, interpolation="linear"):
     n = len(a)
     if not len(a):
         return None, n
