@@ -4148,7 +4148,7 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, allow_unknown_chunksizes=False, **kwargs):
+def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
@@ -4187,7 +4187,10 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
     elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asarray(a)
+        if like is not None:
+            a = np.asarray(a, like=meta_from_array(like))
+        else:
+            a = np.asarray(a)
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
