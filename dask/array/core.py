@@ -58,6 +58,7 @@ from ..utils import (
     parse_bytes,
     typename,
 )
+from ..widgets import get_template
 from . import chunk
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
@@ -334,7 +335,17 @@ def _concatenate2(arrays, axes=[]):
     concatenate = concatenate_lookup.dispatch(
         type(max(arrays, key=lambda x: getattr(x, "__array_priority__", 0)))
     )
-    return concatenate(arrays, axis=axes[0])
+    if isinstance(arrays[0], dict):
+        # Handle concatenation of `dict`s, used as a replacement for structured
+        # arrays when that's not supported by the array library (e.g., CuPy).
+        keys = list(arrays[0].keys())
+        assert all(list(a.keys()) == keys for a in arrays)
+        ret = dict()
+        for k in keys:
+            ret[k] = concatenate(list(a[k] for a in arrays), axis=axes[0])
+        return ret
+    else:
+        return concatenate(arrays, axis=axes[0])
 
 
 def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=None):
@@ -369,11 +380,11 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
-    from .utils import meta_from_array, ones_like_safe
+    from .utils import meta_from_array
 
     # make sure that every arg is an evaluated array
     args = [
-        ones_like_safe(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+        np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
         if is_arraylike(x)
         else x
         for x in args
@@ -1025,15 +1036,13 @@ def store(
 
         return result
     else:
-        name = "store-" + str(uuid.uuid1())
-        dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
-        result = Delayed(name, dsk)
-
         if compute:
-            result.compute(**kwargs)
+            compute_as_if_collection(Array, store_dsk, store_keys, **kwargs)
             return None
         else:
-            return result
+            name = "store-" + str(uuid.uuid1())
+            dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
+            return Delayed(name, dsk)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1405,27 +1414,11 @@ class Array(DaskMethodsMixin):
         )
 
     def _repr_html_(self):
-        table = self._repr_html_table()
         try:
             grid = self.to_svg(size=config.get("array.svg.size", 120))
         except NotImplementedError:
             grid = ""
 
-        both = [
-            "<table>",
-            "<tr>",
-            "<td>",
-            table,
-            "</td>",
-            "<td>",
-            grid,
-            "</td>",
-            "</tr>",
-            "</table>",
-        ]
-        return "\n".join(both)
-
-    def _repr_html_table(self):
         if "sparse" in typename(type(self._meta)):
             nbytes = None
             cbytes = None
@@ -1436,30 +1429,12 @@ class Array(DaskMethodsMixin):
             nbytes = "unknown"
             cbytes = "unknown"
 
-        table = [
-            "<table>",
-            "  <thead>",
-            "    <tr><td> </td><th> Array </th><th> Chunk </th></tr>",
-            "  </thead>",
-            "  <tbody>",
-            "    <tr><th> Bytes </th><td> %s </td> <td> %s </td></tr>"
-            % (nbytes, cbytes)
-            if nbytes is not None
-            else "",
-            "    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>"
-            % (str(self.shape), str(self.chunksize)),
-            "    <tr><th> Count </th><td> %d Tasks </td><td> %d Chunks </td></tr>"
-            % (len(self.__dask_graph__()), self.npartitions),
-            "    <tr><th> Type </th><td> %s </td><td> %s.%s </td></tr>"
-            % (
-                self.dtype,
-                type(self._meta).__module__.split(".")[0],
-                type(self._meta).__name__,
-            ),
-            "  </tbody>",
-            "</table>",
-        ]
-        return "\n".join(table)
+        return get_template("array.html.j2").render(
+            array=self,
+            grid=grid,
+            nbytes=nbytes,
+            cbytes=cbytes,
+        )
 
     @cached_property
     def ndim(self):
@@ -2509,7 +2484,7 @@ class Array(DaskMethodsMixin):
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
         """See da.rechunk for docstring"""
-        from . import rechunk  # avoid circular import
+        from .rechunk import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
 
@@ -4777,8 +4752,6 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    from .utils import IS_NEP18_ACTIVE
-
     # We need this as __array_function__ may not exist on older NumPy versions.
     # And to reduce verbosity.
     NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, "__array_function__", None)
@@ -4792,7 +4765,7 @@ def concatenate3(arrays):
         key=lambda x: getattr(x, "__array_priority__", 0),
     )
 
-    if IS_NEP18_ACTIVE and not all(
+    if not all(
         NDARRAY_ARRAY_FUNCTION
         is getattr(type(arr), "__array_function__", NDARRAY_ARRAY_FUNCTION)
         for arr in core.flatten(arrays, container=(list, tuple))
@@ -5118,8 +5091,6 @@ def _vindex_merge(locations, values):
            [40, 50, 60],
            [10, 20, 30]])
     """
-    from .utils import empty_like_safe
-
     locations = list(map(list, locations))
     values = list(values)
 
@@ -5131,7 +5102,7 @@ def _vindex_merge(locations, values):
 
     dtype = values[0].dtype
 
-    x = empty_like_safe(values[0], dtype=dtype, shape=shape)
+    x = np.empty_like(values[0], dtype=dtype, shape=shape)
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):

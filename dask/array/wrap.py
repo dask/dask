@@ -8,13 +8,7 @@ from ..base import tokenize
 from ..layers import BlockwiseCreateArray
 from ..utils import funcname
 from .core import Array, normalize_chunks
-from .utils import (
-    empty_like_safe,
-    full_like_safe,
-    meta_from_array,
-    ones_like_safe,
-    zeros_like_safe,
-)
+from .utils import meta_from_array
 
 
 def _parse_wrap_args(func, args, kwargs, shape):
@@ -107,17 +101,6 @@ def wrap_func_like(func, *args, **kwargs):
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
 
-def wrap_func_like_safe(func, func_like, *args, **kwargs):
-    """
-    Safe implementation for wrap_func_like(), attempts to use func_like(),
-    if the shape keyword argument, falls back to func().
-    """
-    try:
-        return func_like(*args, **kwargs)
-    except TypeError:
-        return func(*args, **kwargs)
-
-
 @curry
 def wrap(wrap_func, func, **kwargs):
     func_like = kwargs.pop("func_like", None)
@@ -180,12 +163,12 @@ def broadcast_trick(func):
     return inner
 
 
-ones = w(broadcast_trick(ones_like_safe), dtype="f8")
-zeros = w(broadcast_trick(zeros_like_safe), dtype="f8")
-empty = w(broadcast_trick(empty_like_safe), dtype="f8")
+ones = w(broadcast_trick(np.ones_like), dtype="f8")
+zeros = w(broadcast_trick(np.zeros_like), dtype="f8")
+empty = w(broadcast_trick(np.empty_like), dtype="f8")
 
 
-w_like = wrap(wrap_func_like_safe)
+w_like = wrap(wrap_func_like)
 
 
 empty_like = w_like(np.empty, func_like=np.empty_like)
@@ -193,7 +176,7 @@ empty_like = w_like(np.empty, func_like=np.empty_like)
 
 # full and full_like require special casing due to argument check on fill_value
 # Generate wrapped functions only once
-_full = w(broadcast_trick(full_like_safe))
+_full = w(broadcast_trick(np.full_like))
 _full_like = w_like(np.full, func_like=np.full_like)
 
 # workaround for numpy doctest failure: https://github.com/numpy/numpy/pull/17472

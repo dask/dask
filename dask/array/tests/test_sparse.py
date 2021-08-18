@@ -6,8 +6,7 @@ from packaging.version import parse as parse_version
 
 import dask
 import dask.array as da
-from dask.array.numpy_compat import _numpy_117
-from dask.array.utils import IS_NEP18_ACTIVE, assert_eq
+from dask.array.utils import assert_eq
 
 sparse = pytest.importorskip("sparse")
 if sparse:
@@ -175,16 +174,15 @@ def test_metadata():
     assert isinstance(y.rechunk((2, 2))._meta, sparse.COO)
     assert isinstance((y - z)._meta, sparse.COO)
     assert isinstance(y.persist()._meta, sparse.COO)
-    if IS_NEP18_ACTIVE:
-        assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
-        assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
-        assert isinstance(np.stack([y, y])._meta, sparse.COO)
-        if _numpy_117:
-            assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
-            assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y, y])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y, y[:0], y])._meta, sparse.COO)
+    assert isinstance(np.stack([y, y])._meta, sparse.COO)
+    assert isinstance(np.stack([y[:0], y[:0]])._meta, sparse.COO)
+    assert isinstance(np.concatenate([y[:0], y[:0]])._meta, sparse.COO)
 
 
 def test_html_repr():
+    pytest.importorskip("jinja2")
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
     y = y.map_blocks(sparse.COO.from_numpy)

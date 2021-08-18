@@ -12,10 +12,10 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
 from ..utils import is_arraylike, typename
-from ._compat import PANDAS_GT_100
 from .core import DataFrame, Index, Scalar, Series, _Frame
 from .dispatch import (
     categorical_dtype_dispatch,
@@ -28,6 +28,7 @@ from .dispatch import (
     make_meta_dispatch,
     make_meta_obj,
     meta_nonempty,
+    percentile_dispatch,
     tolist_dispatch,
     union_categoricals_dispatch,
 )
@@ -181,8 +182,7 @@ def meta_nonempty_dataframe(x):
         data[i] = dt_s_dict[dt]
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
-    if PANDAS_GT_100:
-        res.attrs = x.attrs
+    res.attrs = x.attrs
     return res
 
 
@@ -281,10 +281,7 @@ def _nonempty_series(s, idx=None):
         data = [pd.Period("2000", freq), pd.Period("2001", freq)]
     elif is_sparse(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
-        if PANDAS_GT_100:
-            data = pd.array([entry, entry], dtype=dtype)
-        else:
-            data = pd.SparseArray([entry, entry], dtype=dtype)
+        data = pd.array([entry, entry], dtype=dtype)
     elif is_interval_dtype(dtype):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
@@ -295,8 +292,7 @@ def _nonempty_series(s, idx=None):
         data = np.array([entry, entry], dtype=dtype)
 
     out = pd.Series(data, name=s.name, index=idx)
-    if PANDAS_GT_100:
-        out.attrs = s.attrs
+    out.attrs = s.attrs
     return out
 
 
@@ -553,3 +549,8 @@ def is_categorical_dtype_pandas(obj):
 @make_meta_obj.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401
+
+
+@percentile_dispatch.register((pd.Series, np.ndarray, pd.Index))
+def percentile(a, q, interpolation="linear"):
+    return _percentile(a, q, interpolation)

@@ -54,7 +54,6 @@ Deploy
     :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
 
 
-
 Scheduler
 ~~~~~~~~~
 
@@ -69,6 +68,15 @@ Worker
 
 .. dask-config-block::
     :location: distributed.worker
+    :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
+    :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
+
+
+Nanny
+~~~~~
+
+.. dask-config-block::
+    :location: distributed.nanny
     :config: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed.yaml
     :schema: https://raw.githubusercontent.com/dask/distributed/main/distributed/distributed-schema.yaml
 

@@ -316,7 +316,7 @@ their input locations (file system, S3, HDFS), line delimiters, and compression
 formats.
 
 Both functions are *lazy*, returning either
-point to blocks of bytes (``read_bytes``) or open file objects
+pointers to blocks of bytes (``read_bytes``) or open file objects
 (``open_files``).  They can handle different storage backends by prepending
 protocols like ``s3://`` or ``hdfs://`` (see below). They handle compression formats
 listed in ``fsspec.compression``, some of which may require additional packages

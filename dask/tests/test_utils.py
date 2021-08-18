@@ -40,6 +40,7 @@ from dask.utils import (
     stringify,
     stringify_collection_keys,
     takes_multiple_arguments,
+    typename,
 )
 from dask.utils_test import inc
 
@@ -720,6 +721,20 @@ def test_noop_context_deprecated():
     with pytest.warns(FutureWarning, match="contextlib.nullcontext"):
         with noop_context():
             pass
+
+
+def test_typename():
+    assert typename(HighLevelGraph) == "dask.highlevelgraph.HighLevelGraph"
+    assert typename(HighLevelGraph, short=True) == "dask.HighLevelGraph"
+
+
+class MyType:
+    pass
+
+
+def test_typename_on_instances():
+    instance = MyType()
+    assert typename(instance) == typename(MyType)
 
 
 def test_delegates():
