@@ -143,6 +143,7 @@ def test_cull_layers():
 
 
 def test_repr_html_hlg_layers():
+    pytest.importorskip("jinja2")
     hg = HighLevelGraph(
         {"a": {"a": 1, ("a", 0): 2, "b": 3}, "b": {"c": 4}},
         {"a": set(), "b": set()},

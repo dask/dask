@@ -22,6 +22,7 @@ def test_basic():
 
 
 def test_repr_html():
+    pytest.importorskip("jinja2")
     assert da.ones([])._repr_html_()
     assert da.ones(10)[:0]._repr_html_()
     assert da.ones(10)._repr_html_()
@@ -55,6 +56,7 @@ def test_errors():
 
 
 def test_repr_html_size_units():
+    pytest.importorskip("jinja2")
     x = da.ones((10000, 5000))
     x = da.ones((3000, 10000), chunks=(1000, 1000))
     text = x._repr_html_()

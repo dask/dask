@@ -61,6 +61,7 @@ dependencies:
   - pandas-datareader
   - python-xxhash
   - mmh3
+  - jinja2
   - pip
   - pip:
     - git+https://github.com/dask/distributed

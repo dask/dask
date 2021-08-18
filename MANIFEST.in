@@ -1,4 +1,5 @@
 recursive-include dask *.py
+recursive-include dask *.j2
 recursive-include docs/source *
 include docs/Makefile docs/make.bat
 
