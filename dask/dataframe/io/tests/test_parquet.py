@@ -1,7 +1,6 @@
 import glob
 import math
 import os
-import shutil
 import sys
 import warnings
 from decimal import Decimal
@@ -3593,14 +3592,8 @@ def test_custom_metadata(tmpdir, engine):
 @pytest.mark.parametrize("gather_statistics", [True, False, None])
 def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
     tmpdir = str(tmpdir)
-    other_dataset = os.path.join(tmpdir, "data0")
     dataset_with_bad_metadata = os.path.join(tmpdir, "data1")
     dataset_without_metadata = os.path.join(tmpdir, "data2")
-
-    # Write a reference dataset with a "bad" _metadata file
-    df0 = pd.DataFrame({"c": range(20), "d": ["fox", "bird"] * 10})
-    ddf0 = dd.from_pandas(df0, npartitions=1)
-    ddf0.to_parquet(path=other_dataset, engine=engine, write_metadata_file=True)
 
     # Write two identical datasets without any _metadata file
     df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
@@ -3614,10 +3607,8 @@ def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
 
     # Copy "bad" metadata into `dataset_with_bad_metadata`
     assert "_metadata" not in os.listdir(dataset_with_bad_metadata)
-    shutil.copyfile(
-        os.path.join(other_dataset, "_metadata"),
-        os.path.join(dataset_with_bad_metadata, "_metadata"),
-    )
+    with open(os.path.join(dataset_with_bad_metadata, "_metadata"), "w") as f:
+        f.write("BAD _METADATA.")
     assert "_metadata" in os.listdir(dataset_with_bad_metadata)
     assert "_metadata" not in os.listdir(dataset_without_metadata)
 
