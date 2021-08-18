@@ -158,14 +158,17 @@ def _determine_pf_parts(fs, paths, gather_statistics, ignore_metadata_file, **kw
         # This is a directory.
         # Check if _metadata and/or _common_metadata files exists
         base = paths[0]
-        _metadata_exists = fs.isfile(fs.sep.join([base, "_metadata"]))
-        _common_metadata_exists = fs.isfile(fs.sep.join([base, "_common_metadata"]))
+        _metadata_exists = _common_metadata_exists = True
+        if not ignore_metadata_file:
+            _metadata_exists = fs.isfile(fs.sep.join([base, "_metadata"]))
+            _common_metadata_exists = fs.isfile(fs.sep.join([base, "_common_metadata"]))
 
         # Find all files if we are not using a _metadata file
         if ignore_metadata_file or not _metadata_exists:
             # For now, we need to discover every file under paths[0]
             paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
-            if _metadata_exists:
+            _common_metadata_exists = "_common_metadata" in fns
+            if "_metadata" in fns:
                 fns.remove("_metadata")
                 paths = [fs.sep.join([base, fn]) for fn in fns]
             _metadata_exists = False
