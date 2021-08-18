@@ -1824,7 +1824,7 @@ class cached_property(_cached_property):
         raise AttributeError("Can't set attribute")
 
 
-def delegates(to=None, keep=False, but=None):
+def delegates(to=None, keep=True, but=None):
     """Decorator: replace `**kwargs` in signature with params from `to`
 
     Decorator to include parameters from other functions.

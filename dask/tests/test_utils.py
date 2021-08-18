@@ -737,78 +737,86 @@ def test_typename_on_instances():
     assert typename(instance) == typename(MyType)
 
 
-def test_delegates():
+class TestDelegates:
     # Based on fastcore.meta.delegates
     # [original docs](https://fastcore.fast.ai/meta.html#delegates).
-    def test_sig(f, b):
-        "Test the signature of an object"
-        return str(inspect.signature(f)) == b
 
-    def baz(a, b=2, c=3):
-        return a + b + c
+    @staticmethod
+    def check_signature(obj, expected):
+        "Check the signature of an object"
+        return str(inspect.signature(obj)) == expected
 
-    @delegates(baz)
-    def foo(c, a, **kwargs):
-        return c + baz(a, **kwargs)
+    def test_decorator(self):
+        def baz(a, b=2, c=3):
+            return a + b + c
 
-    assert test_sig(foo, "(c, a, b=2)")
+        @delegates(baz, keep=False)
+        def foo(c, a, **kwargs):
+            return c + baz(a, **kwargs)
 
-    @delegates(baz, keep=True)
-    def foo(c, a, **kwargs):
-        return c + baz(a, **kwargs)
+        assert self.check_signature(foo, "(c, a, b=2)")
 
-    assert test_sig(foo, "(c, a, b=2, **kwargs)")
+        @delegates(baz, keep=True)
+        def foo(c, a, **kwargs):
+            return c + baz(a, **kwargs)
 
-    def basefoo(e, d, c=2):
-        pass
+        assert self.check_signature(foo, "(c, a, b=2, **kwargs)")
 
-    @delegates(basefoo)
-    def foo(a, b=1, **kwargs):
-        pass
-
-    assert test_sig(
-        foo, "(a, b=1, c=2)"
-    )  # e and d are not included b/c they don't have default parameters.
-
-    def basefoo(e, c=2, d=3):
-        pass
-
-    @delegates(basefoo, but=["d"])
-    def foo(a, b=1, **kwargs):
-        pass
-
-    assert test_sig(foo, "(a, b=1, c=2)")
-
-    class _T:
-        @classmethod
-        def foo(cls, a=1, b=2):
+    def test_excludes_no_defaults(self):
+        def basefoo(e, d, c=2):
             pass
 
-        @classmethod
-        @delegates(foo)
-        def bar(cls, c=3, **kwargs):
+        @delegates(basefoo, keep=False)
+        def foo(a, b=1, **kwargs):
             pass
 
-    assert test_sig(_T.bar, "(c=3, a=1, b=2)")
+        # e and d are not included b/c they don't have default parameters.
+        assert self.check_signature(foo, "(a, b=1, c=2)")
 
-    class _T:
-        def foo(self, a=1, b=2):
+    def test_excludes_but(self):
+        def basefoo(e, c=2, d=3):
             pass
 
-        @delegates(foo)
-        def bar(self, c=3, **kwargs):
+        @delegates(basefoo, but=["d"], keep=False)
+        def foo(a, b=1, **kwargs):
             pass
 
-    t = _T()
-    assert test_sig(t.bar, "(c=3, a=1, b=2)")
+        assert self.check_signature(foo, "(a, b=1, c=2)")
 
-    class BaseFoo:
-        def __init__(self, e, c=2):
-            pass
+    def test_class_method(self):
+        class _T:
+            @classmethod
+            def foo(cls, a=1, b=2):
+                pass
 
-    @delegates()  # since no argument was passsed here we delegate to the superclass
-    class Foo(BaseFoo):
-        def __init__(self, a, b=1, **kwargs):
-            super().__init__(**kwargs)
+            @classmethod
+            @delegates(foo, keep=False)
+            def bar(cls, c=3, **kwargs):
+                pass
 
-    assert test_sig(Foo, "(a, b=1, c=2)")
+        assert self.check_signature(_T.bar, "(c=3, a=1, b=2)")
+
+    def test_class_instance(self):
+        class _T:
+            def foo(self, a=1, b=2):
+                pass
+
+            @delegates(foo, keep=False)
+            def bar(self, c=3, **kwargs):
+                pass
+
+        t = _T()
+        assert self.check_signature(t.bar, "(c=3, a=1, b=2)")
+
+    def test_inherits_super(self):
+        class BaseFoo:
+            def __init__(self, e, c=2):
+                pass
+
+        @delegates(keep=False)
+        class Foo(BaseFoo):
+            def __init__(self, a, b=1, **kwargs):
+                super().__init__(**kwargs)
+
+        # since no argument was passsed here we delegate to the superclass
+        assert self.check_signature(Foo, "(a, b=1, c=2)")
