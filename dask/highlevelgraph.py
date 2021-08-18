@@ -841,6 +841,43 @@ class HighLevelGraph(Mapping):
         return cls(layers, dependencies)
 
     def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
+        """
+        Visualize this dask high level graph.
+
+        Requires ``graphviz`` to be installed.
+
+        Parameters
+        ----------
+        filename : str or None, optional
+            The name of the file to write to disk. If the provided `filename`
+            doesn't include an extension, '.png' will be used by default.
+            If `filename` is None, no file will be written, and the graph is
+            rendered in the Jupyter notebook only.
+        format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
+            Format in which to write output file. Default is 'svg'.
+        color : {None, 'layer_type'}, optional (default: None)
+            Options to color nodes.
+            - None, no colors.
+            - layer_type, color nodes based on the layer type.
+        **kwargs
+           Additional keyword arguments to forward to ``to_graphviz``.
+
+        Examples
+        --------
+        >>> x.dask.visualize(filename='dask.svg')  # doctest: +SKIP
+        >>> x.dask.visualize(filename='dask.svg', color='layer_type')  # doctest: +SKIP
+
+        Returns
+        -------
+        result : IPython.diplay.Image, IPython.display.SVG, or None
+            See dask.dot.dot_graph for more information.
+
+        See Also
+        --------
+        dask.dot.dot_graph
+        dask.base.visualize # low level variant
+        """
+
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
@@ -1134,10 +1171,24 @@ def to_graphviz(
     for layer in hg.dependencies:
         n_tasks[layer] = len(hg.layers[layer])
 
-    mn = min(n_tasks.values())
-    mx = max(n_tasks.values())
+    min_tasks = min(n_tasks.values())
+    max_tasks = max(n_tasks.values())
 
     cache = {}
+
+    color = kwargs.get("color")
+    if color == "layer_type":
+        layer_colors = {
+            "DataFrameIOLayer": ["#CCC7F9", False],  # purple
+            "ShuffleLayer": ["#F9CCC7", False],  # rose
+            "SimpleShuffleLayer": ["#F9CCC7", False],  # rose
+            "ArrayOverlayLayer": ["#FFD9F2", False],  # pink
+            "BroadcastJoinLayer": ["#D9F2FF", False],  # blue
+            "Blockwise": ["#D9FFE6", False],  # green
+            "BlockwiseLayer": ["#D9FFE6", False],  # green
+            "BlockwiseCreateArray": ["#D9FFE6", False],  # green
+            "MaterializedLayer": ["#DBDEE5", False],  # gray
+        }
 
     for layer in hg.dependencies:
         layer_name = name(layer)
@@ -1145,7 +1196,9 @@ def to_graphviz(
 
         node_label = label(layer, cache=cache)
         node_size = (
-            20 if mx == mn else int(20 + ((n_tasks[layer] - mn) / (mx - mn)) * 20)
+            20
+            if max_tasks == min_tasks
+            else int(20 + ((n_tasks[layer] - min_tasks) / (max_tasks - min_tasks)) * 20)
         )
 
         layer_type = str(type(hg.layers[layer]).__name__)
@@ -1177,6 +1230,13 @@ def to_graphviz(
         attrs.setdefault("fontsize", str(node_size))
         attrs.setdefault("tooltip", str(node_tooltips))
 
+        if color == "layer_type":
+            node_color = layer_colors.get(layer_type)[0]
+            layer_colors.get(layer_type)[1] = True
+
+            attrs.setdefault("fillcolor", str(node_color))
+            attrs.setdefault("style", "filled")
+
         g.node(layer_name, **attrs)
 
     for layer, deps in hg.dependencies.items():
@@ -1184,6 +1244,28 @@ def to_graphviz(
         for dep in deps:
             dep_name = name(dep)
             g.edge(dep_name, layer_name)
+
+    if color == "layer_type":
+        legend_title = "Key"
+
+        legend_label = (
+            '<<TABLE BORDER="0" CELLBORDER="1" CELLSPACING="0" CELLPADDING="5">'
+            "<TR><TD><B>Legend: Layer types</B></TD></TR>"
+        )
+
+        for layer_type, color in layer_colors.items():
+            if color[1]:
+                legend_label += f'<TR><TD BGCOLOR="{color[0]}">{layer_type}</TD></TR>'
+
+        legend_label += "</TABLE>>"
+
+        attrs = data_attributes.get(legend_title, {})
+        attrs.setdefault("label", str(legend_label))
+        attrs.setdefault("fontsize", "20")
+        attrs.setdefault("margin", "0")
+
+        g.node(legend_title, **attrs)
+
     return g
 
 
