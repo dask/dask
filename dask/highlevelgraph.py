@@ -871,7 +871,7 @@ class HighLevelGraph(Mapping):
 
     def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
         """
-        Visualize several dask high level graphs at once.
+        Visualize a dask high level graph.
 
         Requires ``graphviz`` to be installed. All options that are not the dask
         graph(s) should be passed as keyword arguments.
