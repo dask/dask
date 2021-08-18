@@ -182,6 +182,7 @@ def test_metadata():
 
 
 def test_html_repr():
+    pytest.importorskip("jinja2")
     y = da.random.random((10, 10), chunks=(5, 5))
     y[y < 0.8] = 0
     y = y.map_blocks(sparse.COO.from_numpy)

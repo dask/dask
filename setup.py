@@ -14,7 +14,10 @@ extras_require = {
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
     "distributed": ["distributed == 2021.08.0"],
-    "diagnostics": ["bokeh >= 1.0.0, != 2.0.0"],
+    "diagnostics": [
+        "bokeh >= 1.0.0, != 2.0.0",
+        "jinja2",
+    ],
     "delayed": [],  # keeping for backwards compatibility
 }
 extras_require["complete"] = sorted({v for req in extras_require.values() for v in req})

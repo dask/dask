@@ -4637,6 +4637,7 @@ def test_dask_layers():
 
 
 def test_repr_html_dataframe_highlevelgraph():
+    pytest.importorskip("jinja2")
     x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
     hg = x.dask
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
