@@ -3589,30 +3589,43 @@ def test_custom_metadata(tmpdir, engine):
     assert "User-defined key/value" in str(e.value)
 
 
-@pytest.mark.parametrize("gather_statistics", [True, False])
+@pytest.mark.parametrize("gather_statistics", [True, False, None])
 def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
     tmpdir = str(tmpdir)
+    path_with_metadata = os.path.join(tmpdir, "data0")
+    path_without_metadata = os.path.join(tmpdir, "data1")
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
     ddf1 = dd.from_pandas(df, npartitions=2)
-    ddf1.to_parquet(path=tmpdir, engine=engine)
+
+    # Write datasets with and without a _metadata file
+    ddf1.to_parquet(path=path_with_metadata, engine=engine, write_metadata_file=True)
+    ddf1.to_parquet(
+        path=path_without_metadata, engine=engine, write_metadata_file=False
+    )
+    assert "_metadata" in os.listdir(path_with_metadata)
+    assert "_metadata" not in os.listdir(path_without_metadata)
+
+    # Read back the datasets with `ignore_metadata_file=True`, and
+    # test that the results are the same
     if engine != "pyarrow-legacy":
-        ddf2 = dd.read_parquet(
-            tmpdir,
+        ddf2a = dd.read_parquet(
+            path_with_metadata,
             engine=engine,
             ignore_metadata_file=True,
             gather_statistics=gather_statistics,
         )
-
-        if gather_statistics is False:
-            # Should not have known divisions if gather_statistics=None
-            # Otherwise, we must have used a _metadata file
-            assert set(ddf2.divisions) == {None}
-
-        assert_eq(ddf1, ddf2, check_divisions=bool(gather_statistics))
+        ddf2b = dd.read_parquet(
+            path_without_metadata,
+            engine=engine,
+            ignore_metadata_file=True,
+            gather_statistics=gather_statistics,
+        )
+        assert_eq(ddf2a, ddf2b)
     else:
+        # Check that "pyarrow-legacy" raises a ValueError
         with pytest.raises(ValueError):
             dd.read_parquet(
-                tmpdir,
+                path_with_metadata,
                 engine=engine,
                 ignore_metadata_file=True,
             )
