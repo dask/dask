@@ -1192,6 +1192,7 @@ def test_len():
 
 
 def test_size():
+    full.reduction(methods.size, np.sum)
     assert_eq(d.size, full.size)
     assert_eq(d.a.size, full.a.size)
     assert_eq(d.index.size, full.index.size)
@@ -2474,13 +2475,15 @@ def test_aca_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
+    assert f(15).__dask_graph__().keys() == f(ddf.npartitions).__dask_graph__().keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
+    assert len(r3.__dask_graph__().keys() & r4.__dask_graph__().keys()) == len(
+        ddf.__dask_graph__()
+    )
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 * (2 + 1) + 7 * (2 + 1) + (3 + 2)
@@ -2572,13 +2575,15 @@ def test_reduction_method_split_every():
     assert_max_deps(f(3), 3)
     assert_max_deps(f(4), 4, False)
     assert_max_deps(f(5), 5)
-    assert f(15).dask.keys() == f(ddf.npartitions).dask.keys()
+    assert f(15).__dask_graph__().keys() == f(ddf.npartitions).__dask_graph__().keys()
 
     r3 = f(3)
     r4 = f(4)
     assert r3._name != r4._name
     # Only intersect on reading operations
-    assert len(r3.dask.keys() & r4.dask.keys()) == len(ddf.dask)
+    assert len(r3.__dask_graph__().keys() & r4.__dask_graph__().keys()) == len(
+        ddf.__dask_graph__()
+    )
 
     # Keywords are different for each step
     assert f(3).compute() == 60 + 15 + 7 * (2 + 1) + (3 + 2)
