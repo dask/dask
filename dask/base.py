@@ -571,15 +571,15 @@ def compute(*args, **kwargs):
 
 def visualize(*args, **kwargs):
     """
-    Visualize a dask low level graph.
+    Visualize several dask graphs at once.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    dsk : dict(s) or collection(s)
-        The dask low level graph(s) to visualize.
+    args : dict(s) or collection(s)
+        The dask graph(s) to visualize.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -591,7 +591,7 @@ def visualize(*args, **kwargs):
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
     color : {None, 'order'}, optional
-        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        Options to color nodes.
         colormap
         - None, the default, no colors.
         - 'order', colors the nodes' border based on the order they appear in the graph

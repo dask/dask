@@ -871,24 +871,23 @@ class HighLevelGraph(Mapping):
 
     def visualize(self, filename="dask-hlg.svg", format=None, **kwargs):
         """
-        Visualize a dask high level graph.
+        Visualize this dask high level graph.
 
-        Requires ``graphviz`` to be installed. All options that are not the dask
-        graph(s) should be passed as keyword arguments.
+        Requires ``graphviz`` to be installed.
 
         Parameters
         ----------
         filename : str or None, optional
             The name of the file to write to disk. If the provided `filename`
             doesn't include an extension, '.svg' will be used by default.
-            If `filename` is None, no file will be written, and we communicate
-            with dot using only pipes.
+            If `filename` is None, no file will be written, and the graph is
+            rendered in the Jupyter notebook only.
         format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
-            Format in which to write output file.  Default is 'svg'.
+            Format in which to write output file. Default is 'svg'.
         color : {None, 'layer_type'}, optional
             Options to color nodes.
             - None, the default, no colors.
-            - 'layer_type', colored nodes based on the layer type.
+            - layer_type, color nodes based on the layer type.
         **kwargs
            Additional keyword arguments to forward to ``to_graphviz``.
 
@@ -906,13 +905,8 @@ class HighLevelGraph(Mapping):
         --------
         dask.dot.dot_graph
         dask.base.visualize # low level variant
-
-        Notes
-        -----
-        For more information on optimization see here:
-
-        https://docs.dask.org/en/latest/optimize.html
         """
+
         from .dot import graphviz_to_file
 
         g = to_graphviz(self, **kwargs)
