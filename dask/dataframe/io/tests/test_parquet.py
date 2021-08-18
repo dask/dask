@@ -1,6 +1,7 @@
 import glob
 import math
 import os
+import shutil
 import sys
 import warnings
 from decimal import Decimal
@@ -3592,30 +3593,45 @@ def test_custom_metadata(tmpdir, engine):
 @pytest.mark.parametrize("gather_statistics", [True, False, None])
 def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
     tmpdir = str(tmpdir)
-    path_with_metadata = os.path.join(tmpdir, "data0")
-    path_without_metadata = os.path.join(tmpdir, "data1")
-    df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
-    ddf1 = dd.from_pandas(df, npartitions=2)
+    other_dataset = os.path.join(tmpdir, "data0")
+    dataset_with_bad_metadata = os.path.join(tmpdir, "data1")
+    dataset_without_metadata = os.path.join(tmpdir, "data2")
 
-    # Write datasets with and without a _metadata file
-    ddf1.to_parquet(path=path_with_metadata, engine=engine, write_metadata_file=True)
+    # Write a reference dataset with a "bad" _metadata file
+    df0 = pd.DataFrame({"c": range(20), "d": ["fox", "bird"] * 10})
+    ddf0 = dd.from_pandas(df0, npartitions=1)
+    ddf0.to_parquet(path=other_dataset, engine=engine, write_metadata_file=True)
+
+    # Write two identical datasets without any _metadata file
+    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=2)
     ddf1.to_parquet(
-        path=path_without_metadata, engine=engine, write_metadata_file=False
+        path=dataset_with_bad_metadata, engine=engine, write_metadata_file=False
     )
-    assert "_metadata" in os.listdir(path_with_metadata)
-    assert "_metadata" not in os.listdir(path_without_metadata)
+    ddf1.to_parquet(
+        path=dataset_without_metadata, engine=engine, write_metadata_file=False
+    )
+
+    # Copy "bad" metadata into `dataset_with_bad_metadata`
+    assert "_metadata" not in os.listdir(dataset_with_bad_metadata)
+    shutil.copyfile(
+        os.path.join(other_dataset, "_metadata"),
+        os.path.join(dataset_with_bad_metadata, "_metadata"),
+    )
+    assert "_metadata" in os.listdir(dataset_with_bad_metadata)
+    assert "_metadata" not in os.listdir(dataset_without_metadata)
 
     # Read back the datasets with `ignore_metadata_file=True`, and
     # test that the results are the same
     if engine != "pyarrow-legacy":
         ddf2a = dd.read_parquet(
-            path_with_metadata,
+            dataset_with_bad_metadata,
             engine=engine,
             ignore_metadata_file=True,
             gather_statistics=gather_statistics,
         )
         ddf2b = dd.read_parquet(
-            path_without_metadata,
+            dataset_without_metadata,
             engine=engine,
             ignore_metadata_file=True,
             gather_statistics=gather_statistics,
@@ -3625,7 +3641,7 @@ def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
         # Check that "pyarrow-legacy" raises a ValueError
         with pytest.raises(ValueError):
             dd.read_parquet(
-                path_with_metadata,
+                dataset_with_bad_metadata,
                 engine=engine,
                 ignore_metadata_file=True,
             )
