@@ -3589,13 +3589,13 @@ def test_custom_metadata(tmpdir, engine):
     assert "User-defined key/value" in str(e.value)
 
 
-@pytest.mark.parametrize("gather_statistics", [True, None])
+@pytest.mark.parametrize("gather_statistics", [True, False])
 def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
     tmpdir = str(tmpdir)
     df = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
     ddf1 = dd.from_pandas(df, npartitions=2)
     ddf1.to_parquet(path=tmpdir, engine=engine)
-    if engine == "pyarrow-dataset":
+    if engine != "pyarrow-legacy":
         ddf2 = dd.read_parquet(
             tmpdir,
             engine=engine,
@@ -3603,7 +3603,7 @@ def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
             gather_statistics=gather_statistics,
         )
 
-        if gather_statistics is None:
+        if gather_statistics is False:
             # Should not have known divisions if gather_statistics=None
             # Otherwise, we must have used a _metadata file
             assert set(ddf2.divisions) == {None}

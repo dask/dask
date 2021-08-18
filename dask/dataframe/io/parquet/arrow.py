@@ -1045,7 +1045,7 @@ class ArrowDatasetEngine(Engine):
             paths = fs.sep.join([base, fns[0]])
 
             meta_path = fs.sep.join([paths, "_metadata"])
-            if fs.exists(meta_path) and not ignore_metadata_file:
+            if not ignore_metadata_file and fs.exists(meta_path):
                 # Use _metadata file
                 ds = pa_ds.parquet_dataset(
                     meta_path,
