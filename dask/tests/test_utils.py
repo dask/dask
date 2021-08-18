@@ -724,3 +724,12 @@ def test_noop_context_deprecated():
 def test_typename():
     assert typename(HighLevelGraph) == "dask.highlevelgraph.HighLevelGraph"
     assert typename(HighLevelGraph, short=True) == "dask.HighLevelGraph"
+
+
+class MyType:
+    pass
+
+
+def test_typename_on_instances():
+    instance = MyType()
+    assert typename(instance) == typename(MyType)
