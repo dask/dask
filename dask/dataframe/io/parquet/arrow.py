@@ -1334,8 +1334,10 @@ class ArrowDatasetEngine(Engine):
         # `gather_statistics=True` for filtering.
         if split_row_groups is None:
             split_row_groups = False
-        _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregation_depth
+        _need_aggregation_stats = (
+            gather_statistics
+            or chunksize
+            or (int(split_row_groups) > 1 and aggregation_depth)
         )
         if (
             isinstance(metadata, list)
@@ -1379,8 +1381,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups,
         gather_statistics,
         stat_col_indices,
-        filters,
-        chunksize,
+        require_statistics,
         aggregation_depth,
     ):
         """Organize row-groups by file.
@@ -1441,7 +1442,7 @@ class ArrowDatasetEngine(Engine):
                             cmin = statistics[name]["min"]
                             cmax = statistics[name]["max"]
                             last = cmax_last.get(name, None)
-                            if not (filters or chunksize or aggregation_depth):
+                            if not (require_statistics or aggregation_depth):
                                 # Only think about bailing if we don't need
                                 # stats for filtering
                                 if cmin is None or (last and cmin < last):
@@ -1543,6 +1544,7 @@ class ArrowDatasetEngine(Engine):
         """
 
         # Organize row-groups by file
+        require_statistics = gather_statistics or chunksize or filters
         (
             file_row_groups,
             file_row_group_stats,
@@ -1554,8 +1556,7 @@ class ArrowDatasetEngine(Engine):
             split_row_groups,
             gather_statistics,
             stat_col_indices,
-            filters,
-            chunksize,
+            require_statistics,
             aggregation_depth,
         )
 
@@ -1950,8 +1951,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         split_row_groups,
         gather_statistics,
         stat_col_indices,
-        filters,
-        chunksize,
+        require_statistics,
         aggregation_depth,
     ):
         """Organize row-groups by file.
@@ -2009,7 +2009,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                         cmin = column.statistics.min
                         cmax = column.statistics.max
                         last = cmax_last.get(name, None)
-                        if not (filters or chunksize or aggregation_depth):
+                        if not (require_statistics or aggregation_depth):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -2039,7 +2039,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     else:
 
                         if (
-                            not (filters or chunksize or aggregation_depth)
+                            not (require_statistics or aggregation_depth)
                             and column.num_values > 0
                         ):
                             # We are collecting statistics for divisions
@@ -2088,6 +2088,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         """
 
         # Organize row-groups by file
+        require_statistics = gather_statistics or chunksize or filters
         (
             file_row_groups,
             file_row_group_stats,
@@ -2098,8 +2099,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             split_row_groups,
             gather_statistics,
             stat_col_indices,
-            filters,
-            chunksize,
+            require_statistics,
             aggregation_depth,
         )
 

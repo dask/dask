@@ -308,8 +308,10 @@ class FastParquetEngine(Engine):
         # want to apply any filters or calculate divisions.
         if split_row_groups is None:
             split_row_groups = False
-        _need_aggregation_stats = chunksize or (
-            int(split_row_groups) > 1 and aggregation_depth
+        _need_aggregation_stats = (
+            gather_statistics
+            or chunksize
+            or (int(split_row_groups) > 1 and aggregation_depth)
         )
         if (
             isinstance(parts, list) and len(parts) and isinstance(parts[0], str)
@@ -366,7 +368,7 @@ class FastParquetEngine(Engine):
         dtypes,
         base_path,
         paths,
-        chunksize,
+        require_statistics,
         aggregation_depth,
     ):
         """Organize row-groups by file."""
@@ -481,7 +483,7 @@ class FastParquetEngine(Engine):
                             cmax = pd.Timestamp(cmax, tz=tz)
                         last = cmax_last.get(name, None)
 
-                        if not (filters or chunksize or aggregation_depth):
+                        if not (require_statistics or aggregation_depth):
                             # Only think about bailing if we don't need
                             # stats for filtering
                             if cmin is None or (last and cmin < last):
@@ -509,7 +511,7 @@ class FastParquetEngine(Engine):
                         cmax_last[name] = cmax
                     else:
                         if (
-                            not (filters or chunksize or aggregation_depth)
+                            not (require_statistics or aggregation_depth)
                             and column.meta_data.num_values > 0
                         ):
                             # We are collecting statistics for divisions
@@ -616,6 +618,7 @@ class FastParquetEngine(Engine):
     ):
 
         # Organize row-groups by file
+        require_statistics = filters or chunksize or gather_statistics
         (
             file_row_groups,
             file_row_group_stats,
@@ -631,7 +634,7 @@ class FastParquetEngine(Engine):
             dtypes,
             base_path,
             paths,
-            chunksize,
+            require_statistics,
             aggregation_depth,
         )
 

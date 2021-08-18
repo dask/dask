@@ -339,6 +339,7 @@ def test_DataFrame_from_dask_array():
     tm.assert_index_equal(df.columns, pd.Index(["a", "b", "c"]))
     assert list(df.divisions) == [0, 4, 8, 9]
     assert (df.compute(scheduler="sync").values == x.compute(scheduler="sync")).all()
+    assert len(df) == x.shape[0]
 
     # dd.from_array should re-route to from_dask_array
     df2 = dd.from_array(x, columns=["a", "b", "c"])

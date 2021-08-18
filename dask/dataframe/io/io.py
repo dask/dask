@@ -451,7 +451,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
 
     name = "from-dask-array" + tokenize(x, columns)
     to_merge = []
-
+    lengths = None
     if index is not None:
         if not isinstance(index, Index):
             raise ValueError("'index' must be an instance of dask.dataframe.Index")
@@ -463,8 +463,9 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             raise ValueError(msg)
         divisions = index.divisions
         to_merge.append(ensure_dict(index.dask))
+        if index._lengths:
+            lengths = index._lengths
         index = index.__dask_keys__()
-
     elif np.isnan(sum(x.shape)):
         divisions = [None] * (len(x.chunks[0]) + 1)
         index = [None] * len(x.chunks[0])
@@ -475,6 +476,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
         index = [
             (np.arange, a, b, 1, "i8") for a, b in zip(divisions[:-1], divisions[1:])
         ]
+        lengths = [ind[2] - ind[1] for ind in index]
         divisions[-1] -= 1
 
     dsk = {}
@@ -487,7 +489,7 @@ def from_dask_array(x, columns=None, index=None, meta=None):
             dsk[name, i] = (type(meta), chunk, ind, meta.columns)
 
     to_merge.extend([ensure_dict(x.dask), dsk])
-    return new_dd_object(merge(*to_merge), name, meta, divisions)
+    return new_dd_object(merge(*to_merge), name, meta, divisions, lengths=lengths)
 
 
 def _link(token, result):

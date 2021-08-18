@@ -340,7 +340,7 @@ def read_parquet(
         aggregation_depth = parts[0].pop("aggregation_depth", aggregation_depth)
 
     # Parse dataset statistics from metadata (if available)
-    parts, divisions, index, index_in_columns = process_statistics(
+    parts, divisions, index, index_in_columns, partition_sizes = process_statistics(
         parts,
         statistics,
         filters,
@@ -386,9 +386,17 @@ def read_parquet(
             ),
             label=label,
         )
+
+        # Check if we can use the row-count
+        # from the statistics
+        if not partition_sizes or filters:
+            # Note that we cannot annotate the row count
+            # if the Engine may be filtering on read
+            partition_sizes = None
+
         graph = HighLevelGraph({output_name: layer}, {output_name: set()})
 
-    return new_dd_object(graph, output_name, meta, divisions)
+    return new_dd_object(graph, output_name, meta, divisions, lengths=partition_sizes)
 
 
 def check_multi_support(engine):
@@ -1087,6 +1095,7 @@ def process_statistics(
     Used in read_parquet.
     """
     index_in_columns = False
+    partition_sizes = None
     if statistics:
         result = list(
             zip(
@@ -1106,6 +1115,17 @@ def process_statistics(
             parts, statistics = aggregate_row_groups(
                 parts, statistics, chunksize, split_row_groups, fs, aggregation_depth
             )
+
+        # Use statistics (if available) to calculate the total
+        # number of rows in the dataset
+        partition_sizes = []
+        for i, stat in enumerate(statistics):
+            try:
+                partition_sizes.append(stat.get("num-rows"))
+            except KeyError:
+                # We don't have the size of all partitions - Bail
+                partition_sizes = None
+                break
 
         out = sorted_columns(statistics)
 
@@ -1151,7 +1171,7 @@ def process_statistics(
     else:
         divisions = [None] * (len(parts) + 1)
 
-    return parts, divisions, index, index_in_columns
+    return parts, divisions, index, index_in_columns, partition_sizes
 
 
 def set_index_columns(meta, index, columns, index_in_columns, auto_index_allowed):

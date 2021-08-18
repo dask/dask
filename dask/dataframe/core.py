@@ -37,6 +37,7 @@ from ..utils import (
     M,
     OperatorMethodMixin,
     apply,
+    cached_property,
     derived_from,
     funcname,
     has_keyword,
@@ -131,8 +132,8 @@ class Scalar(DaskMethodsMixin, OperatorMethodMixin):
     """A Dask object to represent a pandas scalar"""
 
     def __init__(self, dsk, name, meta, divisions=None):
-        # divisions is ignored, only present to be compatible with other
-        # objects.
+        # divisions and lens are ignored, only present to be compatible
+        # with other objects.
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -327,6 +328,7 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
             )
         self._meta = meta
         self.divisions = tuple(divisions)
+        self.__lengths = None
 
     def __dask_graph__(self):
         return self.dask
@@ -538,7 +540,8 @@ Dask Name: {name}, {task} tasks"""
             divisions = self.divisions[n : n + 2]
             layer = {(name, 0): (self._name, n)}
             graph = HighLevelGraph.from_collections(name, layer, dependencies=[self])
-            return new_dd_object(graph, name, self._meta, divisions)
+            lengths = [self._lengths[n]] if self._lengths else None
+            return new_dd_object(graph, name, self._meta, divisions, lengths=lengths)
         else:
             msg = "n must be 0 <= n < {0}".format(self.npartitions)
             raise ValueError(msg)
@@ -575,10 +578,26 @@ Dask Name: {name}, {task} tasks"""
             **kwargs,
         )
 
+    @cached_property
+    def _length(self):
+        if self.__lengths is None:
+            return self.reduction(
+                len, np.sum, token="len", meta=int, split_every=False
+            ).compute()
+        else:
+            return sum(self.__lengths)
+
+    @property
+    def _lengths(self):
+        return self.__lengths
+
+    @_lengths.setter
+    def _lengths(self, lengths):
+        self.__lengths = lengths
+        self.__dict__.pop("_length", None)
+
     def __len__(self):
-        return self.reduction(
-            len, np.sum, token="len", meta=int, split_every=False
-        ).compute()
+        return self._length
 
     def __bool__(self):
         raise ValueError(
@@ -1138,6 +1157,7 @@ Dask Name: {name}, {task} tasks"""
         index = tuple(slice(k, k + 1) if isinstance(k, Number) else k for k in index)
         name = "blocks-" + tokenize(self, index)
         new_keys = np.array(self.__dask_keys__(), dtype=object)[index].tolist()
+        lengths = np.array(self._lengths)[index].tolist() if self._lengths else None
 
         divisions = [self.divisions[i] for _, i in new_keys] + [
             self.divisions[new_keys[-1][1] + 1]
@@ -1145,7 +1165,7 @@ Dask Name: {name}, {task} tasks"""
         dsk = {(name, i): tuple(key) for i, key in enumerate(new_keys)}
 
         graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-        return new_dd_object(graph, name, self._meta, divisions)
+        return new_dd_object(graph, name, self._meta, divisions, lengths=lengths)
 
     @property
     def partitions(self):
@@ -3918,7 +3938,9 @@ class DataFrame(_Frame):
         from .indexing import _iLocIndexer
 
         # For dataframes with unique column names, this will be transformed into a __getitem__ call
-        return _iLocIndexer(self)
+        result = _iLocIndexer(self)
+        result._lengths = self._lengths
+        return result
 
     def __len__(self):
         try:
@@ -3960,7 +3982,9 @@ class DataFrame(_Frame):
             meta = self._meta[_extract_meta(key)]
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            return new_dd_object(
+                graph, name, meta, self.divisions, lengths=self._lengths
+            )
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 
@@ -3985,7 +4009,9 @@ class DataFrame(_Frame):
 
             dsk = partitionwise_graph(operator.getitem, name, self, key)
             graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            return new_dd_object(
+                graph, name, meta, self.divisions, lengths=self._lengths
+            )
         if isinstance(key, Series):
             # do not perform dummy calculation, as columns will not be changed.
             if self.divisions != key.divisions:
@@ -4333,7 +4359,9 @@ class DataFrame(_Frame):
             raise ValueError("Cannot rename index.")
 
         # *args here is index, columns but columns arg is already used
-        return self.map_partitions(M.rename, None, columns=columns)
+        return self.map_partitions(
+            M.rename, None, columns=columns, preserve_length=True
+        )
 
     def query(self, expr, **kwargs):
         """Filter dataframe with complex expression
@@ -5328,7 +5356,8 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
+    _lengths = deps[0]._lengths if deps and isinstance(deps, _Frame) else None
+    result = new_dd_object(graph, _name, meta, divisions, lengths=_lengths)
     return handle_out(out, result)
 
 
@@ -5679,6 +5708,7 @@ def map_partitions(
     meta=no_default,
     enforce_metadata=True,
     transform_divisions=True,
+    preserve_length=False,
     **kwargs,
 ):
     """Apply Python function on each DataFrame partition.
@@ -5697,6 +5727,10 @@ def map_partitions(
         Whether or not to enforce the structure of the metadata at runtime.
         This will rename and reorder columns for each partition,
         and will raise an error if this doesn't work or types don't match.
+    preserve_length : bool
+        Whether or not the operation is guaranteed to preserve the length of
+        all partitions. This is a promise from the user to Dask that ``func``
+        will not change the row count. Default is False.
     $META
     """
     name = kwargs.pop("token", None)
@@ -5823,7 +5857,8 @@ def map_partitions(
             ) + v[1:]
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
-    return new_dd_object(graph, name, meta, divisions)
+    _lengths = dependencies[0]._lengths if preserve_length and dependencies else None
+    return new_dd_object(graph, name, meta, divisions, lengths=_lengths)
 
 
 def apply_and_enforce(*args, **kwargs):
@@ -6857,13 +6892,15 @@ def has_parallel_type(x):
     return get_parallel_type(x) is not Scalar
 
 
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(dsk, name, meta, divisions, parent_meta=None, lengths=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        new = get_parallel_type(meta)(dsk, name, meta, divisions)
+        new._lengths = lengths
+        return new
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
@@ -6881,7 +6918,9 @@ def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
                     layer[(name, i) + suffix] = layer.pop((name, i))
         return da.Array(dsk, name=name, chunks=chunks, dtype=meta.dtype)
     else:
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        new = get_parallel_type(meta)(dsk, name, meta, divisions)
+        new._lengths = lengths
+        return new
 
 
 def partitionwise_graph(func, name, *args, **kwargs):
