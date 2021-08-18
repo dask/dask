@@ -826,6 +826,8 @@ def typename(typ, short=False):
     >>> typename(literal, short=True)
     'dask.literal'
     """
+    if not isinstance(typ, type):
+        return typename(type(typ))
     try:
         if not typ.__module__ or typ.__module__ == "builtins":
             return typ.__name__
