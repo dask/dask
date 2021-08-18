@@ -571,7 +571,7 @@ def compute(*args, **kwargs):
 
 def visualize(*args, **kwargs):
     """
-    Visualize several dask graphs at once.
+    Visualize several low level dask graphs at once.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
@@ -579,7 +579,7 @@ def visualize(*args, **kwargs):
     Parameters
     ----------
     args : dict(s) or collection(s)
-        The dask graph(s) to visualize.
+        The low level dask graph(s) to visualize.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
