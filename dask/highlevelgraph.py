@@ -879,14 +879,14 @@ class HighLevelGraph(Mapping):
         ----------
         filename : str or None, optional
             The name of the file to write to disk. If the provided `filename`
-            doesn't include an extension, '.svg' will be used by default.
+            doesn't include an extension, '.png' will be used by default.
             If `filename` is None, no file will be written, and the graph is
             rendered in the Jupyter notebook only.
         format : {'png', 'pdf', 'dot', 'svg', 'jpeg', 'jpg'}, optional
             Format in which to write output file. Default is 'svg'.
-        color : {None, 'layer_type'}, optional
+        color : {None, 'layer_type'}, optional (default: None)
             Options to color nodes.
-            - None, the default, no colors.
+            - None, no colors.
             - layer_type, color nodes based on the layer type.
         **kwargs
            Additional keyword arguments to forward to ``to_graphviz``.
