@@ -101,17 +101,6 @@ def wrap_func_like(func, *args, **kwargs):
     return Array(dsk, name, chunks, meta=meta.astype(dtype))
 
 
-def wrap_func_like_safe(func, func_like, *args, **kwargs):
-    """
-    Safe implementation for wrap_func_like(), attempts to use func_like(),
-    if the shape keyword argument, falls back to func().
-    """
-    try:
-        return func_like(*args, **kwargs)
-    except TypeError:
-        return func(*args, **kwargs)
-
-
 @curry
 def wrap(wrap_func, func, **kwargs):
     func_like = kwargs.pop("func_like", None)
@@ -179,7 +168,7 @@ zeros = w(broadcast_trick(np.zeros_like), dtype="f8")
 empty = w(broadcast_trick(np.empty_like), dtype="f8")
 
 
-w_like = wrap(wrap_func_like_safe)
+w_like = wrap(wrap_func_like)
 
 
 empty_like = w_like(np.empty, func_like=np.empty_like)
