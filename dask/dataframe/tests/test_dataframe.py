@@ -175,14 +175,14 @@ def test_Index():
 def test_axes():
     pdf = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
     df = dd.from_pandas(pdf, npartitions=2)
-    assert len(df) == 2
+    assert len(df.axes) == len(pdf.axes)
     assert all(assert_eq(d, p) for d, p in zip(df.axes, pdf.axes))
 
 
 def test_series_axes():
     ps = pd.Series(["abcde"])
     ds = dd.from_pandas(ps, npartitions=2)
-    assert len(ds.axes) == 1
+    assert len(ds.axes) == len(ps.axes)
     assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
 
 
