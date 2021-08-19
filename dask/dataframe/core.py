@@ -409,6 +409,12 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
         This is strictly a shallow copy of the underlying computational graph.
         It does not affect the underlying data
+
+        Parameters
+        ----------
+        deep: boolean, default False
+            The deep value must be `False` and it is declared as a parameter just for
+            compatibility with third-party libraries like cuDF operation
         """
         if deep is not False:
             raise ValueError(
