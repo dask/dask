@@ -158,13 +158,18 @@ and running quickly (slow test suites get run less often).
 
 You can run tests locally by running ``py.test`` in the local dask directory::
 
-   py.test dask --verbose
+   py.test dask
 
 You can also test certain modules or individual tests for faster response::
 
-   py.test dask/dataframe --verbose
+   py.test dask/dataframe
 
    py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
+
+If you want the tests to run faster, you can run them in parallel using
+``pytest-xdist``::
+
+   py.test dask -n auto
 
 Tests run automatically on the Travis.ci and Appveyor continuous testing
 frameworks on every push to every pull request on GitHub.
