@@ -1264,12 +1264,12 @@ def test_partition_on(tmpdir, engine):
         tmpdir, engine=engine, index=False, gather_statistics=False
     ).compute()
     for val in df.a1.unique():
-        assert set(df.b[df.a1 == val]) == set(out.b[out.a1 == val])
+        assert set(df.d[df.a1 == val]) == set(out.d[out.a1 == val])
 
     # Now specify the columns and allow auto-index detection
-    out = dd.read_parquet(tmpdir, engine=engine, columns=["b", "a2"]).compute()
+    out = dd.read_parquet(tmpdir, engine=engine, columns=["d", "a2"]).compute()
     for val in df.a2.unique():
-        assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
+        assert set(df.d[df.a2 == val]) == set(out.d[out.a2 == val])
 
 
 def test_partition_on_duplicates(tmpdir, engine):
