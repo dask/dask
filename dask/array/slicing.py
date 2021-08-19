@@ -142,7 +142,7 @@ def slice_array(out_name, in_name, blockdims, index, itemsize):
     {('y', 0): (<function getitem at ...>,
                 ('x', 0),
                 (slice(10, 20, 1),)),
-      ('y', 1): (<function getitem at ...>, ('x', 1), (slice(0, 15, 1),))}
+     ('y', 1): (<function getitem at ...>, ('x', 1), (slice(0, 15, 1),))}
     >>> blockdims
     ((10, 15),)
 
