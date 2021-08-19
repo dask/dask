@@ -387,7 +387,7 @@ def _mul_cols(df, cols):
 
     a b c -> a*a, a*b, b*b, b*c, c*c
     """
-    _df = type(df)()
+    _df = df.__class__()
     for i, j in it.combinations_with_replacement(cols, 2):
         col = "%s%s" % (i, j)
         _df[col] = df[i] * df[j]
@@ -924,10 +924,10 @@ def _groupby_apply_funcs(df, *index, **kwargs):
             result[result_column] = r
 
     if is_dataframe_like(df):
-        return type(df)(result)
+        return df.__class__(result)
     else:
         # Get the DataFrame type of this Series object
-        return type(df.head(0).to_frame())(result)
+        return df.head(0).to_frame().__class__(result)
 
 
 def _compute_sum_of_squares(grouped, column):
@@ -953,7 +953,7 @@ def _agg_finalize(df, aggregate_funcs, finalize_funcs, level, sort=False, **kwar
     for result_column, func, finalize_kwargs in finalize_funcs:
         result[result_column] = func(df, **finalize_kwargs)
 
-    return type(df)(result)
+    return df.__class__(result)
 
 
 def _apply_func_to_column(df_like, column, func):
