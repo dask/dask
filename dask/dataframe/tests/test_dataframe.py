@@ -3856,12 +3856,20 @@ def test_copy():
 
     a = dd.from_pandas(df, npartitions=2)
     b = a.copy()
+    c = a.copy(deep=False)
 
     a["y"] = a.x * 2
 
     assert_eq(b, df)
+    assert_eq(c, df)
 
-    df["y"] = df.x * 2
+    deep_err =  (
+        "The `deep` value must be False. This is strictly a shallow copy "
+        "of the underlying computational graph."
+    )
+    for deep in [True, None, ""]:
+        with pytest.raises(ValueError, match=deep_err):
+            a.copy(deep=deep)
 
 
 def test_del():
@@ -3994,10 +4002,6 @@ def test_to_datetime():
         pd.to_datetime(s.index, infer_datetime_format=True),
         dd.to_datetime(ds.index, infer_datetime_format=True),
         check_divisions=False,
-    )
-    assert_eq(
-        pd.to_datetime(s, utc=True),
-        dd.to_datetime(ds, utc=True),
     )
 
     for arg in ("2021-08-03", 2021):

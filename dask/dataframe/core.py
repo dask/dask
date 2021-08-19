@@ -404,12 +404,17 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __setstate__(self, state):
         self.dask, self._name, self._meta, self.divisions = state
 
-    def copy(self):
+    def copy(self, deep=False):
         """Make a copy of the dataframe
 
         This is strictly a shallow copy of the underlying computational graph.
         It does not affect the underlying data
         """
+        if deep is not False:
+            raise ValueError(
+                "The `deep` value must be False. This is strictly a shallow copy "
+                "of the underlying computational graph."
+            )
         return new_dd_object(self.dask, self._name, self._meta, self.divisions)
 
     def __array__(self, dtype=None, **kwargs):
@@ -6807,10 +6812,9 @@ def maybe_shift_divisions(df, periods, freq):
 
 @wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
-    tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
     if meta is None:
         if isinstance(arg, Index):
-            meta = pd.DatetimeIndex([], **tz_kwarg)
+            meta = pd.DatetimeIndex([])
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
@@ -6818,7 +6822,7 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            meta = pd.Series([pd.Timestamp("2000", **tz_kwarg)])
+            meta = pd.Series([pd.Timestamp("2000")])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
