@@ -4003,6 +4003,10 @@ def test_to_datetime():
         dd.to_datetime(ds.index, infer_datetime_format=True),
         check_divisions=False,
     )
+    assert_eq(
+        pd.to_datetime(s, utc=True),
+        dd.to_datetime(ds, utc=True),
+    )
 
     for arg in ("2021-08-03", 2021):
         with pytest.raises(NotImplementedError, match="non-index-able arguments"):

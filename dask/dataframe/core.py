@@ -412,9 +412,9 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
 
         Parameters
         ----------
-        deep: boolean, default False
+        deep : boolean, default False
             The deep value must be `False` and it is declared as a parameter just for
-            compatibility with third-party libraries like cuDF operation
+            compatibility with third-party libraries like cuDF
         """
         if deep is not False:
             raise ValueError(
