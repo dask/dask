@@ -172,6 +172,20 @@ def test_Index():
         pytest.raises(AttributeError, lambda: ddf.index.index)
 
 
+def test_Axes():
+    pdf = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    df = dd.from_pandas(pdf, npartitions=2)
+    assert len(df) == 2
+    assert all(assert_eq(d, p) for d, p in zip(df.axes, pdf.axes))
+
+
+def test_series_Axes():
+    ps = pd.Series(["abcde"])
+    ds = dd.from_pandas(ps, npartitions=2)
+    assert len(ds.axes) == 1
+    assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
+
+
 def test_Scalar():
     val = np.int64(1)
     s = Scalar({("a", 0): val}, "a", "i8")
