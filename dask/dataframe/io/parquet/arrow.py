@@ -302,6 +302,458 @@ class ArrowDatasetEngine(Engine):
     #
 
     @classmethod
+    def read_metadata(
+        cls,
+        fs,
+        paths,
+        categories=None,
+        index=None,
+        gather_statistics=None,
+        filters=None,
+        split_row_groups=None,
+        read_from_paths=None,
+        chunksize=None,
+        aggregate_files=None,
+        **kwargs,
+    ):
+        # Stage 1: Collect general dataset information
+        dataset_info = cls._collect_dataset_info(
+            paths,
+            fs,
+            categories=categories,
+            index=index,
+            gather_statistics=gather_statistics,
+            filters=filters,
+            split_row_groups=split_row_groups,
+            read_from_paths=read_from_paths,
+            chunksize=chunksize,
+            aggregate_files=aggregate_files,
+            **kwargs.get("dataset", {}),
+        )
+
+        # Stage 2: Generate output `meta`
+        meta = cls._create_dd_meta(dataset_info)
+
+        # Stage 3: Generate parts and stats
+        parts, stats, common_kwargs = cls._construct_collection_plan(meta, dataset_info)
+
+        # Add `common_kwargs` and `aggregation_depth` to the first
+        # element of `parts`. We can return as a separate element
+        # in the future, but should avoid breaking the API for now.
+        if len(parts):
+            parts[0]["common_kwargs"] = common_kwargs
+            parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
+
+        return (meta, stats, parts, dataset_info["index"])
+
+    @classmethod
+    def multi_support(cls):
+        return cls == ArrowDatasetEngine
+
+    @classmethod
+    def read_partition(
+        cls,
+        fs,
+        pieces,
+        columns,
+        index,
+        categories=(),
+        partitions=(),
+        filters=None,
+        schema=None,
+        **kwargs,
+    ):
+        """Read in a single output partition.
+
+        This method is also used by `ArrowLegacyEngine`.
+        """
+        if isinstance(index, list):
+            for level in index:
+                # unclear if we can use set ops here. I think the order matters.
+                # Need the membership test to avoid duplicating index when
+                # we slice with `columns` later on.
+                if level not in columns:
+                    columns.append(level)
+
+        # Ensure `columns` and `partitions` do not overlap
+        columns_and_parts = columns.copy()
+        if not isinstance(partitions, (list, tuple)):
+            if columns_and_parts and partitions:
+                for part_name in partitions.partition_names:
+                    if part_name in columns:
+                        columns.remove(part_name)
+                    else:
+                        columns_and_parts.append(part_name)
+                columns = columns or None
+
+        # Always convert pieces to list
+        if not isinstance(pieces, list):
+            pieces = [pieces]
+
+        tables = []
+        multi_read = len(pieces) > 1
+        for piece in pieces:
+
+            if isinstance(piece, str):
+                # `piece` is a file-path string
+                path_or_frag = piece
+                row_group = None
+                partition_keys = None
+            else:
+                # `piece` contains (path, row_group, partition_keys)
+                (path_or_frag, row_group, partition_keys) = piece
+
+            # Convert row_group to a list and be sure to
+            # check if msgpack converted it to a tuple
+            if isinstance(row_group, tuple):
+                row_group = list(row_group)
+            if not isinstance(row_group, list):
+                row_group = [row_group]
+
+            # Read in arrow table and convert to pandas
+            arrow_table = cls._read_table(
+                path_or_frag,
+                fs,
+                row_group,
+                columns,
+                schema,
+                filters,
+                partitions,
+                partition_keys,
+                **kwargs,
+            )
+            if multi_read:
+                tables.append(arrow_table)
+
+        if multi_read:
+            arrow_table = pa.concat_tables(tables)
+
+        # For pyarrow.dataset api, if we did not read directly from
+        # fragments, we need to add the partitioned columns here.
+        if partitions and isinstance(partitions, list):
+            keys_dict = {k: v for (k, v) in partition_keys}
+            for partition in partitions:
+                if partition.name not in arrow_table.schema.names:
+                    # We read from file paths, so the partition
+                    # columns are NOT in our table yet.
+                    cat = keys_dict.get(partition.name, None)
+                    cat_ind = np.full(
+                        len(arrow_table), partition.keys.index(cat), dtype="i4"
+                    )
+                    arr = pa.DictionaryArray.from_arrays(
+                        cat_ind, pa.array(partition.keys)
+                    )
+                    arrow_table = arrow_table.append_column(partition.name, arr)
+
+        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
+
+        # For pyarrow.dataset api, need to convert partition columns
+        # to categorigal manually for integer types.
+        if partitions and isinstance(partitions, list):
+            for partition in partitions:
+                if df[partition.name].dtype.name != "category":
+                    # We read directly from fragments, so the partition
+                    # columns are already in our dataframe.  We just
+                    # need to convert non-categorical types.
+                    df[partition.name] = pd.Series(
+                        pd.Categorical(
+                            categories=partition.keys,
+                            values=df[partition.name].values,
+                        ),
+                        index=df.index,
+                    )
+
+        # Note that `to_pandas(ignore_metadata=False)` means
+        # pyarrow will use the pandas metadata to set the index.
+        index_in_columns_and_parts = set(df.index.names).issubset(
+            set(columns_and_parts)
+        )
+        if not index:
+            if index_in_columns_and_parts:
+                # User does not want to set index and a desired
+                # column/partition has been set to the index
+                df.reset_index(drop=False, inplace=True)
+            else:
+                # User does not want to set index and an
+                # "unwanted" column has been set to the index
+                df.reset_index(drop=True, inplace=True)
+        else:
+            if set(df.index.names) != set(index) and index_in_columns_and_parts:
+                # The wrong index has been set and it contains
+                # one or more desired columns/partitions
+                df.reset_index(drop=False, inplace=True)
+            elif index_in_columns_and_parts:
+                # The correct index has already been set
+                index = False
+                columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
+        df = df[list(columns_and_parts)]
+
+        if index:
+            df = df.set_index(index)
+        return df
+
+    @classmethod
+    def _get_dataset_offset(cls, path, fs, append, ignore_divisions):
+        fmd = None
+        i_offset = 0
+        if append:
+            # Make sure there are existing file fragments.
+            # Otherwise there is no need to set `append=True`
+            i_offset = len(
+                list(
+                    pa_ds.dataset(path, filesystem=fs, format="parquet").get_fragments()
+                )
+            )
+            if i_offset == 0:
+                # No dataset to append to
+                return fmd, i_offset, False
+            try:
+                fmd = pq.read_metadata(fs.sep.join([path, "_metadata"]))
+            except (IOError, FileNotFoundError):
+                # No _metadata file present - No appending allowed (for now)
+                if not ignore_divisions:
+                    # TODO: Be more flexible about existing metadata.
+                    raise NotImplementedError(
+                        "_metadata file needed to `append` "
+                        "with `engine='pyarrow-dataset'` "
+                        "unless `ignore_divisions` is `True`"
+                    )
+        return fmd, i_offset, append
+
+    @classmethod
+    def initialize_write(
+        cls,
+        df,
+        fs,
+        path,
+        append=False,
+        partition_on=None,
+        ignore_divisions=False,
+        division_info=None,
+        schema=None,
+        index_cols=None,
+        **kwargs,
+    ):
+        # Infer schema if "infer"
+        # (also start with inferred schema if user passes a dict)
+        if schema == "infer" or isinstance(schema, dict):
+
+            # Start with schema from _meta_nonempty
+            _schema = pa.Schema.from_pandas(
+                df._meta_nonempty.set_index(index_cols)
+                if index_cols
+                else df._meta_nonempty
+            )
+
+            # Use dict to update our inferred schema
+            if isinstance(schema, dict):
+                schema = pa.schema(schema)
+                for name in schema.names:
+                    i = _schema.get_field_index(name)
+                    j = schema.get_field_index(name)
+                    _schema = _schema.set(i, schema.field(j))
+
+            # If we have object columns, we need to sample partitions
+            # until we find non-null data for each column in `sample`
+            sample = [col for col in df.columns if df[col].dtype == "object"]
+            if sample and schema == "infer":
+                delayed_schema_from_pandas = delayed(pa.Schema.from_pandas)
+                for i in range(df.npartitions):
+                    # Keep data on worker
+                    _s = delayed_schema_from_pandas(
+                        df[sample].to_delayed()[i]
+                    ).compute()
+                    for name, typ in zip(_s.names, _s.types):
+                        if typ != "null":
+                            i = _schema.get_field_index(name)
+                            j = _s.get_field_index(name)
+                            _schema = _schema.set(i, _s.field(j))
+                            sample.remove(name)
+                    if not sample:
+                        break
+
+            # Final (inferred) schema
+            schema = _schema
+
+        # Check that target directory exists
+        fs.mkdirs(path, exist_ok=True)
+        if append and division_info is None:
+            ignore_divisions = True
+
+        # Extract metadata and get file offset if appending
+        fmd, i_offset, append = cls._get_dataset_offset(
+            path, fs, append, ignore_divisions
+        )
+
+        # Inspect the intial metadata if appending
+        if append:
+            arrow_schema = fmd.schema.to_arrow_schema()
+            names = arrow_schema.names
+            has_pandas_metadata = (
+                arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
+            )
+            if has_pandas_metadata:
+                pandas_metadata = json.loads(
+                    arrow_schema.metadata[b"pandas"].decode("utf8")
+                )
+                categories = [
+                    c["name"]
+                    for c in pandas_metadata["columns"]
+                    if c["pandas_type"] == "categorical"
+                ]
+            else:
+                categories = None
+            dtypes = _get_pyarrow_dtypes(arrow_schema, categories)
+            if set(names) != set(df.columns) - set(partition_on):
+                raise ValueError(
+                    "Appended columns not the same.\n"
+                    "Previous: {} | New: {}".format(names, list(df.columns))
+                )
+            elif (pd.Series(dtypes).loc[names] != df[names].dtypes).any():
+                # TODO Coerce values for compatible but different dtypes
+                raise ValueError(
+                    "Appended dtypes differ.\n{}".format(
+                        set(dtypes.items()) ^ set(df.dtypes.iteritems())
+                    )
+                )
+
+            # Check divisions if necessary
+            if division_info["name"] not in names:
+                ignore_divisions = True
+            if not ignore_divisions:
+                old_end = None
+                row_groups = [fmd.row_group(i) for i in range(fmd.num_row_groups)]
+                for row_group in row_groups:
+                    for i, name in enumerate(names):
+                        if name != division_info["name"]:
+                            continue
+                        column = row_group.column(i)
+                        if column.statistics:
+                            if not old_end:
+                                old_end = column.statistics.max
+                            else:
+                                old_end = max(old_end, column.statistics.max)
+                            break
+
+                divisions = division_info["divisions"]
+                if divisions[0] < old_end:
+                    raise ValueError(
+                        "Appended divisions overlapping with the previous ones"
+                        " (set ignore_divisions=True to append anyway).\n"
+                        "Previous: {} | New: {}".format(old_end, divisions[0])
+                    )
+
+        return fmd, schema, i_offset
+
+    @classmethod
+    def _pandas_to_arrow_table(
+        cls, df: pd.DataFrame, preserve_index=False, schema=None
+    ) -> pa.Table:
+        table = pa.Table.from_pandas(
+            df, nthreads=1, preserve_index=preserve_index, schema=schema
+        )
+        return table
+
+    @classmethod
+    def write_partition(
+        cls,
+        df,
+        path,
+        fs,
+        filename,
+        partition_on,
+        return_metadata,
+        fmd=None,
+        compression=None,
+        index_cols=None,
+        schema=None,
+        head=False,
+        custom_metadata=None,
+        **kwargs,
+    ):
+        _meta = None
+        preserve_index = False
+        if _index_in_schema(index_cols, schema):
+            df.set_index(index_cols, inplace=True)
+            preserve_index = True
+        else:
+            index_cols = []
+
+        t = cls._pandas_to_arrow_table(df, preserve_index=preserve_index, schema=schema)
+        if custom_metadata:
+            _md = t.schema.metadata
+            _md.update(custom_metadata)
+            t = t.replace_schema_metadata(metadata=_md)
+
+        if partition_on:
+            md_list = _write_partitioned(
+                t,
+                path,
+                filename,
+                partition_on,
+                fs,
+                index_cols=index_cols,
+                compression=compression,
+                **kwargs,
+            )
+            if md_list:
+                _meta = md_list[0]
+                for i in range(1, len(md_list)):
+                    _append_row_groups(_meta, md_list[i])
+        else:
+            md_list = []
+            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
+                pq.write_table(
+                    t,
+                    fil,
+                    compression=compression,
+                    metadata_collector=md_list,
+                    **kwargs,
+                )
+            if md_list:
+                _meta = md_list[0]
+                _meta.set_file_path(filename)
+        # Return the schema needed to write the metadata
+        if return_metadata:
+            d = {"meta": _meta}
+            if head:
+                # Only return schema if this is the "head" partition
+                d["schema"] = t.schema
+            return [d]
+        else:
+            return []
+
+    @staticmethod
+    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
+        schema = parts[0][0].get("schema", None)
+        parts = [p for p in parts if p[0]["meta"] is not None]
+        if parts:
+            if not append:
+                # Get only arguments specified in the function
+                common_metadata_path = fs.sep.join([path, "_common_metadata"])
+                keywords = getargspec(pq.write_metadata).args
+                kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
+                with fs.open(common_metadata_path, "wb") as fil:
+                    pq.write_metadata(schema, fil, **kwargs_meta)
+
+            # Aggregate metadata and write to _metadata file
+            metadata_path = fs.sep.join([path, "_metadata"])
+            if append and fmd is not None:
+                _meta = fmd
+                i_start = 0
+            else:
+                _meta = parts[0][0]["meta"]
+                i_start = 1
+            for i in range(i_start, len(parts)):
+                _append_row_groups(_meta, parts[i][0]["meta"])
+            with fs.open(metadata_path, "wb") as fil:
+                _meta.write_metadata_file(fil)
+
+    #
+    # Private Class Methods
+    #
+
+    @classmethod
     def _collect_dataset_info(
         cls,
         paths,
@@ -820,458 +1272,6 @@ class ArrowDatasetEngine(Engine):
             dataset_info["chunksize"],
             dataset_info["aggregation_depth"],
         )
-
-    @classmethod
-    def read_metadata(
-        cls,
-        fs,
-        paths,
-        categories=None,
-        index=None,
-        gather_statistics=None,
-        filters=None,
-        split_row_groups=None,
-        read_from_paths=None,
-        chunksize=None,
-        aggregate_files=None,
-        **kwargs,
-    ):
-        # Stage 1: Collect general dataset information
-        dataset_info = cls._collect_dataset_info(
-            paths,
-            fs,
-            categories=categories,
-            index=index,
-            gather_statistics=gather_statistics,
-            filters=filters,
-            split_row_groups=split_row_groups,
-            read_from_paths=read_from_paths,
-            chunksize=chunksize,
-            aggregate_files=aggregate_files,
-            **kwargs.get("dataset", {}),
-        )
-
-        # Stage 2: Generate output `meta`
-        meta = cls._create_dd_meta(dataset_info)
-
-        # Stage 3: Generate parts and stats
-        parts, stats, common_kwargs = cls._construct_collection_plan(meta, dataset_info)
-
-        # Add `common_kwargs` and `aggregation_depth` to the first
-        # element of `parts`. We can return as a separate element
-        # in the future, but should avoid breaking the API for now.
-        if len(parts):
-            parts[0]["common_kwargs"] = common_kwargs
-            parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
-
-        return (meta, stats, parts, dataset_info["index"])
-
-    @classmethod
-    def multi_support(cls):
-        return cls == ArrowDatasetEngine
-
-    @classmethod
-    def read_partition(
-        cls,
-        fs,
-        pieces,
-        columns,
-        index,
-        categories=(),
-        partitions=(),
-        filters=None,
-        schema=None,
-        **kwargs,
-    ):
-        """Read in a single output partition.
-
-        This method is also used by `ArrowLegacyEngine`.
-        """
-        if isinstance(index, list):
-            for level in index:
-                # unclear if we can use set ops here. I think the order matters.
-                # Need the membership test to avoid duplicating index when
-                # we slice with `columns` later on.
-                if level not in columns:
-                    columns.append(level)
-
-        # Ensure `columns` and `partitions` do not overlap
-        columns_and_parts = columns.copy()
-        if not isinstance(partitions, (list, tuple)):
-            if columns_and_parts and partitions:
-                for part_name in partitions.partition_names:
-                    if part_name in columns:
-                        columns.remove(part_name)
-                    else:
-                        columns_and_parts.append(part_name)
-                columns = columns or None
-
-        # Always convert pieces to list
-        if not isinstance(pieces, list):
-            pieces = [pieces]
-
-        tables = []
-        multi_read = len(pieces) > 1
-        for piece in pieces:
-
-            if isinstance(piece, str):
-                # `piece` is a file-path string
-                path_or_frag = piece
-                row_group = None
-                partition_keys = None
-            else:
-                # `piece` contains (path, row_group, partition_keys)
-                (path_or_frag, row_group, partition_keys) = piece
-
-            # Convert row_group to a list and be sure to
-            # check if msgpack converted it to a tuple
-            if isinstance(row_group, tuple):
-                row_group = list(row_group)
-            if not isinstance(row_group, list):
-                row_group = [row_group]
-
-            # Read in arrow table and convert to pandas
-            arrow_table = cls._read_table(
-                path_or_frag,
-                fs,
-                row_group,
-                columns,
-                schema,
-                filters,
-                partitions,
-                partition_keys,
-                **kwargs,
-            )
-            if multi_read:
-                tables.append(arrow_table)
-
-        if multi_read:
-            arrow_table = pa.concat_tables(tables)
-
-        # For pyarrow.dataset api, if we did not read directly from
-        # fragments, we need to add the partitioned columns here.
-        if partitions and isinstance(partitions, list):
-            keys_dict = {k: v for (k, v) in partition_keys}
-            for partition in partitions:
-                if partition.name not in arrow_table.schema.names:
-                    # We read from file paths, so the partition
-                    # columns are NOT in our table yet.
-                    cat = keys_dict.get(partition.name, None)
-                    cat_ind = np.full(
-                        len(arrow_table), partition.keys.index(cat), dtype="i4"
-                    )
-                    arr = pa.DictionaryArray.from_arrays(
-                        cat_ind, pa.array(partition.keys)
-                    )
-                    arrow_table = arrow_table.append_column(partition.name, arr)
-
-        df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
-
-        # For pyarrow.dataset api, need to convert partition columns
-        # to categorigal manually for integer types.
-        if partitions and isinstance(partitions, list):
-            for partition in partitions:
-                if df[partition.name].dtype.name != "category":
-                    # We read directly from fragments, so the partition
-                    # columns are already in our dataframe.  We just
-                    # need to convert non-categorical types.
-                    df[partition.name] = pd.Series(
-                        pd.Categorical(
-                            categories=partition.keys,
-                            values=df[partition.name].values,
-                        ),
-                        index=df.index,
-                    )
-
-        # Note that `to_pandas(ignore_metadata=False)` means
-        # pyarrow will use the pandas metadata to set the index.
-        index_in_columns_and_parts = set(df.index.names).issubset(
-            set(columns_and_parts)
-        )
-        if not index:
-            if index_in_columns_and_parts:
-                # User does not want to set index and a desired
-                # column/partition has been set to the index
-                df.reset_index(drop=False, inplace=True)
-            else:
-                # User does not want to set index and an
-                # "unwanted" column has been set to the index
-                df.reset_index(drop=True, inplace=True)
-        else:
-            if set(df.index.names) != set(index) and index_in_columns_and_parts:
-                # The wrong index has been set and it contains
-                # one or more desired columns/partitions
-                df.reset_index(drop=False, inplace=True)
-            elif index_in_columns_and_parts:
-                # The correct index has already been set
-                index = False
-                columns_and_parts = list(set(columns_and_parts) - set(df.index.names))
-        df = df[list(columns_and_parts)]
-
-        if index:
-            df = df.set_index(index)
-        return df
-
-    @classmethod
-    def _get_dataset_offset(cls, path, fs, append, ignore_divisions):
-        fmd = None
-        i_offset = 0
-        if append:
-            # Make sure there are existing file fragments.
-            # Otherwise there is no need to set `append=True`
-            i_offset = len(
-                list(
-                    pa_ds.dataset(path, filesystem=fs, format="parquet").get_fragments()
-                )
-            )
-            if i_offset == 0:
-                # No dataset to append to
-                return fmd, i_offset, False
-            try:
-                fmd = pq.read_metadata(fs.sep.join([path, "_metadata"]))
-            except (IOError, FileNotFoundError):
-                # No _metadata file present - No appending allowed (for now)
-                if not ignore_divisions:
-                    # TODO: Be more flexible about existing metadata.
-                    raise NotImplementedError(
-                        "_metadata file needed to `append` "
-                        "with `engine='pyarrow-dataset'` "
-                        "unless `ignore_divisions` is `True`"
-                    )
-        return fmd, i_offset, append
-
-    @classmethod
-    def initialize_write(
-        cls,
-        df,
-        fs,
-        path,
-        append=False,
-        partition_on=None,
-        ignore_divisions=False,
-        division_info=None,
-        schema=None,
-        index_cols=None,
-        **kwargs,
-    ):
-        # Infer schema if "infer"
-        # (also start with inferred schema if user passes a dict)
-        if schema == "infer" or isinstance(schema, dict):
-
-            # Start with schema from _meta_nonempty
-            _schema = pa.Schema.from_pandas(
-                df._meta_nonempty.set_index(index_cols)
-                if index_cols
-                else df._meta_nonempty
-            )
-
-            # Use dict to update our inferred schema
-            if isinstance(schema, dict):
-                schema = pa.schema(schema)
-                for name in schema.names:
-                    i = _schema.get_field_index(name)
-                    j = schema.get_field_index(name)
-                    _schema = _schema.set(i, schema.field(j))
-
-            # If we have object columns, we need to sample partitions
-            # until we find non-null data for each column in `sample`
-            sample = [col for col in df.columns if df[col].dtype == "object"]
-            if sample and schema == "infer":
-                delayed_schema_from_pandas = delayed(pa.Schema.from_pandas)
-                for i in range(df.npartitions):
-                    # Keep data on worker
-                    _s = delayed_schema_from_pandas(
-                        df[sample].to_delayed()[i]
-                    ).compute()
-                    for name, typ in zip(_s.names, _s.types):
-                        if typ != "null":
-                            i = _schema.get_field_index(name)
-                            j = _s.get_field_index(name)
-                            _schema = _schema.set(i, _s.field(j))
-                            sample.remove(name)
-                    if not sample:
-                        break
-
-            # Final (inferred) schema
-            schema = _schema
-
-        # Check that target directory exists
-        fs.mkdirs(path, exist_ok=True)
-        if append and division_info is None:
-            ignore_divisions = True
-
-        # Extract metadata and get file offset if appending
-        fmd, i_offset, append = cls._get_dataset_offset(
-            path, fs, append, ignore_divisions
-        )
-
-        # Inspect the intial metadata if appending
-        if append:
-            arrow_schema = fmd.schema.to_arrow_schema()
-            names = arrow_schema.names
-            has_pandas_metadata = (
-                arrow_schema.metadata is not None and b"pandas" in arrow_schema.metadata
-            )
-            if has_pandas_metadata:
-                pandas_metadata = json.loads(
-                    arrow_schema.metadata[b"pandas"].decode("utf8")
-                )
-                categories = [
-                    c["name"]
-                    for c in pandas_metadata["columns"]
-                    if c["pandas_type"] == "categorical"
-                ]
-            else:
-                categories = None
-            dtypes = _get_pyarrow_dtypes(arrow_schema, categories)
-            if set(names) != set(df.columns) - set(partition_on):
-                raise ValueError(
-                    "Appended columns not the same.\n"
-                    "Previous: {} | New: {}".format(names, list(df.columns))
-                )
-            elif (pd.Series(dtypes).loc[names] != df[names].dtypes).any():
-                # TODO Coerce values for compatible but different dtypes
-                raise ValueError(
-                    "Appended dtypes differ.\n{}".format(
-                        set(dtypes.items()) ^ set(df.dtypes.iteritems())
-                    )
-                )
-
-            # Check divisions if necessary
-            if division_info["name"] not in names:
-                ignore_divisions = True
-            if not ignore_divisions:
-                old_end = None
-                row_groups = [fmd.row_group(i) for i in range(fmd.num_row_groups)]
-                for row_group in row_groups:
-                    for i, name in enumerate(names):
-                        if name != division_info["name"]:
-                            continue
-                        column = row_group.column(i)
-                        if column.statistics:
-                            if not old_end:
-                                old_end = column.statistics.max
-                            else:
-                                old_end = max(old_end, column.statistics.max)
-                            break
-
-                divisions = division_info["divisions"]
-                if divisions[0] < old_end:
-                    raise ValueError(
-                        "Appended divisions overlapping with the previous ones"
-                        " (set ignore_divisions=True to append anyway).\n"
-                        "Previous: {} | New: {}".format(old_end, divisions[0])
-                    )
-
-        return fmd, schema, i_offset
-
-    @classmethod
-    def _pandas_to_arrow_table(
-        cls, df: pd.DataFrame, preserve_index=False, schema=None
-    ) -> pa.Table:
-        table = pa.Table.from_pandas(
-            df, nthreads=1, preserve_index=preserve_index, schema=schema
-        )
-        return table
-
-    @classmethod
-    def write_partition(
-        cls,
-        df,
-        path,
-        fs,
-        filename,
-        partition_on,
-        return_metadata,
-        fmd=None,
-        compression=None,
-        index_cols=None,
-        schema=None,
-        head=False,
-        custom_metadata=None,
-        **kwargs,
-    ):
-        _meta = None
-        preserve_index = False
-        if _index_in_schema(index_cols, schema):
-            df.set_index(index_cols, inplace=True)
-            preserve_index = True
-        else:
-            index_cols = []
-
-        t = cls._pandas_to_arrow_table(df, preserve_index=preserve_index, schema=schema)
-        if custom_metadata:
-            _md = t.schema.metadata
-            _md.update(custom_metadata)
-            t = t.replace_schema_metadata(metadata=_md)
-
-        if partition_on:
-            md_list = _write_partitioned(
-                t,
-                path,
-                filename,
-                partition_on,
-                fs,
-                index_cols=index_cols,
-                compression=compression,
-                **kwargs,
-            )
-            if md_list:
-                _meta = md_list[0]
-                for i in range(1, len(md_list)):
-                    _append_row_groups(_meta, md_list[i])
-        else:
-            md_list = []
-            with fs.open(fs.sep.join([path, filename]), "wb") as fil:
-                pq.write_table(
-                    t,
-                    fil,
-                    compression=compression,
-                    metadata_collector=md_list,
-                    **kwargs,
-                )
-            if md_list:
-                _meta = md_list[0]
-                _meta.set_file_path(filename)
-        # Return the schema needed to write the metadata
-        if return_metadata:
-            d = {"meta": _meta}
-            if head:
-                # Only return schema if this is the "head" partition
-                d["schema"] = t.schema
-            return [d]
-        else:
-            return []
-
-    @staticmethod
-    def write_metadata(parts, fmd, fs, path, append=False, **kwargs):
-        schema = parts[0][0].get("schema", None)
-        parts = [p for p in parts if p[0]["meta"] is not None]
-        if parts:
-            if not append:
-                # Get only arguments specified in the function
-                common_metadata_path = fs.sep.join([path, "_common_metadata"])
-                keywords = getargspec(pq.write_metadata).args
-                kwargs_meta = {k: v for k, v in kwargs.items() if k in keywords}
-                with fs.open(common_metadata_path, "wb") as fil:
-                    pq.write_metadata(schema, fil, **kwargs_meta)
-
-            # Aggregate metadata and write to _metadata file
-            metadata_path = fs.sep.join([path, "_metadata"])
-            if append and fmd is not None:
-                _meta = fmd
-                i_start = 0
-            else:
-                _meta = parts[0][0]["meta"]
-                i_start = 1
-            for i in range(i_start, len(parts)):
-                _append_row_groups(_meta, parts[i][0]["meta"])
-            with fs.open(metadata_path, "wb") as fil:
-                _meta.write_metadata_file(fil)
-
-    #
-    # Private Class Methods
-    #
 
     @classmethod
     def _construct_parts(
