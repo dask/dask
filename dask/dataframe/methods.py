@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 from tlz import partition
 
-from ._compat import PANDAS_GT_140
+from ._compat import PANDAS_GT_131
 
 #  preserve compatibility while moving dispatch objects
 from .dispatch import (  # noqa: F401
@@ -88,7 +88,7 @@ def boundary_slice(df, start, stop, right_boundary=True, left_boundary=True, kin
     if len(df.index) == 0:
         return df
 
-    if PANDAS_GT_140:
+    if PANDAS_GT_131:
         if kind is not None:
             warnings.warn(
                 "The `kind` argument is no longer used/supported. "
