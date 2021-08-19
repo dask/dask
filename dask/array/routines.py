@@ -32,6 +32,7 @@ from .core import (
 )
 from .creation import arange, diag, empty, indices, tri
 from .einsumfuncs import einsum  # noqa
+from .numpy_compat import _numpy_120
 from .ufunc import multiply, sqrt
 from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
 from .wrap import ones
@@ -42,6 +43,8 @@ _range = range
 
 @derived_from(np)
 def array(x, dtype=None, ndmin=None, *, like=None):
+    if not _numpy_120:
+        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
     x = asarray(x, like=like)
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]

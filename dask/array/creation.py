@@ -24,6 +24,7 @@ from .core import (
     normalize_chunks,
     stack,
 )
+from .numpy_compat import _numpy_120
 from .ufunc import greater_equal, rint
 from .utils import AxisError, meta_from_array
 from .wrap import empty, full, ones, zeros
@@ -684,6 +685,9 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 @derived_from(np)
 def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
+    if not _numpy_120:
+        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
