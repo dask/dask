@@ -153,54 +153,6 @@ class PartitionObj:
         self.keys = sorted(keys)
 
 
-def _get_all_partition_keys(ds):
-    """Collect all partition categories (without applying filters).
-    This is needed for proper categorical encoding in `read_partition`.
-    We also need to know the mapping between paths and partition
-    values (`pkeys`).
-
-    Used by `ArrowDatasetEngine` only.
-    """
-    categories = defaultdict(list)
-    pkeys = defaultdict(list)
-    file_frag = None
-    for file_frag in ds.get_fragments():
-        keys = pa_ds._get_partition_keys(file_frag.partition_expression)
-        pkeys[file_frag.path] = keys
-        for k, v in keys.items():
-            if v not in categories[k]:
-                categories[k].append(v)
-
-    if file_frag is not None:
-        # Check/correct order of `categories` using last file_frag
-        #
-        # Note that `_get_partition_keys` does NOT preserve the
-        # partition-hierarchy order of the keys. Therefore, we
-        # use custom regex logic to determine the "correct"
-        # ordering of the `categories` output.
-        #
-        # Example (why we need to "reorder" `categories`):
-        #
-        #    # Fragment path has "hive" structure
-        #    file_frag.path
-        #
-        #        '/data/path/b=x/c=x/part.1.parquet'
-        #
-        #    # `categories` may NOT preserve the hierachy order
-        #    categories.keys()
-        #
-        #        dict_keys(['c', 'b'])
-        #
-        cat_keys = [
-            o.split("=")[0]
-            # Assume arrow always uses a normalized "/" sep
-            for o in re.findall("[^/]*=", file_frag.path)
-        ]
-        if set(categories) == set(cat_keys):
-            return {k: categories[k] for k in cat_keys if k in categories}, pkeys
-    return categories, pkeys
-
-
 def _frag_subset(old_frag, row_groups):
     """Create new fragment with row-group subset.
 
@@ -212,165 +164,6 @@ def _frag_subset(old_frag, row_groups):
         old_frag.partition_expression,
         row_groups=row_groups,
     )
-
-
-def _collect_pyarrow_dataset_frags(
-    ds, filters, valid_paths, fs, split_row_groups, gather_statistics
-):
-    """Collect all dataset fragments while applying filters.
-
-    Used by `ArrowDatasetEngine` only.
-    """
-
-    if not (split_row_groups or filters or gather_statistics):
-        # Don't need to process real metadata if
-        # we are not gathering statistics, splitting
-        # by row-group, filtering, or dealing with partitions.
-        metadata = []
-        for i, frag in enumerate(ds.get_fragments()):
-            if i == 0:
-                if pa_ds._get_partition_keys(frag.partition_expression):
-                    break
-            metadata.append(frag.path)
-        if len(metadata):
-            partition_info = {
-                "partitions": [],
-                "partition_keys": {},
-                "partition_names": [],
-            }
-            return sorted(metadata, key=natural_sort_key), partition_info
-
-    # Get/transate filters
-    ds_filters = None
-    if filters is not None:
-        ds_filters = pq._filters_to_expression(filters)
-
-    # Get all partition keys (without filters) to populate partition_obj
-    partition_obj = []  # See `partition_info` description below
-    categories, pkeys = _get_all_partition_keys(ds)
-    partition_names = list(categories)
-    for name in partition_names:
-        partition_obj.append(PartitionObj(name, categories[name]))
-
-    # Split by row-groups and apply filters
-    partition_keys = {}  # See `partition_info` description below
-    metadata = []  # List of (fragment, row_group_info) tuples
-
-    # Start with sorted (by path) list of file-based fragments
-    file_frags = sorted(
-        [frag for frag in ds.get_fragments(ds_filters)],
-        key=lambda x: natural_sort_key(x.path),
-    )
-
-    # Loop over file fragments
-    for file_frag in file_frags:
-        # If valid_paths is not None, the user passed in a list
-        # of files containing a _metadata file.  Since we used
-        # the _metadata file to generate our dataset object , we need
-        # to ignore any file fragments that are not in the list.
-        if valid_paths and file_frag.path.split(fs.sep)[-1] not in valid_paths:
-            continue
-        # Store (filtered) partition keys
-        if pkeys:
-            partition_keys[file_frag.path] = [
-                (name, pkeys[file_frag.path].get(name, None))
-                for name in partition_names
-            ]
-
-        # Append fragments to our "metadata" list
-        if ds_filters is not None:
-            # If we have filters, we need to split the row groups to apply them.
-            # If any row-groups are filtered out, we convert the remaining row-groups
-            # to a NEW (filtered) fragment, and append the filtered fragment to our
-            # metadata.
-
-            # Collect list of filtered row-group fragments
-            filtered_row_group_frags = []
-            row_group_info = []
-            row_group_ids = []
-            for rg_frag in file_frag.split_by_row_group(ds_filters, schema=ds.schema):
-                filtered_row_group_frags.append(rg_frag)
-                row_group_info.append(rg_frag.row_groups[0])
-                row_group_ids.append(rg_frag.row_groups[0].id)
-
-            # Row group count before (`num_row_groups_i`) and
-            # after (`num_row_groups`) filtering
-            num_row_groups_f = len(filtered_row_group_frags)
-            num_row_groups_i = len(file_frag.row_groups)
-
-            if split_row_groups:
-                # Splitting by row-group.
-                k = int(split_row_groups)
-                if k == 1:
-                    # Each output partition corresponds to a single
-                    # row-group - The work is already done.
-                    metadata.extend([(f, None) for f in filtered_row_group_frags])
-                elif k >= num_row_groups_f:
-                    # Split is larger than the number of row-groups in the file.
-                    if num_row_groups_f < num_row_groups_i:
-                        # 1+ row-groups are filtered - Need new fragment.
-                        metadata.append(
-                            (_frag_subset(file_frag, row_group_ids), row_group_info)
-                        )
-                    else:
-                        # Nothing was filtered - Use original fragment.
-                        metadata.append((file_frag, row_group_info))
-                else:
-                    # Splits are smaller than the number of row-groups in the file.
-                    # We will need to create multiple new fragments.
-                    for rg in range(0, num_row_groups_f, k):
-                        new_row_groups = [
-                            i for i in range(rg, rg + k) if i < num_row_groups_f
-                        ]
-                        if len(new_row_groups) == 1:
-                            # Avoid creating new fragment if we don't need to,
-                            # because it will require us to parse statistics twice.
-                            metadata.append(
-                                (filtered_row_group_frags[new_row_groups[0]], None)
-                            )
-                        else:
-                            metadata.append(
-                                (
-                                    _frag_subset(file_frag, new_row_groups),
-                                    [row_group_info[i] for i in new_row_groups],
-                                )
-                            )
-            elif num_row_groups_f < num_row_groups_i:
-                # 1+ row-groups are filtered - Need new fragment.
-                metadata.append(
-                    (_frag_subset(file_frag, row_group_ids), row_group_info)
-                )
-            else:
-                # Use original fragment
-                metadata.append((file_frag, row_group_info))
-        else:
-            # No filtering or splitting by row-group - Use original fragment.
-            metadata.append((file_frag, None))
-
-    # The final `metadata` object is a list of (fragment, row_group_info)
-    # tuples.  This is different from a `FileMetadata` object (used by the
-    # legacy code path), but it does contain much of the same information.
-    #
-    # The `partition_info` dict summarizes information needed to handle
-    # nested-directory (hive) partitioning.
-    #
-    #    - "partitions" : (list of PartitionObj) This is a list of simple
-    #          objects providing `name` and `keys` attributes for each
-    #          partition column. The list is designed to "duck type" a
-    #          `ParquetPartitions` object, so that the same code path can
-    #          be used for both legacy and pyarrow.dataset-based logic.
-    #    - "partition_keys" : (dict) The keys and values correspond to
-    #          file paths and partition values, respectively. The partition
-    #          values (or partition "keys") will be represented as a list
-    #          of tuples. E.g. `[("year", 2020), ("state", "CA")]`
-    #    - "partition_names" : (list)  This is a list containing the names
-    #          of partitioned columns.
-    partition_info = {
-        "partitions": partition_obj,
-        "partition_keys": partition_keys,
-        "partition_names": partition_names,
-    }
-    return metadata, partition_info
 
 
 def _get_pandas_metadata(schema):
@@ -523,6 +316,12 @@ class ArrowDatasetEngine(Engine):
         aggregate_files=None,
         **dataset_kwargs,
     ):
+        """pyarrow.dataset version of _collect_dataset_info
+        Use pyarrow.dataset API to construct a dictionary of all
+        general information needed to read the dataset.
+
+        This method is overriden by `ArrowLegacyEngine`.
+        """
 
         # Use pyarrow.dataset API
         ds = None
@@ -551,6 +350,7 @@ class ArrowDatasetEngine(Engine):
         # if _dataset_kwargs:
         #     raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
 
+        # Case-dependent pyarrow.dataset creation
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # Use _analyze_paths to avoid relative-path
@@ -571,6 +371,7 @@ class ArrowDatasetEngine(Engine):
                 )
                 if gather_statistics is None:
                     gather_statistics = True
+
         elif len(paths) > 1:
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
             meta_path = fs.sep.join([base, "_metadata"])
@@ -594,6 +395,7 @@ class ArrowDatasetEngine(Engine):
                 fns.remove("_metadata")
                 valid_paths = fns
 
+        # Final "catch-all" pyarrow.dataset call
         if ds is None:
             ds = pa_ds.dataset(
                 paths,
@@ -630,6 +432,11 @@ class ArrowDatasetEngine(Engine):
 
         # Deal with directory partitioning
         # Get all partition keys (without filters) to populate partition_obj
+        #
+        # TODO: We should be able to avoid this pass over the file
+        # fragments if we are not converting hive-partitioned columns
+        # to "category" data-types.
+        #
         partition_obj = []  # See `partition_info` description below
         hive_categories = defaultdict(list)
         file_frag = None
@@ -695,6 +502,7 @@ class ArrowDatasetEngine(Engine):
         #
         return {
             "ds": ds,
+            "schema": ds.schema,
             "fs": fs,
             "valid_paths": valid_paths,
             "gather_statistics": gather_statistics,
@@ -713,14 +521,22 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _create_dd_meta(cls, dataset_info):
+        """Use parquet schema and hive-partition information
+        (stored in dataset_info) to construct DataFrame metadata.
 
-        schema = dataset_info["ds"].schema
+        This method is used by both arrow engines.
+        """
+
+        # Collect necessary information from dataset_info
+        schema = dataset_info["schema"]
         index = dataset_info["index"]
         categories = dataset_info["categories"]
         partition_obj = dataset_info["partitions"]
         partitions = dataset_info["partition_names"]
         columns = None
 
+        # Set index and column names using
+        # pandas metadata (when available)
         pandas_metadata = _get_pandas_metadata(schema)
         if pandas_metadata:
             (
@@ -742,8 +558,8 @@ class ArrowDatasetEngine(Engine):
             column_names = schema.names
             storage_name_mapping = {k: k for k in column_names}
             column_index_names = [None]
-
         if index is None and index_names:
+            # Pandas metadata has provided the index name for us
             index = index_names
 
         # Ensure that there is no overlap between partition columns
@@ -753,6 +569,7 @@ class ArrowDatasetEngine(Engine):
             if not _partitions:
                 partitions = []
                 dataset_info["partitions"] = None
+                dataset_info["partition_keys"] = {}
                 dataset_info["partition_names"] = partitions
             elif len(_partitions) != len(partitions):
                 raise ValueError(
@@ -814,7 +631,27 @@ class ArrowDatasetEngine(Engine):
 
     @classmethod
     def _construct_collection_plan(cls, meta, dataset_info):
+        """pyarrow.dataset version of _construct_collection_plan
+        Use dataset_info to construct the general plan for
+        generating the output DataFrame collection.
 
+        The "plan" is essentially a list (called `parts`) of
+        information that is needed to produce each output partition.
+        After this function is returned, the information in each
+        element of `parts` will be used to produce a single Dask-
+        DataFrame partition (unless some elements of `parts`
+        are aggregated together in a follow-up step).
+
+        This method also returns ``stats`` (which is a list of
+        parquet-metadata statistics for each element of parts),
+        and ``common_metadata`` (which is a dictionary of kwargs
+        that should be passed to the ``read_partition`` call for
+        every output partition).
+
+        This method is overridden in `ArrowDatasetEngine`.
+        """
+
+        # Collect necessary dataset information from dataset_info
         ds = dataset_info["ds"]
         fs = dataset_info["fs"]
         valid_paths = dataset_info["valid_paths"]
@@ -822,21 +659,32 @@ class ArrowDatasetEngine(Engine):
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
 
+        # TODO: In order to enable parallel `parts`/`stats`
+        # generation, we will need to avoid the current split
+        # in the code to build `metadata` and the follow-up
+        # code to build `parts`/`statistics`.
+
+        # Check if this is a very simple dataset-read operation
         metadata = []
         if not (split_row_groups or filters or gather_statistics):
             for i, frag in enumerate(ds.get_fragments()):
                 if i == 0:
                     if pa_ds._get_partition_keys(frag.partition_expression):
+                        # This dataset has hive partitioning.
+                        # This is not a "simple" case - Bail
                         break
                 metadata.append(frag.path)
             if len(metadata):
                 # We are not dealing with row-groups, statistics, or
-                # partitions. Therefore, we are "done"
+                # hive partitions. Therefore, we are "done" collecting
+                # parquet metadata
                 dataset_info["partitions"] = []
                 dataset_info["partition_names"] = []
                 dataset_info["partition_keys"] = {}
                 metadata = sorted(metadata, key=natural_sort_key)
 
+        # If this read operation is more complex (a common case),
+        # loop through the file frags and collect the required metadata.
         if not metadata:
 
             # Get/transate filters
@@ -988,99 +836,35 @@ class ArrowDatasetEngine(Engine):
         aggregate_files=None,
         **kwargs,
     ):
-
-        if cls == ArrowDatasetEngine:
-
-            # Stage 1: Collect general dataset information
-            dataset_info = cls._collect_dataset_info(
-                paths,
-                fs,
-                categories=categories,
-                index=index,
-                gather_statistics=gather_statistics,
-                filters=filters,
-                split_row_groups=split_row_groups,
-                read_from_paths=read_from_paths,
-                chunksize=chunksize,
-                aggregate_files=aggregate_files,
-                **kwargs.get("dataset", {}),
-            )
-
-            # Stage 2: Generate output `meta`
-            meta = cls._create_dd_meta(dataset_info)
-
-            # Stage 3: Generate parts and stats
-            parts, stats, common_kwargs = cls._construct_collection_plan(
-                meta, dataset_info
-            )
-
-            # Add `common_kwargs` and `aggregation_depth` to the first
-            # element of `parts`. We can return as a separate element
-            # in the future, but should avoid breaking the API for now.
-            if len(parts):
-                parts[0]["common_kwargs"] = common_kwargs
-                parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
-
-            return (meta, stats, parts, dataset_info["index"])
-
-        # Gather necessary metadata information. This includes
-        # the schema and (parquet) partitioning information.
-        # This may also set split_row_groups and gather_statistics,
-        # depending on _metadata availability.
-        (
-            schema,
-            metadata,
-            base_path,
-            partition_info,
-            split_row_groups,
-            gather_statistics,
-        ) = cls._gather_metadata(
+        # Stage 1: Collect general dataset information
+        dataset_info = cls._collect_dataset_info(
             paths,
             fs,
-            split_row_groups,
-            gather_statistics,
-            filters,
-            index,
-            kwargs.get("dataset", {}),
+            categories=categories,
+            index=index,
+            gather_statistics=gather_statistics,
+            filters=filters,
+            split_row_groups=split_row_groups,
+            read_from_paths=read_from_paths,
+            chunksize=chunksize,
+            aggregate_files=aggregate_files,
+            **kwargs.get("dataset", {}),
         )
 
-        # Process metadata to define `meta` and `index_cols`
-        meta, index_cols, categories, index, partition_info = cls._generate_dd_meta(
-            schema, index, categories, partition_info
-        )
+        # Stage 2: Generate output `meta`
+        meta = cls._create_dd_meta(dataset_info)
 
-        # Check the `aggregate_files` setting
-        aggregation_depth = _get_aggregation_depth(
-            aggregate_files,
-            partition_info["partition_names"],
-        )
-
-        # Finally, construct our list of `parts`
-        # (and a corresponding list of statistics)
-        parts, stats, common_kwargs = cls._construct_parts(
-            fs,
-            metadata,
-            schema,
-            filters,
-            index_cols,
-            base_path,
-            partition_info,
-            categories,
-            split_row_groups,
-            gather_statistics,
-            read_from_paths,
-            chunksize,
-            aggregation_depth,
-        )
+        # Stage 3: Generate parts and stats
+        parts, stats, common_kwargs = cls._construct_collection_plan(meta, dataset_info)
 
         # Add `common_kwargs` and `aggregation_depth` to the first
         # element of `parts`. We can return as a separate element
         # in the future, but should avoid breaking the API for now.
         if len(parts):
             parts[0]["common_kwargs"] = common_kwargs
-            parts[0]["aggregation_depth"] = aggregation_depth
+            parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
 
-        return (meta, stats, parts, index)
+        return (meta, stats, parts, dataset_info["index"])
 
     @classmethod
     def multi_support(cls):
@@ -1488,241 +1272,6 @@ class ArrowDatasetEngine(Engine):
     #
     # Private Class Methods
     #
-
-    @classmethod
-    def _gather_metadata(
-        cls,
-        paths,
-        fs,
-        split_row_groups,
-        gather_statistics,
-        filters,
-        index,
-        dataset_kwargs,
-    ):
-        """pyarrow.dataset version of _gather_metadata
-        Use pyarrow.dataset API to collect list of row-group fragments.
-        Also, collect other information necessary for parquet-to-ddf
-        mapping (e.g. schema, partition_info).
-
-        This method is overridden in `ArrowLegacyEngine`.
-        """
-        # Use pyarrow.dataset API
-        ds = None
-        valid_paths = None  # Only used if `paths` is a list containing _metadata
-
-        # Discover Partitioning - Note that we need to avoid creating
-        # this factory until it is actually used.  The `partitioning`
-        # object can be overridden if a "partitioning" kwarg is passed
-        # in, containing a `dict` with a required "obj" argument and
-        # optional "arg" and "kwarg" elements.  Note that the "obj"
-        # value must support the "discover" attribute.
-        partitioning = dataset_kwargs.get(
-            "partitioning",
-            {"obj": pa_ds.HivePartitioning},
-        )
-
-        if len(paths) == 1 and fs.isdir(paths[0]):
-
-            # Use _analyze_paths to avoid relative-path
-            # problems (see GH#5608)
-            paths, base, fns = _sort_and_analyze_paths(paths, fs)
-            paths = fs.sep.join([base, fns[0]])
-
-            meta_path = fs.sep.join([paths, "_metadata"])
-            if fs.exists(meta_path):
-                # Use _metadata file
-                ds = pa_ds.parquet_dataset(
-                    meta_path,
-                    filesystem=fs,
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
-                )
-                if gather_statistics is None:
-                    gather_statistics = True
-        elif len(paths) > 1:
-            paths, base, fns = _sort_and_analyze_paths(paths, fs)
-            meta_path = fs.sep.join([base, "_metadata"])
-            if "_metadata" in fns:
-                # Pyarrow cannot handle "_metadata" when `paths` is a list
-                # Use _metadata file
-                ds = pa_ds.parquet_dataset(
-                    meta_path,
-                    filesystem=fs,
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
-                )
-                if gather_statistics is None:
-                    gather_statistics = True
-
-                # Populate valid_paths, since the original path list
-                # must be used to filter the _metadata-based dataset
-                fns.remove("_metadata")
-                valid_paths = fns
-
-        if ds is None:
-            ds = pa_ds.dataset(
-                paths,
-                filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
-            )
-        schema = ds.schema
-        base = ""
-
-        # At this point, we know if `split_row_groups` should be
-        # set to `True` by default.  If the user has not specified
-        # this option, we will only collect statistics if there is
-        # a global "_metadata" file available, otherwise we will
-        # opt for `gather_statistics=False`. For `ArrowDatasetEngine`,
-        # statistics are only required to calculate divisions
-        # and/or aggregate row-groups using `chunksize` (not for
-        # filtering).
-        #
-        # By default, we will create an output partition for each
-        # row group in the dataset (`split_row_groups=True`).
-        # However, we will NOT split by row-group if
-        # `gather_statistics=False`, because this can be
-        # interpreted as an indication that metadata overhead should
-        # be avoided at all costs.
-        if gather_statistics is None:
-            gather_statistics = False
-        if split_row_groups is None:
-            if gather_statistics:
-                split_row_groups = True
-            else:
-                split_row_groups = False
-
-        # Generate list of (fragment, row_group_info) tuples
-        # and call it `metadata`
-        metadata, partition_info = _collect_pyarrow_dataset_frags(
-            ds,
-            filters,
-            valid_paths,
-            fs,
-            split_row_groups,
-            gather_statistics,
-        )
-
-        # Store dict needed to produce a `partitioning`
-        # factory at IO time. This object is needed to
-        # reproduce a `fragment` (for row-wise filtering)
-        # on the worker.
-        partition_info["partitioning"] = partitioning
-
-        return (
-            schema,
-            metadata,
-            base,
-            partition_info,
-            split_row_groups,
-            gather_statistics,
-        )
-
-    @classmethod
-    def _generate_dd_meta(cls, schema, index, categories, partition_info):
-        """Use parquet metadata to construct DataFrame metadata.
-
-        This method is used by both `ArrowDatasetEngine`
-        and `ArrowLegacyEngine`.
-        """
-        partition_obj = partition_info["partitions"]
-        partitions = partition_info["partition_names"]
-        columns = None
-
-        pandas_metadata = _get_pandas_metadata(schema)
-        if pandas_metadata:
-            (
-                index_names,
-                column_names,
-                storage_name_mapping,
-                column_index_names,
-            ) = _parse_pandas_metadata(pandas_metadata)
-            if categories is None:
-                categories = []
-                for col in pandas_metadata["columns"]:
-                    if (col["pandas_type"] == "categorical") and (
-                        col["name"] not in categories
-                    ):
-                        categories.append(col["name"])
-        else:
-            # No pandas metadata implies no index, unless selected by the user
-            index_names = []
-            column_names = schema.names
-            storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
-
-        if index is None and index_names:
-            index = index_names
-
-        # Ensure that there is no overlap between partition columns
-        # and explicit column storage
-        if partitions:
-            _partitions = [p for p in partitions if p not in column_names]
-            if not _partitions:
-                partitions = []
-                partition_info["partitions"] = None
-                partition_info["partition_keys"] = {}
-                partition_info["partition_names"] = partitions
-            elif len(_partitions) != len(partitions):
-                raise ValueError(
-                    "No partition-columns should be written in the \n"
-                    "file unless they are ALL written in the file.\n"
-                    "columns: {} | partitions: {}".format(column_names, partitions)
-                )
-
-        column_names, index_names = _normalize_index_columns(
-            columns, column_names + partitions, index, index_names
-        )
-
-        all_columns = index_names + column_names
-
-        # Check that categories are included in columns
-        if categories and not set(categories).intersection(all_columns):
-            raise ValueError(
-                "categories not in available columns.\n"
-                "categories: {} | columns: {}".format(categories, list(all_columns))
-            )
-
-        dtypes = _get_pyarrow_dtypes(schema, categories)
-        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
-
-        index_cols = index or ()
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
-        if categories:
-            # Make sure all categories are set to "unknown".
-            # Cannot include index names in the `cols` argument.
-            meta = clear_known_categories(
-                meta, cols=[c for c in categories if c not in meta.index.names]
-            )
-
-        if partition_obj:
-
-            for partition in partition_obj:
-                if isinstance(index, list) and partition.name == index[0]:
-                    # Index from directory structure
-                    meta.index = pd.CategoricalIndex(
-                        [], categories=partition.keys, name=index[0]
-                    )
-                elif partition.name == meta.index.name:
-                    # Index created from a categorical column
-                    meta.index = pd.CategoricalIndex(
-                        [], categories=partition.keys, name=meta.index.name
-                    )
-                elif partition.name in meta.columns:
-                    meta[partition.name] = pd.Series(
-                        pd.Categorical(categories=partition.keys, values=[]),
-                        index=meta.index,
-                    )
-
-        return meta, index_cols, categories, index, partition_info
 
     @classmethod
     def _construct_parts(
@@ -2284,6 +1833,98 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
     #
     # Private Class Methods
     #
+
+    @classmethod
+    def _collect_dataset_info(
+        cls,
+        paths,
+        fs,
+        categories=None,
+        index=None,
+        gather_statistics=None,
+        filters=None,
+        split_row_groups=None,
+        read_from_paths=None,
+        chunksize=None,
+        aggregate_files=None,
+        **dataset_kwargs,
+    ):
+        """pyarrow-legacy version of _collect_dataset_info
+        Use the ParquetDataset API to construct a dictionary of all
+        general information needed to read the dataset.
+
+        This method overrides `ArrowDatasetEngine._collect_dataset_info`.
+        """
+
+        (
+            schema,
+            metadata,
+            base,
+            partition_info,
+            split_row_groups,
+            gather_statistics,
+        ) = cls._gather_metadata(
+            paths,
+            fs,
+            split_row_groups,
+            gather_statistics,
+            filters,
+            index,
+            dataset_kwargs,
+        )
+
+        # Check the `aggregate_files` setting
+        aggregation_depth = _get_aggregation_depth(
+            aggregate_files,
+            partition_info["partition_names"],
+        )
+
+        return {
+            "schema": schema,
+            "metadata": metadata,
+            "fs": fs,
+            "base_path": base,
+            "gather_statistics": gather_statistics,
+            "categories": categories,
+            "index": index,
+            "filters": filters,
+            "split_row_groups": split_row_groups,
+            "read_from_paths": read_from_paths,
+            "chunksize": chunksize,
+            "aggregate_files": aggregate_files,
+            "aggregation_depth": aggregation_depth,
+            "partition_keys": partition_info["partition_keys"],
+            "partition_names": partition_info["partition_names"],
+            "partitions": partition_info["partitions"],
+        }
+
+    @classmethod
+    def _construct_collection_plan(cls, meta, dataset_info):
+        """pyarrow-legacy version of _construct_collection_plan
+
+        This method overrides the `ArrowDatasetEngine` implementation.
+        """
+
+        # Wrap legacy `_construct_parts` implementation
+        return cls._construct_parts(
+            dataset_info["fs"],
+            dataset_info["metadata"],
+            dataset_info["schema"],
+            dataset_info["filters"],
+            dataset_info["index_cols"],
+            dataset_info["base_path"],
+            {
+                "partition_keys": dataset_info["partition_keys"],
+                "partition_names": dataset_info["partition_names"],
+                "partitions": dataset_info["partitions"],
+            },
+            dataset_info["categories"],
+            dataset_info["split_row_groups"],
+            dataset_info["gather_statistics"],
+            dataset_info["read_from_paths"],
+            dataset_info["chunksize"],
+            dataset_info["aggregation_depth"],
+        )
 
     @classmethod
     def _gather_metadata(
