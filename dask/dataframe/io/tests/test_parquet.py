@@ -3608,7 +3608,7 @@ def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
     # Copy "bad" metadata into `dataset_with_bad_metadata`
     assert "_metadata" not in os.listdir(dataset_with_bad_metadata)
     with open(os.path.join(dataset_with_bad_metadata, "_metadata"), "w") as f:
-        f.write("BAD _METADATA.")
+        f.write("INVALID METADATA")
     assert "_metadata" in os.listdir(dataset_with_bad_metadata)
     assert "_metadata" not in os.listdir(dataset_without_metadata)
 
