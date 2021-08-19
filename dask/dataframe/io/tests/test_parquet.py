@@ -3205,31 +3205,29 @@ def test_pyarrow_dataset_partitioned(tmpdir, engine, test_filter):
 
 
 @PYARROW_MARK
-@pytest.mark.parametrize("read_from_paths", [True, False])
-@pytest.mark.parametrize("test_filter_partitioned", [True, False])
-def test_pyarrow_dataset_read_from_paths(
-    tmpdir, read_from_paths, test_filter_partitioned
-):
+def test_pyarrow_dataset_read_from_paths(tmpdir):
     fn = str(tmpdir)
     df = pd.DataFrame({"a": [4, 5, 6], "b": ["a", "b", "b"]})
     df["b"] = df["b"].astype("category")
     ddf = dd.from_pandas(df, npartitions=2)
+    ddf.to_parquet(fn, engine="pyarrow", partition_on="b")
 
-    if test_filter_partitioned:
-        ddf.to_parquet(fn, engine="pyarrow", partition_on="b")
-    else:
-        ddf.to_parquet(fn, engine="pyarrow")
-    read_df = dd.read_parquet(
+    with pytest.warns(FutureWarning):
+        read_df_1 = dd.read_parquet(
+            fn,
+            engine="pyarrow",
+            filters=[("b", "==", "a")],
+            read_from_paths=False,
+        )
+
+    read_df_2 = dd.read_parquet(
         fn,
         engine="pyarrow",
-        filters=[("b", "==", "a")] if test_filter_partitioned else None,
-        read_from_paths=read_from_paths,
+        filters=[("b", "==", "a")],
     )
 
-    if test_filter_partitioned:
-        assert_eq(ddf[ddf["b"] == "a"].compute(), read_df.compute())
-    else:
-        assert_eq(ddf, read_df)
+    assert_eq(read_df_1, read_df_2)
+    assert_eq(ddf[ddf["b"] == "a"].compute(), read_df_2.compute())
 
 
 @PYARROW_MARK
