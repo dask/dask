@@ -84,7 +84,7 @@ clone the fork::
 You should also pull the latest git tags (this ensures ``pip``'s dependency resolver
 can successfully install Dask)::
 
-   git remote add upstream https://github.com/dask/dask.git 
+   git remote add upstream https://github.com/dask/dask.git
    git pull upstream main --tags
 
 Contributions to Dask can then be made by submitting pull requests on GitHub.
@@ -165,6 +165,11 @@ You can also test certain modules or individual tests for faster response::
    py.test dask/dataframe --verbose
 
    py.test dask/dataframe/tests/test_dataframe.py::test_rename_index
+
+If you want the tests to run faster, you can run them in parallel using
+``pytest-xdist``::
+
+   py.test dask --verbose -n auto
 
 Tests run automatically on the Travis.ci and Appveyor continuous testing
 frameworks on every push to every pull request on GitHub.
@@ -304,7 +309,7 @@ below.
 How to build the Dask documentation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-To build the documentation locally, make a fork of the main 
+To build the documentation locally, make a fork of the main
 `Dask repository <https://github.com/dask/dask>`_, clone the fork,
 and install the necessary requirements using ``pip`` or ``conda``::
 
