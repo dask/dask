@@ -3994,6 +3994,10 @@ def test_to_datetime():
         check_divisions=False,
     )
 
+    for arg in ("2021-08-03", 2021):
+        with pytest.raises(NotImplementedError, match="non-index-able arguments"):
+            dd.to_datetime(arg)
+
 
 def test_to_timedelta():
     s = pd.Series(range(10))
@@ -4633,6 +4637,7 @@ def test_dask_layers():
 
 
 def test_repr_html_dataframe_highlevelgraph():
+    pytest.importorskip("jinja2")
     x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
     hg = x.dask
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None

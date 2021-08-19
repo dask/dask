@@ -25,8 +25,7 @@ dependencies:
   # sqlalchemy 1.4.0 causes deprecation warnings to be raised from pandas
   # along with other issues https://github.com/pandas-dev/pandas/issues/40467
   - sqlalchemy<1.4.0
-  # TODO: Remove pyarrow pinning once pyarrow=5 deprecations have been resolved
-  - pyarrow<5
+  - pyarrow
   - jsonschema
   # other -- IO
   - bcolz
@@ -59,4 +58,5 @@ dependencies:
   - python-graphviz
   - python-xxhash
   - mmh3
+  - jinja2
   - pip

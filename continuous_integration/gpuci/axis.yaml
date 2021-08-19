@@ -1,13 +1,13 @@
 PYTHON_VER:
-- 3.8
+- "3.8"
 
 CUDA_VER:
-- 11.2
+- "11.2"
 
 LINUX_VER:
 - ubuntu18.04
 
 RAPIDS_VER:
-- 21.08
+- "21.10"
 
 excludes:
