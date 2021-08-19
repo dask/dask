@@ -43,7 +43,7 @@ _range = range
 
 @derived_from(np)
 def array(x, dtype=None, ndmin=None, *, like=None):
-    if not _numpy_120:
+    if not _numpy_120 and like is not None:
         raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
     x = asarray(x, like=like)
     while ndmin is not None and x.ndim < ndmin:

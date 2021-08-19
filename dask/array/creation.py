@@ -685,7 +685,7 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 @derived_from(np)
 def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
-    if not _numpy_120:
+    if not _numpy_120 and like is not None:
         raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
 
     _min_int = np.lib.twodim_base._min_int
