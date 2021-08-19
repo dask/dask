@@ -3863,7 +3863,7 @@ def test_copy():
     assert_eq(b, df)
     assert_eq(c, df)
 
-    deep_err =  (
+    deep_err = (
         "The `deep` value must be False. This is strictly a shallow copy "
         "of the underlying computational graph."
     )
