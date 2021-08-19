@@ -26,8 +26,7 @@ percentile_dispatch = Dispatch("percentile_dispatch")
 
 
 def _percentile(a, q, interpolation="linear"):
-    func = percentile_dispatch.dispatch(type(a))
-    return func(a, q, interpolation)
+    return percentile_dispatch(a, q, interpolation)
 
 
 def concat(

@@ -12,8 +12,6 @@ from .core import Array
 
 @wraps(np.percentile)
 def _percentile(a, q, interpolation="linear"):
-    import pandas as pd
-
     n = len(a)
     if not len(a):
         return None, n
@@ -21,15 +19,17 @@ def _percentile(a, q, interpolation="linear"):
         q = list(q)
     if a.dtype.name == "category":
         result = np.percentile(a.cat.codes, q, interpolation=interpolation)
+        import pandas as pd
 
         return pd.Categorical.from_codes(result, a.dtype.categories, a.dtype.ordered), n
-    if isinstance(a.dtype, pd.core.dtypes.dtypes.DatetimeTZDtype) or np.issubdtype(
-        a.dtype, np.datetime64
-    ):
+    if type(a.dtype).__name__ == "DatetimeTZDtype":
+        import pandas as pd
+
         if isinstance(a, (pd.Series, pd.Index)):
-            values = a.values
-        else:
-            values = a
+            a = a.values
+
+    if np.issubdtype(a.dtype, np.datetime64):
+        values = a
         a2 = values.view("i8")
         result = np.percentile(a2, q, interpolation=interpolation).astype(values.dtype)
         if q[0] == 0:
