@@ -1126,8 +1126,8 @@ class ArrowDatasetEngine(Engine):
 
         # Check files_per_metadata_task setting
         if files_per_metadata_task is None:
-            # Use 8 files per task by deault
-            files_per_metadata_task = 8
+            # Use 32 files per task by deault
+            files_per_metadata_task = 32
 
         # Check if this is a very simple case where
         # gather_statistics should be False
@@ -1193,7 +1193,7 @@ class ArrowDatasetEngine(Engine):
         }
 
         # Main parts/stats-construction
-        if has_metadata_file or not files_per_metadata_task:
+        if has_metadata_file or files_per_metadata_task == 0:
             # We have a global _metadata file to work with.
             # Therefore, we can just loop over fragments on the client.
 
