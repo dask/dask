@@ -316,6 +316,7 @@ class ArrowDatasetEngine(Engine):
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
+        files_per_metadata_task=None,
         **kwargs,
     ):
 
@@ -331,6 +332,7 @@ class ArrowDatasetEngine(Engine):
             chunksize=chunksize,
             aggregate_files=aggregate_files,
             ignore_metadata_file=ignore_metadata_file,
+            files_per_metadata_task=files_per_metadata_task,
             **kwargs.get("dataset", {}),
         )
 
@@ -769,6 +771,7 @@ class ArrowDatasetEngine(Engine):
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
+        files_per_metadata_task=None,
         **dataset_kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -968,6 +971,7 @@ class ArrowDatasetEngine(Engine):
             "partitions": partition_obj,
             "partition_names": partition_names,
             "partitioning_method": partitioning_method,
+            "files_per_metadata_task": files_per_metadata_task,
         }
 
     @classmethod
@@ -1113,12 +1117,17 @@ class ArrowDatasetEngine(Engine):
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
         partition_names = dataset_info["partition_names"]
-        files_per_task = dataset_info.get("files_per_task", 8)
         partitioning_method = dataset_info["partitioning_method"]
         partitions = dataset_info["partitions"]
         categories = dataset_info["categories"]
         has_metadata_file = dataset_info["_metadata"]
         valid_paths = dataset_info["valid_paths"]
+        files_per_metadata_task = dataset_info["files_per_metadata_task"]
+
+        # Check files_per_metadata_task setting
+        if files_per_metadata_task is None:
+            # Use 8 files per task by deault
+            files_per_metadata_task = 8
 
         # Check if this is a very simple case where
         # gather_statistics should be False
@@ -1184,7 +1193,7 @@ class ArrowDatasetEngine(Engine):
         }
 
         # Main parts/stats-construction
-        if has_metadata_file:
+        if has_metadata_file or not files_per_metadata_task:
             # We have a global _metadata file to work with.
             # Therefore, we can just loop over fragments on the client.
 
@@ -1216,12 +1225,12 @@ class ArrowDatasetEngine(Engine):
                 name = "gather-pq-parts-" + tokenize(all_files, dataset_info_kwargs)
                 finalize_list = []
                 for task_i, file_i in enumerate(
-                    range(0, len(all_files), files_per_task)
+                    range(0, len(all_files), files_per_metadata_task)
                 ):
                     finalize_list.append((name, task_i))
                     gather_parts_dsk[finalize_list[-1]] = (
                         cls._collect_file_parts,
-                        all_files[file_i : file_i + files_per_task],
+                        all_files[file_i : file_i + files_per_metadata_task],
                         dataset_info_kwargs,
                     )
 
@@ -1644,6 +1653,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         chunksize=None,
         aggregate_files=None,
         ignore_metadata_file=False,
+        files_per_metadata_task=None,
         **dataset_kwargs,
     ):
         """pyarrow-legacy version of _collect_dataset_info
@@ -1655,6 +1665,11 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
 
         if ignore_metadata_file:
             raise ValueError("ignore_metadata_file not supported in ArrowLegacyEngine")
+
+        if files_per_metadata_task:
+            raise ValueError(
+                "files_per_metadata_task not supported in ArrowLegacyEngine"
+            )
 
         (
             schema,

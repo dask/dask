@@ -105,6 +105,7 @@ def read_parquet(
     engine="auto",
     gather_statistics=None,
     ignore_metadata_file=False,
+    files_per_metadata_task=None,
     split_row_groups=None,
     chunksize=None,
     aggregate_files=None,
@@ -178,6 +179,14 @@ def read_parquet(
         every file will be parsed (which is very slow on some systems).
     ignore_metadata_file : bool, default False
         Whether to ignore the global ``_metadata`` file (when one is present).
+        If ``True``, or if the global ``_metadata`` file is missing, the parquet
+        metadata may be gathered and processed in parallel. Parallel metadata
+        processing is currently supported for ``ArrowDatasetEngine`` only.
+    files_per_metadata_task : int, default engine-specific
+        If parquet metadata is processed in parallel (see ``ignore_metadata_file``
+        description above), this argument can be used to specify the number of
+        dataset files to be processed by each task in the Dask graph.  If this
+        argument is set to ``0``, parallel metadata processing will be disabled.
     split_row_groups : bool or int, default None
         Default is True if a _metadata file is available or if
         the dataset is composed of a single file (otherwise defult is False).
@@ -262,6 +271,7 @@ def read_parquet(
             split_row_groups=split_row_groups,
             chunksize=chunksize,
             aggregate_files=aggregate_files,
+            files_per_metadata_task=files_per_metadata_task,
         )
         return df[columns]
 
@@ -279,6 +289,7 @@ def read_parquet(
         engine,
         gather_statistics,
         ignore_metadata_file,
+        files_per_metadata_task,
         split_row_groups,
         chunksize,
         aggregate_files,
@@ -320,6 +331,7 @@ def read_parquet(
         chunksize=chunksize,
         aggregate_files=aggregate_files,
         ignore_metadata_file=ignore_metadata_file,
+        files_per_metadata_task=files_per_metadata_task,
         **kwargs,
     )
 
