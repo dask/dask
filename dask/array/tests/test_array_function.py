@@ -230,4 +230,4 @@ def test_like_raises(func):
         with pytest.raises(
             RuntimeError, match="The use of ``like`` required NumPy >= 1.20"
         ):
-            func(1, like=func(()))
+            func(1, like=func((1)))
