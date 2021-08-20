@@ -13,7 +13,9 @@ from packaging.version import parse as parse_version
 
 from dask import delayed
 
+from ....base import tokenize
 from ....core import flatten
+from ....delayed import Delayed
 from ....utils import getargspec, natural_sort_key
 from ...utils import clear_known_categories
 from ..utils import _get_pyarrow_dtypes, _meta_from_dtypes
@@ -1109,6 +1111,7 @@ class ArrowDatasetEngine(Engine):
 
         # Collect necessary dataset information from dataset_info
         ds = dataset_info["ds"]
+        fs = dataset_info["fs"]
         filters = dataset_info["filters"]
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
@@ -1118,6 +1121,11 @@ class ArrowDatasetEngine(Engine):
         schema = dataset_info["schema"]
         partition_names = dataset_info["partition_names"]
         files_per_task = dataset_info.get("files_per_task", 8)
+        partitioning_method = dataset_info["partitioning_method"]
+        partitions = dataset_info["partitions"]
+        categories = dataset_info["categories"]
+        has_metadata_file = dataset_info["_metadata"]
+        valid_paths = dataset_info["valid_paths"]
 
         # Check if this is a very simple case where
         # gather_statistics should be False
@@ -1151,7 +1159,6 @@ class ArrowDatasetEngine(Engine):
                     # Partition columns wont have statistics
                     continue
                 stat_col_indices[name] = i
-        dataset_info["stat_col_indices"] = stat_col_indices
 
         # If the user has not specified `gather_statistics`,
         # we will only do so if there are specific columns in
@@ -1167,10 +1174,24 @@ class ArrowDatasetEngine(Engine):
         ds_filters = None
         if filters is not None:
             ds_filters = pq._filters_to_expression(filters)
-        dataset_info["ds_filters"] = ds_filters
+
+        # Define subset of `dataset_info` required by _collect_file_parts
+        dataset_info_kwargs = {
+            "fs": fs,
+            "split_row_groups": split_row_groups,
+            "gather_statistics": gather_statistics,
+            "partitioning_method": partitioning_method,
+            "filters": filters,
+            "ds_filters": ds_filters,
+            "schema": schema,
+            "stat_col_indices": stat_col_indices,
+            "aggregation_depth": aggregation_depth,
+            "chunksize": chunksize,
+            "partitions": partitions,
+        }
 
         # Main parts/stats-construction
-        if dataset_info["_metadata"]:
+        if has_metadata_file:
             # We have a global _metadata file to work with.
             # Therefore, we can just loop over fragments on the client.
 
@@ -1179,28 +1200,64 @@ class ArrowDatasetEngine(Engine):
                 [frag for frag in ds.get_fragments(ds_filters)],
                 key=lambda x: natural_sort_key(x.path),
             )
-            parts, stats = cls._collect_file_parts(file_frags, dataset_info)
+            parts, stats = cls._collect_file_parts(file_frags, dataset_info_kwargs)
         else:
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
 
-            # TODO: Turn this into a dask graph...
-            parts, stats = [], []
+            # Collect list of file paths.
+            # If valid_paths is not None, the user passed in a list
+            # of files containing a _metadata file.  Since we used
+            # the _metadata file to generate our dataset object , we need
+            # to ignore any file fragments that are not in the list.
             all_files = sorted(ds.files, key=natural_sort_key)
-            for i in range(0, len(all_files), files_per_task):
-                file_parts, file_stats = cls._collect_file_parts(
-                    all_files[i : i + files_per_task],
-                    dataset_info,
-                )
-                parts += file_parts
-                if file_stats:
-                    stats += file_stats
+            if valid_paths:
+                all_files = [
+                    frag for file in all_files if file.split(fs.sep)[-1] in valid_paths
+                ]
+
+            parts, stats = [], []
+            if all_files:
+                # Build and compute a task graph to construct stats/parts
+                gather_parts_dsk = {}
+                name = "gather-pq-parts-" + tokenize(all_files, dataset_info_kwargs)
+                finalize_list = []
+                for task_i, file_i in enumerate(
+                    range(0, len(all_files), files_per_task)
+                ):
+                    finalize_list.append((name, task_i))
+                    gather_parts_dsk[finalize_list[-1]] = (
+                        cls._collect_file_parts,
+                        all_files[file_i : file_i + files_per_task],
+                        dataset_info_kwargs,
+                    )
+
+                def _combine_parts(parts_and_stats):
+                    parts, stats = [], []
+                    for part, stat in parts_and_stats:
+                        parts += part
+                        if stat:
+                            stats += stat
+                    return parts, stats
+
+                gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
+                parts, stats = Delayed("final-" + name, gather_parts_dsk).compute()
+
+            # parts, stats = [], []
+            # for i in range(0, len(all_files), files_per_task):
+            #     file_parts, file_stats = cls._collect_file_parts(
+            #         all_files[i : i + files_per_task],
+            #         dataset_info_kwargs,
+            #     )
+            #     parts += file_parts
+            #     if file_stats:
+            #         stats += file_stats
 
         # Add common kwargs
         common_kwargs = {
-            "partitioning": dataset_info["partitioning_method"],
-            "partitions": dataset_info["partitions"],
-            "categories": dataset_info["categories"],
+            "partitioning": partitioning_method,
+            "partitions": partitions,
+            "categories": categories,
             "filters": filters,
             "schema": schema,
         }
@@ -1368,13 +1425,13 @@ class ArrowDatasetEngine(Engine):
     def _collect_file_parts(
         cls,
         files_or_frags,
-        dataset_info,
+        dataset_info_kwargs,
     ):
 
         # Collect necessary information from dataset_info
-        fs = dataset_info["fs"]
-        split_row_groups = dataset_info["split_row_groups"]
-        gather_statistics = dataset_info["gather_statistics"]
+        fs = dataset_info_kwargs["fs"]
+        split_row_groups = dataset_info_kwargs["split_row_groups"]
+        gather_statistics = dataset_info_kwargs["gather_statistics"]
 
         # Make sure we are processing a non-empty list
         if not isinstance(files_or_frags, list):
@@ -1395,7 +1452,7 @@ class ArrowDatasetEngine(Engine):
                 ], None
 
             # Need more information - convert the path to a fragment
-            partitioning_method = dataset_info["partitioning_method"]
+            partitioning_method = dataset_info_kwargs["partitioning_method"]
             file_frags = list(
                 pa_ds.dataset(
                     files_or_frags,
@@ -1410,27 +1467,13 @@ class ArrowDatasetEngine(Engine):
         else:
             file_frags = files_or_frags
 
-        # If valid_paths is not None, the user passed in a list
-        # of files containing a _metadata file.  Since we used
-        # the _metadata file to generate our dataset object , we need
-        # to ignore any file fragments that are not in the list.
-        valid_paths = dataset_info["valid_paths"]
-        if valid_paths:
-            file_frags = [
-                frag
-                for frag in file_frags
-                if frag.path.split(fs.sep)[-1] in valid_paths
-            ]
-            if not file_frags:
-                return [], []
-
         # Collect settings from dataset_info
-        ds_filters = dataset_info["ds_filters"]
-        filters = dataset_info["filters"]
-        schema = dataset_info["schema"]
-        stat_col_indices = dataset_info["stat_col_indices"]
-        aggregation_depth = dataset_info["aggregation_depth"]
-        chunksize = dataset_info["chunksize"]
+        filters = dataset_info_kwargs["filters"]
+        ds_filters = dataset_info_kwargs["ds_filters"]
+        schema = dataset_info_kwargs["schema"]
+        stat_col_indices = dataset_info_kwargs["stat_col_indices"]
+        aggregation_depth = dataset_info_kwargs["aggregation_depth"]
+        chunksize = dataset_info_kwargs["chunksize"]
 
         # Intialize row-group and statistiscs data structures
         file_row_groups = defaultdict(list)
@@ -1537,7 +1580,7 @@ class ArrowDatasetEngine(Engine):
             make_part_kwargs={
                 "fs": fs,
                 "partition_keys": hive_partition_keys,
-                "partition_obj": dataset_info["partitions"],
+                "partition_obj": dataset_info_kwargs["partitions"],
                 "data_path": "",
                 "frag_map": None,
             },
