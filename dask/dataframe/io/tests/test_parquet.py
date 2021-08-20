@@ -1264,12 +1264,12 @@ def test_partition_on(tmpdir, engine):
         tmpdir, engine=engine, index=False, gather_statistics=False
     ).compute()
     for val in df.a1.unique():
-        assert set(df.b[df.a1 == val]) == set(out.b[out.a1 == val])
+        assert set(df.d[df.a1 == val]) == set(out.d[out.a1 == val])
 
     # Now specify the columns and allow auto-index detection
-    out = dd.read_parquet(tmpdir, engine=engine, columns=["b", "a2"]).compute()
+    out = dd.read_parquet(tmpdir, engine=engine, columns=["d", "a2"]).compute()
     for val in df.a2.unique():
-        assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
+        assert set(df.d[df.a2 == val]) == set(out.d[out.a2 == val])
 
 
 def test_partition_on_duplicates(tmpdir, engine):
@@ -2216,7 +2216,7 @@ def test_pathlib_path(tmpdir, engine):
     assert_eq(ddf, ddf2)
 
 
-@PYARROW_MARK
+@PYARROW_LE_MARK
 def test_pyarrow_metadata_nthreads(tmpdir):
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": [4, 5, 6, 1, 2, 3]})
@@ -2224,7 +2224,7 @@ def test_pyarrow_metadata_nthreads(tmpdir):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(tmp_path, engine="pyarrow")
     ops = {"dataset": {"metadata_nthreads": 2}}
-    ddf2 = dd.read_parquet(tmp_path, engine="pyarrow", **ops)
+    ddf2 = dd.read_parquet(tmp_path, engine="pyarrow-legacy", **ops)
     assert_eq(ddf, ddf2)
 
 
@@ -2312,14 +2312,14 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
-    dataset = {"validate_schema": False}
+    dataset = {"validate_schema": False} if engine == "pyarrow-legacy" else {}
     ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
     ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset=dataset)
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
 
-@PYARROW_MARK
+@PYARROW_LE_MARK
 @pytest.mark.parametrize("numerical", [True, False])
 @pytest.mark.parametrize(
     "timestamp", ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"]
@@ -2354,7 +2354,10 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
     ddf2.to_parquet(tmp_path, schema=schema, write_index=False, engine="pyarrow")
     assert_eq(
         dd.read_parquet(
-            tmp_path, dataset={"validate_schema": True}, index=False, engine="pyarrow"
+            tmp_path,
+            dataset={"validate_schema": True},
+            index=False,
+            engine="pyarrow-legacy",
         ),
         ddf2,
         check_divisions=False,
@@ -2362,7 +2365,7 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
     )
 
 
-@PYARROW_MARK
+@PYARROW_LE_MARK
 def test_read_inconsistent_schema_pyarrow(tmpdir):
     # Note: This is a proxy test for a cudf-related issue fix
     # (see cudf#5062 github issue).  The cause of that issue is
@@ -2381,16 +2384,20 @@ def test_read_inconsistent_schema_pyarrow(tmpdir):
     df_expect = pd.concat([df1, df2], ignore_index=True)
     df_expect["val"] = df_expect.val.astype(desired_type)
 
-    df1.to_parquet(os.path.join(tmpdir, "0.parquet"))
-    df2.to_parquet(os.path.join(tmpdir, "1.parquet"))
+    df1.to_parquet(os.path.join(tmpdir, "0.parquet"), engine="pyarrow")
+    df2.to_parquet(os.path.join(tmpdir, "1.parquet"), engine="pyarrow")
 
     # Read Directory
-    check = dd.read_parquet(str(tmpdir), dataset={"validate_schema": False})
+    check = dd.read_parquet(
+        str(tmpdir), dataset={"validate_schema": False}, engine="pyarrow-legacy"
+    )
     assert_eq(check.compute(), df_expect, check_index=False)
 
     # Read List
     check = dd.read_parquet(
-        os.path.join(tmpdir, "*.parquet"), dataset={"validate_schema": False}
+        os.path.join(tmpdir, "*.parquet"),
+        dataset={"validate_schema": False},
+        engine="pyarrow-legacy",
     )
     assert_eq(check.compute(), df_expect, check_index=False)
 
@@ -3580,3 +3587,52 @@ def test_custom_metadata(tmpdir, engine):
             custom_metadata=custom_metadata,
         )
     assert "User-defined key/value" in str(e.value)
+
+
+@pytest.mark.parametrize("gather_statistics", [True, False, None])
+def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
+    tmpdir = str(tmpdir)
+    dataset_with_bad_metadata = os.path.join(tmpdir, "data1")
+    dataset_without_metadata = os.path.join(tmpdir, "data2")
+
+    # Write two identical datasets without any _metadata file
+    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf1.to_parquet(
+        path=dataset_with_bad_metadata, engine=engine, write_metadata_file=False
+    )
+    ddf1.to_parquet(
+        path=dataset_without_metadata, engine=engine, write_metadata_file=False
+    )
+
+    # Copy "bad" metadata into `dataset_with_bad_metadata`
+    assert "_metadata" not in os.listdir(dataset_with_bad_metadata)
+    with open(os.path.join(dataset_with_bad_metadata, "_metadata"), "w") as f:
+        f.write("INVALID METADATA")
+    assert "_metadata" in os.listdir(dataset_with_bad_metadata)
+    assert "_metadata" not in os.listdir(dataset_without_metadata)
+
+    # Read back the datasets with `ignore_metadata_file=True`, and
+    # test that the results are the same
+    if engine != "pyarrow-legacy":
+        ddf2a = dd.read_parquet(
+            dataset_with_bad_metadata,
+            engine=engine,
+            ignore_metadata_file=True,
+            gather_statistics=gather_statistics,
+        )
+        ddf2b = dd.read_parquet(
+            dataset_without_metadata,
+            engine=engine,
+            ignore_metadata_file=True,
+            gather_statistics=gather_statistics,
+        )
+        assert_eq(ddf2a, ddf2b)
+    else:
+        # Check that "pyarrow-legacy" raises a ValueError
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                dataset_with_bad_metadata,
+                engine=engine,
+                ignore_metadata_file=True,
+            )
