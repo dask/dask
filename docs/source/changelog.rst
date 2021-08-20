@@ -1,10 +1,37 @@
 Changelog
 =========
 
+2021.08.1
+---------
+
+Released on August 20, 2021
+
+- Add ``ignore_metadata_file`` option to ``read_parquet`` (``pyarrow-dataset`` and ``fastparquet`` support only) (:pr:`8034`) `Richard (Rick) Zamora`_
+- Add reference to ``pytest-xdist`` in dev docs (:pr:`8066`) `Julia Signell`_
+- Include ``tz`` in meta from ``to_datetime`` (:pr:`8000`) `Julia Signell`_
+- CI Infra Docs (:pr:`7985`) `Benjamin Zaitlen`_
+- Include invalid DataFrame key in ``assert_eq`` check (:pr:`8061`) `James Bourbeau`_
+- Use ``__class__`` when creating DataFrames (:pr:`8053`) `Mads R. B. Kristensen`_
+- Use development version of ``distributed`` in gpuCI build (:pr:`7976`) `James Bourbeau`_
+- Ignore whitespace when gufunc ``signature`` (:pr:`8049`) `James Bourbeau`_
+- Move pandas import and percentile dispatch refactor (:pr:`8055`) `GALI PREM SAGAR`_
+- Add colors to represent high level layer types (:pr:`7974`) `Freyam Mehta`_
+- Upstream instance fix (:pr:`8060`) `Jacob Tomlinson`_
+- Add ``dask.widgets`` and migrate HTML reprs to ``jinja2`` (:pr:`8019`) `Jacob Tomlinson`_
+- Remove ``wrap_func_like_safe``, not required with NumPy >= 1.17 (:pr:`8052`) `Peter Andreas Entschev`_
+- Fix threaded scheduler memory backpressure regression (:pr:`8040`) `David Hoese`_
+- Add percentile dispatch (:pr:`8029`) `GALI PREM SAGAR`_
+- Use a publicly documented attribute ``obj`` in ``groupby`` rather than private ``_selected_obj`` (:pr:`8038`) `GALI PREM SAGAR`_
+- Specify module to ``import rechunk`` from (:pr:`8039`) `Illviljan`_
+- Use ``dict`` to store data for {nan,}arg{min,max} in certain cases (:pr:`8014`) `Peter Andreas Entschev`_
+- Fix ``blocksize`` description formatting in ``read_pandas`` (:pr:`8047`) `Louis Maddox`_
+- Fix "point" -> "pointers" typo in docs (:pr:`8043`) `David Chudzicki`_
+
+
 2021.08.0
 ---------
 
-Released on Ausgust 13, 2021
+Released on August 13, 2021
 
 - Fix ``to_orc`` delayed compute behavior (:pr:`8035`) `Richard (Rick) Zamora`_
 - Don't convert to low-level task graph in ``compute_as_if_collection`` (:pr:`7969`) `James Bourbeau`_
@@ -4456,3 +4483,4 @@ Other
 .. _`gurunath`: https://github.com/rajagurunath
 .. _`aa1371`: https://github.com/aa1371
 .. _`Gregory R. Lee`: https://github.com/grlee77
+.. _`Louis Maddox`: https://github.com/lmmx
