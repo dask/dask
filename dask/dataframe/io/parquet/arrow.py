@@ -315,6 +315,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups=None,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
         **kwargs,
     ):
 
@@ -329,6 +330,7 @@ class ArrowDatasetEngine(Engine):
             split_row_groups=split_row_groups,
             chunksize=chunksize,
             aggregate_files=aggregate_files,
+            ignore_metadata_file=ignore_metadata_file,
             **kwargs.get("dataset", {}),
         )
 
@@ -766,6 +768,7 @@ class ArrowDatasetEngine(Engine):
         split_row_groups=None,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
         **dataset_kwargs,
     ):
         """pyarrow.dataset version of _collect_dataset_info
@@ -791,16 +794,9 @@ class ArrowDatasetEngine(Engine):
             {"obj": pa_ds.HivePartitioning},
         )
 
-        # Check if the user wants to ignore the global metadata file
-        ignore_metadata_file = _dataset_kwargs.pop(
-            "ignore_metadata_file",
-            False,
-        )
-
-        # TODO: Add back this check when tests are upgraded in #8034
-        # # Check that we are not silently ignoring any dataset_kwargs
-        # if _dataset_kwargs:
-        #     raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
+        # Check that we are not silently ignoring any dataset_kwargs
+        if _dataset_kwargs:
+            raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
 
         # Case-dependent pyarrow.dataset creation
         _metadata = False
@@ -1578,6 +1574,10 @@ class ArrowDatasetEngine(Engine):
 def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     """Generate a ParquetDataset object"""
     kwargs = dataset_kwargs.copy()
+    ignore_metadata_file = kwargs.pop("ignore_metadata_file", False)
+    if ignore_metadata_file:
+        raise ValueError("ignore_metadata_file not supported for ArrowLegacyEngine.")
+
     if "validate_schema" not in kwargs:
         kwargs["validate_schema"] = False
     if len(paths) > 1:
@@ -1637,6 +1637,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         split_row_groups=None,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
         **dataset_kwargs,
     ):
         """pyarrow-legacy version of _collect_dataset_info
@@ -1645,6 +1646,9 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
 
         This method overrides `ArrowDatasetEngine._collect_dataset_info`.
         """
+
+        if ignore_metadata_file:
+            raise ValueError("ignore_metadata_file not supported in ArrowLegacyEngine")
 
         (
             schema,

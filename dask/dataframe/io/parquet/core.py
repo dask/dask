@@ -104,6 +104,7 @@ def read_parquet(
     storage_options=None,
     engine="auto",
     gather_statistics=None,
+    ignore_metadata_file=False,
     split_row_groups=None,
     chunksize=None,
     aggregate_files=None,
@@ -175,6 +176,8 @@ def read_parquet(
         this will only be done if the _metadata file is available. Otherwise,
         statistics will only be gathered if True, because the footer of
         every file will be parsed (which is very slow on some systems).
+    ignore_metadata_file : bool, default False
+        Whether to ignore the global ``_metadata`` file (when one is present).
     split_row_groups : bool or int, default None
         Default is True if a _metadata file is available or if
         the dataset is composed of a single file (otherwise defult is False).
@@ -255,6 +258,7 @@ def read_parquet(
             storage_options=storage_options,
             engine=engine,
             gather_statistics=gather_statistics,
+            ignore_metadata_file=ignore_metadata_file,
             split_row_groups=split_row_groups,
             chunksize=chunksize,
             aggregate_files=aggregate_files,
@@ -274,6 +278,7 @@ def read_parquet(
         storage_options,
         engine,
         gather_statistics,
+        ignore_metadata_file,
         split_row_groups,
         chunksize,
         aggregate_files,
@@ -314,6 +319,7 @@ def read_parquet(
         split_row_groups=split_row_groups,
         chunksize=chunksize,
         aggregate_files=aggregate_files,
+        ignore_metadata_file=ignore_metadata_file,
         **kwargs,
     )
 

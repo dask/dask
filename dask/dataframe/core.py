@@ -6801,15 +6801,16 @@ def maybe_shift_divisions(df, periods, freq):
     if df.known_divisions:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
         divisions = divs.shift(periods, freq=freq).index
-        return type(df)(df.dask, df._name, df._meta, divisions)
+        return df.__class__(df.dask, df._name, df._meta, divisions)
     return df
 
 
 @wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
+    tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
     if meta is None:
         if isinstance(arg, Index):
-            meta = pd.DatetimeIndex([])
+            meta = pd.DatetimeIndex([], **tz_kwarg)
             meta.name = arg.name
         elif not (is_dataframe_like(arg) or is_series_like(arg)):
             raise NotImplementedError(
@@ -6817,7 +6818,7 @@ def to_datetime(arg, meta=None, **kwargs):
                 "non-index-able arguments (like scalars)"
             )
         else:
-            meta = pd.Series([pd.Timestamp("2000")])
+            meta = pd.Series([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)
