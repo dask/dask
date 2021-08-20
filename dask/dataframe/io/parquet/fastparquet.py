@@ -754,7 +754,7 @@ class FastParquetEngine(Engine):
     ):
 
         # Check if files_per_metadata_task is set
-        if files_per_metadata_task:
+        if files_per_metadata_task is not None:
             raise ValueError(
                 "files_per_metadata_task not supported in FastParquetEngine"
             )

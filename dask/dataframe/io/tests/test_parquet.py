@@ -3634,3 +3634,42 @@ def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
                 engine=engine,
                 ignore_metadata_file=True,
             )
+
+
+@pytest.mark.parametrize("write_metadata_file", [True, False])
+@pytest.mark.parametrize("files_per_metadata_task", [2, 0])
+def test_files_per_metadata_task(
+    tmpdir, engine, write_metadata_file, files_per_metadata_task
+):
+
+    # Write simple dataset
+    tmpdir = str(tmpdir)
+    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=10)
+    ddf1.to_parquet(
+        path=str(tmpdir), engine=engine, write_metadata_file=write_metadata_file
+    )
+
+    # Read back
+    if engine == "pyarrow-dataset":
+        ddf2a = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            gather_statistics=True,
+            files_per_metadata_task=files_per_metadata_task,
+        )
+        ddf2b = dd.read_parquet(
+            str(tmpdir),
+            engine=engine,
+            gather_statistics=True,
+        )
+        assert_eq(ddf2a, ddf2b)
+    else:
+        # Check that other engines raise a ValueError
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                str(tmpdir),
+                engine=engine,
+                gather_statistics=True,
+                files_per_metadata_task=files_per_metadata_task,
+            )

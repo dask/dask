@@ -802,7 +802,7 @@ class ArrowDatasetEngine(Engine):
             raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
 
         # Case-dependent pyarrow.dataset creation
-        _metadata = False
+        has_metadata_file = False
         if len(paths) == 1 and fs.isdir(paths[0]):
 
             # Use _analyze_paths to avoid relative-path
@@ -821,7 +821,7 @@ class ArrowDatasetEngine(Engine):
                         **partitioning_method.get("kwargs", {}),
                     ),
                 )
-                _metadata = True
+                has_metadata_file = True
                 if gather_statistics is None:
                     gather_statistics = True
 
@@ -840,7 +840,7 @@ class ArrowDatasetEngine(Engine):
                             **partitioning_method.get("kwargs", {}),
                         ),
                     )
-                    _metadata = True
+                    has_metadata_file = True
                     if gather_statistics is None:
                         gather_statistics = True
 
@@ -956,7 +956,7 @@ class ArrowDatasetEngine(Engine):
         #
         return {
             "ds": ds,
-            "_metadata": _metadata,
+            "has_metadata_file": has_metadata_file,
             "schema": ds.schema,
             "fs": fs,
             "valid_paths": valid_paths,
@@ -1120,7 +1120,7 @@ class ArrowDatasetEngine(Engine):
         partitioning_method = dataset_info["partitioning_method"]
         partitions = dataset_info["partitions"]
         categories = dataset_info["categories"]
-        has_metadata_file = dataset_info["_metadata"]
+        has_metadata_file = dataset_info["has_metadata_file"]
         valid_paths = dataset_info["valid_paths"]
         files_per_metadata_task = dataset_info["files_per_metadata_task"]
 
@@ -1666,7 +1666,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         if ignore_metadata_file:
             raise ValueError("ignore_metadata_file not supported in ArrowLegacyEngine")
 
-        if files_per_metadata_task:
+        if files_per_metadata_task is not None:
             raise ValueError(
                 "files_per_metadata_task not supported in ArrowLegacyEngine"
             )
