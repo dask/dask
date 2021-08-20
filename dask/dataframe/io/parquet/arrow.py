@@ -1117,6 +1117,7 @@ class ArrowDatasetEngine(Engine):
         index_cols = dataset_info["index_cols"]
         schema = dataset_info["schema"]
         partition_names = dataset_info["partition_names"]
+        files_per_task = dataset_info.get("files_per_task", 8)
 
         # Check if this is a very simple case where
         # gather_statistics should be False
@@ -1168,8 +1169,7 @@ class ArrowDatasetEngine(Engine):
             ds_filters = pq._filters_to_expression(filters)
         dataset_info["ds_filters"] = ds_filters
 
-        # Main parts/stats-construction loop
-        parts, stats = [], []
+        # Main parts/stats-construction
         if dataset_info["_metadata"]:
             # We have a global _metadata file to work with.
             # Therefore, we can just loop over fragments on the client.
@@ -1179,25 +1179,17 @@ class ArrowDatasetEngine(Engine):
                 [frag for frag in ds.get_fragments(ds_filters)],
                 key=lambda x: natural_sort_key(x.path),
             )
-
-            # Loop over file fragments
-            for file_frag in file_frags:
-                file_parts, file_stats = cls._collect_file_parts(
-                    file_frag,
-                    dataset_info,
-                )
-                parts += file_parts
-                if file_stats:
-                    stats += file_stats
+            parts, stats = cls._collect_file_parts(file_frags, dataset_info)
         else:
             # We DON'T have a global _metadata file to work with.
             # We should loop over files in parallel
 
             # TODO: Turn this into a dask graph...
+            parts, stats = [], []
             all_files = sorted(ds.files, key=natural_sort_key)
-            for file in all_files:
+            for i in range(0, len(all_files), files_per_task):
                 file_parts, file_stats = cls._collect_file_parts(
-                    file,
+                    all_files[i : i + files_per_task],
                     dataset_info,
                 )
                 parts += file_parts
@@ -1375,30 +1367,38 @@ class ArrowDatasetEngine(Engine):
     @classmethod
     def _collect_file_parts(
         cls,
-        file_or_frag,
+        files_or_frags,
         dataset_info,
     ):
 
-        ### TODO: Allow us to process multiple pats at once here
-        ### (to address the offset aggregation problem)
-
+        # Collect necessary information from dataset_info
         fs = dataset_info["fs"]
         split_row_groups = dataset_info["split_row_groups"]
         gather_statistics = dataset_info["gather_statistics"]
 
-        # Get file fragment
-        if isinstance(file_or_frag, str):
+        # Make sure we are processing a non-empty list
+        if not isinstance(files_or_frags, list):
+            files_or_frags = [files_or_frags]
+        elif not files_or_frags:
+            return [], []
+
+        # Make sure we are starting with file fragments
+        if isinstance(files_or_frags[0], str):
 
             # Check if we are using a simple file-partition map
             # without requiring any file or row-group statistics
             if not split_row_groups and gather_statistics is False:
-                return [{"piece": (file_or_frag, None, None)}], None
+                # Cool - We can return immediately
+                return [
+                    {"piece": (file_or_frag, None, None)}
+                    for file_or_frag in files_or_frags
+                ], None
 
             # Need more information - convert the path to a fragment
             partitioning_method = dataset_info["partitioning_method"]
-            file_frag = next(
+            file_frags = list(
                 pa_ds.dataset(
-                    file_or_frag,
+                    files_or_frags,
                     filesystem=fs,
                     format="parquet",
                     partitioning=partitioning_method["obj"].discover(
@@ -1408,105 +1408,117 @@ class ArrowDatasetEngine(Engine):
                 ).get_fragments()
             )
         else:
-            file_frag = file_or_frag
+            file_frags = files_or_frags
 
         # If valid_paths is not None, the user passed in a list
         # of files containing a _metadata file.  Since we used
         # the _metadata file to generate our dataset object , we need
         # to ignore any file fragments that are not in the list.
         valid_paths = dataset_info["valid_paths"]
-        if valid_paths and file_frag.path.split(fs.sep)[-1] not in valid_paths:
-            return [], []
+        if valid_paths:
+            file_frags = [
+                frag
+                for frag in file_frags
+                if frag.path.split(fs.sep)[-1] in valid_paths
+            ]
+            if not file_frags:
+                return [], []
 
+        # Collect settings from dataset_info
         ds_filters = dataset_info["ds_filters"]
         filters = dataset_info["filters"]
         schema = dataset_info["schema"]
         stat_col_indices = dataset_info["stat_col_indices"]
         aggregation_depth = dataset_info["aggregation_depth"]
         chunksize = dataset_info["chunksize"]
-        hive_partition_keys = pa_ds._get_partition_keys(file_frag.partition_expression)
 
-        file_row_groups = []
-        file_row_group_stats = []
-        file_row_group_column_stats = []
+        # Intialize row-group and statistiscs data structures
+        file_row_groups = defaultdict(list)
+        file_row_group_stats = defaultdict(list)
+        file_row_group_column_stats = defaultdict(list)
         single_rg_parts = int(split_row_groups) == 1
+        hive_partition_keys = {}
         cmax_last = {}
-        fpath = file_frag.path
-        for frag in file_frag.split_by_row_group(ds_filters, schema=schema):
-            row_group_info = frag.row_groups
-            if gather_statistics or split_row_groups:
-                # If we are gathering statistics or splitting by
-                # row-group, we may need to ensure our fragment
-                # metadata is complete.
-                if row_group_info is None:
-                    frag.ensure_complete_metadata()
-                    row_group_info = frag.row_groups
-                if not len(row_group_info):
+        for file_frag in file_frags:
+            fpath = file_frag.path
+            hive_partition_keys[fpath] = list(
+                pa_ds._get_partition_keys(file_frag.partition_expression).items()
+            )
+            for frag in file_frag.split_by_row_group(ds_filters, schema=schema):
+                row_group_info = frag.row_groups
+                if gather_statistics or split_row_groups:
+                    # If we are gathering statistics or splitting by
+                    # row-group, we may need to ensure our fragment
+                    # metadata is complete.
+                    if row_group_info is None:
+                        frag.ensure_complete_metadata()
+                        row_group_info = frag.row_groups
+                    if not len(row_group_info):
+                        continue
+                else:
+                    file_row_groups[fpath] = [None]
                     continue
-            else:
-                file_row_groups = [None]
-                continue
-            for row_group in row_group_info:
-                file_row_groups.append(row_group.id)
-                if gather_statistics:
-                    statistics = _get_rg_statistics(row_group, stat_col_indices)
-                    if single_rg_parts:
-                        s = {
-                            "file_path_0": fpath,
-                            "num-rows": row_group.num_rows,
-                            "total_byte_size": row_group.total_byte_size,
-                            "columns": [],
-                        }
-                    else:
-                        s = {
-                            "num-rows": row_group.num_rows,
-                            "total_byte_size": row_group.total_byte_size,
-                        }
-                    cstats = []
-                    for name, i in stat_col_indices.items():
-                        if name in statistics:
-                            cmin = statistics[name]["min"]
-                            cmax = statistics[name]["max"]
-                            last = cmax_last.get(name, None)
-                            if not (filters or chunksize or aggregation_depth):
-                                # Only think about bailing if we don't need
-                                # stats for filtering
-                                if cmin is None or (last and cmin < last):
-                                    # We are collecting statistics for divisions
-                                    # only (no filters) - Column isn't sorted, or
-                                    # we have an all-null partition, so lets bail.
-                                    #
-                                    # Note: This assumes ascending order.
-                                    #
-                                    gather_statistics = False
-                                    file_row_group_stats = {}
-                                    file_row_group_column_stats = {}
-                                    break
-
-                            if single_rg_parts:
-                                s["columns"].append(
-                                    {
-                                        "name": name,
-                                        "min": pd.Timestamp(cmin)
-                                        if isinstance(cmin, datetime)
-                                        else cmin,
-                                        "max": pd.Timestamp(cmax)
-                                        if isinstance(cmax, datetime)
-                                        else cmax,
-                                    }
-                                )
-                            else:
-                                cstats += [cmin, cmax]
-                            cmax_last[name] = cmax
-                        else:
-                            if single_rg_parts:
-                                s["columns"].append({"name": name})
-                            else:
-                                cstats += [None, None, None]
+                for row_group in row_group_info:
+                    file_row_groups[fpath].append(row_group.id)
                     if gather_statistics:
-                        file_row_group_stats.append(s)
-                        if not single_rg_parts:
-                            file_row_group_column_stats.append(tuple(cstats))
+                        statistics = _get_rg_statistics(row_group, stat_col_indices)
+                        if single_rg_parts:
+                            s = {
+                                "file_path_0": fpath,
+                                "num-rows": row_group.num_rows,
+                                "total_byte_size": row_group.total_byte_size,
+                                "columns": [],
+                            }
+                        else:
+                            s = {
+                                "num-rows": row_group.num_rows,
+                                "total_byte_size": row_group.total_byte_size,
+                            }
+                        cstats = []
+                        for name, i in stat_col_indices.items():
+                            if name in statistics:
+                                cmin = statistics[name]["min"]
+                                cmax = statistics[name]["max"]
+                                last = cmax_last.get(name, None)
+                                if not (filters or chunksize or aggregation_depth):
+                                    # Only think about bailing if we don't need
+                                    # stats for filtering
+                                    if cmin is None or (last and cmin < last):
+                                        # We are collecting statistics for divisions
+                                        # only (no filters) - Column isn't sorted, or
+                                        # we have an all-null partition, so lets bail.
+                                        #
+                                        # Note: This assumes ascending order.
+                                        #
+                                        gather_statistics = False
+                                        file_row_group_stats = {}
+                                        file_row_group_column_stats = {}
+                                        break
+
+                                if single_rg_parts:
+                                    s["columns"].append(
+                                        {
+                                            "name": name,
+                                            "min": pd.Timestamp(cmin)
+                                            if isinstance(cmin, datetime)
+                                            else cmin,
+                                            "max": pd.Timestamp(cmax)
+                                            if isinstance(cmax, datetime)
+                                            else cmax,
+                                        }
+                                    )
+                                else:
+                                    cstats += [cmin, cmax]
+                                cmax_last[name] = cmax
+                            else:
+                                if single_rg_parts:
+                                    s["columns"].append({"name": name})
+                                else:
+                                    cstats += [None, None, None]
+                        if gather_statistics:
+                            file_row_group_stats[fpath].append(s)
+                            if not single_rg_parts:
+                                file_row_group_column_stats[fpath].append(tuple(cstats))
 
         # Check if we have empty parts to return
         if not file_row_groups:
@@ -1517,14 +1529,14 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             split_row_groups,
             aggregation_depth,
-            {fpath: file_row_groups},
-            {fpath: file_row_group_stats},
-            {fpath: file_row_group_column_stats},
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
             stat_col_indices,
             cls._make_part,
             make_part_kwargs={
                 "fs": fs,
-                "partition_keys": {fpath: list(hive_partition_keys.items())},
+                "partition_keys": hive_partition_keys,
                 "partition_obj": dataset_info["partitions"],
                 "data_path": "",
                 "frag_map": None,
