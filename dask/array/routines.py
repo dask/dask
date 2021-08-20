@@ -2356,7 +2356,11 @@ def average(a, axis=None, weights=None, returned=False):
 def tril(m, k=0):
     m = asarray_safe(m, like=m)
     mask = tri(
-        *m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m)
+        *m.shape[-2:],
+        k=k,
+        dtype=bool,
+        chunks=m.chunks[-2:],
+        like=meta_from_array(m) if _numpy_120 else None,
     )
 
     return where(mask, m, np.zeros_like(m, shape=(1,)))
@@ -2370,7 +2374,7 @@ def triu(m, k=0):
         k=k - 1,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m),
+        like=meta_from_array(m) if _numpy_120 else None,
     )
 
     return where(mask, np.zeros_like(m, shape=(1,)), m)
