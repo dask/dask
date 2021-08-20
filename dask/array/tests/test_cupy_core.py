@@ -606,6 +606,7 @@ def test_setitem_errs():
     dx = da.from_array(x, chunks=(2, 3))
 
 
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("xp", [np, da])
 @pytest.mark.parametrize("array_func", ["array", "asarray", "asanyarray"])
 def test_array_like(xp, array_func):
