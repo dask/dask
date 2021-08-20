@@ -1258,6 +1258,7 @@ class ArrowDatasetEngine(Engine):
         fs = dataset_info_kwargs["fs"]
         split_row_groups = dataset_info_kwargs["split_row_groups"]
         gather_statistics = dataset_info_kwargs["gather_statistics"]
+        partitions = dataset_info_kwargs["partitions"]
 
         # Make sure we are processing a non-empty list
         if not isinstance(files_or_frags, list):
@@ -1270,7 +1271,7 @@ class ArrowDatasetEngine(Engine):
 
             # Check if we are using a simple file-partition map
             # without requiring any file or row-group statistics
-            if not split_row_groups and gather_statistics is False:
+            if not (split_row_groups or partitions) and gather_statistics is False:
                 # Cool - We can return immediately
                 return [
                     {"piece": (file_or_frag, None, None)}
@@ -1310,9 +1311,14 @@ class ArrowDatasetEngine(Engine):
         cmax_last = {}
         for file_frag in file_frags:
             fpath = file_frag.path
-            hive_partition_keys[fpath] = list(
-                pa_ds._get_partition_keys(file_frag.partition_expression).items()
-            )
+
+            # Extract hive-partition keys, and make sure they
+            # are orederd the same as they are in `partitions`
+            raw_keys = pa_ds._get_partition_keys(file_frag.partition_expression)
+            hive_partition_keys[fpath] = [
+                (hive_part.name, raw_keys[hive_part.name]) for hive_part in partitions
+            ]
+
             for frag in file_frag.split_by_row_group(ds_filters, schema=schema):
                 row_group_info = frag.row_groups
                 if gather_statistics or split_row_groups:
@@ -1406,7 +1412,7 @@ class ArrowDatasetEngine(Engine):
             make_part_kwargs={
                 "fs": fs,
                 "partition_keys": hive_partition_keys,
-                "partition_obj": dataset_info_kwargs["partitions"],
+                "partition_obj": partitions,
                 "data_path": "",
             },
         )
