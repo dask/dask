@@ -25,12 +25,12 @@ extras_require["complete"] = sorted({v for req in extras_require.values() for v 
 extras_require["test"] = ["pytest", "pytest-rerunfailures", "pytest-xdist"]
 
 install_requires = [
-    "packaging >= 20.0",
-    "pyyaml",
     "cloudpickle >= 1.1.1",
     "fsspec >= 0.6.0",
-    "toolz >= 0.8.2",
+    "packaging >= 20.0",
     "partd >= 0.3.10",
+    "pyyaml",
+    "toolz >= 0.8.2",
 ]
 
 packages = [
