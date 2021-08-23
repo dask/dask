@@ -1098,15 +1098,37 @@ class ArrowDatasetEngine(Engine):
                 valid_paths = fns
 
         if ds is None:
-            ds = pa_ds.dataset(
-                paths,
-                filesystem=fs,
-                format="parquet",
-                partitioning=partitioning["obj"].discover(
-                    *partitioning.get("args", []),
-                    **partitioning.get("kwargs", {}),
-                ),
-            )
+            try:
+                ds = pa_ds.dataset(
+                    paths,
+                    filesystem=fs,
+                    format="parquet",
+                    partitioning=partitioning["obj"].discover(
+                        *partitioning.get("args", []),
+                        **partitioning.get("kwargs", {}),
+                    ),
+                )
+            except pa.ArrowInvalid as e:
+                # Dictionary inference may have caused issues here if
+                # there were overlapping partition/file columns. Let's
+                # remove the 'max_partition_dictionary_size' kwarg and
+                # try again.
+                if "Unable to merge" in str(
+                    e
+                ) and "max_partition_dictionary_size" in partitioning.get("kwargs", {}):
+                    partitioning["kwargs"].pop("max_partition_dictionary_size")
+                    ds = pa_ds.dataset(
+                        paths,
+                        filesystem=fs,
+                        format="parquet",
+                        partitioning=partitioning["obj"].discover(
+                            *partitioning.get("args", []),
+                            **partitioning.get("kwargs", {}),
+                        ),
+                    )
+                else:
+                    raise e
+
         schema = ds.schema
         base = ""
 
