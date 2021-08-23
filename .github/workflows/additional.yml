@@ -8,7 +8,7 @@ jobs:
 
     strategy:
       matrix:
-        environment: ["mindeps-array", mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
+        environment: ["mindeps-array", "mindeps-dataframe", "mindeps-non-optional", "mindeps-distributed"]
 
     env:
       COVERAGE: "true"
