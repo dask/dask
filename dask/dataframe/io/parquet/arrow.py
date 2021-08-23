@@ -521,6 +521,7 @@ class ArrowDatasetEngine(Engine):
         read_from_paths=None,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
         categorical_partitions=True,
         **kwargs,
     ):
@@ -530,6 +531,8 @@ class ArrowDatasetEngine(Engine):
         # depending on _metadata availability.
         _dataset_kwargs = kwargs.get("dataset", {})
         _dataset_kwargs["categorical_partitions"] = categorical_partitions
+        if ignore_metadata_file:
+            _dataset_kwargs["ignore_metadata_file"] = ignore_metadata_file
         (
             schema,
             metadata,
@@ -1020,6 +1023,7 @@ class ArrowDatasetEngine(Engine):
         # Use pyarrow.dataset API
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
+        _dataset_kwargs = dataset_kwargs.copy()
 
         # Discover Partitioning - Note that we need to avoid creating
         # this factory until it is actually used.  The `partitioning`
@@ -1027,9 +1031,22 @@ class ArrowDatasetEngine(Engine):
         # in, containing a `dict` with a required "obj" argument and
         # optional "arg" and "kwargs" elements.  Note that the "obj"
         # value must support the "discover" attribute.
-        partitioning = dataset_kwargs.get(
+        partitioning = _dataset_kwargs.get(
             "partitioning", {"obj": pa_ds.HivePartitioning}
         )
+
+        # Check if the user wants to ignore the global metadata file
+        ignore_metadata_file = _dataset_kwargs.pop(
+            "ignore_metadata_file",
+            False,
+        )
+
+        # Check if partition columns should be conveted to "category"
+        categorical_partitions = _dataset_kwargs.pop("categorical_partitions", True)
+
+        # Check that we are not silently ignoring any dataset_kwargs
+        if _dataset_kwargs:
+            raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
 
         if len(paths) == 1 and fs.isdir(paths[0]):
 
@@ -1039,7 +1056,7 @@ class ArrowDatasetEngine(Engine):
             paths = fs.sep.join([base, fns[0]])
 
             meta_path = fs.sep.join([paths, "_metadata"])
-            if fs.exists(meta_path):
+            if not ignore_metadata_file and fs.exists(meta_path):
                 # Use _metadata file
                 ds = pa_ds.parquet_dataset(
                     meta_path,
@@ -1057,16 +1074,17 @@ class ArrowDatasetEngine(Engine):
             if "_metadata" in fns:
                 # Pyarrow cannot handle "_metadata" when `paths` is a list
                 # Use _metadata file
-                ds = pa_ds.parquet_dataset(
-                    meta_path,
-                    filesystem=fs,
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
-                )
-                if gather_statistics is None:
-                    gather_statistics = True
+                if not ignore_metadata_file:
+                    ds = pa_ds.parquet_dataset(
+                        meta_path,
+                        filesystem=fs,
+                        partitioning=partitioning["obj"].discover(
+                            *partitioning.get("args", []),
+                            **partitioning.get("kwargs", {}),
+                        ),
+                    )
+                    if gather_statistics is None:
+                        gather_statistics = True
 
                 # Populate valid_paths, since the original path list
                 # must be used to filter the _metadata-based dataset
@@ -1125,9 +1143,7 @@ class ArrowDatasetEngine(Engine):
         # reproduce a `fragment` (for row-wise filtering)
         # on the worker.
         partition_info["partitioning"] = partitioning
-        partition_info["categorical_partitions"] = dataset_kwargs.pop(
-            "categorical_partitions", True
-        )
+        partition_info["categorical_partitions"] = categorical_partitions
 
         return (
             schema,
@@ -1754,6 +1770,10 @@ class ArrowDatasetEngine(Engine):
 def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     """Generate a ParquetDataset object"""
     kwargs = dataset_kwargs.copy()
+    ignore_metadata_file = kwargs.pop("ignore_metadata_file", False)
+    if ignore_metadata_file:
+        raise ValueError("ignore_metadata_file not supported for ArrowLegacyEngine.")
+
     if "validate_schema" not in kwargs:
         kwargs["validate_schema"] = False
     if len(paths) > 1:

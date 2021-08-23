@@ -58,4 +58,5 @@ dependencies:
   - python-graphviz
   - python-xxhash
   - mmh3
+  - jinja2
   - pip
