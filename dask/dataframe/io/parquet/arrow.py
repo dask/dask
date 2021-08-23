@@ -1845,7 +1845,10 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
         if not categorical_partitions:
             raise ValueError(
                 "`categorical_partitions=False` is not supported for "
-                "`engine='pyarrow-legacy'`. Try `engine='pyarrow-datset'`."
+                "`engine='pyarrow-legacy'`. Try `engine='pyarrow-datset'`. "
+                "To convert back from 'category' dtypes with the legacy "
+                "engine, please use `.astype` on the partitioned columns "
+                "after `read_parquet`."
             )
 
         # Step 1: Create a ParquetDataset object

@@ -756,7 +756,9 @@ class FastParquetEngine(Engine):
         if not categorical_partitions:
             raise ValueError(
                 "`categorical_partitions=False` is not supported for "
-                "`engine='fastparquet'`."
+                "`engine='fastparquet'`. To convert back from 'category' "
+                "dtypes, please use `.astype` on the partitioned columns "
+                "after `read_parquet`."
             )
 
         # Define the parquet-file (pf) object to use for metadata,
