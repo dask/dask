@@ -67,7 +67,6 @@ jobs:
     needs: build
     if: |
       always()
-      && github.event_name == 'schedule'
       && github.repository == 'dask/dask'
       && needs.check.outputs.test-upstream == 'true'
       && needs.build.result == 'failure'
