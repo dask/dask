@@ -4,6 +4,10 @@ Dispatch in dask.dataframe.
 Also see extension.py
 """
 
+import pandas as pd
+
+import dask.array as da
+import dask.dataframe as dd
 
 from ..utils import Dispatch
 
@@ -111,10 +115,6 @@ def make_meta(x, index=None, parent_meta=None):
     -------
     A valid meta-data
     """
-    import pandas as pd
-
-    import dask.array as da
-    import dask.dataframe as dd
 
     if isinstance(
         x,
