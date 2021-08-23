@@ -147,7 +147,7 @@ def test_partition_on(tmpdir, columns, aggregate_files, split_stripes, index, fi
     df = pd.DataFrame(
         {
             "a1": ["A"] * 33 + ["B"] * 33 + ["C"] * 34,
-            "a2": np.random.choice(["X", "Y", "Z"], size=100),
+            "a2": np.random.choice([1, 2, 3], size=100),
             "b": np.random.random(size=100),
             "c": np.random.randint(1, 5, size=100),
             "d": np.arange(0, 100),

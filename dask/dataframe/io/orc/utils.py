@@ -242,10 +242,22 @@ def collect_partitions(file_list, root, fs, partition_sep="=", dtypes=None):
             _split = d.split(partition_sep)
             if len(_split) == 2:
                 col = _split[0]
+                # Interpret partition key as int, float, or str
+                raw_parition_key = (
+                    dtypes[col](_split[1]) if col in dtypes else _split[1]
+                )
+                try:
+                    parition_key = int(raw_parition_key)
+                except ValueError:
+                    try:
+                        parition_key = float(raw_parition_key)
+                    except ValueError:
+                        parition_key = raw_parition_key
+                # Append partition name-key tuple to `partition` list
                 partition.append(
                     (
                         _split[0],
-                        dtypes[col](_split[1]) if col in dtypes else _split[1],
+                        parition_key,
                     )
                 )
         if partition:
