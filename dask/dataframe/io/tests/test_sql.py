@@ -4,6 +4,7 @@ from contextlib import contextmanager
 import pytest
 
 # import dask
+import dask.dataframe as dd
 from dask.dataframe.io.sql import read_sql_table
 from dask.dataframe.utils import assert_eq
 from dask.utils import tmpfile
@@ -210,6 +211,11 @@ def test_simple(db):
     data = read_sql_table("test", db, npartitions=2, index_col="number").compute()
     assert (data.name == df.name).all()
     assert data.index.name == "number"
+    assert_eq(data, df)
+
+
+def test_top_level(db):
+    data = dd.read_sql_table("test", db, npartitions=1, index_col="number")
     assert_eq(data, df)
 
 
