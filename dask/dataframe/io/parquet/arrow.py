@@ -1025,6 +1025,9 @@ class ArrowDatasetEngine(Engine):
         valid_paths = None  # Only used if `paths` is a list containing _metadata
         _dataset_kwargs = dataset_kwargs.copy()
 
+        # Check if partition columns should be conveted to "category"
+        categorical_partitions = _dataset_kwargs.pop("categorical_partitions", True)
+
         # Discover Partitioning - Note that we need to avoid creating
         # this factory until it is actually used.  The `partitioning`
         # object can be overridden if a "partitioning" kwarg is passed
@@ -1032,7 +1035,13 @@ class ArrowDatasetEngine(Engine):
         # optional "arg" and "kwargs" elements.  Note that the "obj"
         # value must support the "discover" attribute.
         partitioning = _dataset_kwargs.get(
-            "partitioning", {"obj": pa_ds.HivePartitioning}
+            "partitioning",
+            {
+                "obj": pa_ds.HivePartitioning,
+                "kwargs": {"max_partition_dictionary_size": -1}
+                if categorical_partitions
+                else {},
+            },
         )
 
         # Check if the user wants to ignore the global metadata file
@@ -1040,9 +1049,6 @@ class ArrowDatasetEngine(Engine):
             "ignore_metadata_file",
             False,
         )
-
-        # Check if partition columns should be conveted to "category"
-        categorical_partitions = _dataset_kwargs.pop("categorical_partitions", True)
 
         # Check that we are not silently ignoring any dataset_kwargs
         if _dataset_kwargs:
