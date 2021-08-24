@@ -570,7 +570,7 @@ def to_parquet(
                 )
         if append:
             raise ValueError("Cannot use both `overwrite=True` and `append=True`!")
-        if fs.isdir(path):
+        if fs.exists(path) and fs.isdir(path):
             # Only remove path contents if
             # (1) The path exists
             # (2) The path is a directory
