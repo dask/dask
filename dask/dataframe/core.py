@@ -6009,7 +6009,7 @@ def quantile(df, q, method="default"):
         }
     else:
 
-        from dask.array.dispatch import _percentile
+        from dask.array.dispatch import percentile_lookup as _percentile
         from dask.array.percentile import merge_percentiles
 
         # Add 0 and 100 during calculation for more robust behavior (hopefully)

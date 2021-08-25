@@ -8,7 +8,6 @@ import pandas as pd
 
 import dask.array as da
 import dask.dataframe as dd
-from dask.array.dispatch import percentile_dispatch  # noqa: F401
 
 from ..utils import Dispatch
 

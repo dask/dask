@@ -1,17 +1,16 @@
 import numpy as np
 
-from dask.array.percentile import _percentile
-
 from .dispatch import (
     concatenate_lookup,
     divide_lookup,
     einsum_lookup,
     empty_lookup,
-    percentile_dispatch,
+    percentile_lookup,
     tensordot_lookup,
 )
 from .numpy_compat import divide as np_divide
 from .numpy_compat import ma_divide
+from .percentile import _percentile
 
 concatenate_lookup.register((object, np.ndarray), np.concatenate)
 tensordot_lookup.register((object, np.ndarray), np.tensordot)
@@ -22,7 +21,7 @@ divide_lookup.register((object, np.ndarray), np_divide)
 divide_lookup.register(np.ma.masked_array, ma_divide)
 
 
-@percentile_dispatch.register(np.ndarray)
+@percentile_lookup.register(np.ndarray)
 def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
@@ -116,12 +115,11 @@ def _tensordot(a, b, axes=2):
 def register_cupy():
     import cupy
 
-    from dask.array.dispatch import percentile_dispatch
-    from dask.dataframe.backends import percentile
+    from dask.array.dispatch import percentile_lookup
 
     concatenate_lookup.register(cupy.ndarray, cupy.concatenate)
     tensordot_lookup.register(cupy.ndarray, cupy.tensordot)
-    percentile_dispatch.register(cupy.ndarray, percentile)
+    percentile_lookup.register(cupy.ndarray, percentile)
 
     @einsum_lookup.register(cupy.ndarray)
     def _cupy_einsum(*args, **kwargs):
