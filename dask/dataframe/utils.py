@@ -620,7 +620,7 @@ def assert_sane_keynames(ddf):
         assert isinstance(k, (str, bytes))
         assert len(k) < 100
         assert " " not in k
-        assert k.split("-")[0].isidentifier()
+        assert k.split("-")[0].isidentifier(), k
 
 
 def assert_dask_dtypes(ddf, res, numeric_equal=True):
