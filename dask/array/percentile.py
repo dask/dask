@@ -91,6 +91,7 @@ def percentile(a, q, interpolation="linear", method="default"):
     --------
     numpy.percentile : Numpy's equivalent Percentile function
     """
+    from .dispatch import percentile_lookup as _percentile
     from .utils import array_safe, meta_from_array
 
     if not a.ndim == 1:
