@@ -4293,6 +4293,7 @@ class DataFrame(_Frame):
 
     @derived_from(pd.DataFrame)
     def assign(self, **kwargs):
+        data = self.copy()
         for k, v in kwargs.items():
             if not (
                 isinstance(v, Scalar)
@@ -4307,27 +4308,27 @@ class DataFrame(_Frame):
                     "{0}".format(typename(type(v)))
                 )
             if callable(v):
-                kwargs[k] = v(self)
+                kwargs[k] = v(data)
             if isinstance(v, Array):
                 from .io import from_dask_array
 
                 if len(v.shape) > 1:
                     raise ValueError("Array assignment only supports 1-D arrays")
-                if v.npartitions != self.npartitions:
+                if v.npartitions != data.npartitions:
                     raise ValueError(
                         "Number of partitions do not match ({0} != {1})".format(
-                            v.npartitions, self.npartitions
+                            v.npartitions, data.npartitions
                         )
                     )
-                kwargs[k] = from_dask_array(v, index=self.index, meta=self._meta)
+                kwargs[k] = from_dask_array(v, index=data.index, meta=data._meta)
 
-            pairs = list(sum(kwargs.items(), ()))
+            pairs = [k, kwargs[k]]
 
             # Figure out columns of the output
-            df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
-            self = elemwise(methods.assign, self, *pairs, meta=df2)
+            df2 = data._meta_nonempty.assign(**_extract_meta({k:kwargs[k]}, nonempty=True))
+            data = elemwise(methods.assign, data, *pairs, meta=df2)
 
-        return self
+        return data
 
     @derived_from(pd.DataFrame, ua_args=["index"])
     def rename(self, index=None, columns=None):
