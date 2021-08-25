@@ -1131,10 +1131,27 @@ class ArrowDatasetEngine(Engine):
 
         # Check if this is a very simple case where
         # gather_statistics should be False
-        if gather_statistics is None and not (split_row_groups or filters):
+        parts = []
+        if not gather_statistics and not (split_row_groups or filters):
             frag = next(ds.get_fragments())
-            if frag and not bool(pa_ds._get_partition_keys(frag.partition_expression)):
-                gather_statistics = False
+            if not (
+                frag and bool(pa_ds._get_partition_keys(frag.partition_expression))
+            ):
+                all_files = sorted(ds.files, key=natural_sort_key)
+                return (
+                    [
+                        {"piece": (full_path, None, None)}
+                        for full_path in sorted(ds.files, key=natural_sort_key)
+                    ],
+                    [],
+                    {
+                        "partitioning": partitioning_method,
+                        "partitions": partitions,
+                        "categories": categories,
+                        "filters": filters,
+                        "schema": schema,
+                    },
+                )
 
         # Cannot gather_statistics if our `metadata` is a list
         # of paths, or if we are building a multiindex (for now).
