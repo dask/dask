@@ -227,92 +227,92 @@ paths_to_cats = (
 
 
 class FastParquetEngine(Engine):
-    @classmethod
-    def _generate_dd_meta(cls, pf, index, categories):
-        columns = None
-        if pf.fmd.key_value_metadata:
-            pandas_md = [
-                x.value for x in pf.fmd.key_value_metadata if x.key == "pandas"
-            ]
-        else:
-            pandas_md = []
+    # @classmethod
+    # def _generate_dd_meta(cls, pf, index, categories):
+    #     columns = None
+    #     if pf.fmd.key_value_metadata:
+    #         pandas_md = [
+    #             x.value for x in pf.fmd.key_value_metadata if x.key == "pandas"
+    #         ]
+    #     else:
+    #         pandas_md = []
 
-        if len(pandas_md) == 0:
-            index_names = []
-            column_names = pf.columns + list(pf.cats)
-            storage_name_mapping = {k: k for k in column_names}
-            column_index_names = [None]
+    #     if len(pandas_md) == 0:
+    #         index_names = []
+    #         column_names = pf.columns + list(pf.cats)
+    #         storage_name_mapping = {k: k for k in column_names}
+    #         column_index_names = [None]
 
-        elif len(pandas_md) == 1:
-            (
-                index_names,
-                column_names,
-                storage_name_mapping,
-                column_index_names,
-            ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
-            #  auto-ranges should not be created by fastparquet
-            column_names.extend(pf.cats)
+    #     elif len(pandas_md) == 1:
+    #         (
+    #             index_names,
+    #             column_names,
+    #             storage_name_mapping,
+    #             column_index_names,
+    #         ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
+    #         #  auto-ranges should not be created by fastparquet
+    #         column_names.extend(pf.cats)
 
-        else:
-            raise ValueError("File has multiple entries for 'pandas' metadata")
+    #     else:
+    #         raise ValueError("File has multiple entries for 'pandas' metadata")
 
-        if index is None and len(index_names) > 0:
-            if len(index_names) == 1 and index_names[0] is not None:
-                index = index_names[0]
-            else:
-                index = index_names
+    #     if index is None and len(index_names) > 0:
+    #         if len(index_names) == 1 and index_names[0] is not None:
+    #             index = index_names[0]
+    #         else:
+    #             index = index_names
 
-        # Normalize user inputs
-        column_names, index_names = _normalize_index_columns(
-            columns, column_names, index, index_names
-        )
+    #     # Normalize user inputs
+    #     column_names, index_names = _normalize_index_columns(
+    #         columns, column_names, index, index_names
+    #     )
 
-        all_columns = index_names + column_names
+    #     all_columns = index_names + column_names
 
-        categories_dict = None
-        if isinstance(categories, dict):
-            categories_dict = categories
+    #     categories_dict = None
+    #     if isinstance(categories, dict):
+    #         categories_dict = categories
 
-        if categories is None:
-            categories = pf.categories
-        elif isinstance(categories, str):
-            categories = [categories]
-        else:
-            categories = list(categories)
+    #     if categories is None:
+    #         categories = pf.categories
+    #     elif isinstance(categories, str):
+    #         categories = [categories]
+    #     else:
+    #         categories = list(categories)
 
-        # Check that categories are included in columns
-        if categories and not set(categories).intersection(all_columns):
-            raise ValueError(
-                "categories not in available columns.\n"
-                "categories: {} | columns: {}".format(categories, list(all_columns))
-            )
+    #     # Check that categories are included in columns
+    #     if categories and not set(categories).intersection(all_columns):
+    #         raise ValueError(
+    #             "categories not in available columns.\n"
+    #             "categories: {} | columns: {}".format(categories, list(all_columns))
+    #         )
 
-        dtypes = pf._dtypes(categories)
-        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
+    #     dtypes = pf._dtypes(categories)
+    #     dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
 
-        index_cols = index or ()
-        if isinstance(index_cols, str):
-            index_cols = [index_cols]
-        for ind in index_cols:
-            if getattr(dtypes.get(ind), "numpy_dtype", None):
-                # index does not support masked types
-                dtypes[ind] = dtypes[ind].numpy_dtype
-        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
+    #     index_cols = index or ()
+    #     if isinstance(index_cols, str):
+    #         index_cols = [index_cols]
+    #     for ind in index_cols:
+    #         if getattr(dtypes.get(ind), "numpy_dtype", None):
+    #             # index does not support masked types
+    #             dtypes[ind] = dtypes[ind].numpy_dtype
+    #     meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
 
-        for cat in categories:
-            if cat in meta:
-                meta[cat] = pd.Series(
-                    pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
-                    index=meta.index,
-                )
+    #     for cat in categories:
+    #         if cat in meta:
+    #             meta[cat] = pd.Series(
+    #                 pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
+    #                 index=meta.index,
+    #             )
 
-        for catcol in pf.cats:
-            if catcol in meta.columns:
-                meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
-            elif meta.index.name == catcol:
-                meta.index = meta.index.set_categories(pf.cats[catcol])
+    #     for catcol in pf.cats:
+    #         if catcol in meta.columns:
+    #             meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
+    #         elif meta.index.name == catcol:
+    #             meta.index = meta.index.set_categories(pf.cats[catcol])
 
-        return meta, dtypes, index_cols, categories_dict, categories, index
+    #     return meta, dtypes, index_cols, categories_dict, categories, index
 
     @classmethod
     def _update_metadata_options(
@@ -894,6 +894,106 @@ class FastParquetEngine(Engine):
         }
 
     @classmethod
+    def _create_dd_meta(cls, dataset_info):
+
+        # Collect necessary information from dataset_info
+        pf = dataset_info["pf"]
+        index = dataset_info["index"]
+        categories = dataset_info["categories"]
+
+        columns = None
+        if pf.fmd.key_value_metadata:
+            pandas_md = [
+                x.value for x in pf.fmd.key_value_metadata if x.key == "pandas"
+            ]
+        else:
+            pandas_md = []
+
+        if len(pandas_md) == 0:
+            index_names = []
+            column_names = pf.columns + list(pf.cats)
+            storage_name_mapping = {k: k for k in column_names}
+            column_index_names = [None]
+
+        elif len(pandas_md) == 1:
+            (
+                index_names,
+                column_names,
+                storage_name_mapping,
+                column_index_names,
+            ) = _parse_pandas_metadata(json.loads(pandas_md[0]))
+            #  auto-ranges should not be created by fastparquet
+            column_names.extend(pf.cats)
+
+        else:
+            raise ValueError("File has multiple entries for 'pandas' metadata")
+
+        if index is None and len(index_names) > 0:
+            if len(index_names) == 1 and index_names[0] is not None:
+                index = index_names[0]
+            else:
+                index = index_names
+
+        # Normalize user inputs
+        column_names, index_names = _normalize_index_columns(
+            columns, column_names, index, index_names
+        )
+
+        all_columns = index_names + column_names
+
+        categories_dict = None
+        if isinstance(categories, dict):
+            categories_dict = categories
+
+        if categories is None:
+            categories = pf.categories
+        elif isinstance(categories, str):
+            categories = [categories]
+        else:
+            categories = list(categories)
+
+        # Check that categories are included in columns
+        if categories and not set(categories).intersection(all_columns):
+            raise ValueError(
+                "categories not in available columns.\n"
+                "categories: {} | columns: {}".format(categories, list(all_columns))
+            )
+
+        dtypes = pf._dtypes(categories)
+        dtypes = {storage_name_mapping.get(k, k): v for k, v in dtypes.items()}
+
+        index_cols = index or ()
+        if isinstance(index_cols, str):
+            index_cols = [index_cols]
+        for ind in index_cols:
+            if getattr(dtypes.get(ind), "numpy_dtype", None):
+                # index does not support masked types
+                dtypes[ind] = dtypes[ind].numpy_dtype
+        meta = _meta_from_dtypes(all_columns, dtypes, index_cols, column_index_names)
+
+        for cat in categories:
+            if cat in meta:
+                meta[cat] = pd.Series(
+                    pd.Categorical([], categories=[UNKNOWN_CATEGORIES]),
+                    index=meta.index,
+                )
+
+        for catcol in pf.cats:
+            if catcol in meta.columns:
+                meta[catcol] = meta[catcol].cat.set_categories(pf.cats[catcol])
+            elif meta.index.name == catcol:
+                meta.index = meta.index.set_categories(pf.cats[catcol])
+
+        # Update `dataset_info` and return `meta`
+        dataset_info["dtypes"] = dtypes
+        dataset_info["index"] = index
+        dataset_info["index_cols"] = index_cols
+        dataset_info["categories"] = categories
+        dataset_info["categories_dict"] = categories_dict
+
+        return meta
+
+    @classmethod
     def read_metadata(
         cls,
         fs,
@@ -934,11 +1034,8 @@ class FastParquetEngine(Engine):
             },
         )
 
-        parts = dataset_info["parts"]
-        pf = dataset_info["pf"]
-        gather_statistics = dataset_info["gather_statistics"]
-        base_path = dataset_info["base"]
-        aggregation_depth = dataset_info["aggregation_depth"]
+        # Stage 2: Generate output `meta`
+        meta = cls._create_dd_meta(dataset_info)
 
         # # Define the parquet-file (pf) object to use for metadata,
         # # Also, initialize `parts`.  If `parts` is populated here,
@@ -952,21 +1049,32 @@ class FastParquetEngine(Engine):
         #     **kwargs,
         # )
 
-        # Process metadata to define `meta` and `index_cols`
-        (
-            meta,
-            dtypes,
-            index_cols,
-            categories_dict,
-            categories,
-            index,
-        ) = cls._generate_dd_meta(pf, index, categories)
+        # # Process metadata to define `meta` and `index_cols`
+        # (
+        #     meta,
+        #     dtypes,
+        #     index_cols,
+        #     categories_dict,
+        #     categories,
+        #     index,
+        # ) = cls._generate_dd_meta(pf, index, categories)
 
         # # Check the `aggregate_files` setting
         # aggregation_depth = _get_aggregation_depth(
         #     aggregate_files,
         #     list(pf.cats),
         # )
+
+        parts = dataset_info["parts"]
+        pf = dataset_info["pf"]
+        gather_statistics = dataset_info["gather_statistics"]
+        base_path = dataset_info["base"]
+        aggregation_depth = dataset_info["aggregation_depth"]
+        index = dataset_info["index"]
+        index_cols = dataset_info["index_cols"]
+        categories = dataset_info["categories"]
+        dtypes = dataset_info["dtypes"]
+        categories_dict = dataset_info["categories_dict"]
 
         # Break `pf` into a list of `parts`
         parts, stats = cls._construct_parts(
