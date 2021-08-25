@@ -558,7 +558,6 @@ class FastParquetEngine(Engine):
         # (if `gather_statistics=None`).
 
         parts = []
-        paths_in = paths
         _metadata_exists = False
         if len(paths) > 1:
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
@@ -611,11 +610,16 @@ class FastParquetEngine(Engine):
             if ignore_metadata_file or not _metadata_exists:
                 # For now, we need to discover every file under paths[0]
                 paths, base, fns = _sort_and_analyze_paths(fs.find(base), fs)
+                _metadata_exists = "_metadata" in fns
                 _common_metadata_exists = "_common_metadata" in fns
-                if "_metadata" in fns:
-                    fns.remove("_metadata")
+                if _metadata_exists or _common_metadata_exists:
+                    if _common_metadata_exists:
+                        fns.remove("_common_metadata")
+                        _common_metadata_exists = False
+                    if _metadata_exists:
+                        fns.remove("_metadata")
+                        _metadata_exists = False
                     paths = [fs.sep.join([base, fn]) for fn in fns]
-                _metadata_exists = False
 
             if _metadata_exists:
                 # Using _metadata file (best-case scenario)
@@ -632,17 +636,10 @@ class FastParquetEngine(Engine):
                 # Scan every file
                 pf = ParquetFile(paths, open_with=fs.open, **kwargs)
             else:
-                # Use _common_metadata file if it is available.
-                # Otherwise, just use 0th file
-                if _common_metadata_exists:
-                    pf = ParquetFile(
-                        fs.sep.join([base, "_common_metadata"]),
-                        open_with=fs.open,
-                        **kwargs,
-                    )
-                    fns.remove("_common_metadata")
-                else:
-                    pf = ParquetFile(paths[0], open_with=fs.open, **kwargs)
+                # Use 0th file
+                # Note that "_common_metadata" can cause issues for
+                # partitioned datasets.
+                pf = ParquetFile(paths[0], open_with=fs.open, **kwargs)
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
@@ -651,6 +648,12 @@ class FastParquetEngine(Engine):
             # There is only one file to read
             base = None
             pf = ParquetFile(paths[0], open_with=fs.open, sep=fs.sep, **kwargs)
+
+        # Check the `aggregate_files` setting
+        aggregation_depth = _get_aggregation_depth(
+            aggregate_files,
+            list(pf.cats),
+        )
 
         # Ensure that there is no overlap between partition columns
         # and explicit columns in `pf`
@@ -665,15 +668,9 @@ class FastParquetEngine(Engine):
                     "columns: {} | partitions: {}".format(pf.columns, pf.cats.keys())
                 )
 
-        # Check the `aggregate_files` setting
-        aggregation_depth = _get_aggregation_depth(
-            aggregate_files,
-            list(pf.cats),
-        )
-
         return {
             "pf": pf,
-            "paths": paths_in,
+            "paths": paths,
             "has_metadata_file": _metadata_exists,
             "parts": parts,
             "base": base,
@@ -825,7 +822,18 @@ class FastParquetEngine(Engine):
             aggregation_depth,
         )
 
-        return parts, stats, {"categories": categories_dict or categories}
+        common_kwargs = {"categories": categories_dict or categories}
+        if pf.cats and gather_statistics is False:
+            # Need to send partition information ot IO tasks
+            common_kwargs.update(
+                {
+                    "root_cats": pf.cats,
+                    "root_file_scheme": pf.file_scheme,
+                    "root_path": base_path,
+                }
+            )
+
+        return parts, stats, common_kwargs
 
     @classmethod
     def read_metadata(
@@ -903,7 +911,18 @@ class FastParquetEngine(Engine):
         return cls == FastParquetEngine
 
     @classmethod
-    def read_partition(cls, fs, pieces, columns, index, categories=(), **kwargs):
+    def read_partition(
+        cls,
+        fs,
+        pieces,
+        columns,
+        index,
+        categories=(),
+        root_cats=None,
+        root_file_scheme=None,
+        root_path=None,
+        **kwargs,
+    ):
 
         null_index_name = False
         if isinstance(index, list):
@@ -939,6 +958,7 @@ class FastParquetEngine(Engine):
                     [p[0] for p in pieces],
                     open_with=fs.open,
                     sep=fs.sep,
+                    root=root_path or False,
                     **kwargs.get("file", {}),
                 )
                 for piece in pieces:
@@ -949,6 +969,7 @@ class FastParquetEngine(Engine):
                             piece[0],
                             open_with=fs.open,
                             sep=fs.sep,
+                            root=root_path or False,
                             **kwargs.get("file", {}),
                         )
                     )
@@ -993,6 +1014,11 @@ class FastParquetEngine(Engine):
             parquet_file._dtypes = (
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
+
+            # Update hive-partitioning information if necessary
+            if root_cats:
+                parquet_file.cats = root_cats
+                parquet_file.file_scheme = root_file_scheme
 
             if set(columns).issubset(
                 parquet_file.columns + list(parquet_file.cats.keys())
