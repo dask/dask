@@ -27,6 +27,7 @@ from .. import array as da
 from .. import core, threaded
 from ..array.core import Array, normalize_arg
 from ..base import DaskMethodsMixin, dont_optimize, is_dask_collection, tokenize
+from ..expr import Expr
 from ..blockwise import Blockwise, blockwise, subs
 from ..context import globalmethod
 from ..delayed import Delayed, delayed, unpack_collections
@@ -57,6 +58,7 @@ from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
     get_parallel_type,
+    get_parallel_type_expr,
     group_split_dispatch,
     hash_object_dispatch,
     meta_nonempty,
@@ -297,6 +299,22 @@ def _scalar_binary(op, self, other, inv=False):
     else:
         return Scalar(graph, name, meta)
 
+class FrameExpr(Expr):
+    @property
+    def name(self):
+        return self.args[0]
+
+    @property
+    def meta(self):
+        return self.args[1]
+
+    @property
+    def divisions(self):
+        return self.args[2]
+
+class FrameLeafExpr(FrameExpr):
+    def __init__(self, name, meta, divisions):
+        self.args = (name, meta, divisions)
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """Superclass for DataFrame and Series
@@ -315,7 +333,11 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, name, meta, divisions):
+    def __init__(self, dsk, expr):
+        if not isinstance(expr, FrameExpr):
+            raise TypeError('expr should be a FrameExpr')
+        name, meta, divisions = expr.name, expr.meta, expr.divisions
+        self.expr = expr
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
         self.dask = dsk
@@ -3852,8 +3874,9 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors = set()
 
-    def __init__(self, dsk, name, meta, divisions):
-        super().__init__(dsk, name, meta, divisions)
+    def __init__(self, dsk, expr):
+        super().__init__(dsk, expr)
+        name = self._name
         if self.dask.layers[name].collection_annotations is None:
             self.dask.layers[name].collection_annotations = {
                 "npartitions": self.npartitions,
@@ -5176,7 +5199,7 @@ for op in [
     _Frame._bind_operator(op)
     Scalar._bind_operator(op)
 
-for name in [
+for _name in [
     "add",
     "sub",
     "mul",
@@ -5195,18 +5218,18 @@ for name in [
     "rmod",
     "rpow",
 ]:
-    meth = getattr(pd.DataFrame, name)
-    DataFrame._bind_operator_method(name, meth)
+    meth = getattr(pd.DataFrame, _name)
+    DataFrame._bind_operator_method(_name, meth)
 
-    meth = getattr(pd.Series, name)
-    Series._bind_operator_method(name, meth)
+    meth = getattr(pd.Series, _name)
+    Series._bind_operator_method(_name, meth)
 
-for name in ["lt", "gt", "le", "ge", "ne", "eq"]:
-    meth = getattr(pd.DataFrame, name)
-    DataFrame._bind_comparison_method(name, meth)
+for _name in ["lt", "gt", "le", "ge", "ne", "eq"]:
+    meth = getattr(pd.DataFrame, _name)
+    DataFrame._bind_comparison_method(_name, meth)
 
-    meth = getattr(pd.Series, name)
-    Series._bind_comparison_method(name, meth)
+    meth = getattr(pd.Series, _name)
+    Series._bind_comparison_method(_name, meth)
 
 
 def is_broadcastable(dfs, s):
@@ -5224,6 +5247,9 @@ def is_broadcastable(dfs, s):
         )
     )
 
+class ElemwiseFrameExpr(FrameExpr):
+    def __init__(self, name, meta, divisions, op_name, *args):
+        self.args = (name, meta, divisions, op_name, *args)
 
 def elemwise(op, *args, **kwargs):
     """Elementwise operation for Dask dataframes
@@ -5234,7 +5260,7 @@ def elemwise(op, *args, **kwargs):
         Function to apply across input dataframes
     *args: DataFrames, Series, Scalars, Arrays,
         The arguments of the operation
-    **kwrags: scalars
+    **kwargs: scalars
     meta: pd.DataFrame, pd.Series (optional)
         Valid metadata for the operation.  Will evaluate on a small piece of
         data if not provided.
@@ -5325,7 +5351,8 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, _name, meta, divisions)
+    result = new_dd_object_expr(graph,
+        ElemwiseFrameExpr(_name, meta, divisions, op.__name__, *[i.expr for i in args]))
     return handle_out(out, result)
 
 
@@ -6854,6 +6881,9 @@ def has_parallel_type(x):
     """Does this object have a dask dataframe equivalent?"""
     return get_parallel_type(x) is not Scalar
 
+def new_dd_object_expr(dsk, expr):
+    meta = expr.meta
+    return get_parallel_type_expr(meta)(dsk, expr)
 
 def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
     """Generic constructor for dask.dataframe objects.
