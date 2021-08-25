@@ -5351,8 +5351,7 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object_expr(graph,
-        ElemwiseFrameExpr(_name, meta, divisions, op.__name__, *[i.expr for i in args]))
+    result = new_dd_object(graph, expr=ElemwiseFrameExpr(_name, meta, divisions, op.__name__, *[i.expr for i in args]))
     return handle_out(out, result)
 
 
@@ -6881,17 +6880,21 @@ def has_parallel_type(x):
     """Does this object have a dask dataframe equivalent?"""
     return get_parallel_type(x) is not Scalar
 
-def new_dd_object_expr(dsk, expr):
-    meta = expr.meta
-    return get_parallel_type_expr(meta)(dsk, expr)
-
-def new_dd_object(dsk, name, meta, divisions, parent_meta=None):
+def new_dd_object(dsk, name=None, meta=None, divisions=None, parent_meta=None,
+                  expr=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
+    if any(i is not None for i in [name, meta, divisions]) and has_parallel_type(meta):
+        if expr is not None:
+            raise ValueError("Just one of (name, meta, divisions) or expr should be provided")
+        expr = FrameLeafExpr(name, meta, divisions)
+    else:
+        meta = expr.meta
+
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, name, meta, divisions)
+        return get_parallel_type(meta)(dsk, expr)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 

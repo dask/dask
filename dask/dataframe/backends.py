@@ -22,7 +22,6 @@ from .dispatch import (
     concat,
     concat_dispatch,
     get_parallel_type,
-    get_parallel_type_expr,
     group_split_dispatch,
     hash_object_dispatch,
     is_categorical_dtype_dispatch,
@@ -308,20 +307,17 @@ def union_categoricals_pandas(to_union, sort_categories=False, ignore_order=Fals
 
 @get_parallel_type.register(pd.Series)
 def get_parallel_type_series(_):
-    return lambda dsk, name, meta, divisions: Series(dsk, FrameLeafExpr(name,
-                                                                        meta, divisions))
+    return Series
 
 
 @get_parallel_type.register(pd.DataFrame)
 def get_parallel_type_dataframe(_):
-    return lambda dsk, name, meta, divisions: DataFrame(dsk, FrameLeafExpr(name,
-                                                                        meta, divisions))
+    return DataFrame
 
 
 @get_parallel_type.register(pd.Index)
 def get_parallel_type_index(_):
-    return lambda dsk, name, meta, divisions: Index(dsk, FrameLeafExpr(name,
-                                                                        meta, divisions))
+    return Index
 
 
 @get_parallel_type.register(_Frame)
@@ -332,26 +328,6 @@ def get_parallel_type_frame(o):
 @get_parallel_type.register(object)
 def get_parallel_type_object(_):
     return Scalar
-
-
-@get_parallel_type_expr.register(pd.Series)
-def get_parallel_type_expr_series(_):
-    return Series
-
-
-@get_parallel_type_expr.register(pd.DataFrame)
-def get_parallel_type_expr_dataframe(_):
-    return DataFrame
-
-
-@get_parallel_type_expr.register(pd.Index)
-def get_parallel_type_expr_index(_):
-    return Index
-
-
-@get_parallel_type_expr.register(_Frame)
-def get_parallel_type_expr_frame(o):
-    return get_parallel_type_expr(o._meta)
 
 
 @hash_object_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
