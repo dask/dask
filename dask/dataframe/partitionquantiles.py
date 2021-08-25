@@ -401,7 +401,7 @@ def percentiles_summary(df, num_old, num_new, upsample, state):
         Scale factor to increase the number of percentiles calculated in
         each partition.  Use to improve accuracy.
     """
-    from dask.dataframe.dispatch import _percentile
+    from dask.array.dispatch import _percentile
 
     length = len(df)
     if length == 0:

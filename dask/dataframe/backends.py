@@ -535,7 +535,7 @@ def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
 
 
-@percentile_dispatch.register((pd.Series, np.ndarray, pd.Index))
+@percentile_dispatch.register((pd.Series, pd.Index))
 def percentile(a, q, interpolation="linear"):
     return _percentile(a, q, interpolation)
 
