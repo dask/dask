@@ -558,6 +558,7 @@ class FastParquetEngine(Engine):
         # (if `gather_statistics=None`).
 
         parts = []
+        paths_in = paths
         _metadata_exists = False
         if len(paths) > 1:
             paths, base, fns = _sort_and_analyze_paths(paths, fs)
@@ -672,7 +673,7 @@ class FastParquetEngine(Engine):
 
         return {
             "pf": pf,
-            "paths": paths,
+            "paths": paths_in,
             "has_metadata_file": _metadata_exists,
             "parts": parts,
             "base": base,
