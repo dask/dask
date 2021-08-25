@@ -3637,10 +3637,8 @@ def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
 
 
 @pytest.mark.parametrize("write_metadata_file", [True, False])
-@pytest.mark.parametrize("files_per_metadata_task", [2, 0])
-def test_files_per_metadata_task(
-    tmpdir, engine, write_metadata_file, files_per_metadata_task
-):
+@pytest.mark.parametrize("metadata_task_size", [2, 0])
+def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_size):
 
     # Write simple dataset
     tmpdir = str(tmpdir)
@@ -3656,7 +3654,7 @@ def test_files_per_metadata_task(
             str(tmpdir),
             engine=engine,
             gather_statistics=True,
-            files_per_metadata_task=files_per_metadata_task,
+            metadata_task_size=metadata_task_size,
         )
         ddf2b = dd.read_parquet(
             str(tmpdir),
@@ -3671,5 +3669,5 @@ def test_files_per_metadata_task(
                 str(tmpdir),
                 engine=engine,
                 gather_statistics=True,
-                files_per_metadata_task=files_per_metadata_task,
+                metadata_task_size=metadata_task_size,
             )
