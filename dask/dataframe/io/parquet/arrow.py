@@ -1131,9 +1131,9 @@ class ArrowDatasetEngine(Engine):
 
         # Check if this is a very simple case where
         # gather_statistics should be False
-        if not (split_row_groups or filters or gather_statistics):
+        if gather_statistics is None and not (split_row_groups or filters):
             frag = next(ds.get_fragments())
-            if frag and bool(pa_ds._get_partition_keys(frag.partition_expression)):
+            if frag and not bool(pa_ds._get_partition_keys(frag.partition_expression)):
                 gather_statistics = False
 
         # Cannot gather_statistics if our `metadata` is a list
