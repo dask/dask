@@ -21,7 +21,6 @@ from tlz.curried import identity
 
 import dask
 import dask.array as da
-import dask.dataframe
 from dask.array.core import (
     Array,
     blockdims_from_blockshape,
