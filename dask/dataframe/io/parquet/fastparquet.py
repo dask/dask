@@ -878,6 +878,7 @@ class FastParquetEngine(Engine):
 
         return {
             "pf": pf,
+            "paths": paths,
             "has_metadata_file": _metadata_exists,
             "parts": parts,
             "base": base,
@@ -994,6 +995,44 @@ class FastParquetEngine(Engine):
         return meta
 
     @classmethod
+    def _construct_collection_plan(cls, dataset_info):
+
+        # Collect necessary information from dataset_info
+        fs = dataset_info["fs"]
+        parts = dataset_info["parts"]
+        paths = dataset_info["paths"]
+        filters = dataset_info["filters"]
+        pf = dataset_info["pf"]
+        split_row_groups = dataset_info["split_row_groups"]
+        chunksize = dataset_info["chunksize"]
+        gather_statistics = dataset_info["gather_statistics"]
+        base_path = dataset_info["base"]
+        aggregation_depth = dataset_info["aggregation_depth"]
+        index_cols = dataset_info["index_cols"]
+        categories = dataset_info["categories"]
+        dtypes = dataset_info["dtypes"]
+        categories_dict = dataset_info["categories_dict"]
+
+        # Break `pf` into a list of `parts`
+        parts, stats = cls._construct_parts(
+            fs,
+            pf,
+            paths,
+            parts,
+            dtypes,
+            base_path,
+            filters,
+            index_cols,
+            categories,
+            split_row_groups,
+            gather_statistics,
+            chunksize,
+            aggregation_depth,
+        )
+
+        return parts, stats, {"categories": categories_dict or categories}
+
+    @classmethod
     def read_metadata(
         cls,
         fs,
@@ -1037,6 +1076,9 @@ class FastParquetEngine(Engine):
         # Stage 2: Generate output `meta`
         meta = cls._create_dd_meta(dataset_info)
 
+        # Stage 3: Generate parts and stats
+        parts, stats, common_kwargs = cls._construct_collection_plan(dataset_info)
+
         # # Define the parquet-file (pf) object to use for metadata,
         # # Also, initialize `parts`.  If `parts` is populated here,
         # # then each part will correspond to a file.  Otherwise, each part will
@@ -1065,35 +1107,25 @@ class FastParquetEngine(Engine):
         #     list(pf.cats),
         # )
 
-        parts = dataset_info["parts"]
-        pf = dataset_info["pf"]
-        gather_statistics = dataset_info["gather_statistics"]
-        base_path = dataset_info["base"]
-        aggregation_depth = dataset_info["aggregation_depth"]
-        index = dataset_info["index"]
-        index_cols = dataset_info["index_cols"]
-        categories = dataset_info["categories"]
-        dtypes = dataset_info["dtypes"]
-        categories_dict = dataset_info["categories_dict"]
-
-        # Break `pf` into a list of `parts`
-        parts, stats = cls._construct_parts(
-            fs,
-            pf,
-            paths,
-            parts,
-            dtypes,
-            base_path,
-            filters,
-            index_cols,
-            categories,
-            split_row_groups,
-            gather_statistics,
-            chunksize,
-            aggregation_depth,
-        )
+        # # Break `pf` into a list of `parts`
+        # parts, stats = cls._construct_parts(
+        #     fs,
+        #     pf,
+        #     paths,
+        #     parts,
+        #     dtypes,
+        #     base_path,
+        #     filters,
+        #     index_cols,
+        #     categories,
+        #     split_row_groups,
+        #     gather_statistics,
+        #     chunksize,
+        #     aggregation_depth,
+        # )
 
         # Cannot allow `None` in columns if the user has specified index=False
+        index = dataset_info["index"]
         if index is False and None in meta.columns:
             meta.drop(columns=[None], inplace=True)
 
@@ -1101,13 +1133,14 @@ class FastParquetEngine(Engine):
         # We can return as a separate element in the future, but
         # should avoid breaking the API for now.
         if len(parts):
-            parts[0]["common_kwargs"] = {"categories": categories_dict or categories}
-            parts[0]["aggregation_depth"] = aggregation_depth
+            parts[0]["common_kwargs"] = common_kwargs
+            parts[0]["aggregation_depth"] = dataset_info["aggregation_depth"]
 
         if len(parts) and len(parts[0]["piece"]) == 1:
 
             # Strip all partition-dependent or unnecessary
             # data from the `ParquetFile` object
+            pf = dataset_info["pf"]
             pf.row_groups = None
             pf.fmd.row_groups = None
             pf._statistics = None
