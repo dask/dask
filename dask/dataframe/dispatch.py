@@ -22,11 +22,6 @@ concat_dispatch = Dispatch("concat")
 tolist_dispatch = Dispatch("tolist")
 is_categorical_dtype_dispatch = Dispatch("is_categorical_dtype")
 union_categoricals_dispatch = Dispatch("union_categoricals")
-percentile_dispatch = Dispatch("percentile_dispatch")
-
-
-def _percentile(a, q, interpolation="linear"):
-    return percentile_dispatch(a, q, interpolation)
 
 
 def concat(
