@@ -4308,7 +4308,6 @@ class DataFrame(_Frame):
                 )
             if callable(v):
                 kwargs[k] = v(self)
-                self[k] = kwargs[k]
             if isinstance(v, Array):
                 from .io import from_dask_array
 
@@ -4321,13 +4320,14 @@ class DataFrame(_Frame):
                         )
                     )
                 kwargs[k] = from_dask_array(v, index=self.index, meta=self._meta)
-                self[k] = kwargs[k]
 
-        pairs = list(sum(kwargs.items(), ()))
+            pairs = list(sum(kwargs.items(), ()))
 
-        # Figure out columns of the output
-        df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
-        return elemwise(methods.assign, self, *pairs, meta=df2)
+            # Figure out columns of the output
+            df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
+            self = elemwise(methods.assign, self, *pairs, meta=df2)
+
+        return self
 
     @derived_from(pd.DataFrame, ua_args=["index"])
     def rename(self, index=None, columns=None):
