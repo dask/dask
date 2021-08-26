@@ -327,7 +327,7 @@ class FrameLeafExpr(FrameExpr):
     def __repr__(self):
         # Use a custom repr because meta and divisions are too noisy to show
         # their full str representation
-        return f"{self.__class__.__name__}({self.name}, <meta>, <divisions>)"
+        return f"{self.__class__.__name__}(<graph>, {self.name}, <meta>, <divisions>)"
 
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
