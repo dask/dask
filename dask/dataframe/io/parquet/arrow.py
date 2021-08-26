@@ -433,23 +433,7 @@ class ArrowDatasetEngine(Engine):
         if multi_read:
             arrow_table = pa.concat_tables(tables)
 
-        # For pyarrow.dataset api, if we did not read directly from
-        # fragments, we need to add the partitioned columns here.
-        if partitions and isinstance(partitions, list):
-            keys_dict = {k: v for (k, v) in partition_keys}
-            for partition in partitions:
-                if partition.name not in arrow_table.schema.names:
-                    # We read from file paths, so the partition
-                    # columns are NOT in our table yet.
-                    cat = keys_dict.get(partition.name, None)
-                    cat_ind = np.full(
-                        len(arrow_table), partition.keys.index(cat), dtype="i4"
-                    )
-                    arr = pa.DictionaryArray.from_arrays(
-                        cat_ind, pa.array(partition.keys)
-                    )
-                    arrow_table = arrow_table.append_column(partition.name, arr)
-
+        # Convert to pandas
         df = cls._arrow_table_to_pandas(arrow_table, categories, **kwargs)
 
         # For pyarrow.dataset api, need to convert partition columns
@@ -1126,15 +1110,26 @@ class ArrowDatasetEngine(Engine):
 
         # Check metadata_task_size setting
         if metadata_task_size is None:
-            # Use 32 files per task by deault
+            # Use 128 files per task by deault
             metadata_task_size = 128
 
-        # Check if this is a very simple case where
-        # gather_statistics should be False
-        if gather_statistics is None and not (split_row_groups or filters):
-            frag = next(ds.get_fragments())
-            if frag and not bool(pa_ds._get_partition_keys(frag.partition_expression)):
-                gather_statistics = False
+        # Check if this is a very simple case where we can just return
+        # the path names
+        if not gather_statistics and not (split_row_groups or filters):
+            return (
+                [
+                    {"piece": (full_path, None, None)}
+                    for full_path in sorted(ds.files, key=natural_sort_key)
+                ],
+                [],
+                {
+                    "partitioning": partitioning_method,
+                    "partitions": partitions,
+                    "categories": categories,
+                    "filters": filters,
+                    "schema": schema,
+                },
+            )
 
         # Cannot gather_statistics if our `metadata` is a list
         # of paths, or if we are building a multiindex (for now).
@@ -1215,7 +1210,9 @@ class ArrowDatasetEngine(Engine):
             all_files = sorted(ds.files, key=natural_sort_key)
             if valid_paths:
                 all_files = [
-                    frag for file in all_files if file.split(fs.sep)[-1] in valid_paths
+                    filef
+                    for filef in all_files
+                    if filef.split(fs.sep)[-1] in valid_paths
                 ]
 
             parts, stats = [], []
@@ -1481,7 +1478,9 @@ class ArrowDatasetEngine(Engine):
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            if partitioning and _need_fragments(filters, partition_keys):
+            if (partitions and partition_keys is None) or (
+                partitioning and _need_fragments(filters, partition_keys)
+            ):
 
                 # We are filtering with "pyarrow-dataset".
                 # Need to convert the path and row-group IDs
@@ -1503,6 +1502,14 @@ class ArrowDatasetEngine(Engine):
                     else frags[0]
                 )
 
+                # Extract hive-partition keys, and make sure they
+                # are orderd the same as they are in `partitions`
+                raw_keys = pa_ds._get_partition_keys(frag.partition_expression)
+                partition_keys = [
+                    (hive_part.name, raw_keys[hive_part.name])
+                    for hive_part in partitions
+                ]
+
         if frag:
             cols = []
             for name in columns:
@@ -1512,14 +1519,14 @@ class ArrowDatasetEngine(Engine):
                 else:
                     cols.append(name)
 
-            return frag.to_table(
+            arrow_table = frag.to_table(
                 use_threads=False,
                 schema=schema,
                 columns=cols,
                 filter=pq._filters_to_expression(filters) if filters else None,
             )
         else:
-            return _read_table_from_path(
+            arrow_table = _read_table_from_path(
                 path_or_frag,
                 fs,
                 row_groups,
@@ -1531,6 +1538,25 @@ class ArrowDatasetEngine(Engine):
                 cls._parquet_piece_as_arrow,
                 **kwargs,
             )
+
+        # For pyarrow.dataset api, if we did not read directly from
+        # fragments, we need to add the partitioned columns here.
+        if partitions and isinstance(partitions, list):
+            keys_dict = {k: v for (k, v) in partition_keys}
+            for partition in partitions:
+                if partition.name not in arrow_table.schema.names:
+                    # We read from file paths, so the partition
+                    # columns are NOT in our table yet.
+                    cat = keys_dict.get(partition.name, None)
+                    cat_ind = np.full(
+                        len(arrow_table), partition.keys.index(cat), dtype="i4"
+                    )
+                    arr = pa.DictionaryArray.from_arrays(
+                        cat_ind, pa.array(partition.keys)
+                    )
+                    arrow_table = arrow_table.append_column(partition.name, arr)
+
+        return arrow_table
 
     @classmethod
     def _arrow_table_to_pandas(
