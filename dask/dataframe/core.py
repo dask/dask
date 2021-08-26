@@ -4325,7 +4325,9 @@ class DataFrame(_Frame):
             pairs = [k, kwargs[k]]
 
             # Figure out columns of the output
-            df2 = data._meta_nonempty.assign(**_extract_meta({k:kwargs[k]}, nonempty=True))
+            df2 = data._meta_nonempty.assign(
+                **_extract_meta({k: kwargs[k]}, nonempty=True)
+            )
             data = elemwise(methods.assign, data, *pairs, meta=df2)
 
         return data
