@@ -58,7 +58,6 @@ from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
 from .dispatch import (
     get_parallel_type,
-    get_parallel_type_expr,
     group_split_dispatch,
     hash_object_dispatch,
     meta_nonempty,
