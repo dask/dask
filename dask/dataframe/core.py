@@ -301,25 +301,34 @@ def _scalar_binary(op, self, other, inv=False):
 
 class FrameExpr(Expr):
     @property
+    def graph(self):
+        return self._graph
+
+    @property
     def name(self):
-        return self.args[0]
+        return self._name
 
     @property
     def meta(self):
-        return self.args[1]
+        return self._meta
 
     @property
     def divisions(self):
-        return self.args[2]
+        return self._divisions
 
 class FrameLeafExpr(FrameExpr):
-    def __init__(self, name, meta, divisions):
-        self.args = (name, meta, divisions)
+    def __init__(self, graph, name, meta, divisions):
+        self.args = (graph, name, meta, divisions)
+        self._graph = graph
+        self._name = name
+        self._meta = meta
+        self._divisions = divisions
 
     def __repr__(self):
         # Use a custom repr because meta and divisions are too noisy to show
         # their full str representation
         return f"{self.__class__.__name__}({self.name}, <meta>, <divisions>)"
+
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """Superclass for DataFrame and Series
@@ -338,10 +347,10 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
         Values along which we partition our blocks on the index
     """
 
-    def __init__(self, dsk, expr):
+    def __init__(self, expr):
         if not isinstance(expr, FrameExpr):
             raise TypeError('expr should be a FrameExpr')
-        name, meta, divisions = expr.name, expr.meta, expr.divisions
+        dsk, name, meta, divisions = expr.graph, expr.name, expr.meta, expr.divisions
         self.expr = expr
         if not isinstance(dsk, HighLevelGraph):
             dsk = HighLevelGraph.from_collections(name, dsk, dependencies=[])
@@ -3879,8 +3888,8 @@ class DataFrame(_Frame):
     _token_prefix = "dataframe-"
     _accessors = set()
 
-    def __init__(self, dsk, expr):
-        super().__init__(dsk, expr)
+    def __init__(self, expr):
+        super().__init__(expr)
         name = self._name
         if self.dask.layers[name].collection_annotations is None:
             self.dask.layers[name].collection_annotations = {
@@ -5253,8 +5262,12 @@ def is_broadcastable(dfs, s):
     )
 
 class ElemwiseFrameExpr(FrameExpr):
-    def __init__(self, name, meta, divisions, op_name, *args):
-        self.args = (name, meta, divisions, op_name, *args)
+    def __init__(self, graph, name, meta, divisions, op_name, *args):
+        self.args = (graph, name, meta, divisions, op_name, *args)
+        self._graph = graph
+        self._name = name
+        self._meta = meta
+        self._divisions = divisions
 
 def elemwise(op, *args, **kwargs):
     """Elementwise operation for Dask dataframes
@@ -5356,7 +5369,7 @@ def elemwise(op, *args, **kwargs):
         with raise_on_meta_error(funcname(op)):
             meta = partial_by_order(*parts, function=op, other=other)
 
-    result = new_dd_object(graph, expr=ElemwiseFrameExpr(_name, meta, divisions, op.__name__, *[i.expr for i in args]))
+    result = new_dd_object(expr=ElemwiseFrameExpr(graph, _name, meta, divisions, op.__name__, *[i.expr for i in args]))
     return handle_out(out, result)
 
 
@@ -6885,21 +6898,21 @@ def has_parallel_type(x):
     """Does this object have a dask dataframe equivalent?"""
     return get_parallel_type(x) is not Scalar
 
-def new_dd_object(dsk, name=None, meta=None, divisions=None, parent_meta=None,
+def new_dd_object(dsk=None, name=None, meta=None, divisions=None, parent_meta=None,
                   expr=None):
     """Generic constructor for dask.dataframe objects.
 
     Decides the appropriate output class based on the type of `meta` provided.
     """
-    if any(i is not None for i in [name, meta, divisions]) and has_parallel_type(meta):
+    if any(i is not None for i in [dsk, name, meta, divisions]) and has_parallel_type(meta):
         if expr is not None:
-            raise ValueError("Just one of (name, meta, divisions) or expr should be provided")
-        expr = FrameLeafExpr(name, meta, divisions)
+            raise ValueError("Just one of (dsk, name, meta, divisions) or expr should be provided")
+        expr = FrameLeafExpr(dsk, name, meta, divisions)
     else:
         meta = expr.meta
 
     if has_parallel_type(meta):
-        return get_parallel_type(meta)(dsk, expr)
+        return get_parallel_type(meta)(expr)
     elif is_arraylike(meta) and meta.shape:
         import dask.array as da
 
