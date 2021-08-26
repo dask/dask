@@ -127,10 +127,10 @@ w = wrap(wrap_func_shape_as_first_arg)
 
 @curry
 def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
-    if shape == ():
-        return np.broadcast_to(func(meta, shape=(), *args, **kwargs), shape)
-    else:
-        return np.broadcast_to(func(meta, shape=1, *args, **kwargs), shape)
+    # cupy-specific hack. numpy is happy with hardcoded shape=().
+    null_shape = () if shape == () else 1
+
+    return np.broadcast_to(func(meta, shape=null_shape, *args, **kwargs), shape)
 
 
 def broadcast_trick(func):
@@ -152,14 +152,9 @@ def broadcast_trick(func):
     Note that those array are read-only and numpy will refuse to assign to them,
     so should be safe.
     """
-
     inner = _broadcast_trick_inner(func)
-
-    if func.__doc__ is not None:
-        inner.__doc__ = func.__doc__
-        inner.__name__ = func.__name__
-        if inner.__name__.endswith("_like_safe"):
-            inner.__name__ = inner.__name__[:-10]
+    inner.__doc__ = func.__doc__
+    inner.__name__ = func.__name__
     return inner
 
 
