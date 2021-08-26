@@ -1656,6 +1656,11 @@ def unique_no_structured_arr(
 
 @derived_from(np)
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
+    # Test whether the downstream library supports structured arrays. If the
+    # `np.empty_like` call raises a `TypeError`, the downstream library (e.g.,
+    # CuPy) doesn't support it. In that case we return the
+    # `unique_no_structured_arr` implementation, otherwise (e.g., NumPy) just
+    # continue as normal.
     try:
         meta = meta_from_array(ar)
         np.empty_like(meta, dtype=[("a", int), ("b", float)])
