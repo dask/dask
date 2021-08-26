@@ -1068,6 +1068,8 @@ Dask Name: {name}, {task} tasks"""
         compute : bool, optional
             Whether to compute the result, default is True.
         """
+        if npartitions == self.npartitions or npartitions == -1:
+            return self._head(n=n, npartitions=npartitions, compute=compute, safe=False)
         return self._head(n=n, npartitions=npartitions, compute=compute, safe=True)
 
     def _head(self, n, npartitions, compute, safe):
