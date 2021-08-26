@@ -326,8 +326,7 @@ class FrameLeafExpr(FrameExpr):
     def __repr__(self):
         # Use a custom repr because meta and divisions are too noisy to show
         # their full str representation
-        return f"{self.__class__.__name__}(<graph>, {self.name!r}, <meta>, <divisions>)"
-
+        return f"{self.func_name}(<graph>, {self.name!r}, <meta>, <divisions>)"
 
 class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     """Superclass for DataFrame and Series
@@ -5261,6 +5260,8 @@ def is_broadcastable(dfs, s):
     )
 
 class ElemwiseFrameExpr(FrameExpr):
+    func_name = 'elemwise'
+
     def __init__(self, op, *args, meta=no_default, transform_divisions=True,
                  out=None, **kwargs):
         self.args = (op, *[getattr(i, 'expr', i) for i in args])
@@ -6909,6 +6910,8 @@ def new_dd_object(dsk=None, name=None, meta=None, divisions=None, parent_meta=No
         if expr is not None:
             raise ValueError("Just one of (dsk, name, meta, divisions) or expr should be provided")
         expr = FrameLeafExpr(dsk, name, meta, divisions)
+        typ = get_parallel_type(meta)
+        expr.func_name = typ.__name__
     else:
         meta = expr.meta
 

@@ -2,13 +2,13 @@ class Expr:
     def __init__(self, *args, **kwargs):
         self.args = args
         self.kwargs = kwargs
+        self.func_name = self.__class__.__name__
 
     def __repr__(self):
-        func = self.__class__.__name__
         args = ', '.join(map(repr, self.args))
         kwargs = ', '.join(f"{key}={val}" for key, val in self.kwargs.items())
         sep = ', ' if args and kwargs else ''
-        return f"{func}({args}{sep}{kwargs})"
+        return f"{self.func_name}({args}{sep}{kwargs})"
 
     def __str__(self):
         return self.__repr__()
