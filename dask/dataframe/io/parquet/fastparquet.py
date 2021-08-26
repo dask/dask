@@ -733,9 +733,7 @@ class FastParquetEngine(Engine):
                     return parts, stats
 
                 gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
-                parts, stats = Delayed("final-" + name, gather_parts_dsk).compute(
-                    scheduler="synchronous"
-                )
+                parts, stats = Delayed("final-" + name, gather_parts_dsk).compute()
 
         return parts, stats, common_kwargs
 
