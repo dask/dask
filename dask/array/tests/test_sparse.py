@@ -30,25 +30,18 @@ functions = [
     lambda x: x.T,
     lambda x: da.transpose(x, (1, 2, 0)),
     lambda x: x.sum(),
-    pytest.param(
-        lambda x: x.mean(),
-        marks=pytest.mark.skipif(
-            parse_version(sparse.__version__) >= parse_version("0.12.0"),
-            reason="https://github.com/dask/dask/issues/7169",
-        ),
-    ),
     lambda x: x.moment(order=0),
     pytest.param(
+        lambda x: x.mean(),
+        marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/7169"),
+    ),
+    pytest.param(
         lambda x: x.std(),
-        marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
-        ),
+        marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/7169"),
     ),
     pytest.param(
         lambda x: x.var(),
-        marks=pytest.mark.xfail(
-            reason="fixed in https://github.com/pydata/sparse/pull/243"
-        ),
+        marks=pytest.mark.xfail(reason="https://github.com/dask/dask/issues/7169"),
     ),
     lambda x: x.dot(np.arange(x.shape[-1])),
     lambda x: x.dot(np.eye(x.shape[-1])),
@@ -68,6 +61,18 @@ functions = [
     lambda x: x.rechunk((2, 2, 1)),
     lambda x: np.isneginf(x),
     lambda x: np.isposinf(x),
+    pytest.param(
+        lambda x: np.zeros_like(x),
+        marks=pytest.mark.xfail(reason="https://github.com/pydata/xarray/issues/5654"),
+    ),
+    pytest.param(
+        lambda x: np.ones_like(x),
+        marks=pytest.mark.xfail(reason="https://github.com/pydata/xarray/issues/5654"),
+    ),
+    pytest.param(
+        lambda x: np.full_like(x, fill_value=2),
+        marks=pytest.mark.xfail(reason="https://github.com/pydata/xarray/issues/5654"),
+    ),
 ]
 
 
