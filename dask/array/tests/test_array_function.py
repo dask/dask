@@ -2,6 +2,7 @@ import numpy as np
 import pytest
 
 import dask.array as da
+from dask.array.numpy_compat import _numpy_120
 from dask.array.utils import assert_eq
 
 from .test_dispatch import EncapsulateNDArray, WrappedArray
@@ -219,3 +220,14 @@ def test_binary_function_type_precedence(func, arr_upcast, arr_downcast):
         == type(func(arr_downcast, arr_upcast))
         == type(arr_upcast)
     )
+
+
+@pytest.mark.parametrize("func", [da.array, da.asarray, da.asanyarray, da.tri])
+def test_like_raises(func):
+    if _numpy_120:
+        assert_eq(func(1, like=func((1))), func(1))
+    else:
+        with pytest.raises(
+            RuntimeError, match="The use of ``like`` required NumPy >= 1.20"
+        ):
+            func(1, like=func((1)))
