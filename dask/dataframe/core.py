@@ -5262,8 +5262,85 @@ def is_broadcastable(dfs, s):
     )
 
 class ElemwiseFrameExpr(FrameExpr):
-    def __init__(self, graph, name, meta, divisions, op_name, *args):
-        self.args = (graph, name, meta, divisions, op_name, *args)
+    def __init__(self, op, *args, meta=no_default, transform_divisions=True,
+                 out=None, **kwargs):
+        self.args = (op, *[getattr(i, 'expr', i) for i in args])
+        self.kwargs = {**kwargs, **dict(meta=meta,
+            transform_divisions=transform_divisions, out=out)}
+
+        name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
+
+        args = _maybe_from_pandas(args)
+
+        from .multi import _maybe_align_partitions
+
+        args = _maybe_align_partitions(args)
+        dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
+        dfs = [df for df in dasks if isinstance(df, _Frame)]
+
+        # Clean up dask arrays if present
+        deps = dasks.copy()
+        for i, a in enumerate(dasks):
+            if not isinstance(a, Array):
+                continue
+            # Ensure that they have similar-ish chunk structure
+            if not all(not a.chunks or len(a.chunks[0]) == df.npartitions for df in dfs):
+                msg = (
+                    "When combining dask arrays with dataframes they must "
+                    "match chunking exactly.  Operation: %s" % funcname(op)
+                )
+                raise ValueError(msg)
+            # Rechunk to have a single chunk along all other axes
+            if a.ndim > 1:
+                a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
+                dasks[i] = a
+
+        divisions = dfs[0].divisions
+        if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
+            try:
+                divisions = op(
+                    *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
+                    **kwargs,
+                )
+                if isinstance(divisions, pd.Index):
+                    divisions = methods.tolist(divisions)
+            except Exception:
+                pass
+            else:
+                if not valid_divisions(divisions):
+                    divisions = [None] * (dfs[0].npartitions + 1)
+
+        _is_broadcastable = partial(is_broadcastable, dfs)
+        dfs = list(remove(_is_broadcastable, dfs))
+
+        other = [
+            (i, arg)
+            for i, arg in enumerate(args)
+            if not isinstance(arg, (_Frame, Scalar, Array))
+        ]
+
+        # adjust the key length of Scalar
+        dsk = partitionwise_graph(op, name, *args, **kwargs)
+
+        graph = HighLevelGraph.from_collections(name, dsk, dependencies=deps)
+
+        if meta is no_default:
+            if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
+                # should not occur in current funcs
+                msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
+                raise NotImplementedError(msg)
+            # For broadcastable series, use no rows.
+            parts = [
+                d._meta
+                if _is_broadcastable(d)
+                else np.empty((), dtype=d.dtype)
+                if isinstance(d, Array)
+                else d._meta_nonempty
+                for d in dasks
+            ]
+            with raise_on_meta_error(funcname(op)):
+                meta = partial_by_order(*parts, function=op, other=other)
+
         self._graph = graph
         self._name = name
         self._meta = meta
@@ -5292,84 +5369,9 @@ def elemwise(op, *args, **kwargs):
     --------
     >>> elemwise(operator.add, df.x, df.y)  # doctest: +SKIP
     """
-    meta = kwargs.pop("meta", no_default)
-    out = kwargs.pop("out", None)
-    transform_divisions = kwargs.pop("transform_divisions", True)
-
-    _name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
-
-    args = _maybe_from_pandas(args)
-
-    from .multi import _maybe_align_partitions
-
-    args = _maybe_align_partitions(args)
-    dasks = [arg for arg in args if isinstance(arg, (_Frame, Scalar, Array))]
-    dfs = [df for df in dasks if isinstance(df, _Frame)]
-
-    # Clean up dask arrays if present
-    deps = dasks.copy()
-    for i, a in enumerate(dasks):
-        if not isinstance(a, Array):
-            continue
-        # Ensure that they have similar-ish chunk structure
-        if not all(not a.chunks or len(a.chunks[0]) == df.npartitions for df in dfs):
-            msg = (
-                "When combining dask arrays with dataframes they must "
-                "match chunking exactly.  Operation: %s" % funcname(op)
-            )
-            raise ValueError(msg)
-        # Rechunk to have a single chunk along all other axes
-        if a.ndim > 1:
-            a = a.rechunk({i + 1: d for i, d in enumerate(a.shape[1:])})
-            dasks[i] = a
-
-    divisions = dfs[0].divisions
-    if transform_divisions and isinstance(dfs[0], Index) and len(dfs) == 1:
-        try:
-            divisions = op(
-                *[pd.Index(arg.divisions) if arg is dfs[0] else arg for arg in args],
-                **kwargs,
-            )
-            if isinstance(divisions, pd.Index):
-                divisions = methods.tolist(divisions)
-        except Exception:
-            pass
-        else:
-            if not valid_divisions(divisions):
-                divisions = [None] * (dfs[0].npartitions + 1)
-
-    _is_broadcastable = partial(is_broadcastable, dfs)
-    dfs = list(remove(_is_broadcastable, dfs))
-
-    other = [
-        (i, arg)
-        for i, arg in enumerate(args)
-        if not isinstance(arg, (_Frame, Scalar, Array))
-    ]
-
-    # adjust the key length of Scalar
-    dsk = partitionwise_graph(op, _name, *args, **kwargs)
-
-    graph = HighLevelGraph.from_collections(_name, dsk, dependencies=deps)
-
-    if meta is no_default:
-        if len(dfs) >= 2 and not all(hasattr(d, "npartitions") for d in dasks):
-            # should not occur in current funcs
-            msg = "elemwise with 2 or more DataFrames and Scalar is not supported"
-            raise NotImplementedError(msg)
-        # For broadcastable series, use no rows.
-        parts = [
-            d._meta
-            if _is_broadcastable(d)
-            else np.empty((), dtype=d.dtype)
-            if isinstance(d, Array)
-            else d._meta_nonempty
-            for d in dasks
-        ]
-        with raise_on_meta_error(funcname(op)):
-            meta = partial_by_order(*parts, function=op, other=other)
-
-    result = new_dd_object(expr=ElemwiseFrameExpr(graph, _name, meta, divisions, op.__name__, *[i.expr for i in args]))
+    expr = ElemwiseFrameExpr(op, *args, **kwargs)
+    result = new_dd_object(expr=expr)
+    out = expr.kwargs['out']
     return handle_out(out, result)
 
 
