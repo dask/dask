@@ -127,7 +127,10 @@ w = wrap(wrap_func_shape_as_first_arg)
 
 @curry
 def _broadcast_trick_inner(func, shape, meta=(), *args, **kwargs):
-    return np.broadcast_to(func(meta, shape=(), *args, **kwargs), shape)
+    # cupy-specific hack. numpy is happy with hardcoded shape=().
+    null_shape = () if shape == () else 1
+
+    return np.broadcast_to(func(meta, shape=null_shape, *args, **kwargs), shape)
 
 
 def broadcast_trick(func):
