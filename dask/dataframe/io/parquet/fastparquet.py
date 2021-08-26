@@ -18,6 +18,8 @@ try:
 except ImportError:
     pass
 
+from ....base import tokenize
+from ....delayed import Delayed
 from ....utils import natural_sort_key
 from ...methods import concat
 from ...utils import UNKNOWN_CATEGORIES
@@ -183,7 +185,7 @@ class FastParquetEngine(Engine):
         filters,
         dtypes,
         base_path,
-        paths,
+        has_metadata_file,
         chunksize,
         aggregation_depth,
     ):
@@ -234,7 +236,7 @@ class FastParquetEngine(Engine):
             # parquet spec.
             fpath = row_group.columns[0].file_path
             if fpath is None:
-                if paths and pf.fn in paths:
+                if not has_metadata_file:
                     # There doesn't need to be a file_path if the
                     # row group is in the same file as the metadata.
                     # Assume this is a single-file dataset.
@@ -416,119 +418,119 @@ class FastParquetEngine(Engine):
 
         return part
 
-    @classmethod
-    def _process_metadata(
-        cls,
-        pf,
-        dtypes,
-        split_row_groups,
-        gather_statistics,
-        stat_col_indices,
-        filters,
-        categories,
-        base_path,
-        paths,
-        fs,
-        chunksize,
-        aggregation_depth,
-    ):
+    # @classmethod
+    # def _process_metadata(
+    #     cls,
+    #     pf,
+    #     dtypes,
+    #     split_row_groups,
+    #     gather_statistics,
+    #     stat_col_indices,
+    #     filters,
+    #     categories,
+    #     base_path,
+    #     paths,
+    #     fs,
+    #     chunksize,
+    #     aggregation_depth,
+    # ):
 
-        # Organize row-groups by file
-        (
-            file_row_groups,
-            file_row_group_stats,
-            file_row_group_column_stats,
-            gather_statistics,
-            base_path,
-        ) = cls._organize_row_groups(
-            pf,
-            split_row_groups,
-            gather_statistics,
-            stat_col_indices,
-            filters,
-            dtypes,
-            base_path,
-            paths,
-            chunksize,
-            aggregation_depth,
-        )
+    #     # Organize row-groups by file
+    #     (
+    #         file_row_groups,
+    #         file_row_group_stats,
+    #         file_row_group_column_stats,
+    #         gather_statistics,
+    #         base_path,
+    #     ) = cls._organize_row_groups(
+    #         pf,
+    #         split_row_groups,
+    #         gather_statistics,
+    #         stat_col_indices,
+    #         filters,
+    #         dtypes,
+    #         base_path,
+    #         paths,
+    #         chunksize,
+    #         aggregation_depth,
+    #     )
 
-        # Convert organized row-groups to parts
-        parts, stats = _row_groups_to_parts(
-            gather_statistics,
-            split_row_groups,
-            aggregation_depth,
-            file_row_groups,
-            file_row_group_stats,
-            file_row_group_column_stats,
-            stat_col_indices,
-            cls._make_part,
-            make_part_kwargs={
-                "fs": fs,
-                "pf": pf,
-                "base_path": base_path,
-                "partitions": pf.info.get("partitions", None),
-            },
-        )
+    #     # Convert organized row-groups to parts
+    #     parts, stats = _row_groups_to_parts(
+    #         gather_statistics,
+    #         split_row_groups,
+    #         aggregation_depth,
+    #         file_row_groups,
+    #         file_row_group_stats,
+    #         file_row_group_column_stats,
+    #         stat_col_indices,
+    #         cls._make_part,
+    #         make_part_kwargs={
+    #             "fs": fs,
+    #             "pf": pf,
+    #             "base_path": base_path,
+    #             "partitions": pf.info.get("partitions", None),
+    #         },
+    #     )
 
-        return parts, stats
+    #     return parts, stats
 
-    @classmethod
-    def _construct_parts(
-        cls,
-        fs,
-        pf,
-        paths,
-        parts,
-        dtypes,
-        base_path,
-        filters,
-        index_cols,
-        categories,
-        split_row_groups,
-        gather_statistics,
-        chunksize,
-        aggregation_depth,
-    ):
+    # @classmethod
+    # def _construct_parts(
+    #     cls,
+    #     fs,
+    #     pf,
+    #     paths,
+    #     parts,
+    #     dtypes,
+    #     base_path,
+    #     filters,
+    #     index_cols,
+    #     categories,
+    #     split_row_groups,
+    #     gather_statistics,
+    #     chunksize,
+    #     aggregation_depth,
+    # ):
 
-        # Check if `parts` is just a list of paths
-        # (not splitting by row-group or collecting statistics)
-        if isinstance(parts, list) and len(parts) and isinstance(parts[0], str):
-            stats = []
-            return [{"piece": (full_path, None)} for full_path in parts], stats
+    #     # Check if `parts` is just a list of paths
+    #     # (not splitting by row-group or collecting statistics)
+    #     if isinstance(parts, list) and len(parts) and isinstance(parts[0], str):
+    #         stats = []
+    #         return [{"piece": (full_path, None)} for full_path in parts], stats
 
-        # Update `gather_statistics` and `split_row_groups`
-        # before constructing `parts`
-        (
-            gather_statistics,
-            split_row_groups,
-            stat_col_indices,
-        ) = cls._update_metadata_options(
-            pf,
-            parts,
-            gather_statistics,
-            split_row_groups,
-            index_cols,
-            filters,
-            chunksize,
-            aggregation_depth,
-        )
+    #     # Update `gather_statistics` and `split_row_groups`
+    #     # before constructing `parts`
+    #     (
+    #         gather_statistics,
+    #         split_row_groups,
+    #         stat_col_indices,
+    #     ) = cls._update_metadata_options(
+    #         pf,
+    #         parts,
+    #         gather_statistics,
+    #         split_row_groups,
+    #         index_cols,
+    #         filters,
+    #         chunksize,
+    #         aggregation_depth,
+    #     )
 
-        # Process row-groups and return `(parts, stats)`
-        return cls._process_metadata(
-            pf,
-            dtypes,
-            split_row_groups,
-            gather_statistics,
-            stat_col_indices,
-            filters,
-            categories,
-            base_path,
-            paths,
-            fs,
-            chunksize,
-            aggregation_depth,
-        )
+    #     # Process row-groups and return `(parts, stats)`
+    #     return cls._process_metadata(
+    #         pf,
+    #         dtypes,
+    #         split_row_groups,
+    #         gather_statistics,
+    #         stat_col_indices,
+    #         filters,
+    #         categories,
+    #         base_path,
+    #         paths,
+    #         fs,
+    #         chunksize,
+    #         aggregation_depth,
+    #     )
 
     @classmethod
     def _collect_dataset_info(
@@ -559,43 +561,8 @@ class FastParquetEngine(Engine):
 
         parts = []
         _metadata_exists = False
-        if len(paths) > 1:
-            paths, base, fns = _sort_and_analyze_paths(paths, fs)
+        if len(paths) == 1 and fs.isdir(paths[0]):
 
-            # Check if _metadata is in paths, and
-            # remove it if ignore_metadata_file=True
-            _metadata_exists = "_metadata" in fns
-            if _metadata_exists and ignore_metadata_file:
-                fns.remove("_metadata")
-                paths = [fs.sep.join([base, fn]) for fn in fns]
-                _metadata_exists = False
-
-            if gather_statistics is not False:
-                # This scans all the files, allowing index/divisions
-                # and filtering
-                if _metadata_exists:
-                    paths_use = fs.sep.join([base, "_metadata"])
-                else:
-                    paths_use = paths
-                pf = ParquetFile(paths_use, open_with=fs.open, sep=fs.sep, **kwargs)
-            else:
-                if _metadata_exists:
-                    # We have a _metadata file, lets use it
-                    pf = ParquetFile(
-                        fs.sep.join([base, "_metadata"]),
-                        open_with=fs.open,
-                        sep=fs.sep,
-                        **kwargs,
-                    )
-                else:
-                    # Rely on metadata for 0th file.
-                    # Will need to pass a list of paths to read_partition
-                    scheme = get_file_scheme(fns)
-                    pf = ParquetFile(paths[0], open_with=fs.open, **kwargs)
-                    pf.file_scheme = scheme
-                    pf.cats = paths_to_cats(fns, scheme)
-                    parts = paths.copy()
-        elif fs.isdir(paths[0]):
             # This is a directory.
             # Check if _metadata and/or _common_metadata files exists
             base = paths[0]
@@ -631,23 +598,45 @@ class FastParquetEngine(Engine):
                 )
                 if gather_statistics is None:
                     gather_statistics = True
-
-            elif gather_statistics is not False:
-                # Scan every file
-                pf = ParquetFile(paths, open_with=fs.open, **kwargs)
             else:
                 # Use 0th file
                 # Note that "_common_metadata" can cause issues for
                 # partitioned datasets.
-                pf = ParquetFile(paths[0], open_with=fs.open, **kwargs)
+                pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
                 scheme = get_file_scheme(fns)
                 pf.file_scheme = scheme
                 pf.cats = paths_to_cats(fns, scheme)
-                parts = [fs.sep.join([base, fn]) for fn in fns]
+                if gather_statistics is False:
+                    parts = [fs.sep.join([base, fn]) for fn in fns]
         else:
-            # There is only one file to read
-            base = None
-            pf = ParquetFile(paths[0], open_with=fs.open, sep=fs.sep, **kwargs)
+            # This is a list of files
+            paths, base, fns = _sort_and_analyze_paths(paths, fs)
+
+            # Check if _metadata is in paths, and
+            # remove it if ignore_metadata_file=True
+            _metadata_exists = "_metadata" in fns
+            if _metadata_exists and ignore_metadata_file:
+                fns.remove("_metadata")
+                paths = [fs.sep.join([base, fn]) for fn in fns]
+                _metadata_exists = False
+
+            elif _metadata_exists:
+                # We have a _metadata file, lets use it
+                pf = ParquetFile(
+                    fs.sep.join([base, "_metadata"]),
+                    open_with=fs.open,
+                    sep=fs.sep,
+                    **kwargs,
+                )
+            else:
+                # Rely on metadata for 0th file.
+                # Will need to pass a list of paths to read_partition
+                scheme = get_file_scheme(fns)
+                pf = ParquetFile(paths[:1], open_with=fs.open, root=base, **kwargs)
+                pf.file_scheme = scheme
+                pf.cats = paths_to_cats(fns, scheme)
+                if gather_statistics is False:
+                    parts = paths.copy()
 
         # Check the `aggregate_files` setting
         aggregation_depth = _get_aggregation_depth(
@@ -684,6 +673,7 @@ class FastParquetEngine(Engine):
             "aggregate_files": aggregate_files,
             "aggregation_depth": aggregation_depth,
             "metadata_task_size": metadata_task_size,
+            "kwargs": kwargs,
         }
 
     @classmethod
@@ -804,36 +794,224 @@ class FastParquetEngine(Engine):
         categories = dataset_info["categories"]
         dtypes = dataset_info["dtypes"]
         categories_dict = dataset_info["categories_dict"]
+        has_metadata_file = dataset_info["has_metadata_file"]
+        metadata_task_size = dataset_info["metadata_task_size"]
 
-        # Break `pf` into a list of `parts`
-        parts, stats = cls._construct_parts(
-            fs,
+        # Check metadata_task_size setting
+        if metadata_task_size is None:
+            # Use 128 files per task by deault
+            metadata_task_size = 128
+
+        # Define common_kwargs
+        common_kwargs = {
+            "categories": categories_dict or categories,
+            "root_cats": pf.cats,
+            "root_file_scheme": pf.file_scheme,
+            "root_path": base_path,
+        }
+
+        # Check if `parts` is just a list of paths
+        # (not splitting by row-group or collecting statistics)
+        if isinstance(parts, list) and len(parts) and isinstance(parts[0], str):
+            return (
+                [{"piece": (full_path, None)} for full_path in parts],
+                [],
+                common_kwargs,
+            )
+
+        # We don't "need" to gather statistics if we don't
+        # want to apply filters, aggregate files, or calculate
+        # divisions.
+        if split_row_groups is None:
+            split_row_groups = False
+        _need_aggregation_stats = chunksize or (
+            int(split_row_groups) > 1 and aggregation_depth
+        )
+        if len(index_cols) > 1:
+            gather_statistics = False
+        elif not _need_aggregation_stats and filters is None and len(index_cols) == 0:
+            gather_statistics = False
+
+        # Make sure gather_statistics allows filtering
+        # (if filters are desired)
+        if filters:
+            # Filters may require us to gather statistics
+            if gather_statistics is False and pf.info.get("partitions", None):
+                warnings.warn(
+                    "Filtering with gather_statistics=False. "
+                    "Only partition columns will be filtered correctly."
+                )
+            elif gather_statistics is False:
+                raise ValueError("Cannot apply filters with gather_statistics=False")
+            elif not gather_statistics:
+                gather_statistics = True
+
+        # Determine which columns need statistics.
+        flat_filters = _flatten_filters(filters)
+        stat_col_indices = {}
+        for i, name in enumerate(pf.columns):
+            if name in index_cols or name in flat_filters:
+                stat_col_indices[name] = i
+
+        # If the user has not specified `gather_statistics`,
+        # we will only do so if there are specific columns in
+        # need of statistics.
+        # NOTE: We cannot change `gather_statistics` from True
+        # to False (even if `stat_col_indices` is empty), in
+        # case a `chunksize` was specified, and the row-group
+        # statistics are needed for part aggregation.
+        if gather_statistics is None:
+            gather_statistics = bool(stat_col_indices)
+
+        dataset_info_kwargs = {
+            "fs": fs,
+            "split_row_groups": split_row_groups,
+            "gather_statistics": gather_statistics,
+            "filters": filters,
+            "dtypes": dtypes,
+            "stat_col_indices": stat_col_indices,
+            "aggregation_depth": aggregation_depth,
+            "chunksize": chunksize,
+            "root_cats": pf.cats,
+            "root_file_scheme": pf.file_scheme,
+            "root_path": "" if base_path is None else base_path,
+            "has_metadata_file": has_metadata_file,
+        }
+
+        if has_metadata_file or metadata_task_size == 0 or len(paths) == 1:
+            # Use original `ParquetFile` object to construct plan,
+            # since it is based on a global _metadata file
+            pf_or_paths = pf if has_metadata_file else paths
+            parts, stats = cls._collect_file_parts(pf_or_paths, dataset_info_kwargs)
+
+        else:
+            # We DON'T have a global _metadata file to work with.
+            # We should loop over files in parallel
+            parts, stats = [], []
+            if paths:
+                # Build and compute a task graph to construct stats/parts
+                gather_parts_dsk = {}
+                name = "gather-pq-parts-" + tokenize(paths, dataset_info_kwargs)
+                finalize_list = []
+                for task_i, file_i in enumerate(
+                    range(0, len(paths), metadata_task_size)
+                ):
+                    finalize_list.append((name, task_i))
+                    gather_parts_dsk[finalize_list[-1]] = (
+                        cls._collect_file_parts,
+                        paths[file_i : file_i + metadata_task_size],
+                        dataset_info_kwargs,
+                    )
+
+                def _combine_parts(parts_and_stats):
+                    parts, stats = [], []
+                    for part, stat in parts_and_stats:
+                        parts += part
+                        if stat:
+                            stats += stat
+                    return parts, stats
+
+                gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
+                parts, stats = Delayed("final-" + name, gather_parts_dsk).compute(
+                    scheduler="synchronous"
+                )
+
+        # # Break `pf` into a list of `parts`
+        # parts, stats = cls._construct_parts(
+        #     fs,
+        #     pf,
+        #     paths,
+        #     parts,
+        #     dtypes,
+        #     base_path,
+        #     filters,
+        #     index_cols,
+        #     categories,
+        #     split_row_groups,
+        #     gather_statistics,
+        #     chunksize,
+        #     aggregation_depth,
+        # )
+
+        return parts, stats, common_kwargs
+
+    @classmethod
+    def _collect_file_parts(
+        cls,
+        pf_or_files,
+        dataset_info_kwargs,
+    ):
+
+        # Collect necessary information from dataset_info
+        fs = dataset_info_kwargs["fs"]
+        split_row_groups = dataset_info_kwargs["split_row_groups"]
+        gather_statistics = dataset_info_kwargs["gather_statistics"]
+        stat_col_indices = dataset_info_kwargs["stat_col_indices"]
+        filters = dataset_info_kwargs["filters"]
+        dtypes = dataset_info_kwargs["dtypes"]
+        chunksize = dataset_info_kwargs["chunksize"]
+        aggregation_depth = dataset_info_kwargs["aggregation_depth"]
+        root_path = dataset_info_kwargs.get("root_path", None)
+        root_cats = dataset_info_kwargs.get("root_cats", None)
+        root_file_scheme = dataset_info_kwargs.get("root_file_scheme", None)
+        has_metadata_file = dataset_info_kwargs["has_metadata_file"]
+
+        # Get ParquetFile
+        if not isinstance(pf_or_files, fastparquet.api.ParquetFile):
+            # Construct local `ParquetFile` object
+            pf = ParquetFile(
+                pf_or_files,
+                open_with=fs.open,
+                sep=fs.sep,
+                root=root_path,
+            )
+            # Update hive-partitioning to match global cats/scheme
+            pf.cats = root_cats or {}
+            if root_cats:
+                pf.file_scheme = root_file_scheme
+        else:
+            # We already have a ParquetFile object to work with
+            pf = pf_or_files
+
+        # Organize row-groups by file
+        (
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            gather_statistics,
+            root_path,
+        ) = cls._organize_row_groups(
             pf,
-            paths,
-            parts,
-            dtypes,
-            base_path,
-            filters,
-            index_cols,
-            categories,
             split_row_groups,
             gather_statistics,
+            stat_col_indices,
+            filters,
+            dtypes,
+            root_path,
+            has_metadata_file,
             chunksize,
             aggregation_depth,
         )
 
-        common_kwargs = {"categories": categories_dict or categories}
-        if pf.cats and gather_statistics is False:
-            # Need to send partition information ot IO tasks
-            common_kwargs.update(
-                {
-                    "root_cats": pf.cats,
-                    "root_file_scheme": pf.file_scheme,
-                    "root_path": base_path,
-                }
-            )
+        # Convert organized row-groups to parts
+        parts, stats = _row_groups_to_parts(
+            gather_statistics,
+            split_row_groups,
+            aggregation_depth,
+            file_row_groups,
+            file_row_group_stats,
+            file_row_group_column_stats,
+            stat_col_indices,
+            cls._make_part,
+            make_part_kwargs={
+                "fs": fs,
+                "pf": pf,
+                "base_path": root_path,
+                "partitions": pf.info.get("partitions", None),
+            },
+        )
 
-        return parts, stats, common_kwargs
+        return parts, stats
 
     @classmethod
     def read_metadata(
@@ -851,10 +1029,6 @@ class FastParquetEngine(Engine):
         metadata_task_size=None,
         **kwargs,
     ):
-
-        # Check if metadata_task_size is set
-        if metadata_task_size is not None:
-            raise ValueError("metadata_task_size not supported in FastParquetEngine")
 
         # Stage 1: Collect general dataset information
         dataset_info = cls._collect_dataset_info(
@@ -925,6 +1099,7 @@ class FastParquetEngine(Engine):
     ):
 
         null_index_name = False
+        root_path = False if not root_cats else root_path
         if isinstance(index, list):
             if index == [None]:
                 # Handling a None-labeled index...
@@ -1011,14 +1186,14 @@ class FastParquetEngine(Engine):
                     index = ["__index_level_0__"]
                     columns += index
 
+            # Update hive-partitioning information if necessary
+            parquet_file.cats = root_cats or {}
+            if root_cats:
+                parquet_file.file_scheme = root_file_scheme
+
             parquet_file._dtypes = (
                 lambda *args: parquet_file.dtypes
             )  # ugly patch, could be fixed
-
-            # Update hive-partitioning information if necessary
-            if root_cats:
-                parquet_file.cats = root_cats
-                parquet_file.file_scheme = root_file_scheme
 
             if set(columns).issubset(
                 parquet_file.columns + list(parquet_file.cats.keys())

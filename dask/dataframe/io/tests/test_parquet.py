@@ -3068,6 +3068,7 @@ def test_partitioned_column_overlap(tmpdir, engine, write_cols):
 
     if write_cols == ["part", "kind", "col"]:
         result = dd.read_parquet(path, engine=engine)
+        result.compute(scheduler="synchronous")
         expect = pd.concat([_df1, _df2], ignore_index=True)
         assert_eq(result, expect, check_index=False)
     else:
@@ -3649,7 +3650,7 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
     )
 
     # Read back
-    if engine == "pyarrow-dataset":
+    if engine != "pyarrow-legacy":
         ddf2a = dd.read_parquet(
             str(tmpdir),
             engine=engine,
