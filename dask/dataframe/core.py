@@ -3860,6 +3860,35 @@ class Index(Series):
         return applied
 
 
+class DataFrameGetItemExpr(FrameExpr):
+    def __init__(self, frame, key):
+        super().__init__(getattr(frame, 'expr', frame), key)
+        self._name = "getitem-%s" % tokenize(self, key)
+        self._divisions = frame.divisions
+        if np.isscalar(key) or isinstance(key, (tuple, str)):
+
+            if isinstance(frame._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
+                if key not in frame._meta.columns:
+                    if PANDAS_GT_120:
+                        warnings.warn(
+                            "Indexing a DataFrame with a datetimelike index using a single "
+                            "string to slice the rows, like `frame[string]`, is deprecated "
+                            "and will be removed in a future version. Use `frame.loc[string]` "
+                            "instead.",
+                            FutureWarning,
+                        )
+                    return frame.loc[key]
+
+            # error is raised from pandas
+            self._meta = frame._meta[_extract_meta(key)]
+            dsk = partitionwise_graph(operator.getitem, self.name, frame, key)
+            self._graph = HighLevelGraph.from_collections(self.name, dsk, dependencies=[frame])
+        else:
+            raise NotImplementedError("DataFrameGetItemExpr currently only supports scalar, tuple, and str keys")
+
+    def __repr__(self):
+        return f"{self.args[0]!r}[{self.args[1]!r}]"
+
 class DataFrame(_Frame):
     """
     Parallel Pandas DataFrame
@@ -3979,24 +4008,8 @@ class DataFrame(_Frame):
     def __getitem__(self, key):
         name = "getitem-%s" % tokenize(self, key)
         if np.isscalar(key) or isinstance(key, (tuple, str)):
-
-            if isinstance(self._meta.index, (pd.DatetimeIndex, pd.PeriodIndex)):
-                if key not in self._meta.columns:
-                    if PANDAS_GT_120:
-                        warnings.warn(
-                            "Indexing a DataFrame with a datetimelike index using a single "
-                            "string to slice the rows, like `frame[string]`, is deprecated "
-                            "and will be removed in a future version. Use `frame.loc[string]` "
-                            "instead.",
-                            FutureWarning,
-                        )
-                    return self.loc[key]
-
-            # error is raised from pandas
-            meta = self._meta[_extract_meta(key)]
-            dsk = partitionwise_graph(operator.getitem, name, self, key)
-            graph = HighLevelGraph.from_collections(name, dsk, dependencies=[self])
-            return new_dd_object(graph, name, meta, self.divisions)
+            expr = DataFrameGetItemExpr(self, key)
+            return new_dd_object(expr=expr)
         elif isinstance(key, slice):
             from pandas.api.types import is_float_dtype
 
