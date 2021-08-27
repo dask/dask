@@ -317,11 +317,11 @@ class FrameExpr(Expr):
 
 class FrameLeafExpr(FrameExpr):
     def __init__(self, graph, name, meta, divisions):
-        self.args = (graph, name, meta, divisions)
         self._graph = graph
         self._name = name
         self._meta = meta
         self._divisions = divisions
+        super().__init__(graph, name, meta, divisions)
 
     def __repr__(self):
         # Use a custom repr because meta and divisions are too noisy to show
@@ -5264,9 +5264,8 @@ class ElemwiseFrameExpr(FrameExpr):
 
     def __init__(self, op, *args, meta=no_default, transform_divisions=True,
                  out=None, **kwargs):
-        self.args = (op, *[getattr(i, 'expr', i) for i in args])
-        self.kwargs = {**kwargs, **dict(meta=meta,
-            transform_divisions=transform_divisions, out=out)}
+        super().__init__(*[getattr(i, 'expr', i) for i in args], meta=meta,
+                         transform_divisions=transform_divisions, out=out, **kwargs)
 
         name = funcname(op) + "-" + tokenize(op, *args, **kwargs)
 
