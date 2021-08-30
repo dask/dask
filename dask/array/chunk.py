@@ -418,8 +418,6 @@ def getitem(obj, index):
 
     """
     result = obj[index]
-    # if not np.isscalar(result) in this case no memory shared, we should avoid copy
-    # Isn't 2 * a bit big?
     try:
         if obj.size >= 2 * result.size:
             result = result.copy()
