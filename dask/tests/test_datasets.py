@@ -19,6 +19,7 @@ def test_full_dataset():
 
 
 def test_make_dataset_with_processes():
+    pytest.importorskip("mimesis")
     b = dask.datasets.make_people(npartitions=2)
     try:
         b.compute(scheduler="processes")
