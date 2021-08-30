@@ -2,7 +2,7 @@ import pytest
 
 pytest.importorskip("numpy")
 
-from operator import getitem as operator_getitem
+import operator
 
 import numpy as np
 
@@ -117,5 +117,5 @@ def test_getitem():
     y = getitem(x, slice(120, 122))
     assert not np.shares_memory(y, x[120:122])
 
-    y_op = operator_getitem(x, slice(120, 122))
+    y_op = operator.getitem(x, slice(120, 122))
     assert np.shares_memory(y_op, x[120:122])
