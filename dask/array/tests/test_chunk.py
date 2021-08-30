@@ -2,10 +2,12 @@ import pytest
 
 pytest.importorskip("numpy")
 
+from operator import getitem as operator_getitem
+
 import numpy as np
 
 import dask.array as da
-from dask.array.chunk import coarsen, keepdims_wrapper
+from dask.array.chunk import coarsen, getitem, keepdims_wrapper
 
 
 def test_keepdims_wrapper_no_axis():
@@ -108,3 +110,12 @@ def test_coarsen_on_uneven_shape():
 
 def test_integer_input():
     assert da.zeros((4, 6), chunks=2).rechunk(3).chunks == ((3, 1), (3, 3))
+
+
+def test_getitem():
+    x = np.random.rand(1_000_000)
+    y = getitem(x, slice(120, 122))
+    assert not np.shares_memory(y, x[120:122])
+
+    y_op = operator_getitem(x, slice(120, 122))
+    assert np.shares_memory(y_op, x[120:122])
