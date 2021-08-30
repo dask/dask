@@ -399,7 +399,27 @@ def slice_with_int_dask_array_aggregate(idx, chunk_outputs, x_chunks, axis):
 
 
 def getitem(obj, index):
+    """Getitem function that creates a copy of the desired selection when
+    the the selection is smaller than half of the original array. This
+    is to avoid pointing to a view when extracting a small portion from a
+    large array which becomes uslless after the extraction. See note on
+    https://numpy.org/doc/stable/reference/arrays.indexing.html#basic-slicing-and-indexing
+
+    Parameters
+    ----------
+    obj: ndarray, string, tuple, list
+        object to get item from.
+    index: int, list[int], slice()
+        desired selection to extract from obj.
+
+    Returns
+    -------
+    Selection obj[index]
+
+    """
     result = obj[index]
+    # if not np.isscalar(result) in this case no memory shared, we should avoid copy
+    # Isn't 2 * a bit big?
     try:
         if obj.size >= 2 * result.size:
             result = result.copy()
