@@ -75,8 +75,9 @@ def _generate_mimesis(field, schema_description, records_per_partition, seed):
 
     field = Field(seed=seed, **field)
     schema = Schema(schema=lambda: schema_description(field))
-    for i in range(records_per_partition):
-        yield schema.create(iterations=1)[0]
+    return [schema.create(iterations=1)[0] for i in range(records_per_partition)]
+    # for i in range(records_per_partition):
+    #     yield schema.create(iterations=1)[0]
 
 
 def _make_mimesis(field, schema, npartitions, records_per_partition, seed=None):

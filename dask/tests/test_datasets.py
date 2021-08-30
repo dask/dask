@@ -18,6 +18,14 @@ def test_full_dataset():
     assert b.count().compute() == 20
 
 
+def test_make_dataset_with_processes():
+    b = dask.datasets.make_people(npartitions=2)
+    try:
+        b.compute(scheduler="processes")
+    except TypeError:
+        pytest.fail("Failed to execute make_people using processes")
+
+
 def test_no_mimesis():
     try:
         import mimesis  # noqa: F401
