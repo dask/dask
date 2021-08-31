@@ -63,7 +63,7 @@ You can specify configuration values in YAML files. For example:
      chunk-size: 128 MiB
      
    distributed:
-      workers: 
+      worker:
          memory:
             spill: 0.85  # default: 0.7
             target: 0.75  # default: 0.6
