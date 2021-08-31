@@ -1,9 +1,11 @@
 import sys
+import types
 from array import array
 
 import pytest
+from importlib_metadata import EntryPoint, EntryPoints
 
-from dask.sizeof import getsizeof, sizeof
+from dask.sizeof import _register_entry_point_plugins, getsizeof, sizeof
 from dask.utils import funcname
 
 
@@ -147,3 +149,34 @@ def test_dict():
     d = {i: x for i in range(100)}
     assert sizeof(d) > x.nbytes * 100
     assert isinstance(sizeof(d), int)
+
+
+def test_plugin_hook():
+    class _CustomType:
+        pass
+
+    def hook(obj):
+        raise NotImplementedError("This hook should not be called")
+
+    def plugin(dispatch):
+        dispatch.register(_CustomType, hook)
+
+    mod_name = "dask_sizeof"
+    plugin_name = "plugin"
+
+    # Create test module
+    mod = types.ModuleType(mod_name)
+    setattr(mod, plugin_name, plugin)
+    sys.modules[mod_name] = mod
+
+    # Hand craft the entry-points
+    entry_point = EntryPoint(
+        name=mod_name, value=f"{mod_name}:{plugin_name}", group="dask.sizeof"
+    )
+    entry_points = EntryPoints([entry_point])
+
+    # Register entry point
+    _register_entry_point_plugins(entry_points=entry_points)
+
+    # Ensure we get the right implementation for this type
+    assert sizeof.dispatch(_CustomType) is hook
