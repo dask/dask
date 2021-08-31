@@ -1113,6 +1113,15 @@ class ArrowDatasetEngine(Engine):
             # Use 128 files per task by deault
             metadata_task_size = 128
 
+        # Add common kwargs
+        common_kwargs = {
+            "partitioning": partitioning_method,
+            "partitions": partitions,
+            "categories": categories,
+            "filters": filters,
+            "schema": schema,
+        }
+
         # Check if this is a very simple case where we can just return
         # the path names
         if not gather_statistics and not (split_row_groups or filters):
@@ -1122,13 +1131,7 @@ class ArrowDatasetEngine(Engine):
                     for full_path in sorted(ds.files, key=natural_sort_key)
                 ],
                 [],
-                {
-                    "partitioning": partitioning_method,
-                    "partitions": partitions,
-                    "categories": categories,
-                    "filters": filters,
-                    "schema": schema,
-                },
+                common_kwargs,
             )
 
         # Cannot gather_statistics if our `metadata` is a list
@@ -1241,15 +1244,6 @@ class ArrowDatasetEngine(Engine):
 
                 gather_parts_dsk["final-" + name] = (_combine_parts, finalize_list)
                 parts, stats = Delayed("final-" + name, gather_parts_dsk).compute()
-
-        # Add common kwargs
-        common_kwargs = {
-            "partitioning": partitioning_method,
-            "partitions": partitions,
-            "categories": categories,
-            "filters": filters,
-            "schema": schema,
-        }
 
         return parts, stats, common_kwargs
 
