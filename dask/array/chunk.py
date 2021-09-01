@@ -419,7 +419,7 @@ def getitem(obj, index):
     """
     result = obj[index]
     try:
-        if obj.size >= 2 * result.size:
+        if not result.flags.owndata and obj.size >= 2 * result.size:
             result = result.copy()
     except AttributeError:
         pass

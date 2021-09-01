@@ -115,9 +115,10 @@ def test_integer_input():
 def test_getitem():
     x = np.random.rand(1_000_000)
     y = getitem(x, slice(120, 122))
-    assert not np.shares_memory(y, x[120:122])
-    assert np.shares_memory(getitem(x, slice(1, None)), x)
+
+    assert y.flags.owndata
+    assert not getitem(x, slice(1, None)).flags.owndata
 
     y_op = operator.getitem(x, slice(120, 122))
-    assert np.shares_memory(y_op, x[120:122])
-    assert np.shares_memory(operator.getitem(x, slice(1, None)), x)
+    assert not y_op.flags.owndata
+    assert not operator.getitem(x, slice(1, None)).flags.owndata
