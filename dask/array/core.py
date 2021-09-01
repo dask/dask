@@ -4122,12 +4122,21 @@ def asarray(
     Parameters
     ----------
     a : array-like
-        Input data, in any form that can be converted to a dask array.
+        Input data, in any form that can be converted to a dask array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
+        lists and ndarrays.
     allow_unknown_chunksizes: bool
         Allow unknown chunksizes, such as come from converting from dask
         dataframes.  Dask.array is unable to verify that chunks line up.  If
         data comes from differently aligned sources then this can cause
         unexpected results.
+    dtype : data-type, optional
+        By default, the data-type is inferred from the input data.
+    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
     like: array-like
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
@@ -4181,7 +4190,16 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
     Parameters
     ----------
     a : array-like
-        Input data, in any form that can be converted to a dask array.
+        Input data, in any form that can be converted to a dask array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
+        lists and ndarrays.
+    dtype : data-type, optional
+        By default, the data-type is inferred from the input data.
+    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
     like: array-like
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
