@@ -115,11 +115,11 @@ Dataframe
     DataFrame.shape
     DataFrame.shuffle
     DataFrame.size
+    DataFrame.sort_values
     DataFrame.squeeze
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
-    DataFrame.sort_values
     DataFrame.tail
     DataFrame.to_bag
     DataFrame.to_csv
