@@ -233,7 +233,7 @@ def test_like_raises(func):
             func(1, like=func((1)))
 
 
-@pytest.mark.skipif(not _numpy_120)
+@pytest.mark.skipif(not _numpy_120, reason="NEP-35 is not available")
 @pytest.mark.parametrize("func", [np.array, np.asarray, np.asanyarray])
 def test_like_with_numpy_func(func):
     assert_eq(func(1, like=da.array((1))), func(1))
