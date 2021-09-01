@@ -48,23 +48,25 @@ def test_simple(dir_server):
     f = open_files(root + fn)[0]
     with f as f:
         data = f.read()
-    assert data == open(os.path.join(dir_server, fn), "rb").read()
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        assert data == expected.read()
 
 
 def test_loc(dir_server):
     root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn)[0]
-    expected = open(os.path.join(dir_server, fn), "rb").read()
-    with f as f:
-        data = f.read(2)
-        assert data == expected[:2]
-        assert f.loc == 2
-        f.seek(0)
-        data = f.read(3)
-        assert data == expected[:3]
-        f.seek(1, 1)
-        assert f.loc == 4
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        expected = expected.read()
+        with f as f:
+            data = f.read(2)
+            assert data == expected[:2]
+            assert f.loc == 2
+            f.seek(0)
+            data = f.read(3)
+            assert data == expected[:3]
+            f.seek(1, 1)
+            assert f.loc == 4
 
 
 def test_fetch_range_with_headers(dir_server):
@@ -75,7 +77,8 @@ def test_fetch_range_with_headers(dir_server):
     f = open_files(root + fn, headers=headers)[0]
     with f as f:
         data = f.read(length=1) + f.read(length=-1)
-    assert data == open(os.path.join(dir_server, fn), "rb").read()
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        assert data == expected.read()
 
 
 @pytest.mark.parametrize("block_size", [None, 99999])
@@ -83,36 +86,38 @@ def test_ops(dir_server, block_size):
     root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn)[0]
-    data = open(os.path.join(dir_server, fn), "rb").read()
-    with f as f:
-        # these pass because the default
-        assert f.read(10) == data[:10]
-        f.seek(0)
-        assert f.read(10) == data[:10]
-        assert f.read(10) == data[10:20]
-        f.seek(-10, 2)
-        assert f.read() == data[-10:]
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        expected = expected.read()
+        with f as f:
+            # these pass because the default
+            assert f.read(10) == expected[:10]
+            f.seek(0)
+            assert f.read(10) == expected[:10]
+            assert f.read(10) == expected[10:20]
+            f.seek(-10, 2)
+            assert f.read() == expected[-10:]
 
 
 def test_ops_blocksize(dir_server):
     root = "http://localhost:8999/"
     fn = files[0]
     f = open_files(root + fn, block_size=2)[0]
-    data = open(os.path.join(dir_server, fn), "rb").read()
-    with f as f:
-        # it's OK to read the whole file
-        assert f.read() == data
-        # and now the file magically has a size
-        assert f.size == len(data)
+    with open(os.path.join(dir_server, fn), "rb") as expected:
+        expected = expected.read()
+        with f as f:
+            # it's OK to read the whole file
+            assert f.read() == expected
+            # and now the file magically has a size
+            assert f.size == len(expected)
 
-    # note that if we reuse f from above, because it is tokenized, we get
-    # the same open file - where is this cached?
-    fn = files[1]
-    f = open_files(root + fn, block_size=2)[0]
-    with f as f:
-        # fails because we want only 12 bytes
-        with pytest.raises(ValueError):
-            assert f.read(10) == data[:10]
+        # note that if we reuse f from above, because it is tokenized, we get
+        # the same open file - where is this cached?
+        fn = files[1]
+        f = open_files(root + fn, block_size=2)[0]
+        with f as f:
+            # fails because we want only 12 bytes
+            with pytest.raises(ValueError):
+                assert f.read(10) == expected[:10]
 
 
 def test_errors(dir_server):
@@ -144,7 +149,8 @@ def test_files(dir_server):
     fs = open_files([root + f for f in files])
     for f, f2 in zip(fs, files):
         with f as f:
-            assert f.read() == open(os.path.join(dir_server, f2), "rb").read()
+            with open(os.path.join(dir_server, f2), "rb") as expected:
+                assert f.read() == expected.read()
 
 
 def test_open_glob(dir_server):
