@@ -8,7 +8,6 @@ import dask.dataframe as dd
 from dask.dataframe._compat import tm
 from dask.dataframe.core import apply_and_enforce
 from dask.dataframe.utils import (
-    PANDAS_GT_100,
     PANDAS_GT_120,
     UNKNOWN_CATEGORIES,
     check_matching_columns,
@@ -82,7 +81,10 @@ def test_make_meta():
     assert meta.name == "a"
 
     # With index
-    meta = make_meta({"a": "i8", "b": "i4"}, index=pd.Int64Index([1, 2], name="foo"))
+    meta = make_meta(
+        {"a": "i8", "b": "i4"},
+        index=pd.Int64Index([1, 2], name="foo"),
+    )
     assert isinstance(meta.index, pd.Int64Index)
     assert len(meta.index) == 0
     meta = make_meta(("a", "i8"), index=pd.Int64Index([1, 2], name="foo"))
@@ -90,32 +92,37 @@ def test_make_meta():
     assert len(meta.index) == 0
 
     # Categoricals
-    meta = make_meta({"a": "category"})
+    meta = make_meta({"a": "category"}, parent_meta=df)
     assert len(meta.a.cat.categories) == 1
     assert meta.a.cat.categories[0] == UNKNOWN_CATEGORIES
-    meta = make_meta(("a", "category"))
+    meta = make_meta(("a", "category"), parent_meta=df)
     assert len(meta.cat.categories) == 1
     assert meta.cat.categories[0] == UNKNOWN_CATEGORIES
 
     # Numpy scalar
-    meta = make_meta(np.float64(1.0))
+    meta = make_meta(np.float64(1.0), parent_meta=df)
     assert isinstance(meta, np.float64)
 
     # Python scalar
-    meta = make_meta(1.0)
+    meta = make_meta(1.0, parent_meta=df)
     assert isinstance(meta, np.float64)
 
     # Timestamp
     x = pd.Timestamp(2000, 1, 1)
-    meta = make_meta(x)
+    meta = make_meta(x, parent_meta=df)
     assert meta is x
 
+    # DatetimeTZDtype
+    x = pd.DatetimeTZDtype(tz="UTC")
+    meta = make_meta(x)
+    assert meta == pd.Timestamp(1, tz=x.tz, unit=x.unit)
+
     # Dtype expressions
-    meta = make_meta("i8")
+    meta = make_meta("i8", parent_meta=df)
     assert isinstance(meta, np.int64)
-    meta = make_meta(float)
+    meta = make_meta(float, parent_meta=df)
     assert isinstance(meta, np.dtype(float).type)
-    meta = make_meta(np.dtype("bool"))
+    meta = make_meta(np.dtype("bool"), parent_meta=df)
     assert isinstance(meta, np.bool_)
     assert pytest.raises(TypeError, lambda: make_meta(None))
 
@@ -282,6 +289,11 @@ def test_meta_nonempty_scalar():
     meta = meta_nonempty(x)
     assert meta is x
 
+    # DatetimeTZDtype
+    x = pd.DatetimeTZDtype(tz="UTC")
+    meta = meta_nonempty(x)
+    assert meta == pd.Timestamp(1, tz=x.tz, unit=x.unit)
+
 
 def test_raise_on_meta_error():
     try:
@@ -362,6 +374,21 @@ def test_check_meta():
         "+--------+----------+----------+"
     )
     assert str(err.value) == exp
+
+    # pandas dtype metadata error
+    with pytest.raises(ValueError) as err:
+        check_meta(df.a, pd.Series([], dtype="string"), numeric_equal=False)
+    assert str(err.value) == (
+        "Metadata mismatch found.\n"
+        "\n"
+        "Partition type: `pandas.core.series.Series`\n"
+        "+----------+--------+\n"
+        "|          | dtype  |\n"
+        "+----------+--------+\n"
+        "| Found    | object |\n"
+        "| Expected | string |\n"
+        "+----------+--------+"
+    )
 
 
 def test_check_matching_columns_raises_appropriate_errors():
@@ -464,11 +491,10 @@ def test_apply_and_enforce_message():
         apply_and_enforce(_func=func, _meta=meta)
 
 
-@pytest.mark.skipif(not PANDAS_GT_100, reason="Only pandas>1")
 def test_nonempty_series_sparse():
     ser = pd.Series(pd.array([0, 1], dtype="Sparse"))
     with pytest.warns(None) as w:
-        dd.utils._nonempty_series(ser)
+        meta_nonempty(ser)
 
     assert len(w) == 0
 
@@ -476,5 +502,5 @@ def test_nonempty_series_sparse():
 @pytest.mark.skipif(not PANDAS_GT_120, reason="Float64 was introduced in pandas>=1.2")
 def test_nonempty_series_nullable_float():
     ser = pd.Series([], dtype="Float64")
-    non_empty = dd.utils._nonempty_series(ser)
+    non_empty = meta_nonempty(ser)
     assert non_empty.dtype == "Float64"

@@ -1,8 +1,7 @@
-from distutils.version import LooseVersion
-
 import numpy as np
 import pandas as pd
 import pytest
+from packaging.version import parse as parse_version
 
 import dask.dataframe as dd
 from dask.dataframe._compat import PANDAS_GT_130
@@ -180,8 +179,8 @@ def test_rolling_methods(method, args, window, center, check_less_precise):
 @pytest.mark.parametrize("center", [True, False])
 def test_rolling_cov(window, center):
     # DataFrame
-    prolling = df.drop("a", 1).rolling(window, center=center)
-    drolling = ddf.drop("a", 1).rolling(window, center=center)
+    prolling = df.drop("a", axis=1).rolling(window, center=center)
+    drolling = ddf.drop("a", axis=1).rolling(window, center=center)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series
@@ -310,8 +309,8 @@ def test_time_rolling_methods(method, args, window, check_less_precise):
 @pytest.mark.parametrize("window", ["1S", "2S", "3S", pd.offsets.Second(5)])
 def test_time_rolling_cov(window):
     # DataFrame
-    prolling = ts.drop("a", 1).rolling(window)
-    drolling = dts.drop("a", 1).rolling(window)
+    prolling = ts.drop("a", axis=1).rolling(window)
+    drolling = dts.drop("a", axis=1).rolling(window)
     assert_eq(prolling.cov(), drolling.cov())
 
     # Series
@@ -401,10 +400,10 @@ def test_rolling_agg_aggregate():
     )
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="needs pandas>=1.0.0")
 def test_rolling_numba_engine():
     numba = pytest.importorskip("numba")
-    if not dd._compat.PANDAS_GT_104 and LooseVersion(numba.__version__) >= "0.49":
+    numba_version = parse_version(numba.__version__)
+    if not dd._compat.PANDAS_GT_104 and numba_version >= parse_version("0.49"):
         # Was fixed in https://github.com/pandas-dev/pandas/pull/33687
         pytest.xfail("Known incompatibility between pandas and numba")
 
@@ -418,11 +417,3 @@ def test_rolling_numba_engine():
         df.rolling(3).apply(f, engine="numba", raw=True),
         ddf.rolling(3).apply(f, engine="numba", raw=True),
     )
-
-
-@pytest.mark.skipif(dd._compat.PANDAS_GT_100, reason="Requires pandas>1.0.0")
-def test_rolling_apply_numba_raises():
-    df = pd.DataFrame({"A": range(5), "B": range(0, 10, 2)})
-    ddf = dd.from_pandas(df, npartitions=3)
-    with pytest.raises(NotImplementedError, match="pandas>=1.0.0"):
-        ddf.rolling(3).apply(lambda x: x.sum(), engine="numba", raw=True)

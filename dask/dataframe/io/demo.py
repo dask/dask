@@ -1,11 +1,9 @@
-import copy
-
 import numpy as np
 import pandas as pd
 
 from ...highlevelgraph import HighLevelGraph
 from ...layers import DataFrameIOLayer
-from ...utils import random_state_data
+from ...utils import _deprecated, random_state_data
 from ..core import DataFrame, tokenize
 
 __all__ = ["make_timeseries"]
@@ -72,11 +70,11 @@ class MakeTimeseriesPart:
     Makes a timeseries partition.
     """
 
-    def __init__(self, dtypes, freq, kwargs):
-        self.dtypes = dtypes
+    def __init__(self, dtypes, freq, kwargs, columns=None):
+        self.columns = columns or list(dtypes.keys())
+        self.dtypes = {c: dtypes[c] for c in self.columns}
         self.freq = freq
         self.kwargs = kwargs
-        self.columns = None
 
     def project_columns(self, columns):
         """Return a new MakeTimeseriesPart object with
@@ -84,20 +82,19 @@ class MakeTimeseriesPart:
         """
         if columns == self.columns:
             return self
-        func = copy.deepcopy(self)
-        func.columns = columns
-        return func
+        return MakeTimeseriesPart(
+            self.dtypes,
+            self.freq,
+            self.kwargs,
+            columns=columns,
+        )
 
     def __call__(self, part):
         divisions, state_data = part
         if isinstance(state_data, int):
             state_data = random_state_data(1, state_data)
-        if self.columns:
-            dtypes = {k: v for k, v in self.dtypes.items() if k in self.columns}
-        else:
-            dtypes = self.dtypes
         return make_timeseries_part(
-            divisions[0], divisions[1], dtypes, self.freq, state_data, self.kwargs
+            divisions[0], divisions[1], self.dtypes, self.freq, state_data, self.kwargs
         )
 
 
@@ -226,7 +223,7 @@ def generate_day(
     freq=pd.Timedelta(seconds=60),
     random_state=None,
 ):
-    """ Generate a day of financial data from open/close high/low values """
+    """Generate a day of financial data from open/close high/low values"""
     if not isinstance(random_state, np.random.RandomState):
         random_state = np.random.RandomState(random_state)
     if not isinstance(date, pd.Timestamp):
@@ -268,6 +265,7 @@ def generate_day(
     )
 
 
+@_deprecated(use_instead="dask.datasets.timeseries for generating example DataFrames")
 def daily_stock(
     symbol,
     start,

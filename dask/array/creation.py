@@ -1,11 +1,12 @@
+import itertools
 from collections.abc import Sequence
 from functools import partial, reduce
 from itertools import product
 from numbers import Integral, Number
-from operator import add, getitem
+from operator import getitem
 
 import numpy as np
-from tlz import accumulate, sliding_window
+from tlz import sliding_window
 
 from ..base import tokenize
 from ..highlevelgraph import HighLevelGraph
@@ -15,6 +16,7 @@ from .core import (
     Array,
     asarray,
     block,
+    blockwise,
     broadcast_arrays,
     broadcast_to,
     cached_cumsum,
@@ -22,8 +24,9 @@ from .core import (
     normalize_chunks,
     stack,
 )
+from .numpy_compat import _numpy_120
 from .ufunc import greater_equal, rint
-from .utils import AxisError, meta_from_array, zeros_like_safe
+from .utils import AxisError, meta_from_array
 from .wrap import empty, full, ones, zeros
 
 
@@ -309,7 +312,7 @@ def linspace(
         bs_space = bs - 1 if endpoint else bs
         blockstop = blockstart + (bs_space * step)
         task = (
-            partial(np.linspace, endpoint=endpoint, dtype=dtype),
+            partial(chunk.linspace, endpoint=endpoint, dtype=dtype),
             blockstart,
             blockstop,
             bs,
@@ -541,18 +544,12 @@ def eye(N, chunks="auto", M=None, k=0, dtype=float):
 
     if not isinstance(chunks, (int, str)):
         raise ValueError("chunks must be an int or string")
-    elif isinstance(chunks, str):
-        chunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
-        chunks = chunks[0][0]
+
+    vchunks, hchunks = normalize_chunks(chunks, shape=(N, M), dtype=dtype)
+    chunks = vchunks[0]
+
     token = tokenize(N, chunks, M, k, dtype)
     name_eye = "eye-" + token
-
-    vchunks = [chunks] * (N // chunks)
-    if N % chunks != 0:
-        vchunks.append(N % chunks)
-    hchunks = [chunks] * (M // chunks)
-    if M % chunks != 0:
-        hchunks.append(M % chunks)
 
     for i, vchunk in enumerate(vchunks):
         for j, hchunk in enumerate(hchunks):
@@ -612,7 +609,7 @@ def diag(v):
                 dsk[key] = (np.diag, blocks[i])
             else:
                 dsk[key] = (np.zeros, (m, n))
-                dsk[key] = (partial(zeros_like_safe, shape=(m, n)), meta)
+                dsk[key] = (partial(np.zeros_like, shape=(m, n)), meta)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[v])
     return Array(graph, name, (chunks_1d, chunks_1d), meta=meta)
@@ -687,7 +684,10 @@ def diagonal(a, offset=0, axis1=0, axis2=1):
 
 
 @derived_from(np)
-def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
+def tri(N, M=None, k=0, dtype=float, chunks="auto", *, like=None):
+    if not _numpy_120 and like is not None:
+        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
     _min_int = np.lib.twodim_base._min_int
 
     if M is None:
@@ -706,37 +706,21 @@ def tri(N, M=None, k=0, dtype=float, chunks="auto", like=None):
     return m
 
 
-def _np_fromfunction(func, shape, dtype, offset, func_kwargs):
-    def offset_func(*args, **kwargs):
-        args2 = list(map(add, args, offset))
-        return func(*args2, **kwargs)
-
-    return np.fromfunction(offset_func, shape, dtype=dtype, **func_kwargs)
-
-
 @derived_from(np)
 def fromfunction(func, chunks="auto", shape=None, dtype=None, **kwargs):
-    chunks = normalize_chunks(chunks, shape, dtype=dtype)
-    name = "fromfunction-" + tokenize(func, chunks, shape, dtype, kwargs)
-    keys = product([name], *(range(len(bd)) for bd in chunks))
-
-    def accumulate_gen(chunks):
-        for bd in chunks:
-            yield accumulate(add, (0,) + bd[:-1])
-
-    aggdims = accumulate_gen(chunks)
-    offsets = product(*aggdims)
-    shapes = product(*chunks)
     dtype = dtype or float
+    chunks = normalize_chunks(chunks, shape, dtype=dtype)
 
-    values = [
-        (_np_fromfunction, func, shp, dtype, offset, kwargs)
-        for offset, shp in zip(offsets, shapes)
-    ]
+    inds = tuple(range(len(shape)))
 
-    dsk = dict(zip(keys, values))
+    arrs = [arange(s, dtype=dtype, chunks=c) for s, c in zip(shape, chunks)]
+    arrs = meshgrid(*arrs, indexing="ij")
 
-    return Array(dsk, name, chunks, dtype=dtype)
+    args = sum(zip(arrs, itertools.repeat(inds)), ())
+
+    res = blockwise(func, inds, *args, token="fromfunction", **kwargs)
+
+    return res
 
 
 @derived_from(np)
@@ -875,9 +859,6 @@ def linear_ramp_chunk(start, stop, num, dim, step):
     """
     Helper function to find the linear ramp for a chunk.
     """
-
-    from .utils import empty_like_safe
-
     num1 = num + 1
 
     shape = list(start.shape)
@@ -886,7 +867,7 @@ def linear_ramp_chunk(start, stop, num, dim, step):
 
     dtype = np.dtype(start.dtype)
 
-    result = empty_like_safe(start, shape, dtype=dtype)
+    result = np.empty_like(start, shape=shape, dtype=dtype)
     for i in np.ndindex(start.shape):
         j = list(i)
         j[dim] = slice(None)

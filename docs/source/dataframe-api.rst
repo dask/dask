@@ -7,6 +7,7 @@ Dataframe
 ~~~~~~~~~
 
 .. autosummary::
+    :toctree: generated/
 
     DataFrame
     DataFrame.abs
@@ -112,6 +113,7 @@ Dataframe
     DataFrame.sem
     DataFrame.set_index
     DataFrame.shape
+    DataFrame.shuffle
     DataFrame.size
     DataFrame.squeeze
     DataFrame.std
@@ -140,6 +142,7 @@ Series
 ~~~~~~
 
 .. autosummary::
+   :toctree: generated/
 
    Series
    Series.add
@@ -261,7 +264,12 @@ Groupby Operations
 
 .. currentmodule:: dask.dataframe.groupby
 
+DataFrame Groupby
+*****************
+
 .. autosummary::
+   :toctree: generated/
+
    DataFrameGroupBy.aggregate
    DataFrameGroupBy.apply
    DataFrameGroupBy.count
@@ -283,7 +291,12 @@ Groupby Operations
    DataFrameGroupBy.idxmin
    DataFrameGroupBy.idxmax
 
+Series Groupby
+**************
+
 .. autosummary::
+   :toctree: generated/
+
    SeriesGroupBy.aggregate
    SeriesGroupBy.apply
    SeriesGroupBy.count
@@ -304,7 +317,12 @@ Groupby Operations
    SeriesGroupBy.idxmin
    SeriesGroupBy.idxmax
 
+Custom Aggregation
+******************
+
 .. autosummary::
+   :toctree: generated/
+
    Aggregation
 
 Rolling Operations
@@ -313,6 +331,8 @@ Rolling Operations
 .. currentmodule:: dask.dataframe
 
 .. autosummary::
+   :toctree: generated/
+
    rolling.map_overlap
    Series.rolling
    DataFrame.rolling
@@ -320,6 +340,8 @@ Rolling Operations
 .. currentmodule:: dask.dataframe.rolling
 
 .. autosummary::
+   :toctree: generated/
+
    Rolling.apply
    Rolling.count
    Rolling.kurt
@@ -340,6 +362,8 @@ Create DataFrames
 .. currentmodule:: dask.dataframe
 
 .. autosummary::
+   :toctree: generated/
+
    read_csv
    read_table
    read_fwf
@@ -353,12 +377,21 @@ Create DataFrames
    from_dask_array
    from_delayed
    from_pandas
-   dask.bag.core.Bag.to_dataframe
+
+.. currentmodule:: dask.bag
+
+.. autosummary::
+   :toctree: generated/
+
+   Bag.to_dataframe
 
 Store DataFrames
 ~~~~~~~~~~~~~~~~
 
+.. currentmodule:: dask.dataframe
+
 .. autosummary::
+   :toctree: generated/
 
    to_csv
    to_parquet
@@ -371,6 +404,7 @@ Convert DataFrames
 ~~~~~~~~~~~~~~~~~~
 
 .. autosummary::
+   :toctree: generated/
 
    DataFrame.to_bag
    DataFrame.to_dask_array
@@ -382,115 +416,75 @@ Reshape DataFrames
 .. currentmodule:: dask.dataframe.reshape
 
 .. autosummary::
+   :toctree: generated/
 
    get_dummies
    pivot_table
    melt
 
-DataFrame Methods
-~~~~~~~~~~~~~~~~~
-
-.. currentmodule:: dask.dataframe
-
-.. autoclass:: DataFrame
-   :members:
-   :inherited-members:
-
-Series Methods
-~~~~~~~~~~~~~~
-
-.. autoclass:: Series
-   :members:
-   :inherited-members:
-
-.. currentmodule:: dask.dataframe.groupby
-
-DataFrameGroupBy
-~~~~~~~~~~~~~~~~
-
-.. autoclass:: DataFrameGroupBy
-   :members:
-   :inherited-members:
-
-SeriesGroupBy
-~~~~~~~~~~~~~
-
-.. autoclass:: SeriesGroupBy
-   :members:
-   :inherited-members:
-
-Custom Aggregation
-~~~~~~~~~~~~~~~~~~
-.. autoclass:: Aggregation
-
-
-Storage and Conversion
+Concatenate DataFrames
 ~~~~~~~~~~~~~~~~~~~~~~
 
-.. currentmodule:: dask.dataframe
+.. currentmodule:: dask.dataframe.multi
 
-.. autofunction:: read_csv
-.. autofunction:: read_table
-.. autofunction:: read_fwf
-.. autofunction:: read_parquet
-.. autofunction:: read_orc
-.. autofunction:: read_hdf
-.. autofunction:: read_json
-.. autofunction:: read_sql_table
-.. autofunction:: from_array
-.. autofunction:: from_pandas
-.. autofunction:: from_bcolz
-.. autofunction:: from_dask_array
-.. autofunction:: from_delayed
-.. autofunction:: to_records
-.. autofunction:: to_csv
-.. autofunction:: to_bag
-.. autofunction:: to_hdf
-.. autofunction:: to_parquet
-.. autofunction:: to_json
-.. autofunction:: to_sql
+.. autosummary::
+   :toctree: generated/
 
-Rolling
-~~~~~~~
+   DataFrame.merge
+   concat
+   merge
+   merge_asof
 
-.. currentmodule:: dask.dataframe.rolling
-
-.. autofunction:: map_overlap
 
 Resampling
 ~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe.tseries.resample
 
-.. autoclass:: Resampler
-   :members:
-   :inherited-members:
+.. autosummary::
+   :toctree: generated/
+
+   Resampler
+   Resampler.agg
+   Resampler.count
+   Resampler.first
+   Resampler.last
+   Resampler.max
+   Resampler.mean
+   Resampler.median
+   Resampler.min
+   Resampler.nunique
+   Resampler.ohlc
+   Resampler.prod
+   Resampler.quantile
+   Resampler.sem
+   Resampler.size
+   Resampler.std
+   Resampler.sum
+   Resampler.var
+
 
 Dask Metadata
 ~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe.utils
 
-.. autofunction:: make_meta
+.. autosummary::
+   :toctree: generated/
+
+   make_meta
 
 Other functions
 ~~~~~~~~~~~~~~~
 
 .. currentmodule:: dask.dataframe
 
-.. autofunction:: compute
-.. autofunction:: map_partitions
-.. autofunction:: to_datetime
-.. autofunction:: to_numeric
+.. autosummary::
+   :toctree: generated/
 
-.. currentmodule:: dask.dataframe.multi
+   compute
+   map_partitions
 
-.. autofunction:: concat
-.. autofunction:: merge         # doctest: +ELLIPSIS
-.. autofunction:: merge_asof    # doctest: +ELLIPSIS
+   to_datetime
+   to_numeric
 
-.. currentmodule:: dask.dataframe.reshape
-
-.. autofunction:: get_dummies
-.. autofunction:: pivot_table
-.. autofunction:: melt

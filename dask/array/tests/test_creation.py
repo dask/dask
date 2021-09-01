@@ -9,7 +9,6 @@ from tlz import concat
 import dask
 import dask.array as da
 from dask.array.core import normalize_chunks
-from dask.array.numpy_compat import _numpy_117, _numpy_118
 from dask.array.utils import AxisError, assert_eq, same_keys
 
 
@@ -73,9 +72,6 @@ def test_arr_like(funcname, shape, cast_shape, dtype, cast_chunks, chunks, name,
         assert not np.isfortran(da_r.compute())
 
 
-@pytest.mark.skipif(
-    not _numpy_117, reason="requires NumPy>=1.17 for shape argument support"
-)
 @pytest.mark.parametrize(
     "funcname, kwargs",
     [
@@ -141,6 +137,11 @@ def test_linspace(endpoint):
     assert sorted(
         da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask
     ) == sorted(da.linspace(6, 49, endpoint=endpoint, chunks=5, dtype=float).dask)
+
+    x = da.array([0.2, 6.4, 3.0, 1.6])
+    nparr = np.linspace(0, 2, 8, endpoint=endpoint)
+    darr = da.linspace(da.argmin(x), da.argmax(x) + 1, 8, endpoint=endpoint)
+    assert_eq(darr, nparr)
 
 
 def test_arange():
@@ -399,6 +400,7 @@ def test_eye():
 
     assert_eq(da.eye(9, chunks=3, dtype=int), np.eye(9, dtype=int))
     assert_eq(da.eye(10, chunks=3, dtype=int), np.eye(10, dtype=int))
+    assert_eq(da.eye(10, chunks=-1, dtype=int), np.eye(10, dtype=int))
 
     with dask.config.set({"array.chunk-size": "50 MiB"}):
         x = da.eye(10000, "auto")
@@ -648,9 +650,6 @@ def test_tile_np_kroncompare_examples(shape, reps):
     assert_eq(np.tile(x, reps), da.tile(d, reps))
 
 
-skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
-
-
 @pytest.mark.parametrize(
     "shape, chunks, pad_width, mode, kwargs",
     [
@@ -660,16 +659,7 @@ skip_stat_length = pytest.mark.xfail(_numpy_117, reason="numpy-14061")
         ((10, 11), (4, 5), 0, "reflect", {}),
         ((10, 11), (4, 5), 0, "symmetric", {}),
         ((10, 11), (4, 5), 0, "wrap", {}),
-        pytest.param(
-            (10, 11),
-            (4, 5),
-            0,
-            "empty",
-            {},
-            marks=pytest.mark.skipif(
-                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
-            ),
-        ),
+        ((10, 11), (4, 5), 0, "empty", {}),
     ],
 )
 def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
@@ -713,16 +703,7 @@ def test_pad_0_width(shape, chunks, pad_width, mode, kwargs):
         ((10,), (3,), ((2, 3)), "maximum", {"stat_length": (1, 2)}),
         ((10, 11), (4, 5), ((1, 4), (2, 3)), "mean", {"stat_length": ((3, 4), (2, 1))}),
         ((10,), (3,), ((2, 3)), "minimum", {"stat_length": (2, 3)}),
-        pytest.param(
-            (10,),
-            (3,),
-            1,
-            "empty",
-            {},
-            marks=pytest.mark.skipif(
-                not _numpy_117, reason="requires NumPy>=1.17 for empty mode support"
-            ),
-        ),
+        ((10,), (3,), 1, "empty", {}),
     ],
 )
 def test_pad(shape, chunks, pad_width, mode, kwargs):
@@ -748,12 +729,7 @@ def test_pad(shape, chunks, pad_width, mode, kwargs):
     [
         "constant",
         "edge",
-        pytest.param(
-            "linear_ramp",
-            marks=pytest.mark.skipif(
-                not _numpy_118, reason="numpy changed pad behaviour"
-            ),
-        ),
+        "linear_ramp",
         "maximum",
         "mean",
         "minimum",

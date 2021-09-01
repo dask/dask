@@ -5,13 +5,18 @@ import pytest
 distributed = pytest.importorskip("distributed")
 
 import sys
+from operator import getitem
 
 from distributed import Client, SchedulerPlugin
 from distributed.utils_test import cluster, loop  # noqa F401
 
+from dask.layers import fractional_slice
+
 
 class SchedulerImportCheck(SchedulerPlugin):
     """Plugin to help record which modules are imported on the scheduler"""
+
+    name = "import-check"
 
     def __init__(self, pattern):
         self.pattern = pattern
@@ -25,16 +30,6 @@ class SchedulerImportCheck(SchedulerPlugin):
             else:
                 # Maually remove the target library
                 sys.modules.pop(mod)
-
-
-def get_start_modules(dask_scheduler):
-    import_check_plugins = [
-        p for p in dask_scheduler.plugins if type(p) is SchedulerImportCheck
-    ]
-    assert len(import_check_plugins) == 1
-
-    plugin = import_check_plugins[0]
-    return plugin.start_modules
 
 
 def _dataframe_shuffle(tmpdir):
@@ -62,6 +57,31 @@ def _array_creation(tmpdir):
 
     # Perform a computation using HLG-based array creation
     return da.ones((100,)) + da.zeros((100,))
+
+
+def _array_map_overlap(tmpdir):
+    da = pytest.importorskip("dask.array")
+    array = da.ones((100,))
+    return array.map_overlap(lambda x: x, depth=1)
+
+
+def test_fractional_slice():
+    assert fractional_slice(("x", 4.9), {0: 2}) == (getitem, ("x", 5), (slice(0, 2),))
+
+    assert fractional_slice(("x", 3, 5.1), {0: 2, 1: 3}) == (
+        getitem,
+        ("x", 3, 5),
+        (slice(None, None, None), slice(-3, None)),
+    )
+
+    assert fractional_slice(("x", 2.9, 5.1), {0: 2, 1: 3}) == (
+        getitem,
+        ("x", 3, 5),
+        (slice(0, 2), slice(-3, None)),
+    )
+
+    fs = fractional_slice(("x", 4.9), {0: 2})
+    assert isinstance(fs[1][1], int)
 
 
 def _pq_pyarrow(tmpdir):
@@ -135,6 +155,7 @@ def _read_csv(tmpdir):
         (_pq_fastparquet, "pandas."),
         (_read_csv, "pandas."),
         (_array_creation, "numpy."),
+        (_array_map_overlap, "numpy."),
     ],
 )
 @pytest.mark.parametrize("optimize_graph", [True, False])
@@ -152,7 +173,11 @@ def test_scheduler_highlevel_graph_unpack_import(op, lib, optimize_graph, loop, 
 
             # Get the new modules which were imported on the scheduler during the computation
             end_modules = c.run_on_scheduler(lambda: set(sys.modules))
-            start_modules = c.run_on_scheduler(get_start_modules)
+            start_modules = c.run_on_scheduler(
+                lambda dask_scheduler: dask_scheduler.plugins[
+                    SchedulerImportCheck.name
+                ].start_modules
+            )
             new_modules = end_modules - start_modules
 
             # Check that the scheduler didn't start with `lib`

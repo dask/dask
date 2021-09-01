@@ -113,8 +113,8 @@ class BlockwiseDepDict(BlockwiseDep):
     that the function will be passed a single input object when
     the task is executed (e.g. a single ``tuple`` or ``dict``):
 
-    >>> import pandas as pd  # doctest: +SKIP
-    >>> func = lambda x: pd.read_csv(**x)  # doctest: +SKIP
+    >>> import pandas as pd
+    >>> func = lambda x: pd.read_csv(**x)
 
     Use ``BlockwiseDepDict`` to define the input argument to
     ``func`` for each block/partition:
@@ -134,7 +134,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...             "names": ["a", "b"],
     ...         },
     ...     }
-    ... )  # doctest: +SKIP
+    ... )
 
     Construct a Blockwise Layer with ``dep`` speficied
     in the ``indices`` list:
@@ -145,7 +145,7 @@ class BlockwiseDepDict(BlockwiseDep):
     ...     dsk={"collection-name": (func, '_0')},
     ...     indices=[(dep, "i")],
     ...     numblocks={},
-    ... )  # doctest: +SKIP
+    ... )
 
     See Also
     --------
@@ -204,14 +204,17 @@ def subs(task, substitution):
 
 
 def index_subs(ind, substitution):
-    """ A simple subs function that works both on tuples and strings """
+    """A simple subs function that works both on tuples and strings"""
     if ind is None:
         return ind
     else:
         return tuple([substitution.get(c, c) for c in ind])
 
 
-def blockwise_token(i, prefix="_"):
+_BLOCKWISE_DEFAULT_PREFIX = "__dask_blockwise__"
+
+
+def blockwise_token(i, prefix=_BLOCKWISE_DEFAULT_PREFIX):
     return prefix + "%d" % i
 
 
@@ -259,12 +262,9 @@ def blockwise(
     new_axes = {index_subs((k,), sub)[0]: v for k, v in new_axes.items()}
 
     # Unpack dask values in non-array arguments
-    argpairs = toolz.partition(2, arrind_pairs)
-
-    # separate argpairs into two separate tuples
     inputs = []
     inputs_indices = []
-    for name, index in argpairs:
+    for name, index in toolz.partition(2, arrind_pairs):
         inputs.append(name)
         inputs_indices.append(index)
 
@@ -498,9 +498,19 @@ class Blockwise(Layer):
         # Embed literals in `dsk`
         keys2 = []
         indices2 = []
+        global_dependencies = set()
         for key, (val, index) in zip(keys, self.indices):
-            if index is None:  # Literal
-                dsk[key] = val
+            if index is None:
+                try:
+                    val_is_a_key = val in all_hlg_keys
+                except TypeError:  # not hashable
+                    val_is_a_key = False
+                if val_is_a_key:
+                    keys2.append(key)
+                    indices2.append((val, index))
+                    global_dependencies.add(stringify(val))
+                else:
+                    dsk[key] = val  # Literal
             else:
                 keys2.append(key)
                 indices2.append((val, index))
@@ -558,7 +568,7 @@ class Blockwise(Layer):
                 raise CancelledError(stringify(future.key))
 
         # All blockwise tasks will depend on the futures in `indices`
-        global_dependencies = {stringify(f.key) for f in indices_unpacked_futures}
+        global_dependencies |= {stringify(f.key) for f in indices_unpacked_futures}
 
         return {
             "output": self.output,
@@ -649,9 +659,12 @@ class Blockwise(Layer):
         # Gather constant dependencies (for all output keys)
         const_deps = set()
         for (arg, ind) in self.indices:
-            if ind is None and isinstance(arg, str):
-                if arg in all_hlg_keys:
-                    const_deps.add(arg)
+            if ind is None:
+                try:
+                    if arg in all_hlg_keys:
+                        const_deps.add(arg)
+                except TypeError:
+                    pass  # unhashable
 
         # Get dependencies for each output block
         key_deps = {}
@@ -1377,13 +1390,13 @@ def rewrite_blockwise(inputs):
             sub = {}
             # Map from (id(key), inds or None) -> index in indices. Used to deduplicate indices.
             index_map = {(id(k), inds): n for n, (k, inds) in enumerate(indices)}
-            for i, index in enumerate(new_indices):
+            for ii, index in enumerate(new_indices):
                 id_key = (id(index[0]), index[1])
                 if id_key in index_map:  # use old inputs if available
-                    sub[blockwise_token(i)] = blockwise_token(index_map[id_key])
+                    sub[blockwise_token(ii)] = blockwise_token(index_map[id_key])
                 else:
                     index_map[id_key] = len(indices)
-                    sub[blockwise_token(i)] = blockwise_token(len(indices))
+                    sub[blockwise_token(ii)] = blockwise_token(len(indices))
                     indices.append(index)
             new_dsk = subs(inputs[dep].dsk, sub)
 
@@ -1405,7 +1418,7 @@ def rewrite_blockwise(inputs):
             new_indices.append(x)
 
     sub = {blockwise_token(k): blockwise_token(v) for k, v in sub.items()}
-    dsk = {k: subs(v, sub) for k, v in dsk.items()}
+    dsk = {k: subs(v, sub) for k, v in dsk.items() if k not in sub.keys()}
 
     indices_check = {k for k, v in indices if v is not None}
     numblocks = toolz.merge([inp.numblocks for inp in inputs.values()])

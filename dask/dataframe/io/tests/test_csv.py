@@ -1,7 +1,6 @@
 import gzip
 import os
 from io import BytesIO
-from time import sleep
 from unittest import mock
 
 import pytest
@@ -124,6 +123,10 @@ comment_header = b"""# some header lines
 # that may be present
 # in a data file
 # before any data"""
+
+comment_footer = b"""# some footer lines
+# that may be present
+# at the end of the file"""
 
 csv_units_row = b"str, int, int\n"
 tsv_units_row = csv_units_row.replace(b",", b"\t")
@@ -248,6 +251,22 @@ def test_skiprows(dd_read, pd_read, files):
     with filetexts(files, mode="b"):
         df = dd_read("2014-01-*.csv", skiprows=skip)
         expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dd_read,pd_read,files",
+    [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
+)
+@read_table_mark
+def test_skipfooter(dd_read, pd_read, files):
+    files = {name: content + b"\n" + comment_footer for name, content in files.items()}
+    skip = len(comment_footer.splitlines())
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", skipfooter=skip, engine="python")
+        expected_df = pd.concat(
+            [pd_read(n, skipfooter=skip, engine="python") for n in sorted(files)]
+        )
         assert_eq(df, expected_df, check_dtype=False)
 
 
@@ -510,8 +529,11 @@ def test_read_csv_skiprows_range():
 def test_usecols():
     with filetext(timeseries) as fn:
         df = dd.read_csv(fn, blocksize=30, usecols=["High", "Low"])
+        df_select = df[["High"]]
         expected = pd.read_csv(fn, usecols=["High", "Low"])
+        expected_select = expected[["High"]]
         assert (df.compute().values == expected.values).all()
+        assert (df_select.compute().values == expected_select.values).all()
 
 
 def test_string_blocksize():
@@ -882,20 +904,6 @@ def test_csv_with_integer_names():
         assert list(df.columns) == [0, 1]
 
 
-@pytest.mark.slow
-def test_read_csv_of_modified_file_has_different_name():
-    with filetext(csv_text) as fn:
-        sleep(1)
-        a = dd.read_csv(fn)
-        sleep(1)
-        with open(fn, "a") as f:
-            f.write("\nGeorge,700")
-            os.fsync(f)
-        b = dd.read_csv(fn)
-
-        assert sorted(a.dask, key=str) != sorted(b.dask, key=str)
-
-
 def test_late_dtypes():
     text = "numbers,names,more_numbers,integers,dates\n"
     for i in range(1000):
@@ -1088,9 +1096,7 @@ def test_read_csv_with_datetime_index_partitions_n():
         assert_eq(df, ddf)
 
 
-xfail_pandas_100 = pytest.mark.xfail(
-    dd._compat.PANDAS_GT_100, reason="https://github.com/dask/dask/issues/5787"
-)
+xfail_pandas_100 = pytest.mark.xfail(reason="https://github.com/dask/dask/issues/5787")
 
 
 @pytest.mark.parametrize(
@@ -1203,10 +1209,24 @@ def test_robust_column_mismatch():
     k = sorted(files)[-1]
     files[k] = files[k].replace(b"name", b"Name")
     with filetexts(files, mode="b"):
-        ddf = dd.read_csv("2014-01-*.csv")
+        ddf = dd.read_csv(
+            "2014-01-*.csv", header=None, skiprows=1, names=["name", "amount", "id"]
+        )
         df = pd.read_csv("2014-01-01.csv")
         assert (df.columns == ddf.columns).all()
         assert_eq(ddf, ddf)
+
+
+def test_different_columns_are_allowed():
+    files = csv_files.copy()
+    k = sorted(files)[-1]
+    files[k] = files[k].replace(b"name", b"address")
+    with filetexts(files, mode="b"):
+        ddf = dd.read_csv("2014-01-*.csv")
+
+        # since enforce is False, meta doesn't have to match computed
+        assert (ddf.columns == ["name", "amount", "id"]).all()
+        assert (ddf.compute().columns == ["name", "amount", "id", "address"]).all()
 
 
 def test_error_if_sample_is_too_small():
@@ -1649,3 +1669,66 @@ def test_read_csv_groupby_get_group(tmpdir):
     ddfs = ddf1.groupby("foo")
 
     assert_eq(df1, ddfs.get_group(10).compute())
+
+
+def test_csv_getitem_column_order(tmpdir):
+    # See: https://github.com/dask/dask/issues/7759
+
+    path = os.path.join(str(tmpdir), "test.csv")
+    columns = list("abcdefghijklmnopqrstuvwxyz")
+    values = list(range(len(columns)))
+
+    df1 = pd.DataFrame([{c: v for c, v in zip(columns, values)}])
+    df1.to_csv(path)
+
+    # Use disordered and duplicated column selection
+    columns = list("hczzkylaape")
+    df2 = dd.read_csv(path)[columns].head(1)
+    assert_eq(df1[columns], df2)
+
+
+def test_csv_parse_fail(tmpdir):
+    # See GH #7680
+    path = os.path.join(str(tmpdir), "test.csv")
+    data = b'a,b\n1,"hi\n"\n2,"oi\n"\n'
+    expected = pd.read_csv(BytesIO(data))
+    with open(path, "wb") as f:
+        f.write(data)
+    with pytest.raises(ValueError, match="EOF encountered"):
+        dd.read_csv(path, sample=13)
+    df = dd.read_csv(path, sample=13, sample_rows=1)
+    assert_eq(df, expected)
+
+
+def test_csv_name_should_be_different_even_if_head_is_same(tmpdir):
+    # https://github.com/dask/dask/issues/7904
+    import random
+    from shutil import copyfile
+
+    old_csv_path = os.path.join(str(tmpdir), "old.csv")
+    new_csv_path = os.path.join(str(tmpdir), "new_csv")
+
+    # Create random CSV
+    with open(old_csv_path, "w") as f:
+        for _ in range(10):
+            f.write(
+                f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"
+            )
+
+    copyfile(old_csv_path, new_csv_path)
+
+    # Add three new rows
+    with open(new_csv_path, "a") as f:
+        for _ in range(3):
+            f.write(
+                f"{random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}, {random.randrange(1, 10**9):09}\n"
+            )
+
+    new_df = dd.read_csv(
+        new_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
+    )
+    old_df = dd.read_csv(
+        old_csv_path, header=None, delimiter=",", dtype=str, blocksize=None
+    )
+
+    assert new_df.dask.keys() != old_df.dask.keys()

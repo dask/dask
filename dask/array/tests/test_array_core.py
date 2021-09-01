@@ -1,4 +1,6 @@
+import contextlib
 import copy
+import xml.etree.ElementTree
 from unittest import mock
 
 import pytest
@@ -19,7 +21,6 @@ from tlz.curried import identity
 
 import dask
 import dask.array as da
-import dask.dataframe
 from dask.array.core import (
     Array,
     blockdims_from_blockshape,
@@ -41,14 +42,13 @@ from dask.array.core import (
     stack,
     store,
 )
-from dask.array.numpy_compat import _numpy_117
 from dask.array.utils import assert_eq, same_keys
 from dask.base import compute_as_if_collection, tokenize
 from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, ignoring, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -443,6 +443,28 @@ def test_stack_unknown_chunksizes():
     c_x = da.stack([a_x, b_x], axis=1, allow_unknown_chunksizes=True)
 
     assert_eq(c_x, np.stack([a_df.values, b_df.values], axis=1))
+
+    m_df = pd.DataFrame({"m": np.arange(12) * 100})
+    n_df = pd.DataFrame({"n": np.arange(12) * 1000})
+
+    m_ddf = dd.from_pandas(m_df, sort=False, npartitions=3)
+    n_ddf = dd.from_pandas(n_df, sort=False, npartitions=3)
+
+    m_x = m_ddf.values
+    n_x = n_ddf.values
+
+    assert np.isnan(m_x.shape[0])
+    assert np.isnan(n_x.shape[0])
+
+    with pytest.raises(ValueError) as exc_info:
+        da.stack([[a_x, b_x], [m_x, n_x]])
+
+    assert "shape" in str(exc_info.value)
+    assert "nan" in str(exc_info.value)
+
+    c_x = da.stack([[a_x, b_x], [m_x, n_x]], allow_unknown_chunksizes=True)
+
+    assert_eq(c_x, np.stack([[a_df.values, b_df.values], [m_df.values, n_df.values]]))
 
 
 def test_concatenate():
@@ -1548,6 +1570,15 @@ def test_repr_meta():
     assert "chunktype=sparse.COO" in repr(s)
 
 
+def test_repr_html_array_highlevelgraph():
+    pytest.importorskip("jinja2")
+    x = da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4]
+    hg = x.dask
+    assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
+    for layer in hg.layers.values():
+        assert xml.etree.ElementTree.fromstring(layer._repr_html_()) is not None
+
+
 def test_slicing_with_ellipsis():
     x = np.arange(256).reshape((4, 4, 4, 4))
     d = da.from_array(x, chunks=((2, 2, 2, 2)))
@@ -2059,7 +2090,7 @@ def test_dtype_complex():
     assert_eq(da.exp(b).dtype, np.exp(y).dtype)
     assert_eq(da.floor(a).dtype, np.floor(x).dtype)
     assert_eq(da.isnan(b).dtype, np.isnan(y).dtype)
-    with ignoring(ImportError):
+    with contextlib.suppress(ImportError):
         assert da.isnull(b).dtype == "bool"
         assert da.notnull(b).dtype == "bool"
 
@@ -2643,7 +2674,6 @@ def test_concatenate3_2():
     )
 
 
-@pytest.mark.skipif(not _numpy_117, reason="NEP-18 is not enabled by default")
 @pytest.mark.parametrize("one_d", [True, False])
 @mock.patch.object(da.core, "_concatenate2", wraps=da.core._concatenate2)
 def test_concatenate3_nep18_dispatching(mock_concatenate2, one_d):
@@ -4178,6 +4208,21 @@ def test_normalize_chunks_nan():
     assert "auto" in str(info.value)
 
 
+def test_pandas_from_dask_array():
+    pd = pytest.importorskip("pandas")
+    from dask.dataframe._compat import PANDAS_GT_130, PANDAS_GT_131
+
+    a = da.ones((12,), chunks=4)
+    s = pd.Series(a, index=range(12))
+
+    if PANDAS_GT_130 and not PANDAS_GT_131:
+        # https://github.com/pandas-dev/pandas/issues/38645
+        assert s.dtype != a.dtype
+    else:
+        assert s.dtype == a.dtype
+        assert_eq(s.values, a)
+
+
 def test_from_zarr_unique_name():
     zarr = pytest.importorskip("zarr")
     a = zarr.array([1, 2, 3])
@@ -4211,18 +4256,6 @@ def test_zarr_return_stored(compute):
         assert isinstance(a2, Array)
         assert_eq(a, a2, check_graph=False)
         assert a2.chunks == a.chunks
-
-
-def test_to_zarr_delayed_creates_no_metadata():
-    pytest.importorskip("zarr")
-    with tmpdir() as d:
-        a = da.from_array([42])
-        result = a.to_zarr(d, compute=False)
-        assert not os.listdir(d)  # No .zarray file
-        # Verify array still created upon compute.
-        result.compute()
-        a2 = da.from_zarr(d)
-        assert_eq(a, a2)
 
 
 def test_zarr_inline_array():

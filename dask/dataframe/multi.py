@@ -60,7 +60,7 @@ from functools import partial, wraps
 
 import numpy as np
 import pandas as pd
-from pandas.api.types import is_categorical_dtype, is_dtype_equal, union_categoricals
+from pandas.api.types import is_categorical_dtype, is_dtype_equal
 from tlz import first, merge_sorted, unique
 
 from ..base import is_dask_collection, tokenize
@@ -68,7 +68,6 @@ from ..highlevelgraph import HighLevelGraph
 from ..layers import BroadcastJoinLayer
 from ..utils import M, apply
 from . import methods
-from ._compat import PANDAS_GT_100
 from .core import (
     DataFrame,
     Index,
@@ -82,12 +81,11 @@ from .core import (
     prefix_reduction,
     suffix_reduction,
 )
+from .dispatch import group_split_dispatch, hash_object_dispatch
 from .io import from_pandas
 from .shuffle import partitioning_index, rearrange_by_divisions, shuffle, shuffle_group
 from .utils import (
     asciitable,
-    group_split_dispatch,
-    hash_object_dispatch,
     is_dataframe_like,
     is_series_like,
     make_meta,
@@ -242,7 +240,7 @@ def merge_chunk(lhs, *args, **kwargs):
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
 
-    if categorical_columns is not None and PANDAS_GT_100:
+    if categorical_columns is not None:
         for col in categorical_columns:
             left = None
             right = None
@@ -261,8 +259,8 @@ def merge_chunk(lhs, *args, **kwargs):
 
             dtype = "category"
             if left is not None and right is not None:
-                dtype = union_categoricals(
-                    [left.astype("category").values, right.astype("category").values]
+                dtype = methods.union_categoricals(
+                    [left.astype("category"), right.astype("category")]
                 ).dtype
 
             if left is not None:
@@ -287,7 +285,7 @@ def merge_chunk(lhs, *args, **kwargs):
 
 
 def merge_indexed_dataframes(lhs, rhs, left_index=True, right_index=True, **kwargs):
-    """ Join two partitioned dataframes along their index """
+    """Join two partitioned dataframes along their index"""
     how = kwargs.get("how", "left")
     kwargs["left_index"] = left_index
     kwargs["right_index"] = right_index
@@ -329,7 +327,7 @@ def hash_join(
     This shuffles both datasets on the joined column and then performs an
     embarrassingly parallel join partition-by-partition
 
-    >>> hash_join(a, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
+    >>> hash_join(lhs, 'id', rhs, 'id', how='left', npartitions=10)  # doctest: +SKIP
     """
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
@@ -771,7 +769,7 @@ def pair_partitions(L, R):
 
 
 def merge_asof_padded(left, right, prev=None, next=None, **kwargs):
-    """ merge_asof but potentially adding rows to the beginning/end of right """
+    """merge_asof but potentially adding rows to the beginning/end of right"""
     frames = []
     if prev is not None:
         frames.append(prev)
@@ -804,32 +802,26 @@ def get_unsorted_columns(frames):
     return order
 
 
-def _concat_compat(frames, left, right):
-    if PANDAS_GT_100:
-        # join_axes removed
-        return (pd.concat, frames, 0, "outer", False, None, None, None, False, False)
-    else:
-        # (axis, join, join_axis, ignore_index, keys, levels, names, verify_integrity, sort)
-        # we only care about sort, to silence warnings.
-        return (
-            pd.concat,
-            frames,
-            0,
-            "outer",
-            None,
-            False,
-            None,
-            None,
-            None,
-            False,
-            False,
-        )
-
-
 def merge_asof_indexed(left, right, **kwargs):
     dsk = dict()
     name = "asof-join-indexed-" + tokenize(left, right, **kwargs)
     meta = pd.merge_asof(left._meta_nonempty, right._meta_nonempty, **kwargs)
+
+    if all(map(pd.isnull, left.divisions)):
+        # results in an empty df that looks like ``meta``
+        return from_pandas(meta.iloc[len(meta) :], npartitions=left.npartitions)
+
+    if all(map(pd.isnull, right.divisions)):
+        # results in an df that looks like ``left`` with nulls for
+        # all ``right.columns``
+        return map_partitions(
+            pd.merge_asof,
+            left,
+            right=right,
+            left_index=True,
+            right_index=True,
+            meta=meta,
+        )
 
     dependencies = [left, right]
     tails = heads = None
@@ -854,8 +846,7 @@ def merge_asof_indexed(left, right, **kwargs):
                     kwargs,
                 )
             )
-        args = _concat_compat(frames, left, right)
-        dsk[(name, i)] = args
+        dsk[(name, i)] = (methods.concat, frames)
 
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
     result = new_dd_object(graph, name, meta, left.divisions)
@@ -901,7 +892,7 @@ def merge_asof(
     }
 
     if left is None or right is None:
-        raise ValueError("Cannot merge_asof on empty DataFrames")
+        raise ValueError("Cannot merge_asof on None")
 
     # if is_dataframe_like(left) and is_dataframe_like(right):
     if isinstance(left, pd.DataFrame) and isinstance(right, pd.DataFrame):
@@ -979,7 +970,7 @@ def concat_unindexed_dataframes(dfs, ignore_order=False, **kwargs):
 
 
 def concat_indexed_dataframes(dfs, axis=0, join="outer", ignore_order=False, **kwargs):
-    """ Concatenate indexed dataframes together along the index """
+    """Concatenate indexed dataframes together along the index"""
     warn = axis != 0
     kwargs.update({"ignore_order": ignore_order})
     meta = methods.concat(
@@ -1143,6 +1134,7 @@ def concat(
     --------
     If all divisions are known and ordered, divisions are kept.
 
+    >>> import dask.dataframe as dd
     >>> a                                               # doctest: +SKIP
     dd.DataFrame<x, divisions=(1, 3, 5)>
     >>> b                                               # doctest: +SKIP
@@ -1182,7 +1174,7 @@ def concat(
 
     Different categoricals are unioned
 
-    >> dd.concat([                                     # doctest: +SKIP
+    >>> dd.concat([
     ...     dd.from_pandas(pd.Series(['a', 'b'], dtype='category'), 1),
     ...     dd.from_pandas(pd.Series(['a', 'c'], dtype='category'), 1),
     ... ], interleave_partitions=True).dtype
@@ -1506,3 +1498,55 @@ def broadcast_join(
     )
 
     return new_dd_object(graph, name, meta, divisions)
+
+
+def _recursive_pairwise_outer_join(
+    dataframes_to_merge, on, lsuffix, rsuffix, npartitions, shuffle
+):
+    """
+    Schedule the merging of a list of dataframes in a pairwise method. This is a recursive function that results
+    in a much more efficient scheduling of merges than a simple loop
+    from:
+    [A] [B] [C] [D] -> [AB] [C] [D] -> [ABC] [D] -> [ABCD]
+    to:
+    [A] [B] [C] [D] -> [AB] [CD] -> [ABCD]
+    Note that either way, n-1 merges are still required, but using a pairwise reduction it can be completed in parallel.
+    :param dataframes_to_merge: A list of Dask dataframes to be merged together on their index
+    :return: A single Dask Dataframe, comprised of the pairwise-merges of all provided dataframes
+    """
+    number_of_dataframes_to_merge = len(dataframes_to_merge)
+
+    merge_options = {
+        "on": on,
+        "lsuffix": lsuffix,
+        "rsuffix": rsuffix,
+        "npartitions": npartitions,
+        "shuffle": shuffle,
+    }
+
+    # Base case 1: just return the provided dataframe and merge with `left`
+    if number_of_dataframes_to_merge == 1:
+        return dataframes_to_merge[0]
+
+    # Base case 2: merge the two provided dataframe to be merged with `left`
+    if number_of_dataframes_to_merge == 2:
+        merged_ddf = dataframes_to_merge[0].join(
+            dataframes_to_merge[1], how="outer", **merge_options
+        )
+        return merged_ddf
+
+    # Recursive case: split the list of dfs into two ~even sizes and continue down
+    else:
+        middle_index = number_of_dataframes_to_merge // 2
+        merged_ddf = _recursive_pairwise_outer_join(
+            [
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[:middle_index], **merge_options
+                ),
+                _recursive_pairwise_outer_join(
+                    dataframes_to_merge[middle_index:], **merge_options
+                ),
+            ],
+            **merge_options,
+        )
+        return merged_ddf

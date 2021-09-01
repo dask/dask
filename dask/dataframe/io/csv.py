@@ -1,4 +1,3 @@
-import copy
 from collections.abc import Mapping
 from io import BytesIO
 from warnings import catch_warnings, simplefilter, warn
@@ -44,6 +43,7 @@ class CSVFunctionWrapper:
 
     def __init__(
         self,
+        full_columns,
         columns,
         colname,
         head,
@@ -53,7 +53,8 @@ class CSVFunctionWrapper:
         enforce,
         kwargs,
     ):
-        self.full_columns = columns
+        self.full_columns = full_columns
+        self.columns = columns
         self.colname = colname
         self.head = head
         self.header = header
@@ -61,22 +62,31 @@ class CSVFunctionWrapper:
         self.dtypes = dtypes
         self.enforce = enforce
         self.kwargs = kwargs
-        self.columns = None  # Used to pass `usecols`
 
     def project_columns(self, columns):
         """Return a new CSVFunctionWrapper object with
         a sub-column projection.
         """
+        # Make sure columns is ordered correctly
+        columns = [c for c in self.head.columns if c in columns]
         if columns == self.columns:
             return self
-        func = copy.deepcopy(self)
-        func.columns = columns
-        return func
+        return CSVFunctionWrapper(
+            self.full_columns,
+            columns,
+            self.colname,
+            self.head[columns],
+            self.header,
+            self.reader,
+            {c: self.dtypes[c] for c in columns},
+            self.enforce,
+            self.kwargs,
+        )
 
     def __call__(self, part):
 
         # Part will be a 3-element tuple
-        block, path, is_first = part
+        block, path, is_first, is_last = part
 
         # Construct `path_info`
         if path is not None:
@@ -92,25 +102,40 @@ class CSVFunctionWrapper:
         # for the first block of each file
         write_header = False
         rest_kwargs = self.kwargs.copy()
-        if self.columns is not None:
-            if rest_kwargs.get("usecols", None) is None:
-                rest_kwargs["usecols"] = self.columns
         if not is_first:
             write_header = True
             rest_kwargs.pop("skiprows", None)
+        if not is_last:
+            rest_kwargs.pop("skipfooter", None)
+
+        # Deal with column projection
+        columns = self.full_columns
+        project_after_read = False
+        if self.columns is not None:
+            if self.kwargs:
+                # To be safe, if any kwargs are defined, avoid
+                # changing `usecols` here. Instead, we can just
+                # select columns after the read
+                project_after_read = True
+            else:
+                columns = self.columns
+                rest_kwargs["usecols"] = columns
 
         # Call `pandas_read_text`
-        return pandas_read_text(
+        df = pandas_read_text(
             self.reader,
             block,
             self.header,
             rest_kwargs,
             self.dtypes,
-            self.full_columns,
+            columns,
             write_header,
             self.enforce,
             path_info,
         )
+        if project_after_read:
+            return df[self.columns]
+        return df
 
 
 def pandas_read_text(
@@ -156,8 +181,6 @@ def pandas_read_text(
 
     if enforce and columns and (list(df.columns) != list(columns)):
         raise ValueError("Columns do not match", df.columns, columns)
-    elif columns:
-        df.columns = columns
     if path:
         colname, path, paths = path
         code = paths.index(path)
@@ -269,6 +292,7 @@ def text_blocks_to_pandas(
     specified_dtypes=None,
     path=None,
     blocksize=None,
+    urlpath=None,
 ):
     """Convert blocks of bytes to a dask.dataframe
 
@@ -324,6 +348,7 @@ def text_blocks_to_pandas(
     blocks = tuple(flatten(block_lists))
     # Create mask of first blocks from nested block_lists
     is_first = tuple(block_mask(block_lists))
+    is_last = tuple(block_mask_last(block_lists))
 
     if path:
         colname, path_converter = path
@@ -346,23 +371,18 @@ def text_blocks_to_pandas(
     parts = []
     colname, paths = path or (None, None)
     for i in range(len(blocks)):
-        parts.append(
-            [
-                blocks[i],
-                paths[i] if paths else None,
-                is_first[i],
-            ]
-        )
+        parts.append([blocks[i], paths[i] if paths else None, is_first[i], is_last[i]])
 
     # Create Blockwise layer
     label = "read-csv-"
-    name = label + tokenize(reader, columns, enforce, head, blocksize)
+    name = label + tokenize(reader, urlpath, columns, enforce, head, blocksize)
     layer = DataFrameIOLayer(
         name,
         columns,
         parts,
         CSVFunctionWrapper(
             columns,
+            None,
             colname,
             head,
             header,
@@ -391,6 +411,21 @@ def block_mask(block_lists):
             continue
         yield True
         yield from (False for _ in block[1:])
+
+
+def block_mask_last(block_lists):
+    """
+    Yields a flat iterable of booleans to mark the last element of the
+    nested input ``block_lists`` in a flattened output.
+
+    >>> list(block_mask_last([[1, 2], [3, 4], [5]]))
+    [False, True, False, True, True]
+    """
+    for block in block_lists:
+        if not block:
+            continue
+        yield from (False for _ in block[:-1])
+        yield True
 
 
 def auto_blocksize(total_memory, cpu_count):
@@ -424,6 +459,7 @@ def read_pandas(
     lineterminator=None,
     compression="infer",
     sample=256000,
+    sample_rows=10,
     enforce=False,
     assume_missing=False,
     storage_options=None,
@@ -552,7 +588,18 @@ def read_pandas(
     header = b"" if header is None else parts[firstrow] + b_lineterminator
 
     # Use sample to infer dtypes and check for presence of include_path_column
-    head = reader(BytesIO(b_sample), **kwargs)
+    head_kwargs = kwargs.copy()
+    head_kwargs.pop("skipfooter", None)
+    try:
+        head = reader(BytesIO(b_sample), nrows=sample_rows, **head_kwargs)
+    except pd.errors.ParserError as e:
+        if "EOF" in str(e):
+            raise ValueError(
+                "EOF encountered while reading header. \n"
+                "Pass argument `sample_rows` and make sure the value of `sample` "
+                "is large enough to accommodate that many rows of data"
+            ) from e
+        raise
     if include_path_column and (include_path_column in head.columns):
         raise ValueError(
             "Files already contain the column name: %s, so the "
@@ -582,6 +629,7 @@ def read_pandas(
         specified_dtypes=specified_dtypes,
         path=path,
         blocksize=blocksize,
+        urlpath=urlpath,
     )
 
 
@@ -619,7 +667,7 @@ urlpath : string or list
 blocksize : str, int or None, optional
     Number of bytes by which to cut up larger files. Default value is computed
     based on available physical memory and the number of cores, up to a maximum
-    of 64MB. Can be a number like ``64000000` or a string like ``"64MB"``. If
+    of 64MB. Can be a number like ``64000000`` or a string like ``"64MB"``. If
     ``None``, a single block is used for each file.
 sample : int, optional
     Number of bytes to use when determining dtypes
@@ -667,6 +715,7 @@ def make_reader(reader, reader_name, file_type):
         lineterminator=None,
         compression="infer",
         sample=256000,
+        sample_rows=10,
         enforce=False,
         assume_missing=False,
         storage_options=None,
@@ -680,6 +729,7 @@ def make_reader(reader, reader_name, file_type):
             lineterminator=lineterminator,
             compression=compression,
             sample=sample,
+            sample_rows=sample_rows,
             enforce=enforce,
             assume_missing=assume_missing,
             storage_options=storage_options,
@@ -885,7 +935,9 @@ def to_csv(
         if scheduler is not None and compute_kwargs.get("scheduler") is None:
             compute_kwargs["scheduler"] = scheduler
 
-        delayed(values).compute(**compute_kwargs)
+        import dask
+
+        dask.compute(*values, **compute_kwargs)
         return [f.path for f in files]
     else:
         return values

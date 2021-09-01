@@ -1,4 +1,5 @@
 """ A set of NumPy functions to apply per chunk """
+import contextlib
 from collections.abc import Container, Iterable, Sequence
 from functools import wraps
 from numbers import Integral
@@ -7,7 +8,6 @@ import numpy as np
 from tlz import concat
 
 from ..core import flatten
-from ..utils import ignoring
 from . import numpy_compat as npcompat
 
 try:
@@ -71,17 +71,17 @@ nanmin = np.nanmin
 nanmax = np.nanmax
 mean = np.mean
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanmean = np.nanmean
 
 var = np.var
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanvar = np.nanvar
 
 std = np.std
 
-with ignoring(AttributeError):
+with contextlib.suppress(AttributeError):
     nanstd = np.nanstd
 
 
@@ -100,9 +100,9 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
     Examples
     --------
     >>> x = np.array([1, 2, 3, 4, 5, 6])
-    >>> coarsen(np.sum, x, {0: 2})          #doctest: +SKIP
+    >>> coarsen(np.sum, x, {0: 2})
     array([ 3,  7, 11])
-    >>> coarsen(np.max, x, {0: 3})          #doctest: +SKIP
+    >>> coarsen(np.max, x, {0: 3})
     array([3, 6])
 
     Provide dictionary of scale per dimension
@@ -114,14 +114,14 @@ def coarsen(reduction, x, axes, trim_excess=False, **kwargs):
            [12, 13, 14, 15, 16, 17],
            [18, 19, 20, 21, 22, 23]])
 
-    >>> coarsen(np.min, x, {0: 2, 1: 3})    #doctest: +SKIP
+    >>> coarsen(np.min, x, {0: 2, 1: 3})
     array([[ 0,  3],
            [12, 15]])
 
     You must avoid excess elements explicitly
 
     >>> x = np.array([1, 2, 3, 4, 5, 6, 7, 8])
-    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)    #doctest: +SKIP
+    >>> coarsen(np.min, x, {0: 3}, trim_excess=True)
     array([1, 4])
     """
     # Insert singleton dimensions if they don't exist already
@@ -265,6 +265,18 @@ def arange(start, stop, step, length, dtype, like=None):
     return res[:-1] if len(res) > length else res
 
 
+def linspace(start, stop, num, endpoint=True, dtype=None):
+    from .core import Array
+
+    if isinstance(start, Array):
+        start = start.compute()
+
+    if isinstance(stop, Array):
+        stop = stop.compute()
+
+    return np.linspace(start, stop, num, endpoint=endpoint, dtype=dtype)
+
+
 def astype(x, astype_dtype=None, **kwargs):
     return x.astype(astype_dtype, **kwargs)
 
@@ -306,6 +318,10 @@ def slice_with_int_dask_array(x, idx, offset, x_size, axis):
     x sliced along axis, using only the elements of idx that fall inside the
     current chunk.
     """
+    from .utils import asarray_safe, meta_from_array
+
+    idx = asarray_safe(idx, like=meta_from_array(x))
+
     # Needed when idx is unsigned
     idx = idx.astype(np.int64)
 

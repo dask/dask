@@ -418,7 +418,8 @@ def test_nan_object(func):
             warnings.simplefilter("default", RuntimeWarning)
 
         assert_eq(getattr(np, func)(x, axis=1), getattr(da, func)(d, axis=1))
-        assert_eq(getattr(np, func)(x), getattr(da, func)(d))
+        # wrap the scalar in a numpy array since the dask version cannot know dtype
+        assert_eq(np.array(getattr(np, func)(x)).astype(object), getattr(da, func)(d))
 
 
 def test_0d_array():
@@ -521,7 +522,7 @@ def test_general_reduction_names():
         da.ones(10, dtype, chunks=2), np.sum, np.sum, dtype=dtype, name="foo"
     )
     names, tokens = list(zip_longest(*[key[0].rsplit("-", 1) for key in a.dask]))
-    assert set(names) == {"ones", "foo", "foo-partial", "foo-aggregate"}
+    assert set(names) == {"ones_like", "foo", "foo-partial", "foo-aggregate"}
     assert all(tokens)
 
 
@@ -700,6 +701,22 @@ def test_median(axis, keepdims, func):
         getattr(da, func)(d, axis=axis, keepdims=keepdims),
         getattr(np, func)(x, axis=axis, keepdims=keepdims),
     )
+
+
+@pytest.mark.parametrize("func", ["median", "nanmedian"])
+@pytest.mark.parametrize("axis", [0, [0, 2], 1])
+def test_median_does_not_rechunk_if_whole_axis_in_one_chunk(axis, func):
+    x = np.arange(100).reshape((2, 5, 10))
+    d = da.from_array(x, chunks=(2, 1, 10))
+
+    actual = getattr(da, func)(d, axis=axis)
+    expected = getattr(np, func)(x, axis=axis)
+    assert_eq(actual, expected)
+    does_rechunk = "rechunk" in str(dict(actual.__dask_graph__()))
+    if axis == 1:
+        assert does_rechunk
+    else:
+        assert not does_rechunk
 
 
 @pytest.mark.parametrize("method", ["sum", "mean", "prod"])

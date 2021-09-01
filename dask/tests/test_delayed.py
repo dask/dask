@@ -100,7 +100,9 @@ def test_delayed_with_dataclass():
     dataclasses = pytest.importorskip("dataclasses")
 
     # Avoid @dataclass decorator as Python < 3.7 fail to interpret the type hints
-    ADataClass = dataclasses.make_dataclass("ADataClass", [("a", int)])
+    ADataClass = dataclasses.make_dataclass(
+        "ADataClass", [("a", int), ("b", int, dataclasses.field(init=False))]
+    )
 
     literal = dask.delayed(3)
     with_class = dask.delayed({"a": ADataClass(a=literal)})
@@ -572,7 +574,8 @@ def test_finalize_name():
     def key(s):
         if isinstance(s, tuple):
             s = s[0]
-        return s.split("-")[0]
+        # Ignore _ in 'ones_like'
+        return s.split("-")[0].replace("_", "")
 
     assert all(key(k).isalpha() for k in v.dask)
 

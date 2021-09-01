@@ -1,16 +1,15 @@
-import difflib
+import contextlib
 import functools
 import itertools
 import math
 import numbers
-import os
 import warnings
 
 import numpy as np
 from tlz import concat, frequencies
 
 from ..highlevelgraph import HighLevelGraph
-from ..utils import has_keyword, ignoring, is_arraylike, is_cupy_type
+from ..utils import has_keyword, is_arraylike, is_cupy_type
 from .core import Array
 
 try:
@@ -65,13 +64,6 @@ def meta_from_array(x, ndim=None, dtype=None):
     if isinstance(x, type):
         x = x(shape=(0,) * (ndim or 0), dtype=dtype)
 
-    if (
-        not hasattr(x, "shape")
-        or not hasattr(x, "dtype")
-        or not isinstance(x.shape, tuple)
-    ):
-        return x
-
     if isinstance(x, list) or isinstance(x, tuple):
         ndims = [
             0
@@ -83,6 +75,13 @@ def meta_from_array(x, ndim=None, dtype=None):
         ]
         a = [a if nd == 0 else meta_from_array(a, nd) for a, nd in zip(x, ndims)]
         return a if isinstance(x, list) else tuple(x)
+
+    if (
+        not hasattr(x, "shape")
+        or not hasattr(x, "dtype")
+        or not isinstance(x.shape, tuple)
+    ):
+        return x
 
     if ndim is None:
         ndim = x.ndim
@@ -156,8 +155,10 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 else:
                     return None
             except ValueError as e:
-                # min/max functions have no identity, attempt to use the first meta
-                if "zero-size array to reduction operation" in str(e):
+                # min/max functions have no identity, just use the same input type when there's only one
+                if len(
+                    args_meta
+                ) == 1 and "zero-size array to reduction operation" in str(e):
                     meta = args_meta[0]
                 else:
                     return None
@@ -165,7 +166,7 @@ def compute_meta(func, _dtype, *args, **kwargs):
                 return None
 
         if _dtype and getattr(meta, "dtype", None) != _dtype:
-            with ignoring(AttributeError):
+            with contextlib.suppress(AttributeError):
                 meta = meta.astype(_dtype)
 
         if np.isscalar(meta):
@@ -201,7 +202,7 @@ def _not_empty(x):
 
 
 def _check_dsk(dsk):
-    """ Check that graph is well named and non-overlapping """
+    """Check that graph is well named and non-overlapping"""
     if not isinstance(dsk, HighLevelGraph):
         return
 
@@ -278,6 +279,11 @@ def assert_eq(
     a_original = a
     b_original = b
 
+    if isinstance(a, (list, int, float)):
+        a = np.array(a)
+    if isinstance(b, (list, int, float)):
+        b = np.array(b)
+
     a, adt, a_meta, a_computed = _get_dt_meta_computed(
         a, check_shape=check_shape, check_graph=check_graph, check_chunks=check_chunks
     )
@@ -286,13 +292,7 @@ def assert_eq(
     )
 
     if str(adt) != str(bdt):
-        # Ignore check for matching length of flexible dtypes, since Array._meta
-        # can't encode that information
-        if adt.type == bdt.type and not (adt.type == np.bytes_ or adt.type == np.str_):
-            diff = difflib.ndiff(str(adt).splitlines(), str(bdt).splitlines())
-            raise AssertionError(
-                "string repr are different" + os.linesep + os.linesep.join(diff)
-            )
+        raise AssertionError(f"a and b have different dtypes: (a: {adt}, b: {bdt})")
 
     try:
         assert (
@@ -380,59 +380,6 @@ def _dtype_of(a):
         return np.asanyarray(a).dtype
 
 
-def empty_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.empty_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.empty(shape, **kwargs)``.
-    """
-    try:
-        return np.empty_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.empty(shape, **kwargs)
-
-
-def full_like_safe(a, fill_value, shape, **kwargs):
-    """
-    Return ``np.full_like(a, fill_value, shape=shape, **kwargs)`` if the
-    shape argument is supported (requires NumPy >= 1.17), otherwise
-    falls back to using the old behavior, returning
-    ``np.full(shape, fill_value, **kwargs)``.
-    """
-    try:
-        return np.full_like(a, fill_value, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.full(shape, fill_value, **kwargs)
-
-
-def ones_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.ones_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.ones(shape, **kwargs)``.
-    """
-    try:
-        return np.ones_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.ones(shape, **kwargs)
-
-
-def zeros_like_safe(a, shape, **kwargs):
-    """
-    Return ``np.zeros_like(a, shape=shape, **kwargs)`` if the shape argument
-    is supported (requires NumPy >= 1.17), otherwise falls back to
-    using the old behavior, returning ``np.zeros(shape, **kwargs)``.
-    """
-    try:
-        return np.zeros_like(a, shape=shape, **kwargs)
-    except TypeError:
-        kwargs.setdefault("dtype", _dtype_of(a))
-        return np.zeros(shape, **kwargs)
-
-
 def arange_safe(*args, like, **kwargs):
     """
     Use the `like=` from `np.arange` to create a new array dispatching
@@ -509,7 +456,7 @@ def asanyarray_safe(a, like, **kwargs):
 
 
 def validate_axis(axis, ndim):
-    """ Validate an input to axis= keywords """
+    """Validate an input to axis= keywords"""
     if isinstance(axis, (tuple, list)):
         return tuple(validate_axis(ax, ndim) for ax in axis)
     if not isinstance(axis, numbers.Integral):
@@ -583,17 +530,3 @@ def scipy_linalg_safe(func_name, *args, **kwargs):
 
 def solve_triangular_safe(a, b, lower=False):
     return scipy_linalg_safe("solve_triangular", a, b, lower=lower)
-
-
-def _is_nep18_active():
-    class A:
-        def __array_function__(self, *args, **kwargs):
-            return True
-
-    try:
-        return np.concatenate([A()])
-    except ValueError:
-        return False
-
-
-IS_NEP18_ACTIVE = _is_nep18_active()

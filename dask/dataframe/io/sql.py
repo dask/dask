@@ -141,7 +141,7 @@ def read_sql_table(
         q = sql.select(columns).limit(head_rows).select_from(table)
         head = pd.read_sql(q, engine, **kwargs)
 
-        if head.empty:
+        if len(head) == 0:
             # no results at all
             name = table.name
             schema = table.schema
@@ -224,8 +224,12 @@ def _read_sql_chunk(q, uri, meta, engine_kwargs=None, **kwargs):
     engine = sa.create_engine(uri, **engine_kwargs)
     df = pd.read_sql(q, engine, **kwargs)
     engine.dispose()
-    if df.empty:
+    if len(df) == 0:
         return meta
+    elif len(meta.dtypes.to_dict()) == 0:
+        # only index column in loaded
+        # required only for pandas < 1.0.0
+        return df
     else:
         return df.astype(meta.dtypes.to_dict(), copy=False)
 
@@ -342,13 +346,13 @@ def to_sql(
     Dask Name: from_pandas, 2 tasks
 
     >>> from dask.utils import tmpfile
-    >>> from sqlalchemy import create_engine    # doctest: +SKIP
-    >>> with tmpfile() as f:                    # doctest: +SKIP
-    ...     db = 'sqlite:///%s' %f              # doctest: +SKIP
-    ...     ddf.to_sql('test', db)              # doctest: +SKIP
-    ...     engine = create_engine(db, echo=False) # doctest: +SKIP
-    ...     result = engine.execute("SELECT * FROM test").fetchall() # doctest: +SKIP
-    >>> result                                  # doctest: +SKIP
+    >>> from sqlalchemy import create_engine
+    >>> with tmpfile() as f:
+    ...     db = 'sqlite:///%s' %f
+    ...     ddf.to_sql('test', db)
+    ...     engine = create_engine(db, echo=False)
+    ...     result = engine.execute("SELECT * FROM test").fetchall()
+    >>> result
     [(0, 0, '00'), (1, 1, '11'), (2, 2, '22'), (3, 3, '33')]
     """
     if not isinstance(uri, str):

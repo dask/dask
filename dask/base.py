@@ -1,3 +1,4 @@
+import datetime
 import inspect
 import os
 import pickle
@@ -6,13 +7,13 @@ import uuid
 from collections import OrderedDict
 from contextlib import contextmanager
 from dataclasses import fields, is_dataclass
-from distutils.version import LooseVersion
 from functools import partial
 from hashlib import md5
 from numbers import Number
 from operator import getitem
 from typing import Iterator, Mapping, Set
 
+from packaging.version import parse as parse_version
 from tlz import curry, groupby, identity, merge
 from tlz.functoolz import Compose
 
@@ -308,7 +309,7 @@ def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs)
 
     Allows for applying the same optimizations and default scheduler."""
     schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
-    dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
+    dsk2 = optimization_function(cls)(dsk, keys, **kwargs)
     return schedule(dsk2, keys, **kwargs)
 
 
@@ -336,8 +337,8 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
             dsk, keys = _extract_graph_and_keys(val)
             dsk = opt(dsk, keys, **kwargs)
 
-            for opt in optimizations:
-                dsk = opt(dsk, keys, **kwargs)
+            for opt_inner in optimizations:
+                dsk = opt_inner(dsk, keys, **kwargs)
 
             graphs.append(dsk)
 
@@ -570,15 +571,15 @@ def compute(*args, **kwargs):
 
 def visualize(*args, **kwargs):
     """
-    Visualize several dask graphs at once.
+    Visualize several low level dask graphs at once.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    dsk : dict(s) or collection(s)
-        The dask graph(s) to visualize.
+    args : dict(s) or collection(s)
+        The low level dask graph(s) to visualize.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -590,8 +591,10 @@ def visualize(*args, **kwargs):
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
     color : {None, 'order'}, optional
-        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        Options to color nodes.
         colormap
+        - None, the default, no colors.
+        - 'order', colors the nodes' border based on the order they appear in the graph
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -797,7 +800,19 @@ def tokenize(*args, **kwargs):
 
 normalize_token = Dispatch()
 normalize_token.register(
-    (int, float, str, bytes, type(None), type, slice, complex, type(Ellipsis)), identity
+    (
+        int,
+        float,
+        str,
+        bytes,
+        type(None),
+        type,
+        slice,
+        complex,
+        type(Ellipsis),
+        datetime.date,
+    ),
+    identity,
 )
 
 
@@ -898,7 +913,7 @@ def _normalize_function(func):
 def register_pandas():
     import pandas as pd
 
-    PANDAS_GT_130 = LooseVersion(pd.__version__) >= LooseVersion("1.3.0")
+    PANDAS_GT_130 = parse_version(pd.__version__) >= parse_version("1.3.0")
 
     @normalize_token.register(pd.Index)
     def normalize_index(ind):
@@ -982,8 +997,7 @@ def register_numpy():
         if hasattr(x, "mode") and getattr(x, "filename", None):
             if hasattr(x.base, "ctypes"):
                 offset = (
-                    x.ctypes.get_as_parameter().value
-                    - x.base.ctypes.get_as_parameter().value
+                    x.ctypes._as_parameter_.value - x.base.ctypes._as_parameter_.value
                 )
             else:
                 offset = 0  # root memmap's have mmap object as base
@@ -1213,13 +1227,13 @@ def get_collection_names(collection) -> Set[str]:
     Examples
     --------
     >>> a.__dask_keys__()  # doctest: +SKIP
-    ["foo", "bar"]  # doctest: +SKIP
+    ["foo", "bar"]
     >>> get_collection_names(a)  # doctest: +SKIP
-    {"foo", "bar"}  # doctest: +SKIP
+    {"foo", "bar"}
     >>> b.__dask_keys__()  # doctest: +SKIP
-    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]  # doctest: +SKIP
+    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]
     >>> get_collection_names(b)  # doctest: +SKIP
-    {"foo-123"}  # doctest: +SKIP
+    {"foo-123"}
     """
     if not is_dask_collection(collection):
         raise TypeError(f"Expected Dask collection; got {type(collection)}")
@@ -1284,9 +1298,9 @@ def clone_key(key, seed):
     Examples
     --------
     >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
-    'inc-1d291de52f5045f8a969743daea271fd'  # doctest: +SKIP
+    'inc-1d291de52f5045f8a969743daea271fd'
     >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
-    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)  # doctest: +SKIP
+    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
     """
     if isinstance(key, tuple) and key and isinstance(key[0], str):
         return (clone_key(key[0], seed),) + key[1:]
