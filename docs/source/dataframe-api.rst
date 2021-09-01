@@ -115,6 +115,7 @@ Dataframe
     DataFrame.shape
     DataFrame.shuffle
     DataFrame.size
+    DataFrame.sort_values
     DataFrame.squeeze
     DataFrame.std
     DataFrame.sub
