@@ -119,6 +119,7 @@ Dataframe
     DataFrame.std
     DataFrame.sub
     DataFrame.sum
+    DataFrame.sort_values
     DataFrame.tail
     DataFrame.to_bag
     DataFrame.to_csv
