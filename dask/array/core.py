@@ -4114,7 +4114,9 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
+def asarray(
+    a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
+):
     """Convert the input to a dask array.
 
     Parameters
@@ -4165,13 +4167,13 @@ def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
         if like is not None:
             if not _numpy_120:
                 raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-            a = np.asarray(a, like=meta_from_array(like))
+            a = np.asarray(a, like=meta_from_array(like), dtype=dtype, order=order)
         else:
-            a = np.asarray(a)
+            a = np.asarray(a, dtype=dtype, order=order)
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a, *, like=None):
+def asanyarray(a, dtype=None, order=None, *, like=None):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4219,9 +4221,9 @@ def asanyarray(a, *, like=None):
         if like is not None:
             if not _numpy_120:
                 raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-            a = np.asanyarray(a, like=meta_from_array(like))
+            a = np.asanyarray(a, like=meta_from_array(like), dtype=dtype, order=order)
         else:
-            a = np.asanyarray(a)
+            a = np.asanyarray(a, dtype=dtype, order=order)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 

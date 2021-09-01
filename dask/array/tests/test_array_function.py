@@ -231,3 +231,14 @@ def test_like_raises(func):
             RuntimeError, match="The use of ``like`` required NumPy >= 1.20"
         ):
             func(1, like=func((1)))
+
+
+@pytest.mark.parametrize("func", [np.array, np.asarray, np.asanyarray])
+def test_like_with_numpy_func(func):
+    if _numpy_120:
+        assert_eq(func(1, like=da.array((1))), func(1))
+    else:
+        with pytest.raises(
+            RuntimeError, match="The use of ``like`` required NumPy >= 1.20"
+        ):
+            func(1, like=da.array((1)))
