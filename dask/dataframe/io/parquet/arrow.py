@@ -1916,9 +1916,7 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                 # by row-group
                 metadata = [p.path for p in dataset.pieces]
                 if schema is None:
-                    schema = cls.collect_file_metadata(
-                        dataset.pieces[0], fs, None
-                    ).schema.to_arrow_schema()
+                    schema = dataset.pieces[0].get_metadata().schema.to_arrow_schema()
                 return (
                     schema,
                     metadata,
@@ -1944,13 +1942,13 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
                     schema = metadata.schema.to_arrow_schema()
             else:
                 for piece, fn in zip(dataset.pieces, fns):
-                    if fn_partitioned:
-                        file_path = piece.path.replace(base + fs.sep, "")
-                    else:
-                        file_path = fn
-                    md = cls.collect_file_metadata(piece.path, fs, file_path=file_path)
+                    md = piece.get_metadata()
                     if schema is None:
                         schema = md.schema.to_arrow_schema()
+                    if fn_partitioned:
+                        md.set_file_path(piece.path.replace(base + fs.sep, ""))
+                    elif fn:
+                        md.set_file_path(fn)
                     if metadata:
                         _append_row_groups(metadata, md)
                     else:
