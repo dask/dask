@@ -1922,10 +1922,12 @@ class Array(DaskMethodsMixin):
         return self.blocks
 
     @derived_from(np.ndarray)
-    def dot(self, other):
+    def dot(self, other, rechunk=True):
         from .routines import tensordot
 
-        return tensordot(self, other, axes=((self.ndim - 1,), (other.ndim - 2,)))
+        return tensordot(
+            self, other, axes=((self.ndim - 1,), (other.ndim - 2,)), rechunk=rechunk
+        )
 
     @property
     def A(self):
