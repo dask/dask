@@ -13,7 +13,7 @@ from dask.utils import tmpdir
 
 files = ["a", "b"]
 requests = pytest.importorskip("requests")
-errs = (requests.exceptions.RequestException,)
+errs = requests.exceptions.RequestException, FileNotFoundError
 if parse_version(fsspec.__version__) > parse_version("0.7.4"):
     aiohttp = pytest.importorskip("aiohttp")
     errs = errs + (aiohttp.client_exceptions.ClientResponseError,)
