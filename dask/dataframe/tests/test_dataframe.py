@@ -1,4 +1,5 @@
 import warnings
+import weakref
 import xml.etree.ElementTree
 from itertools import product
 from operator import add
@@ -11,11 +12,11 @@ from pandas.io.formats import format as pandas_format
 import dask
 import dask.array as da
 import dask.dataframe as dd
-from dask.array.numpy_compat import _numpy_118
+import dask.dataframe.groupby
 from dask.base import compute_as_if_collection
 from dask.blockwise import fuse_roots
 from dask.dataframe import _compat, methods
-from dask.dataframe._compat import PANDAS_GT_100, PANDAS_GT_110, tm
+from dask.dataframe._compat import PANDAS_GT_110, tm
 from dask.dataframe.core import (
     Scalar,
     _concat,
@@ -28,7 +29,7 @@ from dask.dataframe.core import (
 )
 from dask.dataframe.utils import assert_eq, assert_max_deps, make_meta
 from dask.datasets import timeseries
-from dask.utils import M, put_lines
+from dask.utils import M, is_dataframe_like, is_series_like, put_lines
 
 dsk = {
     ("x", 0): pd.DataFrame({"a": [1, 2, 3], "b": [4, 5, 6]}, index=[0, 1, 3]),
@@ -171,6 +172,20 @@ def test_Index():
         pytest.raises(AttributeError, lambda: ddf.index.index)
 
 
+def test_axes():
+    pdf = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    df = dd.from_pandas(pdf, npartitions=2)
+    assert len(df.axes) == len(pdf.axes)
+    assert all(assert_eq(d, p) for d, p in zip(df.axes, pdf.axes))
+
+
+def test_series_axes():
+    ps = pd.Series(["abcde"])
+    ds = dd.from_pandas(ps, npartitions=2)
+    assert len(ds.axes) == len(ps.axes)
+    assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
+
+
 def test_Scalar():
     val = np.int64(1)
     s = Scalar({("a", 0): val}, "a", "i8")
@@ -306,12 +321,7 @@ def test_rename_series():
     ind.name = "renamed"
     dind.name = "renamed"
     assert ind.name == "renamed"
-    with warnings.catch_warnings():
-        if _numpy_118:
-            # Catch DeprecationWarning from numpy from rewrite_blockwise
-            # where we attempt to do `'str' in ndarray`.
-            warnings.simplefilter("ignore", DeprecationWarning)
-        assert_eq(dind, ind)
+    assert_eq(dind, ind)
 
 
 def test_rename_series_method():
@@ -2368,16 +2378,6 @@ def test_select_dtypes(include, exclude):
 
     tm.assert_series_equal(result.dtypes.value_counts(), expected.dtypes.value_counts())
 
-    if not PANDAS_GT_100:
-        # removed in pandas 1.0
-        ctx = pytest.warns(FutureWarning)
-
-        with ctx:
-            tm.assert_series_equal(a.get_ftype_counts(), df.get_ftype_counts())
-            tm.assert_series_equal(
-                result.get_ftype_counts(), expected.get_ftype_counts()
-            )
-
 
 def test_deterministic_apply_concat_apply_names():
     df = pd.DataFrame({"x": [1, 2, 3, 4], "y": [5, 6, 7, 8]})
@@ -3370,7 +3370,6 @@ def _assert_info(df, ddf, memory_usage=True):
     assert stdout_pd == stdout_da
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="Changed info repr")
 def test_info():
     from io import StringIO
 
@@ -3405,7 +3404,6 @@ def test_info():
     assert ddf.info(buf=None) is None
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="Changed info repr")
 def test_groupby_multilevel_info():
     # GH 1844
     from io import StringIO
@@ -3441,7 +3439,6 @@ def test_groupby_multilevel_info():
     assert buf.getvalue() == expected
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="Changed info repr")
 def test_categorize_info():
     # assert that we can call info after categorize
     # workaround for: https://github.com/pydata/pandas/issues/14368
@@ -3892,12 +3889,20 @@ def test_copy():
 
     a = dd.from_pandas(df, npartitions=2)
     b = a.copy()
+    c = a.copy(deep=False)
 
     a["y"] = a.x * 2
 
     assert_eq(b, df)
+    assert_eq(c, df)
 
-    df["y"] = df.x * 2
+    deep_err = (
+        "The `deep` value must be False. This is strictly a shallow copy "
+        "of the underlying computational graph."
+    )
+    for deep in [True, None, ""]:
+        with pytest.raises(ValueError, match=deep_err):
+            a.copy(deep=deep)
 
 
 def test_del():
@@ -4031,6 +4036,14 @@ def test_to_datetime():
         dd.to_datetime(ds.index, infer_datetime_format=True),
         check_divisions=False,
     )
+    assert_eq(
+        pd.to_datetime(s, utc=True),
+        dd.to_datetime(ds, utc=True),
+    )
+
+    for arg in ("2021-08-03", 2021):
+        with pytest.raises(NotImplementedError, match="non-index-able arguments"):
+            dd.to_datetime(arg)
 
 
 def test_to_timedelta():
@@ -4610,7 +4623,6 @@ def test_fuse_roots():
     hlg.validate()
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
 def test_attrs_dataframe():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
     df.attrs = {"date": "2020-10-16"}
@@ -4620,7 +4632,6 @@ def test_attrs_dataframe():
     assert df.abs().attrs == ddf.abs().attrs
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
 def test_attrs_series():
     s = pd.Series([1, 2], name="A")
     s.attrs["unit"] = "kg"
@@ -4630,7 +4641,6 @@ def test_attrs_series():
     assert s.fillna(1).attrs == ds.fillna(1).attrs
 
 
-@pytest.mark.skipif(not dd._compat.PANDAS_GT_100, reason="attrs introduced in 1.0.0")
 @pytest.mark.xfail(reason="df.iloc[:0] does not keep the series attrs")
 def test_attrs_series_in_dataframes():
     df = pd.DataFrame({"A": [1, 2], "B": [3, 4], "C": [5, 6]})
@@ -4674,6 +4684,7 @@ def test_dask_layers():
 
 
 def test_repr_html_dataframe_highlevelgraph():
+    pytest.importorskip("jinja2")
     x = timeseries().shuffle("id", shuffle="tasks").head(compute=False)
     hg = x.dask
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
@@ -4737,3 +4748,34 @@ def test_dot_nan():
 
     assert_eq(s1.dot(s2), dask_s1.dot(dask_s2))
     assert_eq(s2.dot(df), dask_s2.dot(dask_df))
+
+
+def test_use_of_weakref_proxy():
+    """Testing wrapping frames in proxy wrappers"""
+    df = pd.DataFrame({"data": [1, 2, 3]})
+    df_pxy = weakref.proxy(df)
+    ser = pd.Series({"data": [1, 2, 3]})
+    ser_pxy = weakref.proxy(ser)
+
+    assert is_dataframe_like(df_pxy)
+    assert is_series_like(ser_pxy)
+
+    assert dask.dataframe.groupby._cov_chunk(df_pxy, "data")
+    assert isinstance(
+        dask.dataframe.groupby._groupby_apply_funcs(df_pxy, "data", funcs=[]),
+        pd.DataFrame,
+    )
+
+    # Test wrapping each Dask dataframe chunk in a proxy
+    l = []
+
+    def f(x):
+        l.append(x)  # Keep `x` alive
+        return weakref.proxy(x)
+
+    d = pd.DataFrame({"g": [0, 0, 1] * 3, "b": [1, 2, 3] * 3})
+    a = dd.from_pandas(d, npartitions=1)
+    a = a.map_partitions(f, meta=a._meta)
+    pxy = weakref.proxy(a)
+    res = pxy["b"].groupby(pxy["g"]).sum()
+    isinstance(res.compute(), pd.Series)

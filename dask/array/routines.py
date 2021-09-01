@@ -32,15 +32,9 @@ from .core import (
 )
 from .creation import arange, diag, empty, indices, tri
 from .einsumfuncs import einsum  # noqa
+from .numpy_compat import _numpy_120
 from .ufunc import multiply, sqrt
-from .utils import (
-    array_safe,
-    asarray_safe,
-    meta_from_array,
-    safe_wraps,
-    validate_axis,
-    zeros_like_safe,
-)
+from .utils import array_safe, asarray_safe, meta_from_array, safe_wraps, validate_axis
 from .wrap import ones
 
 # save built-in for histogram functions which use range as a kwarg.
@@ -48,8 +42,10 @@ _range = range
 
 
 @derived_from(np)
-def array(x, dtype=None, ndmin=None):
-    x = asarray(x)
+def array(x, dtype=None, ndmin=None, *, like=None):
+    if not _numpy_120 and like is not None:
+        raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+    x = asarray(x, like=like)
     while ndmin is not None and x.ndim < ndmin:
         x = x[None, :]
     if dtype is not None and x.dtype != dtype:
@@ -119,12 +115,22 @@ def atleast_1d(*arys):
 
 @derived_from(np)
 def vstack(tup, allow_unknown_chunksizes=False):
+    if isinstance(tup, Array):
+        raise NotImplementedError(
+            "``vstack`` expects a sequence of arrays as the first argument"
+        )
+
     tup = tuple(atleast_2d(x) for x in tup)
     return concatenate(tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
 
 @derived_from(np)
 def hstack(tup, allow_unknown_chunksizes=False):
+    if isinstance(tup, Array):
+        raise NotImplementedError(
+            "``hstack`` expects a sequence of arrays as the first argument"
+        )
+
     if all(x.ndim == 1 for x in tup):
         return concatenate(
             tup, axis=0, allow_unknown_chunksizes=allow_unknown_chunksizes
@@ -137,6 +143,11 @@ def hstack(tup, allow_unknown_chunksizes=False):
 
 @derived_from(np)
 def dstack(tup, allow_unknown_chunksizes=False):
+    if isinstance(tup, Array):
+        raise NotImplementedError(
+            "``dstack`` expects a sequence of arrays as the first argument"
+        )
+
     tup = tuple(atleast_3d(x) for x in tup)
     return concatenate(tup, axis=2, allow_unknown_chunksizes=allow_unknown_chunksizes)
 
@@ -515,10 +526,37 @@ def ptp(a, axis=None):
 
 
 @derived_from(np)
-def diff(a, n=1, axis=-1):
+def diff(a, n=1, axis=-1, prepend=None, append=None):
     a = asarray(a)
     n = int(n)
     axis = int(axis)
+
+    if n == 0:
+        return a
+    if n < 0:
+        raise ValueError("order must be non-negative but got %d" % n)
+
+    combined = []
+    if prepend is not None:
+        prepend = asarray_safe(prepend, like=meta_from_array(a))
+        if prepend.ndim == 0:
+            shape = list(a.shape)
+            shape[axis] = 1
+            prepend = broadcast_to(prepend, tuple(shape))
+        combined.append(prepend)
+
+    combined.append(a)
+
+    if append is not None:
+        append = asarray_safe(append, like=meta_from_array(a))
+        if append.ndim == 0:
+            shape = list(a.shape)
+            shape[axis] = 1
+            append = np.broadcast_to(append, tuple(shape))
+        combined.append(append)
+
+    if len(combined) > 1:
+        a = concatenate(combined, axis)
 
     sl_1 = a.ndim * [slice(None)]
     sl_2 = a.ndim * [slice(None)]
@@ -657,7 +695,7 @@ def _bincount_agg(bincounts, dtype, **kwargs):
         return bincounts
 
     n = max(map(len, bincounts))
-    out = zeros_like_safe(bincounts[0], shape=n, dtype=dtype)
+    out = np.zeros_like(bincounts[0], shape=n, dtype=dtype)
     for b in bincounts:
         out[: len(b)] += b
     return out
@@ -977,6 +1015,80 @@ def histogram(a, bins=None, range=None, normed=False, weights=None, density=None
         return n, bins
 
 
+def histogram2d(x, y, bins=10, range=None, normed=None, weights=None, density=None):
+    """Blocked variant of :func:`numpy.histogram2d`.
+
+    Parameters
+    ----------
+    x : dask.array.Array
+        An array containing the `x`-coordinates of the points to be
+        histogrammed.
+    y : dask.array.Array
+        An array containing the `y`-coordinates of the points to be
+        histogrammed.
+    bins : sequence of arrays describing bin edges, int, or sequence of ints
+        The bin specification. See the `bins` argument description for
+        :py:func:`histogramdd` for a complete description of all
+        possible bin configurations (this function is a 2D specific
+        version of histogramdd).
+    range : tuple of pairs, optional.
+        The leftmost and rightmost edges of the bins along each
+        dimension when integers are passed to `bins`; of the form:
+        ((xmin, xmax), (ymin, ymax)).
+    normed : bool, optional
+        An alias for the density argument that behaves identically. To
+        avoid confusion with the broken argument in the `histogram`
+        function, `density` should be preferred.
+    weights : dask.array.Array, optional
+        An array of values weighing each sample in the input data. The
+        chunks of the weights must be identical to the chunking along
+        the 0th (row) axis of the data sample.
+    density : bool, optional
+        If False (the default) return the number of samples in each
+        bin. If True, the returned array represents the probability
+        density function at each bin.
+
+    Returns
+    -------
+    dask.array.Array
+        The values of the histogram.
+    dask.array.Array
+        The edges along the `x`-dimension.
+    dask.array.Array
+        The edges along the `y`-dimension.
+
+    See Also
+    --------
+    histogram
+    histogramdd
+
+    Examples
+    --------
+    >>> import dask.array as da
+    >>> x = da.array([2, 4, 2, 4, 2, 4])
+    >>> y = da.array([2, 2, 4, 4, 2, 4])
+    >>> bins = 2
+    >>> range = ((0, 6), (0, 6))
+    >>> h, xedges, yedges = da.histogram2d(x, y, bins=bins, range=range)
+    >>> h
+    dask.array<sum-aggregate, shape=(2, 2), dtype=float64, chunksize=(2, 2), chunktype=numpy.ndarray>
+    >>> xedges
+    dask.array<array, shape=(3,), dtype=float64, chunksize=(3,), chunktype=numpy.ndarray>
+    >>> h.compute()
+    array([[2., 1.],
+           [1., 2.]])
+    """
+    counts, edges = histogramdd(
+        (x, y),
+        bins=bins,
+        range=range,
+        normed=normed,
+        weights=weights,
+        density=density,
+    )
+    return counts, edges[0], edges[1]
+
+
 def _block_histogramdd_rect(sample, bins, range, weights):
     """Call numpy.histogramdd for a blocked/chunked calculation.
 
@@ -1099,8 +1211,8 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     range : sequence of pairs, optional
         A sequence of length D, each a (min, max) tuple giving the
         outer bin edges to be used if the edges are not given
-        explicitly in ``bins``. If defined, this argument is required
-        to have an entry for each dimension. Unlike
+        explicitly in `bins`. If defined, this argument is required to
+        have an entry for each dimension. Unlike
         :func:`numpy.histogramdd`, if `bins` does not define bin
         edges, this argument is required (this function will not
         automatically use the min and max of of the value in a given
@@ -1121,6 +1233,14 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
     See Also
     --------
     histogram
+
+    Returns
+    -------
+    dask.array.Array
+        The values of the histogram.
+    list(dask.array.Array)
+        Sequence of arrays representing the bin edges along each
+        dimension.
 
     Examples
     --------
@@ -1240,7 +1360,7 @@ def histogramdd(sample, bins, range=None, normed=None, weights=None, density=Non
                 "Input array and weights must have the same shape "
                 "and chunk structure along the first dimension."
             )
-        elif not rectangular_sample and weights.numblocks != n_chunks:
+        elif not rectangular_sample and weights.numblocks[0] != n_chunks:
             raise ValueError(
                 "Input arrays and weights must have the same shape "
                 "and chunk structure."
@@ -1481,8 +1601,80 @@ def _unique_internal(ar, indices, counts, return_inverse=False):
     return r
 
 
+def unique_no_structured_arr(
+    ar, return_index=False, return_inverse=False, return_counts=False
+):
+    # A simplified version of `unique`, that allows computing unique for array
+    # types that don't support structured arrays (such as cupy.ndarray), but
+    # can only compute values at the moment.
+
+    if (
+        return_index is not False
+        or return_inverse is not False
+        or return_counts is not False
+    ):
+        raise ValueError(
+            "dask.array.unique does not support `return_index`, `return_inverse` "
+            "or `return_counts` with array types that don't support structured "
+            "arrays."
+        )
+
+    ar = ar.ravel()
+
+    args = [ar, "i"]
+    meta = meta_from_array(ar)
+
+    out = blockwise(np.unique, "i", *args, meta=meta)
+    out._chunks = tuple((np.nan,) * len(c) for c in out.chunks)
+
+    out_parts = [out]
+
+    name = "unique-aggregate-" + out.name
+    dsk = {
+        (name, 0): (
+            (np.unique,)
+            + tuple(
+                (np.concatenate, o.__dask_keys__())
+                if hasattr(o, "__dask_keys__")
+                else o
+                for o in out_parts
+            )
+        )
+    }
+
+    dependencies = [o for o in out_parts if hasattr(o, "__dask_keys__")]
+    graph = HighLevelGraph.from_collections(name, dsk, dependencies=dependencies)
+    chunks = ((np.nan,),)
+    out = Array(graph, name, chunks, meta=meta)
+
+    result = [out]
+
+    if len(result) == 1:
+        result = result[0]
+    else:
+        result = tuple(result)
+
+    return result
+
+
 @derived_from(np)
 def unique(ar, return_index=False, return_inverse=False, return_counts=False):
+    # Test whether the downstream library supports structured arrays. If the
+    # `np.empty_like` call raises a `TypeError`, the downstream library (e.g.,
+    # CuPy) doesn't support it. In that case we return the
+    # `unique_no_structured_arr` implementation, otherwise (e.g., NumPy) just
+    # continue as normal.
+    try:
+        meta = meta_from_array(ar)
+        np.empty_like(meta, dtype=[("a", int), ("b", float)])
+    except TypeError:
+        return unique_no_structured_arr(
+            ar,
+            return_index=return_index,
+            return_inverse=return_inverse,
+            return_counts=return_counts,
+        )
+
     ar = ar.ravel()
 
     # Run unique on each chunk and collect results in a Dask Array of
@@ -2236,10 +2428,14 @@ def average(a, axis=None, weights=None, returned=False):
 def tril(m, k=0):
     m = asarray_safe(m, like=m)
     mask = tri(
-        *m.shape[-2:], k=k, dtype=bool, chunks=m.chunks[-2:], like=meta_from_array(m)
+        *m.shape[-2:],
+        k=k,
+        dtype=bool,
+        chunks=m.chunks[-2:],
+        like=meta_from_array(m) if _numpy_120 else None,
     )
 
-    return where(mask, m, zeros_like_safe(m, shape=(1,)))
+    return where(mask, m, np.zeros_like(m, shape=(1,)))
 
 
 @derived_from(np)
@@ -2250,10 +2446,10 @@ def triu(m, k=0):
         k=k - 1,
         dtype=bool,
         chunks=m.chunks[-2:],
-        like=meta_from_array(m),
+        like=meta_from_array(m) if _numpy_120 else None,
     )
 
-    return where(mask, zeros_like_safe(m, shape=(1,)), m)
+    return where(mask, np.zeros_like(m, shape=(1,)), m)
 
 
 @derived_from(np)

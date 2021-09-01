@@ -58,12 +58,13 @@ from ..utils import (
     parse_bytes,
     typename,
 )
+from ..widgets import get_template
 from . import chunk
 from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
 from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
-from .numpy_compat import _Recurser
+from .numpy_compat import _numpy_120, _Recurser
 from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
@@ -334,7 +335,17 @@ def _concatenate2(arrays, axes=[]):
     concatenate = concatenate_lookup.dispatch(
         type(max(arrays, key=lambda x: getattr(x, "__array_priority__", 0)))
     )
-    return concatenate(arrays, axis=axes[0])
+    if isinstance(arrays[0], dict):
+        # Handle concatenation of `dict`s, used as a replacement for structured
+        # arrays when that's not supported by the array library (e.g., CuPy).
+        keys = list(arrays[0].keys())
+        assert all(list(a.keys()) == keys for a in arrays)
+        ret = dict()
+        for k in keys:
+            ret[k] = concatenate(list(a[k] for a in arrays), axis=axes[0])
+        return ret
+    else:
+        return concatenate(arrays, axis=axes[0])
 
 
 def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=None):
@@ -369,11 +380,11 @@ def apply_infer_dtype(func, args, kwargs, funcname, suggest_dtype="dtype", nout=
     : dtype or List of dtype
         One or many dtypes (depending on ``nout``)
     """
-    from .utils import meta_from_array, ones_like_safe
+    from .utils import meta_from_array
 
     # make sure that every arg is an evaluated array
     args = [
-        ones_like_safe(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
+        np.ones_like(meta_from_array(x), shape=((1,) * x.ndim), dtype=x.dtype)
         if is_arraylike(x)
         else x
         for x in args
@@ -622,8 +633,8 @@ def map_blocks(
     You may specify the key name prefix of the resulting task in the graph with
     the optional ``token`` keyword argument.
 
-    >>> x.map_blocks(lambda x: x + 1, name='increment')  # doctest: +SKIP
-    dask.array<increment, shape=(100,), dtype=int64, chunksize=(10,), chunktype=numpy.ndarray>
+    >>> x.map_blocks(lambda x: x + 1, name='increment')
+    dask.array<increment, shape=(1000,), dtype=int64, chunksize=(100,), chunktype=numpy.ndarray>
 
     For functions that may not handle 0-d arrays, it's also possible to specify
     ``meta`` with an empty array matching the type of the expected result. In
@@ -933,7 +944,6 @@ def store(
 
     Examples
     --------
-    >>> x = ...  # doctest: +SKIP
 
     >>> import h5py  # doctest: +SKIP
     >>> f = h5py.File('myfile.hdf5', mode='a')  # doctest: +SKIP
@@ -1026,15 +1036,13 @@ def store(
 
         return result
     else:
-        name = "store-" + str(uuid.uuid1())
-        dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
-        result = Delayed(name, dsk)
-
         if compute:
-            result.compute(**kwargs)
+            compute_as_if_collection(Array, store_dsk, store_keys, **kwargs)
             return None
         else:
-            return result
+            name = "store-" + str(uuid.uuid1())
+            dsk = HighLevelGraph.merge({name: store_keys}, store_dsk)
+            return Delayed(name, dsk)
 
 
 def blockdims_from_blockshape(shape, chunks):
@@ -1161,6 +1169,7 @@ class Array(DaskMethodsMixin):
                     "shape": self.shape,
                     "dtype": self.dtype,
                     "chunksize": self.chunksize,
+                    "chunks": self.chunks,
                     "type": typename(type(self)),
                     "chunk_type": typename(type(self._meta)),
                 }
@@ -1170,6 +1179,7 @@ class Array(DaskMethodsMixin):
                         "shape": self.shape,
                         "dtype": self.dtype,
                         "chunksize": self.chunksize,
+                        "chunks": self.chunks,
                         "type": typename(type(self)),
                         "chunk_type": typename(type(self._meta)),
                     }
@@ -1404,27 +1414,11 @@ class Array(DaskMethodsMixin):
         )
 
     def _repr_html_(self):
-        table = self._repr_html_table()
         try:
             grid = self.to_svg(size=config.get("array.svg.size", 120))
         except NotImplementedError:
             grid = ""
 
-        both = [
-            "<table>",
-            "<tr>",
-            "<td>",
-            table,
-            "</td>",
-            "<td>",
-            grid,
-            "</td>",
-            "</tr>",
-            "</table>",
-        ]
-        return "\n".join(both)
-
-    def _repr_html_table(self):
         if "sparse" in typename(type(self._meta)):
             nbytes = None
             cbytes = None
@@ -1435,30 +1429,12 @@ class Array(DaskMethodsMixin):
             nbytes = "unknown"
             cbytes = "unknown"
 
-        table = [
-            "<table>",
-            "  <thead>",
-            "    <tr><td> </td><th> Array </th><th> Chunk </th></tr>",
-            "  </thead>",
-            "  <tbody>",
-            "    <tr><th> Bytes </th><td> %s </td> <td> %s </td></tr>"
-            % (nbytes, cbytes)
-            if nbytes is not None
-            else "",
-            "    <tr><th> Shape </th><td> %s </td> <td> %s </td></tr>"
-            % (str(self.shape), str(self.chunksize)),
-            "    <tr><th> Count </th><td> %d Tasks </td><td> %d Chunks </td></tr>"
-            % (len(self.__dask_graph__()), self.npartitions),
-            "    <tr><th> Type </th><td> %s </td><td> %s.%s </td></tr>"
-            % (
-                self.dtype,
-                type(self._meta).__module__.split(".")[0],
-                type(self._meta).__name__,
-            ),
-            "  </tbody>",
-            "</table>",
-        ]
-        return "\n".join(table)
+        return get_template("array.html.j2").render(
+            array=self,
+            grid=grid,
+            nbytes=nbytes,
+            cbytes=cbytes,
+        )
 
     @cached_property
     def ndim(self):
@@ -1501,6 +1477,10 @@ class Array(DaskMethodsMixin):
             "It is uncommon to need to change it, but if you do\n"
             "please set ``._name``"
         )
+
+    def __iter__(self):
+        for i in range(len(self)):
+            yield self[i]
 
     __array_priority__ = 11  # higher than numpy.ndarray and numpy.matrix
 
@@ -1554,6 +1534,12 @@ class Array(DaskMethodsMixin):
         da_func = getattr(module, func.__name__)
         if da_func is func:
             return handle_nonmatching_names(func, args, kwargs)
+
+        # If ``like`` is contained in ``da_func``'s signature, add ``like=self``
+        # to the kwargs dictionary.
+        if has_keyword(da_func, "like"):
+            kwargs["like"] = self
+
         return da_func(*args, **kwargs)
 
     @property
@@ -1700,8 +1686,12 @@ class Array(DaskMethodsMixin):
         out = "setitem-" + tokenize(self, key, value)
         dsk = setitem_array(out, self, key, value)
 
+        meta = meta_from_array(self._meta)
+        if np.isscalar(meta):
+            meta = np.array(meta)
+
         graph = HighLevelGraph.from_collections(out, dsk, dependencies=[self])
-        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype)
+        y = Array(graph, out, chunks=self.chunks, dtype=self.dtype, meta=meta)
 
         self._meta = y._meta
         self.dask = y.dask
@@ -2500,7 +2490,7 @@ class Array(DaskMethodsMixin):
         self, chunks="auto", threshold=None, block_size_limit=None, balance=False
     ):
         """See da.rechunk for docstring"""
-        from . import rechunk  # avoid circular import
+        from .rechunk import rechunk  # avoid circular import
 
         return rechunk(self, chunks, threshold, block_size_limit, balance)
 
@@ -4124,7 +4114,7 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, allow_unknown_chunksizes=False, **kwargs):
+def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
@@ -4136,6 +4126,15 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
         dataframes.  Dask.array is unable to verify that chunks line up.  If
         data comes from differently aligned sources then this can cause
         unexpected results.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
@@ -4163,11 +4162,16 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
     elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asarray(a)
+        if like is not None:
+            if not _numpy_120:
+                raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+            a = np.asarray(a, like=meta_from_array(like))
+        else:
+            a = np.asarray(a)
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a):
+def asanyarray(a, *, like=None):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4176,6 +4180,15 @@ def asanyarray(a):
     ----------
     a : array-like
         Input data, in any form that can be converted to a dask array.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
@@ -4203,7 +4216,12 @@ def asanyarray(a):
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asanyarray(a)
+        if like is not None:
+            if not _numpy_120:
+                raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+            a = np.asanyarray(a, like=meta_from_array(like))
+        else:
+            a = np.asanyarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 
@@ -4768,8 +4786,6 @@ def concatenate3(arrays):
            [1, 2, 1, 2],
            [1, 2, 1, 2]])
     """
-    from .utils import IS_NEP18_ACTIVE
-
     # We need this as __array_function__ may not exist on older NumPy versions.
     # And to reduce verbosity.
     NDARRAY_ARRAY_FUNCTION = getattr(np.ndarray, "__array_function__", None)
@@ -4783,7 +4799,7 @@ def concatenate3(arrays):
         key=lambda x: getattr(x, "__array_priority__", 0),
     )
 
-    if IS_NEP18_ACTIVE and not all(
+    if not all(
         NDARRAY_ARRAY_FUNCTION
         is getattr(type(arr), "__array_function__", NDARRAY_ARRAY_FUNCTION)
         for arr in core.flatten(arrays, container=(list, tuple))
@@ -5109,8 +5125,6 @@ def _vindex_merge(locations, values):
            [40, 50, 60],
            [10, 20, 30]])
     """
-    from .utils import empty_like_safe
-
     locations = list(map(list, locations))
     values = list(values)
 
@@ -5122,7 +5136,7 @@ def _vindex_merge(locations, values):
 
     dtype = values[0].dtype
 
-    x = empty_like_safe(values[0], dtype=dtype, shape=shape)
+    x = np.empty_like(values[0], dtype=dtype, shape=shape)
 
     ind = [slice(None, None) for i in range(x.ndim)]
     for loc, val in zip(locations, values):

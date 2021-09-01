@@ -309,7 +309,7 @@ def compute_as_if_collection(cls, dsk, keys, scheduler=None, get=None, **kwargs)
 
     Allows for applying the same optimizations and default scheduler."""
     schedule = get_scheduler(scheduler=scheduler, cls=cls, get=get)
-    dsk2 = optimization_function(cls)(ensure_dict(dsk), keys, **kwargs)
+    dsk2 = optimization_function(cls)(dsk, keys, **kwargs)
     return schedule(dsk2, keys, **kwargs)
 
 
@@ -571,15 +571,15 @@ def compute(*args, **kwargs):
 
 def visualize(*args, **kwargs):
     """
-    Visualize several dask graphs at once.
+    Visualize several low level dask graphs at once.
 
     Requires ``graphviz`` to be installed. All options that are not the dask
     graph(s) should be passed as keyword arguments.
 
     Parameters
     ----------
-    dsk : dict(s) or collection(s)
-        The dask graph(s) to visualize.
+    args : dict(s) or collection(s)
+        The low level dask graph(s) to visualize.
     filename : str or None, optional
         The name of the file to write to disk. If the provided `filename`
         doesn't include an extension, '.png' will be used by default.
@@ -591,8 +591,10 @@ def visualize(*args, **kwargs):
         If True, the graph is optimized before rendering.  Otherwise,
         the graph is displayed as is. Default is False.
     color : {None, 'order'}, optional
-        Options to color nodes.  Provide ``cmap=`` keyword for additional
+        Options to color nodes.
         colormap
+        - None, the default, no colors.
+        - 'order', colors the nodes' border based on the order they appear in the graph
     collapse_outputs : bool, optional
         Whether to collapse output boxes, which often have empty labels.
         Default is False.
@@ -1225,13 +1227,13 @@ def get_collection_names(collection) -> Set[str]:
     Examples
     --------
     >>> a.__dask_keys__()  # doctest: +SKIP
-    ["foo", "bar"]  # doctest: +SKIP
+    ["foo", "bar"]
     >>> get_collection_names(a)  # doctest: +SKIP
-    {"foo", "bar"}  # doctest: +SKIP
+    {"foo", "bar"}
     >>> b.__dask_keys__()  # doctest: +SKIP
-    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]  # doctest: +SKIP
+    [[("foo-123", 0, 0), ("foo-123", 0, 1)], [("foo-123", 1, 0), ("foo-123", 1, 1)]]
     >>> get_collection_names(b)  # doctest: +SKIP
-    {"foo-123"}  # doctest: +SKIP
+    {"foo-123"}
     """
     if not is_dask_collection(collection):
         raise TypeError(f"Expected Dask collection; got {type(collection)}")
@@ -1296,9 +1298,9 @@ def clone_key(key, seed):
     Examples
     --------
     >>> clone_key("inc-cbb1eca3bafafbb3e8b2419c4eebb387", 123)  # doctest: +SKIP
-    'inc-1d291de52f5045f8a969743daea271fd'  # doctest: +SKIP
+    'inc-1d291de52f5045f8a969743daea271fd'
     >>> clone_key(("sum-cbb1eca3bafafbb3e8b2419c4eebb387", 4, 3), 123)  # doctest: +SKIP
-    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)  # doctest: +SKIP
+    ('sum-f0962cc58ef4415689a86cc1d4cc1723', 4, 3)
     """
     if isinstance(key, tuple) and key and isinstance(key[0], str):
         return (clone_key(key[0], seed),) + key[1:]

@@ -686,8 +686,10 @@ def unsupported_arguments(doc, args):
     return "\n".join(lines)
 
 
-def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
+def _derived_from(cls, method, ua_args=None, extra="", skipblocks=0):
     """Helper function for derived_from to ease testing"""
+    ua_args = ua_args or []
+
     # do not use wraps here, as it hides keyword arguments displayed
     # in the doc
     original_method = getattr(cls, method.__name__)
@@ -726,7 +728,7 @@ def _derived_from(cls, method, ua_args=[], extra="", skipblocks=0):
     return doc
 
 
-def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
+def derived_from(original_klass, version=None, ua_args=None, skipblocks=0):
     """Decorator to attach original class's docstring to the wrapped method.
 
     The output structure will be: top line of docstring, disclaimer about this
@@ -747,6 +749,7 @@ def derived_from(original_klass, version=None, ua_args=[], skipblocks=0):
         How many text blocks (paragraphs) to skip from the start of the
         docstring. Useful for cases where the target has extra front-matter.
     """
+    ua_args = ua_args or []
 
     def wrapper(method):
         try:
@@ -808,7 +811,7 @@ def funcname(func):
         return str(func)[:50]
 
 
-def typename(typ):
+def typename(typ, short=False):
     """
     Return the name of a type
 
@@ -820,11 +823,22 @@ def typename(typ):
     >>> from dask.core import literal
     >>> typename(literal)
     'dask.core.literal'
+    >>> typename(literal, short=True)
+    'dask.literal'
     """
-    if not typ.__module__ or typ.__module__ == "builtins":
-        return typ.__name__
-    else:
-        return typ.__module__ + "." + typ.__name__
+    if not isinstance(typ, type):
+        return typename(type(typ))
+    try:
+        if not typ.__module__ or typ.__module__ == "builtins":
+            return typ.__name__
+        else:
+            if short:
+                module, *_ = typ.__module__.split(".")
+            else:
+                module = typ.__module__
+            return module + "." + typ.__name__
+    except AttributeError:
+        return str(typ)
 
 
 def ensure_bytes(s):
@@ -1309,7 +1323,9 @@ def parse_bytes(s):
     1000000
     >>> parse_bytes(123)
     123
-    >>> parse_bytes('5 foos')  # doctest: +SKIP
+    >>> parse_bytes('5 foos')
+    Traceback (most recent call last):
+        ...
     ValueError: Could not interpret 'foos' as a byte unit
     """
     if isinstance(s, (int, float)):

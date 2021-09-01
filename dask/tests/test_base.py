@@ -17,6 +17,7 @@ from dask.base import (
     clone_key,
     collections_to_dsk,
     compute,
+    compute_as_if_collection,
     function_cache,
     get_collection_names,
     get_name_from_key,
@@ -35,6 +36,7 @@ from dask.base import (
 from dask.core import literal
 from dask.delayed import Delayed
 from dask.diagnostics import Profiler
+from dask.highlevelgraph import HighLevelGraph
 from dask.utils import tmpdir, tmpfile
 from dask.utils_test import dec, import_or_none, inc
 
@@ -283,13 +285,12 @@ def test_tokenize_pandas_extension_array():
         ),
     ]
 
-    if dd._compat.PANDAS_GT_100:
-        arrays.extend(
-            [
-                pd.array(["a", "b", None], dtype="string"),
-                pd.array([True, False, None], dtype="boolean"),
-            ]
-        )
+    arrays.extend(
+        [
+            pd.array(["a", "b", None], dtype="string"),
+            pd.array([True, False, None], dtype="boolean"),
+        ]
+    )
 
     for arr in arrays:
         assert tokenize(arr) == tokenize(arr)
@@ -1404,3 +1405,29 @@ def test_clone_key():
     )
     with pytest.raises(TypeError):
         clone_key(1, 2)
+
+
+def test_compte_as_if_collection_low_level_task_graph():
+    # See https://github.com/dask/dask/pull/7969
+    da = pytest.importorskip("dask.array")
+    x = da.arange(10)
+
+    # Boolean flag to ensure MyDaskArray.__dask_optimize__ is called
+    optimized = False
+
+    class MyDaskArray(da.Array):
+        """Dask Array subclass with validation logic in __dask_optimize__"""
+
+        @classmethod
+        def __dask_optimize__(cls, dsk, keys, **kwargs):
+            # Ensure `compute_as_if_collection` don't convert to a low-level task graph
+            assert type(dsk) is HighLevelGraph
+            nonlocal optimized
+            optimized = True
+            return super().__dask_optimize__(dsk, keys, **kwargs)
+
+    result = compute_as_if_collection(
+        MyDaskArray, x.__dask_graph__(), x.__dask_keys__()
+    )[0]
+    assert optimized
+    da.utils.assert_eq(x, result)

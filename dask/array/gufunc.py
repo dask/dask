@@ -39,7 +39,7 @@ def _parse_gufunc_signature(signature):
     of the form List[Tuple[str, ...]], except for one output. For one output
     core dimension is not a list, but of the form Tuple[str, ...]
     """
-    signature = signature.replace(" ", "")
+    signature = re.sub(r"\s+", "", signature)
     if not re.match(_SIGNATURE, signature):
         raise ValueError("Not a valid gufunc signature: {}".format(signature))
     in_txt, out_txt = signature.split("->")
@@ -305,6 +305,10 @@ def apply_gufunc(
         if output_dtypes is None:
             ## Infer `output_dtypes`
             if vectorize:
+                # NumPy versions before https://github.com/numpy/numpy/pull/19627
+                # would not ignore whitespace characters in `signature` like they
+                # are supposed to. We remove the whitespace here as a workaround.
+                signature = re.sub(r"\s+", "", signature)
                 tempfunc = np.vectorize(func, signature=signature)
             else:
                 tempfunc = func
