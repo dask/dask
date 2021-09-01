@@ -36,6 +36,7 @@ from .core import (
     implements,
     is_scalar_for_elemwise,
     map_blocks,
+    normalize_chunks,
     stack,
     tensordot_lookup,
 )
@@ -265,24 +266,88 @@ def rot90(m, k=1, axes=(0, 1)):
         return flip(transpose(m, axes_list), axes[1])
 
 
-def _tensordot_rechunk(array, inner_axes, limit=None):
-    """Optimize rechunking for tensordot computation."""
+def _tensordot_rechunk(
+    lhs,
+    rhs,
+    left_axes,
+    right_axes,
+    out_shape,
+    out_index,
+    left_index,
+    right_index,
+    dtype=None,
+    limit=None,
+):
+    """Optimize chunks for tensordot computation."""
     if limit is None:
         limit = parse_bytes(config.get("array.chunk-size"))
 
-    inner_chunks = [array.shape[ax] for ax in inner_axes]
-    while limit < (np.prod(inner_chunks) * array.dtype.itemsize):
-        inner_chunks[np.argmax(inner_chunks)] = int(math.ceil(np.max(inner_chunks) / 2))
+    if dtype is None:
+        dtype = np.promote_types(lhs.dtype, rhs.dtype)
 
-    optimal_chunks = []
-    for ax in range(array.ndim):
-        if ax in inner_axes:
-            idx = inner_axes.index(ax)
-            optimal_chunks.append(inner_chunks[idx])
-        else:
-            optimal_chunks.append("auto")
+    if (np.prod(out_shape) > np.prod(lhs.shape)) and (
+        np.prod(out_shape) > np.prod(rhs.shape)
+    ):
+        optimal_chunks_out = normalize_chunks(
+            ["auto" for _ in out_shape],
+            shape=out_shape,
+            limit=limit,
+            dtype=dtype,
+            previous_chunks=None,
+        )
+        optimal_chunks_lhs = ["auto" for _ in lhs.shape]
+        optimal_chunks_rhs = ["auto" for _ in rhs.shape]
+        for i, optimal_chunk in zip(out_index, optimal_chunks_out):
+            if i in left_index:
+                idx = int(np.argwhere(np.array(left_index) == i))
+                if lhs.shape[idx] < max(optimal_chunk):
+                    optimal_chunks_lhs[idx] = lhs.shape[idx]
+                else:
+                    optimal_chunks_lhs[idx] = int(*optimal_chunk)
+            if i in right_index:
+                idx = int(np.argwhere(np.array(right_index) == i))
+                if rhs.shape[idx] < max(optimal_chunk):
+                    optimal_chunks_rhs[idx] = rhs.shape[idx]
+                else:
+                    optimal_chunks_rhs[idx] = int(*optimal_chunk)
+    elif np.prod(lhs.shape) >= np.prod(rhs.shape):
+        optimal_chunks_lhs = normalize_chunks(
+            ["auto" for _ in lhs.shape],
+            shape=lhs.shape,
+            limit=limit,
+            dtype=dtype,
+            previous_chunks=lhs.chunks,
+        )
+        optimal_chunks_rhs = ["auto" for _ in rhs.shape]
+        for l, r in zip(left_axes, right_axes):
+            optimal_chunks_rhs[r] = optimal_chunks_lhs[l]
+    elif np.prod(rhs.shape) > np.prod(lhs.shape):
+        optimal_chunks_rhs = normalize_chunks(
+            ["auto" for _ in rhs.shape],
+            shape=rhs.shape,
+            limit=limit,
+            dtype=dtype,
+            previous_chunks=rhs.chunks,
+        )
+        optimal_chunks_lhs = ["auto" for _ in lhs.shape]
+        for l, r in zip(left_axes, right_axes):
+            optimal_chunks_lhs[l] = optimal_chunks_rhs[r]
 
-    return array.rechunk(optimal_chunks)
+    optimal_chunks_lhs = normalize_chunks(
+        optimal_chunks_lhs,
+        shape=lhs.shape,
+        limit=limit,
+        dtype=dtype,
+        previous_chunks=lhs.chunks,
+    )
+    optimal_chunks_rhs = normalize_chunks(
+        optimal_chunks_rhs,
+        shape=rhs.shape,
+        limit=limit,
+        dtype=dtype,
+        previous_chunks=rhs.chunks,
+    )
+    return optimal_chunks_lhs, optimal_chunks_rhs
 
 
 def _tensordot(a, b, axes):
@@ -330,30 +395,46 @@ def tensordot(lhs, rhs, axes=2, rechunk=True):
     left_index = list(range(lhs.ndim))
     right_index = list(range(lhs.ndim, lhs.ndim + rhs.ndim))
     out_index = left_index + right_index
+    out_shape = list(lhs.shape + rhs.shape)
 
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
+        out_shape.remove(rhs.shape[r])
         right_index[r] = left_index[l]
         if concatenate:
             out_index.remove(left_index[l])
+            out_shape.remove(lhs.shape[l])
 
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        if rechunk is True:
-            lhs = _tensordot_rechunk(lhs, left_axes)
-            rhs = _tensordot_rechunk(rhs, right_axes)
+    if rechunk is True:
+        # Must skip auto-rechunking if input array shapes are unknown (eg: NaN)
+        if not any(np.isnan(lhs.shape)) and not any(np.isnan(rhs.shape)):
+            with warnings.catch_warnings():
+                warnings.simplefilter("ignore")
+                chunks_lhs, chunks_rhs = _tensordot_rechunk(
+                    lhs,
+                    rhs,
+                    left_axes,
+                    right_axes,
+                    out_shape,
+                    out_index,
+                    left_index,
+                    right_index,
+                    dtype=dt,
+                )
+                lhs = lhs.rechunk(chunks_lhs)
+                rhs = rhs.rechunk(chunks_rhs)
 
-        intermediate = blockwise(
-            _tensordot,
-            out_index,
-            lhs,
-            left_index,
-            rhs,
-            right_index,
-            dtype=dt,
-            concatenate=concatenate,
-            axes=(left_axes, right_axes),
-        )
+    intermediate = blockwise(
+        _tensordot,
+        out_index,
+        lhs,
+        left_index,
+        rhs,
+        right_index,
+        dtype=dt,
+        concatenate=concatenate,
+        axes=(left_axes, right_axes),
+    )
 
     if concatenate:
         return intermediate
