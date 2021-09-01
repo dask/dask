@@ -1227,7 +1227,7 @@ def solve(a, b, sym_pos=False):
         l, u = _cholesky(a)
     else:
         p, l, u = lu(a)
-        b = p.T.dot(b)
+        b = p.T.dot(b, rechunk=False)
     uy = solve_triangular(l, b, lower=True)
     return solve_triangular(u, uy)
 
