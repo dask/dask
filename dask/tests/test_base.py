@@ -1349,6 +1349,7 @@ def test_get_scheduler():
     assert get_scheduler(scheduler=dask.local.get_sync) is dask.local.get_sync
     assert get_scheduler(scheduler="threads") is dask.threaded.get
     assert get_scheduler(scheduler="sync") is dask.local.get_sync
+    assert callable(get_scheduler(scheduler=dask.local.synchronous_executor))
     with dask.config.set(scheduler="threads"):
         assert get_scheduler() is dask.threaded.get
     assert get_scheduler() is None
