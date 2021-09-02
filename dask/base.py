@@ -1160,17 +1160,21 @@ def get_scheduler(get=None, scheduler=None, collections=None, cls=None):
             return scheduler
         elif "Client" in type(scheduler).__name__ and hasattr(scheduler, "get"):
             return scheduler.get
-        elif scheduler.lower() in named_schedulers:
-            return named_schedulers[scheduler.lower()]
-        elif scheduler.lower() in ("dask.distributed", "distributed"):
-            from distributed.worker import get_client
+        elif isinstance(scheduler, str):
+            scheduler = scheduler.lower()
+            if scheduler in named_schedulers:
+                return named_schedulers[scheduler]
+            elif scheduler in ("dask.distributed", "distributed"):
+                from distributed.worker import get_client
 
-            return get_client().get
+                return get_client().get
+            else:
+                raise ValueError(
+                    "Expected one of [distributed, %s]"
+                    % ", ".join(sorted(named_schedulers))
+                )
         else:
-            raise ValueError(
-                "Expected one of [distributed, %s]"
-                % ", ".join(sorted(named_schedulers))
-            )
+            raise ValueError("Unexpected scheduler: %s" % repr(scheduler))
         # else:  # try to connect to remote scheduler with this name
         #     return get_client(scheduler).get
 
