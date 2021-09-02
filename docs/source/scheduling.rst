@@ -206,7 +206,7 @@ reusable ``ProcessPoolExecutor`` from loky_:
 .. code-block:: python
 
    from loky import get_reusable_executor
-   with dask.config.set(pool=get_reusable_executor(max_workers=4)):
+   with dask.config.set(scheduler=get_reusable_executor(max_workers=4)):
        x.compute()
 
 Other libraries like ipyparallel_ and mpi4py_ also supply
