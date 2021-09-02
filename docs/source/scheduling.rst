@@ -198,8 +198,8 @@ specify the desired number of workers:
    with dask.config.set(num_workers=4):
        x.compute()
 
-Note that Dask also supports custom ``concurrent.futures.Executor`` subclasses, such as the 
-reusable ``ProcessPoolExecutor`` from loky_:
+Note that Dask also supports custom ``concurrent.futures.Executor`` subclasses,
+such as the ``ReusablePoolExecutor`` from loky_:
 
 .. _loky: https://github.com/joblib/loky
 
