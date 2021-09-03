@@ -37,10 +37,13 @@ gpuci_logger "Activate conda env"
 . /opt/conda/etc/profile.d/conda.sh
 conda activate dask
 
+gpuci_logger "Install distributed"
+python -m pip install git+https://github.com/dask/distributed
+
 gpuci_logger "Install dask"
 python setup.py install
 
-gpuci_logger "Check compiler versions"
+gpuci_logger "Check Python version"
 python --version
 
 gpuci_logger "Check conda environment"

@@ -51,6 +51,7 @@ from ..utils import (
     random_state_data,
     typename,
 )
+from ..widgets import get_template
 from . import methods
 from .accessor import DatetimeAccessor, StringAccessor
 from .categorical import CategoricalAccessor, categorize
@@ -403,12 +404,23 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __setstate__(self, state):
         self.dask, self._name, self._meta, self.divisions = state
 
-    def copy(self):
+    def copy(self, deep=False):
         """Make a copy of the dataframe
 
         This is strictly a shallow copy of the underlying computational graph.
         It does not affect the underlying data
+
+        Parameters
+        ----------
+        deep : boolean, default False
+            The deep value must be `False` and it is declared as a parameter just for
+            compatibility with third-party libraries like cuDF
         """
+        if deep is not False:
+            raise ValueError(
+                "The `deep` value must be False. This is strictly a shallow copy "
+                "of the underlying computational graph."
+            )
         return new_dd_object(self.dask, self._name, self._meta, self.divisions)
 
     def __array__(self, dtype=None, **kwargs):
@@ -3063,6 +3075,10 @@ class Series(_Frame):
         return pd.Series(array, index=index, name=self.name)
 
     @property
+    def axes(self):
+        return [self.index]
+
+    @property
     def name(self):
         return self._meta.name
 
@@ -3492,11 +3508,11 @@ Dask Name: {name}, {task} tasks""".format(
     def combine_first(self, other):
         return self.map_partitions(M.combine_first, other)
 
-    def to_bag(self, index=False):
+    def to_bag(self, index=False, format="tuple"):
         """Create a Dask Bag from a Series"""
         from .io import to_bag
 
-        return to_bag(self, index)
+        return to_bag(self, index, format=format)
 
     @derived_from(pd.Series)
     def to_frame(self, name=None):
@@ -3890,6 +3906,10 @@ class DataFrame(_Frame):
                 index = context[1][0].index
 
         return pd.DataFrame(array, index=index, columns=self.columns)
+
+    @property
+    def axes(self):
+        return [self.index, self.columns]
 
     @property
     def columns(self):
@@ -4342,8 +4362,10 @@ class DataFrame(_Frame):
 
         This is like the sequential version except that this will also happen
         in many threads.  This may conflict with ``numexpr`` which will use
-        multiple threads itself.  We recommend that you set numexpr to use a
-        single thread
+        multiple threads itself.  We recommend that you set ``numexpr`` to use a
+        single thread:
+
+        .. code-block:: python
 
             import numexpr
             numexpr.set_num_threads(1)
@@ -4418,7 +4440,7 @@ class DataFrame(_Frame):
         meta = self._meta.explode(column)
         return self.map_partitions(M.explode, column, meta=meta, enforce_metadata=False)
 
-    def to_bag(self, index=False):
+    def to_bag(self, index=False, format="tuple"):
         """Convert to a dask Bag of tuples of each row.
 
         Parameters
@@ -4426,10 +4448,12 @@ class DataFrame(_Frame):
         index : bool, optional
             If True, the index is included as the first element of each tuple.
             Default is False.
+        format : {"tuple", "dict"},optional
+            Whether to return a bag of tuples or dictionaries.
         """
         from .io import to_bag
 
-        return to_bag(self, index)
+        return to_bag(self, index, format)
 
     def to_parquet(self, path, *args, **kwargs):
         """See dd.to_parquet docstring for more information"""
@@ -5077,8 +5101,8 @@ class DataFrame(_Frame):
     def to_html(self, max_rows=5):
         # pd.Series doesn't have html repr
         data = self._repr_data().to_html(max_rows=max_rows, show_dimensions=False)
-        return self._HTML_FMT.format(
-            data=data, name=key_split(self._name), task=len(self.dask)
+        return get_template("dataframe.html.j2").render(
+            data=data, name=self._name, task=self.dask
         )
 
     def _repr_data(self):
@@ -5093,16 +5117,12 @@ class DataFrame(_Frame):
             )
         return series_df
 
-    _HTML_FMT = """<div><strong>Dask DataFrame Structure:</strong></div>
-{data}
-<div>Dask Name: {name}, {task} tasks</div>"""
-
     def _repr_html_(self):
         data = self._repr_data().to_html(
             max_rows=5, show_dimensions=False, notebook=True
         )
-        return self._HTML_FMT.format(
-            data=data, name=key_split(self._name), task=len(self.dask)
+        return get_template("dataframe.html.j2").render(
+            data=data, name=self._name, task=self.dask
         )
 
     def _select_columns_or_index(self, columns_or_index):
@@ -6010,14 +6030,15 @@ def quantile(df, q, method="default"):
         }
     else:
 
-        from dask.array.percentile import _percentile, merge_percentiles
+        from dask.array.dispatch import percentile_lookup as _percentile
+        from dask.array.percentile import merge_percentiles
 
         # Add 0 and 100 during calculation for more robust behavior (hopefully)
         calc_qs = np.pad(qs, 1, mode="constant")
         calc_qs[-1] = 100
         name = "quantiles-1-" + token
         val_dsk = {
-            (name, i): (_percentile, (getattr, key, "values"), calc_qs)
+            (name, i): (_percentile, key, calc_qs)
             for i, key in enumerate(df.__dask_keys__())
         }
 
@@ -6801,18 +6822,24 @@ def maybe_shift_divisions(df, periods, freq):
     if df.known_divisions:
         divs = pd.Series(range(len(df.divisions)), index=df.divisions)
         divisions = divs.shift(periods, freq=freq).index
-        return type(df)(df.dask, df._name, df._meta, divisions)
+        return df.__class__(df.dask, df._name, df._meta, divisions)
     return df
 
 
 @wraps(pd.to_datetime)
 def to_datetime(arg, meta=None, **kwargs):
+    tz_kwarg = {"tz": "utc"} if kwargs.get("utc") else {}
     if meta is None:
         if isinstance(arg, Index):
-            meta = pd.DatetimeIndex([])
+            meta = pd.DatetimeIndex([], **tz_kwarg)
             meta.name = arg.name
+        elif not (is_dataframe_like(arg) or is_series_like(arg)):
+            raise NotImplementedError(
+                "dask.dataframe.to_datetime does not support "
+                "non-index-able arguments (like scalars)"
+            )
         else:
-            meta = pd.Series([pd.Timestamp("2000")])
+            meta = pd.Series([pd.Timestamp("2000", **tz_kwarg)])
             meta.index = meta.index.astype(arg.index.dtype)
             meta.index.name = arg.index.name
     return map_partitions(pd.to_datetime, arg, meta=meta, **kwargs)

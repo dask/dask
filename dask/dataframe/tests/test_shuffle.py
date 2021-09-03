@@ -640,13 +640,7 @@ def test_set_index_interpolate(engine):
 
     d1 = d.set_index("x", npartitions=3)
     assert d1.npartitions == 3
-    if engine == "cudf":
-        # cuDF has to use "linear" interpolation as "nearest" interpolation
-        # is not supported by CuPy. The result for d1.divisions is different
-        # in this case.
-        assert set(d1.divisions) == set([1, 2, 3, 4])
-    else:
-        assert set(d1.divisions) == set([1, 2, 4])
+    assert set(d1.divisions) == set([1, 2, 4])
 
     d2 = d.set_index("y", npartitions=3)
     assert d2.divisions[0] == 1.0
@@ -1073,7 +1067,8 @@ def test_disk_shuffle_check_actual_compression():
             filename = (
                 p1.partd.partd.filename("x") if compression else p1.partd.filename("x")
             )
-            return open(filename, "rb").read()
+            with open(filename, "rb") as f:
+                return f.read()
 
     # get compressed and uncompressed raw data
     uncompressed_data = generate_raw_partd_file(compression=None)
