@@ -13,7 +13,7 @@ extras_require = {
     "array": ["numpy >= 1.18"],
     "bag": [],  # keeping for backwards compatibility
     "dataframe": ["numpy >= 1.18", "pandas >= 1.0"],
-    "distributed": ["distributed == 2021.08.1"],
+    "distributed": ["distributed == 2021.09.0"],
     "diagnostics": [
         "bokeh >= 1.0.0, != 2.0.0",
         "jinja2",
