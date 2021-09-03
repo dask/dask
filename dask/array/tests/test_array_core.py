@@ -21,7 +21,6 @@ from tlz.curried import identity
 
 import dask
 import dask.array as da
-import dask.dataframe
 from dask.array.core import (
     Array,
     blockdims_from_blockshape,
@@ -1573,6 +1572,7 @@ def test_repr_meta():
 
 
 def test_repr_html_array_highlevelgraph():
+    pytest.importorskip("jinja2")
     x = da.ones((9, 9), chunks=(3, 3)).T[0:4, 0:4]
     hg = x.dask
     assert xml.etree.ElementTree.fromstring(hg._repr_html_()) is not None
