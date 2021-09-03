@@ -212,5 +212,5 @@ such as the ``ReusablePoolExecutor`` from loky_:
 Other libraries like ipyparallel_ and mpi4py_ also supply
 ``concurrent.futures.Executor`` subclasses that could be used as well.
 
-.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/api/ipyparallel.html#ipyparallel.Client.executor
+.. _ipyparallel: https://ipyparallel.readthedocs.io/en/latest/examples/Futures.html#Executors
 .. _mpi4py: https://mpi4py.readthedocs.io/en/latest/mpi4py.futures.html
