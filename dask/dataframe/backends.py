@@ -12,6 +12,8 @@ from pandas.api.types import (
     union_categoricals,
 )
 
+from dask.array.dispatch import percentile_lookup
+from dask.array.percentile import _percentile
 from dask.sizeof import SimpleSizeof, sizeof
 
 from ..utils import is_arraylike, typename
@@ -533,6 +535,11 @@ def is_categorical_dtype_pandas(obj):
     return pd.api.types.is_categorical_dtype(obj)
 
 
+@percentile_lookup.register((pd.Series, pd.Index))
+def percentile(a, q, interpolation="linear"):
+    return _percentile(a, q, interpolation)
+
+
 ######################################
 # cuDF: Pandas Dataframes on the GPU #
 ######################################
@@ -545,5 +552,6 @@ def is_categorical_dtype_pandas(obj):
 @meta_nonempty.register_lazy("cudf")
 @make_meta_dispatch.register_lazy("cudf")
 @make_meta_obj.register_lazy("cudf")
+@percentile_lookup.register_lazy("cudf")
 def _register_cudf():
     import dask_cudf  # noqa: F401

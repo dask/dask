@@ -59,8 +59,21 @@ else:
     SKIP_PYARROW_REASON = "pyarrow not found"
 PYARROW_MARK = pytest.mark.skipif(SKIP_PYARROW, reason=SKIP_PYARROW_REASON)
 
+# "Legacy" and "Dataset"-specific MARK definitions
+SKIP_PYARROW_LE = SKIP_PYARROW
+SKIP_PYARROW_LE_REASON = "pyarrow not found"
 SKIP_PYARROW_DS = SKIP_PYARROW
 SKIP_PYARROW_DS_REASON = "pyarrow not found"
+if pa_version.major >= 5 and not SKIP_PYARROW:
+    # NOTE: We should use PYARROW_LE_MARK to skip
+    # pyarrow-legacy tests once pyarrow officially
+    # removes ParquetDataset support in the future.
+    PYARROW_LE_MARK = pytest.mark.filterwarnings(
+        "ignore::DeprecationWarning",
+        "ignore::FutureWarning",
+    )
+else:
+    PYARROW_LE_MARK = pytest.mark.skipif(SKIP_PYARROW_LE, reason=SKIP_PYARROW_LE_REASON)
 PYARROW_DS_MARK = pytest.mark.skipif(SKIP_PYARROW_DS, reason=SKIP_PYARROW_DS_REASON)
 
 ANY_ENGINE_MARK = pytest.mark.skipif(
@@ -85,7 +98,7 @@ ddf = dd.from_pandas(df, npartitions=npartitions)
 @pytest.fixture(
     params=[
         pytest.param("fastparquet", marks=FASTPARQUET_MARK),
-        pytest.param("pyarrow-legacy", marks=PYARROW_MARK),
+        pytest.param("pyarrow-legacy", marks=PYARROW_LE_MARK),
         pytest.param("pyarrow-dataset", marks=PYARROW_DS_MARK),
     ]
 )
@@ -103,7 +116,7 @@ def write_read_engines(**kwargs):
     # Skip if uninstalled
     skip_marks = {
         "fastparquet": FASTPARQUET_MARK,
-        "pyarrow-legacy": PYARROW_MARK,
+        "pyarrow-legacy": PYARROW_LE_MARK,
         "pyarrow-dataset": PYARROW_DS_MARK,
     }
     marks = {(w, r): [skip_marks[w], skip_marks[r]] for w in backends for r in backends}
@@ -158,6 +171,21 @@ if (
 else:
     fp_pandas_msg = "pandas with fastparquet engine does not preserve index"
     fp_pandas_xfail = write_read_engines()
+
+
+@PYARROW_MARK
+def test_pyarrow_getengine():
+    from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine
+    from dask.dataframe.io.parquet.core import get_engine
+
+    # Check that the default engine for "pyarrow"/"arrow"
+    # is the `pyarrow.dataset`-based engine
+    assert get_engine("pyarrow") == ArrowDatasetEngine
+    assert get_engine("arrow") == ArrowDatasetEngine
+
+    if SKIP_PYARROW_LE:
+        with pytest.warns(FutureWarning):
+            get_engine("pyarrow-legacy")
 
 
 @write_read_engines()
@@ -1044,7 +1072,7 @@ def test_to_parquet_default_writes_nulls(tmpdir):
     assert table[1].null_count == 2
 
 
-@PYARROW_MARK
+@PYARROW_LE_MARK
 def test_to_parquet_pyarrow_w_inconsistent_schema_by_partition_fails_by_default(tmpdir):
     df = pd.DataFrame(
         {"partition_column": [0, 0, 1, 1], "strings": ["a", "b", None, None]}
@@ -1236,12 +1264,12 @@ def test_partition_on(tmpdir, engine):
         tmpdir, engine=engine, index=False, gather_statistics=False
     ).compute()
     for val in df.a1.unique():
-        assert set(df.b[df.a1 == val]) == set(out.b[out.a1 == val])
+        assert set(df.d[df.a1 == val]) == set(out.d[out.a1 == val])
 
     # Now specify the columns and allow auto-index detection
-    out = dd.read_parquet(tmpdir, engine=engine, columns=["b", "a2"]).compute()
+    out = dd.read_parquet(tmpdir, engine=engine, columns=["d", "a2"]).compute()
     for val in df.a2.unique():
-        assert set(df.b[df.a2 == val]) == set(out.b[out.a2 == val])
+        assert set(df.d[df.a2 == val]) == set(out.d[out.a2 == val])
 
 
 def test_partition_on_duplicates(tmpdir, engine):
@@ -2188,7 +2216,7 @@ def test_pathlib_path(tmpdir, engine):
     assert_eq(ddf, ddf2)
 
 
-@PYARROW_MARK
+@PYARROW_LE_MARK
 def test_pyarrow_metadata_nthreads(tmpdir):
     tmp_path = str(tmpdir)
     df = pd.DataFrame({"x": [4, 5, 6, 1, 2, 3]})
@@ -2196,7 +2224,7 @@ def test_pyarrow_metadata_nthreads(tmpdir):
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(tmp_path, engine="pyarrow")
     ops = {"dataset": {"metadata_nthreads": 2}}
-    ddf2 = dd.read_parquet(tmp_path, engine="pyarrow", **ops)
+    ddf2 = dd.read_parquet(tmp_path, engine="pyarrow-legacy", **ops)
     assert_eq(ddf, ddf2)
 
 
@@ -2284,30 +2312,14 @@ def test_timeseries_nulls_in_schema(tmpdir, engine, schema):
     ddf2.name = ddf2.name.where(ddf2.timestamp == "2000-01-01", None)
 
     # Note: `append_row_groups` will fail with pyarrow>0.17.1 for _metadata write
-    dataset = {"validate_schema": False}
-    engine_use = engine
-    if schema != "infer" and engine.startswith("pyarrow"):
-        engine_use = "pyarrow-legacy"
-    ddf2.to_parquet(
-        tmp_path, engine=engine_use, write_metadata_file=False, schema=schema
-    )
-    ddf_read = dd.read_parquet(tmp_path, engine=engine_use, dataset=dataset)
+    dataset = {"validate_schema": False} if engine == "pyarrow-legacy" else {}
+    ddf2.to_parquet(tmp_path, engine=engine, write_metadata_file=False, schema=schema)
+    ddf_read = dd.read_parquet(tmp_path, engine=engine, dataset=dataset)
 
     assert_eq(ddf_read, ddf2, check_divisions=False, check_index=False)
 
-    # Can force schema validation on each partition in pyarrow
-    if engine.startswith("pyarrow") and schema is None:
-        dataset = {"validate_schema": True}
-        engine_use = engine
-        if schema != "infer":
-            engine_use = "pyarrow-legacy"
-        # The schema mismatch should raise an error if the
-        # dataset was written with `schema=None` (no inference)
-        with pytest.raises(ValueError):
-            ddf_read = dd.read_parquet(tmp_path, dataset=dataset, engine=engine_use)
 
-
-@PYARROW_MARK
+@PYARROW_LE_MARK
 @pytest.mark.parametrize("numerical", [True, False])
 @pytest.mark.parametrize(
     "timestamp", ["2000-01-01", "2000-01-02", "2000-01-03", "2000-01-04"]
@@ -2342,7 +2354,10 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
     ddf2.to_parquet(tmp_path, schema=schema, write_index=False, engine="pyarrow")
     assert_eq(
         dd.read_parquet(
-            tmp_path, dataset={"validate_schema": True}, index=False, engine="pyarrow"
+            tmp_path,
+            dataset={"validate_schema": True},
+            index=False,
+            engine="pyarrow-legacy",
         ),
         ddf2,
         check_divisions=False,
@@ -2350,7 +2365,7 @@ def test_timeseries_nulls_in_schema_pyarrow(tmpdir, timestamp, numerical):
     )
 
 
-@PYARROW_MARK
+@PYARROW_LE_MARK
 def test_read_inconsistent_schema_pyarrow(tmpdir):
     # Note: This is a proxy test for a cudf-related issue fix
     # (see cudf#5062 github issue).  The cause of that issue is
@@ -2369,16 +2384,20 @@ def test_read_inconsistent_schema_pyarrow(tmpdir):
     df_expect = pd.concat([df1, df2], ignore_index=True)
     df_expect["val"] = df_expect.val.astype(desired_type)
 
-    df1.to_parquet(os.path.join(tmpdir, "0.parquet"))
-    df2.to_parquet(os.path.join(tmpdir, "1.parquet"))
+    df1.to_parquet(os.path.join(tmpdir, "0.parquet"), engine="pyarrow")
+    df2.to_parquet(os.path.join(tmpdir, "1.parquet"), engine="pyarrow")
 
     # Read Directory
-    check = dd.read_parquet(str(tmpdir), dataset={"validate_schema": False})
+    check = dd.read_parquet(
+        str(tmpdir), dataset={"validate_schema": False}, engine="pyarrow-legacy"
+    )
     assert_eq(check.compute(), df_expect, check_index=False)
 
     # Read List
     check = dd.read_parquet(
-        os.path.join(tmpdir, "*.parquet"), dataset={"validate_schema": False}
+        os.path.join(tmpdir, "*.parquet"),
+        dataset={"validate_schema": False},
+        engine="pyarrow-legacy",
     )
     assert_eq(check.compute(), df_expect, check_index=False)
 
@@ -2964,10 +2983,13 @@ def test_pandas_timestamp_overflow_pyarrow(tmpdir):
 
     # This will raise by default due to overflow
     with pytest.raises(pa.lib.ArrowInvalid) as e:
-        dd.read_parquet(str(tmpdir), engine="pyarrow-legacy").compute()
+        dd.read_parquet(str(tmpdir), engine="pyarrow").compute()
     assert "out of bounds" in str(e.value)
 
-    from dask.dataframe.io.parquet.arrow import ArrowEngine
+    if pa_version >= parse_version("5.0.0"):
+        from dask.dataframe.io.parquet.arrow import ArrowDatasetEngine as ArrowEngine
+    else:
+        from dask.dataframe.io.parquet.arrow import ArrowEngine
 
     class ArrowEngineWithTimestampClamp(ArrowEngine):
         @classmethod
@@ -3164,8 +3186,8 @@ def test_pyarrow_dataset_simple(tmpdir, engine):
     df.set_index("a", inplace=True, drop=True)
     ddf = dd.from_pandas(df, npartitions=2)
     ddf.to_parquet(fn, engine=engine)
-    read_df = dd.read_parquet(fn, engine="pyarrow-legacy")
-    read_df.compute(scheduler="synchronous")
+    read_df = dd.read_parquet(fn, engine="pyarrow-dataset")
+    read_df.compute()
     assert_eq(ddf, read_df)
 
 
@@ -3565,3 +3587,52 @@ def test_custom_metadata(tmpdir, engine):
             custom_metadata=custom_metadata,
         )
     assert "User-defined key/value" in str(e.value)
+
+
+@pytest.mark.parametrize("gather_statistics", [True, False, None])
+def test_ignore_metadata_file(tmpdir, engine, gather_statistics):
+    tmpdir = str(tmpdir)
+    dataset_with_bad_metadata = os.path.join(tmpdir, "data1")
+    dataset_without_metadata = os.path.join(tmpdir, "data2")
+
+    # Write two identical datasets without any _metadata file
+    df1 = pd.DataFrame({"a": range(100), "b": ["dog", "cat"] * 50})
+    ddf1 = dd.from_pandas(df1, npartitions=2)
+    ddf1.to_parquet(
+        path=dataset_with_bad_metadata, engine=engine, write_metadata_file=False
+    )
+    ddf1.to_parquet(
+        path=dataset_without_metadata, engine=engine, write_metadata_file=False
+    )
+
+    # Copy "bad" metadata into `dataset_with_bad_metadata`
+    assert "_metadata" not in os.listdir(dataset_with_bad_metadata)
+    with open(os.path.join(dataset_with_bad_metadata, "_metadata"), "w") as f:
+        f.write("INVALID METADATA")
+    assert "_metadata" in os.listdir(dataset_with_bad_metadata)
+    assert "_metadata" not in os.listdir(dataset_without_metadata)
+
+    # Read back the datasets with `ignore_metadata_file=True`, and
+    # test that the results are the same
+    if engine != "pyarrow-legacy":
+        ddf2a = dd.read_parquet(
+            dataset_with_bad_metadata,
+            engine=engine,
+            ignore_metadata_file=True,
+            gather_statistics=gather_statistics,
+        )
+        ddf2b = dd.read_parquet(
+            dataset_without_metadata,
+            engine=engine,
+            ignore_metadata_file=True,
+            gather_statistics=gather_statistics,
+        )
+        assert_eq(ddf2a, ddf2b)
+    else:
+        # Check that "pyarrow-legacy" raises a ValueError
+        with pytest.raises(ValueError):
+            dd.read_parquet(
+                dataset_with_bad_metadata,
+                engine=engine,
+                ignore_metadata_file=True,
+            )

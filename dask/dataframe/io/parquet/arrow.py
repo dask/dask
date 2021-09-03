@@ -521,12 +521,16 @@ class ArrowDatasetEngine(Engine):
         read_from_paths=None,
         chunksize=None,
         aggregate_files=None,
+        ignore_metadata_file=False,
         **kwargs,
     ):
         # Gather necessary metadata information. This includes
         # the schema and (parquet) partitioning information.
         # This may also set split_row_groups and gather_statistics,
         # depending on _metadata availability.
+        dataset_kwargs = kwargs.get("dataset", {})
+        if ignore_metadata_file:
+            dataset_kwargs["ignore_metadata_file"] = ignore_metadata_file
         (
             schema,
             metadata,
@@ -541,7 +545,7 @@ class ArrowDatasetEngine(Engine):
             gather_statistics,
             filters,
             index,
-            kwargs.get("dataset", {}),
+            dataset_kwargs,
         )
 
         # Process metadata to define `meta` and `index_cols`
@@ -1010,6 +1014,7 @@ class ArrowDatasetEngine(Engine):
         # Use pyarrow.dataset API
         ds = None
         valid_paths = None  # Only used if `paths` is a list containing _metadata
+        _dataset_kwargs = dataset_kwargs.copy()
 
         # Discover Partitioning - Note that we need to avoid creating
         # this factory until it is actually used.  The `partitioning`
@@ -1017,10 +1022,20 @@ class ArrowDatasetEngine(Engine):
         # in, containing a `dict` with a required "obj" argument and
         # optional "arg" and "kwarg" elements.  Note that the "obj"
         # value must support the "discover" attribute.
-        partitioning = dataset_kwargs.get(
+        partitioning = _dataset_kwargs.pop(
             "partitioning",
             {"obj": pa_ds.HivePartitioning},
         )
+
+        # Check if the user wants to ignore the global metadata file
+        ignore_metadata_file = _dataset_kwargs.pop(
+            "ignore_metadata_file",
+            False,
+        )
+
+        # Check that we are not silently ignoring any dataset_kwargs
+        if _dataset_kwargs:
+            raise ValueError(f"Unsupported dataset_kwargs: {_dataset_kwargs.keys()}")
 
         if len(paths) == 1 and fs.isdir(paths[0]):
 
@@ -1030,7 +1045,7 @@ class ArrowDatasetEngine(Engine):
             paths = fs.sep.join([base, fns[0]])
 
             meta_path = fs.sep.join([paths, "_metadata"])
-            if fs.exists(meta_path):
+            if not ignore_metadata_file and fs.exists(meta_path):
                 # Use _metadata file
                 ds = pa_ds.parquet_dataset(
                     meta_path,
@@ -1048,16 +1063,17 @@ class ArrowDatasetEngine(Engine):
             if "_metadata" in fns:
                 # Pyarrow cannot handle "_metadata" when `paths` is a list
                 # Use _metadata file
-                ds = pa_ds.parquet_dataset(
-                    meta_path,
-                    filesystem=fs,
-                    partitioning=partitioning["obj"].discover(
-                        *partitioning.get("args", []),
-                        **partitioning.get("kwargs", {}),
-                    ),
-                )
-                if gather_statistics is None:
-                    gather_statistics = True
+                if not ignore_metadata_file:
+                    ds = pa_ds.parquet_dataset(
+                        meta_path,
+                        filesystem=fs,
+                        partitioning=partitioning["obj"].discover(
+                            *partitioning.get("args", []),
+                            **partitioning.get("kwargs", {}),
+                        ),
+                    )
+                    if gather_statistics is None:
+                        gather_statistics = True
 
                 # Populate valid_paths, since the original path list
                 # must be used to filter the _metadata-based dataset
@@ -1703,6 +1719,32 @@ class ArrowDatasetEngine(Engine):
         )
         return arrow_table
 
+    @classmethod
+    def collect_file_metadata(cls, path, fs, file_path):
+        with fs.open(path, "rb") as f:
+            meta = pq.ParquetFile(f).metadata
+        if file_path:
+            meta.set_file_path(file_path)
+        return meta
+
+    @classmethod
+    def aggregate_metadata(cls, meta_list, fs, out_path):
+        meta = None
+        for _meta in meta_list:
+            if meta:
+                _append_row_groups(meta, _meta)
+            else:
+                meta = _meta
+        if out_path:
+            metadata_path = fs.sep.join([out_path, "_metadata"])
+            with fs.open(metadata_path, "wb") as fil:
+                if not meta:
+                    raise ValueError("Cannot write empty metdata!")
+                meta.write_metadata_file(fil)
+            return None
+        else:
+            return meta
+
 
 #
 #  PyArrow Legacy API [PyArrow<1.0.0]
@@ -1712,6 +1754,10 @@ class ArrowDatasetEngine(Engine):
 def _get_dataset_object(paths, fs, filters, dataset_kwargs):
     """Generate a ParquetDataset object"""
     kwargs = dataset_kwargs.copy()
+    ignore_metadata_file = kwargs.pop("ignore_metadata_file", False)
+    if ignore_metadata_file:
+        raise ValueError("ignore_metadata_file not supported for ArrowLegacyEngine.")
+
     if "validate_schema" not in kwargs:
         kwargs["validate_schema"] = False
     if len(paths) > 1:
@@ -2134,32 +2180,6 @@ class ArrowLegacyEngine(ArrowDatasetEngine):
             cls._parquet_piece_as_arrow,
             **kwargs,
         )
-
-    @classmethod
-    def collect_file_metadata(cls, path, fs, file_path):
-        with fs.open(path, "rb") as f:
-            meta = pq.ParquetFile(f).metadata
-        if file_path:
-            meta.set_file_path(file_path)
-        return meta
-
-    @classmethod
-    def aggregate_metadata(cls, meta_list, fs, out_path):
-        meta = None
-        for _meta in meta_list:
-            if meta:
-                _append_row_groups(meta, _meta)
-            else:
-                meta = _meta
-        if out_path:
-            metadata_path = fs.sep.join([out_path, "_metadata"])
-            with fs.open(metadata_path, "wb") as fil:
-                if not meta:
-                    raise ValueError("Cannot write empty metdata!")
-                meta.write_metadata_file(fil)
-            return None
-        else:
-            return meta
 
     @classmethod
     def multi_support(cls):

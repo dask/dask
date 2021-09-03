@@ -124,6 +124,10 @@ comment_header = b"""# some header lines
 # in a data file
 # before any data"""
 
+comment_footer = b"""# some footer lines
+# that may be present
+# at the end of the file"""
+
 csv_units_row = b"str, int, int\n"
 tsv_units_row = csv_units_row.replace(b",", b"\t")
 
@@ -247,6 +251,22 @@ def test_skiprows(dd_read, pd_read, files):
     with filetexts(files, mode="b"):
         df = dd_read("2014-01-*.csv", skiprows=skip)
         expected_df = pd.concat([pd_read(n, skiprows=skip) for n in sorted(files)])
+        assert_eq(df, expected_df, check_dtype=False)
+
+
+@pytest.mark.parametrize(
+    "dd_read,pd_read,files",
+    [(dd.read_csv, pd.read_csv, csv_files), (dd.read_table, pd.read_table, tsv_files)],
+)
+@read_table_mark
+def test_skipfooter(dd_read, pd_read, files):
+    files = {name: content + b"\n" + comment_footer for name, content in files.items()}
+    skip = len(comment_footer.splitlines())
+    with filetexts(files, mode="b"):
+        df = dd_read("2014-01-*.csv", skipfooter=skip, engine="python")
+        expected_df = pd.concat(
+            [pd_read(n, skipfooter=skip, engine="python") for n in sorted(files)]
+        )
         assert_eq(df, expected_df, check_dtype=False)
 
 
@@ -1189,10 +1209,24 @@ def test_robust_column_mismatch():
     k = sorted(files)[-1]
     files[k] = files[k].replace(b"name", b"Name")
     with filetexts(files, mode="b"):
-        ddf = dd.read_csv("2014-01-*.csv")
+        ddf = dd.read_csv(
+            "2014-01-*.csv", header=None, skiprows=1, names=["name", "amount", "id"]
+        )
         df = pd.read_csv("2014-01-01.csv")
         assert (df.columns == ddf.columns).all()
         assert_eq(ddf, ddf)
+
+
+def test_different_columns_are_allowed():
+    files = csv_files.copy()
+    k = sorted(files)[-1]
+    files[k] = files[k].replace(b"name", b"address")
+    with filetexts(files, mode="b"):
+        ddf = dd.read_csv("2014-01-*.csv")
+
+        # since enforce is False, meta doesn't have to match computed
+        assert (ddf.columns == ["name", "amount", "id"]).all()
+        assert (ddf.compute().columns == ["name", "amount", "id", "address"]).all()
 
 
 def test_error_if_sample_is_too_small():
