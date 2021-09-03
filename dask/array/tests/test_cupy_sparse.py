@@ -71,8 +71,8 @@ def test_sparse_dot(sp_format):
 
     da_x = da.from_array(x, chunks=x_chunks, asarray=False, fancy=False)
     da_y = da.from_array(y, chunks=y_chunks, asarray=False, fancy=False)
-    da_x = da_x.map_blocks(sp_matrix, dtype=dtype)
-    da_y = da_y.map_blocks(sp_matrix, dtype=dtype)
+    da_x = da_x.map_blocks(sp_matrix, meta=sp_matrix(cupy.array([0], dtype=dtype)))
+    da_y = da_y.map_blocks(sp_matrix, meta=sp_matrix(cupy.array([0], dtype=dtype)))
     da_z = da.dot(da_x, da_y).compute()
 
     assert cupyx.scipy.sparse.isspmatrix(da_z)
