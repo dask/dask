@@ -11,6 +11,7 @@ from ..utils import ensure_dict
 
 
 def optimize(dsk, keys, **kwargs):
+    print('in optimize keys:',keys)
     if not isinstance(keys, (list, set)):
         keys = [keys]
     keys = list(core.flatten(keys))
@@ -19,6 +20,7 @@ def optimize(dsk, keys, **kwargs):
         dsk = HighLevelGraph.from_collections(id(dsk), dsk, dependencies=())
 
     dsk = optimize_read_parquet_getitem(dsk, keys=keys)
+    print('optimize get items:',dsk)
     dsk = optimize_blockwise(dsk, keys=keys)
     dsk = fuse_roots(dsk, keys=keys)
     dsk = dsk.cull(set(keys))
@@ -27,7 +29,9 @@ def optimize(dsk, keys, **kwargs):
         return dsk
 
     dependencies = dsk.get_all_dependencies()
+    print('dependencies:',dependencies)
     dsk = ensure_dict(dsk)
+    print('ensure dict:',dsk)
 
     fuse_subgraphs = config.get("optimization.fuse.subgraphs")
     if fuse_subgraphs is None:

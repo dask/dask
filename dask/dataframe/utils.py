@@ -378,6 +378,7 @@ def meta_nonempty_object(x):
     Returns a pandas DataFrame, Series, or Index that contains two rows
     of fake data.
     """
+
     if is_scalar(x):
         return _nonempty_scalar(x)
     else:
@@ -389,19 +390,29 @@ def meta_nonempty_object(x):
 
 @meta_nonempty.register(pd.DataFrame)
 def meta_nonempty_dataframe(x):
+    print('got to non empty')
+    print('x:',x)
     idx = meta_nonempty(x.index)
+    print('idx:',idx)
     dt_s_dict = dict()
     data = dict()
+    print('x columns:',x.columns)
     for i, c in enumerate(x.columns):
+        print('i,c:',i,c)
         series = x.iloc[:, i]
+        print('series:',series)
         dt = series.dtype
+        print('dt:',dt)
         if dt not in dt_s_dict:
-            dt_s_dict[dt] = _nonempty_series(x.iloc[:, i], idx=idx)
+            dt_s_dict[dt] = _nonempty_series(x.iloc[:, i], idx=idx)  #pass x.iloc[;,i] column to get its type dummy data e.g. foo for String
+            print('dt s dict:',dt_s_dict[dt])
         data[i] = dt_s_dict[dt]
+    print('dummy data:',data) #pass a dictionary
     res = pd.DataFrame(data, index=idx, columns=np.arange(len(x.columns)))
     res.columns = x.columns
     if PANDAS_GT_100:
         res.attrs = x.attrs
+    print('res:',res)
     return res
 
 
@@ -474,6 +485,11 @@ hash_object_dispatch = Dispatch("hash_object_dispatch")
 def hash_object_pandas(
     obj, index=True, encoding="utf8", hash_key=None, categorize=True
 ):
+    print('hash object sent:',obj, type(obj))
+    print('hash return:',pd.util.hash_pandas_object(
+        obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
+    ))
+    print('hash done')
     return pd.util.hash_pandas_object(
         obj, index=index, encoding=encoding, hash_key=hash_key, categorize=categorize
     )
@@ -484,15 +500,21 @@ group_split_dispatch = Dispatch("group_split_dispatch")
 
 @group_split_dispatch.register((pd.DataFrame, pd.Series, pd.Index))
 def group_split_pandas(df, c, k, ignore_index=False):
+    print('inside group split dispatch:')
+    print('df,c,k:',df,c,k)
     indexer, locations = pd._libs.algos.groupsort_indexer(
         c.astype(np.int64, copy=False), k
     )
+    print('indexer, locations:',indexer,locations, type(indexer), type(locations))
+
     df2 = df.take(indexer)
+    print('after indexer:',df2)
     locations = locations.cumsum()
     parts = [
         df2.iloc[a:b].reset_index(drop=True) if ignore_index else df2.iloc[a:b]
         for a, b in zip(locations[:-1], locations[1:])
     ]
+    print('return from group split:', dict(zip(range(k), parts)))
     return dict(zip(range(k), parts))
 
 
@@ -509,6 +531,7 @@ _simple_fake_mapping = {
 
 
 def _scalar_from_dtype(dtype):
+    print('dtype kind:',dtype.kind)
     if dtype.kind in ("i", "f", "u"):
         return dtype.type(1)
     elif dtype.kind == "c":
@@ -549,6 +572,9 @@ def _nonempty_series(s, idx=None):
     # TODO: Use register dtypes with make_array_nonempty
     if idx is None:
         idx = _nonempty_index(s.index)
+    print('s:',s)
+    print('s dtype:',s.dtype)
+    print('len s:',len(s))
     dtype = s.dtype
     if len(s) > 0:
         # use value from meta if provided
@@ -582,10 +608,12 @@ def _nonempty_series(s, idx=None):
         entry = _scalar_from_dtype(dtype.subtype)
         data = pd.array([entry, entry], dtype=dtype)
     elif type(dtype) in make_array_nonempty._lookup:
+        print('in array nonempty lookup')
         data = make_array_nonempty(dtype)
     else:
         entry = _scalar_from_dtype(dtype)
-        data = np.array([entry, entry], dtype=dtype)
+        print('entry:',entry) #get dummy data based on type of the column
+        data = np.array([entry, entry], dtype=dtype) #fill 2 rows of dummy data
 
     out = pd.Series(data, name=s.name, index=idx)
     if PANDAS_GT_100:

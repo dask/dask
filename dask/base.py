@@ -330,14 +330,23 @@ def collections_to_dsk(collections, optimize_graph=True, optimizations=(), **kwa
 
     if optimize_graph:
         groups = groupby(optimization_function, collections)
+        print('groups:',groups, type(groups))
 
         graphs = []
         for opt, val in groups.items():
+            print('opt:',opt)
+            print('val:',val,type(val))
             dsk, keys = _extract_graph_and_keys(val)
+            print('after extract dsk:',dsk)
+            print('after extract keys:',keys)
             dsk = opt(dsk, keys, **kwargs)
-
+            print('opt dsk:',dsk)
+            print('$$$$')
+            print(type(list(dsk.values())[-1]))
+            print('optimizations:',optimizations)
             for opt in optimizations:
                 dsk = opt(dsk, keys, **kwargs)
+                print('optimized dsk:',dsk)
 
             graphs.append(dsk)
 
@@ -558,12 +567,14 @@ def compute(*args, **kwargs):
         get=kwargs.pop("get", None),
     )
 
+    print('collections:',collections)
     dsk = collections_to_dsk(collections, optimize_graph, **kwargs)
     keys, postcomputes = [], []
     for x in collections:
         keys.append(x.__dask_keys__())
         postcomputes.append(x.__dask_postcompute__())
 
+    print('dsk sent:',dsk)
     results = schedule(dsk, keys, **kwargs)
     return repack([f(r, *a) for r, (f, a) in zip(results, postcomputes)])
 

@@ -111,6 +111,10 @@ def _execute_task(arg, cache, dsk=None):
     >>> _execute_task('foo', cache)  # Passes through on non-keys
     'foo'
     """
+    print('execute task arg:',arg)
+    print('execute task cache:',cache)
+    list1 = cache.values()
+    print('cache type:', type(list1))
     if isinstance(arg, list):
         return [_execute_task(a, cache) for a in arg]
     elif istask(arg):

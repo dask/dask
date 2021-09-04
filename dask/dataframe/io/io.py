@@ -225,6 +225,11 @@ def from_pandas(data, npartitions=None, chunksize=None, sort=True, name=None):
         locations = list(range(0, nrows, chunksize)) + [len(data)]
         divisions = [None] * len(locations)
 
+    for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:])):
+        print('iloc slicing check:',start,stop)
+        print(data.iloc[start:stop])
+        print(type(data.iloc[start:stop]))
+
     dsk = {
         (name, i): data.iloc[start:stop]
         for i, (start, stop) in enumerate(zip(locations[:-1], locations[1:]))

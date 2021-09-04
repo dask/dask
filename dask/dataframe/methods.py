@@ -447,6 +447,7 @@ def concat_pandas(
     ignore_index=False,
     **kwargs
 ):
+    print("dfs:",dfs)
     ignore_order = kwargs.pop("ignore_order", False)
 
     if axis == 1:
@@ -454,6 +455,7 @@ def concat_pandas(
 
     # Support concatenating indices along axis 0
     if isinstance(dfs[0], pd.Index):
+        #print('in concat')
         if isinstance(dfs[0], pd.CategoricalIndex):
             for i in range(1, len(dfs)):
                 if not isinstance(dfs[i], pd.CategoricalIndex):
@@ -462,6 +464,7 @@ def concat_pandas(
                 union_categoricals(dfs, ignore_order=ignore_order), name=dfs[0].name
             )
         elif isinstance(dfs[0], pd.MultiIndex):
+            #print('in concat')
             first, rest = dfs[0], dfs[1:]
             if all(
                 (isinstance(o, pd.MultiIndex) and o.nlevels >= first.nlevels)
@@ -479,6 +482,7 @@ def concat_pandas(
                 return pd.MultiIndex.from_tuples(new_tuples, names=first.names)
             except Exception:
                 return pd.Index(new_tuples)
+        #print('in concat')
         return dfs[0].append(dfs[1:])
 
     # Handle categorical index separately
@@ -582,6 +586,8 @@ def concat_pandas(
     # Re-add the index if needed
     if ind is not None:
         out.index = ind
+    print('in concat')
+    print('concated df:',out)
     return out
 
 

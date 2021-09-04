@@ -219,7 +219,11 @@ def execute_task(key, task_info, dumps, loads, get_id, pack_exception):
     _execute_task : actually execute task
     """
     try:
+        print('loads:',loads)
+        print("load task info:",loads(task_info))
         task, data = loads(task_info)
+        print('before execute task data type:',data)
+        print('type:',type(data))
         result = _execute_task(task, data)
         id = get_id()
         result = dumps((result, id))
@@ -234,6 +238,7 @@ def batch_execute_tasks(it):
     """
     Batch computing of multiple tasks with `execute_task`
     """
+    print('batch execute:',it)
     return [execute_task(*a) for a in it]
 
 
@@ -417,6 +422,11 @@ def get_async(
     --------
     threaded.get
     """
+    print('loads:',loads)
+    print('dumps:',dumps)
+    print('result:',result)
+    print('just dsk:',dsk)
+
     chunksize = chunksize or config.get("chunksize", 1)
 
     queue = Queue()
@@ -426,6 +436,8 @@ def get_async(
     else:
         result_flat = set([result])
     results = set(result_flat)
+
+    print('results flattened:',results)
 
     dsk = dict(dsk)
     with local_callbacks(callbacks) as callbacks:
@@ -468,15 +480,21 @@ def get_async(
                 # Prep all ready tasks for submission
                 args = []
                 for i, key in zip(range(ntasks), state["ready"]):
+                    print('i,key:',i,key)
                     # Notify task is running
                     state["running"].add(key)
+                    print('pretask cbs:',pretask_cbs)
                     for f in pretask_cbs:
+                        print('didnot get here')
+                        print('f:',f)
                         f(key, dsk, state)
-
+                    print('dsk:',dsk)
+                    print('key:',key)
                     # Prep args to send
                     data = dict(
                         (dep, state["cache"][dep]) for dep in get_dependencies(dsk, key)
                     )
+                    print('data in fire_task:',data)
                     args.append(
                         (
                             key,
@@ -496,11 +514,20 @@ def get_async(
                         break
                     fut = submit(batch_execute_tasks, each_args)
                     fut.add_done_callback(queue.put)
+                print('done fire tasks')
 
+            print('queue:',queue)
             # Main loop, wait on tasks to finish, insert new ones
             while state["waiting"] or state["ready"] or state["running"]:
+                print('got here')
                 fire_tasks(chunksize)
+                #print(queue_get(queue))
+                #print('check pass')
                 for key, res_info, failed in queue_get(queue).result():
+                    #print('inside queue result')
+                    #print('key in queue:',key)
+                    #print('res info',res_info)
+                    #print('failed:',failed)
                     if failed:
                         exc, tb = loads(res_info)
                         if rerun_exceptions_locally:

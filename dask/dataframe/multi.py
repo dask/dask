@@ -238,12 +238,18 @@ def merge_chunk(lhs, *args, **kwargs):
     empty_index_dtype = kwargs.pop("empty_index_dtype", None)
     categorical_columns = kwargs.pop("categorical_columns", None)
 
+    print('empty index dtype:',empty_index_dtype, type(empty_index_dtype))
+    print('categorical columns:', categorical_columns)
+    if categorical_columns is not None:
+        print('categorical not none')
+
     rhs, *args = args
     left_index = kwargs.get("left_index", False)
     right_index = kwargs.get("right_index", False)
 
     if categorical_columns is not None and PANDAS_GT_100:
         for col in categorical_columns:
+            print('in categorical column:',col)
             left = None
             right = None
 
@@ -276,13 +282,22 @@ def merge_chunk(lhs, *args, **kwargs):
                 else:
                     rhs = rhs.assign(**{col: right.astype(dtype)})
 
+    print('lhs merged:', lhs, type(lhs))
+    print('rhs merged:', rhs)
+    print('args:',args)
+    print('kwargs:',kwargs)
     out = lhs.merge(rhs, *args, **kwargs)
+    print('after merge done:',out)
 
     # Workaround pandas bug where if the output result of a merge operation is
     # an empty dataframe, the output index is `int64` in all cases, regardless
     # of input dtypes.
     if len(out) == 0 and empty_index_dtype is not None:
+        print("astype called")
+        print("out merge:", out, "length:",len(out))
+        print("empty_index_dtype:", empty_index_dtype)
         out.index = out.index.astype(empty_index_dtype)
+        print("astype out index:", out.index)
     return out
 
 
@@ -334,9 +349,12 @@ def hash_join(
     if npartitions is None:
         npartitions = max(lhs.npartitions, rhs.npartitions)
 
+    #from this point it call shuffle() in shuffle.py - ignore_index defined there, default False
     lhs2 = shuffle_func(
         lhs, left_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
     )
+
+    print('lhs2:',lhs2)
     rhs2 = shuffle_func(
         rhs, right_on, npartitions=npartitions, shuffle=shuffle, max_branch=max_branch
     )
@@ -367,7 +385,8 @@ def hash_join(
     # Avoid using dummy data for a collection it is empty
     _lhs_meta = lhs._meta_nonempty if len(lhs.columns) else lhs._meta
     _rhs_meta = rhs._meta_nonempty if len(rhs.columns) else rhs._meta
-    meta = _lhs_meta.merge(_rhs_meta, **kwargs)
+    meta = _lhs_meta.merge(_rhs_meta, **kwargs) #dummy data merge
+    print('dummy meta merge:',meta)
 
     if isinstance(left_on, list):
         left_on = (list, tuple(left_on))
@@ -377,8 +396,14 @@ def hash_join(
     token = tokenize(lhs2, rhs2, npartitions, shuffle, **kwargs)
     name = "hash-join-" + token
 
+    print('meta:', meta, type(meta))
+    print('meta index:',meta.index, type(meta.index))
+    print('meta index dtype:',meta.index.dtype, type(meta.index.dtype))
     kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+
+    #print('categorical only df:', meta.select_dtypes(include="category"), type(meta.select_dtypes(include="category")))
+    #print('categorical columns:',meta.select_dtypes(include="category").columns)
+    kwargs["categorical_columns"] = None#meta.select_dtypes(include="category").columns
 
     dsk = {
         (name, i): (apply, merge_chunk, [(lhs2._name, i), (rhs2._name, i)], kwargs)
@@ -387,6 +412,7 @@ def hash_join(
 
     divisions = [None] * (npartitions + 1)
     graph = HighLevelGraph.from_collections(name, dsk, dependencies=[lhs2, rhs2])
+    print('graph:',graph)
     return new_dd_object(graph, name, meta, divisions)
 
 
@@ -396,7 +422,7 @@ def single_partition_join(left, right, **kwargs):
 
     meta = left._meta_nonempty.merge(right._meta_nonempty, **kwargs)
     kwargs["empty_index_dtype"] = meta.index.dtype
-    kwargs["categorical_columns"] = meta.select_dtypes(include="category").columns
+    kwargs["categorical_columns"] = None#meta.select_dtypes(include="category").columns
 
     name = "merge-" + tokenize(left, right, **kwargs)
     if left.npartitions == 1 and kwargs["how"] in allowed_right:
@@ -481,6 +507,7 @@ def merge(
     max_branch=None,
     broadcast=None,
 ):
+    print('suffixes:',suffixes)
     for o in [on, left_on, right_on]:
         if isinstance(o, _Frame):
             raise NotImplementedError(
@@ -498,6 +525,7 @@ def merge(
     if isinstance(left, (pd.Series, pd.DataFrame)) and isinstance(
         right, (pd.Series, pd.DataFrame)
     ):
+        print('yes')
         return pd.merge(
             left,
             right,
@@ -668,7 +696,7 @@ def merge(
                     suffixes,
                     indicator=indicator,
                 )
-
+        print('hash join')
         return hash_join(
             left,
             left.index if left_index else left_on,

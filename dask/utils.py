@@ -482,8 +482,10 @@ class Dispatch:
         """Return the function implementation for the given ``cls``"""
         # Fast path with direct lookup on cls
         lk = self._lookup
+        #print(lk)
         try:
             impl = lk[cls]
+            #print('dispatch impl:',impl)
         except KeyError:
             pass
         else:

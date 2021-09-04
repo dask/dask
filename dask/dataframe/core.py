@@ -371,6 +371,8 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     @property
     def _meta_nonempty(self):
         """ A non-empty version of `_meta` with fake data."""
+        print('self meta:',self._meta)
+        print('return from meta nonempty:',meta_nonempty(self._meta))
         return meta_nonempty(self._meta)
 
     @property
@@ -3614,6 +3616,7 @@ class Index(Series):
     }
 
     def __getattr__(self, key):
+        print('dtype check:',self.dtype, key)
         if is_categorical_dtype(self.dtype) and key in self._cat_attributes:
             return getattr(self.cat, key)
         elif key in self._dt_attributes:
@@ -4199,6 +4202,7 @@ class DataFrame(_Frame):
 
         # Figure out columns of the output
         df2 = self._meta_nonempty.assign(**_extract_meta(kwargs, nonempty=True))
+        print('return from meta non empty:',df2)
         return elemwise(methods.assign, self, *pairs, meta=df2)
 
     @derived_from(pd.DataFrame, ua_args=["index"])
@@ -6688,6 +6692,7 @@ def _repr_data_series(s, index):
     else:
         dtype = str(s.dtype)
     return pd.Series([dtype] + ["..."] * npartitions, index=index, name=s.name)
+
 
 
 get_parallel_type = Dispatch("get_parallel_type")

@@ -48,8 +48,11 @@ def cull(dsk, keys):
     while work:
         new_work = []
         for k in work:
-            dependencies_k = get_dependencies(dsk, k, as_list=True)  # fuse needs lists
+            dependencies_k = get_dependencies(dsk, k, as_list=True)  # fuse needs lists #get dependency tasks from graph for task k
             out[k] = dsk[k]
+            print('task k:',k)
+            print('out k:',out[k])
+            print('out k type:',type(out[k]))
             dependencies[k] = dependencies_k
             for d in dependencies_k:
                 if d not in seen:

@@ -304,7 +304,7 @@ def shuffle(
     shuffle=None,
     npartitions=None,
     max_branch=32,
-    ignore_index=False,
+    ignore_index=False, #Default False- changed to True for cylon issue with index
     compute=None,
 ):
     """Group DataFrame by index
@@ -323,6 +323,10 @@ def shuffle(
     set_partition
     shuffle_disk
     """
+    print('index to check:',index)
+    print('is list like:',pd.api.types.is_list_like(index))
+    print('is dask collection:',is_dask_collection(index))
+    print('shuffe type:',shuffle)
     list_like = pd.api.types.is_list_like(index) and not is_dask_collection(index)
     if shuffle == "tasks" and (isinstance(index, str) or list_like):
         # Avoid creating the "_partitions" column if possible.
@@ -807,23 +811,36 @@ def shuffle_group(df, cols, stage, k, npartitions, ignore_index, nfinal):
         A dictionary mapping integers in {0..k} to dataframes such that the
         hash values of ``df[col]`` are well partitioned.
     """
+    print('cols passed to shuffle:',cols)
+    print("nfinal partitions:",nfinal)
     if isinstance(cols, str):
         cols = [cols]
 
     if cols and cols[0] == "_partitions":
         ind = df[cols[0]]
     else:
+        print('inside shuffle calling hash object dispatch df type:',df, type(df))
+        if cols:
+            print('cols yes:',df[cols]) # get partions on given cols
+            print('type df[cols], df:',type(df[cols]), type(df))
         ind = hash_object_dispatch(df[cols] if cols else df, index=False)
         if nfinal and nfinal != npartitions:
             ind = ind % int(nfinal)
+    print('ind:', ind, type(ind))
+    print('done ind')
+    c = ind.values#ind.values
+    print('got c:',c, type(c), len(c))
+    print("done got c")
 
-    c = ind.values
     typ = np.min_scalar_type(npartitions * 2)
+    print('typ:',typ)
 
-    c = np.mod(c, npartitions).astype(typ, copy=False)
+    c = np.mod(c, npartitions).astype(typ, copy=False) #divide hashed values of column to npartitions
+    print('c next:',c)
     np.floor_divide(c, k ** stage, out=c)
     np.mod(c, k, out=c)
-
+    print('df,c,k:',df,c,k)
+    print('ignore index:',ignore_index)
     return group_split_dispatch(df, c, k, ignore_index=ignore_index)
 
 
