@@ -172,6 +172,20 @@ def test_Index():
         pytest.raises(AttributeError, lambda: ddf.index.index)
 
 
+def test_axes():
+    pdf = pd.DataFrame({"col1": [1, 2], "col2": [3, 4]})
+    df = dd.from_pandas(pdf, npartitions=2)
+    assert len(df.axes) == len(pdf.axes)
+    assert all(assert_eq(d, p) for d, p in zip(df.axes, pdf.axes))
+
+
+def test_series_axes():
+    ps = pd.Series(["abcde"])
+    ds = dd.from_pandas(ps, npartitions=2)
+    assert len(ds.axes) == len(ps.axes)
+    assert all(assert_eq(d, p) for d, p in zip(ds.axes, ps.axes))
+
+
 def test_Scalar():
     val = np.int64(1)
     s = Scalar({("a", 0): val}, "a", "i8")
@@ -3856,12 +3870,20 @@ def test_copy():
 
     a = dd.from_pandas(df, npartitions=2)
     b = a.copy()
+    c = a.copy(deep=False)
 
     a["y"] = a.x * 2
 
     assert_eq(b, df)
+    assert_eq(c, df)
 
-    df["y"] = df.x * 2
+    deep_err = (
+        "The `deep` value must be False. This is strictly a shallow copy "
+        "of the underlying computational graph."
+    )
+    for deep in [True, None, ""]:
+        with pytest.raises(ValueError, match=deep_err):
+            a.copy(deep=deep)
 
 
 def test_del():

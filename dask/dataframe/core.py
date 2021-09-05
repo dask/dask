@@ -404,12 +404,23 @@ class _Frame(DaskMethodsMixin, OperatorMethodMixin):
     def __setstate__(self, state):
         self.dask, self._name, self._meta, self.divisions = state
 
-    def copy(self):
+    def copy(self, deep=False):
         """Make a copy of the dataframe
 
         This is strictly a shallow copy of the underlying computational graph.
         It does not affect the underlying data
+
+        Parameters
+        ----------
+        deep : boolean, default False
+            The deep value must be `False` and it is declared as a parameter just for
+            compatibility with third-party libraries like cuDF
         """
+        if deep is not False:
+            raise ValueError(
+                "The `deep` value must be False. This is strictly a shallow copy "
+                "of the underlying computational graph."
+            )
         return new_dd_object(self.dask, self._name, self._meta, self.divisions)
 
     def __array__(self, dtype=None, **kwargs):
@@ -3064,6 +3075,10 @@ class Series(_Frame):
         return pd.Series(array, index=index, name=self.name)
 
     @property
+    def axes(self):
+        return [self.index]
+
+    @property
     def name(self):
         return self._meta.name
 
@@ -3893,6 +3908,10 @@ class DataFrame(_Frame):
         return pd.DataFrame(array, index=index, columns=self.columns)
 
     @property
+    def axes(self):
+        return [self.index, self.columns]
+
+    @property
     def columns(self):
         return self._meta.columns
 
@@ -4343,8 +4362,10 @@ class DataFrame(_Frame):
 
         This is like the sequential version except that this will also happen
         in many threads.  This may conflict with ``numexpr`` which will use
-        multiple threads itself.  We recommend that you set numexpr to use a
-        single thread
+        multiple threads itself.  We recommend that you set ``numexpr`` to use a
+        single thread:
+
+        .. code-block:: python
 
             import numexpr
             numexpr.set_num_threads(1)
@@ -6009,8 +6030,8 @@ def quantile(df, q, method="default"):
         }
     else:
 
+        from dask.array.dispatch import percentile_lookup as _percentile
         from dask.array.percentile import merge_percentiles
-        from dask.dataframe.dispatch import _percentile
 
         # Add 0 and 100 during calculation for more robust behavior (hopefully)
         calc_qs = np.pad(qs, 1, mode="constant")

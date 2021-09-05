@@ -64,7 +64,7 @@ from .chunk_types import is_valid_array_chunk, is_valid_chunk_type
 
 # Keep einsum_lookup and tensordot_lookup here for backwards compatibility
 from .dispatch import concatenate_lookup, einsum_lookup, tensordot_lookup  # noqa: F401
-from .numpy_compat import _Recurser
+from .numpy_compat import _numpy_120, _Recurser
 from .slicing import cached_cumsum, replace_ellipsis, setitem_array, slice_array
 
 config.update_defaults({"array": {"chunk-size": "128MiB", "rechunk-threshold": 4}})
@@ -1534,6 +1534,12 @@ class Array(DaskMethodsMixin):
         da_func = getattr(module, func.__name__)
         if da_func is func:
             return handle_nonmatching_names(func, args, kwargs)
+
+        # If ``like`` is contained in ``da_func``'s signature, add ``like=self``
+        # to the kwargs dictionary.
+        if has_keyword(da_func, "like"):
+            kwargs["like"] = self
+
         return da_func(*args, **kwargs)
 
     @property
@@ -4108,7 +4114,7 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, allow_unknown_chunksizes=False, **kwargs):
+def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
     """Convert the input to a dask array.
 
     Parameters
@@ -4120,6 +4126,15 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
         dataframes.  Dask.array is unable to verify that chunks line up.  If
         data comes from differently aligned sources then this can cause
         unexpected results.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
@@ -4147,11 +4162,16 @@ def asarray(a, allow_unknown_chunksizes=False, **kwargs):
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
     elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asarray(a)
+        if like is not None:
+            if not _numpy_120:
+                raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+            a = np.asarray(a, like=meta_from_array(like))
+        else:
+            a = np.asarray(a)
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a):
+def asanyarray(a, *, like=None):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4160,6 +4180,15 @@ def asanyarray(a):
     ----------
     a : array-like
         Input data, in any form that can be converted to a dask array.
+    like: array-like
+        Reference object to allow the creation of Dask arrays with chunks
+        that are not NumPy arrays. If an array-like passed in as ``like``
+        supports the ``__array_function__`` protocol, the chunk type of the
+        resulting array will be definde by it. In this case, it ensures the
+        creation of a Dask array compatible with that passed in via this
+        argument. If ``like`` is a Dask array, the chunk type of the
+        resulting array will be defined by the chunk type of ``like``.
+        Requires NumPy 1.20.0 or higher.
 
     Returns
     -------
@@ -4187,7 +4216,12 @@ def asanyarray(a):
     elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
         return stack(a)
     elif not isinstance(getattr(a, "shape", None), Iterable):
-        a = np.asanyarray(a)
+        if like is not None:
+            if not _numpy_120:
+                raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+            a = np.asanyarray(a, like=meta_from_array(like))
+        else:
+            a = np.asanyarray(a)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 
