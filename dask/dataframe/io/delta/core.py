@@ -105,6 +105,7 @@ class DeltaTable:
 
         # reason for this `if condition` was that FastParquetEngine seems to normalizes the json present in each column
         # not sure whether there is a better solution for handling this .
+        # `https://fastparquet.readthedocs.io/en/latest/details.html#reading-nested-schema`
         if self.engine.__name__ == "ArrowDatasetEngine":
             for i, row in parquet_checkpoint.iterrows():
                 if row["metaData"] is not None:
@@ -268,6 +269,10 @@ def read_delta_table(
     Returns
     -------
     Dask.DataFrame
+
+    Examples
+    --------
+    >>> df = dd.read_delta_table('s3://bucket/my-delta-table')  # doctest: +SKIP
 
     """
     engine = get_engine(engine)
