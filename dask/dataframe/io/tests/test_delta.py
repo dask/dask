@@ -1,11 +1,16 @@
 import zipfile
 from io import BytesIO
 
-import pyarrow.dataset as ds
 import pytest
 import requests
 
 import dask.dataframe as dd
+
+# try:
+#     import pyarrow.dataset as ds
+# except ImportError:
+#     ds = False
+ds = pytest.importorskip("pyarrow.dataset")
 
 
 @pytest.fixture()

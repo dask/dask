@@ -14,7 +14,7 @@ __all__ = "read_delta_table"
 
 class DeltaTable:
     """
-    Core DeltaTable Algorithm
+    Core DeltaTable Read Algorithm
 
     Parameters
     ----------
@@ -185,8 +185,7 @@ class DeltaTable:
                 format="parquet",
                 partitioning="hive",
             )
-            .scanner(filter=filter, columns=self.columns)
-            .to_table()
+            .to_table(filter=filter, columns=self.columns)
             .to_pandas()
         )
 
