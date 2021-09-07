@@ -20,7 +20,6 @@ try:
         from_delayed,
         from_pandas,
         read_csv,
-        read_delta_table,
         read_fwf,
         read_hdf,
         read_json,
@@ -40,7 +39,7 @@ try:
     from .utils import assert_eq
 
     try:
-        from .io import read_parquet, to_parquet
+        from .io import read_delta_table, read_parquet, to_parquet
     except ImportError:
         pass
     try:

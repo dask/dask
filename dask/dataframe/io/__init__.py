@@ -1,6 +1,5 @@
 from . import demo
 from .csv import read_csv, read_fwf, read_table, to_csv
-from .delta.core import read_delta_table
 from .hdf import read_hdf, to_hdf
 from .io import (
     dataframe_from_ctable,
@@ -22,5 +21,10 @@ except ImportError:
 
 try:
     from .orc import read_orc, to_orc
+except ImportError:
+    pass
+
+try:
+    from .delta import read_delta_table
 except ImportError:
     pass
