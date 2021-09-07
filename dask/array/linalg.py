@@ -44,7 +44,7 @@ def _wrapped_qr(a):
     """
     # workaround may be removed when numpy stops rejecting edge cases
     if a.shape[0] == 0:
-        return np.zeros((0, 0)), np.zeros((0, a.shape[1]))
+        return np.zeros_like(a, shape=(0, 0)), np.zeros_like(a, shape=(0, a.shape[1]))
     else:
         return np.linalg.qr(a)
 
