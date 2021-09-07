@@ -48,7 +48,7 @@ from dask.blockwise import broadcast_dimensions
 from dask.blockwise import make_blockwise_graph as top
 from dask.blockwise import optimize_blockwise
 from dask.delayed import Delayed, delayed
-from dask.utils import apply, key_split, tmpdir, tmpfile
+from dask.utils import apply, key_split, parse_bytes, tmpdir, tmpfile
 from dask.utils_test import dec, inc
 
 from .test_dispatch import EncapsulateNDArray
@@ -1202,6 +1202,14 @@ def test_reshape_unknown_dimensions():
             assert_eq(x.reshape(new_shape), a.reshape(new_shape))
 
     pytest.raises(ValueError, lambda: da.reshape(a, (-1, -1)))
+
+
+def test_reshape_avoids_large_chunks():
+    limit = parse_bytes("128MiB")
+    x = da.random.random((300, 180, 4, 18483), chunks=(-1, -1, 1, 183))
+    result = x.reshape(300, 180, -1)
+    nbytes = x.dtype.itemsize
+    assert (np.prod(result.chunksize) * nbytes) < (limit)
 
 
 def test_full():
