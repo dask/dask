@@ -36,6 +36,7 @@ from ..utils import (
     IndexCallable,
     M,
     OperatorMethodMixin,
+    _deprecated,
     apply,
     derived_from,
     funcname,
@@ -3294,6 +3295,17 @@ Dask Name: {name}, {task} tasks""".format(
             s = self.get_partition(i).compute()
             for row in s:
                 yield row
+
+    @_deprecated(
+        message=(
+            "Using the ``in`` operator to test for membership in Series is "
+            "deprecated. To test for membership in the index use "
+            "``(s.index == key).any()``. Similarly to test for membership in "
+            "the values use ``(s == key).any()``"
+        )
+    )
+    def __contains__(self, key):
+        return (self == key).any().compute()
 
     @classmethod
     def _validate_axis(cls, axis=0):

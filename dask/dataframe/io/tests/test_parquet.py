@@ -2668,7 +2668,7 @@ def test_split_row_groups_filter(tmpdir, engine):
         filters=filters,
     )
 
-    assert search_val in ddf3["i32"]
+    assert (ddf3["i32"] == search_val).any().compute()
     assert_eq(
         ddf2[ddf2["i32"] == search_val].compute(),
         ddf3[ddf3["i32"] == search_val].compute(),
