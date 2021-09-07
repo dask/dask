@@ -4114,18 +4114,29 @@ def retrieve_from_ooc(keys, dsk_pre, dsk_post=None):
     return load_dsk
 
 
-def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
+def asarray(
+    a, allow_unknown_chunksizes=False, dtype=None, order=None, *, like=None, **kwargs
+):
     """Convert the input to a dask array.
 
     Parameters
     ----------
     a : array-like
-        Input data, in any form that can be converted to a dask array.
+        Input data, in any form that can be converted to a dask array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
+        lists and ndarrays.
     allow_unknown_chunksizes: bool
         Allow unknown chunksizes, such as come from converting from dask
         dataframes.  Dask.array is unable to verify that chunks line up.  If
         data comes from differently aligned sources then this can cause
         unexpected results.
+    dtype : data-type, optional
+        By default, the data-type is inferred from the input data.
+    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
     like: array-like
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
@@ -4165,13 +4176,13 @@ def asarray(a, allow_unknown_chunksizes=False, *, like=None, **kwargs):
         if like is not None:
             if not _numpy_120:
                 raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-            a = np.asarray(a, like=meta_from_array(like))
+            a = np.asarray(a, like=meta_from_array(like), dtype=dtype, order=order)
         else:
-            a = np.asarray(a)
+            a = np.asarray(a, dtype=dtype, order=order)
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
-def asanyarray(a, *, like=None):
+def asanyarray(a, dtype=None, order=None, *, like=None):
     """Convert the input to a dask array.
 
     Subclasses of ``np.ndarray`` will be passed through as chunks unchanged.
@@ -4179,7 +4190,16 @@ def asanyarray(a, *, like=None):
     Parameters
     ----------
     a : array-like
-        Input data, in any form that can be converted to a dask array.
+        Input data, in any form that can be converted to a dask array. This
+        includes lists, lists of tuples, tuples, tuples of tuples, tuples of
+        lists and ndarrays.
+    dtype : data-type, optional
+        By default, the data-type is inferred from the input data.
+    order : {‘C’, ‘F’, ‘A’, ‘K’}, optional
+        Memory layout. ‘A’ and ‘K’ depend on the order of input array a.
+        ‘C’ row-major (C-style), ‘F’ column-major (Fortran-style) memory
+        representation. ‘A’ (any) means ‘F’ if a is Fortran contiguous, ‘C’
+        otherwise ‘K’ (keep) preserve input order. Defaults to ‘C’.
     like: array-like
         Reference object to allow the creation of Dask arrays with chunks
         that are not NumPy arrays. If an array-like passed in as ``like``
@@ -4219,9 +4239,9 @@ def asanyarray(a, *, like=None):
         if like is not None:
             if not _numpy_120:
                 raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-            a = np.asanyarray(a, like=meta_from_array(like))
+            a = np.asanyarray(a, like=meta_from_array(like), dtype=dtype, order=order)
         else:
-            a = np.asanyarray(a)
+            a = np.asanyarray(a, dtype=dtype, order=order)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 
