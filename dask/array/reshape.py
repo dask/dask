@@ -4,11 +4,12 @@ from operator import mul
 
 import numpy as np
 
+from .. import config
 from ..base import tokenize
 from ..core import flatten
 from ..highlevelgraph import HighLevelGraph
-from ..utils import M
-from .core import Array
+from ..utils import M, parse_bytes
+from .core import Array, normalize_chunks
 from .utils import meta_from_array
 
 
@@ -143,7 +144,7 @@ def contract_tuple(chunks, factor):
     return tuple(out)
 
 
-def reshape(x, shape, merge_chunks=True):
+def reshape(x, shape, merge_chunks=True, limit=None):
     """Reshape array to new shape
 
     Parameters
@@ -158,6 +159,9 @@ def reshape(x, shape, merge_chunks=True):
         when communication is necessary given the input array chunking and
         the output shape. With ``merge_chunks==False``, the input array will
         be rechunked to a chunksize of 1, which can create very many tasks.
+    limit: int (optional)
+        The maximum block size to target in bytes,
+        if freedom is given to choose
 
     Notes
     -----
@@ -226,6 +230,19 @@ def reshape(x, shape, merge_chunks=True):
         x = x.rechunk({i: 1 for i in range(din - dout)})
 
     inchunks, outchunks = reshape_rechunk(x.shape, shape, x.chunks)
+    # Check output chunks are not too large
+    max_chunksize_in_bytes = np.prod([max(i) for i in outchunks]) * x.dtype.itemsize
+    if limit is None:
+        limit = parse_bytes(config.get("array.chunk-size"))
+    if max_chunksize_in_bytes > limit:
+        outchunks = normalize_chunks(
+            ["auto" for _ in outchunks],
+            shape=shape,
+            limit=limit,
+            dtype=x.dtype,
+            previous_chunks=outchunks,
+        )
+
     x2 = x.rechunk(inchunks)
 
     # Construct graph
