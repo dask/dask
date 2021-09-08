@@ -3671,3 +3671,33 @@ def test_metadata_task_size(tmpdir, engine, write_metadata_file, metadata_task_s
                 gather_statistics=True,
                 metadata_task_size=metadata_task_size,
             )
+
+
+@PYARROW_MARK
+def test_pyarrow_filesystem(tmpdir):
+    from pyarrow import fs as pa_fs
+
+    # Write simple parquet dataset
+    path = str(tmpdir)
+    df1 = dd.from_pandas(
+        pd.DataFrame({"b": range(100), "a": ["A", "B", "C", "D"] * 25}),
+        2,
+    )
+    df1.to_parquet(path)
+
+    # Read back the data with default options
+    ddf2 = dd.read_parquet(
+        path,
+        engine="pyarrow-dataset",
+    )
+
+    # Read back the data with `arrow_filesystem` defined
+    ddf3 = dd.read_parquet(
+        path,
+        engine="pyarrow-dataset",
+        arrow_filesystem=pa_fs.FileSystem.from_uri(path)[0],
+    )
+
+    # Check that the results are identical
+    assert_eq(df1, ddf3)
+    assert_eq(ddf2, ddf3)

@@ -1452,6 +1452,7 @@ class ArrowDatasetEngine(Engine):
         filters,
         partitions,
         partition_keys,
+        arrow_filesystem=None,
         **kwargs,
     ):
         """Read in a pyarrow table.
@@ -1472,8 +1473,13 @@ class ArrowDatasetEngine(Engine):
             # Check if we need to generate a fragment for filtering.
             # We only need to do this if we are applying filters to
             # columns that were not already filtered by "partition".
-            if (partitions and partition_keys is None) or (
-                partitioning and _need_fragments(filters, partition_keys)
+            #
+            # Note that we also generate a new fragment if the user
+            # has passed in an explicit `arrow_fs` object.
+            if (
+                (partitions and partition_keys is None)
+                or arrow_filesystem
+                or (partitioning and _need_fragments(filters, partition_keys))
             ):
 
                 # We are filtering with "pyarrow-dataset".
@@ -1481,7 +1487,7 @@ class ArrowDatasetEngine(Engine):
                 # to a single "fragment" to read
                 ds = pa_ds.dataset(
                     path_or_frag,
-                    filesystem=fs,
+                    filesystem=arrow_filesystem or fs,
                     format="parquet",
                     partitioning=partitioning["obj"].discover(
                         *partitioning.get("args", []),
