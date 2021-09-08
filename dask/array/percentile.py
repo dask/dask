@@ -165,7 +165,9 @@ def percentile(a, q, interpolation="linear", method="default"):
     return Array(graph, name2, chunks=((len(q),),), meta=meta)
 
 
-def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
+def merge_percentiles(
+    finalq, qs, vals, interpolation="lower", Ns=None, raise_on_nan=True
+):
     """Combine several percentile calculations of different data.
 
     Parameters
@@ -207,14 +209,16 @@ def merge_percentiles(finalq, qs, vals, interpolation="lower", Ns=None):
 
     L = list(zip(*[(q, val, N) for q, val, N in zip(qs, vals, Ns) if N]))
     if not L:
-        raise ValueError("No non-trivial arrays found")
+        if raise_on_nan:
+            raise ValueError("No non-trivial arrays found")
+        return np.full((len(qs[0]) - 2,), np.nan)
     qs, vals, Ns = L
 
     # TODO: Perform this check above in percentile once dtype checking is easy
     #       Here we silently change meaning
     if vals[0].dtype.name == "category":
         result = merge_percentiles(
-            finalq, qs, [v.codes for v in vals], interpolation, Ns
+            finalq, qs, [v.codes for v in vals], interpolation, Ns, raise_on_nan
         )
         import pandas as pd
 
