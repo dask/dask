@@ -240,7 +240,7 @@ def reshape(x, shape, merge_chunks=True, limit=None):
             shape=shape,
             limit=limit,
             dtype=x.dtype,
-            previous_chunks=outchunks,
+            previous_chunks=inchunks,
         )
 
     x2 = x.rechunk(inchunks)
