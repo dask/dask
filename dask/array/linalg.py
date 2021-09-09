@@ -1613,6 +1613,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     """
 
     from scipy.signal import fftconvolve, oaconvolve
+    from scipy.signal.signaltools import _init_freq_conv_axes
 
     from .core import asarray
     from .creation import pad
@@ -1632,19 +1633,21 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
             "acceptable mode flags are 'valid'," " 'same', 'full' or 'periodic'"
         )
 
-    if _inputs_swaps_needed(mode, in1.shape, in2.shape, axes):
-        in1, in2 = in2, in1
+    in1, in2, axes = _init_freq_conv_axes(in1, in2, mode, axes, sorted_axes=False)
+
+    s1 = in1.shape
+    s2 = in2.shape
 
     # Calculating the depth of the ghosting zones in each dimension
-    depth = {i: in2.shape[i] // 2 for i in range(in2.ndim)}
+    depth = {i: s2[i] // 2 for i in range(in2.ndim)}
 
     # Flags even dimensions and removes them by adding zeros
     # This is done to avoid from having some results show up twice on the edge of blocks
 
-    even_flag = np.r_[[1 - i % 2 for i in in2.shape]]
-    target_shape = tuple(np.asarray(in2.shape) + even_flag)
+    even_flag = np.r_[[1 - i % 2 for i in s2]]
+    target_shape = tuple(np.asarray(s2) + even_flag)
 
-    if target_shape != in2.shape:
+    if target_shape != s2:
         # padding axes where in2 is even
         pad_width = tuple((i, 0) for i in even_flag)
         in2 = pad(in2, pad_width)
@@ -1671,45 +1674,8 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     if mode == "valid":
         output_slicing = tuple(
-            slice(depth[i], in1.shape[i] - (depth[i] - even_flag[i]), 1)
-            for i in depth.keys()
+            slice(depth[i], s1[i] - (depth[i] - even_flag[i]), 1) for i in depth.keys()
         )
         in_cv = in_cv[output_slicing]
 
     return in_cv
-
-
-def _inputs_swaps_needed(mode, shape1, shape2, axes=None):
-    """Determine if inputs arrays need to be swapped in `"valid"` mode.
-
-    If in `"valid"` mode, returns whether or not the input arrays need to be
-    swapped depending on whether `shape1` is at least as large as `shape2` in
-    every calculated dimension.
-
-    This is important for convolution where the larger array
-    input needs to come before the smaller array input when
-    operating in this mode.
-
-    Note that if the mode provided is not 'valid', False is immediately
-    returned.
-
-    """
-    if mode != "valid":
-        return False
-
-    if not shape1:
-        return False
-
-    if axes is None:
-        axes = range(len(shape1))
-
-    ok1 = all(shape1[i] >= shape2[i] for i in axes)
-    ok2 = all(shape2[i] >= shape1[i] for i in axes)
-
-    if not (ok1 or ok2):
-        raise ValueError(
-            "For 'valid' mode, one must be at least "
-            "as large as the other in every dimension"
-        )
-
-    return not ok1
