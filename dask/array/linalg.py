@@ -1679,8 +1679,21 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     return in_cv
 
 
-@derived_from(scipy.signal)
 def _inputs_swaps_needed(mode, shape1, shape2, axes=None):
+    """Determine if inputs arrays need to be swapped in `"valid"` mode.
+
+    If in `"valid"` mode, returns whether or not the input arrays need to be
+    swapped depending on whether `shape1` is at least as large as `shape2` in
+    every calculated dimension.
+
+    This is important for convolution where the larger array
+    input needs to come before the smaller array input when
+    operating in this mode.
+
+    Note that if the mode provided is not 'valid', False is immediately
+    returned.
+
+    """
     if mode != "valid":
         return False
 
