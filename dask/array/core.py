@@ -4164,21 +4164,26 @@ def asarray(
     >>> da.asarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
-    if isinstance(a, Array):
-        return a
-    elif hasattr(a, "to_dask_array"):
-        return a.to_dask_array()
-    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-        return asarray(a.data)
-    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
-    elif not isinstance(getattr(a, "shape", None), Iterable):
-        if like is not None:
-            if not _numpy_120:
-                raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-            a = np.asarray(a, like=meta_from_array(like), dtype=dtype, order=order)
-        else:
+    if like is None:
+        if isinstance(a, Array):
+            return a
+        elif hasattr(a, "to_dask_array"):
+            return a.to_dask_array()
+        elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
+            return asarray(a.data)
+        elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+            return stack(a, allow_unknown_chunksizes=allow_unknown_chunksizes)
+        elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asarray(a, dtype=dtype, order=order)
+    else:
+        if not _numpy_120:
+            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
+        like_meta = meta_from_array(like)
+        if isinstance(a, Array):
+            return a.map_blocks(np.asarray, like=like_meta, dtype=dtype, order=order)
+        else:
+            a = np.asarray(a, like=like_meta, dtype=dtype, order=order)
     return from_array(a, getitem=getter_inline, **kwargs)
 
 
@@ -4227,21 +4232,26 @@ def asanyarray(a, dtype=None, order=None, *, like=None):
     >>> da.asanyarray(y)
     dask.array<array, shape=(2, 3), dtype=int64, chunksize=(2, 3), chunktype=numpy.ndarray>
     """
-    if isinstance(a, Array):
-        return a
-    elif hasattr(a, "to_dask_array"):
-        return a.to_dask_array()
-    elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
-        return asanyarray(a.data)
-    elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
-        return stack(a)
-    elif not isinstance(getattr(a, "shape", None), Iterable):
-        if like is not None:
-            if not _numpy_120:
-                raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
-            a = np.asanyarray(a, like=meta_from_array(like), dtype=dtype, order=order)
-        else:
+    if like is None:
+        if isinstance(a, Array):
+            return a
+        elif hasattr(a, "to_dask_array"):
+            return a.to_dask_array()
+        elif type(a).__module__.split(".")[0] == "xarray" and hasattr(a, "data"):
+            return asanyarray(a.data)
+        elif isinstance(a, (list, tuple)) and any(isinstance(i, Array) for i in a):
+            return stack(a)
+        elif not isinstance(getattr(a, "shape", None), Iterable):
             a = np.asanyarray(a, dtype=dtype, order=order)
+    else:
+        if not _numpy_120:
+            raise RuntimeError("The use of ``like`` required NumPy >= 1.20")
+
+        like_meta = meta_from_array(like)
+        if isinstance(a, Array):
+            return a.map_blocks(np.asanyarray, like=like_meta, dtype=dtype, order=order)
+        else:
+            a = np.asanyarray(a, like=like_meta, dtype=dtype, order=order)
     return from_array(a, chunks=a.shape, getitem=getter_inline, asarray=False)
 
 
