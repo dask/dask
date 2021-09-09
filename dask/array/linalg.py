@@ -3,7 +3,6 @@ from functools import partial
 from numbers import Number
 
 import numpy as np
-import scipy.signal
 import tlz as toolz
 
 from ..base import tokenize, wait
@@ -1613,9 +1612,9 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     """
 
-    from .core import asarray, map_overlap, pad
+    from scipy.signal import fftconvolve, oaconvolve
 
-    fftconvolve, oaconvolve = scipy.signal.fftconvolve, scipy.signal.oaconvolve
+    from .core import asarray, pad
 
     in1 = asarray(in1)
     in2 = asarray(in2)
@@ -1665,8 +1664,8 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
 
-    in_cv = map_overlap(
-        cv_func, in1, depth=depth, boundary=boundary, trim=True, dtype="float"
+    in_cv = in1.map_overlap(
+        cv_func, depth=depth, boundary=boundary, trim=True, dtype="float"
     )
 
     if mode == "valid":
