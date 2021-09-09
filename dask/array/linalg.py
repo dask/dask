@@ -1511,3 +1511,146 @@ def norm(x, ord=None, axis=None, keepdims=False):
         r = (abs(r) ** ord).sum(axis=axis, keepdims=keepdims) ** (1.0 / ord)
 
     return r
+
+
+def convolve(in1, in2, mode="full", method="oa", axes=None):
+    """Some parts of this docstring are copied from scipy.signal.
+
+    Convolve two N-dimensional arrays using either the fft or the overlap-add
+    method.
+
+    Convolve `in1` and `in2`, with the output size determined by the
+    `mode` argument.
+
+    Parameters
+    ----------
+    in1 : array_like
+        First input.
+
+    in2 : array_like
+        Second input. Should have the same number of dimensions as `in1`.
+
+    mode : str {‘full’, ‘valid’, ‘same’, 'periodic'}, optional
+        A string indicating the size of the output.
+
+        ``full``
+           The output is the full discrete linear convolution
+           of the inputs. (Default)
+        ``valid``
+           The output consists only of those elements that do not
+           rely on the zero-padding. In 'valid' mode, either `in1` or `in2`
+           must be at least as large as the other in every dimension.
+        ``same``
+           The output is the same size as `in1`, centered
+           with respect to the 'full' output.
+        ``periodic``
+           `in1` is assumed to be periodic for padding purposes, The output
+           is the same size as `in1`.
+
+    method : str {'oa','fft'}, optional
+        A string indicating which method to use to calculate the convolution.
+
+        ``oa``
+           Overlap-add method. This is generally much faster than `fft` when
+           `in1` is much larger than `in2` but can be slower when only a few
+           output values are needed or when the arrays are very similar in
+           shape and can only output float arrays (int or object array inputs)
+           will be cast to float). (Default)
+        ``fft``
+           Convolve `in1` and `in2` using the fast Fourier transform method.
+    axes : int or array_like of ints or None, optional
+          Axes over which to compute the convolution.
+          The default is over all axes.
+
+
+    Returns
+    -------
+    out : Dask array
+        An N-dimensional array containing a subset of the discrete linear
+        convolution of `in1` and `in2`.
+
+    Examples
+    --------
+    Convolve a 100,000 sample signal with a 512-sample filter.
+
+    >>> from scipy import signal
+    >>> import dask.array as da
+    >>> rng = np.random.default_rng()
+    >>> sig = rng.standard_normal(100000)
+    >>> filt = signal.firwin(512, 0.01)
+    >>> fsig = da.convolve(sig, filt).compute()
+
+    >>> import matplotlib.pyplot as plt
+    >>> fig, (ax_orig, ax_mag) = plt.subplots(2, 1)
+    >>> ax_orig.plot(sig)
+    >>> ax_orig.set_title('White noise')
+    >>> ax_mag.plot(fsig)
+    >>> ax_mag.set_title('Filtered noise')
+    >>> fig.tight_layout()
+    >>> fig.show()
+
+    References
+    ----------
+    .. [1] Wikipedia, "Overlap-add_method".
+           https://en.wikipedia.org/wiki/Overlap-add_method
+    .. [2] Richard G. Lyons. Understanding Digital Signal Processing,
+           Third Edition, 2011. Chapter 13.10.
+           ISBN 13: 978-0137-02741-5
+
+
+
+
+    """
+    from scipy.signal import fftconvolve, oaconvolve
+
+    from .core import asarray, map_overlap, pad
+
+    in1 = asarray(in1)
+    in2 = asarray(in2)
+
+    if in1.ndim == in2.ndim == 0:  # scalar inputs
+        return in1 * in2
+    elif in1.ndim != in2.ndim:
+        raise ValueError("in1 and in2 should have the same dimensionality")
+    elif in1.size == 0 or in2.size == 0:  # empty arrays
+        return np.array([])
+
+    # Calculating the depth of the ghosting zones in each dimension
+    depth = {i: in2.shape[i] // 2 for i in range(in2.ndim)}
+
+    # Flags even dimensions and removes them by adding zeros
+    # This is done to avoid from having some results show up twice on the edge of blocks
+
+    even_flag = np.r_[[1 - i % 2 for i in in2.shape]]
+    target_shape = tuple(np.asarray(in2.shape) + even_flag)
+
+    if target_shape != in2.shape:
+        # padding axes where in2 is even
+        pad_width = tuple((i, 0) for i in even_flag)
+        in2 = np.pad(in2, pad_width)
+
+    boundary = 0  # boundary used when mode != 'periodic'
+
+    if mode == "full":
+        pad_width = tuple((depth[i] - even_flag[i], depth[i]) for i in depth.keys())
+        in1 = pad(in1, pad_width)
+
+    if mode == "periodic":
+        boundary = "periodic"
+
+    cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
+
+    cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
+
+    in1_cv = map_overlap(
+        cv_func, in1, depth=depth, boundary=boundary, trim=True, dtype="float"
+    )
+
+    if mode == "valid":
+        output_slicing = tuple(
+            slice(depth[i], in1.shape[i] - (depth[i] - even_flag[i]), 1)
+            for i in depth.keys()
+        )
+        in1_cv = in1_cv[output_slicing]
+
+    return in1_cv
