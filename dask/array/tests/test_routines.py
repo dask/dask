@@ -391,6 +391,19 @@ def test_dot_method():
     assert_eq(a.dot(b), x.dot(y))
 
 
+def test_dot_persist_equivalence():
+    # Regression test for https://github.com/dask/dask/issues/6907
+    x = da.random.random((4, 4), chunks=(2, 2))
+    x[x < 0.65] = 0
+    y = x.persist()
+    z = x.compute()
+    r1 = da.dot(x, x).compute()
+    r2 = da.dot(y, y).compute()
+    rr = np.dot(z, z)
+    assert np.allclose(rr, r1)
+    assert np.allclose(rr, r2)
+
+
 @pytest.mark.parametrize("shape, chunks", [((20,), (6,)), ((4, 5), (2, 3))])
 def test_vdot(shape, chunks):
     np.random.seed(1337)
