@@ -3,6 +3,7 @@ from functools import partial
 from numbers import Number
 
 import numpy as np
+import scipy.signal
 import tlz as toolz
 
 from ..base import tokenize, wait
@@ -1611,9 +1612,10 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
 
     """
-    from scipy.signal import fftconvolve, oaconvolve
 
     from .core import asarray, map_overlap, pad
+
+    fftconvolve, oaconvolve = scipy.signal.fftconvolve, scipy.signal.oaconvolve
 
     in1 = asarray(in1)
     in2 = asarray(in2)
@@ -1624,6 +1626,14 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
         raise ValueError("in1 and in2 should have the same dimensionality")
     elif in1.size == 0 or in2.size == 0:  # empty arrays
         return np.array([])
+
+    if mode != "full" and mode != "same" and mode != "valid" and mode != "periodic":
+        raise ValueError(
+            "acceptable mode flags are 'valid'," " 'same', 'full' or 'periodic'"
+        )
+
+    if _inputs_swaps_needed(mode, in1.shape, in2.shape, axes):
+        in1, in2 = in2, in1
 
     # Calculating the depth of the ghosting zones in each dimension
     depth = {i: in2.shape[i] // 2 for i in range(in2.ndim)}
@@ -1637,7 +1647,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     if target_shape != in2.shape:
         # padding axes where in2 is even
         pad_width = tuple((i, 0) for i in even_flag)
-        in2 = np.pad(in2, pad_width)
+        in2 = pad(in2, pad_width)
 
     boundary = 0  # boundary used when mode != 'periodic'
 
@@ -1650,9 +1660,12 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
 
+    if method not in cv_dict.keys():
+        raise ValueError("acceptable method flags are 'oa' or 'fft'")
+
     cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
 
-    in1_cv = map_overlap(
+    in_cv = map_overlap(
         cv_func, in1, depth=depth, boundary=boundary, trim=True, dtype="float"
     )
 
@@ -1661,6 +1674,29 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
             slice(depth[i], in1.shape[i] - (depth[i] - even_flag[i]), 1)
             for i in depth.keys()
         )
-        in1_cv = in1_cv[output_slicing]
+        in_cv = in_cv[output_slicing]
 
-    return in1_cv
+    return in_cv
+
+
+@derived_from(scipy.signal)
+def _inputs_swaps_needed(mode, shape1, shape2, axes=None):
+    if mode != "valid":
+        return False
+
+    if not shape1:
+        return False
+
+    if axes is None:
+        axes = range(len(shape1))
+
+    ok1 = all(shape1[i] >= shape2[i] for i in axes)
+    ok2 = all(shape2[i] >= shape1[i] for i in axes)
+
+    if not (ok1 or ok2):
+        raise ValueError(
+            "For 'valid' mode, one must be at least "
+            "as large as the other in every dimension"
+        )
+
+    return not ok1
