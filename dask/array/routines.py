@@ -311,6 +311,7 @@ def tensordot(lhs, rhs, axes=2):
     left_index = list(range(lhs.ndim))
     right_index = list(range(lhs.ndim, lhs.ndim + rhs.ndim))
     out_index = left_index + right_index
+    adjust_chunks = {}
     for l, r in zip(left_axes, right_axes):
         out_index.remove(right_index[r])
         right_index[r] = left_index[l]
