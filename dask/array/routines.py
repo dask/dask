@@ -316,6 +316,8 @@ def tensordot(lhs, rhs, axes=2):
         right_index[r] = left_index[l]
         if concatenate:
             out_index.remove(left_index[l])
+        else:
+            adjust_chunks[left_index[l]] = lambda c: 1
     intermediate = blockwise(
         _tensordot,
         out_index,
