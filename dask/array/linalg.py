@@ -1577,7 +1577,14 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     scipy.signal.fftconvolve : Equivalent Scipy operation for the FFT
         method
 
+    Notes
+    -----
+    Despite direct convolution using sums being an option in scipy, this option
+    is not proposed here because it less efficient than other methods for large
+    arrays (n > ~500).
 
+    An improvement possibility would be to allow for the mode argument to be a
+    dict mapping a mode for each axes.
 
     Examples
     --------
