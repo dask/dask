@@ -125,10 +125,8 @@ def read_sql_table(
         if columns
         else list(table.columns)
     )
-    if index_col not in columns:
-        columns.append(
-            table.columns[index_col] if isinstance(index_col, str) else index_col
-        )
+    if index not in columns:
+        columns.append(index)
 
     if isinstance(index_col, str):
         kwargs["index_col"] = index_col
