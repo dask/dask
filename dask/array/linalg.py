@@ -1614,7 +1614,8 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     from scipy.signal import fftconvolve, oaconvolve
 
-    from .core import asarray, pad
+    from .core import asarray
+    from .creation import pad
 
     in1 = asarray(in1)
     in2 = asarray(in2)
