@@ -1102,7 +1102,8 @@ def test_convolve_mismatched_dims(a, b):
 
 def test_convolve_invalid_flags():
     with pytest.raises(
-        ValueError, match="acceptable mode flags are 'valid'," " 'same', or 'full'"
+        ValueError,
+        match="acceptable mode flags are 'valid'," " 'same', 'full', or periodic",
     ):
         convolve([1], [2], mode="chips")
 
