@@ -7,7 +7,7 @@ import numpy as np
 import scipy.linalg
 
 import dask.array as da
-from dask.array.linalg import qr, sfqr, svd, svd_compressed, tsqr
+from dask.array.linalg import convolve, qr, sfqr, svd, svd_compressed, tsqr
 from dask.array.utils import assert_eq, same_keys, svd_flip
 
 
@@ -1068,67 +1068,67 @@ def test_norm_implemented_errors(shape, chunks, axis, norm, keepdims):
             da.linalg.norm(d, ord=norm, axis=axis, keepdims=keepdims)
 
 
-# def test_convolve_invalid_shapes():
-#     a = np.arange(1, 7).reshape((2, 3))
-#     b = np.arange(-6, 0).reshape((3, 2))
-#     with pytest.raises(ValueError,
-#                        match="For 'valid' mode, one must be at least "
-#                        "as large as the other in every dimension"):
-#         convolve(a, b, mode='valid')
-
-# @pytest.mark.parametrize('method',
-#                          ['fft', 'oa'])
-# def test_convolve_invalid_shapes_axes(method):
-#     a = np.zeros([5, 6, 2, 1])
-#     b = np.zeros([5, 6, 3, 1])
-#     with pytest.raises(ValueError,
-#                        match=r"incompatible shapes for in1 and in2:"
-#                        r" \(5L?, 6L?, 2L?, 1L?\) and"
-#                        r" \(5L?, 6L?, 3L?, 1L?\)"):
-#         convolve(a, b, method=method, axes=[0, 1])
-
-# @pytest.mark.parametrize('a,b',
-#                          [([1], 2),
-#                           (1, [2]),
-#                           ([3], [[2]])])
-# def test_convolve_mismatched_dims(a, b):
-#     with pytest.raises(ValueError,
-#                        match="in1 and in2 should have the same"
-#                        " dimensionality"):
-#         convolve(a, b)
+def test_convolve_invalid_shapes():
+    a = np.arange(1, 7).reshape((2, 3))
+    b = np.arange(-6, 0).reshape((3, 2))
+    with pytest.raises(
+        ValueError,
+        match="For 'valid' mode, one must be at least "
+        "as large as the other in every dimension",
+    ):
+        convolve(a, b, mode="valid")
 
 
-# def test_convolve_invalid_flags():
-#     with pytest.raises(ValueError,
-#                        match="acceptable mode flags are 'valid',"
-#                        " 'same', or 'full'"):
-#         convolve([1], [2], mode='chips')
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_convolve_invalid_shapes_axes(method):
+    a = np.zeros([5, 6, 2, 1])
+    b = np.zeros([5, 6, 3, 1])
+    with pytest.raises(
+        ValueError,
+        match=r"incompatible shapes for in1 and in2:"
+        r" \(5L?, 6L?, 2L?, 1L?\) and"
+        r" \(5L?, 6L?, 3L?, 1L?\)",
+    ):
+        convolve(a, b, method=method, axes=[0, 1])
 
-#     with pytest.raises(ValueError,
-#                        match="acceptable method flags are 'oa' or"
-#                        " 'fft'."):
-#         convolve([1],[2],method='chips')
 
-#     with pytest.raises(ValueError,
-#                        match="when provided, axes cannot be empty"):
-#         convolve([1], [2], axes=[])
+@pytest.mark.parametrize("a,b", [([1], 2), (1, [2]), ([3], [[2]])])
+def test_convolve_mismatched_dims(a, b):
+    with pytest.raises(
+        ValueError, match="in1 and in2 should have the same" " dimensionality"
+    ):
+        convolve(a, b)
 
-#     with pytest.raises(ValueError, match="axes must be a scalar or "
-#                        "iterable of integers"):
-#         convolve([1], [2], axes=[[1, 2], [3, 4]])
 
-#     with pytest.raises(ValueError, match="axes must be a scalar or "
-#                        "iterable of integers"):
-#         convolve([1], [2], axes=[1., 2., 3., 4.])
+def test_convolve_invalid_flags():
+    with pytest.raises(
+        ValueError, match="acceptable mode flags are 'valid'," " 'same', or 'full'"
+    ):
+        convolve([1], [2], mode="chips")
 
-#     with pytest.raises(ValueError,
-#                        match="axes exceeds dimensionality of input"):
-#         convolve([1], [2], axes=[1])
+    with pytest.raises(
+        ValueError, match="acceptable method flags are 'oa' or" " 'fft'."
+    ):
+        convolve([1], [2], method="chips")
 
-#     with pytest.raises(ValueError,
-#                        match="axes exceeds dimensionality of input"):
-#         convolve([1], [2], axes=[-2])
+    with pytest.raises(ValueError, match="when provided, axes cannot be empty"):
+        convolve([1], [2], axes=[])
 
-#     with pytest.raises(ValueError,
-#                        match="all axes must be unique"):
-#         convolve([1], [2], axes=[0, 0])
+    with pytest.raises(
+        ValueError, match="axes must be a scalar or " "iterable of integers"
+    ):
+        convolve([1], [2], axes=[[1, 2], [3, 4]])
+
+    with pytest.raises(
+        ValueError, match="axes must be a scalar or " "iterable of integers"
+    ):
+        convolve([1], [2], axes=[1.0, 2.0, 3.0, 4.0])
+
+    with pytest.raises(ValueError, match="axes exceeds dimensionality of input"):
+        convolve([1], [2], axes=[1])
+
+    with pytest.raises(ValueError, match="axes exceeds dimensionality of input"):
+        convolve([1], [2], axes=[-2])
+
+    with pytest.raises(ValueError, match="all axes must be unique"):
+        convolve([1], [2], axes=[0, 0])
