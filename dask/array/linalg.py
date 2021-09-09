@@ -1514,10 +1514,10 @@ def norm(x, ord=None, axis=None, keepdims=False):
 
 
 def convolve(in1, in2, mode="full", method="oa", axes=None):
-    """Some parts of this docstring are copied from scipy.signal.
-
-    Convolve two N-dimensional arrays using either the fft or the overlap-add
+    """Convolve two N-dimensional arrays using either the fft or the overlap-add
     method.
+
+    Some parts of this docstring are copied from scipy.signal
 
     Convolve `in1` and `in2`, with the output size determined by the
     `mode` argument.
@@ -1530,7 +1530,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     in2 : array_like
         Second input. Should have the same number of dimensions as `in1`.
 
-    mode : str {‘full’, ‘valid’, ‘same’, 'periodic'}, optional
+    mode : str {'full', 'valid', 'same', 'periodic'}, optional
         A string indicating the size of the output.
 
         ``full``
@@ -1547,7 +1547,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
            `in1` is assumed to be periodic for padding purposes, The output
            is the same size as `in1`.
 
-    method : str {'oa','fft'}, optional
+    method : str {'oa', 'fft'}, optional
         A string indicating which method to use to calculate the convolution.
 
         ``oa``
@@ -1565,9 +1565,19 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     Returns
     -------
-    out : Dask array
+    out : array
         An N-dimensional array containing a subset of the discrete linear
-        convolution of `in1` and `in2`.
+        convolution of `in1` with `in2`.
+
+
+    See Also
+    --------
+    scipy.signal.oaconvolve : Equivalent Scipy operation for the overlap-add
+        method
+    scipy.signal.fftconvolve : Equivalent Scipy operation for the FFT
+        method
+
+
 
     Examples
     --------
@@ -1578,7 +1588,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     >>> rng = np.random.default_rng()
     >>> sig = rng.standard_normal(100000)
     >>> filt = signal.firwin(512, 0.01)
-    >>> fsig = da.convolve(sig, filt).compute()
+    >>> fsig = da.linalg.convolve(sig, filt).compute()
 
     >>> import matplotlib.pyplot as plt
     >>> fig, (ax_orig, ax_mag) = plt.subplots(2, 1)

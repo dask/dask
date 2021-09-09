@@ -326,6 +326,7 @@ Linear Algebra
    linalg.svd_compressed
    linalg.sfqr
    linalg.tsqr
+   linalg.convolve	
 
 Masked Arrays
 ~~~~~~~~~~~~~
