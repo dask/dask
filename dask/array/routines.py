@@ -327,6 +327,7 @@ def tensordot(lhs, rhs, axes=2):
         right_index,
         dtype=dt,
         concatenate=concatenate,
+        adjust_chunks=adjust_chunks,
         axes=(left_axes, right_axes),
         is_sparse=is_sparse,
     )
