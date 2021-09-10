@@ -27,7 +27,6 @@ def _calculate_divisions(
     partition_col,
     repartition,
     npartitions,
-    ascending=True,
     upsample=1.0,
     partition_size=128e6,
 ):
@@ -68,9 +67,6 @@ def _calculate_divisions(
         mins = pd.Categorical(mins, dtype=dtype).codes.tolist()
         maxes = pd.Categorical(maxes, dtype=dtype).codes.tolist()
 
-    if not ascending:
-        return divisions[::-1], mins[::-1], maxes[::-1]
-
     return divisions, mins, maxes
 
 
@@ -105,7 +101,7 @@ def sort_values(
     sort_by_col = df[by]
 
     divisions, mins, maxes = _calculate_divisions(
-        df, sort_by_col, repartition, npartitions, ascending, upsample, partition_size
+        df, sort_by_col, repartition, npartitions, upsample, partition_size
     )
 
     if (
