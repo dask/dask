@@ -1586,10 +1586,10 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     These include but are not limited to :
 
     * Working out the case where both input are dask arrays.
-    * Giving users the possibility to specify the to have the `mode` argument
-    differ between axes.
-    * Dealing with the case where :math:`\\exists i \\notin` `axes` and
-    ``in1.shape[i] == in2.shape[i] !=1``.
+    * Giving users the possibility to specify the to have the `mode` argument differ between axes.
+    * Dealing with the case where :math:`\\exists i \\notin` `axes` and ``in1.shape[i] == in2.shape[i] !=1``.
+
+
 
     Examples
     --------
