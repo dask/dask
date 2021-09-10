@@ -760,11 +760,11 @@ def collect(p, part, meta, barrier_token):
 
 
 def set_partitions_pre(s, divisions, ascending=True):
-    if ascending:
-        divisions = -divisions
-        s = -s
     try:
-        partitions = divisions.searchsorted(s, side="right") - 1
+        if ascending:
+            partitions = divisions.searchsorted(s, side="right") - 1
+        else:
+            partitions = -divisions.searchsorted(s, side="right") % (len(divisions) - 1)
     except TypeError:
         # When `searchsorted` fails with `TypeError`, it may be
         # caused by nulls in `s`. Try again with the null-values
@@ -772,8 +772,15 @@ def set_partitions_pre(s, divisions, ascending=True):
         partitions = np.empty(len(s), dtype="int32")
         partitions[s.isna()] = 0
         not_null = s.notna()
-        partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
-    partitions[(s >= divisions.iloc[-1]).values] = len(divisions) - 2
+        if ascending:
+            partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
+        else:
+            partitions[not_null] = -divisions.searchsorted(
+                s[not_null], side="right"
+            ) % (len(divisions) - 1)
+    partitions[(s >= divisions.iloc[-1]).values] = (
+        len(divisions) - 2 if ascending else 0
+    )
     return partitions
 
 
