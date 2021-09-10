@@ -119,7 +119,7 @@ def sort_values(
         # divisions are in the right place
         return df.map_partitions(M.sort_values, by, ascending=ascending)
 
-    df = rearrange_by_divisions(df, by, ascending, divisions)
+    df = rearrange_by_divisions(df, by, divisions, ascending=ascending)
     df = df.map_partitions(M.sort_values, by, ascending=ascending)
     return df
 
@@ -383,7 +383,12 @@ def shuffle(
 
 
 def rearrange_by_divisions(
-    df, column, ascending, divisions, max_branch=None, shuffle=None
+    df,
+    column,
+    divisions,
+    max_branch=None,
+    shuffle=None,
+    ascending=True,
 ):
     """Shuffle dataframe so that column separates along divisions"""
     divisions = df._meta._constructor_sliced(divisions)
