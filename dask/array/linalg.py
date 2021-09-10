@@ -1514,21 +1514,22 @@ def norm(x, ord=None, axis=None, keepdims=False):
 
 
 def convolve(in1, in2, mode="full", method="oa", axes=None):
-    """Convolve two N-dimensional arrays using either the fft or the overlap-add
-    method.
+    """Convolve a N-dimensional dask array with another N-dimensional array
+    using either the fft or the overlap-add method.
 
-    Some parts of this docstring are copied from scipy.signal
+    Some parts of this docstring are copied from scipy.signal.
 
     Convolve `in1` and `in2`, with the output size determined by the
     `mode` argument.
 
     Parameters
     ----------
-    in1 : array_like
+    in1 : daskarray_like
         First input.
 
     in2 : array_like
         Second input. Should have the same number of dimensions as `in1`.
+        Will be cast to a numpy array.
 
     mode : str {'full', 'valid', 'same', 'periodic'}, optional
         A string indicating the size of the output.
@@ -1579,21 +1580,26 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     Notes
     -----
-    Despite direct convolution using sums being an option in scipy, this option
-    is not proposed here because it less efficient than other methods for large
-    arrays (n > ~500).
+    This function is a work in progress and there are some possible improvements
+    that could be added.
 
-    An improvement possibility would be to allow for the mode argument to be a
-    dict mapping a mode for each axes.
+    These include but are not limited to :
+
+    * Working out the case where both input are dask arrays.
+    * Giving users the possibility to specify the to have the `mode` argument
+    differ between axes.
+    * Dealing with the case where :math:`\\exists i \\notin` `axes` and
+    ``in1.shape[i] == in2.shape[i] !=1``.
 
     Examples
     --------
-    Convolve a 100,000 sample signal with a 512-sample filter.
+    Convolve a 100,000 sample signal chunked in 100 1,000 elements chunks
+    with a 512-sample filter.
 
     >>> from scipy import signal
     >>> import dask.array as da
     >>> rng = np.random.default_rng()
-    >>> sig = rng.standard_normal(100000)
+    >>> sig = da.from_array(rng.standard_normal(100000), chunks = (1000,))
     >>> filt = signal.firwin(512, 0.01)
     >>> fsig = da.linalg.convolve(sig, filt).compute()
 
@@ -1626,7 +1632,12 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     from .creation import pad
 
     in1 = asarray(in1)
-    in2 = asarray(in2)
+    if hasattr(in2, "chunks"):
+        raise ValueError(
+            "Second input should be a sequential numpy array like"
+            " and not %s" % type(in2)
+        )
+    in2 = np.asarray(in2)
 
     if in1.ndim == in2.ndim == 0:  # scalar inputs
         return in1 * in2
@@ -1642,6 +1653,10 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     in1, in2, axes = _init_freq_conv_axes(in1, in2, mode, axes, sorted_axes=False)
 
+    if type(in1) == np.ndarray:
+        raise ValueError(
+            "For 'valid' mode in1 has to be at least as large as in2 in every dimension"
+        )
     s1 = in1.shape
     s2 = in2.shape
 
