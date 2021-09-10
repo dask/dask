@@ -1067,7 +1067,8 @@ def test_disk_shuffle_check_actual_compression():
             filename = (
                 p1.partd.partd.filename("x") if compression else p1.partd.filename("x")
             )
-            return open(filename, "rb").read()
+            with open(filename, "rb") as f:
+                return f.read()
 
     # get compressed and uncompressed raw data
     uncompressed_data = generate_raw_partd_file(compression=None)
