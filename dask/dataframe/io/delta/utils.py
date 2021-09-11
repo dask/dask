@@ -3,6 +3,59 @@ from typing import Union
 
 import pyarrow as pa
 
+PYARROW_CHECKPOINT_SCHEMA = [
+    "txn",
+    "add",
+    "remove",
+    "metaData",
+    "protocol",
+    "commitInfo",
+]
+FASTPARQUET_CHECKPOINT_SCHEMA = [
+    "txn.appId",
+    "txn.version",
+    "txn.lastUpdated",
+    "add.path",
+    "add.partitionValues",
+    "add.size",
+    "add.modificationTime",
+    "add.dataChange",
+    "add.stats",
+    "add.tags",
+    "remove.path",
+    "remove.deletionTimestamp",
+    "remove.dataChange",
+    "metaData.id",
+    "metaData.name",
+    "metaData.description",
+    "metaData.format.provider",
+    "metaData.format.options",
+    "metaData.schemaString",
+    "metaData.partitionColumns",
+    "metaData.configuration",
+    "metaData.createdTime",
+    "protocol.minReaderVersion",
+    "protocol.minWriterVersion",
+    "commitInfo.version",
+    "commitInfo.timestamp",
+    "commitInfo.userId",
+    "commitInfo.userName",
+    "commitInfo.operation",
+    "commitInfo.operationParameters",
+    "commitInfo.job.jobId",
+    "commitInfo.job.jobName",
+    "commitInfo.job.runId",
+    "commitInfo.job.jobOwnerId",
+    "commitInfo.job.triggerType",
+    "commitInfo.notebook.notebookId",
+    "commitInfo.clusterId",
+    "commitInfo.readVersion",
+    "commitInfo.isolationLevel",
+    "commitInfo.isBlindAppend",
+    "commitInfo.operationMetrics",
+    "commitInfo.userMetadata",
+]
+
 
 def schema_from_string(schema_string: str):
 

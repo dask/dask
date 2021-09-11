@@ -1,15 +1,21 @@
 import json
 import re
 
+import pyarrow.parquet as pq
 from fsspec.core import get_fs_token_paths
 from pyarrow import dataset as pa_ds
 
+from ....base import tokenize
 from ....delayed import delayed
 from ..io import from_delayed
-from ..parquet.core import get_engine, read_parquet
-from .utils import schema_from_string
+from ..parquet.core import get_engine
+from .utils import (
+    FASTPARQUET_CHECKPOINT_SCHEMA,
+    PYARROW_CHECKPOINT_SCHEMA,
+    schema_from_string,
+)
 
-__all__ = "read_delta_table"
+__all__ = ["read_delta_table"]
 
 
 class DeltaTable:
@@ -62,7 +68,9 @@ class DeltaTable:
         self.version = version
         self.pq_files = set()
         self.delta_log_path = f"{self.path}/_delta_log"
-        self.fs, _, _ = get_fs_token_paths(path, storage_options=storage_options)
+        self.fs, self.fs_token, _ = get_fs_token_paths(
+            path, storage_options=storage_options
+        )
         self.engine = engine
         self.columns = columns
         self.checkpoint = (
@@ -76,10 +84,9 @@ class DeltaTable:
         if _last_checkpoint file exists, returns checkpoint_id else zero
         """
         try:
-            with self.fs.open(
-                f"{self.delta_log_path}/_last_checkpoint"
-            ) as last_checkpoint:
-                last_checkpoint_version = json.load(last_checkpoint)["version"]
+            last_checkpoint_version = json.loads(
+                self.fs.cat(f"{self.delta_log_path}/_last_checkpoint")
+            )["version"]
         except FileNotFoundError:
             last_checkpoint_version = 0
         return last_checkpoint_version
@@ -99,14 +106,16 @@ class DeltaTable:
                 f"File {checkpoint_path} not found"
             )
 
-        parquet_checkpoint = read_parquet(
-            checkpoint_path, engine=self.engine, storage_options=self.storage_options
-        ).compute()
-
         # reason for this `if condition` was that FastParquetEngine seems to normalizes the json present in each column
         # not sure whether there is a better solution for handling this .
         # `https://fastparquet.readthedocs.io/en/latest/details.html#reading-nested-schema`
         if self.engine.__name__ == "ArrowDatasetEngine":
+            parquet_checkpoint = self.engine.read_partition(
+                fs=self.fs,
+                pieces=[(checkpoint_path, None, None)],
+                columns=PYARROW_CHECKPOINT_SCHEMA,
+                index=None,
+            )
             for i, row in parquet_checkpoint.iterrows():
                 if row["metaData"] is not None:
                     # get latest schema/columns , since delta Lake supports Schema Evolution.
@@ -115,6 +124,12 @@ class DeltaTable:
                     self.pq_files.add(f"{self.path}/{row['add']['path']}")
 
         elif self.engine.__name__ == "FastParquetEngine":
+            parquet_checkpoint = self.engine.read_partition(
+                fs=self.fs,
+                pieces=[(checkpoint_path, None, None)],
+                columns=FASTPARQUET_CHECKPOINT_SCHEMA,
+                index=None,
+            )
             for i, row in parquet_checkpoint.iterrows():
                 if row["metaData.schemaString"]:
                     self.schema = schema_from_string(row["metaData.schemaString"])
@@ -152,8 +167,9 @@ class DeltaTable:
                 f"checkpoint {self.checkpoint} are {log_versions}"
             )
         for log_file_name, log_version in zip(log_files, log_versions):
-            with self.fs.open(log_file_name) as log:
-                for line in log:
+            log = self.fs.cat(log_file_name).decode().split("\n")
+            for line in log:
+                if line:  # for last empty line
                     meta_data = json.loads(line)
                     if "add" in meta_data.keys():
                         file = f"{self.path}/{meta_data['add']['path']}"
@@ -167,8 +183,8 @@ class DeltaTable:
                         schema_string = meta_data["metaData"]["schemaString"]
                         self.schema = schema_from_string(schema_string)
 
-                if self.version == int(log_version):
-                    break
+            if self.version == int(log_version):
+                break
 
     def read_delta_dataset(self, f, **kwargs):
         """
@@ -177,6 +193,10 @@ class DeltaTable:
         """
         schema = kwargs.pop("schema", None) or self.schema
         filter = kwargs.pop("filter", None)
+        if filter:
+            filter_expression = pq._filters_to_expression(filter)
+        else:
+            filter_expression = None
         return (
             pa_ds.dataset(
                 source=f,
@@ -185,9 +205,20 @@ class DeltaTable:
                 format="parquet",
                 partitioning="hive",
             )
-            .to_table(filter=filter, columns=self.columns)
+            .to_table(filter=filter_expression, columns=self.columns)
             .to_pandas()
         )
+
+    def _make_meta_from_schema(self):
+        meta = dict()
+
+        for field in self.schema:
+            if self.columns:
+                if field.name in self.columns:
+                    meta[field.name] = field.type.to_pandas_dtype()
+            else:
+                meta[field.name] = field.type.to_pandas_dtype()
+        return meta
 
     def read_delta_table(self, **kwargs):
         """
@@ -196,9 +227,14 @@ class DeltaTable:
         if len(self.pq_files) == 0:
             raise RuntimeError("No Parquet files are available")
         parts = [
-            delayed(self.read_delta_dataset)(f, **kwargs) for f in list(self.pq_files)
+            delayed(
+                self.read_delta_dataset,
+                name="read-delta-table-" + tokenize(self.fs_token, f, **kwargs),
+            )(f, **kwargs)
+            for f in list(self.pq_files)
         ]
-        return from_delayed(parts)
+        meta = self._make_meta_from_schema()
+        return from_delayed(parts, meta=meta)
 
 
 def read_delta_table(
@@ -257,13 +293,13 @@ def read_delta_table(
             delta protocol stores the schema string in the json log files which is converted
              into pyarrow.Schema and used for schema evolution (refer delta/utils.py).
             i.e Based on particular version, some columns can be shown or not shown.
-        filter: pyarrow.dataset.Expression
-            Can act as both partition as well as row based filter, need to construct the
-            pyarrow.dataset.Expression using pyarrow.dataset.Field
+
+        filter: Union[List[Tuple[str, str, Any]], List[List[Tuple[str, str, Any]]]], default None
+            List of filters to apply, like ``[[('col1', '==', 0), ...], ...]``.
+            Can act as both partition as well as row based filter, above list of filters
+            converted into pyarrow.dataset.Expression built using pyarrow.dataset.Field
             example:
-                pyarrow.dataset.field("x")>400
-            for more information:
-                refer [pyarrow docs](https://arrow.apache.org/docs/python/generated/pyarrow.dataset.Expression.html)
+                [("x",">",400)] --> pyarrow.dataset.field("x")>400
 
     Returns
     -------

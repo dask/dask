@@ -2,15 +2,10 @@ import zipfile
 from io import BytesIO
 
 import pytest
-import requests
 
 import dask.dataframe as dd
 
-# try:
-#     import pyarrow.dataset as ds
-# except ImportError:
-#     ds = False
-ds = pytest.importorskip("pyarrow.dataset")
+requests = pytest.importorskip("requests")
 
 
 @pytest.fixture()
@@ -93,7 +88,7 @@ def test_row_filter(simple_table):
     df = dd.read_delta_table(
         simple_table,
         version=0,
-        filter=ds.field("count") > 30,
+        filter=[("count", ">", 30)],
     )
     assert df.compute().shape == (61, 3)
 
@@ -115,16 +110,11 @@ def test_different_schema(simple_table):
 
 def test_partition_filter(partition_table):
     # partition filter
-    df = dd.read_delta_table(
-        partition_table,
-        version=0,
-        filter=ds.field("col1") == 1,
-    )
+    df = dd.read_delta_table(partition_table, version=0, filter=[("col1", "==", 1)])
     assert df.compute().shape == (21, 3)
 
     df = dd.read_delta_table(
-        partition_table,
-        filter=(ds.field("col1") == 1) | (ds.field("col1") == 2),
+        partition_table, filter=[[("col1", "==", 1)], [("col1", "==", 2)]]
     )
     assert df.compute().shape == (39, 4)
 
@@ -137,7 +127,7 @@ def test_empty(empty_table1, empty_table2):
     assert df.compute().shape == (5, 2)
 
     with pytest.raises(RuntimeError):
-        # No Json files found at _delta_log_path
+        # No Parquet files found
         _ = dd.read_delta_table(empty_table2)
 
 
