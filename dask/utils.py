@@ -111,6 +111,7 @@ def deepmap(func, *seqs):
         return func(*seqs)
 
 
+@_deprecated()
 def homogeneous_deepmap(func, seq):
     if not seq:
         return seq
