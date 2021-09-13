@@ -5,6 +5,7 @@ pytest.importorskip("scipy")
 
 import numpy as np
 import scipy.linalg
+import scipy.signal
 
 import dask.array as da
 from dask.array.linalg import convolve, qr, sfqr, svd, svd_compressed, tsqr
@@ -1252,3 +1253,22 @@ def test_input_swapping(method):
         match="For 'valid' mode in1 has to be at least as large as in2 in every dimension",
     ):
         convolve(small, big, "valid")
+
+
+@pytest.mark.slow
+@pytest.mark.parametrize(
+    "n",
+    list(range(1, 100))
+    + list(range(1000, 1500))
+    + np.random.RandomState(1234).randint(1001, 10000, 5).tolist(),
+)
+def test_convolve_fft_many_sizes(n):
+    a = np.random.rand(n) + 1j * np.random.rand(n)
+    b = np.random.rand(n) + 1j * np.random.rand(n)
+    expected = scipy.signal.fftconvolve(a, b, "full")
+
+    out = convolve(a, b, "full", "fft")
+    assert_eq(out, expected)
+
+    out = convolve(a, b, "full", "fft", [0])
+    assert_eq(out, expected)
