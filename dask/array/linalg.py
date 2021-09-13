@@ -1713,11 +1713,15 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
 
+    complex_result = in1.dtype.kind == "c" or in2.dtype.kind == "c"
+
+    if complex_result:
+        dtype = "complex"
+    else:
+        dtype = "float"
+
     in_cv = in1.map_overlap(
-        cv_func,
-        depth=depth,
-        boundary=boundary,
-        trim=True,
+        cv_func, depth=depth, boundary=boundary, trim=True, dtype=dtype
     )
 
     if mode == "valid":
