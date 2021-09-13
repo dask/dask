@@ -776,9 +776,9 @@ def set_partitions_pre(s, divisions, ascending=True):
         if ascending:
             partitions[not_null] = divisions.searchsorted(s[not_null], side="right") - 1
         else:
-            partitions[not_null] = -divisions.searchsorted(
-                s[not_null], side="right"
-            ) % (len(divisions) - 1)
+            partitions[not_null] = (
+                len(divisions) - divisions.searchsorted(s[not_null], side="right") - 1
+            )
     partitions[(s >= divisions.iloc[-1]).values] = (
         len(divisions) - 2 if ascending else 0
     )
