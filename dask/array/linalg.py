@@ -1715,11 +1715,11 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
 
     if method == "auto":
-        rng = np.random.default_rng()
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
-        rn_block = list(
-            rng.integers(low=0, high=highs[i], size=1) for i in range(in1.ndim)
-        )
+        print(highs)
+        rn_block = list(np.random.randint(0, h) for h in highs)
+        print(rn_block)
+        print(in1.chunks)
         in1_block_test = in1.blocks[rn_block].compute()
         import time
 
