@@ -1689,11 +1689,11 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     # This is done to avoid from having some results show up twice on the edge of blocks
 
     even_flag = np.r_[[1 - s2[a] % 2 for a in axes]]
-    target_shape = list(s2)
+    target_shape = np.asarray(s2)
     for a in axes:
         target_shape[a] += even_flag
 
-    if target_shape != list(s2):
+    if any(target_shape != np.asarray(s2)):
         # padding axes where in2 is even
         pad_width = tuple(
             (even_flag[a], 0) if a in axes else (0, 0) for a in range(in1.ndim)
