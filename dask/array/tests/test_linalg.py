@@ -1204,3 +1204,51 @@ def test_2d_arrays(method):
         [[2, 7, 16, 17, 12], [10, 30, 62, 58, 38], [12, 31, 58, 49, 30]], dtype="float"
     )
     assert_eq(c, d)
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_input_swapping(method):
+    small = np.arange(8).reshape(2, 2, 2)
+    big = 1j * np.arange(27).reshape(3, 3, 3)
+    big += np.arange(27)[::-1].reshape(3, 3, 3)
+
+    out_array = np.array(
+        [
+            [
+                [0 + 0j, 26 + 0j, 25 + 1j, 24 + 2j],
+                [52 + 0j, 151 + 5j, 145 + 11j, 93 + 11j],
+                [46 + 6j, 133 + 23j, 127 + 29j, 81 + 23j],
+                [40 + 12j, 98 + 32j, 93 + 37j, 54 + 24j],
+            ],
+            [
+                [104 + 0j, 247 + 13j, 237 + 23j, 135 + 21j],
+                [282 + 30j, 632 + 96j, 604 + 124j, 330 + 86j],
+                [246 + 66j, 548 + 180j, 520 + 208j, 282 + 134j],
+                [142 + 66j, 307 + 161j, 289 + 179j, 153 + 107j],
+            ],
+            [
+                [68 + 36j, 157 + 103j, 147 + 113j, 81 + 75j],
+                [174 + 138j, 380 + 348j, 352 + 376j, 186 + 230j],
+                [138 + 174j, 296 + 432j, 268 + 460j, 138 + 278j],
+                [70 + 138j, 145 + 323j, 127 + 341j, 63 + 197j],
+            ],
+            [
+                [32 + 72j, 68 + 166j, 59 + 175j, 30 + 100j],
+                [68 + 192j, 139 + 433j, 117 + 455j, 57 + 255j],
+                [38 + 222j, 73 + 499j, 51 + 521j, 21 + 291j],
+                [12 + 144j, 20 + 318j, 7 + 331j, 0 + 182j],
+            ],
+        ]
+    )
+
+    assert_eq(convolve(small, big, "full", method=method), out_array)
+    assert_eq(convolve(big, small, "full", method=method), out_array)
+    assert_eq(convolve(small, big, "same", method=method), out_array[1:3, 1:3, 1:3])
+    assert_eq(convolve(big, small, "same", method=method), out_array[0:3, 0:3, 0:3])
+    assert_eq(convolve(big, small, "valid", method=method), out_array[1:3, 1:3, 1:3])
+
+    with pytest.raises(
+        ValueError,
+        match="For 'valid' mode in1 has to be at least as large as in2 in every dimension",
+    ):
+        convolve(small, big, "valid")
