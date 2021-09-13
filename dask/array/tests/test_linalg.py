@@ -1200,5 +1200,7 @@ def test_2d_arrays(method):
     a = [[1, 2, 3], [3, 4, 5]]
     b = [[2, 3, 4], [4, 5, 6]]
     c = convolve(a, b, method=method)
-    d = np.array([[2, 7, 16, 17, 12], [10, 30, 62, 58, 38], [12, 31, 58, 49, 30]])
+    d = np.array(
+        [[2, 7, 16, 17, 12], [10, 30, 62, 58, 38], [12, 31, 58, 49, 30]], dtype="float"
+    )
     assert_eq(c, d)

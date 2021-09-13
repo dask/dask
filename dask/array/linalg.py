@@ -1665,6 +1665,8 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     s1 = in1.shape
     s2 = in2.shape
 
+    if not len(axes):
+        return in1 * in2
     # Calculating the depth of the ghosting zones in each dimension
     depth = {i: s2[i] // 2 for i in range(in2.ndim)}
 
@@ -1693,7 +1695,9 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     if method == "auto":
         rng = np.random.default_rng()
         highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
-        rn_block = tuple(rng.integer(low=0, high=highs[i]) for i in range(in1.ndim))
+        rn_block = tuple(
+            rng.integers(low=0, high=highs[i], size="1") for i in range(in1.ndim)
+        )
         in1_block_test = in1.blocks[rn_block].compute()
         import time
 
