@@ -23,6 +23,7 @@ from .delayed import unpack_collections
 from .highlevelgraph import HighLevelGraph, Layer
 from .optimization import SubgraphCallable, fuse
 from .utils import (
+    _deprecated,
     apply,
     ensure_dict,
     homogeneous_deepmap,
@@ -1442,6 +1443,7 @@ def rewrite_blockwise(inputs):
     )
 
 
+@_deprecated()
 def zero_broadcast_dimensions(lol, nblocks):
     """
     >>> lol = [('x', 1, 0), ('x', 1, 1), ('x', 1, 2)]
@@ -1450,7 +1452,7 @@ def zero_broadcast_dimensions(lol, nblocks):
     ...        [('x', 1, 1, 0), ('x', 1, 1, 1)],
     ...        [('x', 1, 2, 0), ('x', 1, 2, 1)]]
 
-    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +NORMALIZE_WHITESPACE
+    >>> zero_broadcast_dimensions(lol, nblocks)  # doctest: +SKIP
     [[('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)],
      [('x', 1, 0, 0), ('x', 1, 0, 1)]]
