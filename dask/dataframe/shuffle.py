@@ -765,7 +765,7 @@ def set_partitions_pre(s, divisions, ascending=True):
         if ascending:
             partitions = divisions.searchsorted(s, side="right") - 1
         else:
-            partitions = -divisions.searchsorted(s, side="right") % (len(divisions) - 1)
+            partitions = len(divisions) - divisions.searchsorted(s, side="right") - 1
     except TypeError:
         # When `searchsorted` fails with `TypeError`, it may be
         # caused by nulls in `s`. Try again with the null-values
