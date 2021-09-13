@@ -1118,7 +1118,9 @@ def test_convolve_invalid_flags():
     ):
         convolve([1], [2], mode="chips")
 
-    with pytest.raises(ValueError, match="acceptable method flags are 'oa' or 'fft'"):
+    with pytest.raises(
+        ValueError, match="acceptable method flags are 'oa', 'auto' or 'fft'"
+    ):
         convolve([1], [2], method="chips")
 
     with pytest.raises(ValueError, match="when provided, axes cannot be empty"):
@@ -1149,7 +1151,7 @@ def test_convolve_basic(method):
     a = [3, 4, 5, 6, 5, 4]
     b = [1, 2, 3]
     c = convolve(a, b, method=method)
-    assert_eq(c, np.array([3, 10, 22, 28, 32, 32, 23, 12]))
+    assert_eq(c, np.array([3, 10, 22, 28, 32, 32, 23, 12], dtype="float"))
 
 
 @pytest.mark.parametrize("method", ["fft", "oa"])
@@ -1157,7 +1159,7 @@ def test_convolve_same(method):
     a = [3, 4, 5]
     b = [1, 2, 3, 4]
     c = convolve(a, b, mode="same", method=method)
-    assert_eq(c, np.array([10, 22, 34]))
+    assert_eq(c, np.array([10, 22, 34], dtype="float"))
 
 
 @pytest.mark.parametrize("method", ["fft", "oa"])

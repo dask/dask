@@ -1714,7 +1714,10 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
 
     in_cv = in1.map_overlap(
-        cv_func, depth=depth, boundary=boundary, trim=True, dtype="float"
+        cv_func,
+        depth=depth,
+        boundary=boundary,
+        trim=True,
     )
 
     if mode == "valid":
