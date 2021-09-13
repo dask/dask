@@ -1548,17 +1548,22 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
            `in1` is assumed to be periodic for padding purposes, The output
            is the same size as `in1`.
 
-    method : str {'oa', 'fft'}, optional
+    method : str {'oa', 'fft','auto'}, optional
         A string indicating which method to use to calculate the convolution.
 
         ``oa``
            Overlap-add method. This is generally much faster than `fft` when
            `in1` is much larger than `in2` but can be slower when only a few
            output values are needed or when the arrays are very similar in
-           shape and can only output float arrays (int or object array inputs)
-           will be cast to float). (Default)
+           shape and can only output float arrays (int or object array inputs
+           will be cast to float).
         ``fft``
            Convolve `in1` and `in2` using the fast Fourier transform method.
+           Can only output float arrays (int or object array inputs will be
+           cast to float).
+        ``auto``
+           Choose the method automatically by comparing the speed on a random
+           block of `in1`.
     axes : int or array_like of ints or None, optional
           Axes over which to compute the convolution.
           The default is over all axes.
@@ -1587,7 +1592,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     * Working out the case where both input are dask arrays.
     * Giving users the possibility to specify the to have the `mode` argument differ between axes.
-    * Dealing with the case where :math:`\\exists i \\notin` `axes` and ``in1.shape[i] == in2.shape[i] !=1``.
+    * Dealing with the case where :math:`\\exists  i \\notin` `axes` and ``in1.shape[i] == in2.shape[i] !=1``.
 
 
 
@@ -1634,7 +1639,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
     in1 = asarray(in1)
     if hasattr(in2, "chunks"):
         raise ValueError(
-            "Second input should be a sequential numpy array like"
+            "second input should be a sequential numpy array_like"
             " and not %s" % type(in2)
         )
     in2 = np.asarray(in2)
@@ -1685,8 +1690,26 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
 
     cv_dict = {"oa": oaconvolve, "fft": fftconvolve}
 
+    if method == "auto":
+        rng = np.random.default_rng()
+        highs = [len(in1.chunks[i]) for i in range(in1.ndim)]
+        rn_block = tuple(rng.integer(low=0, high=highs[i]) for i in range(in1.ndim))
+        in1_block_test = in1.blocks[rn_block].compute()
+        import time
+
+        t0 = time.time()
+        oaconvolve(in1_block_test, in2, mode="same", axes=axes)
+        t_oa = time.time() - t0
+        t0 = time.time()
+        fftconvolve(in1_block_test, in2, mode="same", axes=axes)
+        t_fft = time.time() - t0
+        if t_oa < t_fft:
+            method = "oa"
+        else:
+            method = "fft"
+
     if method not in cv_dict.keys():
-        raise ValueError("acceptable method flags are 'oa' or 'fft'")
+        raise ValueError("acceptable method flags are 'oa', 'auto' or 'fft'")
 
     cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
 

@@ -1100,6 +1100,17 @@ def test_convolve_mismatched_dims(a, b):
         convolve(a, b)
 
 
+def test_convolve_invalid_2nd_input():
+    a = []
+    b = da.asarray([])
+    with pytest.raises(
+        ValueError,
+        match="second input should be a sequential numpy array_like"
+        " and not %s" % type(b),
+    ):
+        convolve(a, b)
+
+
 def test_convolve_invalid_flags():
     with pytest.raises(
         ValueError,
@@ -1131,3 +1142,38 @@ def test_convolve_invalid_flags():
 
     with pytest.raises(ValueError, match="all axes must be unique"):
         convolve([1], [2], axes=[0, 0])
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_convolve_basic(method):
+    a = [3, 4, 5, 6, 5, 4]
+    b = [1, 2, 3]
+    c = convolve(a, b, method=method)
+    assert_eq(c, np.array([3, 10, 22, 28, 32, 32, 23, 12]))
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_convolve_same(method):
+    a = [3, 4, 5]
+    b = [1, 2, 3, 4]
+    c = convolve(a, b, mode="same", method=method)
+    assert_eq(c, np.array([10, 22, 34]))
+
+
+@pytest.mark.parametrize("method", ["fft", "oa"])
+def test_convolve_complex(method):
+    x = da.from_array([1 + 1j, 2 + 1j, 3 + 1j])
+    y = np.array([1 + 1j, 2 + 1j])
+    z = convolve(x, y)
+    assert_eq(z, np.array([2j, 2 + 6j, 5 + 8j, 5 + 5j]), method=method)
+
+
+def test_convolve_broadcastable():
+    a = np.arange(27).reshape(3, 3, 3)
+    b = np.arange(3)
+    for i in range(3):
+        b_shape = [1] * 3
+        b_shape[i] = 3
+        x = convolve(a, b.reshape(b_shape), method="oa")
+        y = convolve(a, b.reshape(b_shape), method="fft")
+        assert_eq(x, y)
