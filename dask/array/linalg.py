@@ -1665,6 +1665,9 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
     s1 = in1.shape
     s2 = in2.shape
 
+    if method not in ["fft", "oa", "auto"]:
+        raise ValueError("acceptable method flags are 'oa', 'auto' or 'fft'")
+
     if not len(axes):
         return in1 * in2
     # Calculating the depth of the ghosting zones in each dimension
@@ -1711,9 +1714,6 @@ def convolve(in1, in2, mode="full", method="auto", axes=None):
             method = "oa"
         else:
             method = "fft"
-
-    if method not in cv_dict.keys():
-        raise ValueError("acceptable method flags are 'oa', 'auto' or 'fft'")
 
     cv_func = lambda x: cv_dict[method](x, in2, mode="same", axes=axes)
 
