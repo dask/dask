@@ -1513,7 +1513,7 @@ def norm(x, ord=None, axis=None, keepdims=False):
     return r
 
 
-def convolve(in1, in2, mode="full", method="oa", axes=None):
+def convolve(in1, in2, mode="full", method="auto", axes=None):
     """Convolve a N-dimensional dask array with another N-dimensional array
     using either the fft or the overlap-add method.
 
@@ -1563,7 +1563,7 @@ def convolve(in1, in2, mode="full", method="oa", axes=None):
            cast to float).
         ``auto``
            Choose the method automatically by comparing the speed on a random
-           block of `in1`.
+           block of `in1`. (Default)
     axes : int or array_like of ints or None, optional
           Axes over which to compute the convolution.
           The default is over all axes.
